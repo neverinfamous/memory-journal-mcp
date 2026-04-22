@@ -51,9 +51,8 @@ describe('ProjectsManager — branch coverage', () => {
     })
 
     describe('getProjectKanban', () => {
-        it('should return null when no graphqlWithAuth', async () => {
-            const result = await projects.getProjectKanban('owner', 1)
-            expect(result).toBeNull()
+        it('should throw error when no graphqlWithAuth', async () => {
+            await expect(projects.getProjectKanban('owner', 1)).rejects.toThrow()
         })
 
         it('should fallback to repo query when user query throws', async () => {
@@ -278,8 +277,8 @@ describe('PullRequestsManager — branch coverage', () => {
     })
 
     describe('getPullRequests', () => {
-        it('should return empty when no octokit', async () => {
-            expect(await prs.getPullRequests('o', 'r')).toEqual([])
+        it('should throw error when no octokit', async () => {
+            await expect(prs.getPullRequests('o', 'r')).rejects.toThrow()
         })
 
         it('should return cached PRs', async () => {
@@ -329,13 +328,13 @@ describe('PullRequestsManager — branch coverage', () => {
             client.octokit = {
                 pulls: { list: vi.fn().mockRejectedValue(new Error('fail')) },
             } as never
-            expect(await prs.getPullRequests('o', 'r')).toEqual([])
+            await expect(prs.getPullRequests('o', 'r')).rejects.toThrow()
         })
     })
 
     describe('getPullRequest', () => {
-        it('should return null when no octokit', async () => {
-            expect(await prs.getPullRequest('o', 'r', 1)).toBeNull()
+        it('should throw error when no octokit', async () => {
+            await expect(prs.getPullRequest('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should return cached PR details', async () => {
@@ -410,13 +409,13 @@ describe('PullRequestsManager — branch coverage', () => {
             client.octokit = {
                 pulls: { get: vi.fn().mockRejectedValue(new Error('404')) },
             } as never
-            expect(await prs.getPullRequest('o', 'r', 999)).toBeNull()
+            await expect(prs.getPullRequest('o', 'r', 999)).rejects.toThrow()
         })
     })
 
     describe('getReviews', () => {
-        it('should return empty when no octokit', async () => {
-            expect(await prs.getReviews('o', 'r', 1)).toEqual([])
+        it('should throw error when no octokit', async () => {
+            await expect(prs.getReviews('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should return cached reviews', async () => {
@@ -462,13 +461,13 @@ describe('PullRequestsManager — branch coverage', () => {
             client.octokit = {
                 rest: { pulls: { listReviews: vi.fn().mockRejectedValue(new Error('fail')) } },
             } as never
-            expect(await prs.getReviews('o', 'r', 1)).toEqual([])
+            await expect(prs.getReviews('o', 'r', 1)).rejects.toThrow()
         })
     })
 
     describe('getReviewComments', () => {
-        it('should return empty when no octokit', async () => {
-            expect(await prs.getReviewComments('o', 'r', 1)).toEqual([])
+        it('should throw error when no octokit', async () => {
+            await expect(prs.getReviewComments('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should return cached comments', async () => {
@@ -524,7 +523,7 @@ describe('PullRequestsManager — branch coverage', () => {
                     pulls: { listReviewComments: vi.fn().mockRejectedValue(new Error('fail')) },
                 },
             } as never
-            expect(await prs.getReviewComments('o', 'r', 1)).toEqual([])
+            await expect(prs.getReviewComments('o', 'r', 1)).rejects.toThrow()
         })
     })
 
@@ -700,8 +699,8 @@ describe('RepositoryManager — branch coverage', () => {
     })
 
     describe('getWorkflowRuns', () => {
-        it('should return empty when no octokit', async () => {
-            expect(await repo.getWorkflowRuns('o', 'r')).toEqual([])
+        it('should throw error when no octokit', async () => {
+            await expect(repo.getWorkflowRuns('o', 'r')).rejects.toThrow()
         })
 
         it('should return cached runs', async () => {
@@ -748,7 +747,7 @@ describe('RepositoryManager — branch coverage', () => {
                     },
                 },
             } as never
-            expect(await repo.getWorkflowRuns('o', 'r')).toEqual([])
+            await expect(repo.getWorkflowRuns('o', 'r')).rejects.toThrow()
         })
     })
 })
@@ -783,8 +782,8 @@ describe('MilestonesManager — branch coverage', () => {
     }
 
     describe('getMilestones', () => {
-        it('should return empty when no octokit', async () => {
-            expect(await milestones.getMilestones('o', 'r')).toEqual([])
+        it('should throw error when no octokit', async () => {
+            await expect(milestones.getMilestones('o', 'r')).rejects.toThrow()
         })
 
         it('should return cached milestones', async () => {
@@ -810,13 +809,13 @@ describe('MilestonesManager — branch coverage', () => {
             client.octokit = {
                 issues: { listMilestones: vi.fn().mockRejectedValue(new Error('fail')) },
             } as never
-            expect(await milestones.getMilestones('o', 'r')).toEqual([])
+            await expect(milestones.getMilestones('o', 'r')).rejects.toThrow()
         })
     })
 
     describe('getMilestone', () => {
-        it('should return null when no octokit', async () => {
-            expect(await milestones.getMilestone('o', 'r', 1)).toBeNull()
+        it('should throw error when no octokit', async () => {
+            await expect(milestones.getMilestone('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should return cached milestone', async () => {
@@ -830,13 +829,13 @@ describe('MilestonesManager — branch coverage', () => {
             client.octokit = {
                 issues: { getMilestone: vi.fn().mockRejectedValue(new Error('404')) },
             } as never
-            expect(await milestones.getMilestone('o', 'r', 999)).toBeNull()
+            await expect(milestones.getMilestone('o', 'r', 999)).rejects.toThrow()
         })
     })
 
     describe('createMilestone', () => {
-        it('should return null when no octokit', async () => {
-            expect(await milestones.createMilestone('o', 'r', 'v1')).toBeNull()
+        it('should throw error when no octokit', async () => {
+            await expect(milestones.createMilestone('o', 'r', 'v1')).rejects.toThrow()
         })
 
         it('should create milestone and return data', async () => {
@@ -854,13 +853,15 @@ describe('MilestonesManager — branch coverage', () => {
             client.octokit = {
                 issues: { createMilestone: vi.fn().mockRejectedValue(new Error('fail')) },
             } as never
-            expect(await milestones.createMilestone('o', 'r', 'v1')).toBeNull()
+            await expect(milestones.createMilestone('o', 'r', 'v1')).rejects.toThrow()
         })
     })
 
     describe('updateMilestone', () => {
-        it('should return null when no octokit', async () => {
-            expect(await milestones.updateMilestone('o', 'r', 1, { title: 'new' })).toBeNull()
+        it('should throw error when no octokit', async () => {
+            await expect(
+                milestones.updateMilestone('o', 'r', 1, { title: 'new' })
+            ).rejects.toThrow()
         })
 
         it('should update milestone with dueOn null', async () => {
@@ -877,7 +878,7 @@ describe('MilestonesManager — branch coverage', () => {
             client.octokit = {
                 issues: { updateMilestone: vi.fn().mockRejectedValue(new Error('fail')) },
             } as never
-            expect(await milestones.updateMilestone('o', 'r', 1, {})).toBeNull()
+            await expect(milestones.updateMilestone('o', 'r', 1, {})).rejects.toThrow()
         })
     })
 

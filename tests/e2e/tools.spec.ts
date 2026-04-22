@@ -37,24 +37,20 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         const toolNames = listResponse.tools.map((t) => t.name)
         expect(toolNames).toContain('create_entry')
         expect(toolNames).toContain('search_entries')
-        expect(toolNames).toContain('test_simple')
         expect(toolNames).toContain('get_recent_entries')
     })
 
-    test('should execute test_simple tool', async () => {
-        const response = await client.callTool({
-            name: 'test_simple',
-            arguments: { message: 'Playwright E2E' },
-        })
-
-        expect(response.isError).toBeUndefined()
-        expect(Array.isArray(response.content)).toBe(true)
-        expect(response.content.length).toBeGreaterThan(0)
-        expect(response.content[0]).toHaveProperty('type', 'text')
-
-        const text = (response.content[0] as { type: string; text: string }).text
-        expect(text).toContain('Playwright E2E')
-    })
+    function getOutput(response: any): string | Record<string, unknown> {
+        const text = (response.content[0] as { text: string }).text
+        if (text === '[Structured output attached]' && 'structuredContent' in response) {
+            return response.structuredContent as Record<string, unknown>
+        }
+        try {
+            return JSON.parse(text)
+        } catch {
+            return text
+        }
+    }
 
     test('should execute create_entry_minimal and get structured response', async () => {
         const response = await client.callTool({
@@ -64,10 +60,9 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
 
         expect(response.isError).toBeUndefined()
         expect(Array.isArray(response.content)).toBe(true)
-        expect(response.content.length).toBeGreaterThan(0)
+        expect((response.content as any[]).length).toBeGreaterThan(0)
 
-        const text = (response.content[0] as { type: string; text: string }).text
-        const parsed = JSON.parse(text)
+        const parsed = getOutput(response) as any
         expect(parsed).toHaveProperty('success', true)
         expect(parsed).toHaveProperty('entry')
         expect(parsed.entry).toHaveProperty('id')
@@ -81,10 +76,9 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
 
         expect(response.isError).toBeUndefined()
         expect(Array.isArray(response.content)).toBe(true)
-        expect(response.content.length).toBeGreaterThan(0)
+        expect((response.content as any[]).length).toBeGreaterThan(0)
 
-        const text = (response.content[0] as { type: string; text: string }).text
-        const parsed = JSON.parse(text)
+        const parsed = getOutput(response) as any
         expect(parsed).toHaveProperty('entries')
         expect(Array.isArray(parsed.entries)).toBe(true)
     })
@@ -102,8 +96,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(response.isError).toBeUndefined()
         expect(Array.isArray(response.content)).toBe(true)
 
-        const text = (response.content[0] as { type: string; text: string }).text
-        const parsed = JSON.parse(text)
+        const parsed = getOutput(response) as any
         expect(parsed).toHaveProperty('success', false)
         expect(parsed).toHaveProperty('error')
         expect(parsed.error).toContain('entry_type')

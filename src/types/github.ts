@@ -118,6 +118,7 @@ export interface ProjectContext {
     pullRequests: GitHubPullRequest[]
     workflowRuns: GitHubWorkflowRun[]
     milestones: GitHubMilestone[]
+    degraded?: string[]
 }
 
 // ============================================================================
@@ -213,4 +214,5 @@ export interface KanbanBoard {
     statusOptions: ProjectV2StatusOption[]
     columns: KanbanColumn[]
     totalItems: number
+    truncated?: boolean
 }

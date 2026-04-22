@@ -24,6 +24,41 @@ import type {
 
 export type { RepoInfo, IssueDetails, PullRequestDetails }
 
+// Removed global cache pool
+
+/**
+ * Factory method for creating a GitHubIntegration instance.
+ * Pools instances by working directory on the ServerRuntime to prevent state bleed
+ * and cross-project coupling, as identified in the Copilot Security Audit.
+ */
+import { createHash } from 'node:crypto'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+
+export function getGitHubIntegration(
+    workingDir = '.',
+    runtime?: ServerRuntime,
+    token?: string
+): GitHubIntegration {
+    const resolvedDir = workingDir === '.' ? process.cwd() : workingDir
+
+    // Support instance-scoped runtime pools for multi-tenant isolation
+    if (runtime) {
+        runtime.githubClientPool ??= new Map<string, GitHubIntegration>()
+        const cacheKey = token
+            ? `${resolvedDir}:${createHash('sha256').update(token).digest('hex').substring(0, 12)}`
+            : resolvedDir
+        let instance = runtime.githubClientPool.get(cacheKey)
+        if (!instance) {
+            instance = new GitHubIntegration(resolvedDir, token)
+            runtime.githubClientPool.set(cacheKey, instance)
+        }
+        return instance
+    }
+
+    // Fallback to non-pooled transient instances if no runtime is provided
+    return new GitHubIntegration(resolvedDir, token)
+}
+
 /**
  * GitHubIntegration - Handles GitHub API and local git operations
  * Uses composition over sub-modules to maintain the exact same API surface.
@@ -37,8 +72,8 @@ export class GitHubIntegration {
     private insightsManager: InsightsManager
     private repositoryManager: RepositoryManager
 
-    constructor(workingDir = '.') {
-        this.client = new GitHubClient(workingDir)
+    constructor(workingDir = '.', token?: string) {
+        this.client = new GitHubClient(workingDir, token)
         this.issuesManager = new IssuesManager(this.client)
         this.pullRequestsManager = new PullRequestsManager(this.client)
         this.projectsManager = new ProjectsManager(this.client)
@@ -71,9 +106,10 @@ export class GitHubIntegration {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubIssue[]> {
-        return this.issuesManager.getIssues(owner, repo, state, limit)
+        return this.issuesManager.getIssues(owner, repo, state, limit, abortSignal)
     }
 
     async getIssue(owner: string, repo: string, issueNumber: number): Promise<IssueDetails | null> {
@@ -122,9 +158,10 @@ export class GitHubIntegration {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubPullRequest[]> {
-        return this.pullRequestsManager.getPullRequests(owner, repo, state, limit)
+        return this.pullRequestsManager.getPullRequests(owner, repo, state, limit, abortSignal)
     }
 
     async getPullRequest(
@@ -155,11 +192,16 @@ export class GitHubIntegration {
         return this.pullRequestsManager.getCopilotReviewSummary(owner, repo, prNumber)
     }
 
-    async getWorkflowRuns(owner: string, repo: string, limit = 10): Promise<GitHubWorkflowRun[]> {
-        return this.repositoryManager.getWorkflowRuns(owner, repo, limit)
+    async getWorkflowRuns(
+        owner: string,
+        repo: string,
+        limit = 10,
+        abortSignal?: AbortSignal
+    ): Promise<GitHubWorkflowRun[]> {
+        return this.repositoryManager.getWorkflowRuns(owner, repo, limit, abortSignal)
     }
 
-    async getRepoContext(): Promise<ProjectContext> {
+    async getRepoContext(abortSignal?: AbortSignal): Promise<ProjectContext> {
         const cached = this.client.getCached('context:repo') as ProjectContext | undefined
         if (cached) return cached
 
@@ -184,30 +226,55 @@ export class GitHubIntegration {
             // Ignore error
         }
 
+        const degraded: string[] = []
         if (repoInfo.owner && repoInfo.repo) {
-            context.issues = await this.issuesManager.getIssues(
-                repoInfo.owner,
-                repoInfo.repo,
-                'open',
-                10
-            )
-            context.pullRequests = await this.pullRequestsManager.getPullRequests(
-                repoInfo.owner,
-                repoInfo.repo,
-                'open',
-                10
-            )
-            context.workflowRuns = await this.repositoryManager.getWorkflowRuns(
-                repoInfo.owner,
-                repoInfo.repo,
-                10
-            )
-            context.milestones = await this.milestonesManager.getMilestones(
-                repoInfo.owner,
-                repoInfo.repo,
-                'open',
-                10
-            )
+            const [issuesResult, prsResult, runsResult, milestonesResult] =
+                await Promise.allSettled([
+                    this.issuesManager.getIssues(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        'open',
+                        10,
+                        abortSignal
+                    ),
+                    this.pullRequestsManager.getPullRequests(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        'open',
+                        10,
+                        abortSignal
+                    ),
+                    this.repositoryManager.getWorkflowRuns(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        10,
+                        abortSignal
+                    ),
+                    this.milestonesManager.getMilestones(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        'open',
+                        10,
+                        abortSignal
+                    ),
+                ])
+
+            context.issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
+            if (issuesResult.status === 'rejected') degraded.push('issues')
+
+            context.pullRequests = prsResult.status === 'fulfilled' ? prsResult.value : []
+            if (prsResult.status === 'rejected') degraded.push('pullRequests')
+
+            context.workflowRuns = runsResult.status === 'fulfilled' ? runsResult.value : []
+            if (runsResult.status === 'rejected') degraded.push('workflowRuns')
+
+            context.milestones =
+                milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
+            if (milestonesResult.status === 'rejected') degraded.push('milestones')
+        }
+
+        if (degraded.length > 0) {
+            context.degraded = degraded
         }
 
         this.client.setCache('context:repo', context)
@@ -217,9 +284,10 @@ export class GitHubIntegration {
     async getProjectKanban(
         owner: string,
         projectNumber: number,
-        repo?: string
+        repo?: string,
+        abortSignal?: AbortSignal
     ): Promise<KanbanBoard | null> {
-        return this.projectsManager.getProjectKanban(owner, projectNumber, repo)
+        return this.projectsManager.getProjectKanban(owner, projectNumber, repo, abortSignal)
     }
 
     async moveProjectItem(
@@ -254,9 +322,10 @@ export class GitHubIntegration {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubMilestone[]> {
-        return this.milestonesManager.getMilestones(owner, repo, state, limit)
+        return this.milestonesManager.getMilestones(owner, repo, state, limit, abortSignal)
     }
 
     async getMilestone(

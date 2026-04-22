@@ -142,12 +142,10 @@ export function formatUserMessage(opts: {
     // Flags row (Hush Protocol)
     let flagsRow = ''
     if (opts.flagSummary && opts.flagSummary.count > 0) {
-        const flagParts = opts.flagSummary.flags
-            .slice(0, 5)
-            .map((f) => {
-                const target = f.target_user ? ` → @${f.target_user}` : ''
-                return `🚩 ${f.flag_type}${target}: ${f.preview.slice(0, 50)}`
-            })
+        const flagParts = opts.flagSummary.flags.slice(0, 5).map((f) => {
+            const target = f.target_user ? ` → @${f.target_user}` : ''
+            return `🚩 ${f.flag_type}${target}: ${f.preview.slice(0, 50)}`
+        })
         flagsRow = `\n| **Flags** | ${escapeTableCell(flagParts.join(' · '))}${opts.flagSummary.count > 5 ? ` (+${String(opts.flagSummary.count - 5)} more)` : ''} |`
     }
 

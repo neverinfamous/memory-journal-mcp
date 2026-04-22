@@ -1,3 +1,4 @@
+import { getGitHubIntegration } from '../github/github-integration/index.js'
 import type { ToolContext } from '../types/index.js'
 
 /**
@@ -24,23 +25,28 @@ export async function resolveIssueUrl(
             ([_, v]) => v.project_number === projectNumber
         )
         if (entry) {
-            // Dynamically import and instantiate GitHubIntegration for the resolved path
+            // Instantiate GitHubIntegration for the resolved path
             // to extract the correct owner/repo directly from the target filesystem
-            const { GitHubIntegration } = await import('../github/github-integration/index.js')
-            const targetGithub = new GitHubIntegration(entry[1].path)
+            const targetGithub = getGitHubIntegration(
+                entry[1].path,
+                undefined,
+                process.env['GITHUB_TOKEN']
+            )
             const repoInfo = await targetGithub.getRepoInfo()
+            const host = process.env['GITHUB_HOST'] ?? 'github.com'
             if (repoInfo.owner && repoInfo.repo) {
-                return `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
+                return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
             }
         }
     }
 
     // 2. Fallback to globally repo info if available
     if (context.github) {
+        const host = process.env['GITHUB_HOST'] ?? 'github.com'
         const cachedRepo =
             context.github.getCachedRepoInfo() ?? (await context.github.getRepoInfo())
         if (cachedRepo?.owner && cachedRepo?.repo) {
-            return `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(issueNumber)}`
+            return `https://${host}/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(issueNumber)}`
         }
     }
 

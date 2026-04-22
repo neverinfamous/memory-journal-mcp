@@ -32,7 +32,7 @@ test.describe('Scheduler Activation (HTTP Only)', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const health = JSON.parse(text)
 
         expect(health).toHaveProperty('scheduler')
@@ -41,7 +41,7 @@ test.describe('Scheduler Activation (HTTP Only)', () => {
 
     test('memory://health should show 3 scheduler jobs', async () => {
         const response = await client.readResource({ uri: 'memory://health' })
-        const health = JSON.parse(response.contents[0]!.text as string)
+        const health = JSON.parse((response.contents[0] as { text: string }).text)
 
         expect(health.scheduler).toHaveProperty('jobs')
         expect(Array.isArray(health.scheduler.jobs)).toBe(true)
@@ -55,7 +55,7 @@ test.describe('Scheduler Activation (HTTP Only)', () => {
 
     test('scheduler jobs should have nextRun timestamps', async () => {
         const response = await client.readResource({ uri: 'memory://health' })
-        const health = JSON.parse(response.contents[0]!.text as string)
+        const health = JSON.parse((response.contents[0] as { text: string }).text)
 
         for (const job of health.scheduler.jobs) {
             expect(job).toHaveProperty('nextRun')
@@ -69,7 +69,7 @@ test.describe('Scheduler Activation (HTTP Only)', () => {
 
     test('scheduler jobs should have run count fields', async () => {
         const response = await client.readResource({ uri: 'memory://health' })
-        const health = JSON.parse(response.contents[0]!.text as string)
+        const health = JSON.parse((response.contents[0] as { text: string }).text)
 
         for (const job of health.scheduler.jobs) {
             expect(job).toHaveProperty('runCount')

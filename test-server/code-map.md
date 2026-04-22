@@ -136,8 +136,8 @@ src/
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
-    │   ├── core.ts                 # Core tool group (6 tools)
-    │   ├── search/                 # Search tool group (4 tools)
+    │   ├── tools/                  # 70 tool handlers (10 groups)
+    │   ├── resources/              # 36 resource handlers group (4 tools)
     │   │   ├── index.ts            # Barrel — connects 4 search tools
     │   │   ├── helpers.ts          # Search helper functions
     │   │   ├── auto.ts             # Auto-mode query heuristic classifier
@@ -149,17 +149,19 @@ src/
     │   ├── admin.ts                # Admin tool group (5 tools)
     │   ├── backup.ts               # Backup tool group (4 tools)
     │   ├── codemode.ts             # Code Mode tool group (1 tool)
-    │   ├── team/                   # Team tool group (23 tools)
+    │   ├── team/                   # Team tool group (25 tools)
     │   │   ├── index.ts            # Barrel — composes all team sub-modules
     │   │   ├── helpers.ts          # Shared team helpers (author batch-fetch, constants)
-    │   │   ├── schemas.ts          # Team Zod input/output schemas (all 20 tools)
+    │   │   ├── schemas.ts          # Team Zod input/output schemas (all 25 tools)
     │   │   ├── core-tools.ts       # Core team tools (create, get_by_id, get_recent, list_tags)
     │   │   ├── search-tools.ts     # Search team tools (search, search_by_date_range)
     │   │   ├── admin-tools.ts      # Admin team tools (update, delete, merge_tags)
     │   │   ├── analytics-tools.ts  # Analytics team tools (get_statistics, get_cross_project_insights, team_get_collaboration_matrix)
     │   │   ├── relationship-tools.ts # Relationship team tools (link, visualize)
     │   │   ├── export-tools.ts     # Export team tool (export_entries)
+    │   │   ├── io-tools.ts         # IO team tools (export_markdown, import_markdown)
     │   │   ├── backup-tools.ts     # Backup team tools (backup, list_backups)
+    │   │   ├── flag-tools.ts       # Flag team tools (team_pass_flag, team_resolve_flag)
     │   │   └── vector-tools.ts     # Vector team tools (semantic_search, vector_index_stats, rebuild, add)
     │   ├── github.ts               # GitHub tools barrel (re-exports from github/ subdirectory)
     │   └── github/                 # GitHub tool handlers (split by domain)
@@ -238,6 +240,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 |                   | `team/export-tools.ts`       | 1     | `team_export_entries`                                                                                                                              |
 |                   | `team/io-tools.ts`           | 2     | `team_export_markdown`, `team_import_markdown`                                                                                                     |
 |                   | `team/backup-tools.ts`       | 2     | `team_backup`, `team_list_backups`                                                                                                                 |
+|                   | `team/flag-tools.ts`         | 2     | `team_pass_flag`, `team_resolve_flag`                                                                                                              |
 |                   | `team/vector-tools.ts`       | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                                     |
 
 ### Utility Files (no tools, shared helpers)
@@ -268,7 +271,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `core/utilities.ts`        | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics`, `memory://rules`, `memory://workflows`, `memory://skills`                                  |
 | `github.ts`                | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                                                                                            |
 | `graph.ts`                 | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                  |
-| `team.ts`                  | `memory://team/recent`, `memory://team/statistics`                                                                                                                            |
+| `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`                                                                             |
 | `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details), `memory://help/gotchas` (field notes)                                                   |
 | `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY) |
 | `audit/audit-resource.ts`  | `memory://audit` (ASSISTANT_FOCUSED) — last 50 write/admin audit entries from JSONL log; returns `audit: not configured` when `AUDIT_LOG_PATH` unset                          |
@@ -465,7 +468,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | File / Directory                                       | Purpose                                                                                                                                              |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `test-server/README.md`                                | Agent testing orchestration doc                                                                                                                      |
-| `test-server/tool-reference.md`                        | Complete 61-tool inventory with descriptions                                                                                                         |
+| `test-server/tool-reference.md`                        | Complete 70-tool inventory with descriptions                                                                                                         |
 | `test-server/code-map.md`                              | This file — agent-optimized codebase navigation                                                                                                      |
 | `test-server/test-preflight.md`                        | Pre-test verification checklist                                                                                                                      |
 | `test-server/standard/test-seed.md`                    | Seed data creation (S1–S17) — must run first                                                                                                         |
@@ -481,7 +484,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/standard/test-github.md`                  | **GitHubIntegration** (`index.ts`): Facade uniting 18 tools (issues, PRs, kanban, milestones, repo context). Orchestrates cross-module dependencies. |
 | `test-server/standard/test-errors.md`                  | Prompt handlers, structured error verification, numeric coercion                                                                                     |
 | `test-server/standard/test-integrity.md`               | Data integrity, boundary values, implementation bug detection                                                                                        |
-| `test-server/standard/test-team.md`                    | Team collaboration (20 tools + 2 resources)                                                                                                          |
+| `test-server/standard/test-team.md`                    | Team collaboration (25 tools + 4 resources)                                                                                                          |
 | `test-server/codemode/test-cm-sandbox-basics.md`       | Code mode — Phase 16: Sandbox basics (expressions, async, metrics, timeout)                                                                          |
 | `test-server/codemode/test-cm-api-discovery.md`        | Code mode — Phase 17: API discoverability (help, aliases, positional args)                                                                           |
 | `test-server/codemode/test-cm-readonly.md`             | Code mode — Phase 18: Readonly mode (read succeed, writes blocked)                                                                                   |

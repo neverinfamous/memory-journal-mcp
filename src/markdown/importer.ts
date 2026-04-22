@@ -6,12 +6,14 @@
  * relationship linking, and dry-run mode.
  */
 
-import { readdir, readFile } from 'node:fs/promises'
+import { opendir, open } from 'node:fs/promises'
 import { join } from 'node:path'
+import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
+import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 
 // ============================================================================
 // Types
@@ -25,6 +27,8 @@ export interface ImportOptions {
     limit?: number
     /** Author name for new entries (team journal) */
     author?: string
+    /** Associate imported entries with a specific GitHub project number */
+    project_number?: number
 }
 
 /** Result of an import operation */
@@ -33,6 +37,8 @@ export interface ImportResult {
     created: number
     updated: number
     skipped: number
+    relationshipsLinked: number
+    vectorsIndexed: number
     errors: { file: string; error: string }[]
     dry_run: boolean
 }
@@ -77,7 +83,12 @@ const VALID_ENTRY_TYPES = new Set<string>([
  */
 function toEntryType(value: string | undefined): EntryType | undefined {
     if (value === undefined) return undefined
-    return VALID_ENTRY_TYPES.has(value) ? (value as EntryType) : undefined
+    if (!VALID_ENTRY_TYPES.has(value)) {
+        throw new Error(
+            `Invalid entry type: ${value}. Must be one of: ${Array.from(VALID_ENTRY_TYPES).join(', ')}`
+        )
+    }
+    return value as EntryType
 }
 
 // ============================================================================
@@ -107,27 +118,80 @@ export async function importMarkdownEntries(
     sourceDir: string,
     db: IDatabaseAdapter,
     options: ImportOptions = {},
-    vectorManager?: VectorSearchManager
+    vectorManager: VectorSearchManager | undefined,
+    allowedRoots: string[]
 ): Promise<ImportResult> {
-    const { dry_run = false, limit = 100 } = options
+    const { dry_run = false, limit = 100, author, project_number } = options
 
-    // Read directory for .md files
-    const allFiles = await readdir(sourceDir)
-    const mdFiles = allFiles.filter((f) => f.endsWith('.md')).slice(0, limit)
+    // Dynamically enforce bounded root
+    assertSafeDirectoryPath(sourceDir, allowedRoots)
+
+    // Stream directory for .md files to avoid memory exhaustion on huge directories
+    const mdFiles: string[] = []
+    const dir = await opendir(sourceDir)
+    for await (const dirent of dir) {
+        if (dirent.isFile() && dirent.name.endsWith('.md')) {
+            mdFiles.push(dirent.name)
+            if (mdFiles.length >= limit) break
+        }
+    }
 
     const result: ImportResult = {
         success: true,
         created: 0,
         updated: 0,
         skipped: 0,
+        relationshipsLinked: 0,
+        vectorsIndexed: 0,
         errors: [],
         dry_run,
     }
 
+    // Phase 1: Read files and parse asynchronously
+    interface ParsedFile {
+        filename: string
+        body: string
+        metadata: {
+            mj_id?: number
+            entry_type?: string
+            tags?: string[]
+            significance?: string
+            relationships?: { type: string; target_id: number }[]
+        }
+    }
+    const parsedFiles: ParsedFile[] = []
+
     for (const filename of mdFiles) {
+        let handle
         try {
             const filepath = join(sourceDir, filename)
-            const content = await readFile(filepath, 'utf-8')
+
+            // Explicitly assert the exact filepath has no symlinked components anywhere in its chain
+            assertSafeFilePath(filepath, allowedRoots)
+
+            // Open the file with O_NOFOLLOW to atomically prevent symlink traversal
+            try {
+                handle = await open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+            } catch (err: unknown) {
+                const code =
+                    err instanceof Error && 'code' in err
+                        ? (err as { code?: string }).code
+                        : undefined
+                if (code === 'ELOOP') {
+                    throw new Error(`Refusing to read symlink during import: ${filename}`, {
+                        cause: err,
+                    })
+                }
+                throw err
+            }
+
+            // Provide atomic size check using the file handle
+            const stats = await handle.stat()
+            if (stats.size > 5 * 1024 * 1024) {
+                throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
+            }
+
+            const content = await handle.readFile('utf-8')
 
             // Parse frontmatter
             const { metadata, body } = parseFrontmatter(content)
@@ -137,6 +201,31 @@ export async function importMarkdownEntries(
                 result.skipped++
                 continue
             }
+
+            parsedFiles.push({
+                filename,
+                body,
+                metadata: metadata,
+            })
+        } catch (err) {
+            result.errors.push({
+                file: filename,
+                error: err instanceof Error ? err.message : String(err),
+            })
+            result.success = false
+        } finally {
+            if (handle) {
+                await handle.close()
+            }
+        }
+    }
+
+    // Phase 2: Perform DB operations in a transaction
+    const vectorQueue: { entryId: number; body: string; filename: string }[] = []
+
+    db.executeInTransaction(() => {
+        for (const file of parsedFiles) {
+            const { filename, body, metadata } = file
 
             if (dry_run) {
                 // In dry-run mode, just classify what would happen
@@ -176,6 +265,9 @@ export async function importMarkdownEntries(
                         ...(metadata.significance !== undefined && {
                             significanceType: metadata.significance as SignificanceType,
                         }),
+                        // SEC-2.4: Preserve author attribution from team import options
+                        ...(author !== undefined && { author }),
+                        ...(project_number !== undefined && { projectNumber: project_number }),
                     })
                     entryId = newEntry.id
                     result.created++
@@ -189,6 +281,9 @@ export async function importMarkdownEntries(
                     ...(metadata.significance !== undefined && {
                         significanceType: metadata.significance as SignificanceType,
                     }),
+                    // SEC-2.4: Preserve author attribution from team import options
+                    ...(author !== undefined && { author }),
+                    ...(project_number !== undefined && { projectNumber: project_number }),
                 })
                 entryId = newEntry.id
                 result.created++
@@ -200,28 +295,45 @@ export async function importMarkdownEntries(
                     if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
 
                     // Only link if target entry exists
-                    try {
-                        const targetExists = db.getEntryById(rel.target_id)
-                        if (targetExists) {
-                            db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
-                        }
-                    } catch {
-                        // Relationship linking failure is non-fatal
+                    const targetExists = db.getEntryById(rel.target_id)
+                    if (targetExists) {
+                        db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
+                        result.relationshipsLinked++
                     }
                 }
             }
 
-            // Vector re-indexing (fire-and-forget)
-            if (vectorManager) {
-                void vectorManager.addEntry(entryId, body).catch(() => {
-                    // Vector indexing failure is non-fatal
+            vectorQueue.push({ entryId, body, filename })
+        }
+    })
+
+    // Phase 3: Perform vector indexing asynchronously (outside transaction)
+    if (!dry_run && vectorManager) {
+        let hasVectorErrors = false
+        for (const { entryId, body, filename } of vectorQueue) {
+            try {
+                const vectorResult = await vectorManager.addEntry(entryId, body)
+                if (vectorResult.success) {
+                    result.vectorsIndexed++
+                } else {
+                    hasVectorErrors = true
+                    result.errors.push({
+                        file: filename,
+                        error: `Vector indexing failed: ${vectorResult.error || 'Unknown error'}`,
+                    })
+                }
+            } catch (err) {
+                hasVectorErrors = true
+                result.errors.push({
+                    file: filename,
+                    error: err instanceof Error ? err.message : String(err),
                 })
             }
-        } catch (err) {
-            result.errors.push({
-                file: filename,
-                error: err instanceof Error ? err.message : String(err),
-            })
+        }
+
+        // If vector indexing fails, we mark the import as a partial success
+        if (hasVectorErrors) {
+            result.success = false
         }
     }
 

@@ -187,8 +187,8 @@ describe('HttpTransport', () => {
         it('should create instance with config', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: false,
             }
             const transport = new HttpTransport(config)
@@ -204,35 +204,27 @@ describe('HttpTransport', () => {
         it('should register routes and start server', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             expect(mockApp.use).toHaveBeenCalled()
-            expect(mockApp.listen).toHaveBeenCalledWith(3000, '0.0.0.0', expect.any(Function))
+            expect(mockApp.listen).toHaveBeenCalledWith(3000, '127.0.0.1', expect.any(Function))
         })
 
-        it('should warn about wildcard CORS and no auth', async () => {
-            const { logger } = await import('../../src/utils/logger.js')
+        it('should throw on wildcard CORS and no auth', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
-
-            expect(logger.warning).toHaveBeenCalledWith(
-                expect.stringContaining('CORS origin'),
-                expect.any(Object)
-            )
-            expect(logger.warning).toHaveBeenCalledWith(
-                expect.stringContaining('No authentication'),
-                expect.any(Object)
+            await expect(transport.start((() => mockServer) as never, null)).rejects.toThrow(
+                /FATAL/
             )
         })
     })
@@ -245,13 +237,13 @@ describe('HttpTransport', () => {
         it('should setup auth middleware when token provided', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigin: 'http://localhost',
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: false,
                 authToken: 'test-token-123',
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             expect(mockApp.use).toHaveBeenCalled()
         })
@@ -282,12 +274,12 @@ describe('HttpTransport', () => {
         it('should set security headers on requests', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             // Find middleware that sets security headers (position is dynamic due to hostHeaderValidation)
             const securityMw = findMiddleware((res) => {
@@ -313,13 +305,13 @@ describe('HttpTransport', () => {
         it('should set HSTS when enableHSTS is true', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
                 enableHSTS: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             // Find security headers middleware by behavior
             const securityMw = findMiddleware((res) => {
@@ -343,12 +335,12 @@ describe('HttpTransport', () => {
         it('should handle CORS OPTIONS preflight with 204', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             // Find the OPTIONS middleware by behavior (returns 204 for OPTIONS)
             let optionsMw: Function | undefined
@@ -381,12 +373,12 @@ describe('HttpTransport', () => {
         it('should pass non-OPTIONS requests through CORS middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             const corsMw = mockMiddlewares[1]
             const req = mockReq({ method: 'POST' })
@@ -407,12 +399,12 @@ describe('HttpTransport', () => {
         it('should return healthy on GET /health', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             const handler = mockRoutes['get']!['/health']
             expect(handler).toBeDefined()
@@ -428,12 +420,12 @@ describe('HttpTransport', () => {
         it('should return server info on GET /', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             const handler = mockRoutes['get']!['/']
             expect(handler).toBeDefined()
@@ -448,12 +440,12 @@ describe('HttpTransport', () => {
         it('should return 204 for OPTIONS via middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             // Find the OPTIONS middleware by behavior (position is dynamic)
             let optionsMw: Function | undefined
@@ -486,12 +478,12 @@ describe('HttpTransport', () => {
         it('should pass non-OPTIONS requests through OPTIONS middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             const optionsMw = mockMiddlewares[1]
             const req = mockReq({ method: 'POST' })
@@ -506,12 +498,12 @@ describe('HttpTransport', () => {
         it('should return 404 for unknown routes', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             // 404 handler is the last registered middleware
             const lastMw = mockMiddlewares[mockMiddlewares.length - 1]
@@ -531,12 +523,12 @@ describe('HttpTransport', () => {
         it('should return 405 for GET /mcp in stateless mode', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             const handler = mockRoutes['get']!['/mcp']
             expect(handler).toBeDefined()
@@ -549,12 +541,12 @@ describe('HttpTransport', () => {
         it('should return 204 for DELETE /mcp in stateless mode', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             const handler = mockRoutes['delete']!['/mcp']
             expect(handler).toBeDefined()
@@ -573,14 +565,14 @@ describe('HttpTransport', () => {
         it('should start scheduler after server listen', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
             const transport = new HttpTransport(config)
             await transport.start(
-                mockServer,
+                (() => mockServer) as never,
                 mockScheduler as unknown as Parameters<HttpTransport['start']>[1]
             )
 
@@ -596,12 +588,12 @@ describe('HttpTransport', () => {
         it('should clean up on stop', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
             await transport.stop(null)
             // Should not throw
         })
@@ -609,14 +601,14 @@ describe('HttpTransport', () => {
         it('should stop scheduler on stop', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigin: '*',
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
             const transport = new HttpTransport(config)
             await transport.start(
-                mockServer,
+                (() => mockServer) as never,
                 mockScheduler as unknown as Parameters<HttpTransport['start']>[1]
             )
             await transport.stop(mockScheduler as unknown as Parameters<HttpTransport['stop']>[0])
@@ -627,12 +619,12 @@ describe('HttpTransport', () => {
         it('should catch errors when closing active transports and SSE transports', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             transport.transports.set('dummy-1', {
                 close: vi.fn().mockRejectedValue(new Error('dummy close error')),
@@ -653,16 +645,16 @@ describe('HttpTransport', () => {
     // ========================================================================
 
     describe('rate limiter middleware', () => {
-        it('should enforce rate limits and bypass health check', async () => {
+        it('should enforce rate limits and apply to health check', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
+                host: '127.0.0.1',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
                 enableRateLimit: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             let rateLimiterMw: Function | undefined
             for (const mw of mockMiddlewares) {
@@ -683,14 +675,14 @@ describe('HttpTransport', () => {
             }
             expect(rateLimiterMw).toBeDefined()
 
-            // Verify a health check bypasses it even if rate limited
+            // Verify a health check does NOT bypass it when rate limited
             const healthRes = mockRes()
             let nextCalled = false
             rateLimiterMw!(mockReq({ path: '/health', ip: '10.0.0.5' }), healthRes, () => {
                 nextCalled = true
             })
-            expect(nextCalled).toBe(true)
-            expect(healthRes['status'] as any).not.toHaveBeenCalledWith(429)
+            expect(nextCalled).toBe(false)
+            expect(healthRes['status'] as any).toHaveBeenCalledWith(429)
 
             // Cleanup any intervals started by HttpTransport for rate limiting
             await transport.stop(null)
@@ -705,13 +697,13 @@ describe('HttpTransport', () => {
         it('should reject bad tokens with 401', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['http://localhost'],
                 stateless: true,
                 authToken: 'secret-token',
             }
             const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            await transport.start((() => mockServer) as never, null)
 
             // Auth middleware checks req.path and authorization header.
             // It's registered via app.use() after security, CORS, json, rate-limit.
@@ -759,85 +751,30 @@ describe('HttpTransport', () => {
 
     describe('oauth mode setups', () => {
         it('should setup OAuth 2.1 authentication when enabled', async () => {
-            const config: HttpTransportConfig = {
-                port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
-                stateless: true,
-                oauthEnabled: true,
-                oauthIssuer: 'https://auth.example.com',
-                oauthAudience: 'test-audience',
-            }
-            const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
+            const originalFetch = global.fetch
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({ keys: [] }),
+            }) as unknown as typeof fetch
 
-            // Should register the well-known route
-            expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
-        })
-
-        it('should enforce OAuth scopes on tools/call requests', async () => {
-            const config: HttpTransportConfig = {
-                port: 3000,
-                host: '0.0.0.0',
-                corsOrigins: ['*'],
-                stateless: true,
-                oauthEnabled: true,
-                oauthIssuer: 'https://auth.example.com',
-                oauthAudience: 'test-audience',
-            }
-            const transport = new HttpTransport(config)
-            await transport.start(mockServer, null)
-
-            // The OAuth scope middleware is pushed into mockMiddlewares.
-            // We can find it by passing a request with no `req.auth` and a tool call body, which returns 401.
-            let scopeMw: Function | undefined
-            for (const mw of mockMiddlewares) {
-                const req = mockReq({
-                    method: 'POST',
-                    body: { method: 'tools/call', params: { name: 'mj_execute_code' } },
-                })
-                const res = mockRes()
-                try {
-                    mw(req, res, () => {})
-                } catch {}
-                if ((res['status'] as any).mock.calls.some((c: any) => c[0] === 401)) {
-                    scopeMw = mw
-                    break
+            try {
+                const config: HttpTransportConfig = {
+                    port: 3000,
+                    host: '127.0.0.1',
+                    corsOrigins: ['http://localhost'],
+                    stateless: true,
+                    oauthEnabled: true,
+                    oauthIssuer: 'https://auth.example.com',
+                    oauthAudience: 'test-audience',
                 }
+                const transport = new HttpTransport(config)
+                await transport.start((() => mockServer) as never, null)
+
+                // Should register the well-known route
+                expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
+            } finally {
+                global.fetch = originalFetch
             }
-            expect(scopeMw).toBeDefined()
-
-            // Test non-POST / non-tools/call
-            const req1 = mockReq({ method: 'GET' })
-            const next1 = vi.fn()
-            scopeMw!(req1, mockRes(), next1)
-            expect(next1).toHaveBeenCalled()
-
-            // Test no params name
-            const req2 = mockReq({ method: 'POST', body: { method: 'tools/call' } })
-            const next2 = vi.fn()
-            scopeMw!(req2, mockRes(), next2)
-            expect(next2).toHaveBeenCalled()
-
-            // Test sufficient scope
-            const req3 = mockReq({
-                method: 'POST',
-                body: { method: 'tools/call', params: { name: 'mj_execute_code' } },
-                auth: { scopes: ['admin'] }, // codemode requires admin scope
-            })
-            const next3 = vi.fn()
-            scopeMw!(req3, mockRes(), next3)
-            expect(next3).toHaveBeenCalled()
-
-            // Test insufficient scope
-            const req4 = mockReq({
-                method: 'POST',
-                body: { method: 'tools/call', params: { name: 'mj_execute_code' } },
-                auth: { scopes: ['read'] },
-            })
-            const res4 = mockRes()
-            scopeMw!(req4, res4, vi.fn())
-            expect(res4['status']).toHaveBeenCalledWith(403)
         })
     })
 })

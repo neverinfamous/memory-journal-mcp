@@ -62,7 +62,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
 
-                    const resolved = await resolveOwner(context, input.owner)
+                    const resolved = await resolveOwner(context, input.owner, input.repo)
                     if ('error' in resolved) return resolved.response
 
                     // Fallback to explicit repo param if auto-detect failed (resolveOwner uses getRepoInfo)
@@ -194,7 +194,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
 
-                    const resolved = await resolveOwner(context, input.owner)
+                    const resolved = await resolveOwner(context, input.owner, input.repo)
                     if ('error' in resolved) return resolved.response
 
                     const effectiveRepo = input.repo ?? resolved.repo
@@ -407,7 +407,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
 
-                    const resolved = await resolveOwner(context, input.owner)
+                    const resolved = await resolveOwner(context, input.owner, input.repo)
                     if ('error' in resolved) return resolved.response
 
                     const effectiveRepo = input.repo ?? resolved.repo

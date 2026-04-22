@@ -7,11 +7,14 @@ services:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
+      - AUDIT_LOG_PATH=stderr
       # Optional: GitHub integration
       # - GITHUB_TOKEN=<your-github-token>
       # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: *)
+      # Optional: CORS origin (default: none)
       # - MCP_CORS_ORIGIN=http://localhost:3000
+      # Required for IO operations to sandbox filesystem access
+      - ALLOWED_IO_ROOTS=/app/data
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev
@@ -37,13 +40,16 @@ services:
       - NODE_ENV=production
       - DB_PATH=/app/data/memory_journal.db
       - MCP_HOST=0.0.0.0
-      # Optional: Bearer token authentication (recommended for production)
-      # - MCP_AUTH_TOKEN=your_secret_token_here
+      - AUDIT_LOG_PATH=stderr
+      # Required for HTTP: Bearer token authentication
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
       # Optional: GitHub integration
       # - GITHUB_TOKEN=<your-github-token>
       # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: *)
+      # Optional: CORS origin (default: none)
       # - MCP_CORS_ORIGIN=http://localhost:3000
+      # Required for IO operations to sandbox filesystem access
+      - ALLOWED_IO_ROOTS=/app/data
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev
@@ -57,6 +63,11 @@ services:
       - '3000:3000'
     command:
       ['node', 'dist/cli.js', '--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
     deploy:
       resources:

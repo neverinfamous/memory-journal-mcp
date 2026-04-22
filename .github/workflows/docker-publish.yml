@@ -40,7 +40,7 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
       - name: Build image for scanning (local only)
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
         with:
           context: .
           file: Dockerfile
@@ -108,8 +108,8 @@ jobs:
       - name: Read version from package.json
         id: version
         run: |
-          VERSION=$(grep -oP '"version":\s*"\K[0-9.]+' package.json | head -1)
-          if [ -z "$VERSION" ]; then
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -z "$VERSION" ] || [ "$VERSION" = "undefined" ]; then
             VERSION="1.0.0"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -128,7 +128,7 @@ jobs:
 
       - name: Build and push platform image
         id: build
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
         with:
           context: .
           file: Dockerfile
@@ -140,6 +140,14 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.platform }},mode=max
           provenance: mode=max
           sbom: true
+
+      - name: Attest Build Provenance
+        if: github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
       - name: Export digest
         run: |
@@ -195,8 +203,8 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(grep -oP '"version":\s*"\K[0-9.]+' package.json | head -1)
-          if [ -z "$VERSION" ]; then
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -z "$VERSION" ] || [ "$VERSION" = "undefined" ]; then
             VERSION="1.0.0"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -217,24 +225,26 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+            $(find . -maxdepth 1 -type f -printf "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%f ")
 
       - name: Inspect manifest
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
       # Update Docker Hub description
+      # WARNING: Docker Hub API does NOT allow updating descriptions using a Personal Access Token (PAT).
+      # If DOCKER_PASSWORD is a PAT, this step will fail silently (continue-on-error: true).
+      # You must either use your actual Docker Hub password, or continue copy/pasting DOCKER_README.md manually.
       - name: Update Docker Hub Description
         if: github.ref == 'refs/heads/main'
         uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5
-        continue-on-error: true
         timeout-minutes: 5
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./DOCKER_README.md
-          short-description: 'MCP Server- AI Memory with Code Mode, GitHub Integration, Knowledge Graphs, Search, Audit+Token Log.'
+          short-description: 'MCP Server- AI Memory with Code Mode, GitHub Integration, Hush, Knowledge Graphs, Search, Audit Log.'
 
       - name: Deployment Summary
         if: github.ref == 'refs/heads/main'

@@ -63,7 +63,7 @@ export function getStatistics(
     const periodRows = db
         .prepare(
             `SELECT
-        strftime('${dateFormat}', timestamp) as period,
+        strftime(?, timestamp) as period,
         COUNT(*) as total_count,
         SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END) as significant_count
     FROM memory_journal
@@ -72,7 +72,11 @@ export function getStatistics(
     ORDER BY period DESC
     LIMIT ${String(MAX_PERIOD_ROWS)}`
         )
-        .all(...dateParams) as { period: string; total_count: number; significant_count: number }[]
+        .all(dateFormat, ...dateParams) as {
+        period: string
+        total_count: number
+        significant_count: number
+    }[]
 
     const entriesByPeriod = periodRows.map((r) => ({
         period: r.period,
@@ -86,7 +90,11 @@ export function getStatistics(
             significantCount: r.significant_count,
         }))
 
-    const relCountRow = db.prepare(`SELECT COUNT(*) as count FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id WHERE m.deleted_at IS NULL${dateFilter}`).get(...dateParams) as {
+    const relCountRow = db
+        .prepare(
+            `SELECT COUNT(*) as count FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id WHERE m.deleted_at IS NULL${dateFilter}`
+        )
+        .get(...dateParams) as {
         count: number
     }
     const relTypeRows = db
@@ -99,7 +107,10 @@ export function getStatistics(
         GROUP BY r.relationship_type
     `
         )
-        .all(...dateParams) as { relationship_type: 'blocked_by' | 'resolved' | 'caused'; count: number }[]
+        .all(...dateParams) as {
+        relationship_type: 'blocked_by' | 'resolved' | 'caused'
+        count: number
+    }[]
 
     const totalRelationships = relCountRow.count
     const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0

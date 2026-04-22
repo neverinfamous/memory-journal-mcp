@@ -1,6 +1,6 @@
 {
     "name": "memory-journal-mcp",
-    "version": "7.5.0",
+    "version": "7.6.0",
     "description": "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads",
     "type": "module",
     "main": "dist/index.js",
@@ -25,8 +25,10 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage && npx tsx scripts/update-badges.ts",
         "bench": "vitest bench --run",
+        "pretest:e2e": "node -e \"fs.rmSync('.test-output/e2e', { recursive: true, force: true })\"",
         "test:e2e": "playwright test",
-        "generate:instructions": "node scripts/generate-server-instructions.ts"
+        "generate:instructions": "node scripts/generate-server-instructions.ts",
+        "prepublishOnly": "npm run check && npm run test && npm run build"
     },
     "keywords": [
         "mcp",

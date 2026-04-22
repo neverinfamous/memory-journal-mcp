@@ -42,7 +42,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | -------------------------- | :---: | ------------------------------------------------------------------------------------------------------- | ----------- |
 | `test-github.md`           |  13   | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, milestones, insights, Copilot, cleanup) | After seed  |
 | `test-kanban-lifecycle.md` | 13.5  | **Kanban Lifecycle** — Seamless Add/Move/Delete flow using token-efficient `get_kanban_board`           | After seed  |
-| `test-team.md`             |  14   | **Team Collaboration** — 24 team tools + 4 team resources (incl. Hush Protocol flags)                   | After seed  |
+| `test-team.md`             |  14   | **Team Collaboration** — 25 team tools + 4 team resources (incl. Hush Protocol flags)                   | After seed  |
 
 ### Granular Tool Group Stress Tests
 

@@ -55,7 +55,7 @@ const help = await mj.team.passTeamFlag({
 
 // Verify entry structure
 const detail = await mj.team.teamGetEntryById({ entry_id: blocker.entry?.id })
-const autoCtx = detail.entry?.autoContext ? JSON.parse(detail.entry.autoContext) : null
+const flagMeta = detail.entry?.flagMetadata || null
 
 const result = {
   blockerSuccess: blocker.success,
@@ -69,31 +69,31 @@ const result = {
   entryType: detail.entry?.entryType,
   hasTags: detail.entry?.tags?.includes('flag:blocker'),
   hasTargetTag: detail.entry?.tags?.includes('@sarah'),
-  autoCtxFlagType: autoCtx?.flag_type,
-  autoCtxTarget: autoCtx?.target_user,
-  autoCtxLink: autoCtx?.link,
-  autoCtxResolved: autoCtx?.resolved,
-};
-return result;
+  autoCtxFlagType: flagMeta?.flag_type,
+  autoCtxTarget: flagMeta?.target_user,
+  autoCtxLink: flagMeta?.link,
+  autoCtxResolved: flagMeta?.resolved,
+}
+return result
 ```
 
-| Check             | Expected                                |
-| ----------------- | --------------------------------------- |
-| `blockerSuccess`  | `true`                                  |
-| `blockerFlagType` | `"blocker"`                             |
-| `blockerTarget`   | `"sarah"` (@ prefix stripped)           |
-| `blockerResolved` | `false`                                 |
-| `blockerHasAuthor`| `true`                                  |
-| `fyiSuccess`      | `true`                                  |
-| `reviewSuccess`   | `true`                                  |
-| `helpSuccess`     | `true`                                  |
-| `entryType`       | `"flag"`                                |
-| `hasTags`         | `true`                                  |
-| `hasTargetTag`    | `true`                                  |
-| `autoCtxFlagType` | `"blocker"`                             |
-| `autoCtxTarget`   | `"sarah"`                               |
-| `autoCtxLink`     | `"src/database/migrations/005.ts"`      |
-| `autoCtxResolved` | `false`                                 |
+| Check              | Expected                           |
+| ------------------ | ---------------------------------- |
+| `blockerSuccess`   | `true`                             |
+| `blockerFlagType`  | `"blocker"`                        |
+| `blockerTarget`    | `"sarah"` (@ prefix stripped)      |
+| `blockerResolved`  | `false`                            |
+| `blockerHasAuthor` | `true`                             |
+| `fyiSuccess`       | `true`                             |
+| `reviewSuccess`    | `true`                             |
+| `helpSuccess`      | `true`                             |
+| `entryType`        | `"flag"`                           |
+| `hasTags`          | `true`                             |
+| `hasTargetTag`     | `true`                             |
+| `autoCtxFlagType`  | `"blocker"`                        |
+| `autoCtxTarget`    | `"sarah"`                          |
+| `autoCtxLink`      | `"src/database/migrations/005.ts"` |
+| `autoCtxResolved`  | `false`                            |
 
 ### 28.13 Vocabulary Validation & Error Paths
 
@@ -136,22 +136,22 @@ const result = {
   resolveGhostCode: resolveGhost.code,
   resolveEmptyError: resolveEmpty.success === false,
   resolveWrongTypeError: resolveWrongType.success === false || resolveWrongType.skipped === true,
-};
-return result;
+}
+return result
 ```
 
-| Check                  | Expected                                      |
-| ---------------------- | --------------------------------------------- |
-| `badTypeError`         | `true` (invalid vocabulary term)              |
-| `badTypeCode`          | `"VALIDATION_ERROR"`                          |
-| `badTypeHasSuggestion` | `true` (lists valid types)                    |
-| `noTypeError`          | `true` (flag_type required)                   |
-| `noMessageError`       | `true` (message required)                     |
-| `emptyError`           | `true` (both required)                        |
-| `resolveGhostError`    | `true` (entry not found)                      |
-| `resolveGhostCode`     | `"RESOURCE_NOT_FOUND"`                        |
-| `resolveEmptyError`    | `true` (flag_id required)                     |
-| `resolveWrongTypeError`| `true` (entry is not a flag)                  |
+| Check                   | Expected                         |
+| ----------------------- | -------------------------------- |
+| `badTypeError`          | `true` (invalid vocabulary term) |
+| `badTypeCode`           | `"VALIDATION_ERROR"`             |
+| `badTypeHasSuggestion`  | `true` (lists valid types)       |
+| `noTypeError`           | `true` (flag_type required)      |
+| `noMessageError`        | `true` (message required)        |
+| `emptyError`            | `true` (both required)           |
+| `resolveGhostError`     | `true` (entry not found)         |
+| `resolveGhostCode`      | `"RESOURCE_NOT_FOUND"`           |
+| `resolveEmptyError`     | `true` (flag_id required)        |
+| `resolveWrongTypeError` | `true` (entry is not a flag)     |
 
 ### 28.14 Flag Resolution Lifecycle
 
@@ -173,7 +173,7 @@ const resolved = await mj.team.resolveTeamFlag({
 
 // Verify resolved state
 const after = await mj.team.teamGetEntryById({ entry_id: flagId })
-const afterCtx = after.entry?.autoContext ? JSON.parse(after.entry.autoContext) : null
+const afterCtx = after.entry?.flagMetadata || null
 
 // Idempotent re-resolve
 const reResolved = await mj.team.resolveTeamFlag({
@@ -202,8 +202,8 @@ const result = {
   reResolveOriginal: reResolved.resolution === 'Fixed by migration hotfix',
   bareResolveSuccess: bareResolved.success,
   bareResolveNoComment: bareResolved.resolution === null,
-};
-return result;
+}
+return result
 ```
 
 | Check                  | Expected                              |
@@ -265,16 +265,16 @@ const result = {
   typeSearchAllFlags: typeSearch.entries?.every((e) => e.entryType === 'flag') ?? true,
   cleanedUp: deleted,
   cleanedAll: deleted === uniqueIds.length,
-};
-return result;
+}
+return result
 ```
 
-| Check               | Expected                         |
-| ------------------- | -------------------------------- |
-| `tagSearchCount`    | ≥ 1                              |
-| `typeSearchCount`   | ≥ 1                              |
-| `typeSearchAllFlags`| `true` (filter enforced)         |
-| `cleanedAll`        | `true` (all test entries deleted)|
+| Check                | Expected                          |
+| -------------------- | --------------------------------- |
+| `tagSearchCount`     | ≥ 1                               |
+| `typeSearchCount`    | ≥ 1                               |
+| `typeSearchAllFlags` | `true` (filter enforced)          |
+| `cleanedAll`         | `true` (all test entries deleted) |
 
 ---
 

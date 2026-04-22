@@ -7,6 +7,9 @@ export class RepositoryManager {
     constructor(private client: GitHubClient) {}
 
     async getRepoInfo(): Promise<RepoInfo> {
+        const cached = this.getCachedRepoInfo()
+        if (cached) return cached
+
         try {
             const branchResult = await this.client.git.branch()
             const branch = branchResult.current || null
@@ -18,7 +21,7 @@ export class RepositoryManager {
             const { owner, repo } = this.parseRemoteUrl(remoteUrl)
 
             const repoInfo = { owner, repo, branch, remoteUrl }
-            this.client.cachedRepoInfo = repoInfo
+            this.client.setCache('repoInfo', repoInfo)
             return repoInfo
         } catch (error) {
             logger.debug('Failed to get repo info (may not be a git repo)', {
@@ -30,11 +33,11 @@ export class RepositoryManager {
     }
 
     getCachedRepoInfo(): RepoInfo | null {
-        return this.client.cachedRepoInfo
+        return (this.client.getCached('repoInfo') as RepoInfo | undefined) ?? null
     }
 
     setCachedRepoInfo(info: RepoInfo): void {
-        this.client.cachedRepoInfo = info
+        this.client.setCache('repoInfo', info)
     }
 
     private parseRemoteUrl(remoteUrl: string | null): {
@@ -67,10 +70,15 @@ export class RepositoryManager {
         return { owner: null, repo: null }
     }
 
-    async getWorkflowRuns(owner: string, repo: string, limit = 10): Promise<GitHubWorkflowRun[]> {
+    async getWorkflowRuns(
+        owner: string,
+        repo: string,
+        limit = 10,
+        abortSignal?: AbortSignal
+    ): Promise<GitHubWorkflowRun[]> {
         if (!this.client.octokit) {
             logger.debug('GitHub API not available - no token', { module: 'GitHub' })
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `workflows:${owner}:${repo}:${String(limit)}`
@@ -82,6 +90,7 @@ export class RepositoryManager {
                 owner,
                 repo,
                 per_page: limit,
+                request: { signal: abortSignal },
             })
 
             const result = response.data.workflow_runs.map((run) => ({
@@ -108,7 +117,7 @@ export class RepositoryManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 }

@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServerFactory } from '../../../server/mcp-server.js'
 import { randomUUID } from 'node:crypto'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -12,27 +12,34 @@ import {
     JSONRPC_INTERNAL_ERROR,
 } from '../types.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import { requestContextStorage } from '../../../utils/request-context.js'
 
 export interface StatefulContext {
     transports: Map<string, StreamableHTTPServerTransport>
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat
     sseTransports: Map<string, SSEServerTransport>
     sessionLastActivity: Map<string, number>
+    sessionSubjects: Map<string, string>
+    sessionLocks: Map<string, number>
     touchSession: (sid: string) => void
     /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     serverConnected: boolean
+    /** Serialize concurrent transport connections to the singleton server */
+    connectionLock?: Promise<void>
+    sessionCreatedAt?: Map<string, number>
 }
 
 export function setupStateful(
     ctx: StatefulContext,
     app: Express,
-    server: McpServer
+    serverFactory: McpServerFactory
 ): ReturnType<typeof setInterval> {
     const sessionSweepTimer = setInterval(() => {
         const now = Date.now()
         for (const [sid, lastActivity] of ctx.sessionLastActivity) {
             const idleMs = now - lastActivity
             if (idleMs <= SESSION_TIMEOUT_MS) continue
+            if ((ctx.sessionLocks.get(sid) ?? 0) > 0) continue // Skip if locked (race condition prevention)
 
             // Expire idle Streamable HTTP sessions
             if (ctx.transports.has(sid)) {
@@ -46,7 +53,9 @@ export function setupStateful(
                     void t.close()
                 }
                 ctx.transports.delete(sid)
+                ctx.sessionSubjects.delete(sid)
                 ctx.sessionLastActivity.delete(sid)
+                if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
             }
 
             // Expire idle Legacy SSE sessions
@@ -61,11 +70,16 @@ export function setupStateful(
                     void t.close()
                 }
                 ctx.sseTransports.delete(sid)
+                ctx.sessionSubjects.delete(sid)
                 ctx.sessionLastActivity.delete(sid)
+                if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
             }
         }
     }, SESSION_SWEEP_INTERVAL_MS)
     sessionSweepTimer.unref()
+
+    // Transports are instantiated dynamically upon receiving an initialize request
+    // to support sequential test resets and client reconnections.
 
     // POST /mcp — Handle JSON-RPC requests
     app.post('/mcp', (req: Request, res: Response): void => {
@@ -73,9 +87,7 @@ export function setupStateful(
 
         void (async () => {
             try {
-                let httpTransport: StreamableHTTPServerTransport | undefined
-
-                if (sessionId !== undefined && ctx.transports.has(sessionId)) {
+                if (sessionId !== undefined) {
                     // Cross-protocol guard: reject SSE session IDs on /mcp
                     if (ctx.sseTransports.has(sessionId)) {
                         res.status(400).json({
@@ -90,79 +102,48 @@ export function setupStateful(
                         return
                     }
 
-                    // Reuse existing transport and refresh session activity
+                    if (!ctx.transports.has(sessionId)) {
+                        res.status(400).json({
+                            jsonrpc: '2.0',
+                            error: { code: JSONRPC_SERVER_ERROR, message: 'Session not found' },
+                            id: null,
+                        })
+                        return
+                    }
+
+                    const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+                    const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
+                    const expectedSub = ctx.sessionSubjects.get(sessionId)
+                    if (reqSubject !== expectedSub) {
+                        res.status(403).json({
+                            jsonrpc: '2.0',
+                            error: {
+                                code: JSONRPC_SERVER_ERROR,
+                                message: 'Forbidden: Session belongs to a different subject',
+                            },
+                            id: null,
+                        })
+                        return
+                    }
+
+                    if (ctx.sessionCreatedAt) {
+                        const createdAt = ctx.sessionCreatedAt.get(sessionId) ?? Date.now()
+                        // 24 hour absolute TTL
+                        if (Date.now() - createdAt > 86400000) {
+                            res.status(401).json({
+                                jsonrpc: '2.0',
+                                error: {
+                                    code: JSONRPC_SERVER_ERROR,
+                                    message: 'Unauthorized: Session absolute TTL expired',
+                                },
+                                id: null,
+                            })
+                            return
+                        }
+                    }
+
                     ctx.touchSession(sessionId)
-                    httpTransport = ctx.transports.get(sessionId)
-                } else if (sessionId === undefined && isInitializeRequest(req.body)) {
-                    // New initialization request — create transport
-                    const newTransport = new StreamableHTTPServerTransport({
-                        sessionIdGenerator: () => randomUUID(),
-                        onsessioninitialized: (sid: string) => {
-                            logger.info('HTTP session initialized', {
-                                module: 'HTTP',
-                                sessionId: sid,
-                            })
-                            ctx.transports.set(sid, newTransport)
-                            ctx.touchSession(sid)
-                        },
-                    })
-
-                    // Clean up on transport close
-                    newTransport.onclose = () => {
-                        const sid = newTransport.sessionId
-                        if (sid !== undefined && ctx.transports.has(sid)) {
-                            logger.info('HTTP transport closed', {
-                                module: 'HTTP',
-                                sessionId: sid,
-                            })
-                            ctx.transports.delete(sid)
-                            ctx.sessionLastActivity.delete(sid)
-                        }
-                    }
-
-                    // Connect transport to server
-                    // SDK requires close() before reconnecting to a new transport.
-                    // This cleanly supports sequential sessions; concurrent sessions
-                    // are an SDK limitation (only one transport at a time).
-                    if (ctx.serverConnected) {
-                        try {
-                            await Promise.race([
-                                server.close(),
-                                new Promise((_, reject) =>
-                                    setTimeout(() => reject(new Error('Timeout closing SDK transport')), 250)
-                                ),
-                            ])
-                        } catch (e) {
-                            logger.error('Forcing server transport close due to timeout', {
-                                module: 'HTTP',
-                                error: e instanceof Error ? e.message : String(e),
-                            })
-                            // Force clear the SDK's internal transport state to unblock reconnect
-                            interface InternalProtocol {
-                                _onclose?: () => void
-                            }
-                            interface InternalServer {
-                                server?: InternalProtocol
-                            }
-                            const internalServer = server as unknown as InternalServer
-                            if (
-                                internalServer.server !== undefined &&
-                                typeof internalServer.server._onclose === 'function'
-                            ) {
-                                internalServer.server._onclose()
-                            }
-                        }
-                    }
-                    await server.connect(newTransport)
-                    ctx.serverConnected = true
-                    await newTransport.handleRequest(
-                        req as IncomingMessage,
-                        res as ServerResponse,
-                        req.body
-                    )
-                    return
-                } else {
-                    // Invalid request — no session ID or not initialization
+                } else if (!isInitializeRequest(req.body)) {
                     res.status(400).json({
                         jsonrpc: '2.0',
                         error: {
@@ -174,14 +155,132 @@ export function setupStateful(
                     return
                 }
 
-                // Handle request with existing transport
-                if (httpTransport !== undefined) {
-                    await httpTransport.handleRequest(
-                        req as IncomingMessage,
-                        res as ServerResponse,
-                        req.body
-                    )
+                let targetTransport: StreamableHTTPServerTransport
+
+                if (sessionId !== undefined) {
+                    const t = ctx.transports.get(sessionId)
+                    if (!t) {
+                        logger.error('Missing transport for active session', {
+                            module: 'HTTP',
+                            sessionId,
+                        })
+                        throw new Error('Critical: session ID exists but transport was lost')
+                    }
+                    targetTransport = t
+                } else {
+                    // This MUST be an initialize request due to the guard above.
+                    // Enforce session limit to prevent unbounded memory growth
+                    const envMax = process.env['MAX_STATEFUL_SESSIONS']
+                    let maxSessions = 1000
+                    if (envMax) {
+                        const parsed = parseInt(envMax, 10)
+                        if (!Number.isNaN(parsed) && parsed > 0) {
+                            maxSessions = parsed
+                        }
+                    }
+
+                    if (ctx.transports.size + ctx.sseTransports.size >= maxSessions) {
+                        res.status(429).json({
+                            jsonrpc: '2.0',
+                            error: {
+                                code: JSONRPC_SERVER_ERROR,
+                                message: 'Too Many Requests: Maximum active sessions reached',
+                            },
+                            id: null,
+                        })
+                        return
+                    }
+
+                    // Instantiate a fresh transport for the new session lifecycle.
+                    const newTransport = new StreamableHTTPServerTransport({
+                        sessionIdGenerator: () => randomUUID(),
+                        onsessioninitialized: (sid: string) => {
+                            logger.info('HTTP session initialized', {
+                                module: 'HTTP',
+                                sessionId: sid,
+                            })
+                            ctx.transports.set(sid, newTransport)
+                            ctx.touchSession(sid)
+
+                            const authReq = req as unknown as {
+                                auth?: { sub?: string; subject?: string }
+                            }
+                            const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
+                            if (reqSubject) {
+                                ctx.sessionSubjects.set(sid, reqSubject)
+                            }
+                            if (ctx.sessionCreatedAt) {
+                                ctx.sessionCreatedAt.set(sid, Date.now())
+                            }
+
+                            // Attach close handler specifically for this session ID, preserving any existing handlers
+                            // (e.g., from server.connect wrapper).
+                            const existingOnClose = newTransport.onclose
+                            newTransport.onclose = () => {
+                                logger.info('HTTP transport closed', {
+                                    module: 'HTTP',
+                                    sessionId: sid,
+                                })
+                                ctx.transports.delete(sid)
+                                ctx.sessionSubjects.delete(sid)
+                                if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
+                                if (existingOnClose) existingOnClose()
+                            }
+                        },
+                    })
+
+                    // Attach the new transport to the server, supporting concurrent clients.
+                    const doConnect = async (): Promise<void> => {
+                        const newServer = serverFactory()
+                        await newServer.connect(newTransport)
+                        ctx.serverConnected = true
+                    }
+
+                    const priorLock: Promise<void> = ctx.connectionLock ?? Promise.resolve()
+
+                    // Chain the attempt
+                    const attempt = priorLock.then(doConnect)
+
+                    // The global lock chain swallows errors to allow subsequent requests to proceed
+                    ctx.connectionLock = attempt.catch((err: unknown) => {
+                        logger.error('Background connection setup failed, releasing lock', {
+                            module: 'HTTP',
+                            error: err instanceof Error ? err.message : String(err),
+                        })
+                    })
+
+                    // Block the current request on the attempt success
+                    await attempt
+
+                    targetTransport = newTransport
                 }
+
+                await requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
+                    const activeSessionId = sessionId
+                    try {
+                        if (activeSessionId) {
+                            const count = ctx.sessionLocks.get(activeSessionId) ?? 0
+                            ctx.sessionLocks.set(activeSessionId, count + 1)
+                        }
+                        await targetTransport.handleRequest(
+                            req as IncomingMessage,
+                            res as ServerResponse,
+                            req.body
+                        )
+                    } finally {
+                        if (activeSessionId) {
+                            const count = ctx.sessionLocks.get(activeSessionId) ?? 0
+                            if (count > 1) {
+                                ctx.sessionLocks.set(activeSessionId, count - 1)
+                            } else {
+                                ctx.sessionLocks.delete(activeSessionId)
+                            }
+                            // Touch session AFTER request completes to prevent immediate expiration
+                            // if the request took longer than the session sweep interval.
+                            ctx.touchSession(activeSessionId)
+                        }
+                    }
+                })
             } catch (error) {
                 logger.error('Error handling MCP request', {
                     module: 'HTTP',
@@ -195,7 +294,12 @@ export function setupStateful(
                     })
                 }
             }
-        })()
+        })().catch((error: unknown) => {
+            logger.error('Unhandled async error in POST /mcp IIFE', {
+                module: 'HTTP',
+                error: error instanceof Error ? error.message : String(error),
+            })
+        })
     })
 
     // GET /mcp — SSE stream for server-to-client notifications
@@ -205,6 +309,23 @@ export function setupStateful(
         if (sessionId === undefined || !ctx.transports.has(sessionId)) {
             res.status(400).send('Invalid or missing session ID')
             return
+        }
+
+        const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+        const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
+        const expectedSub = ctx.sessionSubjects.get(sessionId)
+        if (reqSubject !== expectedSub) {
+            res.status(403).send('Forbidden: Session belongs to a different subject')
+            return
+        }
+
+        if (ctx.sessionCreatedAt) {
+            const createdAt = ctx.sessionCreatedAt.get(sessionId) ?? Date.now()
+            // 24 hour absolute TTL
+            if (Date.now() - createdAt > 86400000) {
+                res.status(401).send('Unauthorized: Session absolute TTL expired')
+                return
+            }
         }
 
         // Refresh session activity on SSE reconnect
@@ -221,7 +342,21 @@ export function setupStateful(
 
         const httpTransport = ctx.transports.get(sessionId)
         if (httpTransport !== undefined) {
-            void httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+            void (async () => {
+                try {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    ctx.sessionLocks.set(sessionId, count + 1)
+                    await httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+                } finally {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    if (count > 1) {
+                        ctx.sessionLocks.set(sessionId, count - 1)
+                    } else {
+                        ctx.sessionLocks.delete(sessionId)
+                    }
+                    ctx.touchSession(sessionId)
+                }
+            })()
         }
     })
 
@@ -234,6 +369,14 @@ export function setupStateful(
             return
         }
 
+        const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+        const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
+        const expectedSub = ctx.sessionSubjects.get(sessionId)
+        if (reqSubject !== expectedSub) {
+            res.status(403).send('Forbidden: Session belongs to a different subject')
+            return
+        }
+
         logger.info('Session termination requested', {
             module: 'HTTP',
             sessionId,
@@ -241,7 +384,21 @@ export function setupStateful(
 
         const httpTransport = ctx.transports.get(sessionId)
         if (httpTransport !== undefined) {
-            void httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+            void (async () => {
+                try {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    ctx.sessionLocks.set(sessionId, count + 1)
+                    await httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+                } finally {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    if (count > 1) {
+                        ctx.sessionLocks.set(sessionId, count - 1)
+                    } else {
+                        ctx.sessionLocks.delete(sessionId)
+                    }
+                    ctx.touchSession(sessionId)
+                }
+            })()
         }
     })
     return sessionSweepTimer

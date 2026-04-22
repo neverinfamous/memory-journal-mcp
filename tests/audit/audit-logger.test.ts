@@ -11,11 +11,12 @@
  *   - Disabled mode
  */
 
-import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { readFile, rm, mkdtemp, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { AuditLogger } from '../../src/audit/audit-logger.js'
+import { logger as appLogger } from '../../src/utils/logger.js'
 import type { AuditEntry, AuditConfig } from '../../src/audit/types.js'
 
 /** Helper: create a unique temp directory */
@@ -371,19 +372,17 @@ describe('AuditLogger', () => {
                 logPath: dir, // dir is a directory, so appendFile will throw EISDIR
             })
 
-            const chunks: string[] = []
-            const originalWrite = process.stderr.write
-            process.stderr.write = ((chunk: string) => {
-                chunks.push(chunk)
-                return true
-            }) as typeof process.stderr.write
+            const errorSpy = vi.spyOn(appLogger, 'error')
 
             try {
                 logger.log(fakeEntry())
                 await logger.flush()
-                expect(chunks.some((c) => c.includes('Write failed'))).toBe(true)
+                expect(errorSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('Write failed'),
+                    expect.any(Object)
+                )
             } finally {
-                process.stderr.write = originalWrite
+                errorSpy.mockRestore()
                 await logger.close()
             }
         })

@@ -11,8 +11,41 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { callTool } from '../../src/handlers/tools/index.js'
+import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 describe('Search Tool Handlers - Coverage', () => {
     let db: DatabaseAdapter
@@ -54,7 +87,7 @@ describe('Search Tool Handlers - Coverage', () => {
             entryType: 'technical_note',
             workflowRunId: 9999,
             workflowName: 'ci',
-            workflowStatus: 'success',
+            workflowStatus: 'completed',
         })
 
         // Seed team entries
@@ -98,7 +131,7 @@ describe('Search Tool Handlers - Coverage', () => {
         it('should merge personal and team results', async () => {
             const result = (await callTool(
                 'search_entries',
-                { query: 'entry', limit: 10 },
+                { query: 'entry', limit: 10, include_team: true },
                 db,
                 undefined,
                 undefined,
@@ -112,10 +145,10 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.entries.length).toBe(result.count)
         })
 
-        it('should deduplicate entries with same content', async () => {
+        it('should not deduplicate entries with same content from different databases', async () => {
             const result = (await callTool(
                 'search_entries',
-                { query: 'alpha', limit: 50 },
+                { query: 'alpha', limit: 50, include_team: true },
                 db,
                 undefined,
                 undefined,
@@ -124,11 +157,11 @@ describe('Search Tool Handlers - Coverage', () => {
                 teamDb
             )) as { entries: { content: string }[]; count: number }
 
-            // "Personal alpha entry" exists in both DBs — should be deduped
+            // 'Personal alpha entry' exists in both DBs — should NOT be deduped since sources differ
             const alphaEntries = result.entries.filter((e) =>
                 e.content.includes('Personal alpha entry')
             )
-            expect(alphaEntries.length).toBe(1)
+            expect(alphaEntries.length).toBe(2)
         })
 
         it('should return validation error for empty search (no query, no filters)', async () => {
@@ -195,7 +228,7 @@ describe('Search Tool Handlers - Coverage', () => {
         it('should handle combined filters with teamDb', async () => {
             const result = (await callTool(
                 'search_entries',
-                { project_number: 42, limit: 10 },
+                { project_number: 42, limit: 10, include_team: true },
                 db,
                 undefined,
                 undefined,
@@ -245,7 +278,7 @@ describe('Search Tool Handlers - Coverage', () => {
             const today = new Date().toISOString().split('T')[0]!
             const result = (await callTool(
                 'search_by_date_range',
-                { start_date: today, end_date: today },
+                { start_date: today, end_date: today, include_team: true },
                 db,
                 undefined,
                 undefined,

@@ -68,17 +68,12 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 1. You **MUST** read the \`memory://briefing/{repo_name}\` at the start of each chat!
 2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
 3. Infer the \`repo_name\` from the user's prompt or your active workspace context.
-4. Once read, present the \`userMessage\` from the briefing to the user as a formatted bullet list containing the key facts for all available fields including:
-
-- Project Name:
-- Entry counts (journal + team)
-- Latest Entry (journal + team):
-- GitHub: repo, branch, CI status, open issues/PRs, insights
-- Milestone progress (if any)
-- Template resources count
-- Registered Workspaces (if available - provides automatic repo-to-project routing)
-- Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB, insights)
-
+4. **ACKNOWLEDGE FLAGS**: If the briefing JSON contains \`activeFlags\` (count > 0), you MUST print an alert ABOVE the table: \`⚠️ **{count} active flag(s)** — review before proceeding.\` followed by each flag (\`🚩 {flag_type} → @{target_user}: {preview}\`).
+5. **RENDER TABLE**: Parse the remaining JSON into a dense 2-column Markdown Table (Field, Value).
+   - **RESTRICTION**: NO bulleted lists inside the table. Do NOT truncate summaries or issues.
+   - **FORMATTING**: Group related properties (use \`<br>\` for line breaks).
+   - **REQUIRED GROUPS**: GitHub, Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
+6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
 - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
 - **Cursor**: Tools are \`user-{name}-{tool}\` → server name = \`user-memory-journal-mcp\`
 - **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
@@ -198,17 +193,72 @@ function buildQuickAccess(groups: Set<ToolGroup>): string {
  * Code Mode namespace row definitions.
  * Each maps a tool group to its Code Mode API namespace.
  */
-const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
-    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
-    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
-    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
-    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
-    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.importMarkdown("content")`' },
-    { group: 'io', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries("json")`' },
-    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
-    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
-    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
-    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
+const CODE_MODE_NAMESPACE_ROWS: {
+    group: ToolGroup
+    label: string
+    namespace: string
+    example: string
+}[] = [
+    {
+        group: 'core',
+        label: 'Core',
+        namespace: '`mj.core.*`',
+        example: '`mj.core.createEntry("Implemented feature X")`',
+    },
+    {
+        group: 'search',
+        label: 'Search',
+        namespace: '`mj.search.*`',
+        example: '`mj.search.searchEntries("performance")`',
+    },
+    {
+        group: 'analytics',
+        label: 'Analytics',
+        namespace: '`mj.analytics.*`',
+        example: '`mj.analytics.getStatistics()`',
+    },
+    {
+        group: 'relationships',
+        label: 'Relationships',
+        namespace: '`mj.relationships.*`',
+        example: '`mj.relationships.linkEntries(1, 2, "implements")`',
+    },
+    {
+        group: 'io',
+        label: 'IO',
+        namespace: '`mj.io.*`',
+        example: '`mj.io.importMarkdown("content")`',
+    },
+    {
+        group: 'io',
+        label: 'Export',
+        namespace: '`mj.export.*`',
+        example: '`mj.export.exportEntries("json")`',
+    },
+    {
+        group: 'admin',
+        label: 'Admin',
+        namespace: '`mj.admin.*`',
+        example: '`mj.admin.rebuildVectorIndex()`',
+    },
+    {
+        group: 'github',
+        label: 'GitHub',
+        namespace: '`mj.github.*`',
+        example: '`mj.github.getGithubIssues({ state: "open" })`',
+    },
+    {
+        group: 'backup',
+        label: 'Backup',
+        namespace: '`mj.backup.*`',
+        example: '`mj.backup.backupJournal()`',
+    },
+    {
+        group: 'team',
+        label: 'Team',
+        namespace: '`mj.team.*`',
+        example: '`mj.team.teamCreateEntry("Team update")`',
+    },
 ]
 
 /**
@@ -218,9 +268,10 @@ const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: st
  */
 function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
     // Build namespace table with only enabled groups
-    const rows = CODE_MODE_NAMESPACE_ROWS
-        .filter((r) => groups.has(r.group))
-        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
+    const rows = CODE_MODE_NAMESPACE_ROWS.filter((r) => groups.has(r.group))
+        .map(
+            (r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`
+        )
         .join('\n')
 
     // Build the static behavioral text from the .md source,
@@ -233,8 +284,10 @@ function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
         return '\n' + fullSection
     }
     const beforeTable = fullSection.slice(0, tableStart)
-    const headerLine = '| Group         | Namespace            | Example                                            |'
-    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
+    const headerLine =
+        '| Group         | Namespace            | Example                                            |'
+    const separatorLine =
+        '| ------------- | -------------------- | -------------------------------------------------- |'
     const afterTable = fullSection.slice(tableEnd)
     return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
 }
@@ -359,7 +412,7 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 ## ⚠️ Critical Patterns
 
-- **\`autoContext\`**: Reserved for future automatic context capture. Currently always \`null\`.
+- **\`autoContext\`**: Deprecated in v7.5.1. The feature was originally planned for background filesystem monitoring but has been abandoned to reduce telemetry overhead. Existing data with \`autoContext: null\` is safely ignored.
 - **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`. Neither returns orphan tags with zero usage.
 - **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).
 - **\`merge_tags\` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.
@@ -399,7 +452,6 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
 - **Team tools without \`TEAM_DB_PATH\`**: All 25 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
-
 
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
@@ -508,4 +560,3 @@ export const SERVER_INSTRUCTIONS =
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS
-

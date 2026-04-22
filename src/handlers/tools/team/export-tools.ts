@@ -77,6 +77,24 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                         entries = entries.slice(0, limit)
                     }
 
+                    // Enforce < 5MB payload ceiling (approximate based on content + overhead)
+                    const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024
+                    let currentBytes = 0
+                    const boundedEntries: typeof entries = []
+                    let truncated = false
+
+                    for (const entry of entries) {
+                        const entrySize = Buffer.byteLength(entry.content, 'utf8') + 500
+                        if (currentBytes + entrySize > MAX_PAYLOAD_BYTES) {
+                            truncated = true
+                            break
+                        }
+                        currentBytes += entrySize
+                        boundedEntries.push(entry)
+                    }
+
+                    entries = boundedEntries
+
                     await sendProgress(progress, 2, 3, 'Formatting export data...')
 
                     // Enrich with authors
@@ -120,6 +138,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                         format,
                         data,
                         count: enriched.length,
+                        truncated,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

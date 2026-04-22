@@ -7,7 +7,7 @@
  */
 
 /** Category of the audited operation */
-export type AuditCategory = 'read' | 'write' | 'admin'
+export type AuditCategory = 'read' | 'write' | 'admin' | 'team' | 'audit'
 
 /**
  * Single audit log entry — serialised as one line of JSONL.
@@ -18,6 +18,9 @@ export interface AuditEntry {
 
     /** Correlates with RequestContext.requestId (or generated UUID) */
     requestId: string
+
+    /** The transport session ID */
+    sessionId?: string | undefined
 
     /** MCP tool name (e.g. "create_entry") */
     tool: string

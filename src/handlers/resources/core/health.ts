@@ -2,7 +2,7 @@ import { getAllToolNames } from '../../../filtering/tool-filter.js'
 import { ICON_HEALTH } from '../../../constants/icons.js'
 import { HIGH_PRIORITY } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
-import { globalMetrics } from '../../../observability/index.js'
+// globalMetrics removed
 
 /**
  * Get total tool count for health status
@@ -30,6 +30,7 @@ export const healthResource: InternalResourceDef = {
             available: boolean
             itemCount: number
             modelName: string | null
+            isReady: boolean
         } | null = null
         if (context.vectorManager) {
             try {
@@ -38,9 +39,10 @@ export const healthResource: InternalResourceDef = {
                     available: true,
                     itemCount: stats.itemCount,
                     modelName: stats.modelName,
+                    isReady: stats.isReady,
                 }
             } catch {
-                vectorIndex = { available: false, itemCount: 0, modelName: null }
+                vectorIndex = { available: false, itemCount: 0, modelName: null, isReady: false }
             }
         }
 
@@ -56,7 +58,8 @@ export const healthResource: InternalResourceDef = {
 
         const metricsSummary = (() => {
             try {
-                const s = globalMetrics.getSummary()
+                const s = context.runtime?.metrics.getSummary()
+                if (!s) return null
                 return {
                     totalCalls: s.totalCalls,
                     totalErrors: s.totalErrors,
@@ -82,6 +85,12 @@ export const healthResource: InternalResourceDef = {
                 scheduler: context.scheduler
                     ? context.scheduler.getStatus()
                     : { active: false, jobs: [] },
+                audit: context.runtime?.auditLogger
+                    ? {
+                          droppedCount: context.runtime.auditLogger.droppedCount,
+                          status: context.runtime.auditLogger.droppedCount > 0 ? 'degraded' : 'ok',
+                      }
+                    : { status: 'unknown' },
                 metrics: metricsSummary,
                 timestamp: lastModified,
             },

@@ -17,7 +17,18 @@ const mockHandle = {
 vi.mock('node:fs/promises', () => ({
     mkdir: vi.fn(),
     open: vi.fn(),
+    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false, ino: 1 }),
 }))
+
+vi.mock('node:fs', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs')>()
+    return {
+        ...actual,
+        realpathSync: {
+            native: vi.fn().mockImplementation((p) => p),
+        },
+    }
+})
 
 describe('markdown exporter utilities', () => {
     describe('generateSlug', () => {
@@ -55,6 +66,7 @@ describe('exportEntriesToMarkdown', () => {
     const mockDb = {
         getTagsForEntry: vi.fn(),
         getRelationships: vi.fn(),
+        getRelationshipsForEntries: vi.fn(),
     }
 
     beforeEach(() => {
@@ -64,6 +76,7 @@ describe('exportEntriesToMarkdown', () => {
         vi.mocked(fs.open).mockResolvedValue(mockHandle as any)
         mockDb.getTagsForEntry.mockReturnValue([])
         mockDb.getRelationships.mockReturnValue([])
+        mockDb.getRelationshipsForEntries.mockReturnValue(new Map())
     })
 
     it('should export an array of entries to files', async () => {
@@ -86,34 +99,37 @@ describe('exportEntriesToMarkdown', () => {
             },
         ]
         mockDb.getTagsForEntry.mockImplementation((id: number) => (id === 1 ? ['tag1'] : ['tag2']))
-        mockDb.getRelationships.mockImplementation((id: number) => {
-            if (id === 2) {
-                return [{ relationshipType: 'references', fromEntryId: 2, toEntryId: 3 }]
+        mockDb.getRelationshipsForEntries.mockImplementation((ids: number[]) => {
+            const map = new Map()
+            for (const id of ids) {
+                if (id === 2) {
+                    map.set(2, [{ relationshipType: 'references', fromEntryId: 2, toEntryId: 3 }])
+                } else {
+                    map.set(id, [])
+                }
             }
-            return []
+            return map
         })
 
-        const result = await exportEntriesToMarkdown(
-            entries as any,
-            '/var/lib/memory-journal/export',
-            mockDb as any
-        )
+        const result = await exportEntriesToMarkdown(entries as any, './export', mockDb as any, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.exported_count).toBe(2)
         expect(result.skipped).toBe(0)
-        expect(result.output_dir).toBe(resolve('/var/lib/memory-journal/export'))
+        expect(result.output_dir).toBe(resolve('./export'))
 
         // Ensure directory was created with the resolved path
-        expect(fs.mkdir).toHaveBeenCalledWith(resolve('/var/lib/memory-journal/export'), {
+        expect(fs.mkdir).toHaveBeenCalledWith(resolve('./export'), {
             recursive: true,
         })
 
         // Ensure open was called twice (once per entry) with create-or-truncate + 0o600
         expect(fs.open).toHaveBeenCalledTimes(2)
         expect(fs.open).toHaveBeenCalledWith(
-            join(resolve('/var/lib/memory-journal/export'), '1-test-content-one.md'),
-            'w',
+            join(resolve('./export'), '1-test-content-one.md'),
+            expect.any(Number),
             0o600
         )
 
@@ -122,14 +138,15 @@ describe('exportEntriesToMarkdown', () => {
         expect(mockHandle.close).toHaveBeenCalledTimes(2)
 
         const firstWriteContent = vi.mocked(mockHandle.writeFile).mock.calls[0][0] as string
-        expect(firstWriteContent).toContain('mj_id: 1')
+        expect(firstWriteContent).toContain('"mj_id": 1')
         expect(firstWriteContent).toContain('Test content one')
         expect(firstWriteContent).toContain('tag1')
 
         const secondWriteContent = vi.mocked(mockHandle.writeFile).mock.calls[1][0] as string
-        expect(secondWriteContent).toContain('author: Test Author')
-        expect(secondWriteContent).toContain('target_id: 3')
-        expect(secondWriteContent).toContain('type: references')
+        expect(secondWriteContent).toContain('"mj_id": 2')
+        expect(secondWriteContent).toContain('"author": "Test Author"')
+        expect(secondWriteContent).toContain('"target_id": 3')
+        expect(secondWriteContent).toContain('"type": "references"')
     })
 
     it('should skip entries without content', async () => {
@@ -142,11 +159,9 @@ describe('exportEntriesToMarkdown', () => {
             },
         ]
 
-        const result = await exportEntriesToMarkdown(
-            entries as any,
-            '/var/lib/memory-journal/export',
-            mockDb as any
-        )
+        const result = await exportEntriesToMarkdown(entries as any, './export', mockDb as any, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.exported_count).toBe(0)
@@ -156,10 +171,31 @@ describe('exportEntriesToMarkdown', () => {
 
     it('should reject exporting into the os temp directory', async () => {
         const tmpExportDir = join(tmpdir(), 'export')
-        await expect(exportEntriesToMarkdown([], tmpExportDir, mockDb as any)).rejects.toThrow(
-            'Refusing to export markdown files into the OS temporary directory'
+        await expect(
+            exportEntriesToMarkdown([], tmpExportDir, mockDb as any, [tmpdir()])
+        ).rejects.toThrow(
+            /Path traversal detected|escapes allowed sandbox boundaries|Refusing to export markdown files into the OS temporary directory/
         )
         expect(fs.mkdir).not.toHaveBeenCalled()
         expect(fs.open).not.toHaveBeenCalled()
+    })
+
+    it('should abort if directory is swapped for a symlink during export (TOCTOU)', async () => {
+        const { realpathSync } = await import('node:fs')
+        vi.mocked(realpathSync.native)
+            .mockReturnValueOnce('/mock/safe/path') // preRealpath
+            .mockReturnValueOnce('/mock/unsafe/swapped/path') // postRealpath
+
+        const entries = [
+            {
+                id: 1,
+                content: 'Test content',
+                timestamp: '2026-04-08T12:00:00Z',
+                entryType: 'note',
+            },
+        ]
+        await expect(
+            exportEntriesToMarkdown(entries as any, './export', mockDb as any, [process.cwd()])
+        ).rejects.toThrow(/Directory swapped during export operation/)
     })
 })

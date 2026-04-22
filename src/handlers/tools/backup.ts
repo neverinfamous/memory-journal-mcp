@@ -11,6 +11,7 @@ import { sendProgress } from '../../utils/progress-utils.js'
 import { relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
+import * as path from 'node:path'
 
 // ============================================================================
 // Output Schemas
@@ -79,7 +80,7 @@ const CleanupBackupsOutputSchema = z
 // ============================================================================
 
 export function getBackupTools(context: ToolContext): ToolDefinition[] {
-    const { db, progress } = context
+    const { db, progress, config } = context
     return [
         {
             name: 'backup_journal',
@@ -107,7 +108,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         message: `Backup created successfully`,
                         filename: result.filename,
-                        path: result.path,
+                        path: path.basename(result.path),
                         sizeBytes: result.sizeBytes,
                     }
                 } catch (err) {
@@ -126,10 +127,14 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             handler: (_params: unknown) => {
                 try {
                     const backups = db.listBackups()
+                    const maskedBackups = backups.map((b) => ({
+                        ...b,
+                        path: path.basename(b.path),
+                    }))
                     return {
-                        backups,
+                        backups: maskedBackups,
                         total: backups.length,
-                        backupsDirectory: db.getBackupsDir(),
+                        backupsDirectory: path.basename(db.getBackupsDir()),
                         hint:
                             backups.length === 0
                                 ? 'No backups found. Use backup_journal to create one.'
@@ -144,7 +149,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             name: 'restore_backup',
             title: 'Restore Journal from Backup',
             description:
-                'Restore the journal database from a backup file. WARNING: This replaces all current data. An automatic backup is created before restore.',
+                'Restore the journal database from a backup file. WARNING: This replaces all current data. Enforce single-writer / single-instance only for restore-capable deployments. An automatic backup is created before restore.',
             group: 'backup',
             inputSchema: z.object({
                 filename: z
@@ -188,7 +193,18 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 3, 'Preparing restore...')
                     await sendProgress(progress, 2, 3, 'Restoring database from backup...')
-                    const result = await db.restoreFromFile(input.filename)
+
+                    if (config?.runtime?.maintenanceManager) {
+                        await config.runtime.maintenanceManager.acquireMaintenanceLock()
+                    }
+                    let result
+                    try {
+                        result = await db.restoreFromFile(input.filename, config?.runtime)
+                    } finally {
+                        if (config?.runtime?.maintenanceManager) {
+                            config.runtime.maintenanceManager.releaseMaintenanceLock()
+                        }
+                    }
 
                     // Send directly using captured primitives (db.restoreFromFile reinitializes DB)
                     if (progressServer !== undefined && progressTokenValue !== undefined) {

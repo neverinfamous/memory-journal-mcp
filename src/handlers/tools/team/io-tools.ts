@@ -11,7 +11,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
+
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries } from '../../../markdown/index.js'
@@ -35,6 +35,7 @@ const TeamExportMarkdownSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     tags: z.array(z.string()).optional(),
+    project_number: z.number(),
     limit: z.number().max(500).optional().default(100),
 })
 
@@ -43,6 +44,7 @@ const TeamExportMarkdownSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
+    project_number: relaxedNumber(),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -62,6 +64,7 @@ const TeamExportMarkdownOutputSchema = z
 const TeamImportMarkdownSchema = z.object({
     source_dir: z.string().min(1),
     dry_run: z.boolean().optional().default(false),
+    project_number: z.number(),
     limit: z.number().max(500).optional().default(100),
 })
 
@@ -72,6 +75,7 @@ const TeamImportMarkdownSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
+    project_number: relaxedNumber(),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -150,8 +154,9 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamExportMarkdownSchema.parse(params)
-                    assertSafeDirectoryPath(input.output_dir)
 
+                    // Determine allowed roots from configuration
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 3, 'Fetching team entries...')
 
                     const limit = input.limit ?? 100
@@ -162,9 +167,13 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         entries = teamDb.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit,
+                            projectNumber: input.project_number,
                         })
                     } else {
-                        entries = teamDb.getRecentEntries(limit)
+                        entries = teamDb.searchEntries('', {
+                            limit,
+                            projectNumber: input.project_number,
+                        })
                     }
 
                     await sendProgress(
@@ -192,7 +201,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     const result = await exportEntriesToMarkdown(
                         exportable,
                         input.output_dir,
-                        teamDb
+                        teamDb,
+                        allowedRoots
                     )
 
                     await sendProgress(progress, 3, 3, 'Team export complete')
@@ -207,7 +217,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             title: 'Team Import from Markdown',
             description:
                 'Import frontmattered Markdown files (.md) into the team journal. ' +
-                'Author is set from TEAM_AUTHOR env or git config. ' +
+                'Author is set from authenticated user identity, falling back to TEAM_AUTHOR env or git config. ' +
                 'Use dry_run: true to preview without writing.',
             group: 'team',
             inputSchema: TeamImportMarkdownSchemaMcp,
@@ -221,11 +231,12 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamImportMarkdownSchema.parse(params)
-                    assertSafeDirectoryPath(input.source_dir)
 
+                    // Determine allowed roots from configuration
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 
-                    const author = resolveAuthor()
+                    const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
                     const result = await importMarkdownEntries(
                         input.source_dir,
                         teamDb,
@@ -233,8 +244,10 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author,
+                            project_number: input.project_number,
                         },
-                        context.vectorManager
+                        context.teamVectorManager,
+                        allowedRoots
                     )
 
                     await sendProgress(progress, 2, 2, 'Team import complete')

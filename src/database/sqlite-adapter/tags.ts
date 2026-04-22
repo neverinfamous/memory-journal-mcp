@@ -12,42 +12,47 @@ export class TagsManager {
     }
 
     private get db(): Database {
-        return this.ctx.getRawDb() as Database
+        return this.ctx.getNativeDb()
     }
 
     linkTagsToEntry(entryId: number, tagNames: string[]): void {
         if (tagNames.length === 0) return
-        const db = this.db
 
-        const insertPlaceholders = tagNames.map(() => '(?, 0)').join(', ')
-        db.prepare(
-            `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
-        ).run(...tagNames)
+        const linkOp = this.db.transaction(() => {
+            const db = this.db
 
-        const selectPlaceholders = tagNames.map(() => '?').join(', ')
-        const rows = db
-            .prepare(`SELECT id, name FROM tags WHERE name IN (${selectPlaceholders})`)
-            .all(...tagNames) as { id: number; name: string }[]
+            const insertPlaceholders = tagNames.map(() => '(?, 0)').join(', ')
+            db.prepare(
+                `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
+            ).run(...tagNames)
 
-        const tagIds = rows.map((r) => r.id)
-        if (tagIds.length === 0) return
+            const selectPlaceholders = tagNames.map(() => '?').join(', ')
+            const rows = db
+                .prepare(`SELECT id, name FROM tags WHERE name IN (${selectPlaceholders})`)
+                .all(...tagNames) as { id: number; name: string }[]
 
-        const linkPlaceholders = tagIds.map(() => '(?, ?)').join(', ')
-        const linkParams = tagIds.flatMap((tagId) => [entryId, tagId])
-        db.prepare(
-            `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${linkPlaceholders}`
-        ).run(...linkParams)
+            const tagIds = rows.map((r) => r.id)
+            if (tagIds.length === 0) return
 
-        const updatePlaceholders = tagIds.map(() => '?').join(', ')
-        db.prepare(
-            `UPDATE tags
-             SET usage_count = (
-                 SELECT COUNT(*)
-                 FROM entry_tags et
-                 WHERE et.tag_id = tags.id
-             )
-             WHERE id IN (${updatePlaceholders})`
-        ).run(...tagIds)
+            const linkPlaceholders = tagIds.map(() => '(?, ?)').join(', ')
+            const linkParams = tagIds.flatMap((tagId) => [entryId, tagId])
+            db.prepare(
+                `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${linkPlaceholders}`
+            ).run(...linkParams)
+
+            const updatePlaceholders = tagIds.map(() => '?').join(', ')
+            db.prepare(
+                `UPDATE tags
+                 SET usage_count = (
+                     SELECT COUNT(*)
+                     FROM entry_tags et
+                     WHERE et.tag_id = tags.id
+                 )
+                 WHERE id IN (${updatePlaceholders})`
+            ).run(...tagIds)
+        })
+
+        linkOp()
     }
 
     getTagsForEntry(entryId: number): string[] {
@@ -66,22 +71,26 @@ export class TagsManager {
         const tagMap = new Map<number, string[]>()
         if (ids.length === 0) return tagMap
 
-        const placeholders = ids.map(() => '?').join(', ')
-        const rows = this.db
-            .prepare(
-                `SELECT et.entry_id, t.name
-                 FROM entry_tags et
-                 JOIN tags t ON et.tag_id = t.id
-                 WHERE et.entry_id IN (${placeholders})`
-            )
-            .all(...ids) as { entry_id: number; name: string }[]
+        const CHUNK_SIZE = 900
+        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+            const chunk = ids.slice(i, i + CHUNK_SIZE)
+            const placeholders = chunk.map(() => '?').join(', ')
+            const rows = this.db
+                .prepare(
+                    `SELECT et.entry_id, t.name
+                     FROM entry_tags et
+                     JOIN tags t ON et.tag_id = t.id
+                     WHERE et.entry_id IN (${placeholders})`
+                )
+                .all(...chunk) as { entry_id: number; name: string }[]
 
-        for (const row of rows) {
-            const existing = tagMap.get(row.entry_id)
-            if (existing) {
-                existing.push(row.name)
-            } else {
-                tagMap.set(row.entry_id, [row.name])
+            for (const row of rows) {
+                const existing = tagMap.get(row.entry_id)
+                if (existing) {
+                    existing.push(row.name)
+                } else {
+                    tagMap.set(row.entry_id, [row.name])
+                }
             }
         }
         return tagMap

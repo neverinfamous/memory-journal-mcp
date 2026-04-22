@@ -47,7 +47,7 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('database')
         expect(parsed).toHaveProperty('vectorIndex')
@@ -60,7 +60,7 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('userMessage')
         expect(parsed).toHaveProperty('journal')
@@ -72,7 +72,7 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         // May be empty if no entries exist, but should be valid JSON
         expect(parsed).toBeDefined()
@@ -84,7 +84,7 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('totalEntries')
     })

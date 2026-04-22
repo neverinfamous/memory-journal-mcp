@@ -8,7 +8,8 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { assertSafeDirectoryPath } from '../../utils/security-utils.js'
+import { logger } from '../../utils/logger.js'
+
 import { exportEntriesToMarkdown } from '../../markdown/index.js'
 import { importMarkdownEntries } from '../../markdown/index.js'
 import type { ExportableEntry } from '../../markdown/index.js'
@@ -65,6 +66,10 @@ const ExportEntriesOutputSchema = z
         entries: z.array(EntryOutputSchema).optional(),
         count: z.number().optional(),
         content: z.string().optional(),
+        truncated: z
+            .boolean()
+            .optional()
+            .describe('True if the results were truncated to fit within payload limits'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })
@@ -138,6 +143,8 @@ const ImportMarkdownOutputSchema = z
         created: z.number().optional(),
         updated: z.number().optional(),
         skipped: z.number().optional(),
+        relationshipsLinked: z.number().optional(),
+        vectorsIndexed: z.number().optional(),
         errors: z
             .array(
                 z.object({
@@ -204,6 +211,29 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             .slice(0, limit)
                     }
 
+                    // Enforce < 5MB payload ceiling (approximate based on content + overhead)
+                    const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024
+                    let currentBytes = 0
+                    const boundedEntries: typeof entries = []
+                    let truncated = false
+
+                    for (const entry of entries) {
+                        const entrySize = Buffer.byteLength(entry.content, 'utf8') + 500
+                        if (currentBytes + entrySize > MAX_PAYLOAD_BYTES) {
+                            truncated = true
+                            logger.warning('Export payload exceeded 5MB cap, truncating results', {
+                                module: 'IO',
+                                limit,
+                                actualCount: boundedEntries.length,
+                            })
+                            break
+                        }
+                        currentBytes += entrySize
+                        boundedEntries.push(entry)
+                    }
+
+                    entries = boundedEntries
+
                     await sendProgress(
                         progress,
                         1,
@@ -220,11 +250,11 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             .join('\n\n')
 
                         await sendProgress(progress, 2, 2, 'Export complete')
-                        return { format: 'markdown', content: md }
+                        return { format: 'markdown', content: md, count: entries.length, truncated }
                     }
 
                     await sendProgress(progress, 2, 2, 'Export complete')
-                    return { format: 'json', entries, count: entries.length }
+                    return { format: 'json', entries, count: entries.length, truncated }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -253,7 +283,10 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ExportMarkdownSchema.parse(params)
-                    assertSafeDirectoryPath(input.output_dir)
+
+                    // Determine allowed roots
+                    // Security fix: Use explicitly configured roots, without CWD fallback
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
 
                     await sendProgress(progress, 0, 3, 'Fetching entries...')
 
@@ -300,7 +333,12 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         significance: e.significanceType ?? undefined,
                     }))
 
-                    const result = await exportEntriesToMarkdown(exportable, input.output_dir, db)
+                    const result = await exportEntriesToMarkdown(
+                        exportable,
+                        input.output_dir,
+                        db,
+                        allowedRoots
+                    )
 
                     await sendProgress(progress, 3, 3, 'Export complete')
                     return result
@@ -333,7 +371,10 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportMarkdownSchema.parse(params)
-                    assertSafeDirectoryPath(input.source_dir)
+
+                    // Determine allowed roots
+                    // Security fix: Use explicitly configured roots, without CWD fallback
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
 
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 
@@ -344,7 +385,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                         },
-                        context.vectorManager
+                        context.vectorManager,
+                        allowedRoots
                     )
 
                     await sendProgress(progress, 2, 2, 'Import complete')

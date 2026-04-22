@@ -87,7 +87,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         input.tags !== undefined ||
                         input.entry_type !== undefined ||
                         input.start_date !== undefined ||
-                        input.end_date !== undefined
+                        input.end_date !== undefined ||
+                        input.project_number !== undefined
 
                     const internalLimit = hasFilters
                         ? Math.min(Math.max(input.limit * 10, 100), 1000)
@@ -115,12 +116,23 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(teamDb, entryIds)
 
+                    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+                    const tagsMap = teamDb.getTagsForEntries(entryIds)
+                    for (const entry of entriesMap.values()) {
+                        entry.tags = tagsMap.get(entry.id) ?? []
+                    }
+
                     const entries = results
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
                             if (input.entry_id !== undefined && entry.id === input.entry_id)
                                 return null
+
+                            // Enforce tenant isolation
+                            if (entry.projectNumber !== input.project_number) {
+                                return null
+                            }
 
                             // Apply filters
                             if (
@@ -236,13 +248,12 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const { indexed, failed, firstError } = await teamVectorManager.rebuildIndex(
-                        teamDb,
-                        progress
-                    )
+                    const { indexed, failed, firstError, partial } =
+                        await teamVectorManager.rebuildIndex(teamDb, progress)
                     const success = indexed > 0 || failed === 0
                     return {
                         success,
+                        partial,
                         entriesIndexed: indexed,
                         ...(failed > 0 ? { failedEntries: failed } : {}),
                         ...(!success
@@ -271,7 +282,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id } = TeamAddToVectorIndexSchema.parse(params)
+                    const { entry_id, project_number } = TeamAddToVectorIndexSchema.parse(params)
 
                     if (!teamVectorManager) {
                         return {
@@ -287,14 +298,15 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const entry = teamDb.getEntryById(entry_id)
-                    if (!entry) {
+                    if (entry?.projectNumber !== project_number) {
                         return {
                             success: false,
                             entryId: entry_id,
-                            error: `Team entry ${String(entry_id)} not found`,
+                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and try again',
+                            suggestion:
+                                'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }

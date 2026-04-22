@@ -27,7 +27,11 @@ function createMockDb(overrides: Record<string, unknown> = {}) {
         searchByDateRange: vi.fn().mockReturnValue([]),
         getRecentEntries: vi.fn().mockReturnValue([]),
         getStatistics: vi.fn().mockReturnValue({ totalEntries: 0 }),
-        executeRawQuery: vi.fn().mockReturnValue([]),
+        getSignificantEntries: vi.fn().mockReturnValue([]),
+        getRecentGraphRelationships: vi.fn().mockReturnValue([]),
+        getWorkflowActionEntries: vi.fn().mockReturnValue([]),
+        getAuthorStatistics: vi.fn().mockReturnValue([]),
+        getAuthorsForEntries: vi.fn().mockReturnValue(new Map()),
         ...overrides,
     }
 }
@@ -126,7 +130,7 @@ describe('Workflow prompts — branch coverage', () => {
     it('goal-tracker: should format significant entries', () => {
         const goalTracker = prompts.find((p) => p.name === 'goal-tracker')!
         const db = createMockDb({
-            executeRawQuery: vi.fn().mockReturnValue([]),
+            getSignificantEntries: vi.fn().mockReturnValue([]),
         })
         const result = goalTracker.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('goals')
@@ -255,7 +259,7 @@ describe('Team resources — branch coverage', () => {
                     .mockReturnValue([
                         { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test' },
                     ]),
-                executeRawQuery: vi.fn().mockReturnValue([{ values: [[1, 'alice']] }]),
+                getAuthorsForEntries: vi.fn().mockReturnValue(new Map([[1, 'alice']])),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!
@@ -297,13 +301,9 @@ describe('Team resources — branch coverage', () => {
         it('should return stats with author breakdown', () => {
             const teamDb = createMockDb({
                 getStatistics: vi.fn().mockReturnValue({ totalEntries: 10 }),
-                executeRawQuery: vi.fn().mockReturnValue([
-                    {
-                        values: [
-                            ['alice', 5],
-                            ['bob', 3],
-                        ],
-                    },
+                getAuthorStatistics: vi.fn().mockReturnValue([
+                    { author: 'alice', count: 5 },
+                    { author: 'bob', count: 3 },
                 ]),
             })
             const context = createMockContext({ teamDb })
@@ -320,7 +320,7 @@ describe('Team resources — branch coverage', () => {
         it('should handle author query failure gracefully', () => {
             const teamDb = createMockDb({
                 getStatistics: vi.fn().mockReturnValue({ totalEntries: 10 }),
-                executeRawQuery: vi.fn().mockImplementation(() => {
+                getAuthorStatistics: vi.fn().mockImplementation(() => {
                     throw new Error('fail')
                 }),
             })
@@ -338,7 +338,7 @@ describe('Team resources — branch coverage', () => {
         it('should handle empty author result', () => {
             const teamDb = createMockDb({
                 getStatistics: vi.fn().mockReturnValue({ totalEntries: 10 }),
-                executeRawQuery: vi.fn().mockReturnValue([]),
+                getAuthorStatistics: vi.fn().mockReturnValue([]),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/statistics')!
@@ -369,7 +369,7 @@ describe('Graph resources — branch coverage', () => {
             const resource = resources.find((r) => r.uri === 'memory://graph/recent')!
             const context = createMockContext({
                 db: createMockDb({
-                    executeRawQuery: vi.fn().mockReturnValue([]),
+                    getRecentGraphRelationships: vi.fn().mockReturnValue([]),
                 }),
             })
             const result = resource.handler('memory://graph/recent', context as never) as string
@@ -380,18 +380,13 @@ describe('Graph resources — branch coverage', () => {
             const resource = resources.find((r) => r.uri === 'memory://graph/recent')!
             const context = createMockContext({
                 db: createMockDb({
-                    executeRawQuery: vi.fn().mockReturnValue([
+                    getRecentGraphRelationships: vi.fn().mockReturnValue([
                         {
-                            columns: [
-                                'from_entry_id',
-                                'to_entry_id',
-                                'relationship_type',
-                                'from_content',
-                                'to_content',
-                            ],
-                            values: [
-                                [1, 2, 'unknown_type', 'Entry one content', 'Entry two content'],
-                            ],
+                            from_entry_id: 1,
+                            to_entry_id: 2,
+                            relationship_type: 'unknown_type',
+                            from_content: 'Entry one content',
+                            to_content: 'Entry two content',
                         },
                     ]),
                 }),
@@ -448,7 +443,7 @@ describe('Graph resources — branch coverage', () => {
             const resource = resources.find((r) => r.uri === 'memory://actions/recent')!
             const context = createMockContext({
                 db: createMockDb({
-                    executeRawQuery: vi.fn().mockReturnValue([]),
+                    getWorkflowActionEntries: vi.fn().mockReturnValue([]),
                 }),
             })
             const result = (await resource.handler(
@@ -465,7 +460,7 @@ describe('Graph resources — branch coverage', () => {
                     getRepoInfo: vi.fn().mockRejectedValue(new Error('fail')),
                 },
                 db: createMockDb({
-                    executeRawQuery: vi.fn().mockReturnValue([]),
+                    getWorkflowActionEntries: vi.fn().mockReturnValue([]),
                 }),
             })
             const result = (await resource.handler(
@@ -482,7 +477,7 @@ describe('Graph resources — branch coverage', () => {
                     getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
                 },
                 db: createMockDb({
-                    executeRawQuery: vi.fn().mockReturnValue([]),
+                    getWorkflowActionEntries: vi.fn().mockReturnValue([]),
                 }),
             })
             const result = (await resource.handler(

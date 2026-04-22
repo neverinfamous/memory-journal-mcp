@@ -9,6 +9,12 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
+import { parseFlagContext } from '../../../../types/auto-context.js'
+import {
+    markUntrustedContentInline,
+    assertSafeFilePath,
+    assertSafeDirectoryPath,
+} from '../../../../utils/security-utils.js'
 
 // ============================================================================
 // Journal Context
@@ -40,8 +46,9 @@ export function buildJournalContext(
             id: e.id,
             timestamp: e.timestamp,
             type: e.entryType,
-            preview:
-                content.slice(0, PREVIEW_LENGTH) + (content.length > PREVIEW_LENGTH ? '...' : ''),
+            preview: markUntrustedContentInline(
+                content.slice(0, PREVIEW_LENGTH) + (content.length > PREVIEW_LENGTH ? '...' : '')
+            ),
         }
     })
 
@@ -84,7 +91,9 @@ export function buildJournalContext(
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : ''),
+                preview: markUntrustedContentInline(
+                    c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')
+                ),
             }
         })
         latestSessionSummary = sessionSummaries[0]
@@ -126,7 +135,7 @@ export function buildTeamContext(
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
             : ''
         const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry['id'])}: ${teamContent.slice(0, TEAM_PREVIEW_LENGTH)}${teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''}`
+            ? `#${String(teamLatestEntry['id'])}: ${markUntrustedContentInline(teamContent.slice(0, TEAM_PREVIEW_LENGTH) + (teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''))}`
             : null
         const teamInfo = {
             totalEntries: teamTotalEntries,
@@ -148,9 +157,10 @@ export function buildTeamContext(
                     id: e.id,
                     timestamp: e.timestamp,
                     type: e.entryType,
-                    preview:
+                    preview: markUntrustedContentInline(
                         content.slice(0, TEAM_PREVIEW_LENGTH) +
-                        (content.length > TEAM_PREVIEW_LENGTH ? '...' : ''),
+                            (content.length > TEAM_PREVIEW_LENGTH ? '...' : '')
+                    ),
                 }
             })
         }
@@ -187,10 +197,14 @@ export interface SkillsDir {
 const MS_PER_HOUR = 3_600_000
 const MS_PER_DAY = 86_400_000
 
-export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile | undefined {
+export function buildRulesFileInfo(
+    rulesFilePath: string | undefined,
+    allowedIoRoots: string[] = []
+): RulesFile | undefined {
     if (!rulesFilePath) return undefined
 
     try {
+        assertSafeFilePath(rulesFilePath, allowedIoRoots)
         const stat = fs.statSync(rulesFilePath)
         const ageMs = Date.now() - stat.mtimeMs
         const ageHours = Math.floor(ageMs / MS_PER_HOUR)
@@ -203,7 +217,7 @@ export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile
                   : 'just now'
 
         return {
-            path: rulesFilePath,
+            path: path.basename(rulesFilePath),
             name: path.basename(rulesFilePath),
             sizeKB: Math.round(stat.size / 1024),
             lastModified: agoStr,
@@ -218,14 +232,18 @@ export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile
     }
 }
 
-export function buildSkillsDirInfo(skillsDirPath: string | undefined): SkillsDir | undefined {
+export function buildSkillsDirInfo(
+    skillsDirPath: string | undefined,
+    allowedIoRoots: string[] = []
+): SkillsDir | undefined {
     if (!skillsDirPath) return undefined
 
     try {
+        assertSafeDirectoryPath(skillsDirPath, allowedIoRoots)
         const entries = fs.readdirSync(skillsDirPath, { withFileTypes: true })
         const skillDirs = entries.filter((e) => e.isDirectory())
         return {
-            path: skillsDirPath,
+            path: path.basename(skillsDirPath),
             count: skillDirs.length,
             names: skillDirs.map((d) => d.name),
         }
@@ -269,41 +287,21 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
 
         const activeFlags = flagEntries
             .map((entry) => {
-                const autoCtx = entry.autoContext
-                if (!autoCtx) return null
-                try {
-                    const parsed: unknown = JSON.parse(autoCtx)
-                    if (
-                        typeof parsed === 'object' &&
-                        parsed !== null &&
-                        'flag_type' in parsed &&
-                        'resolved' in parsed
-                    ) {
-                        const ctx = parsed as Record<string, unknown>
-                        if (ctx['resolved'] === true) return null
-                        const content = entry.content ?? ''
-                        return {
-                            id: entry.id,
-                            flag_type: String(ctx['flag_type']),
-                            target_user: typeof ctx['target_user'] === 'string'
-                                ? ctx['target_user']
-                                : null,
-                            preview:
-                                content.slice(0, 80) +
-                                (content.length > 80 ? '...' : ''),
-                            timestamp: entry.timestamp,
-                        }
-                    }
-                    return null
-                } catch {
-                    return null
+                const ctx = parseFlagContext(entry.autoContext)
+                if (!ctx || ctx.resolved) return null
+
+                const content = entry.content ?? ''
+                return {
+                    id: entry.id,
+                    flag_type: ctx.flag_type,
+                    target_user: ctx.target_user ?? null,
+                    preview: markUntrustedContentInline(
+                        content.slice(0, 80) + (content.length > 80 ? '...' : '')
+                    ),
+                    timestamp: entry.timestamp,
                 }
             })
-            .filter(
-                (
-                    f
-                ): f is NonNullable<typeof f> => f !== null
-            )
+            .filter((f): f is NonNullable<typeof f> => f !== null)
 
         if (activeFlags.length === 0) return undefined
 
@@ -320,4 +318,3 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
         return undefined
     }
 }
-

@@ -9,10 +9,11 @@ export class MilestonesManager {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubMilestone[]> {
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `milestones:${owner}:${repo}:${state}:${String(limit)}`
@@ -27,6 +28,7 @@ export class MilestonesManager {
                 per_page: limit,
                 sort: 'due_on',
                 direction: 'asc',
+                request: { signal: abortSignal },
             })
 
             const result = response.data.map((ms) => ({
@@ -50,7 +52,7 @@ export class MilestonesManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -60,7 +62,7 @@ export class MilestonesManager {
         milestoneNumber: number
     ): Promise<GitHubMilestone | null> {
         if (!this.client.octokit) {
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `milestone:${owner}:${repo}:${String(milestoneNumber)}`
@@ -92,12 +94,15 @@ export class MilestonesManager {
             this.client.setCache(cacheKey, milestone)
             return milestone
         } catch (error) {
+            if (error instanceof Error && 'status' in error && error.status === 404) {
+                return null
+            }
             logger.error('Failed to get milestone', {
                 module: 'GitHub',
                 entityId: milestoneNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         }
     }
 
@@ -112,7 +117,7 @@ export class MilestonesManager {
             logger.error('Cannot create milestone: GitHub API not available', {
                 module: 'GitHub',
             })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -151,7 +156,7 @@ export class MilestonesManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { title, owner, repo },
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`milestones:${owner}:${repo}`)
             this.client.invalidateCache('context:')
@@ -173,7 +178,7 @@ export class MilestonesManager {
             logger.error('Cannot update milestone: GitHub API not available', {
                 module: 'GitHub',
             })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -214,7 +219,7 @@ export class MilestonesManager {
                 entityId: milestoneNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`milestones:${owner}:${repo}`)
             this.client.invalidateCache(`milestone:${owner}:${repo}:${String(milestoneNumber)}`)

@@ -38,38 +38,29 @@ function mockRes(): Record<string, unknown> {
 // ============================================================================
 
 describe('getClientIp', () => {
-    it('should return req.ip when trustProxy is false', () => {
+    it('should return req.ip if present', () => {
         const req = mockReq({
-            headers: { 'x-forwarded-for': '10.0.0.1' },
             ip: '192.168.1.100',
         })
-        const ip = getClientIp(req as never, false)
+        const ip = getClientIp(req as never)
         expect(ip).toBe('192.168.1.100')
     })
 
-    it('should return X-Forwarded-For first IP when trustProxy is true', () => {
-        const req = mockReq({
-            headers: { 'x-forwarded-for': '10.0.0.1, 172.16.0.1' },
-        })
-        const ip = getClientIp(req as never, true)
-        expect(ip).toBe('10.0.0.1')
-    })
-
-    it('should fall back to req.ip when X-Forwarded-For is absent', () => {
-        const req = mockReq({ ip: '172.16.0.5' })
-        const ip = getClientIp(req as never, true)
+    it('should fall back to socket.remoteAddress when req.ip is undefined', () => {
+        const req = mockReq({ ip: undefined, socket: { remoteAddress: '172.16.0.5' } })
+        const ip = getClientIp(req as never)
         expect(ip).toBe('172.16.0.5')
     })
 
     it('should fall back to socket.remoteAddress when req.ip is undefined', () => {
         const req = mockReq({ ip: undefined })
-        const ip = getClientIp(req as never, false)
+        const ip = getClientIp(req as never)
         expect(ip).toBe('192.168.1.1')
     })
 
     it('should return "unknown" when no IP available', () => {
         const req = mockReq({ ip: undefined, socket: { remoteAddress: undefined } })
-        const ip = getClientIp(req as never, false)
+        const ip = getClientIp(req as never)
         expect(ip).toBe('unknown')
     })
 })
@@ -99,8 +90,13 @@ describe('checkRateLimit', () => {
 
         const result = checkRateLimit(req as never, config, rateLimitMap)
 
+        const expectedHash = require('node:crypto')
+            .createHash('sha256')
+            .update('10.0.0.1')
+            .digest('hex')
+
         expect(result.allowed).toBe(true)
-        expect(rateLimitMap.has('10.0.0.1')).toBe(true)
+        expect(rateLimitMap.has(expectedHash)).toBe(true)
     })
 
     it('should deny when rate limit exceeded', () => {
@@ -130,12 +126,16 @@ describe('checkRateLimit', () => {
         } as HttpTransportConfig
         const rateLimitMap = new Map<string, RateLimitEntry>()
         const req = mockReq({ ip: '10.0.0.1' })
+        const expectedHash = require('node:crypto')
+            .createHash('sha256')
+            .update('10.0.0.1')
+            .digest('hex')
 
         // Use up the limit
         checkRateLimit(req as never, config, rateLimitMap)
 
         // Simulate window expiry by modifying entry
-        const entry = rateLimitMap.get('10.0.0.1')!
+        const entry = rateLimitMap.get(expectedHash)!
         entry.resetTime = Date.now() - 1
 
         // Should be allowed again
@@ -211,7 +211,7 @@ describe('setSecurityHeaders', () => {
             (c: unknown[]) => c[0] === 'Strict-Transport-Security'
         )
         expect(hstsCall).toBeDefined()
-        expect(hstsCall[1]).toContain('includeSubDomains')
+        expect(hstsCall![1]).toContain('includeSubDomains')
     })
 
     it('should set HSTS with custom max-age', () => {
@@ -224,7 +224,7 @@ describe('setSecurityHeaders', () => {
         const hstsCall = setHeader.mock.calls.find(
             (c: unknown[]) => c[0] === 'Strict-Transport-Security'
         )
-        expect(hstsCall[1]).toContain('max-age=86400')
+        expect(hstsCall![1]).toContain('max-age=86400')
     })
 })
 

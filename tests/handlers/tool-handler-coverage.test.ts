@@ -10,9 +10,42 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { callTool } from '../../src/handlers/tools/index.js'
+import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 function createMockVector(overrides: Partial<Record<string, unknown>> = {}): VectorSearchManager {
     const defaults = {
@@ -43,6 +76,7 @@ describe('Tool Handler Coverage', () => {
         await db.initialize()
         teamDb = new DatabaseAdapter(teamDbPath)
         await teamDb.initialize()
+        await teamDb.applyTeamSchema()
     })
 
     afterAll(() => {
@@ -224,14 +258,12 @@ describe('Tool Handler Coverage', () => {
     describe('visualize_relationships - coverage', () => {
         it('should return no entries for nonexistent entry_id', async () => {
             const result = (await callTool('visualize_relationships', { entry_id: 99999 }, db)) as {
-                entry_count: number
-                mermaid: null
-                message: string
+                success: boolean
+                error: string
             }
 
-            expect(result.entry_count).toBe(0)
-            expect(result.mermaid).toBeNull()
-            expect(result.message).toContain('not found')
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('not found')
         })
 
         it('should filter by tags', async () => {

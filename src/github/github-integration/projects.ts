@@ -13,11 +13,12 @@ export class ProjectsManager {
     async getProjectKanban(
         owner: string,
         projectNumber: number,
-        repo?: string
+        repo?: string,
+        abortSignal?: AbortSignal
     ): Promise<KanbanBoard | null> {
         if (!this.client.graphqlWithAuth) {
             logger.debug('GraphQL not available - no token', { module: 'GitHub' })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const projectFragment = `
@@ -37,7 +38,10 @@ export class ProjectsManager {
                         }
                     }
                 }
-                items(first: 100) {
+                items(first: $itemLimit) {
+                    pageInfo {
+                        hasNextPage
+                    }
                     nodes {
                         id
                         type
@@ -89,7 +93,7 @@ export class ProjectsManager {
 
         const userQuery = `
             ${projectFragment}
-            query($owner: String!, $number: Int!) {
+            query($owner: String!, $number: Int!, $itemLimit: Int!) {
                 user(login: $owner) {
                     projectV2(number: $number) {
                         ...ProjectData
@@ -100,7 +104,7 @@ export class ProjectsManager {
 
         const repoQuery = `
             ${projectFragment}
-            query($owner: String!, $repo: String!, $number: Int!) {
+            query($owner: String!, $repo: String!, $number: Int!, $itemLimit: Int!) {
                 repository(owner: $owner, name: $repo) {
                     projectV2(number: $number) {
                         ...ProjectData
@@ -111,7 +115,7 @@ export class ProjectsManager {
 
         const orgQuery = `
             ${projectFragment}
-            query($owner: String!, $number: Int!) {
+            query($owner: String!, $number: Int!, $itemLimit: Int!) {
                 organization(login: $owner) {
                     projectV2(number: $number) {
                         ...ProjectData
@@ -135,6 +139,7 @@ export class ProjectsManager {
                 }[]
             }
             items: {
+                pageInfo?: { hasNextPage: boolean }
                 nodes: {
                     id: string
                     type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE'
@@ -174,6 +179,8 @@ export class ProjectsManager {
             const response = await this.client.graphqlWithAuth<UserResponse>(userQuery, {
                 owner,
                 number: projectNumber,
+                itemLimit: 100,
+                request: { signal: abortSignal },
             })
             if (response.user?.projectV2) {
                 project = response.user.projectV2
@@ -189,6 +196,8 @@ export class ProjectsManager {
                     owner,
                     repo,
                     number: projectNumber,
+                    itemLimit: 100,
+                    request: { signal: abortSignal },
                 })
                 if (response.repository?.projectV2) {
                     project = response.repository.projectV2
@@ -206,6 +215,8 @@ export class ProjectsManager {
                 const response = await this.client.graphqlWithAuth<OrgResponse>(orgQuery, {
                     owner,
                     number: projectNumber,
+                    itemLimit: 100,
+                    request: { signal: abortSignal },
                 })
                 if (response.organization?.projectV2) {
                     project = response.organization.projectV2
@@ -292,11 +303,12 @@ export class ProjectsManager {
         }
 
         const totalItems = project.items.nodes.length
+        const truncated = project.items.pageInfo?.hasNextPage ?? false
 
         logger.info('Fetched Kanban board', {
             module: 'GitHub',
             entityId: projectNumber,
-            context: { columns: columns.length, items: totalItems, source },
+            context: { columns: columns.length, items: totalItems, source, truncated },
         })
 
         return {
@@ -307,6 +319,7 @@ export class ProjectsManager {
             statusOptions,
             columns,
             totalItems,
+            truncated,
         }
     }
 
@@ -337,6 +350,10 @@ export class ProjectsManager {
                     }
                 }
             `
+
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
 
             await this.client.graphqlWithAuth(mutation, {
                 projectId,
@@ -386,6 +403,10 @@ export class ProjectsManager {
                 }
             `
 
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
+
             const response = await this.client.graphqlWithAuth<{
                 addProjectV2ItemById: { item: { id: string } }
             }>(mutation, {
@@ -432,6 +453,10 @@ export class ProjectsManager {
                     }
                 }
             `
+
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
 
             await this.client.graphqlWithAuth(mutation, {
                 projectId,

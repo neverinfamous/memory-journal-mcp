@@ -2,6 +2,7 @@ import DatabaseAdapter from 'better-sqlite3'
 import type { Database } from 'better-sqlite3'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { execFile } from 'node:child_process'
 import { logger } from '../../utils/logger.js'
 import { ConnectionError } from '../../types/errors.js'
 import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from '../core/schema.js'
@@ -12,7 +13,7 @@ import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
  * Hoisted to module scope to avoid recompilation on every exec() call.
  */
 const IS_MUTATION_RE =
-    /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store))./i
+    /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check))./i
 
 /**
  * Shared migration columns required by both personal and team schemas.
@@ -120,40 +121,77 @@ export class NativeConnectionManager implements IDatabaseConnection {
         const columns = new Set(tableInfo.map((row) => row.name))
 
         const added: string[] = []
-        for (const col of SHARED_MIGRATION_COLUMNS) {
-            if (!columns.has(col.name)) {
-                db.exec(col.sql)
-                added.push(col.name)
+
+        db.transaction(() => {
+            for (const col of SHARED_MIGRATION_COLUMNS) {
+                if (!columns.has(col.name)) {
+                    db.exec(col.sql)
+                    added.push(col.name)
+                }
             }
-        }
 
-        db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
+            db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
 
-        // Populate FTS5 index for existing databases that were created before FTS5 was added.
-        // Uses FTS5's built-in 'rebuild' command for content-sync tables.
-        // We query the fts_content_docsize shadow table to get the true number of indexed documents
-        // because querying fts_content directly merely delegates to the content table (memory_journal).
-        let ftsCount = 0
-        try {
-            ftsCount = (
-                db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
+            // Populate FTS5 index for existing databases that were created before FTS5 was added.
+            // Uses FTS5's built-in 'rebuild' command for content-sync tables.
+            // We query the fts_content_docsize shadow table to get the true number of indexed documents
+            // because querying fts_content directly merely delegates to the content table (memory_journal).
+            let ftsCount = 0
+            try {
+                ftsCount = (
+                    db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
+                        c: number
+                    }
+                ).c
+            } catch {
+                // Shadow table doesn't exist yet or FTS5 disabled
+            }
+
+            const entryCount = (
+                db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
             ).c
-        } catch {
-            // Shadow table doesn't exist yet or FTS5 disabled
-        }
+            let needsRebuild = false
+            let rebuildReason = ''
 
-        const entryCount = (
-            db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
-        ).c
-        if (ftsCount === 0 && entryCount > 0) {
-            db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
-            added.push('fts5:populated')
-        } else if (ftsCount > entryCount) {
-            // Ghost entries: FTS has more rows than the journal (hard deletes before the
-            // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
-            db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
-            added.push('fts5:rebuilt-ghost-cleanup')
-        }
+            if (ftsCount === 0 && entryCount > 0) {
+                needsRebuild = true
+                rebuildReason = 'fts5:populated'
+            } else if (ftsCount > entryCount) {
+                // Ghost entries: FTS has more rows than the journal (hard deletes before the
+                // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
+                needsRebuild = true
+                rebuildReason = 'fts5:rebuilt-ghost-cleanup'
+            }
+
+            if (needsRebuild) {
+                added.push(rebuildReason)
+                // Defer rebuilding FTS5 index to prevent blocking server startup
+                const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000
+                setTimeout(() => {
+                    // Start a detached node process to rebuild the index without blocking the main event loop
+                    const code = `
+                        const Database = require('better-sqlite3');
+                        const db = new Database(process.argv[1]);
+                        db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
+                        db.close();
+                    `
+                    execFile('node', ['-e', code, this.dbPath], (err, _stdout, stderr) => {
+                        if (err) {
+                            logger.error('Failed to rebuild FTS5 index in background process', {
+                                module: 'NativeConnectionManager',
+                                error: err?.message || 'unknown error',
+                                stderr,
+                            })
+                        } else {
+                            logger.info(
+                                `Deferred FTS5 rebuild completed (${rebuildReason}) in background process`,
+                                { module: 'NativeConnectionManager', dbPath: this.dbPath }
+                            )
+                        }
+                    })
+                }, deferMs)
+            }
+        })()
 
         if (added.length > 0) {
             logger.info('Schema migrated', {
@@ -178,12 +216,15 @@ export class NativeConnectionManager implements IDatabaseConnection {
         ]
 
         const added: string[] = []
-        for (const col of teamColumns) {
-            if (!columns.has(col.name)) {
-                db.exec(col.sql)
-                added.push(col.name)
+
+        db.transaction(() => {
+            for (const col of teamColumns) {
+                if (!columns.has(col.name)) {
+                    db.exec(col.sql)
+                    added.push(col.name)
+                }
             }
-        }
+        })()
 
         if (added.length > 0) {
             logger.info('Team schema migrated', {
@@ -195,20 +236,30 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     /**
+     * @internal QUARANTINED
      * Maps better-sqlite3 results to the legacy `{ columns: string[], values: unknown[][] }[]` shape
      * Because better-sqlite3 returns arrays of objects instantly, we map them out.
      */
     exec(sql: string, params?: unknown[]): QueryResult[] {
         const db = this.ensureDb()
 
+        // Strip string literals to safely check for multiple statements
+        // SQLite uses single quotes for strings and double quotes for identifiers
+        const strippedSql = sql.replace(/'[^']*'/g, '').replace(/"[^"]*"/g, '')
+        const statements = strippedSql
+            .split(';')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+
+        // Reject multiple statements separated by semicolon to prevent unparameterized footguns
+        if (statements.length > 1) {
+            throw new Error(
+                'Multi-statement queries via exec() are strictly forbidden. Use properly parameterized adapter methods instead.'
+            )
+        }
+
         // Use pre-compiled regex to detect true mutations that should return an empty set
         const isMutation = IS_MUTATION_RE.test(sql)
-
-        // For multiple statements separated by semicolon where they just want it to run
-        if (isMutation && sql.includes(';')) {
-            db.exec(sql)
-            return []
-        }
 
         const stmt = db.prepare(sql)
 
@@ -239,6 +290,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     /**
+     * @internal QUARANTINED
      * Wrapper for INSERT/UPDATE/DELETE
      */
     run(sql: string, params?: unknown[]): void {
@@ -284,7 +336,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
         db.pragma(command)
     }
 
-    getRawDb(): unknown {
+    /**
+     * @internal
+     * Restricted to internal SQLite components only
+     */
+    getNativeDb(): Database {
         return this.ensureDb()
     }
 

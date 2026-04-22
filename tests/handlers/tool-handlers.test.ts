@@ -6,8 +6,41 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getTools, callTool } from '../../src/handlers/tools/index.js'
+import { getTools, callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 describe('Tool Handlers', () => {
     let db: DatabaseAdapter
@@ -446,7 +479,9 @@ describe('Tool Handlers', () => {
 
     describe('callTool - error handling', () => {
         it('should throw for unknown tool', async () => {
-            await expect(callTool('nonexistent_tool', {}, db)).rejects.toThrow('Unknown tool')
+            await expect(callTool('nonexistent_tool', {}, db)).rejects.toThrow(
+                'Tool not found: nonexistent_tool'
+            )
         })
     })
 

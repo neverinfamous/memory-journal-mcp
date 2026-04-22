@@ -20,12 +20,14 @@ export interface QueryResult {
  */
 export interface IDatabaseConnection {
     /**
+     * @internal QUARANTINED: Internal schema and migration use only.
      * Executes queries that return results (SELECT, PRAGMA)
      * Must return the shape: { columns: string[], values: unknown[][] }[]
      */
     exec(sql: string, params?: unknown[]): QueryResult[]
 
     /**
+     * @internal QUARANTINED: Internal schema and migration use only.
      * Executes queries that modify data (INSERT, UPDATE, DELETE)
      */
     run(sql: string, params?: unknown[]): void
@@ -58,12 +60,6 @@ export interface IDatabaseConnection {
     getDbPath(): string
 
     /**
-     * Provides the underlying better-sqlite3 Database instance.
-     * Note: Avoid using this in business logic to prevent driver-coupling
-     */
-    getRawDb(): unknown
-
-    /**
      * Execute a PRAGMA command.
      * Wraps the driver-specific pragma call so callers don't need getRawDb().
      */
@@ -90,6 +86,9 @@ export interface IDatabaseAdapter {
     getEntryById(id: number): JournalEntry | null
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null
     getEntriesByIds(ids: number[]): Map<number, JournalEntry>
+    getEntriesByIdsWithImportance(
+        ids: number[]
+    ): Map<number, { entry: JournalEntry; importance: ImportanceResult }>
     calculateImportance(entryId: number): ImportanceResult
     getRecentEntries(
         limit?: number,
@@ -105,6 +104,18 @@ export interface IDatabaseAdapter {
             entryType?: EntryType
             tags?: string[]
             isPersonal?: boolean
+            significanceType?: string
+            autoContext?: string | null
+            projectNumber?: number
+            projectOwner?: string
+            issueNumber?: number
+            issueUrl?: string
+            prNumber?: number
+            prUrl?: string
+            prStatus?: string
+            workflowRunId?: number
+            workflowName?: string
+            workflowStatus?: string
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
@@ -146,9 +157,12 @@ export interface IDatabaseAdapter {
         endDate?: string,
         projectBreakdown?: boolean
     ): Record<string, unknown>
+    getAuthorStatistics(): { author: string; count: number }[]
+    getAuthorsForEntries(entryIds: number[]): Map<number, string | null>
 
     // Tags Manager
     getTagsForEntry(entryId: number): string[]
+    getTagsForEntries(entryIds: number[]): Map<number, string[]>
     listTags(): Tag[]
     mergeTags(
         sourceTag: string,
@@ -163,6 +177,7 @@ export interface IDatabaseAdapter {
         description?: string
     ): Relationship
     getRelationships(entryId: number): Relationship[]
+    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]>
 
     // Backup Manager
     getBackupsDir(): string
@@ -171,7 +186,10 @@ export interface IDatabaseAdapter {
     ): Promise<{ filename: string; path: string; sizeBytes: number }>
     listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[]
     deleteOldBackups(keepCount: number): { deleted: string[]; kept: number }
-    restoreFromFile(filename: string): Promise<{
+    restoreFromFile(
+        filename: string,
+        runtime?: unknown
+    ): Promise<{
         restoredFrom: string
         previousEntryCount: number
         newEntryCount: number
@@ -192,10 +210,6 @@ export interface IDatabaseAdapter {
         }
     }
 
-    getRawDb(): unknown
-    pragma(command: string): void
-    executeRawQuery(sql: string, params?: unknown[]): QueryResult[]
-
     // Analytics Snapshots
     saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number
     getLatestAnalyticsSnapshot(
@@ -205,4 +219,64 @@ export interface IDatabaseAdapter {
         type: string,
         limit?: number
     ): { id: number; createdAt: string; data: Record<string, unknown> }[]
+    computeDigest(): Record<string, unknown>
+
+    pragma(command: string): void
+
+    // Advanced Analytic and Relationship queries (Replaces raw queries)
+    getCrossProjectInsights(options: {
+        startDate?: string
+        endDate?: string
+        minEntries: number
+        inactiveThresholdDays: number
+    }): {
+        projects: Record<string, unknown>[]
+        inactiveProjects: { project_number: number; last_entry_date: string }[]
+    }
+
+    visualizeRelationships(options: {
+        entryId?: number
+        tags?: string[]
+        relationshipType?: string
+        depth: number
+        limit: number
+    }): {
+        nodes: {
+            id: string | number
+            label: string
+            group: string
+            metadata?: Record<string, unknown>
+        }[]
+        edges: { from: string | number; to: string | number; label: string; type: string }[]
+    }
+
+    getTeamCollaborationMatrix(options: { period: string; limit: number }): {
+        totalAuthors: number
+        totalEntries: number
+        authorActivity: { author: string; period: string; entryCount: number }[]
+        crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[]
+        impactFactor: { author: string; inboundLinks: number }[]
+    }
+
+    getWorkflowActionEntries(limit: number): JournalEntry[]
+    getSignificantEntries(limit: number, projectNumber?: number): JournalEntry[]
+    getRecentGraphRelationships(limit: number): {
+        from_entry_id: number
+        to_entry_id: number
+        relationship_type: string
+        from_content: string
+        to_content: string
+    }[]
+
+    // Vector Search Primitives
+    upsertVector(entryId: number, embedding: Float32Array): void
+    upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void
+    searchVectors(embedding: Float32Array, limit: number): { entry_id: number; distance: number }[]
+    getVector(entryId: number): Float32Array | null
+    deleteVector(entryId: number): void
+    clearVectors(): void
+    getVectorCount(): number
+    cleanupStaleVectors(): void
+
+    executeInTransaction<T>(cb: () => T): T
 }

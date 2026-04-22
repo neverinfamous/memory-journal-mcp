@@ -2,6 +2,7 @@ import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
 import type { GitHubIssue } from '../../types/index.js'
 import type { IssueDetails } from './types.js'
+import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 
 export class IssuesManager {
     constructor(private client: GitHubClient) {}
@@ -10,10 +11,11 @@ export class IssuesManager {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubIssue[]> {
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `issues:${owner}:${repo}:${state}:${String(limit)}`
@@ -25,9 +27,10 @@ export class IssuesManager {
                 owner,
                 repo,
                 state,
-                per_page: Math.min(limit * 2, 100),
+                per_page: Math.min(limit + 5, 100),
                 sort: 'updated',
                 direction: 'desc',
+                request: { signal: abortSignal },
             })
 
             const result = response.data
@@ -35,7 +38,7 @@ export class IssuesManager {
                 .slice(0, limit)
                 .map((issue) => ({
                     number: issue.number,
-                    title: issue.title,
+                    title: markUntrustedContentInline(issue.title),
                     url: issue.html_url,
                     state: issue.state === 'open' ? ('OPEN' as const) : ('CLOSED' as const),
                     milestone: issue.milestone
@@ -53,13 +56,13 @@ export class IssuesManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
     async getIssue(owner: string, repo: string, issueNumber: number): Promise<IssueDetails | null> {
         if (!this.client.octokit) {
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `issue:${owner}:${repo}:${String(issueNumber)}`
@@ -81,11 +84,11 @@ export class IssuesManager {
 
             const details: IssueDetails = {
                 number: issue.number,
-                title: issue.title,
+                title: markUntrustedContentInline(issue.title),
                 url: issue.html_url,
                 state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
                 nodeId: issue.node_id,
-                body: issue.body ?? null,
+                body: issue.body || '',
                 labels: issue.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))),
                 assignees: issue.assignees?.map((a) => a.login) ?? [],
                 createdAt: issue.created_at,
@@ -100,12 +103,15 @@ export class IssuesManager {
             this.client.setCache(cacheKey, details)
             return details
         } catch (error) {
+            if (error instanceof Error && 'status' in error && error.status === 404) {
+                return null
+            }
             logger.error('Failed to get issue details', {
                 module: 'GitHub',
                 entityId: issueNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         }
     }
 
@@ -118,7 +124,7 @@ export class IssuesManager {
         const _limit = Math.min(limit, 100)
         if (_limit <= 0) return []
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `issue-comments:${owner}:${repo}:${String(issueNumber)}:${String(_limit)}`
@@ -139,7 +145,7 @@ export class IssuesManager {
 
             const comments = response.data.slice(0, _limit).map((comment) => ({
                 author: comment.user?.login ?? 'unknown',
-                body: comment.body ?? '',
+                body: markUntrustedContent(comment.body),
                 createdAt: comment.created_at,
             }))
 
@@ -151,7 +157,7 @@ export class IssuesManager {
                 entityId: issueNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -166,7 +172,7 @@ export class IssuesManager {
     ): Promise<{ number: number; url: string; title: string; nodeId: string } | null> {
         if (!this.client.octokit) {
             logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -198,7 +204,7 @@ export class IssuesManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { title, owner, repo },
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`issues:${owner}:${repo}`)
             this.client.invalidateCache('context:')
@@ -213,7 +219,7 @@ export class IssuesManager {
     ): Promise<{ success: boolean; url: string } | null> {
         if (!this.client.octokit) {
             logger.error('Cannot close issue: GitHub API not available', { module: 'GitHub' })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -249,7 +255,7 @@ export class IssuesManager {
                 entityId: issueNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`issues:${owner}:${repo}`)
             this.client.invalidateCache(`issue:${owner}:${repo}:${String(issueNumber)}`)

@@ -7,7 +7,6 @@
 
 // @huggingface/transformers is loaded lazily via dynamic import() in initialize()
 // to avoid 1.5s cold-start penalty from eagerly loading the module.
-import type { Database as BetterSqlite3Database } from 'better-sqlite3'
 import { logger } from '../utils/logger.js'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { JournalEntry } from '../types/index.js'
@@ -44,16 +43,12 @@ export class VectorSearchManager {
     private embedder:
         | ((text: string, options?: Record<string, unknown>) => Promise<unknown>)
         | null = null
-    private get db(): BetterSqlite3Database | null {
-        try {
-            return this.dbAdapter.getRawDb() as BetterSqlite3Database
-        } catch {
-            return null
-        }
+    private get db(): IDatabaseAdapter | null {
+        return this.dbAdapter
     }
     private readonly modelName: string
     private initialized = false
-    private initializing = false
+    private initPromise: Promise<void> | null = null
 
     constructor(
         private readonly dbAdapter: IDatabaseAdapter,
@@ -73,36 +68,41 @@ export class VectorSearchManager {
      * Initialize the vector search manager (lazy loading)
      */
     async initialize(): Promise<void> {
-        if (this.initialized || this.initializing) return
+        if (this.initialized) return
+        if (this.initPromise) return this.initPromise
 
-        this.initializing = true
+        this.initPromise = (async () => {
+            try {
+                logger.info('Initializing vector search...', { module: 'VectorSearch' })
 
-        try {
-            logger.info('Initializing vector search...', { module: 'VectorSearch' })
+                // Load embedding model (downloads on first use, ~23MB)
+                // Dynamic import avoids 1.5s cold-start penalty from eagerly loading the module
+                logger.info(`Loading embedding model: ${this.modelName}`, {
+                    module: 'VectorSearch',
+                })
+                const { pipeline } = await import('@huggingface/transformers')
+                this.embedder = await pipeline('feature-extraction', this.modelName, {
+                    dtype: 'q8', // Quantized int8 for faster inference and smaller model size
+                })
+                logger.info('Embedding model loaded', { module: 'VectorSearch' })
 
-            // Load embedding model (downloads on first use, ~23MB)
-            // Dynamic import avoids 1.5s cold-start penalty from eagerly loading the module
-            logger.info(`Loading embedding model: ${this.modelName}`, { module: 'VectorSearch' })
-            const { pipeline } = await import('@huggingface/transformers')
-            this.embedder = await pipeline('feature-extraction', this.modelName, {
-                dtype: 'q8', // Quantized int8 for faster inference and smaller model size
-            })
-            logger.info('Embedding model loaded', { module: 'VectorSearch' })
+                // Get the raw better-sqlite3 database instance
+                // sqlite-vec extension is already loaded by NativeConnectionManager
 
-            // Get the raw better-sqlite3 database instance
-            // sqlite-vec extension is already loaded by NativeConnectionManager
+                this.initialized = true
+                logger.info('Vector search initialized successfully', { module: 'VectorSearch' })
+            } catch (error) {
+                logger.error('Failed to initialize vector search', {
+                    module: 'VectorSearch',
+                    error: error instanceof Error ? error.message : String(error),
+                })
+                throw error
+            } finally {
+                this.initPromise = null
+            }
+        })()
 
-            this.initialized = true
-            this.initializing = false
-            logger.info('Vector search initialized successfully', { module: 'VectorSearch' })
-        } catch (error) {
-            this.initializing = false
-            logger.error('Failed to initialize vector search', {
-                module: 'VectorSearch',
-                error: error instanceof Error ? error.message : String(error),
-            })
-            throw error
-        }
+        return this.initPromise
     }
 
     /**
@@ -122,6 +122,13 @@ export class VectorSearchManager {
 
         // Convert to number array
         const embedding = Array.from(output.data)
+
+        if (embedding.length !== EMBEDDING_DIMENSIONS) {
+            throw new Error(
+                `Embedding dimension mismatch: expected ${String(EMBEDDING_DIMENSIONS)}, got ${String(embedding.length)}`
+            )
+        }
+
         return embedding
     }
 
@@ -149,14 +156,9 @@ export class VectorSearchManager {
             // Generate embedding
             const embedding = await this.generateEmbedding(content)
 
-            // vec0 virtual tables don't support INSERT OR REPLACE — use DELETE+INSERT
             const vec = new Float32Array(embedding)
-            const bigId = BigInt(entryId)
-            // DELETE is a no-op if entry doesn't exist
-            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(bigId)
-            this.db
-                .prepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
-                .run(bigId, vec)
+
+            this.dbAdapter.upsertVector(entryId, vec)
 
             logger.debug('Added entry to vector index', {
                 module: 'VectorSearch',
@@ -187,15 +189,11 @@ export class VectorSearchManager {
         similarityThreshold = 0.3
     ): Promise<SemanticSearchResult[]> {
         if (!this.initialized) {
-            try {
-                await this.initialize()
-            } catch {
-                return []
-            }
+            await this.initialize()
         }
 
         if (!this.db) {
-            return []
+            throw new ConfigurationError('Vector database not available')
         }
 
         try {
@@ -203,17 +201,8 @@ export class VectorSearchManager {
             const queryEmbedding = await this.generateEmbedding(query)
             const queryVec = new Float32Array(queryEmbedding)
 
-            // KNN search via sqlite-vec vec0 virtual table
-            // Returns entry_id and distance (L2), ordered by distance ascending
-            const results = this.db
-                .prepare(
-                    `SELECT entry_id, distance
-                     FROM vec_embeddings
-                     WHERE embedding MATCH ?
-                     ORDER BY distance
-                     LIMIT ?`
-                )
-                .all(queryVec, limit) as { entry_id: number; distance: number }[]
+            // KNN search via adapter
+            const results = this.dbAdapter.searchVectors(queryVec, limit)
 
             // Convert L2 distance to similarity score and filter by threshold
             const filteredResults: SemanticSearchResult[] = results
@@ -230,7 +219,7 @@ export class VectorSearchManager {
                 module: 'VectorSearch',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -248,24 +237,18 @@ export class VectorSearchManager {
         similarityThreshold = 0.3
     ): Promise<SemanticSearchResult[]> {
         if (!this.initialized) {
-            try {
-                await this.initialize()
-            } catch {
-                return []
-            }
+            await this.initialize()
         }
 
         if (!this.db) {
-            return []
+            throw new ConfigurationError('Vector database not available')
         }
 
         try {
             // Look up the stored embedding for this entry
-            const row = this.db
-                .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
-                .get(BigInt(entryId)) as { embedding: Buffer } | undefined
+            const storedEmbedding = this.dbAdapter.getVector(entryId)
 
-            if (!row) {
+            if (!storedEmbedding) {
                 logger.debug('No embedding found for entry', {
                     module: 'VectorSearch',
                     entityId: entryId,
@@ -273,23 +256,8 @@ export class VectorSearchManager {
                 return []
             }
 
-            // Use the stored embedding as the query vector
-            const queryVec = new Float32Array(
-                row.embedding.buffer,
-                row.embedding.byteOffset,
-                EMBEDDING_DIMENSIONS
-            )
-
             // KNN search — fetch extra to allow excluding the source entry
-            const results = this.db
-                .prepare(
-                    `SELECT entry_id, distance
-                     FROM vec_embeddings
-                     WHERE embedding MATCH ?
-                     ORDER BY distance
-                     LIMIT ?`
-                )
-                .all(queryVec, limit + 1) as { entry_id: number; distance: number }[]
+            const results = this.dbAdapter.searchVectors(storedEmbedding, limit + 1)
 
             // Convert L2 distance to similarity, exclude the source entry, filter by threshold
             const filteredResults: SemanticSearchResult[] = results
@@ -308,7 +276,7 @@ export class VectorSearchManager {
                 entityId: entryId,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -319,8 +287,7 @@ export class VectorSearchManager {
         if (!this.db) return false
 
         try {
-            // sqlite-vec vec0 requires BigInt primary keys through better-sqlite3 bindings
-            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(BigInt(entryId))
+            this.dbAdapter.deleteVector(entryId)
             return true
         } catch (error) {
             logger.debug('Vector removeEntry failed (item may not exist)', {
@@ -340,8 +307,9 @@ export class VectorSearchManager {
      */
     async rebuildIndex(
         db: IDatabaseAdapter,
-        progress?: ProgressContext
-    ): Promise<{ indexed: number; failed: number; firstError: string | null }> {
+        progress?: ProgressContext,
+        options?: { budget?: number; isCancelled?: () => boolean }
+    ): Promise<{ indexed: number; failed: number; firstError: string | null; partial: boolean }> {
         if (!this.initialized) {
             try {
                 await this.initialize()
@@ -351,12 +319,13 @@ export class VectorSearchManager {
                     indexed: 0,
                     failed: 0,
                     firstError: `Vector search initialization failed: ${msg}`,
+                    partial: false,
                 }
             }
         }
 
         if (!this.db) {
-            return { indexed: 0, failed: 0, firstError: null }
+            return { indexed: 0, failed: 0, firstError: null, partial: false }
         }
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
@@ -364,24 +333,26 @@ export class VectorSearchManager {
         // Step 1: Get total entry count for progress reporting
         const totalEntries = db.getActiveEntryCount()
 
-        // Step 2: Clear existing embeddings (O(1) operation)
-        this.db.prepare('DELETE FROM vec_embeddings').run()
-        logger.info('Cleared vec_embeddings table for rebuild', { module: 'VectorSearch' })
+        // Step 2: Clear existing embeddings (O(1) operation) - REMOVED for Fail-Closed behavior
+        // this.dbAdapter.clearVectors()
+        // logger.info('Cleared vec_embeddings table for rebuild', { module: 'VectorSearch' })
 
         // Step 3: Re-index all entries using paginated fetch
         // Embeddings are generated in parallel batches (CPU-bound, safe),
         // then inserted into SQLite (synchronous, fast, concurrency-safe via WAL)
         await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild...')
 
-        // Prepare insert statement once for reuse
-        const insertStmt = this.db.prepare(
-            'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
-        )
-
         let indexed = 0
         let failed = 0
+        let processed = 0
+        const budget = options?.budget ?? 10000
         let firstError: string | null = null
+        let partial = false
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
+            if (options?.isCancelled?.() || processed >= budget) {
+                partial = true
+                break
+            }
             const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
 
             // Generate embeddings in parallel batches
@@ -392,6 +363,9 @@ export class VectorSearchManager {
                 const embeddings = await Promise.all(
                     batch.map(async (entry: JournalEntry) => {
                         try {
+                            // Yield to the event loop before the heavy WASM execution
+                            // to prevent starving Node.js during the batch
+                            await new Promise((resolve) => setImmediate(resolve))
                             return {
                                 entry,
                                 embedding: await this.generateEmbedding(entry.content),
@@ -410,29 +384,37 @@ export class VectorSearchManager {
                     })
                 )
 
-                // Insert embeddings into SQLite
+                // Insert embeddings into SQLite using bulk upsert for performance
+                const validVectors: { entryId: number; embedding: Float32Array }[] = []
                 for (const { entry, embedding, error: embError } of embeddings) {
                     if (embedding !== null) {
-                        try {
-                            const vec = new Float32Array(embedding)
-                            // sqlite-vec vec0 requires BigInt primary keys through better-sqlite3 bindings
-                            insertStmt.run(BigInt(entry.id), vec)
-                            indexed++
-                        } catch (error) {
-                            failed++
-                            const errorMsg = error instanceof Error ? error.message : String(error)
-                            firstError ??= errorMsg
-                            logger.error('Failed to insert entry into vector index', {
-                                module: 'VectorSearch',
-                                entityId: entry.id,
-                                error: errorMsg,
-                            })
-                        }
+                        validVectors.push({
+                            entryId: entry.id,
+                            embedding: new Float32Array(embedding),
+                        })
                     } else {
                         failed++
                         if (embError !== null) firstError ??= embError
                     }
                 }
+
+                if (validVectors.length > 0) {
+                    try {
+                        this.dbAdapter.upsertVectors(validVectors)
+                        indexed += validVectors.length
+                    } catch (error) {
+                        failed += validVectors.length
+                        const errorMsg = error instanceof Error ? error.message : String(error)
+                        firstError ??= errorMsg
+                        logger.error('Failed to batch insert entries into vector index', {
+                            module: 'VectorSearch',
+                            error: errorMsg,
+                        })
+                    }
+                }
+
+                // Yield to event loop to prevent blocking live requests
+                await new Promise((resolve) => setTimeout(resolve, 10))
 
                 // Report progress every 10 entries to avoid flooding
                 if (indexed % 10 === 0 || indexed === totalEntries) {
@@ -443,13 +425,26 @@ export class VectorSearchManager {
                         `Indexed ${String(indexed)} of ${String(totalEntries)} entries`
                     )
                 }
+
+                processed += batch.length
+
+                if (options?.isCancelled?.()) {
+                    firstError ??= 'Operation cancelled'
+                    partial = true
+                    break
+                }
+                if (processed >= budget) {
+                    firstError ??= `Rebuild index budget of ${String(budget)} items reached`
+                    partial = true
+                    break
+                }
             }
         }
 
         // Final progress
         await sendProgress(progress, indexed, totalEntries, 'Vector index rebuild complete')
 
-        if (failed > 0) {
+        if (failed > 0 || firstError) {
             logger.warning(
                 `Vector index rebuild: ${String(indexed)} indexed, ${String(failed)} failed`,
                 {
@@ -461,32 +456,54 @@ export class VectorSearchManager {
                 module: 'VectorSearch',
             })
         }
-        return { indexed, failed, firstError }
+
+        // Fail-Closed: Prune any stale embeddings even if the operation partially failed
+        // This ensures deleted entries don't leak ghost vectors in semantic search
+        try {
+            this.dbAdapter.cleanupStaleVectors()
+            logger.info('Cleared stale embeddings post-rebuild', { module: 'VectorSearch' })
+        } catch (cleanupError) {
+            logger.warning('Failed to clear stale embeddings', {
+                module: 'VectorSearch',
+                error: String(cleanupError),
+            })
+        }
+
+        return { indexed, failed, firstError, partial }
     }
 
     /**
      * Get index statistics
      */
-    getStats(): { itemCount: number; modelName: string; dimensions: number } {
+    getStats(): { itemCount: number; modelName: string; dimensions: number; isReady: boolean } {
         if (!this.db) {
-            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS }
+            return {
+                itemCount: 0,
+                modelName: this.modelName,
+                dimensions: EMBEDDING_DIMENSIONS,
+                isReady: this.initialized,
+            }
         }
 
         try {
-            const result = this.db.prepare('SELECT COUNT(*) as count FROM vec_embeddings').get() as
-                | { count: number }
-                | undefined
+            const count = this.dbAdapter.getVectorCount()
             return {
-                itemCount: result?.count ?? 0,
+                itemCount: count,
                 modelName: this.modelName,
                 dimensions: EMBEDDING_DIMENSIONS,
+                isReady: this.initialized,
             }
         } catch (error) {
             logger.debug('Failed to get vector index stats', {
                 module: 'VectorSearch',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS }
+            return {
+                itemCount: 0,
+                modelName: this.modelName,
+                dimensions: EMBEDDING_DIMENSIONS,
+                isReady: this.initialized,
+            }
         }
     }
 }

@@ -34,36 +34,16 @@ import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getCodeModeTools } from './codemode.js'
 
-import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
-import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
-import type { AuditConfig, AuditInterceptor } from '../../audit/index.js'
+import { wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
+
+import { enforceAccessBoundary } from '../../auth/validation.js'
+import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
 
-// ============================================================================
-// Global Audit Logger Singleton
-// ============================================================================
-
-let globalAuditLogger: AuditLogger | null = null
-let globalAuditInterceptor: AuditInterceptor | null = null
-
-/**
- * Initialize the global audit logger from CLI/env config.
- * Called once during server startup. Must be called before any tool calls.
- */
-export function initializeAuditLogger(config: AuditConfig): AuditLogger {
-    globalAuditLogger = new AuditLogger(config)
-    globalAuditInterceptor = createAuditInterceptor(globalAuditLogger)
-    return globalAuditLogger
-}
-
-/**
- * Get the global audit logger instance (for shutdown/resource access).
- */
-export function getGlobalAuditLogger(): AuditLogger | null {
-    return globalAuditLogger
-}
+// Global audit singletons removed per CRIT-1
+// Callers must provide ServerRuntime.
 
 // ============================================================================
 // Icon Mapping
@@ -160,9 +140,17 @@ export function getTools(
 
     if (filterConfig) {
         // Filtered lists are not cached — filter sets vary per call
-        return Array.from((toolMapCache ?? EMPTY_TOOL_MAP).values())
+        const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
+        return Array.from(mapToUse.values())
             .filter((t) => filterConfig.enabledTools.has(t.name))
             .map(mapTool)
+    }
+
+    if (config?.runtime) {
+        config.runtime.mappedToolsCache ??= Array.from(
+            (config.runtime.toolMapCache ?? EMPTY_TOOL_MAP).values()
+        ).map(mapTool)
+        return config.runtime.mappedToolsCache
     }
 
     // Return cached mapped output for unfiltered calls
@@ -190,6 +178,20 @@ let cachedContextRefs: {
     teamVectorManager?: VectorSearchManager
 } | null = null
 
+function safeIsAvailable(gh: GitHubIntegration | undefined | null): boolean | undefined {
+    if (!gh) return undefined
+    const ghObj = gh as unknown as Record<string, unknown>
+    const isAvail = ghObj['isAvailable']
+    return typeof isAvail === 'function' ? Boolean(isAvail.call(gh)) : undefined
+}
+
+function safeIsInitialized(vm: VectorSearchManager | undefined | null): boolean | undefined {
+    if (!vm) return undefined
+    const vmObj = vm as unknown as Record<string, unknown>
+    const isInit = vmObj['isInitialized']
+    return typeof isInit === 'function' ? Boolean(isInit.call(vm)) : undefined
+}
+
 /**
  * Ensure the tool definition cache is populated and valid for the given context.
  * Shared by getTools() and callTool() to avoid redundant getAllToolDefinitions() calls.
@@ -202,16 +204,47 @@ function ensureToolCache(
     teamDb?: IDatabaseAdapter,
     teamVectorManager?: VectorSearchManager
 ): void {
-    if (
-        toolMapCache &&
-        cachedContextRefs?.db === db &&
-        cachedContextRefs.github === github &&
-        cachedContextRefs.vectorManager === vectorManager &&
-        cachedContextRefs.config === config &&
-        cachedContextRefs.teamDb === teamDb &&
-        cachedContextRefs.teamVectorManager === teamVectorManager
-    ) {
-        return // Cache is valid
+    if (config?.runtime) {
+        const rt = config.runtime
+        const refs = rt.cachedContextRefs as {
+            db: IDatabaseAdapter
+            github?: GitHubIntegration
+            vectorManager?: VectorSearchManager
+            config?: ToolHandlerConfig
+            teamDb?: IDatabaseAdapter
+            teamVectorManager?: VectorSearchManager
+        } | null
+        if (
+            rt.toolMapCache &&
+            refs?.db === db &&
+            (refs?.github === github ||
+                safeIsAvailable(refs?.github) === safeIsAvailable(github)) &&
+            (refs?.vectorManager === vectorManager ||
+                safeIsInitialized(refs?.vectorManager) === safeIsInitialized(vectorManager)) &&
+            refs?.config === config &&
+            refs?.teamDb === teamDb &&
+            (refs?.teamVectorManager === teamVectorManager ||
+                safeIsInitialized(refs?.teamVectorManager) === safeIsInitialized(teamVectorManager))
+        ) {
+            return
+        }
+    } else {
+        if (
+            toolMapCache &&
+            cachedContextRefs?.db === db &&
+            (cachedContextRefs.github === github ||
+                safeIsAvailable(cachedContextRefs.github) === safeIsAvailable(github)) &&
+            (cachedContextRefs.vectorManager === vectorManager ||
+                safeIsInitialized(cachedContextRefs.vectorManager) ===
+                    safeIsInitialized(vectorManager)) &&
+            cachedContextRefs.config === config &&
+            cachedContextRefs.teamDb === teamDb &&
+            (cachedContextRefs.teamVectorManager === teamVectorManager ||
+                safeIsInitialized(cachedContextRefs.teamVectorManager) ===
+                    safeIsInitialized(teamVectorManager))
+        ) {
+            return // Cache is valid
+        }
     }
 
     const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
@@ -221,19 +254,25 @@ function ensureToolCache(
     // When audit logging is enabled, also wraps with the audit interceptor.
     // This is O(n) once per cache miss — production cost is negligible.
     const instrumentedDefs: ToolDefinition[] = rawDefs.map((t) => {
-        // Layer 1: Metrics collection (always active)
-        const metricsWrapped = wrapWithMetrics(
-            t.name,
-            (args: Record<string, unknown>) => Promise.resolve(t.handler(args)),
-            globalMetrics
-        )
+        // Layer 1: Metrics collection (always active if runtime is provided)
+        const metricsInstance = config?.runtime?.metrics
+        const metricsWrapped =
+            metricsInstance !== undefined
+                ? wrapWithMetrics(
+                      t.name,
+                      (args: Record<string, unknown>) => Promise.resolve(t.handler(args)),
+                      metricsInstance
+                  )
+                : (args: Record<string, unknown>) => Promise.resolve(t.handler(args))
 
         // Layer 2: Audit logging (only when initialized)
-        const interceptor = globalAuditInterceptor
-        const finalHandler = interceptor
-            ? (args: Record<string, unknown>): Promise<unknown> =>
-                  interceptor.around(t.name, args, () => metricsWrapped(args))
-            : metricsWrapped
+        const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
+        const interceptor = runtimeAudit
+        const finalHandler =
+            interceptor !== null && interceptor !== undefined
+                ? (args: Record<string, unknown>): Promise<unknown> =>
+                      interceptor.around(t.name, args, () => metricsWrapped(args))
+                : metricsWrapped
 
         return {
             ...t,
@@ -241,9 +280,22 @@ function ensureToolCache(
         }
     })
 
-    toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
-    mappedToolsCache = null // Invalidate mapped cache when definitions change
-    cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
+    if (config?.runtime) {
+        config.runtime.toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
+        config.runtime.mappedToolsCache = null
+        config.runtime.cachedContextRefs = {
+            db,
+            github,
+            vectorManager,
+            config,
+            teamDb,
+            teamVectorManager,
+        }
+    } else {
+        toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
+        mappedToolsCache = null // Invalidate mapped cache when definitions change
+        cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
+    }
 }
 
 /**
@@ -262,10 +314,25 @@ export async function callTool(
 ): Promise<unknown> {
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
-    const tool = (toolMapCache ?? EMPTY_TOOL_MAP).get(name)
+    const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
+    const tool = mapToUse.get(name)
 
     if (!tool) {
-        return Promise.reject(new Error(`Unknown tool: ${name}`))
+        throw new ResourceNotFoundError('Tool', name)
+    }
+
+    if (!config?.runtime?.maintenanceManager) {
+        throw new ConfigurationError(
+            'ServerRuntime is logically required for secure tool execution. Please initialize the server correctly.'
+        )
+    }
+
+    // Authorization Hook: Enforce scope if auth context exists
+    try {
+        const auditLogger = config?.runtime?.auditLogger
+        enforceAccessBoundary(name, 'tool', tool.capabilities, auditLogger)
+    } catch (error) {
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
 
     // When progress context is provided, rebuild the handler with it.
@@ -286,18 +353,54 @@ export async function callTool(
         const freshTool = freshTools.find((t) => t.name === name)
         if (freshTool) {
             // Layer 1: Metrics
-            const metricsWrapped = wrapWithMetrics(
-                freshTool.name,
-                (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a)),
-                globalMetrics
-            )
+            const metricsInstance = config?.runtime?.metrics
+            const metricsWrapped =
+                metricsInstance !== undefined
+                    ? wrapWithMetrics(
+                          freshTool.name,
+                          (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a)),
+                          metricsInstance
+                      )
+                    : (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a))
             // Layer 2: Audit (if initialized)
-            const interceptor = globalAuditInterceptor
-            const freshResult = interceptor
-                ? await interceptor.around(freshTool.name, args, () => metricsWrapped(args))
-                : await metricsWrapped(args)
+            const runtimeAudit =
+                config?.runtime !== undefined && config.runtime !== null
+                    ? config.runtime.auditInterceptor
+                    : null
+            const interceptor = runtimeAudit
+
+            const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
+                if (interceptor !== null && interceptor !== undefined) {
+                    return await interceptor.around(freshTool.name, a, () => metricsWrapped(a))
+                }
+                return await metricsWrapped(a)
+            }
+
+            if (
+                config?.runtime?.maintenanceManager !== undefined &&
+                config.runtime.maintenanceManager !== null
+            ) {
+                const freshResult = await config.runtime.maintenanceManager.withActiveJob(
+                    () => wrappedHandler(args),
+                    name === 'restore_backup'
+                )
+                return injectTokenEstimate(freshResult)
+            }
+
+            const freshResult = await wrappedHandler(args)
             return injectTokenEstimate(freshResult)
         }
+    }
+
+    if (
+        config?.runtime?.maintenanceManager !== undefined &&
+        config.runtime.maintenanceManager !== null
+    ) {
+        const result = await config.runtime.maintenanceManager.withActiveJob(
+            () => Promise.resolve(tool.handler(args)),
+            name === 'restore_backup' // restore bypasses lock since it acquires exclusive
+        )
+        return injectTokenEstimate(result)
     }
 
     const result = await Promise.resolve(tool.handler(args))

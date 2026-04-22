@@ -23,14 +23,16 @@ export default defineConfig({
             'node dist/cli.js --transport http --port 3100 --db ./.test-output/e2e/test-e2e.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2',
         env: {
             ...process.env,
-            // Prevent 429s during E2E runs with many client connections
-            MCP_RATE_LIMIT_MAX: '10000',
+            // Elevate rate limit boundary for test runner concurrency (simulating realistic clustered traffic)
+            MCP_RATE_LIMIT_MAX: '1000',
             // Enable team DB so team tools get functional E2E coverage
             TEAM_DB_PATH: './.test-output/e2e/test-e2e-team.db',
+            TEAM_AUTHOR: 'Alice',
+            ALLOWED_IO_ROOTS: process.cwd() + '/.test-output/e2e',
         },
         url: 'http://localhost:3100/health',
         reuseExistingServer: !process.env.CI,
-        timeout: 15000,
+        timeout: 60000,
         stdout: 'pipe',
         stderr: 'pipe',
     },

@@ -4,20 +4,28 @@ import { parseFrontmatter, serializeFrontmatter } from '../../src/markdown/front
 describe('parseFrontmatter', () => {
     it('should correctly parse well-formed frontmatter', () => {
         const markdown = `---
-mj_id: 123
-entry_type: decision
-author: Alice
-tags:
-  - architecture
-  - backend
-timestamp: 2026-04-08T12:00:00Z
-significance: high
-relationships:
-  - type: blocked_by
-    target_id: 456
-  - type: references
-    target_id: 789
-source: team
+{
+  "mj_id": 123,
+  "entry_type": "decision",
+  "author": "Alice",
+  "tags": [
+    "architecture",
+    "backend"
+  ],
+  "timestamp": "2026-04-08T12:00:00Z",
+  "significance": "high",
+  "relationships": [
+    {
+      "type": "blocked_by",
+      "target_id": 456
+    },
+    {
+      "type": "references",
+      "target_id": 789
+    }
+  ],
+  "source": "team"
+}
 ---
 This is the content.`
 
@@ -48,9 +56,12 @@ This is the content.`
 
     it('should extract partial frontmatter', () => {
         const markdown = `---
-mj_id: 42
-tags:
-  - simple
+{
+  "mj_id": 42,
+  "tags": [
+    "simple"
+  ]
+}
 ---
 Content`
         const { metadata, body } = parseFrontmatter(markdown)
@@ -58,18 +69,6 @@ Content`
             mj_id: 42,
             tags: ['simple'],
         })
-        expect(body).toBe('Content')
-    })
-
-    it('should ignore invalid YAML structures gracefully due to our custom parser limitations, but not crash', () => {
-        const markdown = `---
-invalid_key:
-  foo: bar
-mj_id: 99
----
-Content`
-        const { metadata, body } = parseFrontmatter(markdown)
-        expect(metadata.mj_id).toBe(99)
         expect(body).toBe('Content')
     })
 
@@ -85,35 +84,28 @@ Body`
         expect(body).toContain('mj_id: 1')
     })
 
-    it('should return empty metadata and full content if closing delimiter is missing', () => {
+    it('should throw an error if the closing delimiter is missing', () => {
         const markdown = `---
 mj_id: 123
 Body without closing delimiter`
-        const { metadata, body } = parseFrontmatter(markdown)
-        expect(metadata).toEqual({})
-        expect(body).toBe(markdown)
+        expect(() => parseFrontmatter(markdown)).toThrow(
+            'Invalid frontmatter: Found opening --- fence but no closing --- fence'
+        )
     })
 
     it('should throw an error if frontmatter fails schema validation', () => {
         const markdown = `---
-mj_id: "not-a-number"
+{
+  "mj_id": "not-a-number"
+}
 ---
 Body`
-        expect(() => parseFrontmatter(markdown)).toThrow(/Invalid frontmatter: mj_id/i)
-    })
-
-    it('should strip single quotes from string values', () => {
-        const markdown = `---
-author: 'Alice'
----
-Body`
-        const { metadata } = parseFrontmatter(markdown)
-        expect(metadata.author).toBe('Alice')
+        expect(() => parseFrontmatter(markdown)).toThrow(/Invalid frontmatter.*mj_id/i)
     })
 })
 
 describe('serializeFrontmatter', () => {
-    it('should serialize metadata to YAML-like format', () => {
+    it('should serialize metadata to JSON format', () => {
         const metadata = {
             mj_id: 123,
             entry_type: 'decision',
@@ -130,17 +122,17 @@ describe('serializeFrontmatter', () => {
 
         const serialized = serializeFrontmatter(metadata)
         expect(serialized).toContain('---')
-        expect(serialized).toContain('mj_id: 123')
-        expect(serialized).toContain('entry_type: decision')
-        expect(serialized).toContain('author: Alice')
-        expect(serialized).toContain('tags:')
-        expect(serialized).toContain('  - architecture')
-        expect(serialized).toContain('  - backend')
-        expect(serialized).toContain('relationships:')
-        expect(serialized).toContain('  - type: blocked_by')
-        expect(serialized).toContain('    target_id: 456')
-        expect(serialized).toContain('  - type: references')
-        expect(serialized).toContain('    target_id: 789')
+        expect(serialized).toContain('"mj_id": 123')
+        expect(serialized).toContain('"entry_type": "decision"')
+        expect(serialized).toContain('"author": "Alice"')
+        expect(serialized).toContain('"tags": [')
+        expect(serialized).toContain('"architecture"')
+        expect(serialized).toContain('"backend"')
+        expect(serialized).toContain('"relationships": [')
+        expect(serialized).toContain('"type": "blocked_by"')
+        expect(serialized).toContain('"target_id": 456')
+        expect(serialized).toContain('"type": "references"')
+        expect(serialized).toContain('"target_id": 789')
     })
 
     it('should return empty string if no metadata provided', () => {
@@ -152,6 +144,6 @@ describe('serializeFrontmatter', () => {
     it('should serialize only provided fields', () => {
         const metadata = { mj_id: 42 }
         const serialized = serializeFrontmatter(metadata)
-        expect(serialized).toBe('---\nmj_id: 42\n---\n')
+        expect(serialized).toBe('---\n{\n  "mj_id": 42\n}\n---\n')
     })
 })

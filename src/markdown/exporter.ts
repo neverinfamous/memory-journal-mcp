@@ -8,9 +8,13 @@
 import { mkdir, open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
+import { constants, realpathSync } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
 import type { FrontmatterData } from './frontmatter.js'
+import { logger } from '../utils/logger.js'
+
+import { assertSafeDirectoryPath } from '../utils/security-utils.js'
 
 // ============================================================================
 // Types
@@ -87,8 +91,12 @@ export function generateFilename(id: number, content: string): string {
 export async function exportEntriesToMarkdown(
     entries: ExportableEntry[],
     outputDir: string,
-    db: IDatabaseAdapter
+    db: IDatabaseAdapter,
+    allowedRoots: string[]
 ): Promise<ExportResult> {
+    // Dynamically enforce bounded root
+    assertSafeDirectoryPath(outputDir, allowedRoots)
+
     // Guard: refuse to export into the OS temporary directory (CodeQL js/insecure-temporary-file)
     const resolvedOutputDir = resolve(outputDir)
     const resolvedTmpDir = resolve(tmpdir())
@@ -102,13 +110,16 @@ export async function exportEntriesToMarkdown(
     const files: string[] = []
     let skipped = 0
 
-    for (const entry of entries) {
-        // Skip entries with empty content
-        if (!entry.content.trim()) {
-            skipped++
-            continue
-        }
+    const validEntries = entries.filter((e) => e.content.trim())
+    skipped += entries.length - validEntries.length
 
+    // Batch fetch relationships
+    // We do not catch and swallow errors here. If relationship fetch fails, we must
+    // explicitly fail the export to prevent generating corrupt files that lack their
+    // associated relationship data, preserving interchange fidelity.
+    const relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
+
+    for (const entry of validEntries) {
         // Build frontmatter data
         const fmData: FrontmatterData = {
             mj_id: entry.id,
@@ -129,35 +140,79 @@ export async function exportEntriesToMarkdown(
             fmData.author = entry.author
         }
 
-        // Fetch relationships for this entry
-        try {
-            const relationships = db.getRelationships(entry.id)
-            if (relationships.length > 0) {
-                fmData.relationships = relationships.map((r) => ({
-                    type: r.relationshipType,
-                    target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
-                }))
-            }
-        } catch {
-            // Relationship lookup failure is non-fatal
+        // Apply pre-fetched relationships for this entry
+        const relationships = relationshipsMap.get(entry.id) ?? []
+        if (relationships.length > 0) {
+            fmData.relationships = relationships.map((r) => ({
+                type: r.relationshipType,
+                target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
+            }))
         }
 
         // Generate file content
         const frontmatter = serializeFrontmatter(fmData)
         const fileContent = frontmatter + '\n' + entry.content + '\n'
 
-        // Write file — 'w' flag is O_WRONLY|O_CREAT|O_TRUNC: atomic create-or-overwrite via
-        // file descriptor with owner-only permissions. No check-then-act, no race window.
-        // Satisfies both CodeQL js/insecure-temporary-file and js/file-system-race.
+        // Write file atomically preventing symlink traversal via O_NOFOLLOW
         const filename = generateFilename(entry.id, entry.content)
         const filepath = join(resolvedOutputDir, filename)
-        const handle = await open(filepath, 'w', 0o600)
+
+        let handle
         try {
+            // Mitigate TOCTOU by verifying the actual resolved path immediately before open
+            // using native realpath to bypass Node.js cache
+            const preRealpath = realpathSync.native(resolvedOutputDir)
+
+            // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
+            handle = await open(
+                filepath,
+                constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+                0o600
+            )
+
+            // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
+            const postRealpath = realpathSync.native(resolvedOutputDir)
+            if (preRealpath !== postRealpath) {
+                throw new Error(
+                    `Directory swapped during export operation! Aborting to prevent path traversal.`
+                )
+            }
+
+            // Verify the final real path is still within allowed roots
+            assertSafeDirectoryPath(postRealpath, allowedRoots)
+
             await handle.writeFile(fileContent, 'utf-8')
+            files.push(filename)
+        } catch (err: unknown) {
+            if (
+                err instanceof Error &&
+                (err.message.includes('became a symlink') ||
+                    err.message.includes('Directory swapped'))
+            ) {
+                throw err
+            }
+
+            const code =
+                err instanceof Error && 'code' in err ? (err as { code?: string }).code : undefined
+            if (code === 'ELOOP' || code === 'EEXIST') {
+                logger.warning('Refusing to overwrite symlink during export', {
+                    module: 'Exporter',
+                    filepath,
+                })
+                skipped++
+            } else {
+                logger.error('Failed to write markdown file', {
+                    module: 'Exporter',
+                    filepath,
+                    error: err instanceof Error ? err.message : String(err),
+                })
+                skipped++
+            }
         } finally {
-            await handle.close()
+            if (handle) {
+                await handle.close()
+            }
         }
-        files.push(filename)
     }
 
     return {

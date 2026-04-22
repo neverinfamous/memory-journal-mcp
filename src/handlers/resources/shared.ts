@@ -8,8 +8,10 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
-import { GitHubIntegration } from '../../github/github-integration/index.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
+import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 
 // ============================================================================
 // GitHub Resource Guard
@@ -39,13 +41,31 @@ export interface GitHubRepoResolved {
 export async function resolveGitHubRepo(
     github: GitHubIntegration | null | undefined,
     config?: BriefingConfig,
-    targetRepo?: string
+    targetRepo?: string,
+    runtime?: ServerRuntime
 ): Promise<GitHubRepoResolved | ResourceResult> {
     const lastModified = new Date().toISOString()
 
     let activeGithub = github
-    if (targetRepo && config?.projectRegistry?.[targetRepo]) {
-        activeGithub = new GitHubIntegration(config.projectRegistry[targetRepo].path)
+    if (targetRepo) {
+        if (!/^[a-zA-Z0-9_.-]+(\/[a-zA-Z0-9_.-]+)?$/.test(targetRepo)) {
+            return {
+                data: { error: 'Invalid repository name format' },
+                annotations: { lastModified },
+            }
+        }
+        const registry = config?.projectRegistry
+        if (registry && Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
+            const entry = registry[targetRepo]
+            if (entry) {
+                activeGithub = getGitHubIntegration(entry.path, runtime)
+            }
+        } else {
+            return {
+                data: { error: `Repository not found in registry: ${targetRepo}` },
+                annotations: { lastModified },
+            }
+        }
     }
 
     if (!activeGithub) {
@@ -68,8 +88,29 @@ export async function resolveGitHubRepo(
     const repo = repoInfo.repo
 
     if (!owner || !repo) {
-        const hasRegistry =
-            config?.projectRegistry && Object.keys(config.projectRegistry).length > 0
+        const registry = config?.projectRegistry
+        const hasRegistry = registry && Object.keys(registry).length > 0
+
+        // Fallback to the first VALID registered project if no targetRepo was specified
+        if (!targetRepo && hasRegistry) {
+            for (const key of Object.keys(registry)) {
+                const project = registry[key]
+                if (project) {
+                    const fallbackGithub = getGitHubIntegration(project.path, runtime)
+                    const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
+                    if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {
+                        return {
+                            owner: fallbackRepoInfo.owner,
+                            repo: fallbackRepoInfo.repo,
+                            branch: fallbackRepoInfo.branch ?? null,
+                            lastModified,
+                            github: fallbackGithub,
+                        }
+                    }
+                }
+            }
+        }
+
         return {
             data: {
                 error: 'Could not detect repository',
@@ -131,6 +172,8 @@ export interface BriefingConfig {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Hush Protocol flag vocabulary passed from CLI/env */
     flagVocabulary?: string[]
+    /** Allowlisted directory roots for strict filesystem jailing of agent read access */
+    allowedIoRoots?: string[]
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
@@ -158,6 +201,7 @@ export interface ResourceContext {
     github?: GitHubIntegration | null
     scheduler?: Scheduler | null
     briefingConfig?: BriefingConfig
+    runtime?: ServerRuntime
 }
 
 /**
@@ -187,55 +231,11 @@ export interface InternalResourceDef {
         autoRead?: boolean
         sessionInit?: boolean
     }
-    handler: (uri: string, context: ResourceContext) => unknown
-}
-
-/**
- * Execute a raw SQL query on the database
- */
-export function execQuery(
-    db: IDatabaseAdapter,
-    sql: string,
-    params: unknown[] = []
-): Record<string, unknown>[] {
-    const result = db.executeRawQuery(sql, params)
-    if (result.length === 0) return []
-
-    const columns = result[0]?.columns ?? []
-    return (result[0]?.values ?? []).map((values: unknown[]) => {
-        const obj: Record<string, unknown> = {}
-        columns.forEach((col: string, i: number) => {
-            obj[col] = values[i]
-        })
-        return obj
-    })
-}
-
-/**
- * Transform snake_case SQL row to camelCase entry object
- * Ensures consistency with SqliteAdapter.getRecentEntries() output
- */
-export function transformEntryRow(row: Record<string, unknown>): Record<string, unknown> {
-    return {
-        id: row['id'],
-        entryType: row['entry_type'],
-        content: row['content'],
-        timestamp: row['timestamp'],
-        isPersonal: row['is_personal'] === 1 || row['is_personal'] === true,
-        significanceType: row['significance_type'] ?? null,
-        autoContext: row['auto_context'] ?? null,
-        deletedAt: row['deleted_at'] ?? null,
-        projectNumber: row['project_number'] ?? null,
-        projectOwner: row['project_owner'] ?? null,
-        issueNumber: row['issue_number'] ?? null,
-        issueUrl: row['issue_url'] ?? null,
-        prNumber: row['pr_number'] ?? null,
-        prUrl: row['pr_url'] ?? null,
-        prStatus: row['pr_status'] ?? null,
-        workflowRunId: row['workflow_run_id'] ?? null,
-        workflowName: row['workflow_name'] ?? null,
-        workflowStatus: row['workflow_status'] ?? null,
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
     }
+    handler: (uri: string, context: ResourceContext) => unknown
 }
 
 /**

@@ -37,7 +37,7 @@ export const TeamCreateEntrySchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: z.number().optional(),
+    project_number: z.number(),
     project_owner: z.string().optional(),
     issue_number: z.number().optional(),
     issue_url: z.string().optional(),
@@ -53,7 +53,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.string().optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
@@ -66,6 +66,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
+    project_number: z.number(),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -76,6 +77,7 @@ export const TeamGetRecentSchema = z.object({
 /** team_get_recent — relaxed */
 export const TeamGetRecentSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(10),
+    project_number: relaxedNumber(),
     sort_by: z
         .string()
         .optional()
@@ -87,6 +89,7 @@ export const TeamGetRecentSchemaMcp = z.object({
 export const TeamSearchSchema = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    project_number: z.number().optional(),
     limit: z.number().max(500).optional().default(10),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -99,6 +102,7 @@ export const TeamSearchSchema = z.object({
 export const TeamSearchSchemaMcp = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(10),
     sort_by: z
         .string()
@@ -111,12 +115,14 @@ export const TeamSearchSchemaMcp = z.object({
 export const TeamGetEntryByIdSchema = z.object({
     entry_id: z.number(),
     include_relationships: z.boolean().optional().default(true),
+    project_number: z.number().optional(),
 })
 
 /** team_get_entry_by_id — relaxed */
 export const TeamGetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     include_relationships: z.boolean().optional().default(true),
+    project_number: relaxedNumber().optional(),
 })
 
 // ============================================================================
@@ -129,6 +135,7 @@ export const TeamSearchByDateRangeSchema = z.object({
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
+    project_number: z.number().optional(),
     limit: z.number().max(500).optional().default(50),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -143,6 +150,7 @@ export const TeamSearchByDateRangeSchemaMcp = z.object({
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(50),
     sort_by: z
         .string()
@@ -161,6 +169,7 @@ export const TeamUpdateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
+    project_number: z.number().optional(),
 })
 
 /** team_update_entry — relaxed */
@@ -169,16 +178,19 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_delete_entry — strict */
 export const TeamDeleteEntrySchema = z.object({
     entry_id: z.number(),
+    project_number: z.number().optional(),
 })
 
 /** team_delete_entry — relaxed */
 export const TeamDeleteEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_merge_tags — strict */
@@ -229,6 +241,7 @@ export const TeamLinkEntriesSchema = z.object({
         .optional()
         .default('references'),
     description: z.string().optional(),
+    project_number: z.number(),
 })
 
 /** team_link_entries — relaxed */
@@ -237,6 +250,7 @@ export const TeamLinkEntriesSchemaMcp = z.object({
     to_entry_id: relaxedNumber().optional(),
     relationship_type: z.string().optional().default('references'),
     description: z.string().optional(),
+    project_number: relaxedNumber(),
 })
 
 /** team_visualize_relationships — strict */
@@ -403,6 +417,7 @@ export const TeamExportOutputSchema = z
         format: z.string().optional(),
         data: z.string().optional(),
         count: z.number().optional(),
+        truncated: z.boolean().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -457,6 +472,7 @@ export const TeamSemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    project_number: z.number(),
 })
 
 /** team_semantic_search — relaxed */
@@ -474,16 +490,19 @@ export const TeamSemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    project_number: relaxedNumber(),
 })
 
 /** team_add_to_vector_index — strict */
 export const TeamAddToVectorIndexSchema = z.object({
     entry_id: z.number(),
+    project_number: z.number(),
 })
 
 /** team_add_to_vector_index — relaxed */
 export const TeamAddToVectorIndexSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
 })
 
 // ============================================================================
@@ -520,6 +539,7 @@ export const TeamVectorStatsOutputSchema = z
 export const TeamRebuildVectorIndexOutputSchema = z
     .object({
         success: z.boolean().optional(),
+        partial: z.boolean().optional(),
         entriesIndexed: z.number().optional(),
         failedEntries: z.number().optional(),
         error: z.string().optional(),
@@ -664,17 +684,15 @@ export const TeamCollaborationMatrixOutputSchema = z
 // ============================================================================
 
 /** Default flag vocabulary */
-export const DEFAULT_FLAG_VOCABULARY = [
-    'blocker',
-    'needs_review',
-    'help_requested',
-    'fyi',
-] as const
+export const DEFAULT_FLAG_VOCABULARY = ['blocker', 'needs_review', 'help_requested', 'fyi'] as const
 
 /** pass_team_flag — strict */
 export const PassTeamFlagSchema = z.object({
-    flag_type: z.string().min(1).describe('Flag type from vocabulary (e.g., blocker, needs_review)'),
-    message: z.string().min(1).max(50_000).describe('Flag message describing the issue or request'),
+    flag_type: z
+        .string()
+        .min(1)
+        .describe('Flag type from vocabulary (e.g., blocker, needs_review)'),
+    message: z.string().min(1).max(49_000).describe('Flag message describing the issue or request'),
     target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
     link: z.string().optional().describe('Related file path, URL, or reference'),
     project_number: z.number().optional(),
@@ -731,4 +749,3 @@ export const ResolveFlagOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
-

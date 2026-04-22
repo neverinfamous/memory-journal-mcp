@@ -7,6 +7,7 @@ import type {
     CopilotReviewSummary,
 } from '../../types/index.js'
 import type { PullRequestDetails } from './types.js'
+import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 
 export class PullRequestsManager {
     /** Known Copilot bot login patterns */
@@ -22,10 +23,11 @@ export class PullRequestsManager {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubPullRequest[]> {
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `prs:${owner}:${repo}:${state}:${String(limit)}`
@@ -37,14 +39,15 @@ export class PullRequestsManager {
                 owner,
                 repo,
                 state,
-                per_page: limit,
+                per_page: Math.min(limit, 100),
                 sort: 'updated',
                 direction: 'desc',
+                request: { signal: abortSignal },
             })
 
             const result = response.data.map((pr) => ({
                 number: pr.number,
-                title: pr.title,
+                title: markUntrustedContentInline(pr.title),
                 url: pr.html_url,
                 state: pr.merged_at
                     ? ('MERGED' as const)
@@ -60,7 +63,7 @@ export class PullRequestsManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -70,7 +73,7 @@ export class PullRequestsManager {
         prNumber: number
     ): Promise<PullRequestDetails | null> {
         if (!this.client.octokit) {
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `pr:${owner}:${repo}:${String(prNumber)}`
@@ -88,10 +91,10 @@ export class PullRequestsManager {
 
             const details: PullRequestDetails = {
                 number: pr.number,
-                title: pr.title,
+                title: markUntrustedContentInline(pr.title),
                 url: pr.html_url,
                 state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',
-                body: pr.body,
+                body: pr.body || '',
                 draft: pr.draft ?? false,
                 headBranch: pr.head.ref,
                 baseBranch: pr.base.ref,
@@ -108,12 +111,15 @@ export class PullRequestsManager {
             this.client.setCache(cacheKey, details)
             return details
         } catch (error) {
+            if (error instanceof Error && 'status' in error && error.status === 404) {
+                return null
+            }
             logger.error('Failed to get PR details', {
                 module: 'GitHub',
                 entityId: prNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         }
     }
 
@@ -125,7 +131,7 @@ export class PullRequestsManager {
     }
 
     async getReviews(owner: string, repo: string, prNumber: number): Promise<GitHubReview[]> {
-        if (!this.client.octokit) return []
+        if (!this.client.octokit) throw new Error('GitHub API not available')
 
         const cacheKey = `reviews:${owner}:${repo}:${String(prNumber)}`
         const cached = this.client.getCached(cacheKey) as GitHubReview[] | undefined
@@ -143,7 +149,7 @@ export class PullRequestsManager {
                 id: r.id,
                 author: r.user?.login ?? 'unknown',
                 state: r.state as GitHubReview['state'],
-                body: r.body ?? null,
+                body: markUntrustedContent(r.body),
                 submittedAt: r.submitted_at ?? r.commit_id ?? new Date().toISOString(),
                 isCopilot: PullRequestsManager.isCopilotAuthor(r.user?.login ?? ''),
             }))
@@ -156,7 +162,7 @@ export class PullRequestsManager {
                 entityId: prNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -165,7 +171,7 @@ export class PullRequestsManager {
         repo: string,
         prNumber: number
     ): Promise<GitHubReviewComment[]> {
-        if (!this.client.octokit) return []
+        if (!this.client.octokit) throw new Error('GitHub API not available')
 
         const cacheKey = `review-comments:${owner}:${repo}:${String(prNumber)}`
         const cached = this.client.getCached(cacheKey) as GitHubReviewComment[] | undefined
@@ -182,7 +188,7 @@ export class PullRequestsManager {
             const comments: GitHubReviewComment[] = response.data.map((c) => ({
                 id: c.id,
                 author: c.user?.login ?? 'unknown',
-                body: c.body,
+                body: markUntrustedContent(c.body),
                 path: c.path,
                 line: c.line ?? c.original_line ?? null,
                 side: c.side ?? 'RIGHT',
@@ -198,7 +204,7 @@ export class PullRequestsManager {
                 entityId: prNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 

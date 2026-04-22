@@ -7,9 +7,54 @@
  * and team export with actual entry data for filter branches.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { callTool } from '../../src/handlers/tools/index.js'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import * as fs from 'node:fs'
+
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
+
+vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
+    const actual = await importOriginal()
+    return {
+        ...actual,
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
+    }
+})
 
 describe('Handler catch blocks via Zod validation errors', () => {
     let db: DatabaseAdapter
@@ -144,8 +189,16 @@ describe('Team tools with teamDb but no vectorManager', () => {
         await teamDb.initialize()
 
         // Create some entries for team tools to operate on
-        teamDb.createEntry({ content: 'Team entry for catch block test', tags: ['catch-test'] })
-        teamDb.createEntry({ content: 'Another team entry', tags: ['catch-test', 'extra'] })
+        teamDb.createEntry({
+            content: 'Team entry for catch block test',
+            tags: ['catch-test'],
+            projectNumber: 1,
+        })
+        teamDb.createEntry({
+            content: 'Another team entry',
+            tags: ['catch-test', 'extra'],
+            projectNumber: 1,
+        })
     })
 
     afterAll(() => {
@@ -164,7 +217,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_semantic_search: teamDb present, no vectorManager', async () => {
         const result = (await callTool(
             'team_semantic_search',
-            { query: 'test' },
+            {
+                project_number: 1,
+                query: 'test',
+            },
             db,
             undefined,
             undefined,
@@ -208,7 +264,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_add_to_vector_index: teamDb present, no vectorManager', async () => {
         const result = (await callTool(
             'team_add_to_vector_index',
-            { entry_id: 1 },
+            {
+                project_number: 1,
+                entry_id: 1,
+            },
             db,
             undefined,
             undefined,
@@ -224,7 +283,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_update_entry: invalid params triggers catch', async () => {
         const result = (await callTool(
             'team_update_entry',
-            { entry_id: 'bad' },
+            {
+                project_number: 1,
+                entry_id: 'bad',
+            },
             db,
             undefined,
             undefined,
@@ -240,7 +302,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_delete_entry: invalid params triggers catch', async () => {
         const result = (await callTool(
             'team_delete_entry',
-            { entry_id: 'bad' },
+            {
+                project_number: 1,
+                entry_id: 'bad',
+            },
             db,
             undefined,
             undefined,
@@ -273,7 +338,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_backup: creates backup successfully', async () => {
         const result = (await callTool(
             'team_backup',
-            {},
+            {
+                project_number: 1,
+            },
             db,
             undefined,
             undefined,
@@ -287,7 +354,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_list_backups: lists backups after creation', async () => {
         const result = (await callTool(
             'team_list_backups',
-            {},
+            {
+                project_number: 1,
+            },
             db,
             undefined,
             undefined,
@@ -303,7 +372,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_export_entries: json format with date range', async () => {
         const result = (await callTool(
             'team_export_entries',
-            { format: 'json', start_date: '2020-01-01', end_date: '2030-12-31' },
+            {
+                project_number: 1,
+                format: 'json',
+                start_date: '2020-01-01',
+                end_date: '2030-12-31',
+            },
             db,
             undefined,
             undefined,
@@ -315,14 +389,19 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 
     it('team_export_entries: markdown format with entry_type filter', async () => {
         const result = (await callTool(
             'team_export_entries',
-            { format: 'markdown', entry_type: 'personal_reflection', limit: 5 },
+            {
+                project_number: 1,
+                format: 'markdown',
+                entry_type: 'personal_reflection',
+                limit: 5,
+            },
             db,
             undefined,
             undefined,
@@ -334,14 +413,19 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 
     it('team_export_entries: json format with tags filter', async () => {
         const result = (await callTool(
             'team_export_entries',
-            { format: 'json', tags: ['catch-test'], limit: 5 },
+            {
+                project_number: 1,
+                format: 'json',
+                tags: ['catch-test'],
+                limit: 5,
+            },
             db,
             undefined,
             undefined,
@@ -353,14 +437,17 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 
     it('team_export_entries: basic json no filters', async () => {
         const result = (await callTool(
             'team_export_entries',
-            { format: 'json' },
+            {
+                project_number: 1,
+                format: 'json',
+            },
             db,
             undefined,
             undefined,
@@ -372,7 +459,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 
@@ -380,7 +467,11 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_update_entry: entry not found', async () => {
         const result = (await callTool(
             'team_update_entry',
-            { entry_id: 99999, content: 'test' },
+            {
+                project_number: 1,
+                entry_id: 99999,
+                content: 'test',
+            },
             db,
             undefined,
             undefined,
@@ -395,7 +486,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_delete_entry: entry not found', async () => {
         const result = (await callTool(
             'team_delete_entry',
-            { entry_id: 99999 },
+            {
+                project_number: 1,
+                entry_id: 99999,
+            },
             db,
             undefined,
             undefined,
@@ -441,11 +535,15 @@ describe('Team tools with teamDb but no vectorManager', () => {
     // team/admin-tools.ts — update code path coverage
     it('team_update_entry: exercises update path', async () => {
         // Insert directly via adapter (same as beforeAll) to guarantee entry exists
-        const newId = teamDb.createEntry({ content: 'Entry for update test' })
+        const newId = teamDb.createEntry({ content: 'Entry for update test', projectNumber: 1 })
 
         const result = (await callTool(
             'team_update_entry',
-            { entry_id: newId, content: 'Updated team content' },
+            {
+                project_number: 1,
+                entry_id: newId,
+                content: 'Updated team content',
+            },
             db,
             undefined,
             undefined,
@@ -466,7 +564,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     it('team_delete_entry: successful delete', async () => {
         const result = (await callTool(
             'team_delete_entry',
-            { entry_id: 2 },
+            {
+                project_number: 1,
+                entry_id: 2,
+            },
             db,
             undefined,
             undefined,

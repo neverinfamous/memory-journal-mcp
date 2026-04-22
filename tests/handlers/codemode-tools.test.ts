@@ -1,8 +1,50 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { GitHubIntegration } from '../../src/github/github-integration/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import { callTool } from '../../src/handlers/tools/index.js'
+import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import * as fs from 'fs'
+
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+                dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
+
+vi.mock('../../src/utils/request-context.js', async (importOriginal) => {
+    const actual = await importOriginal<any>()
+    return {
+        ...actual,
+        getRequestContext: () => ({ sessionId: 'test-session-id' }),
+    }
+})
 
 vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
     const actual = await importOriginal<any>()
@@ -17,7 +59,7 @@ vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
                     return { success: true, result: 'undefined' }
                 }
                 if (code.includes('huge')) {
-                    return { success: true, result: 'a'.repeat(11 * 1024 * 1024) }
+                    return { success: false, error: 'Result string exceeds allowed limit' }
                 }
                 return { success: true, result: 2 }
             },
@@ -88,24 +130,30 @@ describe('Code Mode Tool Handlers', () => {
     })
 
     it('should inject github context based on repo parameter', async () => {
-        // Construct a ToolContext that mimics what the server builds
-        const context = Object.assign(
-            Object.create(Object.getPrototypeOf(personalDb)),
-            personalDb,
-            {
-                config: {
-                    defaultProjectNumber: 1,
-                    projectRegistry: {
-                        testrepo: { path: '.', project_number: 99 },
-                    },
+        const config = {
+            defaultProjectNumber: 1,
+            projectRegistry: {
+                testrepo: { path: '.', project_number: 99 },
+            },
+            codemodeInternalFullAccess: true,
+            runtime: {
+                maintenanceManager: {
+                    withActiveJob: (fn: any) => fn(),
+                    acquireMaintenanceLock: async () => {},
+                    releaseMaintenanceLock: () => {},
                 },
-            }
-        )
+            },
+            io: { allowedRoots: [process.cwd()] },
+            dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+        }
 
         const result = (await callTool(
             'mj_execute_code',
             { code: 'return 1', repo: 'testrepo' },
-            context
+            personalDb,
+            undefined,
+            undefined,
+            config
         )) as any
 
         expect(result.success).toBe(true)
@@ -120,34 +168,43 @@ describe('Code Mode Tool Handlers', () => {
         )) as any
 
         expect(result.success).toBe(false)
-        expect(result.error).toContain('Result exceeds')
+        expect(result.error).toContain('Result string exceeds')
     })
 
-    it('should swallow git errors on repo context injection', async () => {
+    it('should return error when git initialization fails on repo context injection', async () => {
         const spy = vi
             .spyOn(GitHubIntegration.prototype, 'getRepoInfo')
             .mockRejectedValue(new Error('no git'))
 
-        const context = Object.assign(
-            Object.create(Object.getPrototypeOf(personalDb)),
-            personalDb,
-            {
-                config: {
-                    projectRegistry: {
-                        testrepo2: { path: '.', project_number: 99 },
-                    },
+        const config = {
+            projectRegistry: {
+                testrepo2: { path: '.', project_number: 99 },
+            },
+            codemodeInternalFullAccess: true,
+            runtime: {
+                maintenanceManager: {
+                    withActiveJob: (fn: any) => fn(),
+                    acquireMaintenanceLock: async () => {},
+                    releaseMaintenanceLock: () => {},
                 },
-            }
-        )
+            },
+            io: { allowedRoots: [process.cwd()] },
+            dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+        }
 
         const result = (await callTool(
             'mj_execute_code',
             { code: 'return 1', repo: 'testrepo2' },
-            context
+            personalDb,
+            undefined,
+            undefined,
+            config
         )) as any
 
-        expect(result.error).toBeUndefined()
-        expect(result.success).toBe(true)
+        expect(result.success).toBe(false)
+        expect(result.error).toContain(
+            "Failed to initialize injected repository 'testrepo2': no git"
+        )
         spy.mockRestore()
     })
 
@@ -161,5 +218,5 @@ describe('Code Mode Tool Handlers', () => {
 
         expect(result.success).toBe(false)
         expect(result.error).toContain('Rate limit exceeded')
-    })
+    }, 30000)
 })

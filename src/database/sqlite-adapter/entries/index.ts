@@ -1,6 +1,5 @@
 import type { JournalEntry, EntryType, ImportanceResult } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
-import type { Database } from 'better-sqlite3'
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { TagsManager } from '../tags.js'
 
@@ -21,7 +20,7 @@ import {
     searchByDateRange,
     type SortBy,
 } from './search.js'
-import { calculateImportance } from './importance.js'
+import { calculateImportance, getEntriesByIdsWithImportance } from './importance.js'
 import { getStatistics } from './statistics.js'
 
 export class EntriesManager {
@@ -32,7 +31,7 @@ export class EntriesManager {
             ctx,
             tagsMgr,
             get db() {
-                return ctx.getRawDb() as Database
+                return ctx.getNativeDb()
             },
         }
     }
@@ -47,6 +46,12 @@ export class EntriesManager {
 
     getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
         return getEntriesByIds(this.sharedContext, ids)
+    }
+
+    getEntriesByIdsWithImportance(
+        ids: number[]
+    ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
+        return getEntriesByIdsWithImportance(this.sharedContext, ids)
     }
 
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null {

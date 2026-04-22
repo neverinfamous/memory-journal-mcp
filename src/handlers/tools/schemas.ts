@@ -105,7 +105,13 @@ export const EntryOutputSchema = z
         timestamp: z.string(),
         tags: z.array(z.string()).optional(),
         significanceType: z.string().nullable().optional(),
-        autoContext: z.string().nullable().optional(),
+        autoContext: z
+            .string()
+            .nullable()
+            .optional()
+            .describe('@deprecated Use author and flagMetadata instead'),
+        author: z.string().nullable().optional(),
+        flagMetadata: z.record(z.string(), z.unknown()).nullable().optional(),
         deletedAt: z.string().nullable().optional(),
         projectNumber: z.number().nullable().optional(),
         projectOwner: z.string().nullable().optional(),
@@ -134,6 +140,12 @@ export const EntriesListOutputSchema = z
         entries: z.array(EntryOutputSchema).optional(),
         count: z.number().optional(),
         searchMode: z.string().optional(),
+        degraded: z
+            .boolean()
+            .optional()
+            .describe(
+                'True if the search degraded to a slower fallback method due to infrastructure failure'
+            ),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

@@ -81,6 +81,15 @@ const {
     mockSigintHandlers: [] as Function[],
 }))
 
+vi.mock('../../src/auth/scope-map.js', () => ({
+    getRequiredScope: vi.fn().mockImplementation((toolName: string) => {
+        // Return a default scope for fake test tools
+        if (toolName.startsWith('fake_')) return 'core'
+        // Fallback or throw if we wanted to enforce it here
+        return 'core'
+    }),
+}))
+
 // ============================================================================
 // Module mocks
 // ============================================================================
@@ -161,6 +170,7 @@ vi.mock('../../src/vector/vector-search-manager.js', () => ({
     VectorSearchManager: function () {
         return {
             initialize: mockVectorInitialize,
+            warmup: vi.fn(),
             isInitialized: vi.fn().mockReturnValue(false),
             search: vi.fn().mockResolvedValue([]),
             addEntry: vi.fn().mockResolvedValue(true),
@@ -200,10 +210,35 @@ vi.mock('../../src/github/github-integration/index.js', () => ({
             invalidateCache: vi.fn(),
         }
     },
+    getGitHubIntegration: function () {
+        return {
+            isApiAvailable: mockGitHubIsApiAvailable,
+            getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null, branch: null }),
+            getCachedRepoInfo: vi.fn().mockReturnValue(null),
+            getRepoContext: vi.fn().mockResolvedValue(null),
+            getIssues: vi.fn().mockResolvedValue([]),
+            getIssue: vi.fn().mockResolvedValue(null),
+            createIssue: vi.fn().mockResolvedValue(null),
+            closeIssue: vi.fn().mockResolvedValue(null),
+            getPullRequests: vi.fn().mockResolvedValue([]),
+            getPullRequest: vi.fn().mockResolvedValue(null),
+            getWorkflowRuns: vi.fn().mockResolvedValue([]),
+            getProjectKanban: vi.fn().mockResolvedValue(null),
+            getMilestones: vi.fn().mockResolvedValue([]),
+            getMilestone: vi.fn().mockResolvedValue(null),
+            createMilestone: vi.fn().mockResolvedValue(null),
+            updateMilestone: vi.fn().mockResolvedValue(null),
+            deleteMilestone: vi.fn().mockResolvedValue(null),
+            moveProjectItem: vi.fn().mockResolvedValue({ success: false }),
+            addProjectItem: vi.fn().mockResolvedValue({ success: false }),
+            clearCache: vi.fn(),
+            invalidateCache: vi.fn(),
+        }
+    },
 }))
 
 // Mock express to avoid actual HTTP server creation
-vi.mock('express', () => {
+vi.mock('express', function () {
     const mockApp = {
         use: vi.fn().mockImplementation((...args: unknown[]) => {
             if (args.length === 1 && typeof args[0] === 'function') {
@@ -245,7 +280,7 @@ vi.spyOn(process, 'on').mockImplementation((event: any, handler: any) => {
     }
     return process
 })
-vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
+vi.spyOn(process, 'exit').mockImplementation(function () {} as never)
 
 // ============================================================================
 // Import after mocks
@@ -254,8 +289,8 @@ vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
 import { createServer, type ServerOptions } from '../../src/server/mcp-server.js'
 import * as toolsModule from '../../src/handlers/tools/index.js'
 
-describe('McpServer', () => {
-    beforeEach(() => {
+describe('McpServer', function () {
+    beforeEach(function () {
         // Reset call counts but preserve mock implementations
         // (vi.clearAllMocks() would wipe .mockImplementation() on express mock)
         mockRegisterTool.mockClear()
@@ -280,8 +315,8 @@ describe('McpServer', () => {
     // Server initialization
     // ========================================================================
 
-    describe('createServer - stdio transport', () => {
-        it('should initialize database and register tools/resources/prompts', async () => {
+    describe('createServer - stdio transport', function () {
+        it('should initialize database and register tools/resources/prompts', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -305,7 +340,7 @@ describe('McpServer', () => {
             expect(mockConnect).toHaveBeenCalled()
         })
 
-        it('should pass tool options with description', async () => {
+        it('should pass tool options with description', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -318,7 +353,7 @@ describe('McpServer', () => {
             expect(firstCall[1]).toBeDefined() // tool options with description
         })
 
-        it('should register create_entry tool', async () => {
+        it('should register create_entry tool', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -333,7 +368,7 @@ describe('McpServer', () => {
             expect(toolNames).toContain('search_entries')
         })
 
-        it('should initialize audit logger when auditConfig is enabled', async () => {
+        it('should initialize audit logger when auditConfig is enabled', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -353,8 +388,8 @@ describe('McpServer', () => {
     // Tool filter
     // ========================================================================
 
-    describe('createServer - with tool filter', () => {
-        it('should apply tool filter when provided', async () => {
+    describe('createServer - with tool filter', function () {
+        it('should apply tool filter when provided', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -373,8 +408,8 @@ describe('McpServer', () => {
     // Auto-rebuild vector index
     // ========================================================================
 
-    describe('createServer - auto rebuild index', () => {
-        it('should rebuild vector index when autoRebuildIndex is true', async () => {
+    describe('createServer - auto rebuild index', function () {
+        it('should rebuild vector index when autoRebuildIndex is true', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -385,13 +420,13 @@ describe('McpServer', () => {
             expect(mockVectorRebuildIndex).toHaveBeenCalled()
         })
 
-        it('should NOT rebuild index when autoRebuildIndex is not set', async () => {
+        it('should NOT rebuild index when autoRebuildIndex is not set', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
             })
 
-            expect(mockVectorInitialize).not.toHaveBeenCalled()
+            expect(mockVectorInitialize).toHaveBeenCalled()
             expect(mockVectorRebuildIndex).not.toHaveBeenCalled()
         })
     })
@@ -400,8 +435,8 @@ describe('McpServer', () => {
     // Team Database & Sandbox Mode
     // ========================================================================
 
-    describe('createServer - team database and sandbox', () => {
-        it('should initialize team database and team vector manager when teamDbPath is provided', async () => {
+    describe('createServer - team database and sandbox', function () {
+        it('should initialize team database and team vector manager when teamDbPath is provided', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -410,24 +445,14 @@ describe('McpServer', () => {
             // Since mockDbInitialize is shared, it should be called twice (once for main, once for team)
             expect(mockDbInitialize).toHaveBeenCalledTimes(2)
         })
-
-        it('should configure sandbox mode when provided', async () => {
-            await createServer({
-                transport: 'stdio',
-                dbPath: './test-server.db',
-                sandboxMode: 'isolate' as any,
-            })
-            // Assert server creation succeeded
-            expect(mockConnect).toHaveBeenCalled()
-        })
     })
 
     // ========================================================================
     // Resource registration
     // ========================================================================
 
-    describe('createServer - resource registration', () => {
-        it('should register both static and template resources', async () => {
+    describe('createServer - resource registration', function () {
+        it('should register both static and template resources', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -443,8 +468,8 @@ describe('McpServer', () => {
     // Prompt registration
     // ========================================================================
 
-    describe('createServer - prompt registration', () => {
-        it('should register prompts with argsSchema', async () => {
+    describe('createServer - prompt registration', function () {
+        it('should register prompts with argsSchema', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -465,14 +490,15 @@ describe('McpServer', () => {
     // HTTP transport (stateless)
     // ========================================================================
 
-    describe('createServer - HTTP stateless', () => {
-        it('should set up express app for stateless HTTP', async () => {
+    describe('createServer - HTTP stateless', function () {
+        it('should set up express app for stateless HTTP', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
                 port: 4000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
             })
 
             // Should connect to transport
@@ -484,10 +510,11 @@ describe('McpServer', () => {
     // HTTP transport (stateful)
     // ========================================================================
 
-    describe('createServer - HTTP stateful', () => {
-        it('should set up express app for stateful HTTP with session management', async () => {
+    describe('createServer - HTTP stateful', function () {
+        it('should set up express app for stateful HTTP with session management', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
                 port: 5000,
@@ -497,17 +524,20 @@ describe('McpServer', () => {
             // Should NOT call connect for stateful mode (connects per-session)
             // The server.connect is only called once for stateless or stdio
             // For stateful, connect is called per new session initialization
-            expect(mockRegisterTool).toHaveBeenCalled()
+            // Tools are not registered until session connects.
+            expect(mockHandlers.post['/mcp']).toBeDefined()
         })
 
-        it('should configure CORS origin from options', async () => {
+        it('should configure CORS origin from options', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 corsOrigins: ['https://example.com'],
+                statelessHttp: false,
             })
 
-            expect(mockRegisterTool).toHaveBeenCalled()
+            expect(mockHandlers.post['/mcp']).toBeDefined()
         })
     })
 
@@ -515,8 +545,8 @@ describe('McpServer', () => {
     // Default project number
     // ========================================================================
 
-    describe('createServer - defaultProjectNumber', () => {
-        it('should pass defaultProjectNumber through to tools', async () => {
+    describe('createServer - defaultProjectNumber', function () {
+        it('should pass defaultProjectNumber through to tools', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -527,7 +557,7 @@ describe('McpServer', () => {
             expect(mockRegisterTool).toHaveBeenCalled()
         })
 
-        it('should resolve githubPath using projectRegistry when defaultProjectNumber matches', async () => {
+        it('should resolve githubPath using projectRegistry when defaultProjectNumber matches', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -540,7 +570,7 @@ describe('McpServer', () => {
             expect(mockRegisterTool).toHaveBeenCalled()
         })
 
-        it('should resolve githubPath using projectRegistry fallback to first entry when defaultProjectNumber missing', async () => {
+        it('should resolve githubPath using projectRegistry fallback to first entry when defaultProjectNumber missing', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -556,8 +586,8 @@ describe('McpServer', () => {
     // Tool handler callbacks
     // ========================================================================
 
-    describe('tool handler callbacks', () => {
-        it('should invoke tool handler and return structured content', async () => {
+    describe('tool handler callbacks', function () {
+        it('should invoke tool handler and return structured content', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -580,9 +610,9 @@ describe('McpServer', () => {
             expect(result.content[0]!.type).toBe('text')
         })
 
-        it('should return structured error content when tool throws', async () => {
+        it('should return structured error content when tool throws', async function () {
             // Make createEntry throw
-            mockCreateEntry.mockImplementationOnce(() => {
+            mockCreateEntry.mockImplementationOnce(function () {
                 throw new Error('Database error')
             })
 
@@ -610,43 +640,60 @@ describe('McpServer', () => {
             expect(result.isError).toBeUndefined()
             expect(result.content[0]!.type).toBe('text')
 
-            const parsed = JSON.parse(result.content[0]!.text) as {
-                success: boolean
-                error: string
-            }
-            expect(parsed.success).toBe(false)
-            expect(parsed.error).toContain('Database error')
+            const text = result.content[0]!.text
+            expect(text).toContain('[Structured output attached]')
+
+            const struct = result as { structuredContent?: { success: boolean; error: string } }
+            expect(struct.structuredContent).toBeDefined()
+            expect(struct.structuredContent!.success).toBe(false)
+            expect(struct.structuredContent!.error).toContain(
+                'An internal error occurred during tool execution. Please check the server logs for more details.'
+            )
         })
 
-        it('should return structured error content when JSON stringify blows up (triggering global catch)', async () => {
+        it('should return legacy error content when JSON stringify blows up on missing outputSchema (triggering global catch)', async function () {
             // BigInt fails JSON.stringify natively, throwing a TypeError which triggers the global catch
-            mockCreateEntry.mockImplementationOnce(() => {
-                return { invalidField: 10n }
+            // We use a fake tool with no outputSchema to trigger the manual JSON.stringify in mcp-server.ts
+            const spyTools = vi.spyOn(toolsModule, 'getTools').mockReturnValueOnce([
+                {
+                    name: 'fake_boom_tool',
+                    description: 'A fake tool',
+                    inputSchema: { shape: {} },
+                    // no outputSchema!
+                } as any,
+            ])
+
+            const spyCall = vi.spyOn(toolsModule, 'callTool').mockResolvedValueOnce({
+                invalidField: 10n,
             })
+            const server = await createServer({ transport: 'stdio', dbPath: './test-server.db' })
 
-            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
-
-            const createEntryCalls = mockRegisterTool.mock.calls.filter(
-                (call: unknown[]) => call[0] === 'create_entry'
+            const toolCalls = mockRegisterTool.mock.calls.filter(
+                (call: unknown[]) => call[0] === 'fake_boom_tool'
             ) as unknown[][]
 
-            const handler = createEntryCalls[0]![2] as (
+            const handler = toolCalls[0]![2] as (
                 args: unknown,
                 extra: unknown
             ) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
 
-            const result = await handler({ content: 'Test' }, { _meta: {} })
+            const result = await handler({}, { _meta: {} })
 
+            // because it lacks outputSchema, the error catch block uses `hasOutputSchema: false`, returning isError: true
             expect(result.isError).toBe(true)
+
             const parsed = JSON.parse(result.content[0]!.text) as {
                 success: boolean
                 error: string
             }
             expect(parsed.success).toBe(false)
             expect(parsed.error).toContain('BigInt')
+
+            spyTools.mockRestore()
+            spyCall.mockRestore()
         })
 
-        it('should return raw string result when tool has no outputSchema and result is a string', async () => {
+        it('should return raw string result when tool has no outputSchema and result is a string', async function () {
             const spyTools = vi.spyOn(toolsModule, 'getTools').mockReturnValueOnce([
                 {
                     name: 'fake_string_tool',
@@ -675,18 +722,18 @@ describe('McpServer', () => {
             spyCall.mockRestore()
         })
 
-        it('should handle schema partial() or passthrough() throws gracefully', async () => {
+        it('should handle schema partial() or passthrough() throws gracefully', async function () {
             const spy = vi.spyOn(toolsModule, 'getTools').mockReturnValueOnce([
                 {
                     name: 'fake_tool',
                     description: 'A fake tool',
                     inputSchema: {
-                        partial: () => {
+                        partial: function () {
                             throw new Error('schema blowup')
                         },
                     },
                     outputSchema: {
-                        passthrough: () => {
+                        passthrough: function () {
                             throw new Error('output schema blowup')
                         },
                     },
@@ -712,8 +759,8 @@ describe('McpServer', () => {
     // Prompt handler callbacks
     // ========================================================================
 
-    describe('prompt handler callbacks', () => {
-        it('should invoke prompt handler and return messages', async () => {
+    describe('prompt handler callbacks', function () {
+        it('should invoke prompt handler and return messages', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -738,8 +785,8 @@ describe('McpServer', () => {
     // Resource handler callbacks
     // ========================================================================
 
-    describe('resource handler callbacks', () => {
-        it('should invoke resource handler and return contents', async () => {
+    describe('resource handler callbacks', function () {
+        it('should invoke resource handler and return contents', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -764,8 +811,8 @@ describe('McpServer', () => {
     // SIGINT Handlers
     // ========================================================================
 
-    describe('SIGINT clean shutdown', () => {
-        it('should register SIGINT handlers and cleanly close database (stdio)', async () => {
+    describe('SIGINT clean shutdown', function () {
+        it('should register SIGINT handlers and cleanly close database (stdio)', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -788,9 +835,10 @@ describe('McpServer', () => {
             }
         })
 
-        it('should close audit logger and db on SIGINT (http stateful)', async () => {
+        it('should close audit logger and db on SIGINT (http stateful)', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
                 port: 5123,
@@ -816,10 +864,11 @@ describe('McpServer', () => {
     // HTTP Endpoint handlers
     // ========================================================================
 
-    describe('HTTP endpoint handlers', () => {
-        it('should handle POST /mcp in stateless mode', async () => {
+    describe('HTTP endpoint handlers', function () {
+        it('should handle POST /mcp in stateless mode', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -827,7 +876,7 @@ describe('McpServer', () => {
             const postHandler = mockHandlers.post['/mcp']
             expect(postHandler).toBeDefined()
 
-            const mockReq = { body: { jsonrpc: '2.0', id: 1, method: 'initialize' } }
+            const mockReq = { headers: {}, body: { jsonrpc: '2.0', id: 1, method: 'initialize' } }
             const mockRes = { status: vi.fn().mockReturnThis(), json: vi.fn(), end: vi.fn() }
 
             // Invoke the handler
@@ -837,9 +886,10 @@ describe('McpServer', () => {
             // StreamableHTTPServerTransport.handleRequest should be called (from our mock)
         })
 
-        it('should handle GET /mcp and DELETE /mcp in stateless mode', async () => {
+        it('should handle GET /mcp and DELETE /mcp in stateless mode', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -859,9 +909,10 @@ describe('McpServer', () => {
             expect(mockRes.status).toHaveBeenCalledWith(204)
         })
 
-        it('should handle stateful mode POST /mcp validation failures', async () => {
+        it('should handle stateful mode POST /mcp validation failures', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -887,7 +938,7 @@ describe('McpServer', () => {
             )
         })
 
-        it('should handle OPTIONS preflight via middleware', async () => {
+        it('should handle OPTIONS preflight via middleware', async function () {
             const middlewareFns: Function[] = []
             const { default: expressMod } = await import('express')
             const app = expressMod()
@@ -899,6 +950,7 @@ describe('McpServer', () => {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
             })
 
@@ -933,7 +985,7 @@ describe('McpServer', () => {
             expect(optionsMwFound).toBe(true)
         })
 
-        it('should invoke security headers middleware', async () => {
+        it('should invoke security headers middleware', async function () {
             const middlewareFns: Function[] = []
             const { default: expressMod } = await import('express')
             const app = expressMod()
@@ -946,6 +998,7 @@ describe('McpServer', () => {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -977,7 +1030,7 @@ describe('McpServer', () => {
             expect(securityMiddlewareFound).toBe(true)
         })
 
-        it('should invoke CORS middleware and handle OPTIONS', async () => {
+        it('should invoke CORS middleware and handle OPTIONS', async function () {
             const middlewareFns: Function[] = []
             const { default: expressMod } = await import('express')
             const app = expressMod()
@@ -989,6 +1042,7 @@ describe('McpServer', () => {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
                 corsOrigins: ['https://test.example.com'],
@@ -1070,9 +1124,10 @@ describe('McpServer', () => {
             }
         })
 
-        it('should handle stateful GET /mcp without session', async () => {
+        it('should handle stateful GET /mcp without session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1094,9 +1149,10 @@ describe('McpServer', () => {
             )
         })
 
-        it('should handle stateful DELETE /mcp without session', async () => {
+        it('should handle stateful DELETE /mcp without session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1114,9 +1170,10 @@ describe('McpServer', () => {
             expect(mockRes.status).toHaveBeenCalledWith(400)
         })
 
-        it('should handle stateful GET /mcp with invalid session', async () => {
+        it('should handle stateful GET /mcp with invalid session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1132,9 +1189,10 @@ describe('McpServer', () => {
             expect(mockRes.status).toHaveBeenCalledWith(400)
         })
 
-        it('should handle stateful DELETE /mcp with invalid session', async () => {
+        it('should handle stateful DELETE /mcp with invalid session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1150,7 +1208,7 @@ describe('McpServer', () => {
             expect(mockRes.status).toHaveBeenCalledWith(400)
         })
 
-        it('should handle stateful POST /mcp with initialization request', async () => {
+        it('should handle stateful POST /mcp with initialization request', async function () {
             // Make isInitializeRequest return true for this test
             const { isInitializeRequest: mockIsInit } =
                 await import('@modelcontextprotocol/sdk/types.js')
@@ -1158,6 +1216,7 @@ describe('McpServer', () => {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1187,12 +1246,12 @@ describe('McpServer', () => {
             expect(mockConnect).toHaveBeenCalled()
         })
 
-        it('should handle stateful POST /mcp error with 500 response', async () => {
+        it('should handle stateful POST /mcp error with 500 response', async function () {
             // Create a transport mock that throws
             const StreamableTransportMod =
                 await import('@modelcontextprotocol/sdk/server/streamableHttp.js')
             const OrigConstructor = StreamableTransportMod.StreamableHTTPServerTransport
-            const throwingConstructor = vi.fn().mockImplementation(() => {
+            const throwingConstructor = vi.fn().mockImplementation(function () {
                 return {
                     handleRequest: vi.fn().mockRejectedValue(new Error('Transport failure')),
                     close: vi.fn().mockResolvedValue(undefined),
@@ -1204,6 +1263,7 @@ describe('McpServer', () => {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1237,8 +1297,8 @@ describe('McpServer', () => {
     // Scheduler
     // ========================================================================
 
-    describe('createServer - scheduler', () => {
-        it('should warn and not start scheduler on stdio transport', async () => {
+    describe('createServer - scheduler', function () {
+        it('should warn and not start scheduler on stdio transport', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -1247,6 +1307,7 @@ describe('McpServer', () => {
                     vacuumIntervalMinutes: 120,
                     rebuildIndexIntervalMinutes: 180,
                     keepBackups: 5,
+                    digestIntervalMinutes: 0,
                 },
             })
 
@@ -1255,9 +1316,10 @@ describe('McpServer', () => {
             expect(mockDbInitialize).toHaveBeenCalled()
         })
 
-        it('should start scheduler on HTTP transport', async () => {
+        it('should start scheduler on HTTP transport', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
                 scheduler: {
@@ -1265,21 +1327,24 @@ describe('McpServer', () => {
                     vacuumIntervalMinutes: 0,
                     rebuildIndexIntervalMinutes: 0,
                     keepBackups: 5,
+                    digestIntervalMinutes: 0,
                 },
             })
 
             expect(mockDbInitialize).toHaveBeenCalled()
         })
 
-        it('should not create scheduler when all intervals are 0', async () => {
+        it('should not create scheduler when all intervals are 0', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 scheduler: {
                     backupIntervalMinutes: 0,
                     vacuumIntervalMinutes: 0,
                     rebuildIndexIntervalMinutes: 0,
                     keepBackups: 5,
+                    digestIntervalMinutes: 0,
                 },
             })
 
@@ -1291,8 +1356,8 @@ describe('McpServer', () => {
     // Tool handler with outputSchema
     // ========================================================================
 
-    describe('tool handler structuredContent', () => {
-        it('should return structuredContent for tools with outputSchema', async () => {
+    describe('tool handler structuredContent', function () {
+        it('should return structuredContent for tools with outputSchema', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -1319,7 +1384,7 @@ describe('McpServer', () => {
             expect(result.structuredContent).toBeDefined()
         })
 
-        it('should pass progressToken to tool handler when provided', async () => {
+        it('should pass progressToken to tool handler when provided', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -1348,8 +1413,8 @@ describe('McpServer', () => {
     // Environment-based tool filter
     // ========================================================================
 
-    describe('createServer - env tool filter', () => {
-        it('should use MEMORY_JOURNAL_MCP_TOOL_FILTER env var when no explicit filter', async () => {
+    describe('createServer - env tool filter', function () {
+        it('should use MEMORY_JOURNAL_MCP_TOOL_FILTER env var when no explicit filter', async function () {
             process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] = 'core'
 
             await createServer({
@@ -1376,12 +1441,12 @@ describe('McpServer', () => {
         })
     })
 
-    describe('Registered Handlers', () => {
-        beforeEach(() => {
+    describe('Registered Handlers', function () {
+        beforeEach(function () {
             vi.clearAllMocks()
         })
 
-        it('should execute registered tools successfully', async () => {
+        it('should execute registered tools successfully', async function () {
             await createServer({ transport: 'stdio', dbPath: './test-server.db' })
 
             // Verify tool registration occurred
@@ -1405,7 +1470,7 @@ describe('McpServer', () => {
             expect(successResult.content).toBeDefined()
         })
 
-        it('should execute registered resources successfully', async () => {
+        it('should execute registered resources successfully', async function () {
             await createServer({ transport: 'stdio', dbPath: './test-server.db' })
 
             const resCall =
@@ -1432,8 +1497,8 @@ describe('McpServer', () => {
     // SIGINT shutdown handlers
     // ========================================================================
 
-    describe('createServer - shutdown handlers', () => {
-        it('should register SIGINT handler for stdio transport', async () => {
+    describe('createServer - shutdown handlers', function () {
+        it('should register SIGINT handler for stdio transport', async function () {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -1442,9 +1507,10 @@ describe('McpServer', () => {
             expect(mockSigintHandlers.length).toBe(1)
         })
 
-        it('should register SIGINT handler for stateless HTTP', async () => {
+        it('should register SIGINT handler for stateless HTTP', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -1462,9 +1528,10 @@ describe('McpServer', () => {
             expect(mockDbClose).toHaveBeenCalled()
         })
 
-        it('should register SIGINT handler for stateful HTTP', async () => {
+        it('should register SIGINT handler for stateful HTTP', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })

@@ -63,8 +63,8 @@ test.describe('HTTP Transport Security & Limits', () => {
         const response = await request.get('/health')
         const headers = response.headers()
 
-        // Default CORS origin is * (configurable via --cors-origin)
-        expect(headers['access-control-allow-origin']).toBe('*')
+        // Default CORS origin is strict-by-default (undefined) unless configured
+        expect(headers['access-control-allow-origin']).toBeUndefined()
         expect(headers['access-control-allow-methods']).toContain('POST')
         expect(headers['access-control-allow-methods']).toContain('GET')
         expect(headers['access-control-expose-headers']).toContain('mcp-session-id')
@@ -93,7 +93,7 @@ test.describe('HTTP Transport Security & Limits', () => {
     })
 
     test('should include HSTS header when --enable-hsts is configured', async () => {
-        const HSTS_PORT = 3106
+        const HSTS_PORT = 3124
 
         await startServer(HSTS_PORT, ['--enable-hsts'], 'hsts')
 

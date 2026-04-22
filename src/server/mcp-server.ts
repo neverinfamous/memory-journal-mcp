@@ -12,7 +12,7 @@ import type { z } from 'zod'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { DatabaseAdapterFactory } from '../database/adapter-factory.js'
 import { VectorSearchManager } from '../vector/vector-search-manager.js'
-import { GitHubIntegration } from '../github/github-integration/index.js'
+import { getGitHubIntegration } from '../github/github-integration/index.js'
 import { logger } from '../utils/logger.js'
 import {
     parseToolFilter,
@@ -21,29 +21,28 @@ import {
     getEnabledGroups,
     type ToolFilterConfig,
 } from '../filtering/tool-filter.js'
-import {
-    getTools,
-    callTool,
-    initializeAuditLogger,
-    getGlobalAuditLogger,
-} from '../handlers/tools/index.js'
+import { getTools, callTool } from '../handlers/tools/index.js'
+import { getRequiredScope } from '../auth/scope-map.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/server-instructions.js'
 import { Scheduler, type SchedulerOptions } from './scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
-import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
+
 import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
-import type { ProjectRegistryEntry } from '../types/index.js'
+import type { ProjectRegistryEntry, ToolHandlerConfig } from '../types/index.js'
 import type { AuditConfig } from '../audit/index.js'
 import {
     registerResources,
     registerPrompts,
     type ResourceDefinition,
     type PromptDefinition,
-    type ResourceReadHandler,
 } from './registration.js'
 import { VERSION } from '../version.js'
+import { ServerRuntime } from '../utils/maintenance-lock.js'
+import { AuditLogger, createAuditInterceptor } from '../audit/index.js'
+
+export type McpServerFactory = () => McpServer
 
 export interface ServerOptions {
     transport: 'stdio' | 'http'
@@ -59,13 +58,16 @@ export interface ServerOptions {
     authToken?: string
     enableHSTS?: boolean
     scheduler?: SchedulerOptions
-    sandboxMode?: SandboxMode
+
     // OAuth 2.1 options
     oauthEnabled?: boolean
     oauthIssuer?: string
     oauthAudience?: string
     oauthJwksUri?: string
     oauthClockTolerance?: number
+    allowPlaintextLoopbackOAuth?: boolean
+    trustProxy?: boolean
+    publicOrigin?: string
     // Briefing configuration
     briefingConfig?: BriefingConfig
     // Project Registry
@@ -76,6 +78,10 @@ export interface ServerOptions {
     auditConfig?: AuditConfig
     // Hush Protocol flag vocabulary
     flagVocabulary?: string[]
+    // Allowlisted roots for file IO
+    allowedIoRoots?: string[]
+    // Admin override for Code Mode
+    codemodeInternalFullAccess?: boolean
 }
 
 /**
@@ -84,23 +90,18 @@ export interface ServerOptions {
 export async function createServer(options: ServerOptions): Promise<void> {
     const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
 
-    // Configure sandbox mode for Code Mode
-    if (options.sandboxMode) {
-        setDefaultSandboxMode(options.sandboxMode)
-        logger.info('Code Mode sandbox configured', {
-            module: 'McpServer',
-            sandboxMode: options.sandboxMode,
-        })
-    }
-
     // Initialize database
     const db = await DatabaseAdapterFactory.create(dbPath)
     await db.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath })
 
+    // Initialize ServerRuntime (handles instance-scoped globals)
+    const runtime = new ServerRuntime()
+
     // Initialize audit logging if configured
     if (options.auditConfig?.enabled) {
-        initializeAuditLogger(options.auditConfig)
+        runtime.auditLogger = new AuditLogger(options.auditConfig)
+        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
         logger.info('Audit logging enabled', {
             module: 'McpServer',
             path: options.auditConfig.logPath,
@@ -120,7 +121,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize vector search manager (lazy loading - model loads on first use)
     const vectorManager = new VectorSearchManager(db)
-    logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
 
     // Initialize team vector search manager if team DB is configured
     let teamVectorManager: VectorSearchManager | undefined
@@ -129,15 +129,56 @@ export async function createServer(options: ServerOptions): Promise<void> {
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
-    // Auto-rebuild vector index if enabled
+    // Auto-rebuild vector index if enabled (non-blocking)
     if (options.autoRebuildIndex) {
-        logger.info('Auto-rebuilding vector index on startup...', { module: 'McpServer' })
-        await vectorManager.initialize()
-        const { indexed: count } = await vectorManager.rebuildIndex(db)
-        logger.info('Vector index rebuilt on startup', {
+        logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
+        vectorManager
+            .initialize()
+            .then(async () => {
+                const { indexed: count } = await vectorManager.rebuildIndex(db)
+                logger.info('Vector index rebuilt in background', {
+                    module: 'McpServer',
+                    entriesIndexed: count,
+                })
+            })
+            .catch((err: unknown) => {
+                logger.error('Background vector init/rebuild failed', {
+                    module: 'McpServer',
+                    error: err,
+                })
+            })
+
+        if (teamVectorManager) {
+            teamVectorManager.initialize().catch((err: unknown) => {
+                logger.error('Background team vector init failed', {
+                    module: 'McpServer',
+                    error: err,
+                })
+            })
+            logger.info('Team vector search manager eager initialization started in background', {
+                module: 'McpServer',
+            })
+        }
+    } else {
+        // Otherwise, eager-load the model in the background so the first request isn't blocked
+        logger.info('Vector search manager eager initialization started in background', {
             module: 'McpServer',
-            entriesIndexed: count,
         })
+        vectorManager
+            .initialize()
+            .then(async () => {
+                // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
+                if (teamVectorManager) {
+                    logger.info(
+                        'Team vector search manager eager initialization started in background',
+                        { module: 'McpServer' }
+                    )
+                    await teamVectorManager.initialize()
+                }
+            })
+            .catch((err: unknown) => {
+                logger.error('Background vector init failed', { module: 'McpServer', error: err })
+            })
     }
 
     // Initialize GitHub integration
@@ -152,20 +193,20 @@ export async function createServer(options: ServerOptions): Promise<void> {
             }
         }
 
-        // Fallback: If no explicit default matched, use the first project in the registry
-        if (githubPath === '.') {
-            const firstEntry = Object.values(options.projectRegistry)[0]
-            if (firstEntry?.path) {
-                githubPath = firstEntry.path
-            }
-        }
+        // Removed implicit fallback to the first registry entry.
+        // Mutating operations without an explicit owner/repo will throw or request clarification
+        // rather than guessing the wrong project boundary.
     }
-    const github = new GitHubIntegration(githubPath)
+    const github = getGitHubIntegration(githubPath, runtime)
     try {
         // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
         await github.getRepoInfo()
-    } catch {
-        // Ignore failing silently if not within a git repository workspace
+    } catch (error: unknown) {
+        logger.warning('Failed to pre-populate GitHub repository cache', {
+            module: 'McpServer',
+            path: githubPath,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        })
     }
 
     logger.info('GitHub integration initialized', {
@@ -191,28 +232,83 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     }
 
-    // Get resources and prompts for instruction generation
+    // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
+    // which captures scheduler in its closure.
+    let scheduler: Scheduler | null = null
+    if (options.scheduler) {
+        const hasAnyJob =
+            options.scheduler.backupIntervalMinutes > 0 ||
+            options.scheduler.vacuumIntervalMinutes > 0 ||
+            options.scheduler.rebuildIndexIntervalMinutes > 0 ||
+            options.scheduler.digestIntervalMinutes > 0
+
+        if (hasAnyJob && transport === 'stdio') {
+            logger.warning(
+                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
+                    'Use HTTP/SSE transport for automated scheduling.',
+                { module: 'Scheduler' }
+            )
+        } else if (hasAnyJob) {
+            scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
+        }
+    }
+
+    // ========================================================================
+    // CACHED SESSION-INVARIANT STATE
+    // Extracting heavy initialization out of createServerInstance improves
+    // stateful HTTP/SSE connection time by bypassing redundant iterations.
+    // ========================================================================
     const resources = getResources()
     const prompts = getPrompts()
+    // Resolve dynamic roots for explicit isolation if not explicitly provided
+    let allowedIoRoots = options.allowedIoRoots
+    if (!allowedIoRoots) {
+        if (transport === 'http') {
+            const errorMsg = `FATAL: Refusing to bind HTTP transport without explicit ALLOWED_IO_ROOTS. You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to prevent ambient filesystem authority.`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
+        allowedIoRoots = [] // Empty array means NO filesystem access
+        logger.warning(
+            '⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.',
+            {
+                module: 'McpServer',
+            }
+        )
+    }
 
-    // Fetch latest entry for initial briefing context
-    const recentEntries = db.getRecentEntries(1)
-    const latestEntry = recentEntries[0]
-        ? {
-              id: recentEntries[0].id,
-              timestamp: recentEntries[0].timestamp,
-              entryType: recentEntries[0].entryType,
-              content: recentEntries[0].content,
-          }
-        : undefined
+    logger.info('IO sandbox configured', {
+        module: 'McpServer',
+        allowedRoots: allowedIoRoots,
+    })
 
-    const customToolHandlerConfig = {
+    const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber,
         projectRegistry: options.projectRegistry,
         flagVocabulary: options.flagVocabulary,
+        allowedIoRoots,
+        filterConfig,
+        authEnabled: Boolean(options.authToken ?? process.env['MCP_AUTH_TOKEN']),
+        oauthEnabled: options.oauthEnabled,
+        codemodeInternalFullAccess: options.codemodeInternalFullAccess,
+        runtime,
     }
 
-    // Get all tools once (unfiltered) for both instruction generation and registration
+    const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
+        callTool(
+            name,
+            args,
+            db,
+            vectorManager,
+            github,
+            baseConfig,
+            undefined,
+            teamDb,
+            teamVectorManager
+        )
+
+    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
+
     const allTools = getTools(
         db,
         null,
@@ -224,36 +320,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
     )
     const allToolNames = new Set(allTools.map((t) => t.name))
 
-    // Generate dynamic instructions based on enabled tools, prompts, and latest entry
+    for (const toolName of allToolNames) {
+        getRequiredScope(toolName)
+    }
+
     const enabledToolSet = filterConfig?.enabledTools ?? allToolNames
     const enabledGroups = filterConfig ? getEnabledGroups(filterConfig.enabledTools) : undefined
-    const instructions = generateInstructions(
-        enabledToolSet,
-        prompts.map((p) => {
-            const prompt = p as { name: string; description?: string }
-            return { name: prompt.name, description: prompt.description }
-        }),
-        latestEntry,
-        options.instructionLevel ?? 'standard',
-        enabledGroups
-    )
 
-    // Create MCP server with capabilities and instructions
-    const server = new McpServer(
-        {
-            name: 'memory-journal-mcp',
-            version: VERSION,
-        },
-        {
-            capabilities: {
-                logging: {},
-            },
-            instructions,
-        }
-    )
-
-    // Apply filter to get the set of tools to register
-    const tools = filterConfig
+    const staticTools = filterConfig
         ? getTools(
               db,
               filterConfig,
@@ -264,85 +338,129 @@ export async function createServer(options: ServerOptions): Promise<void> {
               teamVectorManager
           )
         : allTools
-    for (const tool of tools) {
-        // Build tool options matching MCP SDK expectations
-        const toolOptions: Record<string, unknown> = {
-            description: tool.description,
-        }
 
-        // MCP 2025-11-25: Pass title for human-readable display
-        if (tool.title) {
-            toolOptions['title'] = tool.title
-        }
+    const createServerInstance = (): McpServer => {
+        // Generate dynamic instructions based on enabled tools and prompts
+        // (Latest DB entry is omitted here to decouple session setup from DB latency;
+        // agents get this context from the mandatory memory://briefing read instead).
+        const instructions = generateInstructions(
+            enabledToolSet,
+            prompts.map((p) => {
+                const prompt = p as { name: string; description?: string }
+                return { name: prompt.name, description: prompt.description }
+            }),
+            undefined,
+            options.instructionLevel ?? 'standard',
+            enabledGroups
+        )
 
-        if (tool.inputSchema !== undefined) {
-            const schema = tool.inputSchema
-            if (
-                typeof schema === 'object' &&
-                schema !== null &&
-                'partial' in schema &&
-                typeof (schema as { partial: unknown }).partial === 'function'
-            ) {
-                // .partial() makes all fields optional so the SDK accepts `{}`.
-                // .passthrough() preserves unrecognized keys so handler can normalize.
-                // Wrapped in try/catch: if partial() returns something without passthrough()
-                // (non-ZodObject wrapper), fall back to the original schema to avoid
-                // a startup throw.
-                try {
-                    const relaxed = (
-                        schema as { partial: () => { passthrough?: () => z.ZodType } }
-                    ).partial()
-                    toolOptions['inputSchema'] =
-                        typeof relaxed.passthrough === 'function' ? relaxed.passthrough() : schema
-                } catch {
-                    toolOptions['inputSchema'] = schema
-                }
-            } else {
-                toolOptions['inputSchema'] = schema
+        // Create MCP server with capabilities and instructions
+        const server = new McpServer(
+            {
+                name: 'memory-journal-mcp',
+                version: VERSION,
+            },
+            {
+                capabilities: {
+                    logging: {},
+                },
+                instructions,
             }
-        }
+        )
 
-        // MCP 2025-11-25: Pass outputSchema for structured responses
-        if (tool.outputSchema !== undefined) {
-            const outSchema = tool.outputSchema
-            if (
-                typeof outSchema === 'object' &&
-                outSchema !== null &&
-                'passthrough' in outSchema &&
-                typeof (outSchema as { passthrough: unknown }).passthrough === 'function'
-            ) {
-                try {
-                    toolOptions['outputSchema'] = (
-                        outSchema as { passthrough: () => z.ZodType }
-                    ).passthrough()
-                } catch {
-                    toolOptions['outputSchema'] = outSchema
-                }
-            } else {
-                toolOptions['outputSchema'] = outSchema
-            }
-        }
-
-        if (tool.annotations !== undefined) {
-            toolOptions['annotations'] = tool.annotations
-        }
-
-        // MCP 2025-11-25: Pass icons for visual representation
-        if (tool.icons) {
-            toolOptions['icons'] = tool.icons
-        }
-
-        // Capture whether this tool has outputSchema for response handling
-        const hasOutputSchema = Boolean(tool.outputSchema)
-
-        server.registerTool(
-            tool.name,
-            toolOptions as {
+        for (const tool of staticTools) {
+            // Build tool options matching MCP SDK expectations
+            const toolOptions: {
                 description?: string
+                title?: string
                 inputSchema?: z.ZodType
                 outputSchema?: z.ZodType
-            },
-            async (args, extra) => {
+                annotations?: {
+                    title?: string
+                    readOnlyHint?: boolean
+                    destructiveHint?: boolean
+                    idempotentHint?: boolean
+                    openWorldHint?: boolean
+                }
+                icons?: unknown
+            } = {
+                description: tool.description,
+            }
+
+            // MCP 2025-11-25: Pass title for human-readable display
+            if (tool.title) {
+                toolOptions.title = tool.title
+            }
+
+            if (tool.inputSchema !== undefined) {
+                const schema = tool.inputSchema
+                if (
+                    typeof schema === 'object' &&
+                    schema !== null &&
+                    'partial' in schema &&
+                    typeof schema.partial === 'function'
+                ) {
+                    // DOCUMENTATION (P3 #8): Two-Schema Pattern
+                    // We use a strict `inputSchema` for tool definitions so LLMs see exactly what is required.
+                    // However, the MCP SDK strictly validates incoming JSON against this schema before reaching our handlers.
+                    // By using `.partial().passthrough()` here, we relax the schema for the SDK, allowing our
+                    // own handler logic to perform the strict validation, sanitize data, and return structured error
+                    // messages instead of the SDK crashing or returning opaque generic errors.
+                    //
+                    // .partial() makes all fields optional so the SDK accepts `{}`.
+                    // .passthrough() preserves unrecognized keys so handler can normalize.
+                    // Wrapped in try/catch: if partial() returns something without passthrough()
+                    // (non-ZodObject wrapper), fall back to the original schema to avoid
+                    // a startup throw.
+                    try {
+                        const relaxed = (
+                            schema as { partial: () => { passthrough?: () => z.ZodType } }
+                        ).partial()
+                        toolOptions.inputSchema = (typeof relaxed.passthrough === 'function'
+                            ? relaxed.passthrough()
+                            : schema) as unknown as z.ZodType
+                    } catch {
+                        toolOptions.inputSchema = schema as unknown as z.ZodType
+                    }
+                } else {
+                    toolOptions.inputSchema = schema as unknown as z.ZodType
+                }
+            }
+
+            // MCP 2025-11-25: Pass outputSchema for structured responses
+            if (tool.outputSchema !== undefined) {
+                const outSchema = tool.outputSchema
+                if (
+                    typeof outSchema === 'object' &&
+                    outSchema !== null &&
+                    'passthrough' in outSchema &&
+                    typeof outSchema.passthrough === 'function'
+                ) {
+                    try {
+                        toolOptions.outputSchema = (
+                            outSchema as { passthrough: () => z.ZodType }
+                        ).passthrough()
+                    } catch {
+                        toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                    }
+                } else {
+                    toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                }
+            }
+
+            if (tool.annotations !== undefined) {
+                toolOptions.annotations = tool.annotations
+            }
+
+            // MCP 2025-11-25: Pass icons for visual representation
+            if (tool.icons) {
+                toolOptions.icons = tool.icons
+            }
+
+            // Capture whether this tool has outputSchema for response handling
+            const hasOutputSchema = Boolean(tool.outputSchema)
+
+            server.registerTool(tool.name, toolOptions, async (args, extra) => {
                 try {
                     // Build progress context for progress notifications
                     // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
@@ -369,11 +487,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     // - structuredContent: validated JSON for clients that support it
                     // - content: compact text fallback (~15-20% payload reduction per §3.1)
                     if (hasOutputSchema) {
+                        // Protocol Optimization: Return structured objects natively without redundant text stringification.
+                        // Emits a lightweight marker for clients that don't support structuredContent.
                         return {
                             content: [
                                 {
                                     type: 'text' as const,
-                                    text: JSON.stringify(result),
+                                    text: '[Structured output attached]',
                                 },
                             ],
                             structuredContent: result as Record<string, unknown>,
@@ -393,13 +513,24 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         ],
                     }
                 } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : String(error)
-                    const errorResult = {
-                        success: false,
-                        error: errorMessage,
-                        code: 'INTERNAL_ERROR',
-                        category: 'internal',
-                        recoverable: false,
+                    let errorResult: Record<string, unknown>
+                    if (
+                        error instanceof Error &&
+                        'toResponse' in error &&
+                        typeof (error as { toResponse?: unknown }).toResponse === 'function'
+                    ) {
+                        errorResult = (
+                            error as { toResponse: () => Record<string, unknown> }
+                        ).toResponse()
+                    } else {
+                        const errorMessage = error instanceof Error ? error.message : String(error)
+                        errorResult = {
+                            success: false,
+                            error: errorMessage,
+                            code: 'INTERNAL_ERROR',
+                            category: 'internal',
+                            recoverable: false,
+                        }
                     }
                     return {
                         content: [
@@ -412,89 +543,69 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         isError: true,
                     }
                 }
-            }
-        )
-    }
-
-    // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
-    // which captures scheduler in its closure.
-    let scheduler: Scheduler | null = null
-    if (options.scheduler) {
-        const hasAnyJob =
-            options.scheduler.backupIntervalMinutes > 0 ||
-            options.scheduler.vacuumIntervalMinutes > 0 ||
-            options.scheduler.rebuildIndexIntervalMinutes > 0 ||
-            options.scheduler.digestIntervalMinutes > 0
-
-        if (hasAnyJob && transport === 'stdio') {
-            logger.warning(
-                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
-                    'Use HTTP/SSE transport for automated scheduling.',
-                { module: 'Scheduler' }
-            )
-        } else if (hasAnyJob) {
-            scheduler = new Scheduler(options.scheduler, db, vectorManager)
+            })
         }
-    }
 
-    // Resource read handler shared by template and static branches (D2 fix)
-    const handleResourceRead = async (
-        uri: URL,
-        mimeType: string
-    ): Promise<{
-        contents: {
-            uri: string
+        // Resource read handler shared by template and static branches (D2 fix)
+        const handleResourceRead = async (
+            uri: URL,
             mimeType: string
-            text: string
-            annotations?: Record<string, unknown>
-        }[]
-    }> => {
-        const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
-            ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
-            // Ensure defaultProjectNumber is available to resource handlers
-            // (may come via briefingConfig from CLI, or directly from server options)
-            defaultProjectNumber:
-                options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
-            projectRegistry: options.projectRegistry,
-            flagVocabulary: options.flagVocabulary,
+        ): Promise<{
+            contents: {
+                uri: string
+                mimeType: string
+                text: string
+                annotations?: Record<string, unknown>
+            }[]
+        }> => {
+            const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
+                ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
+                // Ensure defaultProjectNumber is available to resource handlers
+                // (may come via briefingConfig from CLI, or directly from server options)
+                defaultProjectNumber:
+                    options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
+                projectRegistry: options.projectRegistry,
+                flagVocabulary: options.flagVocabulary,
+                allowedIoRoots: allowedIoRoots,
+            }
+            const result = await readResource(
+                uri.href,
+                db,
+                vectorManager,
+                filterConfig,
+                github,
+                scheduler,
+                teamDb,
+                activeBriefingConfig,
+                runtime
+            )
+            const dataStr =
+                typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
+            return {
+                contents: [
+                    {
+                        uri: uri.href,
+                        mimeType,
+                        text: dataStr,
+                        ...(result.annotations ? { annotations: result.annotations } : {}),
+                    },
+                ],
+            }
         }
-        const result = await readResource(
-            uri.href,
-            db,
-            vectorManager,
-            filterConfig,
-            github,
-            scheduler,
-            teamDb,
-            activeBriefingConfig
-        )
-        const dataStr =
-            typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
-        return {
-            contents: [
-                {
-                    uri: uri.href,
-                    mimeType,
-                    text: dataStr,
-                    ...(result.annotations ? { annotations: result.annotations } : {}),
-                },
-            ],
-        }
+
+        // Register resources (reusing resources from instruction generation)
+        registerResources(server, resources as ResourceDefinition[], handleResourceRead, runtime)
+
+        // Register prompts (reusing prompts from instruction generation)
+        registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
+
+        return server
     }
-
-    // Register resources (reusing resources from instruction generation)
-    registerResources(
-        server,
-        resources as ResourceDefinition[],
-        handleResourceRead as ResourceReadHandler
-    )
-
-    // Register prompts (reusing prompts from instruction generation)
-    registerPrompts(server, prompts as PromptDefinition[], db, teamDb)
 
     // Start server based on transport
     if (transport === 'stdio') {
         const stdioTransport = new StdioServerTransport()
+        const server = createServerInstance()
         await server.connect(stdioTransport)
         logger.info('MCP server started on stdio', { module: 'McpServer' })
 
@@ -502,9 +613,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         process.on('SIGINT', () => {
             logger.info('Shutting down...', { module: 'McpServer' })
             // Flush audit log before exit
-            const auditLogger = getGlobalAuditLogger()
-            if (auditLogger) {
-                void auditLogger.close()
+            if (runtime.auditLogger) {
+                void runtime.auditLogger.close()
             }
             db.close()
             teamDb?.close()
@@ -514,8 +624,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // HTTP transport
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
-        const corsRaw = process.env['MCP_CORS_ORIGIN'] ?? '*'
-        const corsOrigins = options.corsOrigins ?? corsRaw.split(',').map((s) => s.trim())
+        const corsRaw = process.env['MCP_CORS_ORIGIN']
+        const corsOrigins =
+            options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()) : [])
         const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
 
         const httpTransport = new HttpTransport({
@@ -530,18 +641,20 @@ export async function createServer(options: ServerOptions): Promise<void> {
             oauthAudience: options.oauthAudience,
             oauthJwksUri: options.oauthJwksUri,
             oauthClockTolerance: options.oauthClockTolerance,
+            allowPlaintextLoopbackOAuth: options.allowPlaintextLoopbackOAuth,
+            trustProxy: options.trustProxy,
+            publicOrigin: options.publicOrigin,
         })
 
-        await httpTransport.start(server, scheduler)
+        await httpTransport.start(createServerInstance, scheduler)
 
         // Handle shutdown
         process.on('SIGINT', () => {
             void (async () => {
                 await httpTransport.stop(scheduler)
                 // Flush audit log before exit
-                const auditLogger = getGlobalAuditLogger()
-                if (auditLogger) {
-                    await auditLogger.close()
+                if (runtime.auditLogger) {
+                    await runtime.auditLogger.close()
                 }
                 db.close()
                 teamDb?.close()

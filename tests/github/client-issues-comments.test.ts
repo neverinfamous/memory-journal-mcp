@@ -10,8 +10,7 @@ describe('IssuesManager - getIssueComments (Coverage)', () => {
             setCache: vi.fn(),
         } as unknown as GitHubClient
         const manager = new IssuesManager(mockClient)
-        const result = await manager.getIssueComments('owner', 'repo', 1)
-        expect(result).toEqual([])
+        await expect(manager.getIssueComments('owner', 'repo', 1)).rejects.toThrow()
     })
 
     it('returns from cache if available', async () => {
@@ -60,8 +59,7 @@ describe('IssuesManager - getIssueComments (Coverage)', () => {
         } as unknown as GitHubClient
 
         const manager = new IssuesManager(mockClient)
-        const result = await manager.getIssueComments('owner', 'repo', 1)
-        expect(result).toEqual([])
+        await expect(manager.getIssueComments('owner', 'repo', 1)).rejects.toThrow()
     })
 
     it('caps limit at 100', async () => {
@@ -86,8 +84,7 @@ describe('IssuesManager - getIssues (Coverage)', () => {
             setCache: vi.fn(),
         } as unknown as GitHubClient
         const manager = new IssuesManager(mockClient)
-        const result = await manager.getIssues('owner', 'repo')
-        expect(result).toEqual([])
+        await expect(manager.getIssues('owner', 'repo')).rejects.toThrow()
     })
 
     it('returns from cache if available', async () => {
@@ -126,7 +123,7 @@ describe('IssuesManager - getIssues (Coverage)', () => {
         expect(listForRepo).toHaveBeenCalled()
         expect(mockClient.setCache).toHaveBeenCalled()
         expect(result.length).toBe(1)
-        expect(result[0].title).toBe('issue1')
+        expect(result[0].title).toBe('<untrusted_remote_content>issue1</untrusted_remote_content>')
     })
 
     it('handles errors during fetch', async () => {
@@ -138,8 +135,7 @@ describe('IssuesManager - getIssues (Coverage)', () => {
         } as unknown as GitHubClient
 
         const manager = new IssuesManager(mockClient)
-        const result = await manager.getIssues('owner', 'repo')
-        expect(result).toEqual([])
+        await expect(manager.getIssues('owner', 'repo')).rejects.toThrow()
     })
 })
 
@@ -151,8 +147,7 @@ describe('IssuesManager - getIssue (Coverage)', () => {
             setCache: vi.fn(),
         } as unknown as GitHubClient
         const manager = new IssuesManager(mockClient)
-        const result = await manager.getIssue('owner', 'repo', 1)
-        expect(result).toBeNull()
+        await expect(manager.getIssue('owner', 'repo', 1)).rejects.toThrow()
     })
 
     it('returns from cache if available', async () => {
@@ -193,7 +188,7 @@ describe('IssuesManager - getIssue (Coverage)', () => {
         const result = await manager.getIssue('owner', 'repo', 1)
         expect(get).toHaveBeenCalled()
         expect(mockClient.setCache).toHaveBeenCalled()
-        expect(result?.title).toBe('issue1')
+        expect(result?.title).toBe('<untrusted_remote_content>issue1</untrusted_remote_content>')
     })
 
     it('returns null if issue is a pull request', async () => {
@@ -219,7 +214,6 @@ describe('IssuesManager - getIssue (Coverage)', () => {
         } as unknown as GitHubClient
 
         const manager = new IssuesManager(mockClient)
-        const result = await manager.getIssue('owner', 'repo', 1)
-        expect(result).toBeNull()
+        await expect(manager.getIssue('owner', 'repo', 1)).rejects.toThrow()
     })
 })

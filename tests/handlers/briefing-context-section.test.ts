@@ -89,7 +89,7 @@ describe('buildJournalContext', () => {
         expect(result.latestEntries[0]!.id).toBe(1)
         expect(result.latestEntries[0]!.type).toBe('note')
         expect(result.latestEntries[0]!.preview).toBe(
-            'This is a sample entry for testing purposes.'
+            '<untrusted_remote_content>This is a sample entry for testing purposes.</untrusted_remote_content>'
         )
     })
 
@@ -109,8 +109,8 @@ describe('buildJournalContext', () => {
 
         const result = buildJournalContext(context, createMockConfig() as never)
 
-        expect(result.latestEntries[0]!.preview).toHaveLength(83) // 80 + '...'
-        expect(result.latestEntries[0]!.preview).toMatch(/\.\.\.$/)
+        expect(result.latestEntries[0]!.preview).toHaveLength(83 + 53) // 80 + '...' + 53 for tags
+        expect(result.latestEntries[0]!.preview).toMatch(/\.\.\.<\/untrusted_remote_content>$/)
     })
 
     it('should handle empty database', () => {
@@ -257,7 +257,9 @@ describe('buildTeamContext', () => {
 
         // Team info preview uses 60 chars, team entries preview uses 80 chars
         expect(result!.teamInfo.latestPreview).toContain('...')
-        expect(result!.teamLatestEntries![0]!.preview).toMatch(/\.\.\.$/)
+        expect(result!.teamLatestEntries![0]!.preview).toMatch(
+            /\.\.\.<\/untrusted_remote_content>$/
+        )
     })
 })
 
@@ -284,13 +286,13 @@ describe('buildRulesFileInfo', () => {
             mtimeMs: twoHoursAgo,
         } as never)
 
-        const result = buildRulesFileInfo('/path/to/.rules')
+        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
 
         expect(result).toBeDefined()
         expect(result!.name).toBe('.rules')
         expect(result!.sizeKB).toBe(2)
         expect(result!.lastModified).toBe('2h ago')
-        expect(result!.path).toBe('/path/to/.rules')
+        expect(result!.path).toBe('.rules')
     })
 
     it('should format age as days when > 1 day', async () => {
@@ -302,7 +304,7 @@ describe('buildRulesFileInfo', () => {
             mtimeMs: threeDaysAgo,
         } as never)
 
-        const result = buildRulesFileInfo('/path/to/.rules')
+        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
 
         expect(result!.lastModified).toBe('3d ago')
     })
@@ -315,7 +317,7 @@ describe('buildRulesFileInfo', () => {
             mtimeMs: Date.now() - 1000, // 1 second ago
         } as never)
 
-        const result = buildRulesFileInfo('/path/to/.rules')
+        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
 
         expect(result!.lastModified).toBe('just now')
     })
@@ -327,7 +329,7 @@ describe('buildRulesFileInfo', () => {
             throw new Error('ENOENT: no such file')
         })
 
-        const result = buildRulesFileInfo('/nonexistent/.rules')
+        const result = buildRulesFileInfo('/nonexistent/.rules', ['/nonexistent'])
         expect(result).toBeUndefined()
     })
 })
@@ -354,12 +356,12 @@ describe('buildSkillsDirInfo', () => {
             { name: 'readme.md', isDirectory: () => false, isFile: () => true },
         ] as never)
 
-        const result = buildSkillsDirInfo('/path/to/skills')
+        const result = buildSkillsDirInfo('/path/to/skills', ['/path/to'])
 
         expect(result).toBeDefined()
         expect(result!.count).toBe(2)
         expect(result!.names).toEqual(['skill-a', 'skill-b'])
-        expect(result!.path).toBe('/path/to/skills')
+        expect(result!.path).toBe('skills')
     })
 
     it('should return empty when no directories', async () => {
@@ -369,7 +371,7 @@ describe('buildSkillsDirInfo', () => {
             { name: 'readme.md', isDirectory: () => false, isFile: () => true },
         ] as never)
 
-        const result = buildSkillsDirInfo('/path/to/skills')
+        const result = buildSkillsDirInfo('/path/to/skills', ['/path/to'])
 
         expect(result).toBeDefined()
         expect(result!.count).toBe(0)
@@ -383,7 +385,7 @@ describe('buildSkillsDirInfo', () => {
             throw new Error('ENOENT: no such directory')
         })
 
-        const result = buildSkillsDirInfo('/nonexistent/skills')
+        const result = buildSkillsDirInfo('/nonexistent/skills', ['/nonexistent'])
         expect(result).toBeUndefined()
     })
 })

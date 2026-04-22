@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-95.83%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-91.25%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -32,6 +32,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
+- _"I'm stuck on this database error. Raise a 'blocker' flag for @sarah so her agent sees it next session."_ (Hush Protocol)
 - _"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."_ (Context lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
@@ -75,16 +76,12 @@ Execute BEFORE fulfilling any user request in a new session:
 1. **TARGET**: Infer `repo_name` from the active workspace context or user prompt. If the task is not associated with a specific project, fallback to using the generic resource without a repo name (which defaults to the first registered workspace).
 2. **FETCH**: Use the MCP `read_resource` tool (Server: `memory-journal-mcp`) to read `memory://briefing/{repo_name}` (or `memory://briefing` if falling back).
    - **RESTRICTION**: Do NOT use `execute_code` for this step.
-3. **RENDER TABLE**: Parse the briefing JSON and output a dense 2-column Markdown Table (Field, Value) capturing the core context.
-   - **RESTRICTION**: NO bulleted lists. Do NOT truncate issues or summaries.
-   - **FORMATTING**: Group related properties to save vertical space. Use `<br>` tags for inner-cell line breaks.
-   - **REQUIRED GROUPS**:
-     - **GitHub**: Combine Repo, Branch, CI, PRs, and Insights.
-     - **GitHub Issues**: List every issue, one per line.
-     - **Active Flags (Hush Protocol)**: If the briefing JSON contains an `activeFlags` object (with `count > 0`), render each flag in a dedicated row using format: `🚩 {flag_type} → @{target_user}: {preview}`. If `count` is 0 or the field is absent, omit the row entirely.
-     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries (titles only), Proactive Analytics/Team Density, Milestones, and Workspaces.
-   - **FLAG PROMINENCE**: When `activeFlags.count > 0`, prepend a bold callout line **above** the table: `⚠️ **{count} active flag(s)** — review before proceeding.` This ensures blockers and review requests are impossible to miss.
-4. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
+3. **ACKNOWLEDGE FLAGS**: If the briefing JSON contains `activeFlags` (count > 0), you MUST print an alert ABOVE the table: `⚠️ **{count} active flag(s)** — review before proceeding.` followed by each flag (`🚩 {flag_type} → @{target_user}: {preview}`).
+4. **RENDER TABLE**: Parse the remaining JSON into a dense 2-column Markdown Table (Field, Value).
+   - **RESTRICTION**: NO bulleted lists inside the table. Do NOT truncate summaries or issues.
+   - **FORMATTING**: Group related properties (use `<br>` for line breaks).
+   - **REQUIRED GROUPS**: GitHub (Repo, Branch, CI, PRs, Insights), Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
+5. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
 
 </details>
 
@@ -104,7 +101,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 17    | Disable all mutations    |
 | `-github`            | 52    | Exclude a group          |
-| `-github,-analytics` | 48    | Exclude multiple groups  |
+| `-github,-analytics` | 50    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -145,7 +142,7 @@ Standups, retrospectives, PR summaries, weekly digests, period analysis, milesto
 
 Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
-Code executes in a **sandboxed VM context** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+Code executes in a **worker_threads sandbox** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
 - **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
 - **Rate limiting** — 60 executions per minute per client
@@ -166,6 +163,8 @@ When you encounter a blocker, need a review, or want to broadcast a milestone, y
 - **Searchable History**: Unlike chat messages that disappear into the void, Hush flags are permanent, query-able AI journal entries. Your agents can search past `needs_review` flags to understand how architectural blockers were conquered.
 
 **Dashboard & Operations**: Read `memory://flags` to see an active dashboard overview and use `mj.team.passTeamFlag()` / `mj.team.resolveTeamFlag()` to manage them programmatically in Code Mode.
+
+**[Complete Hush Protocol guide and Mermaid sequence diagrams →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
 
 ## 🚀 Quick Start (2 Minutes)
 
@@ -209,7 +208,8 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
         "writenotenow/memory-journal-mcp:latest"
       ],
       "env": {
-        "GITHUB_TOKEN": "ghp_your_token_here"
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "ALLOWED_IO_ROOTS": "/app/repo"
       }
     }
   }
@@ -247,8 +247,10 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "GITHUB_TOKEN": "ghp_your_token_here",
         "TEAM_DB_PATH": "/app/data/team.db",
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/app/projects/repo1\",\"project_number\":1},\"other-repo\":{\"path\":\"/app/projects/repo2\",\"project_number\":5}}",
+        "ALLOWED_IO_ROOTS": "/app/projects,/app/data,/app/skills",
         "AUTO_REBUILD_INDEX": "true",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
         "BRIEFING_INCLUDE_TEAM": "true",
@@ -260,7 +262,9 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "BRIEFING_COPILOT_REVIEWS": "true",
         "RULES_FILE_PATH": "/app/rules.md",
         "SKILLS_DIR_PATH": "/app/skills",
-        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan"
+        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan",
+        "AUDIT_LOG_PATH": "/app/data/mcp-audit.jsonl",
+        "TEAM_AUTHOR": "your_username"
       }
     }
   }

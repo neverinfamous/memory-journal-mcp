@@ -8,9 +8,11 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { resolveAuthor } from '../../utils/security-utils.js'
+import { resolveAuthenticatedAuthor } from '../../utils/security-utils.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { resolveIssueUrl } from '../../utils/github-helpers.js'
+import { getAuthContext } from '../../auth/auth-context.js'
+import { hasScope, SCOPES } from '../../auth/scopes.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
 import {
@@ -34,7 +36,7 @@ import {
 const CreateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH),
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(z.string().max(100)).max(50).optional().default([]),
     is_personal: z.boolean().optional().default(true),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
     auto_context: z.boolean().optional().default(true),
@@ -55,7 +57,7 @@ const CreateEntrySchema = z.object({
 const CreateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional().default('personal_reflection'),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(z.string().max(100)).max(50).optional().default([]),
     is_personal: z.boolean().optional().default(true),
     significance_type: z.string().optional(),
     auto_context: z.boolean().optional().default(true),
@@ -127,6 +129,9 @@ const CreateEntryOutputSchema = z
         entry: EntryOutputSchema.optional(),
         sharedWithTeam: z.boolean().optional(),
         author: z.string().optional(),
+        teamError: z.string().optional(),
+        indexStatus: z.string().optional(),
+        enrichmentStatus: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -177,24 +182,19 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
-                    // Auto-populate issueUrl if issue_number provided without issueUrl
-                    const resolvedIssueUrl = await resolveIssueUrl(
-                        context,
-                        input.project_number,
-                        input.issue_number,
-                        input.issue_url
-                    )
+                    // The user's provided issueUrl (if any)
+                    const initialIssueUrl = input.issue_url
 
-                    const entry = db.createEntry({
+                    let entry = db.createEntry({
                         content: input.content,
                         entryType: input.entry_type,
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         significanceType: input.significance_type ?? null,
-                        projectNumber: input.project_number,
+                        projectNumber: input.project_number ?? context.config?.defaultProjectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
-                        issueUrl: resolvedIssueUrl,
+                        issueUrl: initialIssueUrl,
                         prNumber: input.pr_number,
                         prUrl: input.pr_url,
                         prStatus: input.pr_status,
@@ -203,15 +203,27 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: input.workflow_status,
                     })
 
-                    // Auto-index to vector store for semantic search (fire-and-forget)
-                    autoIndexEntry(vectorManager, entry.id, entry.content)
-
                     // Share with team if requested
                     let sharedWithTeam = false
                     let author: string | undefined
+                    let teamEntryId: number | undefined
+                    let teamError: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
-                            author = resolveAuthor()
+                            const authCtx = getAuthContext()
+                            const hasTeamScope = hasScope(
+                                authCtx?.claims?.scopes ?? [],
+                                SCOPES.TEAM
+                            )
+                            const envAuthor = process.env['TEAM_AUTHOR']?.trim()
+                            const codemodeBypass =
+                                context.config?.codemodeInternalFullAccess === true
+                            if (!hasTeamScope && !envAuthor && !codemodeBypass) {
+                                throw new Error(
+                                    'Insufficient scope: team scope is required to share entries with the team'
+                                )
+                            }
+                            author = resolveAuthenticatedAuthor()
                             const teamEntry = teamDb.createEntry({
                                 content: input.content,
                                 entryType: input.entry_type,
@@ -222,33 +234,74 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 projectNumber: input.project_number,
                                 projectOwner: input.project_owner,
                                 issueNumber: input.issue_number,
-                                issueUrl: resolvedIssueUrl,
+                                issueUrl: initialIssueUrl,
                                 prNumber: input.pr_number,
                                 prUrl: input.pr_url,
                                 prStatus: input.pr_status,
                                 workflowRunId: input.workflow_run_id,
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status,
+                                author,
                             })
-                            teamDb.executeRawQuery(
-                                'UPDATE memory_journal SET author = ? WHERE id = ?',
-                                [author, teamEntry.id]
-                            )
+                            teamEntryId = teamEntry.id
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {
-                            logger.debug('Failed to share entry with team DB', {
-                                module: 'TOOL',
-                                operation: 'create-entry',
-                                error,
-                            })
+                            logger.error(
+                                'Failed to share entry with team DB, retaining personal entry',
+                                {
+                                    module: 'TOOL',
+                                    operation: 'create-entry',
+                                    error: error instanceof Error ? error.message : String(error),
+                                }
+                            )
+                            teamError = error instanceof Error ? error.message : String(error)
                         }
                     }
+
+                    // Auto-populate issueUrl if issue_number provided without issueUrl
+                    let enrichmentStatus = 'complete'
+                    if (input.issue_number !== undefined && !input.issue_url) {
+                        try {
+                            const resolvedUrl = await resolveIssueUrl(
+                                context,
+                                input.project_number ?? context.config?.defaultProjectNumber,
+                                input.issue_number,
+                                input.issue_url
+                            )
+                            if (resolvedUrl) {
+                                const updatedEntry = db.updateEntry(entry.id, {
+                                    issueUrl: resolvedUrl,
+                                })
+                                if (updatedEntry) {
+                                    entry = updatedEntry
+                                }
+                                if (teamDb && teamEntryId !== undefined) {
+                                    teamDb.updateEntry(teamEntryId, { issueUrl: resolvedUrl })
+                                }
+                            } else {
+                                enrichmentStatus = 'failed'
+                            }
+                        } catch (err: unknown) {
+                            logger.error('Failed to resolve issue url synchronously', {
+                                error: String(err),
+                            })
+                            enrichmentStatus = 'failed: ' + String(err)
+                        }
+                    }
+
+                    // Auto-index to vector store for semantic search synchronously
+                    // to ensure index status is accurately reported to the client.
+                    // This is done after team DB share to prevent async embeddings from surviving a rollback.
+                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     return {
                         success: true,
                         entry,
+                        indexStatus,
+                        enrichmentStatus,
                         ...(sharedWithTeam ? { sharedWithTeam: true, author } : {}),
+                        ...(teamError ? { teamError } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -306,7 +359,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { limit, is_personal, sort_by } = GetRecentEntriesSchema.parse(params)
                     const entries = db.getRecentEntries(limit, is_personal, sort_by)
-                    return { success: true, entries, count: entries.length }
+                    return { success: true, entries, count: entries.length, degraded: false }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -320,15 +373,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
                     const entry = db.createEntry({ content })
 
-                    // Auto-index to vector store for semantic search (fire-and-forget)
-                    autoIndexEntry(vectorManager, entry.id, entry.content)
+                    // Auto-index to vector store for semantic search synchronously
+                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
 
-                    return { success: true, entry }
+                    return { success: true, entry, indexStatus }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

@@ -20,10 +20,14 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test.beforeAll(async () => {
         // Start a dedicated server WITHOUT TEAM_DB_PATH to test config error path
-        await startServer(NO_TEAM_PORT, [], 'payloads-team', {
-            env: { TEAM_DB_PATH: undefined },
+        await startServer(NO_TEAM_PORT, ['--auth-token', 'test-token'], 'payloads-team', {
+            env: {
+                TEAM_DB_PATH: undefined,
+                TEAM_AUTHOR: 'Alice',
+                MCP_AUTH_SCOPES: 'read,write,team',
+            },
         })
-        client = await createClient(NO_TEAM_PORT)
+        client = await createClient(NO_TEAM_PORT, 'test-token')
     })
 
     test.afterAll(async () => {
@@ -43,6 +47,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Core ---
     test('team_create_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_create_entry', {
+            project_number: 1,
             content: 'test',
             author: 'e2e',
         })
@@ -51,24 +56,30 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_get_entry_by_id → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_get_entry_by_id', {
+            project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)
     })
 
     test('team_get_recent → CONFIGURATION_ERROR', async () => {
-        const payload = await callToolAndParse(client, 'team_get_recent', {})
+        const payload = await callToolAndParse(client, 'team_get_recent', {
+            project_number: 1,
+        })
         expectConfigError(payload)
     })
 
     test('team_list_tags → CONFIGURATION_ERROR', async () => {
-        const payload = await callToolAndParse(client, 'team_list_tags', {})
+        const payload = await callToolAndParse(client, 'team_list_tags', {
+            project_number: 1,
+        })
         expectConfigError(payload)
     })
 
     // --- Search ---
     test('team_search → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_search', {
+            project_number: 1,
             query: 'test',
         })
         expectConfigError(payload)
@@ -76,6 +87,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_search_by_date_range → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_search_by_date_range', {
+            project_number: 1,
             start_date: '2020-01-01',
             end_date: '2030-12-31',
         })
@@ -85,6 +97,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Admin ---
     test('team_update_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_update_entry', {
+            project_number: 1,
             entry_id: 1,
             content: 'updated',
         })
@@ -93,6 +106,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_delete_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
+            project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)
@@ -128,6 +142,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_visualize_relationships → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_visualize_relationships', {
+            project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)
@@ -136,6 +151,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Export ---
     test('team_export_entries → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_export_entries', {
+            project_number: 1,
             format: 'json',
         })
         expectConfigError(payload)
@@ -143,18 +159,23 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     // --- Backup ---
     test('team_backup → CONFIGURATION_ERROR', async () => {
-        const payload = await callToolAndParse(client, 'team_backup', {})
+        const payload = await callToolAndParse(client, 'team_backup', {
+            project_number: 1,
+        })
         expectConfigError(payload)
     })
 
     test('team_list_backups → CONFIGURATION_ERROR', async () => {
-        const payload = await callToolAndParse(client, 'team_list_backups', {})
+        const payload = await callToolAndParse(client, 'team_list_backups', {
+            project_number: 1,
+        })
         expectConfigError(payload)
     })
 
     // --- Vector ---
     test('team_semantic_search → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_semantic_search', {
+            project_number: 1,
             query: 'test',
         })
         expectConfigError(payload)
@@ -175,8 +196,34 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_add_to_vector_index → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_add_to_vector_index', {
+            project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)
+    })
+
+    // --- Team resources (no TEAM_DB_PATH in test env) ---
+    test('should read memory://team/recent', async () => {
+        const response = await client.readResource({ uri: 'memory://team/recent' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = (response.contents[0] as { text: string }).text
+        const parsed = JSON.parse(text)
+        // Without team DB, should return a not-configured indicator
+        expect(typeof parsed).toBe('object')
+    })
+
+    test('should read memory://team/statistics', async () => {
+        const response = await client.readResource({ uri: 'memory://team/statistics' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = (response.contents[0] as { text: string }).text
+        const parsed = JSON.parse(text)
+        // Without team DB, should return a not-configured indicator
+        expect(typeof parsed).toBe('object')
     })
 })

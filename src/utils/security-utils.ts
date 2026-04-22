@@ -1,9 +1,6 @@
-import { execFileSync } from 'node:child_process'
+import { getAuthContext } from '../auth/auth-context.js'
 import { MemoryJournalMcpError } from '../types/errors.js'
 import { ErrorCategory } from '../types/error-types.js'
-
-/** Timeout for shelling out to git commands (ms) */
-const GIT_COMMAND_TIMEOUT_MS = 3000
 
 // ============================================================================
 // Typed Security Errors
@@ -118,21 +115,107 @@ export function assertNoPathTraversal(filename: string): void {
     }
 }
 
+import fs from 'node:fs'
+import path from 'node:path'
+
 /**
- * Validates that a directory path does not contain path traversal components.
+ * Validates that a directory path is strictly bounded within the active memory journal context.
  *
- * Unlike assertNoPathTraversal() (which rejects all separators for filenames),
- * this allows `/` and `\` but rejects `..` path components that could escape
- * the intended directory boundary.
+ * This enforces strict file-system isolation. The target path MUST reside within:
+ * 1. The current working directory (where the server was started)
+ * 2. OR any explicitly configured path inside the PROJECT_REGISTRY map.
  *
  * @param dirPath - The directory path to validate
- * @throws PathTraversalError if `..` components are detected
+ * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
-export function assertSafeDirectoryPath(dirPath: string): void {
+export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
+    // 1. Initial basic check for traversal strings
     const normalized = dirPath.replace(/\\/g, '/')
     const segments = normalized.split('/')
     if (segments.some((s) => s === '..')) {
         throw new PathTraversalError(dirPath)
+    }
+
+    const resolved = path.resolve(dirPath)
+
+    // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
+    // This prevents symlink traversal bypasses where the final node does not exist but a parent is a symlink pointing outside.
+    let currentDir = resolved
+    let existingRealPath = ''
+
+    while (currentDir !== path.parse(currentDir).root) {
+        try {
+            existingRealPath = fs.realpathSync(currentDir)
+            break
+        } catch {
+            currentDir = path.dirname(currentDir)
+        }
+    }
+
+    if (!existingRealPath) {
+        try {
+            existingRealPath = fs.realpathSync(currentDir) // root resolution
+        } catch {
+            existingRealPath = currentDir
+        }
+    }
+
+    // The target path is the successfully evaluated real path plus any non-existent trailing segments
+    const remainder = path.relative(currentDir, resolved)
+    const targetPath = remainder ? path.join(existingRealPath, remainder) : existingRealPath
+
+    // 3. Define safe boundaries
+    const rawRoots: string[] = providedRoots
+    if (rawRoots.length === 0) {
+        throw new PathTraversalError(
+            'No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.'
+        )
+    }
+    const allowedRoots: string[] = []
+
+    for (const root of rawRoots) {
+        try {
+            allowedRoots.push(fs.realpathSync(path.resolve(root)))
+        } catch {
+            allowedRoots.push(path.resolve(root))
+        }
+    }
+
+    // 4. Verify the targetPath is structurally inside at least one allowed root
+    const isAllowed = allowedRoots.some((root) => {
+        const rel = path.relative(root, targetPath)
+        // If relative path is '..' or starts with '../' (or '..\'), it escapes the root
+        return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
+    })
+
+    if (!isAllowed) {
+        throw new PathTraversalError(
+            `Directory path escapes allowed sandbox boundaries: ${dirPath}`
+        )
+    }
+}
+
+/**
+ * Validates that a file path is strictly bounded and refuses symlinks to prevent
+ * any file-level traversal tricks.
+ */
+export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
+    // First ensure the logical path is within boundaries
+    assertSafeDirectoryPath(path.dirname(filePath), providedRoots)
+
+    // Second, if the file exists, ensure it is not a symlink that could trick the system
+    try {
+        const stats = fs.lstatSync(filePath)
+        if (stats.isSymbolicLink()) {
+            throw new PathTraversalError(
+                `Symlinks are strictly forbidden for file operations: ${filePath}`
+            )
+        }
+    } catch (err: unknown) {
+        // If file doesn't exist, that's fine, but if it's our error, throw it
+        if (err instanceof PathTraversalError) {
+            throw err
+        }
     }
 }
 
@@ -146,12 +229,19 @@ export function assertSafeDirectoryPath(dirPath: string): void {
  */
 const TOKEN_PATTERNS = [
     // GitHub personal access tokens (classic and fine-grained)
-    /ghp_[A-Za-z0-9_]{36,}/g,
+    /gh[pousr]_[A-Za-z0-9_]{36,}/g,
     /github_pat_[A-Za-z0-9_]{82,}/g,
-    // Authorization headers in error dumps
-    /Authorization:\s*(?:token|Bearer)\s+\S+/gi,
-    // Generic Bearer tokens
-    /Bearer\s+[A-Za-z0-9._\-~+/]+=*/gi,
+    // JWT Tokens
+    /eyJ[a-zA-Z0-9_-]{2,}\.eyJ[a-zA-Z0-9_-]{2,}\.[a-zA-Z0-9_-]{2,}/g,
+    // Slack tokens
+    /xox[baprs]-[A-Za-z0-9-]+/g,
+    // AWS API Keys
+    /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
+    // Authorization headers in error dumps (catch-all for token, Bearer, Basic)
+    /Authorization:(?:\s+(?:token|Bearer|Basic))?\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
+    // Generic token patterns standalone
+    /Bearer\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
+    /Basic\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
 ] as const
 
 /**
@@ -169,6 +259,44 @@ export function sanitizeErrorForLogging(message: string): string {
         sanitized = sanitized.replace(pattern, '[REDACTED]')
     }
     return sanitized
+}
+
+// ============================================================================
+// Untrusted Content Boundaries
+// ============================================================================
+
+/**
+ * Marks free-text content as untrusted remote origin for LLM instruction consumption.
+ * Defends against prompt-injection by surrounding external inputs with tags.
+ *
+ * Will not insert nested tags if the content is already marked.
+ */
+export function markUntrustedContent(content: string | undefined | null): string {
+    if (!content) return ''
+    let trimmed = content.trim()
+    if (!trimmed) return ''
+
+    // Strip any existing tags to prevent breakout/nesting
+    trimmed = trimmed.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
+    // Escape HTML entities to prevent prompt injection
+    trimmed = trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    return `<untrusted_remote_content>\n${trimmed}\n</untrusted_remote_content>`
+}
+
+/**
+ * Utility for formatting remote content natively for inline single-line contexts.
+ */
+export function markUntrustedContentInline(content: string | undefined | null): string {
+    if (!content) return ''
+    let cleaned = content
+
+    // Strip existing wrappers to normalize for inline layout
+    cleaned = cleaned.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
+    // Escape HTML entities to prevent prompt injection
+    cleaned = cleaned.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    return `<untrusted_remote_content>${cleaned}</untrusted_remote_content>`
 }
 
 // ============================================================================
@@ -193,24 +321,45 @@ export function sanitizeAuthor(raw: string): string {
 // ============================================================================
 
 /**
+ * Resolve the author name strictly from the authenticated context.
+ * Prioritizes authenticated claims over TEAM_AUTHOR environment variables.
+ * Uses sanitizeAuthor() to strip control characters and cap length.
+ */
+export function resolveAuthenticatedAuthor(): string {
+    const authCtx = getAuthContext()
+    if (authCtx?.authenticated && authCtx.claims) {
+        const claims = authCtx.claims
+        const email = typeof claims['email'] === 'string' ? claims['email'] : undefined
+        const prefName =
+            typeof claims['preferred_username'] === 'string'
+                ? claims['preferred_username']
+                : undefined
+        const subject = typeof claims['subject'] === 'string' ? claims['subject'] : undefined
+
+        const claimAuthor = email ?? prefName ?? claims.sub ?? subject
+        if (claimAuthor) {
+            return sanitizeAuthor(claimAuthor)
+        }
+    }
+
+    return resolveAuthor()
+}
+
+/**
  * Resolve the author name for team-shared entries.
- * Priority: TEAM_AUTHOR env → git config user.name → 'unknown'
- *
+ * Priority: TEAM_AUTHOR env → req.auth.sub → 'unknown'.
  * Uses sanitizeAuthor() to strip control characters and cap length.
  */
 export function resolveAuthor(): string {
     const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return sanitizeAuthor(envAuthor)
-    try {
-        const gitUser = execFileSync('git', ['config', 'user.name'], {
-            encoding: 'utf-8',
-            timeout: GIT_COMMAND_TIMEOUT_MS,
-        })
-            .trim()
-            .replace(/"/g, '')
-        if (gitUser) return sanitizeAuthor(gitUser)
-    } catch {
-        // Git not available
+    if (envAuthor) {
+        return sanitizeAuthor(envAuthor)
     }
+
+    const authCtx = getAuthContext()
+    if (authCtx?.claims?.sub) {
+        return sanitizeAuthor(authCtx.claims.sub)
+    }
+
     return 'unknown'
 }

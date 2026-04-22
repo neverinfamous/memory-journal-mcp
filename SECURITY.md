@@ -35,14 +35,17 @@ are safely handled by the database layer and do not pose injection risks.
 
 ### **SQL Injection Prevention**
 
+- ✅ **No Raw SQL Execution** — All raw SQL methods (`_executeRawQueryUnsafe`) have been removed. All handlers must use strict, parameterized methods defined by `IDatabaseAdapter`.
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** via Zod schemas before database operations
 - ✅ **Warning system** for potentially dangerous content patterns
 - ✅ **FTS5 / LIKE pattern sanitization** (escapes `%`, `_`, `\` wildcards and handles FTS5 syntax errors gracefully)
 - ✅ **Date format whitelisting** (prevents strftime injection)
 
-### **Path Traversal Protection**
+### **Path Traversal & Filesystem Boundaries**
 
+- ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
+- ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
 - ✅ **Backup filenames validated** - rejects `/`, `\`, `..` in paths
 - ✅ **Typed security errors** with consistent error codes
 
@@ -54,8 +57,8 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 - ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `MCP_CORS_ORIGIN` environment variable
 - ✅ **Exact-match verification** (no wildcard matching for custom domains)
-- ⚠️ **Default: `*`** (allow all origins) for backward compatibility
-- 🔒 **Recommended**: Set specific origins for production deployments
+- 🔒 **Default: None** (no external origins allowed by default). You MUST explicitly configure CORS for browsers.
+- 🔒 **Required**: Set specific origins for production deployments, or wildcard (`*`) will only be accepted if HTTP Authentication is enabled.
 
 ```bash
 # Restrict CORS to specific origins
@@ -68,7 +71,7 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Security Headers & Protections**
 
 - ✅ **DNS Rebinding Protection** — `hostHeaderValidation` middleware prevents CVE-2025-66414
-- ✅ **Strict-Transport-Security (HSTS)** — max-age=31536000; includeSubDomains (opt-in via `--enable-hsts`)
+- ✅ **Strict-Transport-Security (HSTS)** — max-age=31536000; includeSubDomains (opt-in via `--enable-hsts`). Note: Only effective when deployed behind a reverse proxy handling HTTPS.
 - ✅ **X-Content-Type-Options: nosniff** — prevents MIME sniffing
 - ✅ **X-Frame-Options: DENY** — prevents clickjacking
 - ✅ **Content-Security-Policy: default-src 'none'; frame-ancestors 'none'** — prevents XSS and framing
@@ -104,6 +107,12 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Environment Variables**
 
 ```bash
+# Required for Authentication (Must not be the placeholder token)
+MCP_AUTH_TOKEN="your-secure-token-here"
+
+# Required for Filesystem Tools (Export, Backup)
+ALLOWED_IO_ROOTS="/path/to/allow1,/path/to/allow2"
+
 # Required for GitHub features
 GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
@@ -111,7 +120,7 @@ GITHUB_TOKEN=ghp_...            # GitHub personal access token
 GITHUB_ORG_TOKEN=ghp_...        # For organization projects
 PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
-MCP_CORS_ORIGIN=*               # CORS origin (default: *)
+MCP_CORS_ORIGIN=                 # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host
 AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 ```
@@ -147,12 +156,12 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 
 ## 🔍 **Data Privacy**
 
-### **Local-First Architecture**
+### **Architecture Characteristics**
 
-- ✅ **No external services**: All processing happens locally
-- ✅ **No telemetry**: No data sent to external servers
 - ✅ **Full data ownership**: SQLite database stays on your machine
-- ✅ **Semantic search**: ML model runs locally via `@huggingface/transformers`
+- ✅ **No telemetry**: No data sent to external telemetry endpoints
+- ⚠️ **External Services**: If configured, communicates with GitHub API and fetches OAuth discovery (JWKS) endpoints.
+- ⚠️ **Semantic search**: ML models are executed locally via `@huggingface/transformers`, but the model weights are downloaded from the Hugging Face registry on first run if not cached locally.
 
 ### **Context Security**
 
@@ -164,7 +173,7 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 
 - ✅ **CodeQL analysis** - automated static analysis on push/PR
 - ✅ **Trivy container scanning** - Docker image vulnerability detection
-- ✅ **TruffleHog + Gitleaks** - secret scanning on push/PR
+- ✅ **TruffleHog** - secret scanning on push/PR
 - ✅ **npm audit** - dependency vulnerability checking
 - ✅ **Dependabot** - automated dependency update PRs
 
@@ -193,6 +202,8 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 - [x] Parameterized SQL queries
 - [x] SQL injection detection heuristics (defense-in-depth)
 - [x] Path traversal protection (`assertNoPathTraversal`)
+- [x] Explicit Filesystem Boundaries (`ALLOWED_IO_ROOTS` enforcement)
+- [x] Strict Authentication Tokens (Placeholder rejection)
 - [x] FTS5 / LIKE pattern sanitization (`sanitizeSearchQuery`)
 - [x] Date format whitelisting (`validateDateFormatPattern`)
 - [x] HTTP body size limit (1MB)

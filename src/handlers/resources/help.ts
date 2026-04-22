@@ -336,7 +336,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             group: inferGroupFromName(t.name),
             inputSchema: t.inputSchema,
             outputSchema: t.outputSchema,
-            annotations: t.annotations as MinimalToolDef['annotations'],
+            annotations: t.annotations,
         }))
     } catch (e: unknown) {
         logger.error('HELP_LOAD_TOOLS_FAILED', {
@@ -348,8 +348,8 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
 
 /**
  * Infer tool group from the tool name.
- * Exhaustive map of all 61 tools — team_ and mj_ prefixes handled first,
- * then explicit lookup for the remaining 41 tools.
+ * Exhaustive map of all 70 tools — team_ and mj_ prefixes handled first,
+ * then explicit lookup for the remaining 44 tools.
  */
 function inferGroupFromName(name: string): string {
     if (name.startsWith('team_')) return 'team'

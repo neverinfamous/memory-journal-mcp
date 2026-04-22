@@ -1,6 +1,6 @@
 # Memory Journal MCP Server - TypeScript Version
 # Multi-stage build for optimized production image
-FROM node:24.14.1-alpine AS builder
+FROM node:24.15.0-alpine AS builder
 
 WORKDIR /app
 
@@ -10,34 +10,9 @@ RUN apk add --no-cache python3 make g++ && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 && \
     apk upgrade --no-cache
 
-# Upgrade npm globally to get fixed versions of bundled packages
+# Upgrade npm globally to a pinned version to ensure reproducible builds
 # Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
-RUN npm install -g npm@latest --force && npm cache clean --force
-
-# Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff to 8.0.4
-# npm hasn't released a version with diff@8.0.4 yet, so we patch it directly
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack diff@9.0.0 && \
-    rm -rf node_modules/diff && \
-    tar -xzf diff-9.0.0.tgz && \
-    mv package node_modules/diff && \
-    rm diff-9.0.0.tgz
-
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.13
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.13 && \
-    rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.13.tgz && \
-    mv package node_modules/tar && \
-    rm tar-7.5.13.tgz
-
-# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.5
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack minimatch@10.2.5 && \
-    rm -rf node_modules/minimatch && \
-    tar -xzf minimatch-10.2.5.tgz && \
-    mv package node_modules/minimatch && \
-    rm minimatch-10.2.5.tgz
+RUN npm install -g npm@10.9.2 && npm cache clean --force
 
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
@@ -74,7 +49,7 @@ RUN rm -rf /app/prod_modules/node_modules/onnxruntime-web \
            /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/win32
 
 # Production stage
-FROM node:24.14.1-alpine
+FROM node:24.15.0-alpine
 
 WORKDIR /app
 
@@ -83,7 +58,7 @@ WORKDIR /app
 # Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
 RUN apk add --no-cache git ca-certificates && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib libcrypto3 libssl3 && \
+    apk add --no-cache curl libexpat zlib libcrypto3 libssl3 && \
     apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
@@ -116,7 +91,7 @@ USER appuser
 #     timeout: 10s
 #     retries: 3
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "process.exit(0)" || exit 1
+    CMD sh -c 'if ps | grep "[n]ode.*http" > /dev/null; then curl -f http://localhost:3000/health || exit 1; else node -e "process.exit(0)" || exit 1; fi'
 
 # Run the MCP server
 ENTRYPOINT ["node", "dist/cli.js"]

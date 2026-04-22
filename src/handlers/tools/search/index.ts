@@ -24,8 +24,7 @@ import {
     MAX_QUERY_LIMIT,
 } from '../schemas.js'
 import { calcPerDbLimit, mergeAndDedup, passMetadataFilters } from './helpers.js'
-import type { ISearchFilters } from './helpers.js'
-import { resolveSearchMode, type SearchMode } from './auto.js'
+import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager.js'
@@ -36,7 +35,7 @@ import type { SemanticSearchResult } from '../../../vector/vector-search-manager
 
 /** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     mode: z
         .enum(['auto', 'fts', 'semantic', 'hybrid'])
         .optional()
@@ -60,11 +59,16 @@ const SearchEntriesSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const SearchEntriesSchemaMcp = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     mode: z
         .string()
         .optional()
@@ -88,6 +92,11 @@ const SearchEntriesSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -107,6 +116,11 @@ const SearchByDateRangeSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -126,11 +140,16 @@ const SearchByDateRangeSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
 const SemanticSearchSchema = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     entry_id: z
         .number()
         .optional()
@@ -157,11 +176,16 @@ const SemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const SemanticSearchSchemaMcp = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     entry_id: relaxedNumber()
         .optional()
         .describe(
@@ -179,6 +203,11 @@ const SemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 // ============================================================================
@@ -232,7 +261,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = SearchEntriesSchema.parse(params)
                     const query = input.query?.trim() || ''
-                    const mode = input.mode as SearchMode
+                    const mode = input.mode
 
                     // Validate: at least one filter or query must be provided to prevent bare searches
                     const hasFilters =
@@ -260,6 +289,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             ),
                             entries: [],
                             count: 0,
+                            degraded: false,
                         }
                     }
 
@@ -281,6 +311,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         startDate: input.start_date,
                         endDate: input.end_date,
                         sortBy: input.sort_by,
+                        includeTeam: input.include_team,
                     }
 
                     // Route to the appropriate search strategy
@@ -302,27 +333,31 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             )
                             const entryIds = semanticResults.map((r) => r.entryId)
                             const entriesMap = db.getEntriesByIds(entryIds)
+
+                            // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+                            if (input.tags && input.tags.length > 0) {
+                                const tagsMap = db.getTagsForEntries(entryIds)
+                                for (const entry of entriesMap.values()) {
+                                    entry.tags = tagsMap.get(entry.id) ?? []
+                                }
+                            }
+
                             let entries = semanticResults
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
                                     if (!entry) return null
-                                    if (
-                                        !passMetadataFilters(
-                                            entry,
-                                            searchOptions as ISearchFilters,
-                                            db
-                                        )
-                                    )
-                                        return null
+                                    if (!passMetadataFilters(entry, searchOptions, db)) return null
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
+                                const ids = entries.map((e) => e.id)
+                                const importanceMap = db.getEntriesByIdsWithImportance(ids)
                                 const scored = entries.map((e) => {
-                                    const { score } = db.calculateImportance(e.id)
-                                    return { ...e, importanceScore: Math.round(score * 100) / 100 }
+                                    const imp = importanceMap.get(e.id)?.importance.score ?? 0
+                                    return { ...e, importanceScore: Math.round(imp * 100) / 100 }
                                 })
                                 scored.sort(
                                     (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
@@ -337,6 +372,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
+                                degraded: false,
                             }
                         }
                         case 'hybrid': {
@@ -345,7 +381,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
                                 return { ...result, searchMode: 'fts (fallback)' }
                             }
-                            const { entries } = await hybridSearch(
+                            const { entries, degraded } = await hybridSearch(
                                 query,
                                 db,
                                 vectorManager,
@@ -354,10 +390,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
+                                const ids = entries.map((e) => e['id'] as number)
+                                const importanceMap = db.getEntriesByIdsWithImportance(ids)
                                 const scored = entries.map((e) => {
                                     const entryId = e['id'] as number
-                                    const { score } = db.calculateImportance(entryId)
-                                    return { ...e, importanceScore: Math.round(score * 100) / 100 }
+                                    const imp = importanceMap.get(entryId)?.importance.score ?? 0
+                                    return { ...e, importanceScore: Math.round(imp * 100) / 100 }
                                 })
                                 scored.sort(
                                     (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
@@ -367,6 +405,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     entries: scored,
                                     count: scored.length,
                                     searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
+                                    degraded: degraded === true,
                                 }
                             }
 
@@ -375,6 +414,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
+                                degraded: degraded === true,
                             }
                         }
                         case 'fts':
@@ -384,6 +424,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 ...result,
                                 success: true,
                                 searchMode: isAuto ? 'fts (auto)' : 'fts',
+                                degraded: result.degraded ?? false,
                             }
                         }
                     }
@@ -431,7 +472,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     // Cross-database merge when team DB is available
                     // Skip team DB when is_personal is explicitly true (team entries are never personal)
-                    if (teamDb && input.is_personal !== true) {
+                    if (teamDb && input.include_team && input.is_personal !== true) {
                         const teamEntries = teamDb.searchByDateRange(
                             input.start_date,
                             input.end_date,
@@ -452,13 +493,19 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             input.limit,
                             input.sort_by
                         )
-                        return { success: true, entries: merged, count: merged.length }
+                        return {
+                            success: true,
+                            entries: merged,
+                            count: merged.length,
+                            degraded: false,
+                        }
                     }
 
                     return {
                         success: true,
                         entries: personalEntries,
                         count: personalEntries.length,
+                        degraded: false,
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -540,20 +587,29 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     const entryIds = results.map((r) => r.entryId)
                     const entriesMap = db.getEntriesByIds(entryIds)
 
+                    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+                    const filterOptions = {
+                        isPersonal: input.is_personal,
+                        tags: input.tags,
+                        entryType: input.entry_type,
+                        startDate: input.start_date,
+                        endDate: input.end_date,
+                        includeTeam: input.include_team,
+                    }
+
+                    if (input.tags && input.tags.length > 0) {
+                        const tagsMap = db.getTagsForEntries(entryIds)
+                        for (const entry of entriesMap.values()) {
+                            entry.tags = tagsMap.get(entry.id) ?? []
+                        }
+                    }
+
                     const entries = results
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
 
-                            const filterOptions = {
-                                isPersonal: input.is_personal,
-                                tags: input.tags,
-                                entryType: input.entry_type,
-                                startDate: input.start_date,
-                                endDate: input.end_date,
-                            }
-                            if (!passMetadataFilters(entry, filterOptions as ISearchFilters, db))
-                                return null
+                            if (!passMetadataFilters(entry, filterOptions, db)) return null
 
                             // Exclude the source entry from find-related results
                             if (input.entry_id !== undefined && entry.id === input.entry_id)

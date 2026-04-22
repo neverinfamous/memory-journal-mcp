@@ -206,7 +206,12 @@ describe('TOOL_GROUP_SCOPES', () => {
 
     it('should map write groups to write', () => {
         expect(TOOL_GROUP_SCOPES['github']).toBe(SCOPES.WRITE)
-        expect(TOOL_GROUP_SCOPES['team']).toBe(SCOPES.WRITE)
+    })
+
+    // SEC-1.3: Team tools require dedicated `team` scope, not generic `write`.
+    // Tokens with admin/full still have access via hasScope() hierarchy.
+    it('should map team group to team scope', () => {
+        expect(TOOL_GROUP_SCOPES['team']).toBe(SCOPES.TEAM)
     })
 
     it('should map admin groups to admin', () => {
@@ -239,7 +244,9 @@ describe('scope group arrays', () => {
     it('WRITE_SCOPE_GROUPS should contain read + write groups', () => {
         expect(WRITE_SCOPE_GROUPS).toContain('core')
         expect(WRITE_SCOPE_GROUPS).toContain('github')
-        expect(WRITE_SCOPE_GROUPS).toContain('team')
+        // SEC-1.3: `team` is now SCOPES.TEAM, not SCOPES.WRITE.
+        // Team group is in the team-scope tier (accessible to team/admin/full tokens only).
+        expect(WRITE_SCOPE_GROUPS).not.toContain('team')
         expect(WRITE_SCOPE_GROUPS).not.toContain('admin')
     })
 

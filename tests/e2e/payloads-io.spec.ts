@@ -15,7 +15,7 @@ test.describe.configure({ mode: 'serial' })
 
 test.describe('Payload Contracts: IO', () => {
     let client: Client
-    const testExportDir = './test-exports'
+    const testExportDir = './.test-output/e2e/test-exports'
 
     test.beforeAll(async () => {
         client = await createClient()

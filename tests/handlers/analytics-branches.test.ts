@@ -35,7 +35,7 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
             },
             causalMetrics: { blocked_by: 1, resolved: 2, caused: 3 },
         }),
-        executeRawQuery: vi.fn(),
+        _executeRawQueryUnsafe: vi.fn(),
         ...overrides,
     }
 }
@@ -98,7 +98,9 @@ describe('analytics tools — branch coverage', () => {
     describe('get_cross_project_insights', () => {
         it('should return empty result when no projects match', () => {
             const db = createMockDb({
-                executeRawQuery: vi.fn().mockReturnValue([{ columns: [], values: [] }]),
+                getCrossProjectInsights: vi
+                    .fn()
+                    .mockReturnValue({ projects: [], inactiveProjects: [] }),
             })
             const handler = getInsightsHandler(db)
 
@@ -109,58 +111,50 @@ describe('analytics tools — branch coverage', () => {
 
         it('should filter by start_date and end_date', () => {
             const db = createMockDb({
-                executeRawQuery: vi.fn().mockReturnValue([{ columns: [], values: [] }]),
+                getCrossProjectInsights: vi
+                    .fn()
+                    .mockReturnValue({ projects: [], inactiveProjects: [] }),
             })
             const handler = getInsightsHandler(db)
 
             handler({ start_date: '2025-01-01', end_date: '2025-03-31' })
 
             // First call should include both date params
-            const firstCall = db.executeRawQuery.mock.calls[0] as [string, unknown[]]
-            expect(firstCall[0]).toContain('DATE(timestamp) >= DATE(?)')
-            expect(firstCall[0]).toContain('DATE(timestamp) <= DATE(?)')
-            expect(firstCall[1]).toContain('2025-01-01')
-            expect(firstCall[1]).toContain('2025-03-31')
+            const mockFn = db.getCrossProjectInsights as ReturnType<typeof vi.fn>
+            expect(mockFn).toHaveBeenCalledWith({
+                startDate: '2025-01-01',
+                endDate: '2025-03-31',
+                minEntries: 3,
+                inactiveThresholdDays: expect.any(Number),
+            })
         })
 
         it('should compute project data with tags and distribution', () => {
             const db = createMockDb({
-                executeRawQuery: vi
-                    .fn()
-                    // 1st call: project stats
-                    .mockReturnValueOnce([
+                getCrossProjectInsights: vi.fn().mockReturnValue({
+                    projects: [
                         {
-                            columns: [
-                                'project_number',
-                                'entry_count',
-                                'first_entry',
-                                'last_entry',
-                                'active_days',
-                            ],
-                            values: [
-                                [1, 10, '2025-01-01', '2025-01-10', 5],
-                                [2, 5, '2025-01-05', '2025-01-08', 3],
+                            project_number: 1,
+                            entry_count: 10,
+                            first_entry: '2025-01-01',
+                            last_entry: '2025-01-10',
+                            active_days: 5,
+                            top_tags: [
+                                { name: 'bug', count: 8 },
+                                { name: 'feature', count: 4 },
                             ],
                         },
-                    ])
-                    // 2nd call: tags per project
-                    .mockReturnValueOnce([
                         {
-                            columns: ['project_number', 'name', 'count'],
-                            values: [
-                                [1, 'bug', 8],
-                                [1, 'feature', 4],
-                                [2, 'docs', 3],
-                            ],
+                            project_number: 2,
+                            entry_count: 5,
+                            first_entry: '2025-01-05',
+                            last_entry: '2025-01-08',
+                            active_days: 3,
+                            top_tags: [{ name: 'docs', count: 3 }],
                         },
-                    ])
-                    // 3rd call: inactive projects
-                    .mockReturnValueOnce([
-                        {
-                            columns: ['project_number', 'last_entry_date'],
-                            values: [[2, '2025-01-08']],
-                        },
-                    ]),
+                    ],
+                    inactiveProjects: [{ project_number: 2, last_entry_date: '2025-01-08' }],
+                }),
             })
             const handler = getInsightsHandler(db)
 
@@ -182,24 +176,19 @@ describe('analytics tools — branch coverage', () => {
 
         it('should handle missing tag results gracefully', () => {
             const db = createMockDb({
-                executeRawQuery: vi
-                    .fn()
-                    .mockReturnValueOnce([
+                getCrossProjectInsights: vi.fn().mockReturnValue({
+                    projects: [
                         {
-                            columns: [
-                                'project_number',
-                                'entry_count',
-                                'first_entry',
-                                'last_entry',
-                                'active_days',
-                            ],
-                            values: [[1, 10, '2025-01-01', '2025-01-10', 5]],
+                            project_number: 1,
+                            entry_count: 10,
+                            first_entry: '2025-01-01',
+                            last_entry: '2025-01-10',
+                            active_days: 5,
+                            top_tags: [],
                         },
-                    ])
-                    // Tags: no results
-                    .mockReturnValueOnce([])
-                    // Inactive: no results
-                    .mockReturnValueOnce([]),
+                    ],
+                    inactiveProjects: [],
+                }),
             })
             const handler = getInsightsHandler(db)
 

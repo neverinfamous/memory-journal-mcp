@@ -4,8 +4,28 @@ import * as fs from 'node:fs/promises'
 
 vi.mock('node:fs/promises', () => ({
     readdir: vi.fn(),
+    opendir: vi.fn(),
     readFile: vi.fn(),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 100 }),
+    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
+    realpath: vi.fn(),
+    open: vi.fn().mockImplementation(async (path) => {
+        const fsPromises = await import('node:fs/promises')
+        return {
+            stat: vi.fn().mockResolvedValue({ size: 100 }),
+            readFile: () => fsPromises.readFile(path),
+            close: vi.fn(),
+        }
+    }),
 }))
+
+vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../src/utils/security-utils.js')>()
+    return {
+        ...actual,
+        assertSafeDirectoryPath: vi.fn(),
+    }
+})
 
 describe('importMarkdownEntries', () => {
     const mockDb = {
@@ -14,32 +34,41 @@ describe('importMarkdownEntries', () => {
         updateEntry: vi.fn(),
         getOrCreateTag: vi.fn(),
         linkEntries: vi.fn(),
+        executeInTransaction: vi.fn((cb) => cb()),
     }
 
     const mockVectorManager = {
-        addEntry: vi.fn().mockResolvedValue(undefined),
+        addEntry: vi.fn().mockResolvedValue({ success: true }),
     }
 
     beforeEach(() => {
         vi.clearAllMocks()
-        vi.mocked(fs.readdir).mockResolvedValue(['1-test.md', 'ignore-dir', 'ignore.txt'] as any)
+        vi.mocked(fs.opendir).mockResolvedValue([
+            { isFile: () => true, name: '1-test.md' },
+            { isFile: () => false, name: 'ignore-dir' },
+            { isFile: () => true, name: 'ignore.txt' },
+        ] as any)
 
         mockDb.createEntry.mockReturnValue({ id: 99 })
     })
 
     it('should process .md files and create new entry when no mj_id is present', async () => {
         const fileContent = `---
-tags:
-  - test
+{
+  "tags": [
+    "test"
+  ]
+}
 ---
 New content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
         const result = await importMarkdownEntries(
-            '/tmp/import',
+            './import',
             mockDb as any,
             {},
-            mockVectorManager as any
+            mockVectorManager as any,
+            [process.cwd()]
         )
 
         expect(result.success).toBe(true)
@@ -56,8 +85,10 @@ New content`
 
     it('should update existing entry when mj_id is present and found in db', async () => {
         const fileContent = `---
-mj_id: 42
-entry_type: project_decision
+{
+  "mj_id": 42,
+  "entry_type": "project_decision"
+}
 ---
 Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -65,7 +96,9 @@ Updated decision content`
         // Mock finding the entry
         mockDb.getEntryById.mockReturnValue({ id: 42 })
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.updated).toBe(1)
@@ -82,7 +115,9 @@ Updated decision content`
 
     it('should create new entry matching mj_id when mj_id is present but NOT found in db', async () => {
         const fileContent = `---
-mj_id: 100
+{
+  "mj_id": 100
+}
 ---
 Restored entry`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -90,7 +125,9 @@ Restored entry`
         // Mock NOT finding the entry
         mockDb.getEntryById.mockReturnValue(null)
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         // From importer perspective, if it brings its own ID but it's new, it counts as creation
@@ -107,13 +144,21 @@ Restored entry`
 
     it('should respect dry_run mode entirely', async () => {
         const fileContent = `---
-mj_id: 42
+{
+  "mj_id": 42
+}
 ---
 Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
         mockDb.getEntryById.mockReturnValue({ id: 42 })
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any, { dry_run: true })
+        const result = await importMarkdownEntries(
+            './import',
+            mockDb as any,
+            { dry_run: true },
+            undefined,
+            [process.cwd()]
+        )
 
         expect(result.success).toBe(true)
         expect(result.dry_run).toBe(true)
@@ -129,9 +174,14 @@ Updated decision content`
 
     it('should gracefully handle relationships linking missing targets without crashing', async () => {
         const fileContent = `---
-relationships:
-  - type: references
-    target_id: 999
+{
+  "relationships": [
+    {
+      "type": "references",
+      "target_id": 999
+    }
+  ]
+}
 ---
 Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -139,7 +189,9 @@ Content`
         // Mock the target missing
         mockDb.getEntryById.mockImplementation((id) => (id === 999 ? null : undefined))
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.errors).toEqual([]) // It shouldn't be a hard error, just skipped quietly in importer mapping
@@ -149,29 +201,43 @@ Content`
 
     it('should skip entries with empty body', async () => {
         const fileContent = `---
-tags:
-  - test
+{
+  "tags": [
+    "test"
+  ]
+}
 ---
   \n  `
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
         expect(result.skipped).toBe(1)
         expect(result.created).toBe(0)
     })
 
     it('should handle dry_run where mj_id is present but not found, and no mj_id', async () => {
         // We'll return 2 files, one with mj_id (not found), one without mj_id
-        vi.mocked(fs.readdir).mockResolvedValue(['1-test.md', '2-test.md'] as any)
+        vi.mocked(fs.opendir).mockResolvedValue([
+            { isFile: () => true, name: '1-test.md' },
+            { isFile: () => true, name: '2-test.md' },
+        ] as any)
         vi.mocked(fs.readFile).mockImplementation(async (path: any) => {
             if (path.toString().includes('1-test.md')) {
-                return `---\nmj_id: 100\n---\nContent1`
+                return `---\n{\n  "mj_id": 100\n}\n---\nContent1`
             }
             return `Content2`
         })
         mockDb.getEntryById.mockReturnValue(null) // mj_id 100 not found
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any, { dry_run: true })
+        const result = await importMarkdownEntries(
+            './import',
+            mockDb as any,
+            { dry_run: true },
+            undefined,
+            [process.cwd()]
+        )
         expect(result.dry_run).toBe(true)
         expect(result.created).toBe(2) // Both should count as created
         expect(result.updated).toBe(0)
@@ -179,9 +245,14 @@ tags:
 
     it('should link valid relationships successfully', async () => {
         const fileContent = `---
-relationships:
-  - type: references
-    target_id: 999
+{
+  "relationships": [
+    {
+      "type": "references",
+      "target_id": 999
+    }
+  ]
+}
 ---
 Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -189,28 +260,32 @@ Content`
         // Target exists
         mockDb.getEntryById.mockImplementation((id) => (id === 999 ? { id: 999 } : undefined))
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references')
     })
 
-    it('should silently catch vector manager errors', async () => {
+    it('should record vector manager errors without crashing', async () => {
         const fileContent = `Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
         mockVectorManager.addEntry.mockRejectedValueOnce(new Error('Vector failure'))
 
         const result = await importMarkdownEntries(
-            '/tmp/import',
+            './import',
             mockDb as any,
             {},
-            mockVectorManager as any
+            mockVectorManager as any,
+            [process.cwd()]
         )
 
-        expect(result.success).toBe(true)
+        expect(result.success).toBe(false)
         expect(mockVectorManager.addEntry).toHaveBeenCalled()
-        // No hard errors thrown
-        expect(result.errors).toEqual([])
+        // No hard errors thrown, but it should be recorded
+        expect(result.errors.length).toBe(1)
+        expect(result.errors[0]?.error).toContain('Vector fail')
     })
 })

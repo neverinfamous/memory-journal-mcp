@@ -119,6 +119,12 @@ END;
 CREATE TRIGGER IF NOT EXISTS fts_content_ad AFTER DELETE ON memory_journal BEGIN
     INSERT INTO fts_content(fts_content, rowid, content) VALUES ('delete', old.id, old.content);
 END;
+
+CREATE TRIGGER IF NOT EXISTS fts_content_soft_delete AFTER UPDATE OF deleted_at ON memory_journal 
+WHEN new.deleted_at IS NOT NULL AND old.deleted_at IS NULL
+BEGIN
+    INSERT INTO fts_content(fts_content, rowid, content) VALUES ('delete', old.id, old.content);
+END;
 `
 
 /**
@@ -143,6 +149,7 @@ export interface CreateEntryInput {
     workflowRunId?: number
     workflowName?: string
     workflowStatus?: 'queued' | 'in_progress' | 'completed'
+    author?: string
 }
 
 /**

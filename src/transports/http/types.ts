@@ -42,8 +42,8 @@ export const JSONRPC_INTERNAL_ERROR = -32603
 /** Session timeout for stateful HTTP mode (30 minutes) */
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 
-/** Session timeout sweep interval (5 minutes) */
-export const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000
+/** Session timeout sweep interval (1 minute) */
+export const SESSION_SWEEP_INTERVAL_MS = 1 * 60 * 1000
 
 // =============================================================================
 // Rate Limiting
@@ -52,6 +52,7 @@ export const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000
 export interface RateLimitEntry {
     count: number
     resetTime: number
+    lastSeen: number
 }
 
 // =============================================================================
@@ -75,8 +76,9 @@ export interface HttpTransportConfig {
     authToken?: string
 
     /**
-     * Allowed CORS origins. Defaults to ["*"] (all origins).
-     * Supports wildcard subdomains (e.g., "*.example.com" matches "app.example.com").
+     * Allowed CORS origins. Defaults to `[]` (no origins allowed — strict by default).
+     * To allow all origins, pass `["*"]`. For production, list explicit origins.
+     * Note: `corsAllowCredentials` cannot be combined with the `"*"` wildcard.
      */
     corsOrigins?: string[]
 
@@ -129,4 +131,16 @@ export interface HttpTransportConfig {
 
     /** Clock tolerance in seconds for token validation (default: 60) */
     oauthClockTolerance?: number
+
+    /**
+     * The public resource origin for OAuth RFC 9728 metadata (e.g. "https://example.com").
+     * If omitted, falls back to the dynamic http://${host}:${port}.
+     */
+    publicOrigin?: string
+
+    /**
+     * Explicit flag to allow plaintext (http://) loopback URLs for OAuth operations.
+     * Prevents accidental deployment of insecure issuers.
+     */
+    allowPlaintextLoopbackOAuth?: boolean
 }

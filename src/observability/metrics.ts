@@ -146,6 +146,11 @@ export class MetricsAccumulator {
     private readonly userCounts = new Map<string, number>()
 
     recordUser(user: string): void {
+        if (this.userCounts.size >= 10000 && !this.userCounts.has(user)) {
+            const bucket = 'other'
+            this.userCounts.set(bucket, (this.userCounts.get(bucket) ?? 0) + 1)
+            return
+        }
         this.userCounts.set(user, (this.userCounts.get(user) ?? 0) + 1)
     }
 
@@ -176,5 +181,4 @@ export class MetricsAccumulator {
 // Singleton
 // ============================================================================
 
-/** Global metrics accumulator — shared between interceptor and resource handlers */
-export const globalMetrics = new MetricsAccumulator()
+// REMOVED: globalMetrics singleton. Use ServerRuntime.metrics instead.

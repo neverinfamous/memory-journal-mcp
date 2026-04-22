@@ -62,7 +62,11 @@ describe('GitHubClient — branch coverage', () => {
         })
 
         it('should delete expired entries and return undefined', () => {
-            client.apiCache.set('expired', { data: 'old', timestamp: Date.now() - 10 * 60 * 1000 })
+            client.apiCache.set('expired', {
+                data: 'old',
+                timestamp: Date.now() - 10 * 60 * 1000,
+                sizeBytes: 9,
+            })
             expect(client.getCached('expired')).toBeUndefined()
             expect(client.apiCache.has('expired')).toBe(false)
         })
@@ -75,7 +79,11 @@ describe('GitHubClient — branch coverage', () => {
         })
 
         it('should return undefined for expired entry with custom TTL', () => {
-            client.apiCache.set('old-ttl', { data: 'stale', timestamp: Date.now() - 120_000 })
+            client.apiCache.set('old-ttl', {
+                data: 'stale',
+                timestamp: Date.now() - 120_000,
+                sizeBytes: 10,
+            })
             expect(client.getCachedWithTtl('old-ttl', 60_000)).toBeUndefined()
             expect(client.apiCache.has('old-ttl')).toBe(false)
         })
@@ -86,14 +94,14 @@ describe('GitHubClient — branch coverage', () => {
     })
 
     describe('setCache — LRU eviction', () => {
-        it('should evict oldest entry when cache exceeds 100 items', () => {
-            for (let i = 0; i < 101; i++) {
+        it('should evict oldest entry when cache exceeds 1000 items', () => {
+            for (let i = 0; i < 1001; i++) {
                 client.setCache(`key-${String(i)}`, i)
             }
             // key-0 should be evicted
             expect(client.apiCache.has('key-0')).toBe(false)
-            expect(client.apiCache.has('key-100')).toBe(true)
-            expect(client.apiCache.size).toBe(100)
+            expect(client.apiCache.has('key-1000')).toBe(true)
+            expect(client.apiCache.size).toBe(1000)
         })
     })
 
@@ -141,8 +149,7 @@ describe('IssuesManager — branch coverage', () => {
 
     describe('getIssues', () => {
         it('should return empty array when no octokit', async () => {
-            const result = await issues.getIssues('o', 'r')
-            expect(result).toEqual([])
+            await expect(issues.getIssues('o', 'r')).rejects.toThrow()
         })
 
         it('should return cached issues', async () => {
@@ -159,8 +166,7 @@ describe('IssuesManager — branch coverage', () => {
                     listForRepo: vi.fn().mockRejectedValue(new Error('API down')),
                 },
             } as any
-            const result = await issues.getIssues('o', 'r')
-            expect(result).toEqual([])
+            await expect(issues.getIssues('o', 'r')).rejects.toThrow()
         })
 
         it('should filter out PRs and map milestone/state', async () => {
@@ -207,8 +213,7 @@ describe('IssuesManager — branch coverage', () => {
 
     describe('getIssue', () => {
         it('should return null when no octokit', async () => {
-            const result = await issues.getIssue('o', 'r', 1)
-            expect(result).toBeNull()
+            await expect(issues.getIssue('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should return cached issue', async () => {
@@ -266,15 +271,13 @@ describe('IssuesManager — branch coverage', () => {
                     get: vi.fn().mockRejectedValue(new Error('Not found')),
                 },
             } as any
-            const result = await issues.getIssue('o', 'r', 999)
-            expect(result).toBeNull()
+            await expect(issues.getIssue('o', 'r', 999)).rejects.toThrow()
         })
     })
 
     describe('createIssue', () => {
         it('should return null when no octokit', async () => {
-            const result = await issues.createIssue('o', 'r', 'title')
-            expect(result).toBeNull()
+            await expect(issues.createIssue('o', 'r', 'title')).rejects.toThrow()
         })
 
         it('should handle API error', async () => {
@@ -284,15 +287,13 @@ describe('IssuesManager — branch coverage', () => {
                 },
             } as any
             // Need to set apiCache just so invalidateCache doesn't break
-            const result = await issues.createIssue('o', 'r', 'title')
-            expect(result).toBeNull()
+            await expect(issues.createIssue('o', 'r', 'title')).rejects.toThrow()
         })
     })
 
     describe('closeIssue', () => {
         it('should return null when no octokit', async () => {
-            const result = await issues.closeIssue('o', 'r', 1)
-            expect(result).toBeNull()
+            await expect(issues.closeIssue('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should close without comment', async () => {
@@ -334,8 +335,7 @@ describe('IssuesManager — branch coverage', () => {
                     update: vi.fn().mockRejectedValue(new Error('fail')),
                 },
             } as any
-            const result = await issues.closeIssue('o', 'r', 1)
-            expect(result).toBeNull()
+            await expect(issues.closeIssue('o', 'r', 1)).rejects.toThrow()
         })
     })
 })
@@ -420,13 +420,17 @@ describe('Error helpers — branch coverage', () => {
         it('should handle plain Error', () => {
             const result = formatHandlerError(new Error('oops'))
             expect(result.success).toBe(false)
-            expect(result.error).toBe('oops')
+            expect(result.error).toBe(
+                'An internal error occurred during tool execution. Please check the server logs for more details.'
+            )
             expect(result.code).toBe('INTERNAL_ERROR')
         })
 
         it('should handle non-Error throw (string)', () => {
             const result = formatHandlerError('string error')
-            expect(result.error).toBe('string error')
+            expect(result.error).toBe(
+                'An internal error occurred during tool execution. Please check the server logs for more details.'
+            )
             expect(result.code).toBe('INTERNAL_ERROR')
         })
     })

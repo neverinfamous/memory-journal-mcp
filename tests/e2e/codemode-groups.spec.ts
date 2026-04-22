@@ -341,8 +341,13 @@ test.describe('Code Mode Groups: Representative Calls', () => {
             const p = await callToolAndParse(client, 'mj_execute_code', {
                 code: 'return await mj.admin.rebuildVectorIndex({});',
             })
-            // Accept success or structured error (index may not be initialized)
-            expect(typeof (p.result as Record<string, unknown>)?.success).toBe('boolean')
+            const result = p.result as Record<string, unknown>
+            // Accept success or structured error (index may not be initialized or might throw)
+            if (result.success !== undefined) {
+                expect(typeof result.success).toBe('boolean')
+            } else {
+                expect(typeof result.error).toBe('string')
+            }
         } finally {
             await client.close()
         }

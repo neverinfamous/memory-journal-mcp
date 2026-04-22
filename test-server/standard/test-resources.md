@@ -21,32 +21,32 @@
 
 ### 1.1 Static Resources
 
-| Resource          | URI                          | Test                                                                                                                                              |
-| ----------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resource          | URI                          | Test                                                                                                                                                                                   |
+| ----------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Briefing          | `memory://briefing`          | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`, optional `rulesFile`, `skillsDir`, `workflowSummary`, `copilotReviews`, `localTime`, optional `activeFlags` |
-| Instructions      | `memory://instructions`      | Full server instructions — verify it references all 61 tools and key resources                                                                    |
-| Recent entries    | `memory://recent`            | Read, verify 10 entries with typed fields                                                                                                         |
-| Significant       | `memory://significant`       | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                                           |
-| Significant order | `memory://significant`       | Compare adjacent entries: `entries[0].importance >= entries[1].importance` etc.                                                                   |
-| Tags              | `memory://tags`              | Read, verify tag counts match `list_tags` output                                                                                                  |
-| Statistics        | `memory://statistics`        | Read, verify structured stats match `get_statistics` output                                                                                       |
-| Health            | `memory://health`            | Shows DB stats, tool filter status, vector index health                                                                                           |
-| GitHub status     | `memory://github/status`     | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary (includes milestones)                                                             |
-| Repo insights     | `memory://github/insights`   | Compact summary of stars, forks, and 14-day traffic                                                                                               |
-| GitHub milestones | `memory://github/milestones` | Open milestones with completion percentages                                                                                                       |
-| Graph recent      | `memory://graph/recent`      | Mermaid diagram with harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)                                                                      |
-| Graph actions     | `memory://graph/actions`     | CI/CD narrative graph (verify graceful output when no workflow entries exist)                                                                     |
-| Actions recent    | `memory://actions/recent`    | Recent workflow runs (verify graceful output when no workflow entries exist)                                                                      |
-| Team recent       | `memory://team/recent`       | Author-enriched entries, `source: "team"`, `count`                                                                                                |
-| Team statistics   | `memory://team/statistics`   | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                                    |
-| Help index        | `memory://help`              | Lists all tool groups with counts, descriptions, and `totalTools`                                                                                 |
-| Help group detail | `memory://help/{group}`      | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                                            |
-| Help gotchas      | `memory://help/gotchas`      | Field notes and practical tips (moved from server instructions); verify non-empty content with actionable guidance                                |
-| Rules             | `memory://rules`             | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                                        |
-| Workflows         | `memory://workflows`         | Workflow summary (requires `MEMORY_JOURNAL_WORKFLOW_SUMMARY` or `--workflow-summary`); returns `{ configured: false }` when not set               |
-| Skills            | `memory://skills`            | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                                    |
-| Active flags      | `memory://flags`             | JSON with `activeFlags` array (unresolved flags); empty array when no active flags                                                                |
-| Flag vocabulary   | `memory://flags/vocabulary`  | JSON listing configured vocabulary: `blocker`, `needs_review`, `help_requested`, `fyi` (defaults)                                                 |
+| Instructions      | `memory://instructions`      | Full server instructions — verify it references all 61 tools and key resources                                                                                                         |
+| Recent entries    | `memory://recent`            | Read, verify 10 entries with typed fields                                                                                                                                              |
+| Significant       | `memory://significant`       | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                                                                                |
+| Significant order | `memory://significant`       | Compare adjacent entries: `entries[0].importance >= entries[1].importance` etc.                                                                                                        |
+| Tags              | `memory://tags`              | Read, verify tag counts match `list_tags` output                                                                                                                                       |
+| Statistics        | `memory://statistics`        | Read, verify structured stats match `get_statistics` output                                                                                                                            |
+| Health            | `memory://health`            | Shows DB stats, tool filter status, vector index health                                                                                                                                |
+| GitHub status     | `memory://github/status`     | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary (includes milestones)                                                                                                  |
+| Repo insights     | `memory://github/insights`   | Compact summary of stars, forks, and 14-day traffic                                                                                                                                    |
+| GitHub milestones | `memory://github/milestones` | Open milestones with completion percentages                                                                                                                                            |
+| Graph recent      | `memory://graph/recent`      | Mermaid diagram with harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)                                                                                                           |
+| Graph actions     | `memory://graph/actions`     | CI/CD narrative graph (verify graceful output when no workflow entries exist)                                                                                                          |
+| Actions recent    | `memory://actions/recent`    | Recent workflow runs (verify graceful output when no workflow entries exist)                                                                                                           |
+| Team recent       | `memory://team/recent`       | Author-enriched entries, `source: "team"`, `count`                                                                                                                                     |
+| Team statistics   | `memory://team/statistics`   | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                                                                         |
+| Help index        | `memory://help`              | Lists all tool groups with counts, descriptions, and `totalTools`                                                                                                                      |
+| Help group detail | `memory://help/{group}`      | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                                                                                 |
+| Help gotchas      | `memory://help/gotchas`      | Field notes and practical tips (moved from server instructions); verify non-empty content with actionable guidance                                                                     |
+| Rules             | `memory://rules`             | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                                                                             |
+| Workflows         | `memory://workflows`         | Workflow summary (requires `MEMORY_JOURNAL_WORKFLOW_SUMMARY` or `--workflow-summary`); returns `{ configured: false }` when not set                                                    |
+| Skills            | `memory://skills`            | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                                                                         |
+| Active flags      | `memory://flags`             | JSON with `activeFlags` array (unresolved flags); empty array when no active flags                                                                                                     |
+| Flag vocabulary   | `memory://flags/vocabulary`  | JSON listing configured vocabulary: `blocker`, `needs_review`, `help_requested`, `fyi` (defaults)                                                                                      |
 
 ### 1.2 Template Resources — Happy Path
 

@@ -9,7 +9,11 @@
 import { test, expect } from '@playwright/test'
 import { startServer, stopServer } from './helpers.js'
 
-const OAUTH_PORT = 3105
+import express from 'express'
+import { Server } from 'node:http'
+
+const OAUTH_PORT = 3199
+const MOCK_ISSUER_PORT = 3198
 
 test.describe('OAuth 2.1 Discovery', () => {
     test.describe('Without OAuth enabled (default)', () => {
@@ -23,15 +27,27 @@ test.describe('OAuth 2.1 Discovery', () => {
     })
 
     test.describe('With OAuth enabled', () => {
+        let mockIssuerServer: Server
+
         test.beforeAll(async () => {
+            // Start a mock JWKS server to prevent jwks-preload from timing out
+            const app = express()
+            app.get('/.well-known/jwks.json', (req, res) => {
+                res.json({ keys: [] })
+            })
+            await new Promise<void>((resolve) => {
+                mockIssuerServer = app.listen(MOCK_ISSUER_PORT, '127.0.0.1', () => resolve())
+            })
+
             await startServer(
                 OAUTH_PORT,
                 [
                     '--oauth-enabled',
                     '--oauth-issuer',
-                    'https://auth.example.com/realms/test',
+                    `http://127.0.0.1:${MOCK_ISSUER_PORT}`,
                     '--oauth-audience',
                     'memory-journal-mcp',
+                    '--oauth-allow-plaintext-loopback',
                 ],
                 'oauth'
             )
@@ -39,6 +55,7 @@ test.describe('OAuth 2.1 Discovery', () => {
 
         test.afterAll(() => {
             stopServer(OAUTH_PORT)
+            if (mockIssuerServer) mockIssuerServer.close()
         })
 
         test('/.well-known/oauth-protected-resource should return RFC 9728 metadata', async () => {
@@ -56,7 +73,7 @@ test.describe('OAuth 2.1 Discovery', () => {
             expect(body.authorization_servers.length).toBeGreaterThan(0)
 
             // Should include the issuer we configured
-            expect(body.authorization_servers).toContain('https://auth.example.com/realms/test')
+            expect(body.authorization_servers).toContain(`http://127.0.0.1:${MOCK_ISSUER_PORT}`)
         })
 
         test('/.well-known/oauth-protected-resource should include scopes', async () => {

@@ -10,6 +10,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
+import { getAuthContext } from '../../../auth/auth-context.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
 import {
     PassTeamFlagSchema,
@@ -20,20 +21,7 @@ import {
     ResolveFlagOutputSchema,
     DEFAULT_FLAG_VOCABULARY,
 } from './schemas.js'
-
-// ============================================================================
-// Flag Auto-Context Shape
-// ============================================================================
-
-interface FlagAutoContext {
-    flag_type: string
-    target_user: string | null
-    link: string | null
-    resolved: boolean
-    resolved_at: string | null
-    resolution: string | null
-    author: string
-}
+import { parseFlagContext, type FlagContext } from '../../../types/auto-context.js'
 
 // ============================================================================
 // Helpers
@@ -45,28 +33,6 @@ interface FlagAutoContext {
 function getVocabulary(context: ToolContext): readonly string[] {
     const custom = context.config?.flagVocabulary
     return custom && custom.length > 0 ? custom : DEFAULT_FLAG_VOCABULARY
-}
-
-/**
- * Parse auto_context JSON for a flag entry.
- * Returns undefined if parsing fails or entry is not a flag.
- */
-function parseFlagContext(autoContext: string | null): FlagAutoContext | undefined {
-    if (!autoContext) return undefined
-    try {
-        const parsed: unknown = JSON.parse(autoContext)
-        if (
-            typeof parsed === 'object' &&
-            parsed !== null &&
-            'flag_type' in parsed &&
-            'resolved' in parsed
-        ) {
-            return parsed as FlagAutoContext
-        }
-        return undefined
-    } catch {
-        return undefined
-    }
 }
 
 // ============================================================================
@@ -112,11 +78,30 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const author = input.author ?? resolveAuthor()
+                    // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
+                    const authCtx = getAuthContext()
+                    if (
+                        authCtx?.authenticated &&
+                        authCtx.claims?.sub &&
+                        input.author !== undefined
+                    ) {
+                        if (input.author !== authCtx.claims.sub) {
+                            return {
+                                success: false,
+                                error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authCtx.claims.sub}". Omit the author field to use your identity automatically.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion:
+                                    'Omit the author field to use your authenticated identity automatically.',
+                                recoverable: false,
+                            }
+                        }
+                    }
+                    const author = authCtx?.claims?.sub ?? input.author ?? resolveAuthor()
                     const targetUser = input.target_user?.replace(/^@/, '') ?? null
 
                     // Build auto_context for structured flag metadata
-                    const flagContext: FlagAutoContext = {
+                    const flagContext: FlagContext = {
                         flag_type: input.flag_type,
                         target_user: targetUser,
                         link: input.link ?? null,
@@ -145,18 +130,18 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         autoContext: JSON.stringify(flagContext),
                         projectNumber: input.project_number,
                         issueNumber: input.issue_number,
+                        author,
                     })
 
-                    // Set author column
-                    teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
-                        author,
-                        entry.id,
-                    ])
                     teamDb.flushSave()
 
                     return {
                         success: true,
-                        entry: { ...entry, author },
+                        entry: {
+                            ...entry,
+                            author,
+                            flagMetadata: flagContext as Record<string, unknown>,
+                        },
                         flag_type: input.flag_type,
                         target_user: targetUser,
                         resolved: false,
@@ -208,7 +193,8 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                             error: `Entry ${String(input.flag_id)} is not a flag (type: ${entry.entryType})`,
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
-                            suggestion: 'Use team_resolve_flag only on entries created by team_pass_flag',
+                            suggestion:
+                                'Use team_resolve_flag only on entries created by team_pass_flag',
                             recoverable: true,
                         }
                     }
@@ -229,7 +215,11 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         const author = fetchAuthor(teamDb, input.flag_id)
                         return {
                             success: true,
-                            entry: { ...entry, author },
+                            entry: {
+                                ...entry,
+                                author,
+                                flagMetadata: flagCtx as Record<string, unknown>,
+                            },
                             flag_type: flagCtx.flag_type,
                             resolved: true,
                             resolution: flagCtx.resolution,
@@ -237,7 +227,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Update auto_context with resolution
-                    const updatedContext: FlagAutoContext = {
+                    const updatedContext: FlagContext = {
                         ...flagCtx,
                         resolved: true,
                         resolved_at: new Date().toISOString(),
@@ -250,12 +240,11 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         : ' [RESOLVED]'
                     const updatedContent = entry.content + resolutionSuffix
 
-                    // Update auto_context and content via raw SQL (auto_context is not
-                    // exposed via the updateEntry interface, same pattern as author column)
-                    teamDb.executeRawQuery(
-                        'UPDATE memory_journal SET auto_context = ?, content = ? WHERE id = ?',
-                        [JSON.stringify(updatedContext), updatedContent, input.flag_id]
-                    )
+                    // Update auto_context and content
+                    teamDb.updateEntry(input.flag_id, {
+                        autoContext: JSON.stringify(updatedContext),
+                        content: updatedContent,
+                    })
                     teamDb.flushSave()
 
                     const updatedEntry = teamDb.getEntryById(input.flag_id)
@@ -263,7 +252,13 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: true,
-                        entry: updatedEntry ? { ...updatedEntry, author } : undefined,
+                        entry: updatedEntry
+                            ? {
+                                  ...updatedEntry,
+                                  author,
+                                  flagMetadata: updatedContext as Record<string, unknown>,
+                              }
+                            : undefined,
                         flag_type: flagCtx.flag_type,
                         resolved: true,
                         resolution: input.resolution ?? null,

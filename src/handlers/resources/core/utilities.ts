@@ -6,7 +6,7 @@ import {
     ICON_ANALYTICS,
     ICON_BRIEFING,
 } from '../../../constants/icons.js'
-import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../../database/core/entry-columns.js'
+// removed ENTRY_COLUMNS
 import {
     withPriority,
     ASSISTANT_FOCUSED,
@@ -14,10 +14,16 @@ import {
     MEDIUM_PRIORITY,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
-import { execQuery, transformEntryRow } from '../shared.js'
+// removed transformEntryRow
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import {
+    assertSafeFilePath,
+    assertSafeDirectoryPath,
+    markUntrustedContentInline,
+} from '../../../utils/security-utils.js'
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -46,32 +52,8 @@ export const significantResource: InternalResourceDef = {
     icons: [ICON_STAR],
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext) => {
-        // Batched importance: single query computes rel_count + causal_count for all
-        // significant entries using LEFT JOIN aggregations, eliminating N+1 per-entry calls.
-        // Weights mirror importance.ts constants (significance 0.3, relationships 0.35,
-        // causal 0.2, recency 0.15). If those change, update the formula here too.
-        const rows = execQuery(
-            context.db,
-            `
-            SELECT ${ENTRY_COLUMNS},
-                   COALESCE(r.rel_count, 0) AS rel_count,
-                   COALESCE(r.causal_count, 0) AS causal_count
-            FROM memory_journal
-            LEFT JOIN (
-                SELECT entry_id,
-                       COUNT(*) AS rel_count,
-                       SUM(CASE WHEN rel_type IN ('blocked_by','resolved','caused') THEN 1 ELSE 0 END) AS causal_count
-                FROM (
-                    SELECT from_entry_id AS entry_id, relationship_type AS rel_type FROM relationships
-                    UNION ALL
-                    SELECT to_entry_id AS entry_id, relationship_type AS rel_type FROM relationships
-                ) grouped
-                GROUP BY entry_id
-            ) r ON r.entry_id = memory_journal.id
-            WHERE significance_type IS NOT NULL
-            AND deleted_at IS NULL
-        `
-        )
+        // Importance weights mirror importance.ts constants (significance 0.3, relationships 0.35, causal 0.2, recency 0.15)
+        const entries = context.db.getSignificantEntries(100)
 
         const now = Date.now()
         const MS_PER_DAY = 86_400_000
@@ -79,34 +61,37 @@ export const significantResource: InternalResourceDef = {
         const MAX_REL_SCORE_AT = 5
         const MAX_CAUSAL_SCORE_AT = 3
 
-        const entriesWithImportance = rows.map((row) => {
-            const entry = transformEntryRow(row)
-            const relCount = (row['rel_count'] as number) ?? 0
-            const causalCount = (row['causal_count'] as number) ?? 0
-            const daysSince = Math.floor(
-                (now - new Date(entry['timestamp'] as string).getTime()) / MS_PER_DAY
-            )
+        const entryIds = entries.map((e) => e.id)
+        const relationshipsMap = context.db.getRelationshipsForEntries(entryIds)
+
+        const entriesWithImportance = entries.map((entry) => {
+            const relationships = relationshipsMap.get(entry.id) ?? []
+            const relCount = relationships.length
+            const causalCount = relationships.filter((r) =>
+                ['blocked_by', 'resolved', 'caused'].includes(r.relationshipType)
+            ).length
+
+            const timestampMs = new Date(entry.timestamp).getTime()
+            const daysSince = Math.floor((now - timestampMs) / MS_PER_DAY)
             const recency = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
             const importance =
                 Math.round(
-                    (1.0 * 0.3 + // significance (always 1.0 — filtered by IS NOT NULL)
-                        Math.min(relCount / MAX_REL_SCORE_AT, 1.0) * 0.35 + // relationships
-                        Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0) * 0.2 + // causal
-                        recency * 0.15) * // recency
+                    (1.0 * 0.3 +
+                        Math.min(relCount / MAX_REL_SCORE_AT, 1.0) * 0.35 +
+                        Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0) * 0.2 +
+                        recency * 0.15) *
                         100
                 ) / 100
 
-            return { ...entry, importance } as { timestamp: string; importance: number }
+            return { ...entry, importance, timestampMs }
         })
 
         entriesWithImportance.sort((a, b) => {
             if (b.importance !== a.importance) {
                 return b.importance - a.importance
             }
-            const aTime = new Date(a.timestamp).getTime()
-            const bTime = new Date(b.timestamp).getTime()
-            return bTime - aTime
+            return b.timestampMs - a.timestampMs
         })
         const top20 = entriesWithImportance.slice(0, 20)
         return { entries: top20, count: top20.length }
@@ -145,8 +130,11 @@ export const statisticsResource: InternalResourceDef = {
     },
 }
 
-let cachedRulesContent: string | null = null
-let rulesLastScanTime = 0
+interface CachedRuleEntry {
+    content: string
+    timestamp: number
+}
+const cachedRulesMap = new Map<string, CachedRuleEntry>()
 const RULES_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export const rulesResource: InternalResourceDef = {
@@ -157,8 +145,8 @@ export const rulesResource: InternalResourceDef = {
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
-    handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
-        const rulesPath = process.env['RULES_FILE_PATH']
+    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+        const rulesPath = context.briefingConfig?.rulesFilePath ?? process.env['RULES_FILE_PATH']
         if (!rulesPath) {
             return {
                 data: {
@@ -169,29 +157,61 @@ export const rulesResource: InternalResourceDef = {
             }
         }
         try {
-            if (cachedRulesContent && Date.now() - rulesLastScanTime < RULES_CACHE_TTL_MS) {
+            const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
+            // Add explicitly configured rules directory to allowed roots for this check
+            const expandedRoots = [...allowedRoots, path.dirname(rulesPath)]
+            assertSafeFilePath(rulesPath, expandedRoots)
+        } catch (err) {
+            return {
+                data: {
+                    configured: true,
+                    error: err instanceof Error ? err.message : String(err),
+                },
+            }
+        }
+
+        try {
+            const cached = cachedRulesMap.get(rulesPath)
+            if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
                 const stat = await fs.promises
                     .stat(rulesPath)
                     .catch(() => ({ mtimeMs: Date.now() }))
                 return {
-                    data: cachedRulesContent,
+                    data: cached.content,
                     annotations: {
                         lastModified: new Date(stat.mtimeMs).toISOString(),
                     },
                 }
             }
 
-            const content = await fs.promises.readFile(rulesPath, 'utf8')
-            const stat = await fs.promises.stat(rulesPath).catch(() => ({ mtimeMs: Date.now() }))
-            const mtimeMs = stat.mtimeMs
+            const file = await fs.promises.open(rulesPath, 'r')
+            try {
+                const stat = await file.stat()
+                if (stat.size > 1024 * 1024) {
+                    throw new Error('Rules file exceeds 1MB limit')
+                }
+                const content = await file.readFile('utf8')
 
-            cachedRulesContent = content
-            rulesLastScanTime = Date.now()
+                cachedRulesMap.set(rulesPath, {
+                    content,
+                    timestamp: Date.now(),
+                })
 
+            // Bounded cache
+            if (cachedRulesMap.size > 100) {
+                const firstKey = cachedRulesMap.keys().next().value
+                if (firstKey) cachedRulesMap.delete(firstKey)
+            }
+
+            } finally {
+                await file.close()
+            }
+
+            const cachedData = cachedRulesMap.get(rulesPath)
             return {
-                data: content,
+                data: cachedData ? cachedData.content : '',
                 annotations: {
-                    lastModified: new Date(mtimeMs).toISOString(),
+                    lastModified: new Date(cachedData ? cachedData.timestamp : Date.now()).toISOString(),
                 },
             }
         } catch (err) {
@@ -200,7 +220,7 @@ export const rulesResource: InternalResourceDef = {
                 data: {
                     configured: true,
                     error: `Could not read rules file: ${message}`,
-                    path: rulesPath,
+                    // Removed configuration path disclosure
                 },
             }
         }
@@ -240,9 +260,11 @@ export const workflowsResource: InternalResourceDef = {
     },
 }
 
-let cachedSkills: { name: string; path: string; excerpt: string; source: string }[] | null = null
-let lastScanTime = 0
-let lastScanDirs: string | null = null // cache key: serialized dir paths
+interface CachedSkillEntry {
+    skills: { name: string; path: string; excerpt: string; source: string }[]
+    timestamp: number
+}
+const cachedSkillsMap = new Map<string, CachedSkillEntry>()
 const SKILLS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 /** Resolve the package's own skills/ directory (ships with npm package). */
@@ -293,7 +315,9 @@ async function scanSkillsDir(
         const excerptLine = lines.find(
             (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
         )
-        const excerpt = excerptLine ? excerptLine.trim().slice(0, 160) : ''
+        const excerpt = excerptLine
+            ? markUntrustedContentInline(excerptLine.trim().slice(0, 160))
+            : ''
 
         skills.push({ name: entry.name, path: skillMdPath, excerpt, source })
     }
@@ -308,10 +332,32 @@ export const skillsResource: InternalResourceDef = {
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-    handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
-        const userSkillsDir = process.env['SKILLS_DIR_PATH']
+    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+        const userSkillsDir =
+            context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
         const shippedSkillsDir = getShippedSkillsDir()
         const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
+
+        if (userSkillsDir) {
+            try {
+                const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
+                // Add explicitly configured skills directory to allowed roots for this check
+                const expandedRoots = [...allowedRoots, userSkillsDir]
+                assertSafeDirectoryPath(userSkillsDir, expandedRoots)
+                if (!fs.existsSync(userSkillsDir)) {
+                    throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
+                }
+            } catch (err) {
+                return {
+                    data: {
+                        configured: true,
+                        error: err instanceof Error ? err.message : String(err),
+                        skills: [],
+                        count: 0,
+                    },
+                }
+            }
+        }
 
         if (!hasAnySource) {
             return {
@@ -325,18 +371,18 @@ export const skillsResource: InternalResourceDef = {
         try {
             const currentDirs = `${userSkillsDir ?? ''}|${shippedSkillsDir ?? ''}`
 
-            if (
-                cachedSkills &&
-                Date.now() - lastScanTime < SKILLS_CACHE_TTL_MS &&
-                lastScanDirs === currentDirs
-            ) {
+            const cached = cachedSkillsMap.get(currentDirs)
+            if (cached && Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS) {
                 return {
                     data: {
                         configured: true,
-                        ...(userSkillsDir ? { skillsDir: userSkillsDir } : {}),
-                        ...(shippedSkillsDir ? { shippedSkillsDir } : {}),
-                        skills: cachedSkills,
-                        count: cachedSkills.length,
+                        // Prevent path disclosure of host directories
+                        skills: cached.skills.map((s) => ({
+                            name: s.name,
+                            excerpt: s.excerpt,
+                            source: s.source,
+                        })),
+                        count: cached.skills.length,
                     },
                 }
             }
@@ -361,16 +407,26 @@ export const skillsResource: InternalResourceDef = {
 
             const skills = [...skillMap.values()].sort((a, b) => a.name.localeCompare(b.name))
 
-            cachedSkills = skills
-            lastScanTime = Date.now()
-            lastScanDirs = currentDirs
+            cachedSkillsMap.set(currentDirs, {
+                skills,
+                timestamp: Date.now(),
+            })
+
+            // Bounded cache
+            if (cachedSkillsMap.size > 100) {
+                const firstKey = cachedSkillsMap.keys().next().value
+                if (firstKey) cachedSkillsMap.delete(firstKey)
+            }
 
             return {
                 data: {
                     configured: true,
-                    ...(userSkillsDir ? { skillsDir: userSkillsDir } : {}),
-                    ...(shippedSkillsDir ? { shippedSkillsDir } : {}),
-                    skills,
+                    // Prevent path disclosure of host directories
+                    skills: skills.map((s) => ({
+                        name: s.name,
+                        excerpt: s.excerpt,
+                        source: s.source,
+                    })),
                     count: skills.length,
                 },
             }

@@ -15,7 +15,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
-import { type ChildProcess, spawn } from 'node:child_process'
+import { ChildProcess, spawn } from 'node:child_process'
+import { createWriteStream } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
@@ -37,8 +38,14 @@ export function getBaseURL(testInfo: TestInfo): string {
  * Create and connect a Streamable HTTP MCP client.
  * Caller is responsible for calling client.close() in afterAll.
  */
-export async function createClient(port = 3100): Promise<Client> {
-    const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${port}/mcp`))
+export async function createClient(port = 3100, authToken?: string): Promise<Client> {
+    const transportOptions = authToken
+        ? { requestInit: { headers: { Authorization: `Bearer ${authToken}` } } }
+        : undefined
+    const transport = new StreamableHTTPClientTransport(
+        new URL(`http://localhost:${port}/mcp`),
+        transportOptions
+    )
     const client = new Client(
         { name: 'payload-contract-test', version: '1.0.0' },
         { capabilities: {} }
@@ -58,14 +65,31 @@ export async function callToolAndParse(
 ): Promise<Record<string, unknown>> {
     const response = await client.callTool({ name: toolName, arguments: args })
 
+    if (response.isError) {
+        console.error(
+            'Tool call returned isError: true. Response:',
+            JSON.stringify(response, null, 2)
+        )
+    }
     expect(response.isError).toBeUndefined()
     expect(Array.isArray(response.content)).toBe(true)
 
     const content = response.content as Array<{ type: string; text?: string }>
     expect(content.length).toBeGreaterThan(0)
 
+    // MCP SDK may support unknown fields or ignore them. Check if attached natively:
+    if ('structuredContent' in response && response.structuredContent) {
+        return response.structuredContent as Record<string, unknown>
+    }
+
     const first = content[0]!
     expect(first.type).toBe('text')
+
+    // If the structed property was stripped by strict-schema SDK parsing, we cannot test the E2E JSON effectively from the test harness if it just says "[Structured output attached]".
+    // But since the original code was JSON stringified, if we encounter the optimization string, we have a problem.
+    if (first.text === '[Structured output attached]') {
+        throw new Error('SDK stripped structuredContent and only optimization text remains.')
+    }
 
     return JSON.parse(first.text!) as Record<string, unknown>
 }
@@ -153,12 +177,16 @@ export async function startServer(
         'node',
         [
             join(process.cwd(), 'dist/cli.js'),
+            '--allowed-io-roots',
+            process.cwd(),
             '--transport',
             'http',
             '--port',
             String(port),
             '--db',
-            join(process.cwd(), '.test-output', 'e2e', `test-e2e-${suffix}.db`),
+            options?.cwd
+                ? join(options.cwd, `test-e2e-${suffix}.db`)
+                : join(process.cwd(), '.test-output', 'e2e', `test-e2e-${suffix}.db`),
             ...args,
         ],
         {
@@ -167,6 +195,7 @@ export async function startServer(
             env: Object.fromEntries(
                 Object.entries({
                     ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
                         ? undefined
                         : '10000',
@@ -176,9 +205,15 @@ export async function startServer(
         }
     )
 
+    const logStream = createWriteStream(
+        join(process.cwd(), '.test-output', 'e2e', `server-${port}.log`)
+    )
+    serverProcess.stdout?.pipe(logStream)
+    serverProcess.stderr?.pipe(logStream)
+
     managedServers.set(port, { process: serverProcess, port })
 
-    const maxAttempts = 30
+    const maxAttempts = 180
     for (let i = 0; i < maxAttempts; i++) {
         try {
             const res = await fetch(`http://localhost:${port}/health`)
@@ -188,6 +223,8 @@ export async function startServer(
         }
         await delay(500)
     }
+
+    serverProcess.kill()
     throw new Error(`Server on port ${port} did not start within timeout`)
 }
 

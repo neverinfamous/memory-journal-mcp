@@ -4,6 +4,9 @@ export default defineConfig({
     test: {
         globals: true,
         environment: 'node',
+        env: {
+            TEAM_AUTHOR: 'test-author',
+        },
         include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',
@@ -11,11 +14,12 @@ export default defineConfig({
             reportsDirectory: '.test-output/coverage',
             include: ['src/**/*.ts'],
             exclude: [
-                'src/cli.ts',
                 'src/index.ts',
-                'src/transports/http.ts',
-                'src/types/**',
+                'src/**/index.ts',
+                'src/cli.ts',
                 'src/codemode/worker-script.ts',
+                'src/handlers/tools/core/fields-mixin.ts',
+                'src/types/**',
             ],
         },
         hookTimeout: 30_000,

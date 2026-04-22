@@ -28,23 +28,30 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             'node',
             [
                 'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
                 '--transport',
                 'http',
                 '--port',
                 String(BRIEFING_PORT),
                 '--db',
                 './.test-output/e2e/test-briefing.db',
+                '--auth-token',
+                'test-token',
             ],
             {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
                     ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     BRIEFING_ENTRY_COUNT: '2', // Only 2 entries max
                     BRIEFING_INCLUDE_TEAM: 'true', // Force inclusion
                     BRIEFING_COPILOT_REVIEWS: 'true', // Adds copilot block
                     TEAM_DB_PATH: './.test-output/e2e/test-briefing-team.db',
+                    TEAM_AUTHOR: 'Alice',
+                    MCP_AUTH_SCOPES: 'read,write,team',
                 },
             }
         )
@@ -57,7 +64,9 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             await delay(500)
         }
 
-        const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`))
+        const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), {
+            requestInit: { headers: { Authorization: 'Bearer test-token' } },
+        })
         client = new McpClient({ name: 'briefing-test', version: '1.0' }, { capabilities: {} })
         await client.connect(transport)
     })
@@ -84,15 +93,18 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         // Also create a team entry to test inclusion
         const t_resp = await client.callTool({
             name: 'team_create_entry',
-            arguments: { content: 'Team insight', entry_type: 'test_entry' },
+            arguments: { content: 'Team insight', entry_type: 'test_entry', project_number: 1 },
         })
         expect(t_resp.isError).toBeUndefined()
 
         const response = await client.readResource({ uri: 'memory://briefing' })
 
         expect(response.contents).toBeDefined()
-        const contentText = response.contents[0]!.text as string
-
+        const firstResource = response.contents[0]
+        if (!firstResource || !('text' in firstResource)) {
+            throw new Error('Expected text resource')
+        }
+        const contentText = firstResource.text
         // The briefing resource yields JSON format
         const briefingObj = JSON.parse(contentText)
 

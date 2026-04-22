@@ -4,10 +4,20 @@
  * Tests memory://team/recent and memory://team/statistics resources.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
+vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
+    const actual = await importOriginal()
+    return {
+        ...actual,
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
+    }
+})
 describe('Team Resource Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
@@ -15,6 +25,7 @@ describe('Team Resource Handlers', () => {
     const teamDbPath = './test-team-resources-team.db'
 
     beforeAll(async () => {
+        process.env.TEAM_AUTHOR = 'Alice'
         personalDb = new DatabaseAdapter(personalDbPath)
         await personalDb.initialize()
 
@@ -36,30 +47,23 @@ describe('Team Resource Handlers', () => {
             resolved: false,
             resolved_at: null,
             resolution: null,
-            author: 'Alice'
+            author: 'Alice',
         }
         const entry3 = teamDb.createEntry({
             content: 'flag:blocker @neverinfamous: API is down',
             entryType: 'flag',
-            autoContext: JSON.stringify(flagContext)
+            autoContext: JSON.stringify(flagContext),
         })
 
         // Set author on entries via raw SQL
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
-            'Alice',
-            entry1.id,
-        ])
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
-            'Bob',
-            entry2.id,
-        ])
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
-            'Alice',
-            entry3.id,
-        ])
+        const rawDb = teamDb['connection'].getNativeDb() as any
+        rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Alice', entry1.id)
+        rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Bob', entry2.id)
+        rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Alice', entry3.id)
     })
 
     afterAll(() => {
+        delete process.env.TEAM_AUTHOR
         personalDb.close()
         teamDb.close()
         try {
@@ -194,7 +198,11 @@ describe('Team Resource Handlers', () => {
             )
 
             const data = result.data as {
-                activeFlags: { flag_type: string; target_user: string | null; author: string | null }[]
+                activeFlags: {
+                    flag_type: string
+                    target_user: string | null
+                    author: string | null
+                }[]
                 count: number
             }
             expect(data.count).toBeGreaterThan(0)
@@ -254,7 +262,7 @@ describe('Team Resource Handlers', () => {
                 undefined, // filterConfig
                 undefined, // github
                 undefined, // scheduler
-                teamDb,    // teamDb
+                teamDb, // teamDb
                 { flagVocabulary: ['urgent', 'review'] } as any // briefingConfig
             )
 

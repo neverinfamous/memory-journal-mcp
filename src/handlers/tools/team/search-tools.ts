@@ -28,7 +28,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'team_search',
             title: 'Search Team Entries',
             description:
-                'Search entries in the team database by text and/or tags. Requires TEAM_DB_PATH.',
+                'Search entries in the team database by text and/or tags. Requires TEAM_DB_PATH. 🛑 WARNING: Team DB is a shared multi-tenant domain. You MUST specify project_number to isolate results to the target project.',
             group: 'team',
             inputSchema: TeamSearchSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
@@ -39,40 +39,41 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, sort_by } = TeamSearchSchema.parse(params)
+                    const { query, tags, limit, sort_by, project_number } =
+                        TeamSearchSchema.parse(params)
+
+                    const isGlobalFlagSearch = tags?.some(t => t.startsWith('flag:'))
+
+                    if (project_number == null && !isGlobalFlagSearch) {
+                        return {
+                            success: false,
+                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'Provide a valid project_number in the tool parameters.',
+                            recoverable: false,
+                            entries: [],
+                            count: 0,
+                            degraded: false,
+                        }
+                    }
 
                     const searchLimit =
-                        tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT) : limit
+                        tags && tags.length > 0
+                            ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT)
+                            : limit
 
-                    let entries
-                    if (query) {
-                        entries = teamDb.searchEntries(query, {
-                            limit: searchLimit,
-                            sortBy: sort_by,
-                        })
-                    } else {
-                        entries = teamDb.getRecentEntries(searchLimit, undefined, sort_by)
-                    }
+                    let entries = teamDb.searchEntries(query ?? '', {
+                        limit: searchLimit,
+                        sortBy: sort_by,
+                        projectNumber: project_number,
+                    })
 
                     // Filter by tags if provided (batch query instead of N+1)
                     if (tags && tags.length > 0) {
                         const entryIds = entries.map((e) => e.id)
                         if (entryIds.length > 0) {
-                            const placeholders = entryIds.map(() => '?').join(',')
-                            const tagResult = teamDb.executeRawQuery(
-                                `SELECT et.entry_id, t.name FROM tags t JOIN entry_tags et ON t.id = et.tag_id WHERE et.entry_id IN (${placeholders})`,
-                                entryIds
-                            )
-                            const entryTagMap = new Map<number, string[]>()
-                            if (tagResult[0]) {
-                                for (const row of tagResult[0].values) {
-                                    const entryId = row[0] as number
-                                    const tagName = row[1] as string
-                                    const existing = entryTagMap.get(entryId) ?? []
-                                    existing.push(tagName)
-                                    entryTagMap.set(entryId, existing)
-                                }
-                            }
+                            const entryTagMap = teamDb.getTagsForEntries(entryIds)
                             entries = entries.filter((e) => {
                                 const entryTags = entryTagMap.get(e.id) ?? []
                                 return tags.some((t: string) => entryTags.includes(t))
@@ -93,7 +94,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { success: true, entries: enriched, count: enriched.length }
+                    return {
+                        success: true,
+                        entries: enriched,
+                        count: enriched.length,
+                        degraded: false,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -103,7 +109,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'team_search_by_date_range',
             title: 'Search Team Entries by Date Range',
             description:
-                'Search team entries within a date range with optional filters for entry type and tags. Requires TEAM_DB_PATH.',
+                'Search team entries within a date range with optional filters for entry type and tags. Requires TEAM_DB_PATH. 🛑 WARNING: Team DB is a shared multi-tenant domain. You MUST specify project_number to isolate results to the target project.',
             group: 'team',
             inputSchema: TeamSearchByDateRangeSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
@@ -114,8 +120,31 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { start_date, end_date, entry_type, tags, limit, sort_by } =
-                        TeamSearchByDateRangeSchema.parse(params)
+                    const {
+                        start_date,
+                        end_date,
+                        entry_type,
+                        tags,
+                        limit,
+                        sort_by,
+                        project_number,
+                    } = TeamSearchByDateRangeSchema.parse(params)
+
+                    const isGlobalFlagSearch = entry_type === 'flag' || tags?.some(t => t.startsWith('flag:'))
+
+                    if (project_number == null && !isGlobalFlagSearch) {
+                        return {
+                            success: false,
+                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'Provide a valid project_number in the tool parameters.',
+                            recoverable: false,
+                            entries: [],
+                            count: 0,
+                            degraded: false,
+                        }
+                    }
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
                     if (start_date > end_date) {
@@ -134,6 +163,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         tags,
                         limit,
                         sortBy: sort_by,
+                        projectNumber: project_number,
                     })
 
                     // Batch-fetch authors
@@ -146,7 +176,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { success: true, entries: enriched, count: enriched.length }
+                    return {
+                        success: true,
+                        entries: enriched,
+                        count: enriched.length,
+                        degraded: false,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

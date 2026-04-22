@@ -12,6 +12,11 @@ import { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
+import { auditOperation } from '../audit/interceptor.js'
+import type { ServerRuntime } from '../utils/maintenance-lock.js'
+
+import { ConfigurationError } from '../types/errors.js'
+import { enforceAccessBoundary } from '../auth/validation.js'
 
 // ============================================================================
 // Types
@@ -24,6 +29,10 @@ export interface ResourceDefinition {
     description?: string
     mimeType?: string
     icons?: { src: string; mimeType?: string; sizes?: string[] }[]
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+    }
 }
 
 /** Raw prompt definition from getPrompts() */
@@ -32,6 +41,10 @@ export interface PromptDefinition {
     description?: string
     arguments?: { name: string; description: string; required?: boolean }[]
     icons?: { src: string; mimeType?: string; sizes?: string[] }[]
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+    }
 }
 
 /** Callback that reads a resource by URI and returns structured content. */
@@ -59,7 +72,8 @@ export type ResourceReadHandler = (
 export function registerResources(
     server: McpServer,
     resources: ResourceDefinition[],
-    handleResourceRead: ResourceReadHandler
+    handleResourceRead: ResourceReadHandler,
+    runtime?: ServerRuntime
 ): void {
     for (const resDef of resources) {
         const mimeType = resDef.mimeType ?? 'application/json'
@@ -78,12 +92,36 @@ export function registerResources(
                 resDef.name,
                 template,
                 meta,
-                async (uri: URL, _variables: Variables) => handleResourceRead(uri, mimeType)
+                async (uri: URL, _variables: Variables) => {
+                    if (!runtime) {
+                        throw new ConfigurationError(
+                            'ServerRuntime is logically required for secure resource execution.'
+                        )
+                    }
+                    const auditLog = runtime.auditLogger
+                    enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
+                    return auditOperation(auditLog, 'resource', resDef.name, async () => {
+                        return runtime.maintenanceManager.withActiveJob(() =>
+                            handleResourceRead(uri, mimeType)
+                        )
+                    })
+                }
             )
         } else {
-            server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) =>
-                handleResourceRead(uri, mimeType)
-            )
+            server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
+                if (!runtime) {
+                    throw new ConfigurationError(
+                        'ServerRuntime is logically required for secure resource execution.'
+                    )
+                }
+                const auditLog = runtime.auditLogger
+                enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
+                return auditOperation(auditLog, 'resource', resDef.name, async () => {
+                    return runtime.maintenanceManager.withActiveJob(() =>
+                        handleResourceRead(uri, mimeType)
+                    )
+                })
+            })
         }
     }
 }
@@ -104,7 +142,8 @@ export function registerPrompts(
     server: McpServer,
     prompts: PromptDefinition[],
     db: IDatabaseAdapter,
-    teamDb?: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter,
+    runtime?: ServerRuntime
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
@@ -126,31 +165,32 @@ export function registerPrompts(
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
-                try {
-                    const args = providedArgs as Record<string, string>
-                    const promptResult = getPrompt(promptDef.name, args, db, teamDb)
-                    // Map to MCP SDK expected format
-                    const result = {
-                        messages: promptResult.messages.map((m) => ({
-                            role: m.role as 'user' | 'assistant',
-                            content: m.content as { type: 'text'; text: string },
-                        })),
-                    }
-                    return Promise.resolve(result)
-                } catch (err) {
-                    const message = err instanceof Error ? err.message : String(err)
-                    return Promise.resolve({
-                        messages: [
-                            {
-                                role: 'user' as const,
-                                content: {
-                                    type: 'text' as const,
-                                    text: `[Prompt handler error] ${message}`,
-                                },
-                            },
-                        ],
-                    })
+                if (!runtime) {
+                    throw new ConfigurationError(
+                        'ServerRuntime is logically required for secure prompt execution.'
+                    )
                 }
+                const auditLog = runtime.auditLogger
+                enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
+                return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
+                    const executePrompt = (): Promise<{
+                        messages: {
+                            role: 'user' | 'assistant'
+                            content: { type: 'text'; text: string }
+                        }[]
+                    }> => {
+                        const args = providedArgs as Record<string, string>
+                        const promptResult = getPrompt(promptDef.name, args, db, teamDb)
+                        return Promise.resolve({
+                            messages: promptResult.messages.map((m) => ({
+                                role: m.role as 'user' | 'assistant',
+                                content: m.content as { type: 'text'; text: string },
+                            })),
+                        })
+                    }
+
+                    return await runtime.maintenanceManager.withActiveJob(executePrompt)
+                })
             }
         )
     }

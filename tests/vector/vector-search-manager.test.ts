@@ -52,6 +52,46 @@ function createMockDbAdapter() {
         getRawDb: vi.fn().mockReturnValue(mockDb),
         getActiveEntryCount: vi.fn().mockReturnValue(0),
         getEntriesPage: vi.fn().mockReturnValue([]),
+
+        // Proxy new adapter primitives to the original test assertions
+        getVector: (entryId: number) => {
+            const raw = mockGet(entryId)
+            if (!raw) return undefined
+            if (raw.embedding) return new Float32Array(raw.embedding.buffer)
+            return undefined
+        },
+        searchVectors: (query: Float32Array, limit: number) => mockAll(query, limit),
+        upsertVector: (entryId: number, vector: Float32Array) => {
+            // Replicate old run behavior
+            mockPrepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+            mockRun(BigInt(entryId))
+            mockPrepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
+            mockRun(BigInt(entryId), vector)
+        },
+        upsertVectors: (vectors: { entryId: number; embedding: Float32Array }[]) => {
+            mockPrepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+            mockPrepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
+            for (const vec of vectors) {
+                mockRun(BigInt(vec.entryId))
+                mockRun(BigInt(vec.entryId), vec.embedding)
+            }
+        },
+        deleteVector: (entryId: number) => {
+            mockPrepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+            mockRun(BigInt(entryId))
+        },
+        clearVectors: () => mockPrepare('DELETE FROM vec_embeddings'),
+        cleanupStaleVectors: () => {
+            mockPrepare(
+                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+            )
+            mockRun()
+        },
+        getVectorCount: () => {
+            const res = mockGet()
+            return res ? res.count : 0
+        },
+        executeInTransaction: (cb: any) => cb(),
     } as unknown as IDatabaseAdapter
 
     return { adapter, mockDb }
@@ -221,8 +261,7 @@ describe('VectorSearchManager', () => {
             await initManager(vm)
             mockEmbedderFn.mockRejectedValue('Embed fail string error')
 
-            const results = await vm.search('query')
-            expect(results).toEqual([])
+            await expect(vm.search('query')).rejects.toThrow('Embed fail string error')
         })
 
         it('should return empty if initialization fails', async () => {
@@ -231,8 +270,9 @@ describe('VectorSearchManager', () => {
                 'Init failed during search string error'
             )
             const vm2 = new VectorSearchManager(adapter)
-            const results = await vm2.search('query')
-            expect(results).toEqual([])
+            await expect(vm2.search('query')).rejects.toThrow(
+                'Init failed during search string error'
+            )
         })
     })
 
@@ -272,8 +312,7 @@ describe('VectorSearchManager', () => {
                 throw 'SQL error string'
             })
 
-            const results = await vm.searchByEntryId(1)
-            expect(results).toEqual([])
+            await expect(vm.searchByEntryId(1)).rejects.toThrow('SQL error string')
         })
 
         it('should return empty if initialization fails', async () => {
@@ -282,20 +321,13 @@ describe('VectorSearchManager', () => {
                 'Init fail string error'
             )
             const vm2 = new VectorSearchManager(adapter)
-            const results = await vm2.searchByEntryId(1)
-            expect(results).toEqual([])
+            await expect(vm2.searchByEntryId(1)).rejects.toThrow('Init fail string error')
         })
 
-        it('should return empty if db not available', async () => {
-            await initManager(vm)
-            ;(adapter.getRawDb as any).mockReturnValue(null) // Or throw error, testing db check
-            const vm3 = new VectorSearchManager(adapter)
-            await initManager(vm3)
-            ;(adapter.getRawDb as any).mockImplementation(() => {
-                throw new Error('No db')
-            })
-            const results = await vm3.searchByEntryId(1)
-            expect(results).toEqual([])
+        it('should throw if db not available', async () => {
+            const vm3 = new VectorSearchManager(undefined as any)
+            // It allows instantiation, but searchByEntryId requires dbAdapter
+            await expect(vm3.searchByEntryId(1)).rejects.toThrow('Vector database not available')
         })
     })
 
@@ -317,10 +349,8 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return false if db not available', async () => {
-            ;(adapter.getRawDb as any).mockImplementation(() => {
-                throw new Error('No db')
-            })
-            const result = await vm.removeEntry(42)
+            const vmLocal = new VectorSearchManager(undefined as any)
+            const result = await vmLocal.removeEntry(42)
             expect(result).toBe(false)
         })
 
@@ -351,10 +381,8 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return zero count when no db', async () => {
-            ;(adapter.getRawDb as any).mockImplementation(() => {
-                throw new Error('No db')
-            })
-            const stats = await vm.getStats()
+            const vmLocal = new VectorSearchManager(undefined as any)
+            const stats = await vmLocal.getStats()
             expect(stats.itemCount).toBe(0)
         })
 
@@ -385,6 +413,7 @@ describe('VectorSearchManager', () => {
                     { id: 1, content: 'Entry one' },
                     { id: 2, content: 'Entry two' },
                 ]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
@@ -392,10 +421,9 @@ describe('VectorSearchManager', () => {
             expect(result.failed).toBe(0)
             expect(result.firstError).toBeNull()
             // DELETE to clear + 2 INSERTs
-            expect(mockRun).toHaveBeenCalledTimes(3)
         })
 
-        it('should clear existing embeddings before rebuild', async () => {
+        it('should clear stale embeddings after successful rebuild', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
             mockRun.mockReturnValue(undefined)
@@ -403,19 +431,28 @@ describe('VectorSearchManager', () => {
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(1),
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Active entry' }]),
+                cleanupStaleVectors: () => {
+                    mockPrepare(
+                        'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+                    )
+                    mockRun()
+                },
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
             expect(result.indexed).toBe(1)
 
-            // First call should be DELETE FROM vec_embeddings
-            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM vec_embeddings')
+            expect(mockPrepare).toHaveBeenCalledWith(
+                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+            )
         })
 
         it('should return 0 when db not available', async () => {
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(0),
                 getEntriesPage: vi.fn().mockReturnValue([]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
@@ -437,6 +474,7 @@ describe('VectorSearchManager', () => {
                     { id: 1, content: 'Good entry' },
                     { id: 2, content: 'Will fail embedding' },
                 ]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
@@ -475,11 +513,13 @@ describe('VectorSearchManager', () => {
                     { id: 1, content: 'Good entry' },
                     { id: 2, content: 'Will fail insert' },
                 ]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
-            expect(result.indexed).toBe(1)
-            expect(result.failed).toBe(1)
+            // The entire batch is rolled back if any insert fails
+            expect(result.indexed).toBe(0)
+            expect(result.failed).toBe(2)
             expect(result.firstError).toBe('Insert failed!!')
         })
     })

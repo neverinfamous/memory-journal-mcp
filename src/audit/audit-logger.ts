@@ -1,7 +1,7 @@
 /**
- * memory-journal-mcp — Audit Logger
+ * memory-journal-mcp — Operational Telemetry Logger
  *
- * Async-buffered JSONL writer for the audit trail. Appends one
+ * Async-buffered JSONL writer for operational telemetry. Appends one
  * JSON object per line to a configurable file path, or writes to
  * stderr for containerised deployments (`--audit-log stderr`).
  *
@@ -13,13 +13,14 @@
  *   - Streaming tail-read: recent() reads only last 64KB for O(1) memory
  *   - stderr mode: `--audit-log stderr` routes to process.stderr
  *
- * Non-throwing by design: audit failures log to stderr but never
+ * Non-throwing by design: telemetry failures log to stderr but never
  * propagate to tool callers.
  */
 
 import { appendFile, mkdir, open, rename, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry } from './types.js'
+import { logger } from '../utils/logger.js'
 
 // ============================================================================
 // Constants
@@ -56,10 +57,12 @@ export class AuditLogger {
 
     private buffer: string[] = []
     private flushTimer: ReturnType<typeof setInterval> | null = null
-    private activeFlush: Promise<void> | null = null
+    private flushQueue: Promise<void> = Promise.resolve()
     private closed = false
     private dirEnsured = false
     private readonly stderrMode: boolean
+
+    private _droppedCount = 0
 
     constructor(config: AuditConfig) {
         this.config = config
@@ -75,14 +78,37 @@ export class AuditLogger {
     }
 
     /**
+     * Total number of events dropped due to memory limits or persistent I/O failure.
+     */
+    get droppedCount(): number {
+        return this._droppedCount
+    }
+
+    /**
      * Append an audit entry to the buffer.
      * Non-blocking — the entry is serialised and queued; the
      * actual file write happens on the next flush cycle.
+     *
+     * NOTE: This is a lossy operational telemetry mechanism, not a guaranteed immutable ledger.
+     * Under extreme backpressure or persistent I/O failure, oldest entries will be dropped
+     * to preserve memory and system stability.
      */
     log(entry: AuditEntry): void {
         if (this.closed || !this.config.enabled) return
 
         this.buffer.push(JSON.stringify(entry))
+
+        // Hard cap to prevent unbounded heap growth if flush loop hangs
+        if (this.buffer.length > 5000) {
+            this.buffer.shift()
+            if (this._droppedCount === 0) {
+                logger.warning(
+                    'Telemetry buffer overflow. Dropping oldest entries. Note: This log is a lossy operational telemetry mechanism.',
+                    { module: 'Audit' }
+                )
+            }
+            this._droppedCount++
+        }
 
         // Eagerly flush when the buffer is full
         if (this.buffer.length >= BUFFER_HIGH_WATER) {
@@ -91,51 +117,85 @@ export class AuditLogger {
     }
 
     /**
+     * Log a denied access attempt.
+     */
+    logDenial(
+        toolName: string,
+        reason: string,
+        context?: {
+            user?: string | null
+            scopes?: string[]
+            category?: AuditEntry['category']
+            scope?: string
+            requestId?: string
+            sessionId?: string
+        }
+    ): void {
+        this.log({
+            timestamp: new Date().toISOString(),
+            requestId: context?.requestId ?? `denied-${Date.now().toString()}`,
+            sessionId: context?.sessionId ?? undefined,
+            tool: toolName,
+            category: context?.category ?? 'read',
+            scope: context?.scope ?? '',
+            user: context?.user ?? null,
+            scopes: context?.scopes ?? [],
+            durationMs: 0,
+            success: false,
+            error: `Access Denied: ${reason}`,
+        })
+    }
+
+    /**
      * Flush the buffer to disk.
-     * Safe to call concurrently — serialises via `this.activeFlush` Promise.
+     * Safe to call concurrently — serialises via `this.flushQueue` Promise chain.
      */
     async flush(): Promise<void> {
-        // If a flush is currently running, wait for it to finish
-        if (this.activeFlush) {
-            await this.activeFlush
-            // If the buffer is empty after waiting, return
-            if (this.buffer.length === 0) return
-        }
-
         if (this.buffer.length === 0) return
 
-        const doFlush = async (): Promise<void> => {
-            // Rotate before writing if the log exceeds the configured size
-            await this.rotateIfNeeded()
+        this.flushQueue = this.flushQueue
+            .then(async () => {
+                if (this.buffer.length === 0) return
 
-            // Swap the buffer so new entries can accumulate while we write
-            const lines = this.buffer
-            this.buffer = []
+                // Rotate before writing if the log exceeds the configured size
+                await this.rotateIfNeeded()
 
-            try {
-                if (this.stderrMode) {
-                    // Stderr mode: write directly, no buffering to disk
-                    process.stderr.write(lines.join('\n') + '\n')
-                } else {
-                    await this.ensureDirectory()
-                    // One appendFile call with all buffered lines — each terminated by \n
-                    await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
+                // Swap the buffer so new entries can accumulate while we write
+                const lines = this.buffer
+                this.buffer = []
+
+                try {
+                    if (this.stderrMode) {
+                        // Stderr mode: write directly, no buffering to disk
+                        process.stderr.write(lines.join('\n') + '\n')
+                    } else {
+                        await this.ensureDirectory()
+                        // One appendFile call with all buffered lines — each terminated by \n
+                        await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
+                    }
+                } catch (err) {
+                    // Never throw — telemetry must not break tool execution
+                    const message = err instanceof Error ? err.message : String(err)
+                    logger.error(`Write failed: ${message}`, { module: 'Audit' })
+                    // Re-queue the failed lines so they aren't lost
+                    this.buffer.unshift(...lines)
+                    // Prevent infinite memory leak under permanent IO failure
+                    if (this.buffer.length > 5000) {
+                        logger.error(
+                            `Buffer overflow (${String(this.buffer.length)} entries), dropping oldest entries`,
+                            { module: 'Audit' }
+                        )
+                        const toDrop = this.buffer.length - 5000
+                        this.buffer = this.buffer.slice(-5000)
+                        this._droppedCount += toDrop
+                    }
                 }
-            } catch (err) {
-                // Never throw — audit must not break tool execution
-                const message = err instanceof Error ? err.message : String(err)
-                process.stderr.write(`[AUDIT] Write failed: ${message}\n`)
-                // Re-queue the failed lines so they aren't lost
-                this.buffer.unshift(...lines)
-            }
-        }
+            })
+            .catch(() => {
+                /* ignore */
+            })
 
-        this.activeFlush = doFlush()
-        try {
-            await this.activeFlush
-        } finally {
-            this.activeFlush = null
-        }
+        await this.flushQueue
     }
 
     /**
@@ -179,7 +239,8 @@ export class AuditLogger {
 
             try {
                 // stat after open — file is guaranteed to exist since we hold the FD
-                const info = await stat(this.config.logPath)
+                const info = await fh.stat()
+                if (info.isDirectory()) return []
                 const fileSize = info.size
                 if (fileSize === 0) return []
 
@@ -208,8 +269,11 @@ export class AuditLogger {
             } finally {
                 await fh.close()
             }
-        } catch {
-            return []
+        } catch (err) {
+            throw new Error(
+                `Failed to read telemetry log: ${err instanceof Error ? err.message : String(err)}`,
+                { cause: err }
+            )
         }
     }
 
@@ -249,11 +313,13 @@ export class AuditLogger {
                 await rename(oldFile, newFile).catch(() => null)
             }
 
-            // Rename current to .1
+            // Rename current directly to .1 to avoid a crash window where data is left in a .tmp file
             const rotatedPath = `${this.config.logPath}.1`
             await rename(this.config.logPath, rotatedPath)
-        } catch {
+        } catch (err) {
             // Rotation failure must not block logging
+            const message = err instanceof Error ? err.message : String(err)
+            logger.error(`Rotate failed: ${message}`, { module: 'Audit' })
         }
     }
 }

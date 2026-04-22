@@ -4,8 +4,16 @@ import {
     ASSISTANT_FOCUSED,
     MEDIUM_PRIORITY,
 } from '../../utils/resource-annotations.js'
-import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import type {
+    InternalResourceDef,
+    ResourceContext,
+    ResourceResult,
+    BriefingConfig,
+} from './shared.js'
 import { DEFAULT_FLAG_VOCABULARY } from '../tools/team/schemas.js'
+import { parseFlagContext } from '../../types/auto-context.js'
+import { logger } from '../../utils/logger.js'
+import { markUntrustedContent, sanitizeAuthor } from '../../utils/security-utils.js'
 
 // ============================================================================
 // Helpers
@@ -20,54 +28,14 @@ function enrichWithAuthor<T extends { id: number }>(
 ): (T & { author: string | null })[] {
     const teamDb = context.teamDb
     if (!teamDb || entries.length === 0) return entries.map((e: T) => ({ ...e, author: null }))
-    
-    const ids = entries.map(e => e.id)
-    const placeholders = ids.map(() => '?').join(',')
-    const authorResult = teamDb.executeRawQuery(
-        `SELECT id, author FROM memory_journal WHERE id IN (${placeholders})`,
-        ids
-    )
-    
-    const authorMap = new Map<number, string | null>()
-    if (authorResult[0]) {
-        authorResult[0].values.forEach((row: unknown[]) => {
-            authorMap.set(row[0] as number, row[1] as string | null)
-        })
-    }
-    
+
+    const ids = entries.map((e) => e.id)
+    const authorMap = teamDb.getAuthorsForEntries(ids)
+
     return entries.map((e: T) => ({
         ...e,
-        author: authorMap.get(e.id) ?? null
+        author: authorMap.get(e.id) ?? null,
     }))
-}
-
-/**
- * Parse auto_context JSON to extract flag metadata.
- */
-function parseFlagAutoContext(
-    autoContext: string | null
-): { flag_type: string; target_user: string | null; resolved: boolean; link: string | null } | null {
-    if (!autoContext) return null
-    try {
-        const parsed: unknown = JSON.parse(autoContext)
-        if (
-            typeof parsed === 'object' &&
-            parsed !== null &&
-            'flag_type' in parsed &&
-            'resolved' in parsed
-        ) {
-            const ctx = parsed as Record<string, unknown>
-            return {
-                flag_type: String(ctx['flag_type']),
-                target_user: typeof ctx['target_user'] === 'string' ? ctx['target_user'] : null,
-                resolved: Boolean(ctx['resolved']),
-                link: typeof ctx['link'] === 'string' ? ctx['link'] : null,
-            }
-        }
-        return null
-    } catch {
-        return null
-    }
 }
 
 // ============================================================================
@@ -78,7 +46,7 @@ function parseFlagAutoContext(
  * Get team resource definitions
  */
 export function getTeamResourceDefinitions(): InternalResourceDef[] {
-    return [
+    const resources: InternalResourceDef[] = [
         {
             uri: 'memory://team/recent',
             name: 'Recent Team Entries',
@@ -105,7 +73,11 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        entries: enriched,
+                        entries: enriched.map((e) => ({
+                            ...e,
+                            content: markUntrustedContent(e.content),
+                            author: e.author ? sanitizeAuthor(e.author) : null,
+                        })),
                         count: enriched.length,
                         source: 'team',
                     },
@@ -136,21 +108,12 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []
                 try {
-                    const authorResult = context.teamDb.executeRawQuery(
-                        `SELECT COALESCE(author, 'unknown') as author, COUNT(*) as count
-                         FROM memory_journal
-                         WHERE deleted_at IS NULL
-                         GROUP BY COALESCE(author, 'unknown')
-                         ORDER BY count DESC`
-                    )
-                    if (authorResult[0]) {
-                        authors = authorResult[0].values.map((row: unknown[]) => ({
-                            author: row[0] as string,
-                            count: row[1] as number,
-                        }))
-                    }
-                } catch {
-                    // Author column may not exist yet
+                    authors = context.teamDb.getAuthorStatistics()
+                } catch (error: unknown) {
+                    logger.warning('Failed to get team author statistics', {
+                        module: 'ResourceHandler',
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                    })
                 }
 
                 return {
@@ -196,26 +159,26 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
 
                 const activeFlags = enriched
                     .map((entry) => {
-                        const flagCtx = parseFlagAutoContext(entry.autoContext)
+                        const flagCtx = parseFlagContext(entry.autoContext)
                         if (!flagCtx || flagCtx.resolved) return null
                         return {
                             id: entry.id,
                             flag_type: flagCtx.flag_type,
                             target_user: flagCtx.target_user,
                             link: flagCtx.link,
-                            author: entry.author,
+                            author: entry.author ? sanitizeAuthor(entry.author) : null,
                             timestamp: entry.timestamp,
-                            preview:
+                            preview: markUntrustedContent(
                                 entry.content.slice(0, 120) +
-                                (entry.content.length > 120 ? '...' : ''),
+                                    (entry.content.length > 120 ? '...' : '')
+                            ),
                             tags: entry.tags,
                             projectNumber: entry.projectNumber ?? null,
                         }
                     })
                     .filter((f): f is NonNullable<typeof f> => f !== null)
 
-                const lastModified =
-                    activeFlags[0]?.timestamp ?? new Date().toISOString()
+                const lastModified = activeFlags[0]?.timestamp ?? new Date().toISOString()
 
                 return {
                     data: {
@@ -236,18 +199,30 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_FLAG],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
-                const custom = context.briefingConfig?.flagVocabulary
-                const vocabulary =
-                    custom && custom.length > 0 ? custom : [...DEFAULT_FLAG_VOCABULARY]
+                const config: BriefingConfig | undefined = context.briefingConfig
+                const custom: string[] | undefined = config?.flagVocabulary
+                const hasCustom = Array.isArray(custom) && custom.length > 0
+
+                const vocabulary: string[] = hasCustom
+                    ? custom.map(String)
+                    : [...DEFAULT_FLAG_VOCABULARY]
 
                 return {
                     data: {
                         vocabulary,
                         count: vocabulary.length,
-                        isDefault: !custom || custom.length === 0,
+                        isDefault: !hasCustom,
                     },
                 }
             },
         },
     ]
+
+    return resources.map((resource) => ({
+        ...resource,
+        capabilities: {
+            ...resource.capabilities,
+            requiresTeamScope: true,
+        },
+    }))
 }

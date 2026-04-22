@@ -40,6 +40,11 @@ function createMockContext() {
         db: {},
         progress: null,
         github: {
+            getPullRequest: vi.fn().mockResolvedValue({
+                number: 42,
+                title: 'Mock PR',
+                state: 'open',
+            }),
             getCopilotReviewSummary: vi.fn().mockResolvedValue({
                 prNumber: 42,
                 state: 'approved',
@@ -93,6 +98,29 @@ describe('getCopilotReviewTools', () => {
         expect(result['comments']).toHaveLength(3)
         expect((result['comments'] as Record<string, unknown>[])[0]!['body']).toBe('Use const here')
         expect(result['owner']).toBe('neverinfamous')
+    })
+
+    it('should return RESOURCE_NOT_FOUND when PR does not exist', async () => {
+        const context = createMockContext()
+        // Simulate missing PR
+        context.github.getPullRequest.mockResolvedValueOnce(null)
+
+        mockResolveOwnerRepo.mockResolvedValue({
+            owner: 'neverinfamous',
+            repo: 'memory-journal-mcp',
+            detectedOwner: 'neverinfamous',
+            detectedRepo: 'memory-journal-mcp',
+            github: context.github,
+        })
+
+        const tools = getCopilotReviewTools(context as never)
+        const handler = tools[0]!.handler
+
+        const result = (await handler({ pr_number: 999999 })) as Record<string, unknown>
+
+        expect(result['success']).toBe(false)
+        expect(result['code']).toBe('RESOURCE_NOT_FOUND')
+        expect(result['error']).toContain('not found')
     })
 
     it('should return error response when GitHub not available', async () => {

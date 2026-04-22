@@ -5,7 +5,6 @@
  * Allows runtime configuration of the sandbox mode.
  */
 
-import { CodeModeSandbox, SandboxPool } from './sandbox.js'
 import { WorkerSandbox, WorkerSandboxPool } from './worker-sandbox.js'
 import type { SandboxOptions, PoolOptions, SandboxResult } from './types.js'
 import { ConfigurationError } from '../types/errors.js'
@@ -15,7 +14,7 @@ import { ConfigurationError } from '../types/errors.js'
 // =============================================================================
 
 /** Available sandbox modes */
-export type SandboxMode = 'vm' | 'worker'
+export type SandboxMode = 'worker'
 
 /** Common sandbox interface */
 export interface ISandbox {
@@ -34,6 +33,7 @@ export interface ISandboxPool {
         timeoutMs?: number
     ): Promise<SandboxResult>
     getActiveCount(): number
+    dispose(): void
     readonly poolId: string
 }
 
@@ -41,7 +41,7 @@ export interface ISandboxPool {
 export interface SandboxModeInfo {
     mode: SandboxMode
     description: string
-    securityLevel: 'basic' | 'production'
+    securityLevel: 'basic' | 'trusted_admin'
     isolation: string
 }
 
@@ -69,7 +69,7 @@ export function getDefaultSandboxMode(): SandboxMode {
  * Get all available sandbox modes.
  */
 export function getAvailableSandboxModes(): SandboxMode[] {
-    return ['vm', 'worker']
+    return ['worker']
 }
 
 // =============================================================================
@@ -83,8 +83,6 @@ export function createSandbox(mode?: SandboxMode, options?: SandboxOptions): ISa
     const resolvedMode = mode ?? defaultMode
 
     switch (resolvedMode) {
-        case 'vm':
-            return new CodeModeSandbox(options)
         case 'worker':
             return new WorkerSandbox(options)
         default:
@@ -103,8 +101,6 @@ export function createSandboxPool(
     const resolvedMode = mode ?? defaultMode
 
     switch (resolvedMode) {
-        case 'vm':
-            return new SandboxPool(sandboxOptions, poolOptions)
         case 'worker':
             return new WorkerSandboxPool(sandboxOptions, poolOptions)
         default:
@@ -123,19 +119,12 @@ export function getSandboxModeInfo(mode?: SandboxMode): SandboxModeInfo {
     const resolvedMode = mode ?? defaultMode
 
     switch (resolvedMode) {
-        case 'vm':
-            return {
-                mode: 'vm',
-                description:
-                    'VM-based sandbox using node:vm (lightweight, not a true security boundary)',
-                securityLevel: 'basic',
-                isolation: 'Script-level context isolation via vm.createContext',
-            }
         case 'worker':
             return {
                 mode: 'worker',
-                description: 'Worker-thread sandbox using node:worker_threads (true V8 isolate)',
-                securityLevel: 'production',
+                description:
+                    'Worker-thread sandbox using node:worker_threads. Secure multi-tenant process isolation.',
+                securityLevel: 'trusted_admin',
                 isolation: 'Process-level V8 isolate with resource limits and MessagePort RPC',
             }
         default:

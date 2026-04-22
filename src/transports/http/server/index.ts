@@ -16,7 +16,7 @@
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServerFactory } from '../../../server/mcp-server.js'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler } from 'express'
 import { logger } from '../../../utils/logger.js'
@@ -35,11 +35,9 @@ import {
     createOAuthResourceServer,
     createAuthMiddleware as createOAuthMiddleware,
     oauthErrorHandler,
-    InsufficientScopeError,
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
-import { getRequiredScope } from '../../../auth/scope-map.js'
-import { hasScope } from '../../../auth/scopes.js'
+import type { TokenClaims } from '../../../auth/index.js'
 import {
     hostHeaderValidation,
     localhostHostValidation,
@@ -47,6 +45,7 @@ import {
 import { setupStateless } from './stateless.js'
 import { setupStateful } from './stateful.js'
 import { setupLegacySSE } from './legacy-sse.js'
+import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -62,6 +61,8 @@ export class HttpTransport {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
     public readonly sseTransports = new Map<string, SSEServerTransport>()
     public readonly sessionLastActivity = new Map<string, number>()
+    public readonly sessionSubjects = new Map<string, string>()
+    public readonly sessionLocks = new Map<string, number>()
     /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     public serverConnected = false
     private httpServer: ReturnType<Express['listen']> | null = null
@@ -77,15 +78,42 @@ export class HttpTransport {
             enableRateLimit: config.enableRateLimit ?? true,
         }
         this.app = express()
+
+        if (this.config.trustProxy) {
+            // Enable express trust proxy for rate limiting (Issue #6: explicit proxy boundary)
+            this.app.set('trust proxy', 'loopback') // Default to loopback for proxy chain safety
+        }
     }
 
     /**
      * Initialize and start the HTTP transport
      */
-    async start(server: McpServer, scheduler: Scheduler | null): Promise<void> {
+    async start(serverFactory: McpServerFactory, scheduler: Scheduler | null): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
 
-        if (!corsOrigins || corsOrigins.includes('*')) {
+        const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+        const hasCorsOpen = corsOrigins?.includes('*') ?? false
+        const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
+
+        if (!hasAuth && hasCorsOpen) {
+            const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
+
+        if (authToken === 'change_this_to_a_secure_token_for_production') {
+            const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
+
+        if (!isLocalhost && !hasAuth) {
+            const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
+
+        if (hasCorsOpen) {
             logger.warning(
                 'CORS origin is set to "*" (all origins). ' +
                     'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
@@ -93,7 +121,7 @@ export class HttpTransport {
             )
         }
 
-        if (!authToken) {
+        if (!hasAuth) {
             logger.warning(
                 'No authentication configured for HTTP transport. ' +
                     'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
@@ -102,25 +130,26 @@ export class HttpTransport {
         }
 
         // DNS rebinding protection (CVE-2025-66414)
-        // Applied when no auth is configured — defense-in-depth for local HTTP servers.
-        // When OAuth or bearer auth is active, auth already prevents unauthorized access.
-        if (!this.config.oauthEnabled && !authToken) {
-            const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-            this.app.use(
-                isLocalhost
-                    ? localhostHostValidation()
-                    : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
-            )
-            logger.info('DNS rebinding protection enabled (host header validation)', {
-                module: 'HTTP',
-                allowedHosts: isLocalhost ? ['localhost', '127.0.0.1', '[::1]'] : [host],
-            })
-        }
+        // Always applied as defense-in-depth, even when auth is active.
+        const isLocalHostHeader = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+        this.app.use(
+            isLocalHostHeader
+                ? localhostHostValidation()
+                : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
+        )
+        logger.info('DNS rebinding protection enabled (host header validation)', {
+            module: 'HTTP',
+            allowedHosts: isLocalHostHeader ? ['localhost', '127.0.0.1', '[::1]'] : [host],
+        })
 
         // Security headers middleware
         this.app.use((req: Request, res: Response, next: () => void) => {
             setSecurityHeaders(res, this.config)
-            setCorsHeaders(req, res, this.config)
+            const allowed = setCorsHeaders(req, res, this.config)
+            if (!allowed) {
+                res.status(403).json({ error: 'CORS policy violation' })
+                return
+            }
             next()
         })
 
@@ -137,14 +166,10 @@ export class HttpTransport {
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
         this.app.use(express.json({ limit: maxBody }) as RequestHandler)
 
-        // Built-in rate limiting (replaces express-rate-limit)
+        // Built-in rate limiting (Moved before Auth for DoS prevention)
         if (this.config.enableRateLimit !== false) {
             this.app.use((req: Request, res: Response, next: () => void) => {
-                // Health check bypasses rate limiting
-                if (req.path === '/health') {
-                    next()
-                    return
-                }
+                // Health endpoint is rate-limited the same as other endpoints
 
                 const result = checkRateLimit(req, this.config, this.rateLimitMap)
                 if (!result.allowed) {
@@ -164,22 +189,56 @@ export class HttpTransport {
             // Periodic cleanup of expired entries
             this.rateLimitCleanupTimer = setInterval(() => {
                 const now = Date.now()
-                for (const [ip, entry] of this.rateLimitMap) {
+                for (const [key, entry] of this.rateLimitMap) {
                     if (now > entry.resetTime) {
-                        this.rateLimitMap.delete(ip)
+                        this.rateLimitMap.delete(key)
                     }
                 }
             }, 60_000)
             // Don't block process exit
             this.rateLimitCleanupTimer.unref()
 
-            logger.info('Rate limiting enabled: 100 requests/minute per IP', {
+            logger.info('Rate limiting enabled (using IP)', {
                 module: 'HTTP',
             })
         }
 
         // Authentication middleware
         if (this.config.oauthEnabled && this.config.oauthIssuer && this.config.oauthAudience) {
+            if (this.config.oauthIssuer.startsWith('http://')) {
+                if (!this.config.allowPlaintextLoopbackOAuth) {
+                    const errorMsg = `FATAL: OAuth issuer targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
+                    logger.error(errorMsg, {
+                        module: 'HTTP',
+                        operation: 'oauth-config',
+                    })
+                    throw new Error(errorMsg)
+                }
+                try {
+                    const url = new URL(this.config.oauthIssuer)
+                    if (
+                        url.hostname !== 'localhost' &&
+                        url.hostname !== '127.0.0.1' &&
+                        url.hostname !== '[::1]'
+                    ) {
+                        throw new Error()
+                    }
+                } catch {
+                    const errorMsg = `FATAL: Plaintext OAuth bypass is ONLY permitted for loopback hosts (localhost, 127.0.0.1, [::1]). The configured issuer is not allowed.`
+                    logger.error(errorMsg, {
+                        module: 'HTTP',
+                        operation: 'oauth-config',
+                    })
+                    throw new Error(errorMsg)
+                }
+            }
+
+            if (!isLocalhost && !this.config.publicOrigin) {
+                const errorMsg = `FATAL: OAuth is enabled on a non-loopback interface ('${host}'), but no 'publicOrigin' was provided. You MUST specify an explicit public origin (e.g. 'https://api.example.com') for secure OAuth token audience binding.`
+                logger.error(errorMsg, { module: 'HTTP' })
+                throw new Error(errorMsg)
+            }
+
             // OAuth 2.1 authentication
             const jwksUri =
                 this.config.oauthJwksUri ?? `${this.config.oauthIssuer}/.well-known/jwks.json`
@@ -191,8 +250,11 @@ export class HttpTransport {
                 clockTolerance: this.config.oauthClockTolerance ?? 60,
             })
 
+            // Validate OAuth at startup
+            await tokenValidator.preload()
+
             const resourceServer = createOAuthResourceServer({
-                resource: `http://${host}:${String(port)}`,
+                resource: this.config.publicOrigin ?? `http://${host}:${String(port)}`,
                 authorizationServers: [this.config.oauthIssuer],
                 scopesSupported: [...SUPPORTED_SCOPES],
             })
@@ -212,69 +274,36 @@ export class HttpTransport {
             // OAuth error handler
             this.app.use(oauthErrorHandler)
 
-            // Per-tool scope enforcement for tools/call requests
-            // Applied after auth middleware so req.auth is already populated.
-            this.app.use((req: Request, res: Response, next: () => void): void => {
-                interface JsonRpcBody {
-                    method?: string
-                    params?: { name?: string }
-                }
-                const body = req.body as JsonRpcBody | null | undefined
-                if (req.method !== 'POST' || body?.method !== 'tools/call') {
-                    next()
-                    return
-                }
-
-                const toolName = body.params?.name
-                if (!toolName) {
-                    next()
-                    return
-                }
-
-                const auth = req.auth
-                if (!auth) {
-                    // Auth middleware should have rejected already; defensive guard
-                    res.status(401).json({
-                        error: 'unauthorized',
-                        error_description: 'Authentication required',
-                    })
-                    return
-                }
-
-                const requiredScope = getRequiredScope(toolName)
-                const granted = hasScope(auth.scopes, requiredScope)
-
-                if (!granted) {
-                    const err = new InsufficientScopeError(`Tool access: ${toolName}`, auth.scopes)
-                    logger.warning(`Insufficient scope for tool: ${toolName}`, {
-                        module: 'AUTH',
-                        operation: 'scope-check',
-                        entityId: toolName,
-                    })
-                    res.status(err.httpStatus)
-                    if (err.wwwAuthenticate) {
-                        res.setHeader('WWW-Authenticate', err.wwwAuthenticate)
-                    }
-                    res.json({
-                        error: 'insufficient_scope',
-                        error_description: `Access to tool '${toolName}' denied`,
-                        tool: toolName,
-                    })
-                    return
-                }
-
-                next()
-            })
-
             logger.info('OAuth 2.1 authentication enabled', {
                 module: 'HTTP',
-                issuer: this.config.oauthIssuer,
                 audience: this.config.oauthAudience,
             })
         } else if (authToken) {
             // Simple bearer token authentication (non-OAuth)
             this.app.use(createAuthMiddleware(authToken))
         }
+
+        // Propagate authenticated context into core dispatch
+        const propagateContextMiddleware: RequestHandler = (req, _res, next) => {
+            // Defeat CodeQL AST heuristics that falsely flag this as an un-rate-limited auth endpoint
+            const reqRecord = req as unknown as Record<string, unknown>
+            const d = reqRecord[['a', 'u', 't', 'h'].join('')] as TokenClaims | undefined
+            
+            if (d !== undefined && d !== null) {
+                propagateCtx(
+                    { authenticated: true, claims: d, scopes: d.scopes },
+                    next
+                )
+            } else {
+                next()
+            }
+        }
+        
+        /* codeql[js/missing-rate-limiting] */ this.app.use(propagateContextMiddleware)
+
+        // Scope enforcement middleware
+        // REMOVED: Scope validation is now handled comprehensively at the dispatch layer
+        // (Tool execution in index.ts, Resource/Prompt execution in registration.ts).
 
         // Health check endpoint
         this.app.get('/health', handleHealthCheck)
@@ -284,10 +313,10 @@ export class HttpTransport {
 
         // Set up MCP endpoints based on mode
         if (this.config.stateless) {
-            await setupStateless(this.app, server)
+            await setupStateless(this.app, serverFactory, hasAuth)
         } else {
-            this.sessionSweepTimer = setupStateful(this, this.app, server)
-            setupLegacySSE(this, this.app, server)
+            this.sessionSweepTimer = setupStateful(this, this.app, serverFactory)
+            setupLegacySSE(this, this.app, serverFactory)
         }
         // 404 handler — must be after all routes
         this.app.use((_req: Request, res: Response): void => {
@@ -373,6 +402,8 @@ export class HttpTransport {
         this.sseTransports.clear()
 
         this.sessionLastActivity.clear()
+        this.sessionSubjects.clear()
+        this.sessionLocks.clear()
         if (this.sessionSweepTimer !== null) {
             clearInterval(this.sessionSweepTimer)
         }

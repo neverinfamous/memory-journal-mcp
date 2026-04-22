@@ -18,6 +18,7 @@ import {
 } from './schemas.js'
 import { resolveOwnerRepo } from './helpers.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
+import { markUntrustedContent } from '../../../utils/security-utils.js'
 
 // ============================================================================
 // Tool Definitions
@@ -73,13 +74,14 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input.state,
                         input.limit
                     )
+                    const safeIssues = issues
                     return {
                         owner: resolved.owner,
                         repo: resolved.repo,
                         detectedOwner: resolved.detectedOwner,
                         detectedRepo: resolved.detectedRepo,
-                        issues,
-                        count: issues.length,
+                        issues: safeIssues,
+                        count: safeIssues.length,
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -134,13 +136,14 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input.state,
                         input.limit
                     )
+                    const safePrs = pullRequests
                     return {
                         owner: resolved.owner,
                         repo: resolved.repo,
                         detectedOwner: resolved.detectedOwner,
                         detectedRepo: resolved.detectedRepo,
-                        pullRequests,
-                        count: pullRequests.length,
+                        pullRequests: safePrs,
+                        count: safePrs.length,
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -206,32 +209,41 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Clone issue to avoid mutating cache
+                    const safeIssue = { ...issue }
+
                     // Apply body truncation
                     const truncateBody = input.truncate_body
                     let bodyTruncated = false
                     let bodyFullLength: number | undefined
-                    if (truncateBody > 0 && issue.body && issue.body.length > truncateBody) {
-                        bodyFullLength = issue.body.length
-                        const remaining = issue.body.length - truncateBody
-                        issue.body =
-                            issue.body.slice(0, truncateBody) +
-                            `\n[Truncated. Re-run with truncate_body: 0 to view remaining ${String(remaining)} chars]`
+                    if (
+                        truncateBody > 0 &&
+                        safeIssue.body &&
+                        safeIssue.body.length > truncateBody
+                    ) {
+                        bodyFullLength = safeIssue.body.length
+                        safeIssue.body =
+                            safeIssue.body.slice(0, truncateBody) +
+                            `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
                         bodyTruncated = true
                     }
+
+                    safeIssue.body = markUntrustedContent(safeIssue.body)
 
                     // Fetch comments if requested
                     let comments: { author: string; body: string; createdAt: string }[] | undefined
                     if (input.include_comments) {
-                        comments = await resolved.github.getIssueComments(
+                        const rawComments = await resolved.github.getIssueComments(
                             resolved.owner,
                             resolved.repo,
                             input.issue_number
                         )
+                        comments = rawComments
                     }
 
                     return {
                         issue: {
-                            ...issue,
+                            ...safeIssue,
                             ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
                         },
                         ...(comments ? { comments, commentCount: comments.length } : {}),
@@ -298,26 +310,26 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Clone PR to avoid mutating cache
+                    const safePr = { ...pullRequest }
+
                     // Apply body truncation
                     const truncateBody = input.truncate_body
                     let bodyTruncated = false
                     let bodyFullLength: number | undefined
-                    if (
-                        truncateBody > 0 &&
-                        pullRequest.body &&
-                        pullRequest.body.length > truncateBody
-                    ) {
-                        bodyFullLength = pullRequest.body.length
-                        const remaining = pullRequest.body.length - truncateBody
-                        pullRequest.body =
-                            pullRequest.body.slice(0, truncateBody) +
-                            `\n[Truncated. Re-run with truncate_body: 0 to view remaining ${String(remaining)} chars]`
+                    if (truncateBody > 0 && safePr.body && safePr.body.length > truncateBody) {
+                        bodyFullLength = safePr.body.length
+                        safePr.body =
+                            safePr.body.slice(0, truncateBody) +
+                            `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
                         bodyTruncated = true
                     }
 
+                    safePr.body = markUntrustedContent(safePr.body)
+
                     return {
                         pullRequest: {
-                            ...pullRequest,
+                            ...safePr,
                             ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
                         },
                         owner: resolved.owner,

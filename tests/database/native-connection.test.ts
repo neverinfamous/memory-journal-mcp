@@ -5,7 +5,7 @@
  * and close-during-initialization branches.
  */
 
-import { describe, it, expect, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import fs from 'node:fs'
 import { NativeConnectionManager } from '../../src/database/sqlite-adapter/native-connection.js'
@@ -34,9 +34,14 @@ function cleanupDirs(...paths: string[]) {
     }
 }
 
+beforeAll(() => {
+    cleanupFiles(TEST_DB_PATH, TEST_DB_PATH_2)
+    cleanupDirs('./test-native-nested', './test-native-nested-error')
+})
+
 afterAll(() => {
     cleanupFiles(TEST_DB_PATH, TEST_DB_PATH_2)
-    cleanupDirs('./test-native-nested')
+    cleanupDirs('./test-native-nested', './test-native-nested-error')
 })
 
 describe('NativeConnectionManager', () => {
@@ -49,7 +54,7 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH)
             await mgr.initialize()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             expect(db).toBeDefined()
 
             // DB should be usable
@@ -64,7 +69,7 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             await mgr.initialize() // should not throw
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             expect(db).toBeDefined()
             mgr.close()
         })
@@ -99,7 +104,7 @@ describe('NativeConnectionManager', () => {
     describe('ensureDb', () => {
         it('should throw ConnectionError when DB is not initialized', () => {
             const mgr = new NativeConnectionManager(':memory:')
-            expect(() => mgr.getRawDb()).toThrow()
+            expect(() => mgr.getNativeDb()).toThrow()
         })
     })
 
@@ -113,8 +118,8 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             mgr.close()
 
-            // getRawDb should throw after close
-            expect(() => mgr.getRawDb()).toThrow()
+            // getNativeDb should throw after close
+            expect(() => mgr.getNativeDb()).toThrow()
         })
 
         it('should be safe to call close() multiple times', async () => {
@@ -135,7 +140,7 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH)
             await mgr.initialize()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             // Verify some migration columns exist
             const info = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
             const cols = info.map((r) => r.name)
@@ -150,7 +155,7 @@ describe('NativeConnectionManager', () => {
         it('should populate FTS5 on existing DBs missing FTS rows', async () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr.initialize()
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
 
             // Drop insert trigger so insertion doesn't hit FTS index
             db.exec('DROP TRIGGER IF EXISTS fts_content_ai')
@@ -160,11 +165,28 @@ describe('NativeConnectionManager', () => {
             // Re-init should populate FTS (entryCount=1, ftsCount=0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr2.initialize()
-
-            const db2 = mgr2.getRawDb() as Database
-            const ftsCount = (
-                db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
-            ).c
+            // Poll for the background process to finish
+            const db2 = mgr2.getNativeDb() as Database
+            let ftsCount = 0
+            for (let i = 0; i < 50; i++) {
+                ftsCount = (
+                    db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
+                        c: number
+                    }
+                ).c
+                if (ftsCount === 1) break
+                await new Promise((r) => setTimeout(r, 100))
+            }
+            if (ftsCount !== 1) {
+                console.log(
+                    'MEMORY_JOURNAL ROWS:',
+                    db2.prepare('SELECT id, content FROM memory_journal').all()
+                )
+                console.log(
+                    'FTS_CONTENT ROWS:',
+                    db2.prepare('SELECT rowid, * FROM fts_content').all()
+                )
+            }
             expect(ftsCount).toBe(1)
             mgr2.close()
         })
@@ -173,7 +195,7 @@ describe('NativeConnectionManager', () => {
             // First DB is initialized
             const mgr = new NativeConnectionManager(TEST_DB_PATH)
             await mgr.initialize()
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
 
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('bar', 'test')")
@@ -187,11 +209,18 @@ describe('NativeConnectionManager', () => {
             // Re-init should trigger ghost cleanup because ftsCount (3) > entryCount (0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH)
             await mgr2.initialize()
-
-            const db2 = mgr2.getRawDb() as Database
-            const ftsCount = (
-                db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
-            ).c
+            // Poll for background cleanup to finish
+            const db2 = mgr2.getNativeDb() as Database
+            let ftsCount = 3
+            for (let i = 0; i < 50; i++) {
+                ftsCount = (
+                    db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
+                        c: number
+                    }
+                ).c
+                if (ftsCount === 0) break
+                await new Promise((r) => setTimeout(r, 100))
+            }
             expect(ftsCount).toBe(0) // should be cleaned up!
             mgr2.close()
         })
@@ -207,7 +236,7 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             mgr.applyTeamSchema()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             const info = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
             const cols = info.map((r) => r.name)
             expect(cols).toContain('author')
@@ -226,7 +255,7 @@ describe('NativeConnectionManager', () => {
     })
 
     // =========================================================================
-    // executeRawQuery
+    // _executeRawQueryUnsafe
     // =========================================================================
 
     describe('exec', () => {
@@ -234,7 +263,7 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(':memory:')
             await mgr.initialize()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             db.exec(
                 "INSERT INTO memory_journal (entry_type, content, timestamp, is_personal) VALUES ('test_entry', 'test content', datetime('now'), 1)"
             )

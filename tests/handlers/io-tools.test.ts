@@ -36,6 +36,11 @@ vi.mock('../../src/markdown/index.js', () => ({
     }),
 }))
 
+vi.mock('../../src/utils/security-utils.js', () => ({
+    assertSafeDirectoryPath: vi.fn(),
+    assertAllowedPathBoundaries: vi.fn(),
+}))
+
 import { getIoTools } from '../../src/handlers/tools/io.js'
 
 // ============================================================================

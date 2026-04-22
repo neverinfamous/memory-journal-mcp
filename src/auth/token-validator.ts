@@ -44,13 +44,31 @@ export class TokenValidator {
         this.clockTolerance = config.clockTolerance ?? 60
         this.jwksCacheTtl = config.jwksCacheTtl ?? 3600
 
-        const issuerHost = (() => {
-            try {
-                return new URL(this.issuer).hostname
-            } catch {
-                return '[configured]'
-            }
-        })()
+        const issuerUrl = new URL(this.issuer)
+        const jwksUrl = new URL(this.jwksUri)
+
+        const isLoopback = (host: string): boolean =>
+            host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+
+        if (issuerUrl.protocol !== 'https:' && !isLoopback(issuerUrl.hostname)) {
+            throw new Error(
+                `Security Violation: Issuer must use HTTPS protocol (got ${this.issuer})`
+            )
+        }
+
+        if (jwksUrl.protocol !== 'https:' && !isLoopback(jwksUrl.hostname)) {
+            throw new Error(
+                `Security Violation: JWKS URI must use HTTPS protocol (got ${this.jwksUri})`
+            )
+        }
+
+        if (issuerUrl.origin !== jwksUrl.origin) {
+            throw new Error(
+                `Security Violation: JWKS URI origin (${jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`
+            )
+        }
+
+        const issuerHost = new URL(this.issuer).hostname
         logger.info(`Token Validator initialized for issuer: ${issuerHost}`, {
             module: 'AUTH',
             operation: 'init',
@@ -119,6 +137,7 @@ export class TokenValidator {
             this.jwks = jose.createRemoteJWKSet(new URL(this.jwksUri), {
                 cooldownDuration: 30000, // 30 seconds between retries
                 cacheMaxAge: this.jwksCacheTtl * 1000,
+                timeoutDuration: 5000, // Explicit 5s timeout to prevent socket hangs
             })
 
             this.jwksExpiry = Date.now() + this.jwksCacheTtl * 1000
@@ -185,7 +204,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: 'Token has expired',
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.TOKEN_EXPIRED,
             }
         }
@@ -198,7 +217,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: `Token claim validation failed: ${error.message}`,
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.TOKEN_INVALID,
             }
         }
@@ -211,7 +230,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: 'Token signature verification failed',
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.SIGNATURE_INVALID,
             }
         }
@@ -224,7 +243,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: 'No matching key found in JWKS',
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.TOKEN_INVALID,
             }
         }
@@ -239,7 +258,7 @@ export class TokenValidator {
 
         return {
             valid: false,
-            error: `Token validation failed: ${message}`,
+            error: 'Invalid or expired token',
             errorCode: AUTH_ERROR_CODES.TOKEN_INVALID,
         }
     }
@@ -278,6 +297,43 @@ export class TokenValidator {
         }
 
         return new InvalidTokenError(result.error)
+    }
+
+    /**
+     * Preload JWKS to validate availability at startup
+     */
+    async preload(): Promise<void> {
+        const jwksHost = (() => {
+            try {
+                return new URL(this.jwksUri).hostname
+            } catch {
+                return '[configured]'
+            }
+        })()
+
+        logger.info(`Pre-fetching JWKS from: ${jwksHost}`, {
+            module: 'AUTH',
+            operation: 'jwks-preload',
+        })
+
+        try {
+            const response = await fetch(this.jwksUri, {
+                method: 'GET',
+                signal: AbortSignal.timeout(10000),
+                redirect: 'error',
+            })
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`)
+            }
+        } catch (error) {
+            const cause = error instanceof Error ? error : new Error(String(error))
+            logger.error('Failed to pre-fetch JWKS at startup', {
+                module: 'AUTH',
+                operation: 'jwks-preload',
+                error: cause.message,
+            })
+            throw new JwksFetchError(this.jwksUri, cause)
+        }
     }
 }
 

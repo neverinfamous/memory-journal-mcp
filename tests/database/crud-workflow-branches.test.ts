@@ -74,7 +74,7 @@ function createTestDb() {
 
 /** Creates a mock NativeConnectionManager for TagsManager */
 function makeCtx(db: InstanceType<typeof Database>) {
-    return { getRawDb: () => db } as ConstructorParameters<typeof TagsManager>[0]
+    return { getNativeDb: () => db } as ConstructorParameters<typeof TagsManager>[0]
 }
 
 function createContext(db: InstanceType<typeof Database>) {
@@ -314,13 +314,13 @@ describe('Workflow prompts — branch coverage', () => {
             }),
             searchEntries: vi.fn().mockReturnValue(entries),
             getRecentEntries: vi.fn().mockReturnValue(entries),
-            executeRawQuery: vi.fn().mockReturnValue(
+            getSignificantEntries: vi.fn().mockReturnValue(
                 entries.map((e) => ({
                     id: e.id,
                     content: e.content,
-                    entry_type: e.entryType,
+                    entryType: e.entryType,
                     timestamp: e.timestamp,
-                    significance_type: 'decision',
+                    significanceType: 'decision',
                 }))
             ),
         } as unknown as IDatabaseAdapter

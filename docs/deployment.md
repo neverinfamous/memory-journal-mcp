@@ -11,6 +11,10 @@ The full CI/CD pipeline (`gatekeeper.yml`) triggers automatically on push to `ma
 
 If all four pass → `docker-publish.yml` runs → then `publish-npm.yml` runs.
 
+## Deployment Architecture Constraints
+
+**Single-Instance Requirement**: `memory-journal-mcp` is designed for single-instance operation. If you run multiple instances (e.g., behind a load balancer), you **MUST** explicitly document and enforce single-writer / single-instance behavior for the `restore_backup` tool to prevent database corruption during an active restore operation.
+
 ## To trigger a release
 
 **Option A — Automatic (push to main or tag):** Simply merge/push a tag (e.g., `v7.3.0`) to `main`. _(Note: Pushing directly to main without a tag will just run the validation gates without publishing)._

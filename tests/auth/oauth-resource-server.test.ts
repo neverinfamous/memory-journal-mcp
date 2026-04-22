@@ -4,7 +4,7 @@
  * Tests for RFC 9728 Protected Resource Metadata.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
     OAuthResourceServer,
     createOAuthResourceServer,
@@ -161,7 +161,10 @@ describe('OAuthResourceServer', () => {
 
             handler(mockReq, mockRes, vi.fn())
 
-            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json')
+            expect(mockRes.setHeader).toHaveBeenCalledWith(
+                'Content-Type',
+                'application/oauth-protected-resource-metadata+json'
+            )
             expect(mockRes.setHeader).toHaveBeenCalledWith('Cache-Control', 'public, max-age=3600')
             expect(mockRes.json).toHaveBeenCalled()
 

@@ -7,7 +7,7 @@
  */
 
 import { TOOL_GROUPS } from '../filtering/tool-filter.js'
-import { TOOL_GROUP_SCOPES, SCOPES } from './scopes.js'
+import { TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
 import type { ToolGroup } from '../types/index.js'
 
@@ -28,18 +28,19 @@ for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
     }
 }
 
-// Per-tool scope overrides — import tools mutate the journal and require write
-toolScopeMap.set('import_markdown', SCOPES.WRITE)
-toolScopeMap.set('team_import_markdown', SCOPES.WRITE)
+// Per-tool scope overrides
+for (const [toolName, scope] of Object.entries(TOOL_SCOPE_OVERRIDES)) {
+    toolScopeMap.set(toolName, scope)
+}
 
-/**
- * Get the required scope for a tool by name.
- *
- * @param toolName - The MCP tool name (e.g., "create_entry")
- * @returns The required scope, or "read" as a safe default for unknown tools
- */
 export function getRequiredScope(toolName: string): StandardScope {
-    return toolScopeMap.get(toolName) ?? SCOPES.READ
+    const scope = toolScopeMap.get(toolName)
+    if (!scope) {
+        throw new Error(
+            `CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`
+        )
+    }
+    return scope
 }
 
 /**

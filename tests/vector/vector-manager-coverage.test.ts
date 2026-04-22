@@ -15,12 +15,8 @@ describe('VectorSearchManager - error coverage', () => {
 
     it('covers DB insertion error in addEntry', async () => {
         const mockDb = {
-            getRawDb: vi.fn().mockReturnValue({
-                prepare: vi.fn().mockReturnValue({
-                    run: vi.fn().mockImplementation(() => {
-                        throw new Error('db error')
-                    }),
-                }),
+            upsertVector: vi.fn().mockImplementation(() => {
+                throw new Error('db error')
             }),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
@@ -35,12 +31,8 @@ describe('VectorSearchManager - error coverage', () => {
 
     it('covers error path in search', async () => {
         const mockDb = {
-            getRawDb: vi.fn().mockReturnValue({
-                prepare: vi.fn().mockReturnValue({
-                    all: vi.fn().mockImplementation(() => {
-                        throw new Error('db search err')
-                    }),
-                }),
+            searchVectors: vi.fn().mockImplementation(() => {
+                throw new Error('db search err')
             }),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
@@ -48,28 +40,27 @@ describe('VectorSearchManager - error coverage', () => {
         vi.spyOn(manager, 'generateEmbedding').mockResolvedValue([0.1])
         ;(manager as any).initialized = true
 
-        const res = await manager.search('query')
-        expect(res).toEqual([])
+        await expect(manager.search('query')).rejects.toThrow('db search err')
     })
 
     it('covers error path in searchByEntryId', async () => {
         const mockDb = {
-            getRawDb: vi.fn().mockReturnValue({
-                prepare: vi.fn().mockImplementation(() => {
-                    throw new Error('db search id err')
-                }),
+            getVector: vi.fn().mockImplementation(() => {
+                throw new Error('db search id err')
             }),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         vi.spyOn(manager, 'initialize').mockResolvedValue()
         ;(manager as any).initialized = true
 
-        const res = await manager.searchByEntryId(1)
-        expect(res).toEqual([])
+        await expect(manager.searchByEntryId(1)).rejects.toThrow('db search id err')
     })
 
     it('covers initError in rebuildIndex', async () => {
-        const mockDb = { getRawDb: vi.fn() } as unknown as IDatabaseAdapter
+        const mockDb = {
+            clearVectors: vi.fn(),
+            getActiveEntryCount: vi.fn().mockReturnValue(0),
+        } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         vi.spyOn(manager, 'initialize').mockRejectedValue(new Error('init reb err'))
         const res = await manager.rebuildIndex(mockDb)
@@ -80,20 +71,16 @@ describe('VectorSearchManager - error coverage', () => {
     it('covers insertion and embedding errors in rebuildIndex', async () => {
         let calls = 0
         const mockDb = {
-            getRawDb: vi.fn().mockReturnValue({
-                prepare: vi.fn().mockImplementation((query: string) => ({
-                    run: vi.fn().mockImplementation(() => {
-                        if (query.includes('INSERT') && calls++ === 0) {
-                            throw new Error('insert err first')
-                        }
-                    }),
-                })),
+            clearVectors: vi.fn(),
+            upsertVectors: vi.fn().mockImplementation(() => {
+                if (calls++ === 0) throw new Error('insert err first')
             }),
             getActiveEntryCount: vi.fn().mockReturnValue(2),
             getEntriesPage: vi.fn().mockReturnValue([
                 { id: 1, content: 'fail db' },
                 { id: 2, content: 'fail embed' },
             ]),
+            executeInTransaction: vi.fn().mockImplementation((cb) => cb()),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         vi.spyOn(manager, 'initialize').mockResolvedValue()
@@ -105,15 +92,13 @@ describe('VectorSearchManager - error coverage', () => {
 
         const res = await manager.rebuildIndex(mockDb)
         expect(res.failed).toBe(2) // 1 failed insert, 1 failed embed
-        expect(res.firstError).toContain('insert err first') // whichever came first
+        expect(res.firstError).toContain('embed err') // embed errors are processed in the first loop
     })
 
     it('covers error path in getStats', async () => {
         const mockDb = {
-            getRawDb: vi.fn().mockReturnValue({
-                prepare: vi.fn().mockImplementation(() => {
-                    throw new Error('stats err')
-                }),
+            getVectorCount: vi.fn().mockImplementation(() => {
+                throw new Error('stats err')
             }),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)

@@ -11,6 +11,7 @@ import type { AuthorizationServerMetadata, AuthServerDiscoveryConfig } from './t
 import { AuthServerDiscoveryError } from './errors.js'
 import { ConfigurationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
+import * as https from 'node:https'
 
 // =============================================================================
 // Authorization Server Discovery
@@ -63,32 +64,113 @@ export class AuthorizationServerDiscovery {
 
         const metadataUrl = `${this.authServerUrl}/.well-known/oauth-authorization-server`
 
+        let parsedUrl: URL
+        try {
+            parsedUrl = new URL(metadataUrl)
+        } catch {
+            throw new ConfigurationError(`Invalid authorization server URL: ${metadataUrl}`)
+        }
+
+        // SSRF Protection: Enforce HTTPS
+        // This acts as the primary mitigation against DNS rebinding (TOCTOU) attacks,
+        // as the target server would need a valid TLS certificate for the requested hostname.
+        if (parsedUrl.protocol !== 'https:') {
+            throw new ConfigurationError(`Authorization server URL must use HTTPS: ${metadataUrl}`)
+        }
+
+        // SSRF Protection: Block private and loopback IP spaces via DNS resolution
+        const host = parsedUrl.hostname.toLowerCase()
+        try {
+            const { promises: dns } = await import('node:dns')
+            const { address } = await dns.lookup(host)
+
+            const isLoopback =
+                address === 'localhost' ||
+                address === '127.0.0.1' ||
+                address === '::1' ||
+                address.startsWith('127.') ||
+                address === '0.0.0.0' ||
+                address === '::'
+            const isPrivateV4 =
+                address.startsWith('10.') ||
+                address.startsWith('192.168.') ||
+                /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(address)
+            const isLinkLocal = address.startsWith('169.254.')
+            const isPrivateV6 = address.startsWith('fc') || address.startsWith('fd')
+
+            if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
+                throw new ConfigurationError(
+                    `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`
+                )
+            }
+
+            // Store the safe resolved IP to pin the connection and prevent TOCTOU
+            parsedUrl.hostname = address
+        } catch (err) {
+            if (err instanceof ConfigurationError) throw err
+            throw new ConfigurationError(`Failed to resolve authorization server hostname: ${host}`)
+        }
+
+        const resolvedAddress = parsedUrl.hostname
+        parsedUrl.hostname = host // restore for the request options
+
         logger.info(`Fetching authorization server metadata from: ${metadataUrl}`, {
             module: 'AUTH',
             operation: 'discovery',
         })
 
         try {
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), this.timeout)
-
-            const response = await fetch(metadataUrl, {
-                method: 'GET',
-                headers: {
-                    Accept: 'application/json',
-                },
-                signal: controller.signal,
-            })
-
-            clearTimeout(timeoutId)
-
-            if (!response.ok) {
-                throw new ConfigurationError(
-                    `HTTP ${String(response.status)}: ${response.statusText}`
+            const metadata = await new Promise<AuthorizationServerMetadata>((resolve, reject) => {
+                const req = https.request(
+                    metadataUrl,
+                    {
+                        method: 'GET',
+                        headers: {
+                            Accept: 'application/json',
+                            Host: parsedUrl.host,
+                        },
+                        lookup: (_hostname, _options, callback) => {
+                            // SSRF Protection: Pin connection to the pre-validated IP to eliminate TOCTOU
+                            callback(null, resolvedAddress, resolvedAddress.includes(':') ? 6 : 4)
+                        },
+                        timeout: this.timeout,
+                    },
+                    (res) => {
+                        if (
+                            res.statusCode === undefined ||
+                            res.statusCode < 200 ||
+                            res.statusCode >= 300
+                        ) {
+                            reject(
+                                new ConfigurationError(
+                                    `HTTP ${String(res.statusCode ?? 'unknown')}: ${res.statusMessage || ''}`
+                                )
+                            )
+                            return
+                        }
+                        const chunks: Buffer[] = []
+                        res.on('data', (d: Buffer) => chunks.push(d))
+                        res.on('end', () => {
+                            try {
+                                resolve(
+                                    JSON.parse(
+                                        Buffer.concat(chunks).toString()
+                                    ) as AuthorizationServerMetadata
+                                )
+                            } catch {
+                                reject(new ConfigurationError('Invalid JSON response'))
+                            }
+                        })
+                    }
                 )
-            }
 
-            const metadata = (await response.json()) as AuthorizationServerMetadata
+                req.on('error', reject)
+                req.on('timeout', () => {
+                    req.destroy()
+                    reject(new Error('Request timeout'))
+                })
+                req.end()
+            })
 
             // Validate required fields per RFC 8414
             this.validateMetadata(metadata)

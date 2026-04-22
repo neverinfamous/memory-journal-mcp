@@ -25,24 +25,11 @@ test.describe('Payload Contracts: Backup Restore', () => {
 
     test('restore_backup(confirm: false) returns structured validation error', async () => {
         // When confirm is false, the handler returns a structured error response.
-        // The MCP SDK marks tool responses containing { success: false } as isError when
-        // the outputSchema is validated — use raw callTool here instead of callToolAndParse.
-        const response = await client.callTool({
-            name: 'restore_backup',
-            arguments: {
-                filename: 'nonexistent.db',
-                confirm: false,
-            },
-        })
+        const payload = (await callToolAndParse(client, 'restore_backup', {
+            filename: 'nonexistent.db',
+            confirm: false,
+        })) as Record<string, unknown>
 
-        // isError may be true because the SDK detected a structured error response
-        // The key assertion is that the content is a well-formed error, not an exception
-        expect(Array.isArray(response.content)).toBe(true)
-        const content = response.content as Array<{ type: string; text?: string }>
-        expect(content.length).toBeGreaterThan(0)
-        expect(content[0]!.type).toBe('text')
-
-        const payload = JSON.parse(content[0]!.text!) as Record<string, unknown>
         expect(payload.success).toBe(false)
         expect(typeof payload.error).toBe('string')
         expect((payload.error as string).toLowerCase()).toContain('confirm')
@@ -51,18 +38,11 @@ test.describe('Payload Contracts: Backup Restore', () => {
     })
 
     test('restore_backup with nonexistent file returns structured error', async () => {
-        const response = await client.callTool({
-            name: 'restore_backup',
-            arguments: {
-                filename: 'nonexistent-backup-file-that-does-not-exist.db',
-                confirm: true,
-            },
-        })
+        const payload = (await callToolAndParse(client, 'restore_backup', {
+            filename: 'nonexistent-backup-file-that-does-not-exist.db',
+            confirm: true,
+        })) as Record<string, unknown>
 
-        expect(Array.isArray(response.content)).toBe(true)
-        const payload = JSON.parse(
-            (response.content as Array<{ type: string; text: string }>)[0]!.text
-        ) as Record<string, unknown>
         expect(payload.success).toBe(false)
         expect(typeof payload.error).toBe('string')
     })
@@ -85,18 +65,11 @@ test.describe('Payload Contracts: Backup Restore', () => {
         const backupFilename = backup.filename as string
 
         // Step 3: Restore from the backup (use filename directly from backup result)
-        const restore = await client.callTool({
-            name: 'restore_backup',
-            arguments: {
-                filename: backupFilename,
-                confirm: true,
-            },
-        })
+        const restorePayload = (await callToolAndParse(client, 'restore_backup', {
+            filename: backupFilename,
+            confirm: true,
+        })) as Record<string, unknown>
 
-        expect(Array.isArray(restore.content)).toBe(true)
-        const restorePayload = JSON.parse(
-            (restore.content as Array<{ type: string; text: string }>)[0]!.text
-        ) as Record<string, unknown>
         expect(restorePayload.success).toBe(true)
     })
 })

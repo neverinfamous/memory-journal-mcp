@@ -6,24 +6,42 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     const { db, tagsMgr } = context
 
     let timestamp = input.timestamp ?? new Date().toISOString()
-    // SQLite expects standard ISO format
+
+    // Accept broad ISO-8601 input shapes, then normalize to canonical UTC ISO format for storage.
     if (!timestamp.includes('T')) {
-        timestamp += 'T00:00:00.000Z'
+        timestamp = `${timestamp}T00:00:00.000Z`
+    } else {
+        const parsedTimestamp = new Date(timestamp)
+        if (Number.isNaN(parsedTimestamp.getTime())) {
+            throw new Error(
+                `Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`
+            )
+        }
+        timestamp = parsedTimestamp.toISOString()
     }
 
     let insertId!: number
     const txn = db.transaction(() => {
-        // Insert main entry
-        const stmt = db.prepare(
-            `
-            INSERT INTO memory_journal (
-                entry_type, content, timestamp, is_personal, significance_type, auto_context,
-                project_number, project_owner, issue_number, issue_url, pr_number, pr_url, pr_status,
-                workflow_run_id, workflow_name, workflow_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `
-        )
-        const result = stmt.run(
+        // Build dynamic columns and values
+        const columns = [
+            'entry_type',
+            'content',
+            'timestamp',
+            'is_personal',
+            'significance_type',
+            'auto_context',
+            'project_number',
+            'project_owner',
+            'issue_number',
+            'issue_url',
+            'pr_number',
+            'pr_url',
+            'pr_status',
+            'workflow_run_id',
+            'workflow_name',
+            'workflow_status',
+        ]
+        const values = [
             input.entryType ?? 'personal_reflection',
             input.content,
             timestamp,
@@ -39,8 +57,19 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.prStatus || null,
             input.workflowRunId ?? null,
             input.workflowName || null,
-            input.workflowStatus || null
+            input.workflowStatus || null,
+        ]
+
+        if (input.author !== undefined) {
+            columns.push('author')
+            values.push(input.author)
+        }
+
+        const placeholders = columns.map(() => '?').join(', ')
+        const stmt = db.prepare(
+            `INSERT INTO memory_journal (${columns.join(', ')}) VALUES (${placeholders})`
         )
+        const result = stmt.run(...values)
         insertId = result.lastInsertRowid as number
 
         // Link tags
@@ -53,7 +82,9 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
     const entry = getEntryById(context, insertId)
     if (!entry) {
-        throw new Error(`Failed to retrieve newly created entry ${insertId}`)
+        throw new Error(
+            `Storage Inconsistency Anomaly: Entry with ID ${insertId} successfully written but could not be read back.`
+        )
     }
     return entry
 }

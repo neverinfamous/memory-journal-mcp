@@ -7,7 +7,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
     getAuthContext,
-    setAuthContext,
     withAuthContext,
     isAuthenticated,
     getAuthenticatedScopes,
@@ -36,7 +35,7 @@ describe('auth-context', () => {
                     exp: Math.floor(Date.now() / 1000) + 3600,
                     iat: Math.floor(Date.now() / 1000),
                 },
-                token: 'test-token',
+                scopes: ['read', 'write'],
             }
 
             const result = withAuthContext(context, () => {
@@ -56,7 +55,7 @@ describe('auth-context', () => {
                     exp: 0,
                     iat: 0,
                 },
-                token: 'token-1',
+                scopes: ['read'],
             }
 
             const context2 = {
@@ -67,7 +66,7 @@ describe('auth-context', () => {
                     exp: 0,
                     iat: 0,
                 },
-                token: 'token-2',
+                scopes: ['admin'],
             }
 
             withAuthContext(context1, () => {
@@ -87,29 +86,6 @@ describe('auth-context', () => {
         })
     })
 
-    describe('setAuthContext', () => {
-        it('should set and return context', () => {
-            const context = {
-                authenticated: true as const,
-                claims: {
-                    sub: 'user-1',
-                    scopes: ['read'],
-                    exp: 0,
-                    iat: 0,
-                },
-                token: 'test-token',
-            }
-
-            // setAuthContext sets the context for checking later
-            // This function uses enterWith which replaces the current store
-            setAuthContext(context)
-
-            const ctx = getAuthContext()
-            expect(ctx?.authenticated).toBe(true)
-            expect(ctx?.claims?.sub).toBe('user-1')
-        })
-    })
-
     describe('isAuthenticated', () => {
         it('should return false when no context', () => {
             expect(isAuthenticated()).toBe(false)
@@ -124,7 +100,7 @@ describe('auth-context', () => {
                     exp: 0,
                     iat: 0,
                 },
-                token: 'test-token',
+                scopes: ['read'],
             }
 
             const result = withAuthContext(context, () => {
@@ -149,7 +125,7 @@ describe('auth-context', () => {
                     exp: 0,
                     iat: 0,
                 },
-                token: 'test-token',
+                scopes: ['read', 'write'],
             }
 
             const result = withAuthContext(context, () => {

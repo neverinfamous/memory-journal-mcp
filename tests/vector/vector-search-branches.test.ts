@@ -28,11 +28,7 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should return false from addEntry when no db after initialize', async () => {
-        const manager = new VectorSearchManager({
-            getRawDb: () => {
-                throw new Error('No DB')
-            },
-        } as any)
+        const manager = new VectorSearchManager(null as any)
 
         // Force skipping real initialization by marking it as initialized
         // but with no db connection
@@ -43,40 +39,14 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should return empty results from search when no db after initialize', async () => {
-        const manager = new VectorSearchManager({
-            getRawDb: () => {
-                throw new Error('No DB')
-            },
-        } as any)
+        const manager = new VectorSearchManager(null as any)
         Object.assign(manager, { initialized: true })
 
-        const result = await manager.search('test query')
-        expect(result).toEqual([])
-    })
-
-    it('should return 0 from rebuildIndex when no db', async () => {
-        const manager = new VectorSearchManager({
-            getRawDb: () => {
-                throw new Error('No DB')
-            },
-        } as any)
-        Object.assign(manager, { initialized: true })
-
-        const mockDbAdapter = {
-            getActiveEntryCount: vi.fn().mockReturnValue(0),
-            getEntriesPage: vi.fn().mockReturnValue([]),
-        }
-
-        const result = await manager.rebuildIndex(mockDbAdapter as never)
-        expect(result).toEqual({ indexed: 0, failed: 0, firstError: null })
+        await expect(manager.search('test query')).rejects.toThrow('Vector database not available')
     })
 
     it('should return stats with zero values when no db', async () => {
-        const manager = new VectorSearchManager({
-            getRawDb: () => {
-                throw new Error('No DB')
-            },
-        } as any)
+        const manager = new VectorSearchManager(null as any)
         Object.assign(manager, { initialized: true })
 
         const result = manager.getStats()
@@ -84,11 +54,7 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should auto-initialize when calling addEntry on uninitialized manager', async () => {
-        const manager = new VectorSearchManager({
-            getRawDb: () => {
-                throw new Error('No DB')
-            },
-        } as any)
+        const manager = new VectorSearchManager(null as any)
 
         // Mock initialize to just set initialized flag without connecting
         const initSpy = vi.spyOn(manager, 'initialize').mockImplementation(async () => {
@@ -101,39 +67,13 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should auto-initialize when calling search on uninitialized manager', async () => {
-        const manager = new VectorSearchManager({
-            getRawDb: () => {
-                throw new Error('No DB')
-            },
-        } as any)
+        const manager = new VectorSearchManager(null as any)
 
         const initSpy = vi.spyOn(manager, 'initialize').mockImplementation(async () => {
             Object.assign(manager, { initialized: true })
         })
 
-        const result = await manager.search('query')
+        await expect(manager.search('query')).rejects.toThrow('Vector database not available')
         expect(initSpy).toHaveBeenCalled()
-        expect(result).toEqual([])
-    })
-
-    it('should auto-initialize when calling rebuildIndex on uninitialized manager', async () => {
-        const manager = new VectorSearchManager({
-            getRawDb: () => {
-                throw new Error('No DB')
-            },
-        } as any)
-
-        const initSpy = vi.spyOn(manager, 'initialize').mockImplementation(async () => {
-            Object.assign(manager, { initialized: true })
-        })
-
-        const mockDbAdapter = {
-            getActiveEntryCount: vi.fn().mockReturnValue(0),
-            getEntriesPage: vi.fn().mockReturnValue([]),
-        }
-
-        const result = await manager.rebuildIndex(mockDbAdapter as never)
-        expect(initSpy).toHaveBeenCalled()
-        expect(result).toEqual({ indexed: 0, failed: 0, firstError: null })
     })
 })

@@ -1,11 +1,13 @@
 import type { JournalEntry, EntryType } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import {
     ENTRY_COLUMNS,
     ALIASED_ENTRY_COLUMNS,
     type EntriesSharedContext,
     rowsToEntries,
 } from './shared.js'
-import { buildImportanceSqlExpression } from './importance.js'
+import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
+import { sanitizeSearchQuery } from '../../../utils/security-utils.js'
 
 /** Allowed sort dimensions for search results */
 export type SortBy = 'timestamp' | 'importance'
@@ -19,9 +21,12 @@ export function getRecentEntries(
 
     if (sortBy === 'importance') {
         const importanceExpr = buildImportanceSqlExpression()
+        const cte = buildImportanceCte()
         const stmt = db.prepare(`
+            WITH ${cte}
             SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
             FROM memory_journal e
+            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             WHERE e.deleted_at IS NULL
             ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ?
         `)
@@ -79,6 +84,12 @@ export function searchEntries(
 ): JournalEntry[] {
     const { db, tagsMgr } = context
 
+    if (queryStr.length > 500) {
+        throw new ValidationError(
+            'Search query exceeds maximum length of 500 characters. Please refine your search.'
+        )
+    }
+
     // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
     if (queryStr.length > 0) {
         try {
@@ -86,8 +97,30 @@ export function searchEntries(
             const stmt = db.prepare(sql)
             const rows = stmt.all(params)
             return rowsToEntries(tagsMgr, rows)
-        } catch {
+        } catch (error) {
             // FTS5 syntax error (e.g. unbalanced quotes, special chars) — fall back to LIKE
+            // Rethrow if it's an infrastructural error (like missing extension)
+            const isSyntaxError =
+                error instanceof Error &&
+                (error.message.includes('syntax error') ||
+                    error.message.includes('no such column') ||
+                    error.message.includes('unterminated string') ||
+                    error.message.includes('unrecognized token'))
+
+            if (!isSyntaxError) {
+                // Infrastructural error - rethrow
+                throw error
+            }
+
+            // Syntax error - fall back to LIKE with degraded flag
+            const { sql, params } = buildSearchQuery(queryStr, options, false)
+            const stmt = db.prepare(sql)
+            const rows = stmt.all(params)
+            const entries = rowsToEntries(tagsMgr, rows)
+            if (queryStr.length > 0) {
+                Object.defineProperty(entries, 'degraded', { value: true, enumerable: false })
+            }
+            return entries
         }
     }
 
@@ -127,16 +160,27 @@ function buildSearchQuery(
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
 
+    let ctePrefix = ''
+    let joinClause = ''
+    if (useImportance) {
+        ctePrefix = `WITH ${buildImportanceCte()}`
+        joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id`
+    }
+
     if (useFts) {
         query = `
+            ${ctePrefix}
             SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
             JOIN fts_content fts ON fts.rowid = e.id
+            ${joinClause}
         `
     } else {
         query = `
+            ${ctePrefix}
             SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
+            ${joinClause}
         `
     }
     if (options?.tags && options.tags.length > 0) {
@@ -154,8 +198,8 @@ function buildSearchQuery(
             conditions.push(`fts_content MATCH ?`)
             params.push(sanitizeFtsQuery(queryStr))
         } else {
-            conditions.push(`e.content LIKE '%' || ? || '%'`)
-            params.push(queryStr)
+            conditions.push(`e.content LIKE '%' || ? || '%' ESCAPE '\\'`)
+            params.push(sanitizeSearchQuery(queryStr))
         }
     }
 
@@ -271,9 +315,17 @@ export function searchByDateRange(
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
 
-    let query = `
+    let query = ''
+    if (useImportance) {
+        query += `WITH ${buildImportanceCte()} `
+    }
+
+    query += `
         SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
     `
+    if (useImportance) {
+        query += `LEFT JOIN rel_stats rs ON e.id = rs.entry_id `
+    }
 
     if (options?.tags && options.tags.length > 0) {
         query += `
@@ -335,24 +387,81 @@ export function searchByDateRange(
 // ============================================================================
 
 /**
- * Sanitize an FTS5 query string to handle porter-stemmer phrase mismatch.
+ * Rigorous FTS5 Query Sanitization
  *
- * FTS5 phrase queries (e.g. `"error handling"`) require exact token sequences.
- * However the porter stemmer stores stems: `handling` → `handl`, so the phrase
- * `"error handling"` never matches even when the content contains "error handling".
+ * Prevents FTS5 catastrophic backtracking (ReDoS) and application-level syntax crashes
+ * by aggressively stripping FTS control syntax and forcing queries into safe,
+ * implicit AND-token sequences.
  *
- * Fix: detect a *pure* quoted phrase (the entire query is one quoted phrase)
- * and rewrite it as AND-joined individual terms. This lets the stemmer apply
- * to each word and correctly finds documents containing all the terms.
- *
- * Non-phrase queries are passed through unchanged.
- *
- * Examples:
- *   `"error handling"` → `error AND handling`
- *   `deploy OR release` → `deploy OR release` (unchanged)
- *   `auth*` → `auth*` (unchanged)
- *   `deploy NOT staging` → `deploy NOT staging` (unchanged)
+ * Threat Vectors Mitigated:
+ * - Unbalanced quotes & parentheses causing SQLITE_ERROR syntax crashes
+ * - Deeply nested or hallucinated `NEAR/xxx` proximity operators causing FTS planner ReDoS
+ * - Column filters (`col:val`) leaking unintended field traversals
+ * - Naked booleans (`word AND OR NOT word`) confusing the FTS AST parser
  */
 function sanitizeFtsQuery(query: string): string {
-    return query;
+    if (!query) return ''
+
+    // Strip quotes entirely to prevent unterminated string syntax errors
+    const noQuotes = query.replace(/"/g, ' ')
+    const tokens = noQuotes.split(/\s+/)
+    const safeTokens: string[] = []
+
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i]
+        if (!token) continue
+
+        // Strip out non-alphanumeric characters, except hyphen, underscore, and asterisk
+        let sanitizedToken = token.replace(/[^a-zA-Z0-9_\-*]/g, '')
+        if (!sanitizedToken) continue
+
+        // Ensure asterisk is only at the end of the token for prefix matching,
+        // preventing standalone asterisks or inner asterisks which cause syntax errors.
+        const hasAsterisk = token.endsWith('*')
+        sanitizedToken = sanitizedToken.replace(/\*/g, '')
+        if (hasAsterisk && sanitizedToken.length > 0) {
+            sanitizedToken += '*'
+        }
+
+        if (!sanitizedToken || sanitizedToken === '*') continue
+
+        // Drop NEAR as it causes ReDoS
+        if (/^NEAR$/i.test(sanitizedToken)) continue
+
+        const isOperator = /^(AND|OR|NOT)$/i.test(sanitizedToken)
+        if (isOperator) {
+            // Must be uppercase for FTS5
+            sanitizedToken = sanitizedToken.toUpperCase()
+
+            // Operators cannot be the first token
+            if (safeTokens.length === 0) continue
+
+            // Operators cannot be preceded by another operator
+            const prevToken = safeTokens[safeTokens.length - 1]
+            if (prevToken && /^(AND|OR|NOT)$/.test(prevToken)) {
+                // If there are adjacent operators, skip the current one
+                continue
+            }
+
+            // Operators must have a valid subsequent non-operator token
+            let hasValidNext = false
+            for (let j = i + 1; j < tokens.length; j++) {
+                const rawNext = tokens[j]
+                if (!rawNext) continue
+
+                let nextToken = rawNext.replace(/[^a-zA-Z0-9_\-*]/g, '')
+                nextToken = nextToken.replace(/\*/g, '')
+                if (nextToken && !/^(AND|OR|NOT|NEAR)$/i.test(nextToken)) {
+                    hasValidNext = true
+                    break
+                }
+            }
+
+            if (!hasValidNext) continue
+        }
+
+        safeTokens.push(sanitizedToken)
+    }
+
+    return safeTokens.join(' ')
 }

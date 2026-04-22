@@ -12,12 +12,13 @@ import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager.js'
 import { passMetadataFilters, type ISearchFilters, type EntryWithSource } from './helpers.js'
+import { logger } from '../../../utils/logger.js'
 
 /** RRF tuning constant (standard value from Cormack et al. 2009) */
 const RRF_K = 60
 
 /** Over-fetch multiplier for each source before fusion */
-const OVERFETCH_MULTIPLIER = 3
+const OVERFETCH_MULTIPLIER = 2
 
 // ============================================================================
 // Types
@@ -69,8 +70,10 @@ export async function hybridSearch(
     options: ISearchFilters & {
         limit: number
     }
-): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number> }> {
+): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number>; degraded?: boolean }> {
     const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
+
+    let semanticDegraded = false
 
     // Run FTS5 and semantic search in parallel
     const [ftsResults, semanticResults] = await Promise.all([
@@ -92,7 +95,14 @@ export async function hybridSearch(
         ),
         // Semantic search (returns [] if vectorManager is unavailable)
         vectorManager
-            ? vectorManager.search(query, overfetchLimit, 0.15) // Lower threshold for broader recall
+            ? vectorManager.search(query, overfetchLimit, 0.15).catch((err: unknown) => {
+                  logger.warning(
+                      `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
+                      { module: 'HybridSearch' }
+                  )
+                  semanticDegraded = true
+                  return []
+              }) // Lower threshold for broader recall
             : Promise.resolve([]),
     ])
 
@@ -112,6 +122,14 @@ export async function hybridSearch(
     // Batch fetch entries
     const entriesMap = db.getEntriesByIds(sortedIds)
 
+    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+    if (options.tags && options.tags.length > 0) {
+        const tagsMap = db.getTagsForEntries(sortedIds)
+        for (const entry of entriesMap.values()) {
+            entry.tags = tagsMap.get(entry.id) ?? []
+        }
+    }
+
     // Build output in fusion-score order
     const entries: EntryWithSource[] = []
     for (const id of sortedIds) {
@@ -122,5 +140,8 @@ export async function hybridSearch(
         entries.push({ ...entry, source: 'personal' as const })
     }
 
-    return { entries, fusionScores }
+    const isDegraded =
+        (ftsResults as unknown as { degraded?: boolean }).degraded === true || semanticDegraded
+
+    return { entries, fusionScores, degraded: isDegraded }
 }

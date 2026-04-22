@@ -6,6 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
 import {
     TeamUpdateEntrySchema,
@@ -41,19 +42,35 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, content, entry_type, tags } =
+                    const { entry_id, content, entry_type, tags, project_number } =
                         TeamUpdateEntrySchema.parse(params)
 
-                    // Verify entry exists
+                    // Verify entry exists and belongs to the project (if project_number is specified)
                     const existing = teamDb.getEntryById(entry_id)
-                    if (!existing) {
+                    if (!existing || (project_number !== undefined && existing.projectNumber !== project_number)) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found`,
+                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and try again',
+                            suggestion:
+                                'Verify the team entry ID and project number, and try again',
                             recoverable: true,
+                        }
+                    }
+
+                    const author = fetchAuthor(teamDb, entry_id)
+
+                    const currentUser = resolveAuthenticatedAuthor()
+
+                    if (author && author !== currentUser) {
+                        return {
+                            success: false,
+                            error: `Permission Denied: Only the original author ("${author}") can modify this team entry.`,
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'You can only update entries that you authored.',
+                            recoverable: false,
                         }
                     }
 
@@ -62,8 +79,6 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         entryType: entry_type,
                         tags,
                     })
-
-                    const author = fetchAuthor(teamDb, entry_id)
 
                     return {
                         success: true,
@@ -94,22 +109,39 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id } = TeamDeleteEntrySchema.parse(params)
+                    const { entry_id, project_number } = TeamDeleteEntrySchema.parse(params)
 
-                    // Verify entry exists
+                    // Verify entry exists and belongs to project (if project_number is specified)
                     const existing = teamDb.getEntryById(entry_id)
-                    if (!existing) {
+                    if (!existing || (project_number !== undefined && existing.projectNumber !== project_number)) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found`,
+                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and try again',
+                            suggestion:
+                                'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
 
+                    const author = fetchAuthor(teamDb, entry_id)
+
+                    const currentUser = resolveAuthenticatedAuthor()
+
+                    if (author && author !== currentUser) {
+                        return {
+                            success: false,
+                            error: `Permission Denied: Only the original author ("${author}") can delete this team entry.`,
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'You can only delete entries that you authored.',
+                            recoverable: false,
+                        }
+                    }
+
                     teamDb.deleteEntry(entry_id)
+                    teamDb.deleteVector(entry_id)
 
                     return {
                         success: true,

@@ -40,6 +40,11 @@ test.describe('Stateless HTTP Mode', () => {
         })
 
         expect(response.status).toBe(200)
+        const body = await response.json()
+        expect(body).toHaveProperty('jsonrpc', '2.0')
+        expect(body).toHaveProperty('id', 1)
+        expect(body.result).toBeDefined()
+        expect(body.result.serverInfo.name).toBe('memory-journal-mcp')
     })
 
     test('GET /mcp should return 405 (SSE not available in stateless)', async () => {

@@ -6,7 +6,7 @@
  */
 
 import type { Database } from 'better-sqlite3'
-import { buildImportanceSqlExpression } from './importance.js'
+import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
 import { queryRow, queryRows } from './shared.js'
 
 // ============================================================================
@@ -148,13 +148,16 @@ export function computeDigest(db: Database): DigestSnapshot {
 
     // --- Top importance entries ---
     const importanceExpr = buildImportanceSqlExpression()
+    const importanceCte = buildImportanceCte()
     const topRows = queryRows(
         db,
-        `SELECT
+        `WITH ${importanceCte}
+        SELECT
             e.id,
             ${importanceExpr} AS importance_score,
             SUBSTR(e.content, 1, ${String(PREVIEW_LENGTH)}) AS preview
         FROM memory_journal e
+        LEFT JOIN rel_stats rs ON e.id = rs.entry_id
         WHERE e.deleted_at IS NULL
         ORDER BY importance_score DESC
         LIMIT ${String(TOP_IMPORTANCE_COUNT)}`

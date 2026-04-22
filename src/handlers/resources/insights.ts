@@ -93,7 +93,10 @@ export const teamCollaborationResource: InternalResourceDef = {
 
         // Compute collaboration matrix live from team DB
         try {
-            const matrix = computeTeamCollaborationMatrix(context.teamDb)
+            const matrix = context.teamDb.getTeamCollaborationMatrix({
+                period: 'month',
+                limit: 100,
+            })
             return {
                 data: { success: true, matrix },
                 annotations: { lastModified },
@@ -111,117 +114,8 @@ export const teamCollaborationResource: InternalResourceDef = {
 }
 
 // ============================================================================
-// Team Collaboration Matrix Computation
-// ============================================================================
 
-import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import { execQuery } from './shared.js'
-
-interface AuthorActivity {
-    author: string
-    period: string
-    entryCount: number
-}
-
-interface CrossAuthorLink {
-    fromAuthor: string
-    toAuthor: string
-    linkCount: number
-}
-
-interface AuthorImpact {
-    author: string
-    inboundLinks: number
-}
-
-interface CollaborationMatrix {
-    authorActivity: AuthorActivity[]
-    crossAuthorLinks: CrossAuthorLink[]
-    impactFactor: AuthorImpact[]
-    totalAuthors: number
-    totalEntries: number
-}
-
-function computeTeamCollaborationMatrix(teamDb: IDatabaseAdapter): CollaborationMatrix {
-    // Author activity heatmap (entries per author per month)
-    const activityRows = execQuery(
-        teamDb,
-        `SELECT
-            COALESCE(author, 'unknown') AS author,
-            strftime('%Y-%m', timestamp) AS period,
-            COUNT(*) AS entry_count
-        FROM memory_journal
-        WHERE deleted_at IS NULL
-        GROUP BY author, period
-        ORDER BY period DESC, entry_count DESC
-        LIMIT 100`
-    )
-    const authorActivity: AuthorActivity[] = activityRows.map((r) => ({
-        author: r['author'] as string,
-        period: r['period'] as string,
-        entryCount: r['entry_count'] as number,
-    }))
-
-    // Cross-author linking (who links to whose entries)
-    const crossLinkRows = execQuery(
-        teamDb,
-        `SELECT
-            COALESCE(m1.author, 'unknown') AS from_author,
-            COALESCE(m2.author, 'unknown') AS to_author,
-            COUNT(*) AS link_count
-        FROM relationships r
-        JOIN memory_journal m1 ON r.from_entry_id = m1.id
-        JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL
-            AND COALESCE(m1.author, 'unknown') != COALESCE(m2.author, 'unknown')
-        GROUP BY from_author, to_author
-        ORDER BY link_count DESC
-        LIMIT 50`
-    )
-    const crossAuthorLinks: CrossAuthorLink[] = crossLinkRows.map((r) => ({
-        fromAuthor: r['from_author'] as string,
-        toAuthor: r['to_author'] as string,
-        linkCount: r['link_count'] as number,
-    }))
-
-    // Impact factor (whose entries are linked TO the most)
-    const impactRows = execQuery(
-        teamDb,
-        `SELECT
-            COALESCE(m2.author, 'unknown') AS author,
-            COUNT(*) AS inbound_links
-        FROM relationships r
-        JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        WHERE m2.deleted_at IS NULL
-        GROUP BY author
-        ORDER BY inbound_links DESC
-        LIMIT 20`
-    )
-    const impactFactor: AuthorImpact[] = impactRows.map((r) => ({
-        author: r['author'] as string,
-        inboundLinks: r['inbound_links'] as number,
-    }))
-
-    // Totals
-    const totalsRow = execQuery(
-        teamDb,
-        `SELECT
-            COUNT(DISTINCT COALESCE(author, 'unknown')) AS total_authors,
-            COUNT(*) AS total_entries
-        FROM memory_journal
-        WHERE deleted_at IS NULL`
-    )
-    const totalAuthors = (totalsRow[0]?.['total_authors'] as number) ?? 0
-    const totalEntries = (totalsRow[0]?.['total_entries'] as number) ?? 0
-
-    return {
-        authorActivity,
-        crossAuthorLinks,
-        impactFactor,
-        totalAuthors,
-        totalEntries,
-    }
-}
+// Removed computeTeamCollaborationMatrix (migrated to SQLite adapter)
 
 /**
  * Get all insight resource definitions

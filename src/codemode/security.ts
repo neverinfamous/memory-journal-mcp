@@ -7,6 +7,7 @@
  */
 
 import { DEFAULT_SECURITY_CONFIG, type SecurityConfig, type ValidationResult } from './types.js'
+import * as v8 from 'node:v8'
 
 // =============================================================================
 // Rate Limiter
@@ -27,9 +28,20 @@ interface RateLimitEntry {
 export class CodeModeSecurityManager {
     private readonly config: SecurityConfig
     private readonly rateLimits = new Map<string, RateLimitEntry>()
+    private readonly cleanupInterval: NodeJS.Timeout
 
     constructor(config?: Partial<SecurityConfig>) {
         this.config = { ...DEFAULT_SECURITY_CONFIG, ...config }
+        // Periodically drop expired rate limit entries to prevent memory leaks
+        this.cleanupInterval = setInterval(() => this.cleanupRateLimits(), 60_000)
+        this.cleanupInterval.unref() // Don't block process exit
+    }
+
+    /**
+     * Stop the cleanup interval to prevent memory leaks when this manager is evicted.
+     */
+    dispose(): void {
+        clearInterval(this.cleanupInterval)
     }
 
     // =========================================================================
@@ -117,14 +129,44 @@ export class CodeModeSecurityManager {
      */
     validateResultSize(result: unknown): ValidationResult {
         const errors: string[] = []
-        try {
-            // Stringify and measure length iteratively or just check the resulting buffer bounds safely.
-            // In Node, creating a huge string can trigger V8 allocation limits (max ~1GB).
-            // A safer bounds check limits string allocation immediately.
-            const serialized = JSON.stringify(result)
 
-            // If stringification succeeded but the string itself is larger than the limit
-            const actualBytes = Buffer.byteLength(serialized, 'utf-8')
+        // Pre-flight checks to prevent OOM / V8 crashes on massive explicit arrays/strings
+        if (typeof result === 'string' && result.length > this.config.maxResultSize) {
+            const limitKb = Math.ceil(this.config.maxResultSize / 1024)
+            errors.push(
+                `Result string exceeds maximum approximate size of ${String(limitKb)} KB. Extract specific fields or aggregate data.`
+            )
+            return { valid: false, errors }
+        }
+
+        if (Array.isArray(result) && result.length > 1000) {
+            errors.push(
+                `Result array exceeds maximum length of 1000 elements (${String(result.length)} returned). Aggregate data or reduce limit before returning.`
+            )
+            return { valid: false, errors }
+        }
+
+        try {
+            // Use v8.serialize for high-performance memory footprint calculation
+            // without triggering V8 cross-thread string allocation limits.
+            let actualBytes = 0
+            try {
+                actualBytes = v8.serialize(result).length
+            } catch {
+                // Fallback to safe JSON serialization if v8 encounters uncloneable data or cyclic references
+                const cache = new Set()
+                actualBytes = Buffer.byteLength(
+                    JSON.stringify(result, (_key: string, value: unknown): unknown => {
+                        if (typeof value === 'object' && value !== null) {
+                            if (cache.has(value)) return '[Circular]'
+                            cache.add(value)
+                        }
+                        return value
+                    }) || '',
+                    'utf-8'
+                )
+            }
+
             if (actualBytes > this.config.maxResultSize) {
                 const actualKb = Math.ceil(actualBytes / 1024)
                 const limitKb = Math.ceil(this.config.maxResultSize / 1024)

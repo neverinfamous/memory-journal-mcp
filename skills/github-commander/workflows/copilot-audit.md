@@ -5,7 +5,7 @@ This workflow orchestrates an AI-driven adversarial review using the GitHub Copi
 ## Phase 1: Environment Readiness & Authentication
 
 1. **Verify Copilot CLI Presence**:
-   Run `npm list -g @github/copilot`. 
+   Run `npm list -g @github/copilot`.
    If missing, install it automatically: `npm i -g @github/copilot`.
 
 2. **Verify Authentication**:
@@ -16,6 +16,7 @@ This workflow orchestrates an AI-driven adversarial review using the GitHub Copi
 Determine whether this is a localized Feature Branch (Pre-Push PR) review or a whole Codebase Audit.
 
 ### Path A: Pre-Push PR Review
+
 1. Diff the current working branch against the primary target (e.g., `main` or `master`).
 2. **Execute Single-Shot Evaluation Buffer**:
    ```bash
@@ -23,6 +24,7 @@ Determine whether this is a localized Feature Branch (Pre-Push PR) review or a w
    ```
 
 ### Path B: Comprehensive Codebase Review
+
 1. **Execute Single-Shot Codebase Buffer**:
    ```bash
    echo "Act as an adversarial security and performance auditor. Perform a comprehensive analysis of all files in this repository. Point out bad architectural couplings, injection vectors, unhandled error flows, and data boundaries that are not explicit. Output as a detailed Markdown report." | copilot

@@ -5,6 +5,7 @@
  */
 
 import type { Request, Response } from 'express'
+import { createHash } from 'node:crypto'
 import type { HttpTransportConfig, RateLimitEntry } from './types.js'
 import {
     DEFAULT_RATE_LIMIT_WINDOW_MS,
@@ -19,17 +20,12 @@ import {
 
 /**
  * Extract the client IP address from the request.
- * When trustProxy is enabled, uses the leftmost IP from X-Forwarded-For.
- * Falls back to Express's req.ip then req.socket.remoteAddress.
+ * Note: req.ip correctly respects proxy boundaries because
+ * `this.app.set('trust proxy', 'loopback')` is configured globally in the HTTP server
+ * when `trustProxy` is enabled. This prevents client IP spoofing while supporting reverse proxies.
+ * Falls back to req.socket.remoteAddress if req.ip is not available.
  */
-export function getClientIp(req: Request, trustProxy: boolean): string {
-    if (trustProxy) {
-        const forwarded = req.headers['x-forwarded-for']
-        if (typeof forwarded === 'string') {
-            const firstIp = forwarded.split(',')[0]?.trim()
-            if (firstIp) return firstIp
-        }
-    }
+export function getClientIp(req: Request): string {
     return req.ip ?? req.socket.remoteAddress ?? 'unknown'
 }
 
@@ -50,21 +46,51 @@ export function checkRateLimit(
         return { allowed: true }
     }
 
-    const clientIp = getClientIp(req, config.trustProxy ?? false)
+    const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+    const subject = authReq.auth?.sub ?? authReq.auth?.subject
+    const ip = getClientIp(req)
+    // Ignore user-agent to prevent DoS via UA randomization
+    const rawIdentity = typeof subject === 'string' && subject ? subject : ip
+    const clientIdentity = createHash('sha256').update(rawIdentity).digest('hex')
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
-    const maxRequests =
-        config.rateLimitMaxRequests ??
-        (process.env['MCP_RATE_LIMIT_MAX']
-            ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10)
-            : DEFAULT_RATE_LIMIT_MAX_REQUESTS)
+    let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX']
+        ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10)
+        : NaN
+    if (Number.isNaN(envMaxRequests) || envMaxRequests <= 0) {
+        envMaxRequests = DEFAULT_RATE_LIMIT_MAX_REQUESTS
+    }
+    const maxRequests = config.rateLimitMaxRequests ?? envMaxRequests
 
-    const entry = rateLimitMap.get(clientIp)
+    const entry = rateLimitMap.get(clientIdentity)
 
     if (!entry || now > entry.resetTime) {
-        rateLimitMap.set(clientIp, { count: 1, resetTime: now + windowMs })
+        // Enforce hard cap to prevent Map OOM from unbounded IP spoofing
+        if (rateLimitMap.size >= 10000 && !rateLimitMap.has(clientIdentity)) {
+            // Cleanup expired entries first
+            for (const [key, val] of rateLimitMap.entries()) {
+                if (now > val.resetTime) {
+                    rateLimitMap.delete(key)
+                }
+            }
+            // If still at capacity, evict the oldest entry (LRU) to prevent fail-closed DoS.
+            // Since JS Map preserves insertion order and we re-insert on access, the first item is the LRU.
+            if (rateLimitMap.size >= 10000) {
+                const firstKey = rateLimitMap.keys().next().value
+                if (firstKey !== undefined) {
+                    rateLimitMap.delete(firstKey)
+                }
+            }
+        }
+        rateLimitMap.set(clientIdentity, { count: 1, resetTime: now + windowMs, lastSeen: now })
         return { allowed: true }
     }
+
+    entry.lastSeen = now
+
+    // Re-insert to maintain LRU order (O(1))
+    rateLimitMap.delete(clientIdentity)
+    rateLimitMap.set(clientIdentity, entry)
 
     if (entry.count >= maxRequests) {
         const retryAfterSeconds = Math.ceil((entry.resetTime - now) / 1000)
@@ -114,8 +140,17 @@ export function setSecurityHeaders(res: Response, config: HttpTransportConfig): 
  * Wildcard subdomain patterns (`*.example.com`) are not supported when
  * `corsAllowCredentials` is true. For credentialed CORS, list explicit origins.
  */
-export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): void {
-    const corsOrigins = config.corsOrigins ?? ['*']
+export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): boolean {
+    let corsOrigins = config.corsOrigins ?? []
+    const isLocalhost =
+        config.host === 'localhost' || config.host === '127.0.0.1' || config.host === '::1'
+    const hasAuth = Boolean(config.authToken) || config.oauthEnabled === true
+
+    // Hard-block wildcard CORS on localhost if no auth is configured to prevent local-browser CSRF
+    if (isLocalhost && !hasAuth && corsOrigins.includes('*')) {
+        corsOrigins = corsOrigins.filter((o) => o !== '*')
+    }
+
     const isWildcard = corsOrigins.includes('*')
     const origin = req.headers.origin
 
@@ -123,7 +158,7 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
         res.setHeader('Access-Control-Allow-Origin', '*')
     } else if (origin) {
         // Build whitelist record — CodeQL recognizes `origin in whitelist` as a sanitizer
-        const whitelist: Record<string, true> = {}
+        const whitelist = Object.create(null) as Record<string, true>
         for (const allowed of corsOrigins) {
             whitelist[allowed] = true
         }
@@ -144,4 +179,14 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     )
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
     res.setHeader('Access-Control-Max-Age', String(CORS_PREFLIGHT_MAX_AGE_SECONDS))
+
+    if (origin && !isWildcard) {
+        const whitelist = Object.create(null) as Record<string, true>
+        for (const allowed of corsOrigins) whitelist[allowed] = true
+        if (!(origin in whitelist)) {
+            // Self-origin fallback removed to prevent host header injection
+            return false
+        }
+    }
+    return true
 }

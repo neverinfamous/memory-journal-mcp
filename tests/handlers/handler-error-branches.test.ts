@@ -10,9 +10,42 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { callTool, getTools } from '../../src/handlers/tools/index.js'
+import { callTool as _callTool, getTools } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 function createMockVector(overrides: Partial<Record<string, unknown>> = {}): VectorSearchManager {
     const defaults = {
@@ -214,6 +247,7 @@ describe('Handler Error Branches', () => {
             const mockProgress = {
                 progressToken: 'test-token',
                 sendProgress: vi.fn(),
+                server: {} as any,
             }
 
             // test_simple is a trivial tool that always works
@@ -238,7 +272,7 @@ describe('Handler Error Branches', () => {
     describe('callTool — unknown tool', () => {
         it('should reject with Error for unknown tool name', async () => {
             await expect(callTool('nonexistent_tool_xyz', {}, db)).rejects.toThrow(
-                'Unknown tool: nonexistent_tool_xyz'
+                'Tool not found: nonexistent_tool_xyz'
             )
         })
     })

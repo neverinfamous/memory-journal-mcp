@@ -43,6 +43,27 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                     const resolved = await resolveOwnerRepo(context, input)
                     if ('error' in resolved) return resolved.response
 
+                    // Verify PR exists before fetching reviews to return clean 404
+                    const pullRequest = await resolved.github.getPullRequest(
+                        resolved.owner,
+                        resolved.repo,
+                        input.pr_number
+                    )
+                    if (!pullRequest) {
+                        return {
+                            success: false,
+                            error: `PR #${String(input.pr_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the PR number exists in this repository.',
+                            recoverable: true,
+                            owner: resolved.owner,
+                            repo: resolved.repo,
+                            detectedOwner: resolved.detectedOwner,
+                            detectedRepo: resolved.detectedRepo,
+                        }
+                    }
+
                     const summary = await resolved.github.getCopilotReviewSummary(
                         resolved.owner,
                         resolved.repo,

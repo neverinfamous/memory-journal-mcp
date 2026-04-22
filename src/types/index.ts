@@ -112,7 +112,7 @@ export interface McpIcon {
 // Tool, Resource, Prompt Definitions
 // ============================================================================
 
-import type { ToolGroup } from './filtering.js'
+import type { ToolGroup, ToolFilterConfig } from './filtering.js'
 
 /**
  * Tool definition for registration
@@ -138,6 +138,13 @@ export interface ToolDefinition {
 
     /** Behavioral hints for AI clients */
     annotations: ToolAnnotations
+
+    /** Security capabilities required to execute this tool */
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+        mutatesState?: boolean
+    }
 
     /** Tool handler function */
     handler: (params: unknown) => unknown
@@ -166,6 +173,8 @@ export interface ProjectRegistryEntry {
 /**
  * Tool handler configuration options
  */
+import type { ServerRuntime } from '../utils/maintenance-lock.js'
+
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
@@ -173,6 +182,32 @@ export interface ToolHandlerConfig {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Hush Protocol flag vocabulary */
     flagVocabulary?: string[]
+    /** Allowlisted roots for file IO */
+    allowedIoRoots?: string[]
+    /**
+     * SEC-1.1: Central dispatch function for Code Mode.
+     * Routes sandbox tool calls through callTool() so OAuth scope checks,
+     * maintenance-mode guards, and audit interception apply to inner calls.
+     * When absent, Code Mode falls back to calling raw tool handlers directly.
+     */
+    dispatch?: (name: string, args: Record<string, unknown>) => Promise<unknown>
+    /**
+     * SEC-1.2: Active tool filter for Code Mode universe scoping.
+     * When set, Code Mode only exposes tools that are in filterConfig.enabledTools,
+     * ensuring operators' --tool-filter restrictions are enforced inside the sandbox.
+     */
+    filterConfig?: ToolFilterConfig | null
+    /**
+     * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
+     */
+    /** Server auth configuration passed down for strict security gates */
+    authEnabled?: boolean
+    oauthEnabled?: boolean
+    codemodeInternalFullAccess?: boolean
+    /**
+     * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
+     */
+    runtime?: ServerRuntime
 }
 
 /**
@@ -193,6 +228,8 @@ export interface ToolContext {
     config?: ToolHandlerConfig
     /** Progress reporting context */
     progress?: ProgressContext
+    /** Authentication context injected by transport */
+    auth?: { sub?: string; subject?: string; scopes?: string[] }
 }
 
 /**
@@ -216,6 +253,12 @@ export interface ResourceDefinition {
 
     /** Resource metadata annotations */
     annotations?: ResourceAnnotations
+
+    /** Security capabilities required to read this resource */
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+    }
 
     /** Resource handler - NOTE: db is passed at runtime, not in the definition */
     handler: (uri: string) => Promise<unknown>

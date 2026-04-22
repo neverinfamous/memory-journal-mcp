@@ -12,12 +12,8 @@ import type { ToolGroup } from '../../src/types/index.js'
 
 describe('scope-map', () => {
     describe('getRequiredScope', () => {
-        it('should return read for core tools', () => {
-            const coreTools = TOOL_GROUPS['core']
-            if (coreTools && coreTools.length > 0) {
-                const firstTool = coreTools[0]!
-                expect(getRequiredScope(firstTool)).toBe('read')
-            }
+        it('should return read for read-only core tools', () => {
+            expect(getRequiredScope('get_recent_entries')).toBe('read')
         })
 
         it('should return write for github tools', () => {
@@ -36,8 +32,10 @@ describe('scope-map', () => {
             }
         })
 
-        it('should return read as safe default for unknown tools', () => {
-            expect(getRequiredScope('nonexistent_tool_xyz')).toBe('read')
+        it('should throw error for unknown tools', () => {
+            expect(() => getRequiredScope('nonexistent_tool_xyz')).toThrow(
+                'CRITICAL SECURITY FAILURE'
+            )
         })
     })
 
@@ -54,7 +52,20 @@ describe('scope-map', () => {
                 const expectedScope = TOOL_GROUP_SCOPES[group as ToolGroup]
                 for (const tool of tools) {
                     let expected = expectedScope
-                    if (tool === 'import_markdown' || tool === 'team_import_markdown') {
+                    // import_markdown (personal journal) stays at write
+                    // team_import_markdown now requires team scope (SEC-1.3)
+                    if (tool === 'import_markdown') {
+                        expected = 'write'
+                    } else if (tool === 'team_import_markdown') {
+                        expected = 'team'
+                    } else if (
+                        [
+                            'create_entry',
+                            'create_entry_minimal',
+                            'link_entries',
+                            'export_markdown',
+                        ].includes(tool)
+                    ) {
                         expected = 'write'
                     }
                     expect(map.get(tool)).toBe(expected)

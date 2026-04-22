@@ -12,7 +12,7 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
 import { VERSION } from '../../../../version.js'
-import { GitHubIntegration } from '../../../../github/github-integration/index.js'
+import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
@@ -72,7 +72,7 @@ async function buildBriefingData(
 
     if (targetRepo && config.projectRegistry?.[targetRepo]) {
         const repoPath = config.projectRegistry[targetRepo].path
-        activeGithub = new GitHubIntegration(repoPath)
+        activeGithub = getGitHubIntegration(repoPath, context.runtime)
         activeProjectNumber = config.projectRegistry[targetRepo].project_number ?? undefined
     }
 
@@ -80,8 +80,8 @@ async function buildBriefingData(
     const journal = buildJournalContext(context, config, activeProjectNumber)
     const github = await buildGitHubSection(activeGithub, config)
     const team = buildTeamContext(context, config, activeProjectNumber)
-    const rulesFile = buildRulesFileInfo(config.rulesFilePath)
-    const skillsDir = buildSkillsDirInfo(config.skillsDirPath)
+    const rulesFile = buildRulesFileInfo(config.rulesFilePath, config.allowedIoRoots)
+    const skillsDir = buildSkillsDirInfo(config.skillsDirPath, config.allowedIoRoots)
     const insights = buildInsightsSection(context)
     const flags = buildFlagsContext(context)
 
@@ -132,7 +132,16 @@ async function buildBriefingData(
             ...(skillsDir ? { skillsDir } : {}),
             ...(insights ? { insights } : {}),
             ...(flags ? { activeFlags: flags } : {}),
-            ...(config.projectRegistry ? { registeredWorkspaces: config.projectRegistry } : {}),
+            ...(config.projectRegistry
+                ? {
+                      registeredWorkspaces: Object.fromEntries(
+                          Object.entries(config.projectRegistry).map(([k, v]) => {
+                              const strippedPath = v.path.split(/[\\/]/).pop() || v.path
+                              return [k, { ...v, path: strippedPath }]
+                          })
+                      ),
+                  }
+                : {}),
             behaviors: {
                 create: 'implementations, decisions, bug-fixes, milestones',
                 search: 'before decisions, referencing prior work',

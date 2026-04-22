@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import { TeamBackupSchema, TeamBackupOutputSchema, TeamBackupsListOutputSchema } from './schemas.js'
+import * as path from 'node:path'
 
 // ============================================================================
 // Tool Definitions
@@ -33,13 +34,27 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamBackupSchema.parse(params)
-                    const result = await teamDb.exportToFile(input.name)
+
+                    let result
+                    try {
+                        result = await teamDb.exportToFile(input.name)
+                    } catch (exportErr) {
+                        return {
+                            success: false,
+                            error: `Backup failed: ${exportErr instanceof Error ? exportErr.message : String(exportErr)}`,
+                            code: 'BACKUP_FAILED',
+                            category: 'system',
+                            suggestion:
+                                'Check file system permissions, available disk space, and ensure the backup directory is writable.',
+                            recoverable: false,
+                        }
+                    }
 
                     return {
                         success: true,
                         message: 'Team database backup created successfully',
                         filename: result.filename,
-                        path: result.path,
+                        path: path.basename(result.path),
                         sizeBytes: result.sizeBytes,
                     }
                 } catch (err) {
@@ -63,12 +78,16 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const backups = teamDb.listBackups()
+                    const maskedBackups = backups.map((b) => ({
+                        ...b,
+                        path: path.basename(b.path),
+                    }))
 
                     return {
                         success: true,
-                        backups,
+                        backups: maskedBackups,
                         total: backups.length,
-                        backupsDirectory: teamDb.getBackupsDir(),
+                        backupsDirectory: path.basename(teamDb.getBackupsDir()),
                         hint:
                             backups.length === 0
                                 ? 'No team backups found. Use team_backup to create one.'

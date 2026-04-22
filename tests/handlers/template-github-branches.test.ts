@@ -25,7 +25,7 @@ function createMockDb(overrides: Record<string, unknown> = {}) {
         searchByDateRange: vi.fn().mockReturnValue([]),
         getRecentEntries: vi.fn().mockReturnValue([]),
         getStatistics: vi.fn().mockReturnValue({ totalEntries: 0 }),
-        executeRawQuery: vi.fn().mockReturnValue([]),
+
         ...overrides,
     }
 }
@@ -268,7 +268,7 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1',
                 createMockContext({ github }) as never
             )) as Record<string, unknown>
-            expect(result.error).toContain('Could not detect repository owner')
+            expect(result.error).toContain('Could not detect repository')
         })
 
         it('should return error when board not found', async () => {
@@ -305,7 +305,7 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1/diagram',
                 createMockContext() as never
             )) as string
-            expect(result).toContain('NoGitHub')
+            expect(result).toContain('GitHub integration not available')
         })
 
         it('should return no-owner mermaid', async () => {
@@ -319,12 +319,12 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1/diagram',
                 createMockContext({ github }) as never
             )) as string
-            expect(result).toContain('NoOwner')
+            expect(result).toContain('Could not detect repository')
         })
 
         it('should return not-found mermaid', async () => {
             const github = {
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: null }),
+                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r' }),
                 getProjectKanban: vi.fn().mockResolvedValue(null),
             }
             const resource = resources.find(
@@ -334,7 +334,7 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1/diagram',
                 createMockContext({ github }) as never
             )) as string
-            expect(result).toContain('NotFound')
+            expect(result).toContain('not found')
         })
 
         it('should render diagram with all item types', async () => {
@@ -435,21 +435,25 @@ describe('GitHub resources — branch coverage', () => {
         it('should compute CI status from workflow runs', async () => {
             const github = {
                 getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r', branch: 'main' }),
-                getRepoContext: vi.fn().mockResolvedValue({ commit: 'abc1234567', branch: 'main' }),
+                getRepoContext: vi.fn().mockResolvedValue({
+                    commit: 'abc1234567',
+                    branch: 'main',
+                    workflowRuns: [
+                        {
+                            id: 1,
+                            name: 'CI',
+                            status: 'completed',
+                            conclusion: 'failure',
+                            headSha: 'abc1234',
+                            headBranch: 'main',
+                            url: '',
+                            createdAt: '',
+                        },
+                    ],
+                }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),
-                getWorkflowRuns: vi.fn().mockResolvedValue([
-                    {
-                        id: 1,
-                        name: 'CI',
-                        status: 'completed',
-                        conclusion: 'failure',
-                        headSha: 'abc1234',
-                        headBranch: 'main',
-                        url: '',
-                        createdAt: '',
-                    },
-                ]),
+                getWorkflowRuns: vi.fn().mockResolvedValue([]),
                 getProjectKanban: vi.fn().mockResolvedValue(null),
                 getMilestones: vi.fn().mockResolvedValue([]),
             }
@@ -465,21 +469,24 @@ describe('GitHub resources — branch coverage', () => {
         it('should show pending CI status', async () => {
             const github = {
                 getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r', branch: 'main' }),
-                getRepoContext: vi.fn().mockResolvedValue({ commit: null }),
+                getRepoContext: vi.fn().mockResolvedValue({
+                    commit: null,
+                    workflowRuns: [
+                        {
+                            id: 1,
+                            name: 'CI',
+                            status: 'in_progress',
+                            conclusion: null,
+                            headSha: 'abc1234',
+                            headBranch: 'main',
+                            url: '',
+                            createdAt: '',
+                        },
+                    ],
+                }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),
-                getWorkflowRuns: vi.fn().mockResolvedValue([
-                    {
-                        id: 1,
-                        name: 'CI',
-                        status: 'in_progress',
-                        conclusion: null,
-                        headSha: 'abc1234',
-                        headBranch: 'main',
-                        url: '',
-                        createdAt: '',
-                    },
-                ]),
+                getWorkflowRuns: vi.fn().mockResolvedValue([]),
                 getProjectKanban: vi.fn().mockResolvedValue(null),
                 getMilestones: vi.fn().mockResolvedValue([]),
             }
@@ -495,21 +502,24 @@ describe('GitHub resources — branch coverage', () => {
         it('should show cancelled CI status', async () => {
             const github = {
                 getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r', branch: null }),
-                getRepoContext: vi.fn().mockResolvedValue({ commit: null }),
+                getRepoContext: vi.fn().mockResolvedValue({
+                    commit: null,
+                    workflowRuns: [
+                        {
+                            id: 1,
+                            name: 'CI',
+                            status: 'completed',
+                            conclusion: 'cancelled',
+                            headSha: 'abc1234',
+                            headBranch: 'main',
+                            url: '',
+                            createdAt: '',
+                        },
+                    ],
+                }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),
-                getWorkflowRuns: vi.fn().mockResolvedValue([
-                    {
-                        id: 1,
-                        name: 'CI',
-                        status: 'completed',
-                        conclusion: 'cancelled',
-                        headSha: 'abc1234',
-                        headBranch: 'main',
-                        url: '',
-                        createdAt: '',
-                    },
-                ]),
+                getWorkflowRuns: vi.fn().mockResolvedValue([]),
                 getProjectKanban: vi.fn().mockResolvedValue(null),
                 getMilestones: vi.fn().mockResolvedValue([]),
             }
@@ -564,21 +574,24 @@ describe('GitHub resources — branch coverage', () => {
         it('should include milestoneSummary when milestones available', async () => {
             const github = {
                 getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r', branch: 'main' }),
-                getRepoContext: vi.fn().mockResolvedValue({ commit: null }),
+                getRepoContext: vi.fn().mockResolvedValue({
+                    commit: null,
+                    milestones: [
+                        {
+                            number: 1,
+                            title: 'v1.0',
+                            state: 'open',
+                            openIssues: 3,
+                            closedIssues: 7,
+                            dueOn: '2025-06-01',
+                        },
+                    ],
+                }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),
                 getWorkflowRuns: vi.fn().mockResolvedValue([]),
                 getProjectKanban: vi.fn().mockResolvedValue(null),
-                getMilestones: vi.fn().mockResolvedValue([
-                    {
-                        number: 1,
-                        title: 'v1.0',
-                        state: 'open',
-                        openIssues: 3,
-                        closedIssues: 7,
-                        dueOn: '2025-06-01',
-                    },
-                ]),
+                getMilestones: vi.fn().mockResolvedValue([]),
             }
             const resource = resources.find((r) => r.uri === 'memory://github/status')!
             const result = (await resource.handler(

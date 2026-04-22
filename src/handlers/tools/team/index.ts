@@ -7,7 +7,7 @@
  *   Core:          team_create_entry, team_get_entry_by_id, team_get_recent, team_list_tags
  *   Search:        team_search, team_search_by_date_range
  *   Admin:         team_update_entry, team_delete_entry, team_merge_tags
- *   Analytics:     team_get_statistics, team_get_cross_project_insights
+ *   Analytics:     team_get_statistics, team_get_cross_project_insights, team_get_collaboration_matrix
  *   Relationships: team_link_entries, team_visualize_relationships
  *   Export:        team_export_entries
  *   IO:            team_export_markdown, team_import_markdown

@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-95.83%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-91.25%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -42,6 +42,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
+- _"I'm stuck on this database error. Raise a 'blocker' flag for @sarah so her agent sees it next session."_ (Hush Protocol)
 - _"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."_ (Context lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
@@ -60,7 +61,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Dynamic Project Routing**   | Seamlessly switch contexts and access CI/Issue tracking across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                    |
 | **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                 |
 | **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5 keywords, semantic vector similarity, auto-heuristics, and date-range filters                                                                           |
-| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                    |
+| **Code Mode**                 | Execute multi-step operations in a trusted-admin execution environment — up to 90% token savings via `mj.*` API                                                                               |
 | **Configurable Briefing**     | 15 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness, chronological grounding                                                         |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                      |
 | **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                            |
@@ -118,7 +119,7 @@ flowchart TB
 ---
 
 <details>
-<summary><strong>🤖 Recommended AI Agent Instructions/Rule</strong></summary>
+<summary><strong>Recommended AI Agent Instructions/Rule</strong></summary>
 
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
@@ -129,16 +130,12 @@ Execute BEFORE fulfilling any user request in a new session:
 1. **TARGET**: Infer `repo_name` from the active workspace context or user prompt. If the task is not associated with a specific project, fallback to using the generic resource without a repo name (which defaults to the first registered workspace).
 2. **FETCH**: Use the MCP `read_resource` tool (Server: `memory-journal-mcp`) to read `memory://briefing/{repo_name}` (or `memory://briefing` if falling back).
    - **RESTRICTION**: Do NOT use `execute_code` for this step.
-3. **RENDER TABLE**: Parse the briefing JSON and output a dense 2-column Markdown Table (Field, Value) capturing the core context.
-   - **RESTRICTION**: NO bulleted lists. Do NOT truncate issues or summaries.
-   - **FORMATTING**: Group related properties to save vertical space. Use `<br>` tags for inner-cell line breaks.
-   - **REQUIRED GROUPS**:
-     - **GitHub**: Combine Repo, Branch, CI, PRs, and Insights.
-     - **GitHub Issues**: List every issue, one per line.
-     - **Active Flags (Hush Protocol)**: If the briefing JSON contains an `activeFlags` object (with `count > 0`), render each flag in a dedicated row using format: `🚩 {flag_type} → @{target_user}: {preview}`. If `count` is 0 or the field is absent, omit the row entirely.
-     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries (titles only), Proactive Analytics/Team Density, Milestones, and Workspaces.
-   - **FLAG PROMINENCE**: When `activeFlags.count > 0`, prepend a bold callout line **above** the table: `⚠️ **{count} active flag(s)** — review before proceeding.` This ensures blockers and review requests are impossible to miss.
-4. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
+3. **ACKNOWLEDGE FLAGS**: If the briefing JSON contains `activeFlags` (count > 0), you MUST print an alert ABOVE the table: `⚠️ **{count} active flag(s)** — review before proceeding.` followed by each flag (`🚩 {flag_type} → @{target_user}: {preview}`).
+4. **RENDER TABLE**: Parse the remaining JSON into a dense 2-column Markdown Table (Field, Value).
+   - **RESTRICTION**: NO bulleted lists inside the table. Do NOT truncate summaries or issues.
+   - **FORMATTING**: Group related properties (use `<br>` for line breaks).
+   - **REQUIRED GROUPS**: GitHub (Repo, Branch, CI, PRs, Insights), Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
+5. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
 
 </details>
 
@@ -156,9 +153,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `full`               | 70    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 18    | Disable all mutations    |
+| `readonly`           | 17    | Disable all mutations    |
 | `-github`            | 52    | Exclude a group          |
-| `-github,-analytics` | 48    | Exclude multiple groups  |
+| `-github,-analytics` | 50    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -208,7 +205,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `confirm-briefing` - Acknowledge session context to user
 - `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
 - `team-session-summary` - Create a retrospective team session summary entry securely isolated to the team database
-- `load-project-kanban` - Dynamic project board injection
+
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -240,7 +237,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://metrics/tokens` - Per-tool token usage breakdown sorted by output token cost — MEDIUM priority
 - `memory://metrics/system` - Process-level metrics: memory (MB), uptime (s), Node.js version, platform — MEDIUM priority
 - `memory://metrics/users` - Per-user call counts (populated when OAuth user identifiers are present) — LOW priority
-- `memory://audit` - Last 50 write/admin tool call entries from the JSONL audit log (requires `AUDIT_LOG_PATH`)
+- `memory://audit` - Last 50 write/admin tool call entries from the JSONL operational telemetry log (requires `AUDIT_LOG_PATH`)
 - `memory://flags` - Active (unresolved) team flags dashboard (requires `TEAM_DB_PATH`)
 - `memory://flags/vocabulary` - Configured flag vocabulary terms
 
@@ -264,7 +261,7 @@ _Note: The `memory://github/status`, `memory://github/insights`, `memory://githu
 
 Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
-Code executes in a **sandboxed VM context** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+Code executes in a **worker_threads sandbox** designed as a secure multi-tenant process isolation environment. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
 - **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
 - **Rate limiting** — 60 executions per minute per client
@@ -313,6 +310,8 @@ When you encounter a blocker, need a review, or want to broadcast a milestone, y
 
 **Dashboard & Operations**: Read `memory://flags` to see an active dashboard overview and use `mj.team.passTeamFlag()` / `mj.team.resolveTeamFlag()` to manage them programmatically in Code Mode.
 
+**[Complete Hush Protocol guide and Mermaid sequence diagrams →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
+
 ---
 
 ## 🚀 Quick Start
@@ -345,7 +344,8 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
       "command": "memory-journal-mcp",
       "env": {
         "GITHUB_TOKEN": "ghp_your_token_here",
-        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/your/git/repo\",\"project_number\":1}}"
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/your/git/repo\",\"project_number\":1}}",
+        "ALLOWED_IO_ROOTS": "/path/to/your/git/repo"
       }
     }
   }
@@ -366,8 +366,10 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "TEAM_DB_PATH": "/path/to/shared/team.db",
         "GITHUB_TOKEN": "ghp_your_token_here",
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
+        "ALLOWED_IO_ROOTS": "/path/to/repo,/path/to/other,/path/to/your/skills",
         "AUTO_REBUILD_INDEX": "true",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
         "BRIEFING_INCLUDE_TEAM": "true",
@@ -379,7 +381,9 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "BRIEFING_COPILOT_REVIEWS": "true",
         "RULES_FILE_PATH": "/path/to/your/RULES.md",
         "SKILLS_DIR_PATH": "/path/to/your/skills",
-        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan"
+        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan",
+        "AUDIT_LOG_PATH": "/path/to/your/mcp-audit.jsonl",
+        "TEAM_AUTHOR": "your_username"
       }
     }
   }
@@ -403,15 +407,21 @@ Restart your MCP client and start journaling!
 
 ### Option 3: HTTP/SSE Transport (Remote Access)
 
+> 🔒 **Security Posture: Stdio vs HTTP**
+>
+> - **Stdio (Default):** Runs implicitly within the secure boundaries of your local IDE or command-line environment. No explicit authentication is required because the execution context is already trusted.
+> - **HTTP/SSE:** Exposes the server over a network socket. By default, HTTP binds ONLY to `localhost` and blocks wildcard CORS to prevent unauthorized access and CSRF attacks. **Public network binding (`--server-host 0.0.0.0`) requires explicit authentication** (`--auth-token` or `--oauth-enabled`). The server will throw a fatal error if you attempt to expose it publicly without securing it.
+
 For remote access or web-based clients, run the server in HTTP mode:
 
 ```bash
 memory-journal-mcp --transport http --port 3000
 ```
 
-To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest):
+To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest), you MUST provide an authentication token:
 
 ```bash
+export MCP_AUTH_TOKEN="your_secure_random_token"
 memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-interval 1440
 ```
 
@@ -496,57 +506,59 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
-| Environment Variable              | Description                                                                                                                 |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                        |
-| `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                              |
-| `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                                                     |
-| `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                                                 |
-| `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                                                      |
-| `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                                |
-| `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                                     |
-| `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                           |
-| `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                                                        |
-| `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: `*`)                                                     |
-| `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                                           |
-| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)                                       |
-| `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)                                      |
-| `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                                                |
-| `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                              |
-| `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                                                 |
-| `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                              |
-| `OAUTH_CLOCK_TOLERANCE`           | Allowed clock skew tolerance in seconds for JWT verification (default: `5`)                                                 |
-| `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`)             |
-| `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                                       |
-| `BRIEFING_SUMMARY_COUNT`          | Session summaries to list in briefing (CLI: `--briefing-summaries`; default: `1`)                                           |
-| `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                                                      |
-| `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                                                 |
-| `BRIEFING_PR_COUNT`               | PRs to list in briefing; `0` = count only (default: `0`)                                                                    |
-| `BRIEFING_PR_STATUS`              | Show PR status breakdown (open/merged/closed; default: `false`)                                                             |
-| `BRIEFING_MILESTONE_COUNT`        | Milestones to list in briefing; `0` = hide entirely (CLI: `--briefing-milestones`; default: `3`)                            |
-| `BRIEFING_WORKFLOW_COUNT`         | Workflow runs to list in briefing; `0` = status only (default: `0`)                                                         |
-| `BRIEFING_WORKFLOW_STATUS`        | Show workflow status breakdown in briefing (default: `false`)                                                               |
-| `BRIEFING_COPILOT_REVIEWS`        | Aggregate Copilot review state in briefing (default: `false`)                                                               |
-| `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                                           |
-| `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                          |
-| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                                             |
-| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)                           |
-| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `npm run lint`)                                        |
-| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `npm run typecheck`; empty = skip)                                                      |
-| `PROJECT_BUILD_CMD`               | Project build command (default: `npm run build`; empty = skip)                                                              |
-| `PROJECT_TEST_CMD`                | Project test command (default: `npm run test`)                                                                              |
-| `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                                            |
-| `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)                                 |
-| `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                                            |
-| `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                                                     |
-| `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                                               |
-| `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                                               |
-| `AUDIT_LOG_PATH`                  | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable audit logging. |
-| `AUDIT_REDACT`                    | Set to `true` to omit tool arguments from audit log entries for privacy (default: `false`)                                  |
-| `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                              |
-| `AUDIT_LOG_MAX_SIZE`              | Maximum audit log file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)                     |
-| `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)                                        |
-| `FLAG_VOCABULARY`                 | Comma-separated flag types for Hush Protocol (CLI: `--flag-vocabulary`; default: `blocker,needs_review,help_requested,fyi`) |
+| Environment Variable              | Description                                                                                                                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                                                  |
+| `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                                                        |
+| `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                                                                               |
+| `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                                                                           |
+| `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                                                                                |
+| `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                                                          |
+| `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                                                               |
+| `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
+| `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
+| `ALLOWED_IO_ROOTS`                | **Critical Security Boundary**: Comma-separated absolute paths granting filesystem access to Code Mode and export tools (default: none / fail-closed) |
+| `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: blank, strict opt-in)                                                              |
+| `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                                                                     |
+| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)                                                                 |
+| `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)                                                                |
+| `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                                                                          |
+| `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                                                        |
+| `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                                                                           |
+| `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                                                        |
+| `OAUTH_CLOCK_TOLERANCE`           | Allowed clock skew tolerance in seconds for JWT verification (default: `5`)                                                                           |
+| `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`)                                       |
+| `CODEMODE_INTERNAL_FULL_ACCESS`   | Bypass tool filter constraints within the Code Mode sandbox (CLI: `--codemode-internal-full-access`; default: `false`)                                |
+| `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                                                                 |
+| `BRIEFING_SUMMARY_COUNT`          | Session summaries to list in briefing (CLI: `--briefing-summaries`; default: `1`)                                                                     |
+| `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                                                                                |
+| `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                                                                           |
+| `BRIEFING_PR_COUNT`               | PRs to list in briefing; `0` = count only (default: `0`)                                                                                              |
+| `BRIEFING_PR_STATUS`              | Show PR status breakdown (open/merged/closed; default: `false`)                                                                                       |
+| `BRIEFING_MILESTONE_COUNT`        | Milestones to list in briefing; `0` = hide entirely (CLI: `--briefing-milestones`; default: `3`)                                                      |
+| `BRIEFING_WORKFLOW_COUNT`         | Workflow runs to list in briefing; `0` = status only (default: `0`)                                                                                   |
+| `BRIEFING_WORKFLOW_STATUS`        | Show workflow status breakdown in briefing (default: `false`)                                                                                         |
+| `BRIEFING_COPILOT_REVIEWS`        | Aggregate Copilot review state in briefing (default: `false`)                                                                                         |
+| `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                                                                     |
+| `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                                                    |
+| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                                                                       |
+| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)                                                     |
+| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `npm run lint`)                                                                  |
+| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `npm run typecheck`; empty = skip)                                                                                |
+| `PROJECT_BUILD_CMD`               | Project build command (default: `npm run build`; empty = skip)                                                                                        |
+| `PROJECT_TEST_CMD`                | Project test command (default: `npm run test`)                                                                                                        |
+| `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                                                                      |
+| `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)                                                           |
+| `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                                                                      |
+| `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                                                                               |
+| `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                                                                         |
+| `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                                                                         |
+| `AUDIT_LOG_PATH`                  | Path for the JSONL operational telemetry log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable telemetry logging.       |
+| `AUDIT_REDACT`                    | Set to `false` to include tool arguments in telemetry log entries (default: `true`)                                                                   |
+| `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                                                        |
+| `AUDIT_LOG_MAX_SIZE`              | Maximum operational telemetry file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)                                   |
+| `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)                                                                  |
+| `FLAG_VOCABULARY`                 | Comma-separated flag types for Hush Protocol (CLI: `--flag-vocabulary`; default: `blocker,needs_review,help_requested,fyi`)                           |
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
 
@@ -715,8 +727,8 @@ flowchart TB
 
 - **TypeScript + Native SQLite** - High-performance `better-sqlite3` with synchronous I/O
 - **sqlite-vec** - Vector similarity search via SQLite extension
-- **@huggingface/transformers** - ML embeddings in JavaScript
-- **Lazy loading** - ML models load on first use, not startup
+- **@huggingface/transformers** - Local ML embedding models in JavaScript
+- **Background Warmup** - Model weights (~23MB) are loaded into memory asynchronously on server startup to avoid first-request latency. If the server is invoked before warmup completes, the first semantic search or vector insertion will incur a network-bound cold start (~1.5s - 3s) while the weights are cached locally.
 
 ### Performance Benchmarks
 

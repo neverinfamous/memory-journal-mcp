@@ -34,13 +34,7 @@ describe('Sandbox Factory', () => {
             expect(getDefaultSandboxMode()).toBe('worker')
         })
 
-        it('should allow setting to vm mode', () => {
-            setDefaultSandboxMode('vm')
-            expect(getDefaultSandboxMode()).toBe('vm')
-        })
-
         it('should allow setting back to worker mode', () => {
-            setDefaultSandboxMode('vm')
             setDefaultSandboxMode('worker')
             expect(getDefaultSandboxMode()).toBe('worker')
         })
@@ -51,11 +45,10 @@ describe('Sandbox Factory', () => {
     // =========================================================================
 
     describe('getAvailableSandboxModes', () => {
-        it('should return both vm and worker modes', () => {
+        it('should return worker mode only', () => {
             const modes = getAvailableSandboxModes()
-            expect(modes).toContain('vm')
             expect(modes).toContain('worker')
-            expect(modes).toHaveLength(2)
+            expect(modes).toHaveLength(1)
         })
     })
 
@@ -64,12 +57,6 @@ describe('Sandbox Factory', () => {
     // =========================================================================
 
     describe('createSandbox', () => {
-        it('should create a VM sandbox when mode is vm', () => {
-            const sandbox = createSandbox('vm')
-            expect(sandbox).toBeDefined()
-            expect(typeof sandbox.execute).toBe('function')
-        })
-
         it('should create a Worker sandbox when mode is worker', () => {
             const sandbox = createSandbox('worker')
             expect(sandbox).toBeDefined()
@@ -77,7 +64,7 @@ describe('Sandbox Factory', () => {
         })
 
         it('should use default mode when not specified', () => {
-            setDefaultSandboxMode('vm')
+            setDefaultSandboxMode('worker')
             const sandbox = createSandbox()
             expect(sandbox).toBeDefined()
         })
@@ -92,14 +79,6 @@ describe('Sandbox Factory', () => {
     // =========================================================================
 
     describe('createSandboxPool', () => {
-        it('should create a VM pool when mode is vm', () => {
-            const pool = createSandboxPool('vm')
-            expect(pool).toBeDefined()
-            expect(typeof pool.execute).toBe('function')
-            expect(typeof pool.getActiveCount).toBe('function')
-            expect(pool.poolId).toBeDefined()
-        })
-
         it('should create a Worker pool when mode is worker', () => {
             const pool = createSandboxPool('worker')
             expect(pool).toBeDefined()
@@ -108,7 +87,7 @@ describe('Sandbox Factory', () => {
         })
 
         it('should use default mode when not specified', () => {
-            setDefaultSandboxMode('vm')
+            setDefaultSandboxMode('worker')
             const pool = createSandboxPool()
             expect(pool).toBeDefined()
         })
@@ -123,26 +102,18 @@ describe('Sandbox Factory', () => {
     // =========================================================================
 
     describe('getSandboxModeInfo', () => {
-        it('should return VM info', () => {
-            const info = getSandboxModeInfo('vm')
-            expect(info.mode).toBe('vm')
-            expect(info.securityLevel).toBe('basic')
-            expect(info.description).toContain('VM-based')
-            expect(info.isolation).toContain('vm.createContext')
-        })
-
         it('should return Worker info', () => {
             const info = getSandboxModeInfo('worker')
             expect(info.mode).toBe('worker')
-            expect(info.securityLevel).toBe('production')
+            expect(info.securityLevel).toBe('trusted_admin')
             expect(info.description).toContain('Worker-thread')
             expect(info.isolation).toContain('V8 isolate')
         })
 
         it('should use default mode when not specified', () => {
-            setDefaultSandboxMode('vm')
+            setDefaultSandboxMode('worker')
             const info = getSandboxModeInfo()
-            expect(info.mode).toBe('vm')
+            expect(info.mode).toBe('worker')
         })
 
         it('should throw for unknown mode', () => {

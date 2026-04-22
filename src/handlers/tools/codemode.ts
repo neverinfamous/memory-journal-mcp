@@ -11,9 +11,12 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { relaxedNumber } from './schemas.js'
+import { ConfigurationError } from '../../types/errors.js'
 import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
+import { getRequestContext, requestContextStorage } from '../../utils/request-context.js'
+import { getAuthContext, runWithAuthContext } from '../../auth/auth-context.js'
 import { getCoreTools } from './core.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
@@ -23,7 +26,7 @@ import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
-import { GitHubIntegration } from '../../github/github-integration/index.js'
+import { getGitHubIntegration } from '../../github/github-integration/index.js'
 
 // =============================================================================
 // Input / Output Schemas
@@ -60,11 +63,53 @@ const ExecuteCodeSchemaMcp = z.object({
 // Singleton State
 // =============================================================================
 
-let securityManager: CodeModeSecurityManager | null = null
-let sandboxPool: ISandboxPool | null = null
+interface CacheEntry<T> {
+    instance: T
+    lastAccessed: number
+}
 
-function getSecurityManager(): CodeModeSecurityManager {
-    if (!securityManager) {
+const securityManagerMap = new Map<string, CacheEntry<CodeModeSecurityManager>>()
+
+let globalSandboxPool: ISandboxPool | null = null
+
+function getSandboxPool(): ISandboxPool {
+    globalSandboxPool ??= createSandboxPool()
+    return globalSandboxPool
+}
+
+const TTL_MS = 10 * 60 * 1000 // 10 minute eviction
+let lastSweepTime = Date.now()
+
+function sweepCaches(): void {
+    const now = Date.now()
+    if (now - lastSweepTime < 1 * 60 * 1000) return // Sweep at most every 1 min
+    lastSweepTime = now
+
+    for (const [id, entry] of securityManagerMap.entries()) {
+        if (now - entry.lastAccessed > TTL_MS) {
+            entry.instance.dispose()
+            securityManagerMap.delete(id)
+        }
+    }
+}
+
+const MAX_SANDBOX_POOLS = 50
+
+function evictExcessCaches(): void {
+    while (securityManagerMap.size >= MAX_SANDBOX_POOLS) {
+        const oldestId = securityManagerMap.keys().next().value
+        if (oldestId !== undefined) {
+            securityManagerMap.get(oldestId)?.instance.dispose()
+            securityManagerMap.delete(oldestId)
+        }
+    }
+}
+
+function getSecurityManager(clientId: string): CodeModeSecurityManager {
+    sweepCaches()
+    let entry = securityManagerMap.get(clientId)
+    if (!entry) {
+        evictExcessCaches()
         const envMaxSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
         const parsedMaxSize =
             envMaxSize && /^\d+$/.test(envMaxSize) ? parseInt(envMaxSize, 10) : undefined
@@ -75,14 +120,18 @@ function getSecurityManager(): CodeModeSecurityManager {
             parsedMaxSize > 0
                 ? { maxResultSize: parsedMaxSize }
                 : undefined
-        securityManager = new CodeModeSecurityManager(overrides)
-    }
-    return securityManager
-}
 
-function getSandboxPool(): ISandboxPool {
-    sandboxPool ??= createSandboxPool()
-    return sandboxPool
+        entry = {
+            instance: new CodeModeSecurityManager(overrides),
+            lastAccessed: Date.now(),
+        }
+        securityManagerMap.set(clientId, entry)
+    } else {
+        entry.lastAccessed = Date.now()
+        securityManagerMap.delete(clientId)
+        securityManagerMap.set(clientId, entry)
+    }
+    return entry.instance
 }
 
 // =============================================================================
@@ -99,13 +148,16 @@ let cachedCodeModeContext: ToolContext | null = null
 /**
  * Collect all tool definitions except codemode (prevents recursion).
  * Results are cached by referential identity of the ToolContext.
+ *
+ * SEC-1.2: Filters by context.config.filterConfig so the operator's active
+ * --tool-filter restrictions are honoured inside the Code Mode sandbox.
  */
 function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
     if (cachedNonCodeModeTools && cachedCodeModeContext === context) {
         return cachedNonCodeModeTools
     }
 
-    cachedNonCodeModeTools = [
+    const allTools = [
         ...getCoreTools(context),
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
@@ -116,12 +168,23 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
         ...getBackupTools(context),
         ...getTeamTools(context),
     ]
+
+    // SEC-1.2: Respect active tool filter — Code Mode must not reach tools that the
+    // operator has explicitly excluded. Strict enforcement.
+    const filterConfig = context.config?.filterConfig
+    const bypassFilter = context.config?.codemodeInternalFullAccess === true
+
+    cachedNonCodeModeTools =
+        filterConfig && !bypassFilter
+            ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
+            : allTools
+
     cachedCodeModeContext = context
     return cachedNonCodeModeTools
 }
 
 // =============================================================================
-// Tool Definitions
+// Tool Definitions & Access Control
 // =============================================================================
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
@@ -130,7 +193,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             name: 'mj_execute_code',
             title: 'Execute Code (Code Mode)',
             description:
-                'Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. ' +
+                '🛑 TRUSTED ADMIN ONLY: Execute JavaScript in a Privileged sandboxed environment with access to all journal tools via the `mj.*` API. ' +
                 'Enables multi-step workflows in a single call, reducing token usage by 70-90%. ' +
                 'API groups: mj.core.*, mj.search.*, mj.analytics.*, mj.relationships.*, ' +
                 'mj.io.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +
@@ -151,8 +214,14 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         repo,
                     } = ExecuteCodeSchema.parse(params)
 
+                    // Context extraction for rate limiting and tenant isolation
+                    const reqCtx = getRequestContext()
+                    const authCtx = getAuthContext()
+                    const clientId =
+                        authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
+
                     // Security validation
-                    const security = getSecurityManager()
+                    const security = getSecurityManager(clientId)
                     const validation = security.validateCode(code)
                     if (!validation.valid) {
                         return {
@@ -162,7 +231,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Rate limiting
-                    if (!security.checkRateLimit('default')) {
+                    if (!security.checkRateLimit(clientId)) {
                         return {
                             success: false,
                             error: 'Rate limit exceeded (60 executions per minute)',
@@ -171,25 +240,47 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // Context injection for GitHub / Kanban routing
                     let sessionContext = context
-                    if (repo && context.config?.projectRegistry) {
-                        const registryEntry = context.config.projectRegistry[repo]
-                        if (registryEntry) {
-                            const injectedGithub = new GitHubIntegration(registryEntry.path)
-                            try {
-                                // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
-                                await injectedGithub.getRepoInfo()
-                            } catch {
-                                // Ignore failing silently if repo is invalid
+                    if (repo) {
+                        if (!context.config?.codemodeInternalFullAccess) {
+                            return {
+                                success: false,
+                                error: 'Repo switching is restricted to internal administrative access.',
                             }
-                            sessionContext = {
-                                ...context,
-                                github: injectedGithub,
-                                config: {
-                                    ...context.config,
-                                    defaultProjectNumber:
-                                        registryEntry.project_number ??
-                                        context.config.defaultProjectNumber,
-                                },
+                        }
+                        if (context.config?.projectRegistry) {
+                            let registryEntry = context.config.projectRegistry[repo]
+                            if (!registryEntry && repo.includes('/')) {
+                                const repoName = repo.split('/').pop()
+                                if (repoName) {
+                                    registryEntry = context.config.projectRegistry[repoName]
+                                }
+                            }
+
+                            if (registryEntry) {
+                                const injectedGithub = getGitHubIntegration(
+                                    registryEntry.path,
+                                    undefined,
+                                    process.env['GITHUB_TOKEN']
+                                )
+                                try {
+                                    // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
+                                    await injectedGithub.getRepoInfo()
+                                } catch (error) {
+                                    return {
+                                        success: false,
+                                        error: `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`,
+                                    }
+                                }
+                                sessionContext = {
+                                    ...context,
+                                    github: injectedGithub,
+                                    config: {
+                                        ...context.config,
+                                        defaultProjectNumber:
+                                            registryEntry.project_number ??
+                                            context.config.defaultProjectNumber,
+                                    },
+                                }
                             }
                         }
                     }
@@ -197,13 +288,80 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Build tool list (excluding codemode to prevent recursion)
                     const allTools = collectNonCodeModeTools(sessionContext)
 
-                    // Filter out write operations if readonly mode
+                    // Filter out write operations if readonly mode using ACL
                     const tools = readonlyMode
-                        ? allTools.filter((t) => t.annotations.readOnlyHint === true)
+                        ? allTools.filter((t) => t.annotations?.readOnlyHint === true)
                         : allTools
 
-                    // Build the API bridge
-                    const api = createJournalApi(tools)
+                    // SEC-1.1: Build the API bridge using the callTool()-backed dispatcher
+                    // when available. This ensures scope checks, maintenance-mode guards,
+                    // and audit interception apply to all inner tool calls.
+                    const dispatcher = sessionContext.config?.dispatch
+                    if (!dispatcher) {
+                        throw new ConfigurationError(
+                            'Code Mode is unavailable in the current configuration.'
+                        )
+                    }
+
+                    const capturedReqCtx = reqCtx
+                    const capturedAuthCtx = authCtx
+
+                    const secureDispatcher = async (
+                        name: string,
+                        args: Record<string, unknown>
+                    ): Promise<unknown> => {
+                        // Inject defaultProjectNumber into args to propagate repo context across the dispatcher boundary
+                        if (
+                            sessionContext.config?.defaultProjectNumber !== undefined &&
+                            !('project_number' in args) &&
+                            (name === 'create_entry' ||
+                                name === 'update_entry' ||
+                                name === 'delete_entry' ||
+                                name.startsWith('team_') ||
+                                name === 'pass_flag')
+                        ) {
+                            args['project_number'] = sessionContext.config.defaultProjectNumber
+                        }
+
+                        // Inject repo into args to propagate GitHub context across the dispatcher boundary
+                        if (repo && !('repo' in args)) {
+                            args['repo'] = repo
+                        }
+
+                        const executeAuth = (): Promise<unknown> => {
+                            if (capturedAuthCtx) {
+                                return runWithAuthContext(capturedAuthCtx, () =>
+                                    dispatcher(name, args)
+                                )
+                            }
+                            return dispatcher(name, args)
+                        }
+
+                        const mm = sessionContext.config?.runtime?.maintenanceManager
+                        if (mm) mm.yieldJob()
+                        try {
+                            let result: unknown
+                            if (capturedReqCtx) {
+                                result = await requestContextStorage.run(
+                                    capturedReqCtx,
+                                    executeAuth
+                                )
+                            } else {
+                                result = await executeAuth()
+                            }
+                            return result
+                        } catch (error) {
+                            return {
+                                success: false,
+                                error: error instanceof Error ? error.message : String(error),
+                                code: 'DISPATCH_ERROR',
+                            }
+                        } finally {
+                            if (mm) mm.resumeJob()
+                        }
+                    }
+
+                    const api = createJournalApi(tools, secureDispatcher)
                     const bindings = api.createSandboxBindings()
 
                     // Execute in sandbox (override timeout if specified)
@@ -212,17 +370,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
                     const result = await pool.execute(code, bindings, timeout)
-                    // Validate result size
-                    if (result.success && result.result !== undefined) {
-                        const sizeCheck = security.validateResultSize(result.result)
-                        if (!sizeCheck.valid) {
-                            return {
-                                success: false,
-                                error: sizeCheck.errors.join('; '),
-                                metrics: result.metrics,
-                            }
-                        }
-                    }
+                    // Result size is validated internally by the worker pool
                     return result
                 } catch (err) {
                     return formatHandlerError(err)

@@ -12,9 +12,7 @@
 import { MAX_QUERY_LIMIT } from '../schemas.js'
 import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
-
-/** Number of leading characters used as deduplication key */
-const DEDUP_KEY_LENGTH = 200
+import * as crypto from 'node:crypto'
 
 // ============================================================================
 // Types
@@ -39,6 +37,7 @@ export interface ISearchFilters {
     entryType?: string
     startDate?: string
     endDate?: string
+    includeTeam?: boolean
 }
 
 // ============================================================================
@@ -81,8 +80,15 @@ export function mergeAndDedup(
     })
 
     for (const entry of all) {
-        // Deduplicate by content (same entry shared to team)
-        const key = entry.content.slice(0, DEDUP_KEY_LENGTH)
+        // Stop deduplicating cross-DB by content alone to prevent dropping identical text entries.
+        // Use source + id, fallback to source + content hash.
+        const entryId =
+            typeof entry['id'] === 'number' || typeof entry['id'] === 'string'
+                ? String(entry['id'])
+                : ''
+        const key = entryId
+            ? `${entry.source}:${entryId}`
+            : crypto.createHash('sha256').update(`${entry.source}:${entry.content}`).digest('hex')
         if (!seen.has(key)) {
             seen.add(key)
             merged.push(entry)

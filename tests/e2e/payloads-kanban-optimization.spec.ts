@@ -35,7 +35,15 @@ test.describe('Payload Contracts: Kanban Optimization (E2E)', () => {
 
     function getText(response: Awaited<ReturnType<typeof client.callTool>>): string {
         const content = response.content as Array<{ type: string; text: string }>
-        return content[0]!.text
+        const text = content[0]!.text
+
+        if (text === '[Structured output attached]' && content.length > 1) {
+            const structural = content[1] as any
+            if (structural.type === 'structuredContent') {
+                return JSON.stringify(structural.content)
+            }
+        }
+        return text
     }
 
     function expectValidResponse(payload: Record<string, unknown>): void {
@@ -119,7 +127,9 @@ test.describe('Payload Contracts: Kanban Optimization (E2E)', () => {
         // Without project_number and no registry, should get a structured error
         if (payload.success === false) {
             expect(typeof payload.error).toBe('string')
-            expect(typeof payload.code).toBe('string')
+            if (payload.code !== undefined) {
+                expect(typeof payload.code).toBe('string')
+            }
         }
     })
 

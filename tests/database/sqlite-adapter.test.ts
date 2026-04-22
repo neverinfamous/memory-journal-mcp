@@ -576,11 +576,7 @@ describe('DatabaseAdapter', () => {
             }
         })
 
-        it('should get raw database handle', () => {
-            const rawDb = db.getRawDb() as any
-            expect(rawDb).toBeDefined()
-            expect(typeof rawDb.exec).toBe('function')
-        })
+        // test removed - raw db handle no longer exposed
     })
 
     // ========================================================================

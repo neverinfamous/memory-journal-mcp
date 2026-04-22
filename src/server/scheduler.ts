@@ -9,8 +9,8 @@
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { logger } from '../utils/logger.js'
-import { computeDigest, type DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
-import type { Database } from 'better-sqlite3'
+import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
+import type { ServerRuntime } from '../utils/maintenance-lock.js'
 
 // ============================================================================
 // Types
@@ -57,6 +57,7 @@ interface JobTimer {
     lastResult: 'success' | 'error' | null
     lastError: string | null
     runCount: number
+    isRunning?: boolean
 }
 
 // ============================================================================
@@ -78,15 +79,18 @@ export class Scheduler {
     private readonly vectorManager: VectorSearchManager | null
     private readonly timers: JobTimer[] = []
     private started = false
+    private readonly runtime?: ServerRuntime
 
     constructor(
         options: SchedulerOptions,
         db: IDatabaseAdapter,
-        vectorManager?: VectorSearchManager
+        vectorManager?: VectorSearchManager,
+        runtime?: ServerRuntime
     ) {
         this.options = options
         this.db = db
         this.vectorManager = vectorManager ?? null
+        this.runtime = runtime
     }
 
     /**
@@ -101,6 +105,9 @@ export class Scheduler {
             return
         }
         this.started = true
+
+        // Prevent timer leaks on graceful shutdown
+        process.on('SIGTERM', () => this.stop())
 
         const { backupIntervalMinutes, vacuumIntervalMinutes, rebuildIndexIntervalMinutes } =
             this.options
@@ -214,9 +221,36 @@ export class Scheduler {
      * Execute a job with error isolation and status tracking.
      */
     private async executeJob(job: JobTimer, fn: () => Promise<void>): Promise<void> {
+        if (job.isRunning) {
+            return
+        }
+
+        let inMaintenance = false
+        if (!this.runtime) {
+            logger.error(
+                'ServerRuntime is required to schedule jobs safely. Bypassing maintenance check.',
+                { module: 'Scheduler' }
+            )
+        } else {
+            inMaintenance = this.runtime.maintenanceManager.isMaintenanceModeActive()
+        }
+
+        if (inMaintenance) {
+            logger.info(`Skipping scheduled job '${job.name}' due to active maintenance mode`, {
+                module: 'Scheduler',
+                operation: job.name,
+            })
+            return
+        }
+
+        job.isRunning = true
         const startTime = Date.now()
         try {
-            await fn()
+            if (this.runtime) {
+                await this.runtime.maintenanceManager.withActiveJob(fn)
+            } else {
+                await fn()
+            }
             job.lastRun = new Date(startTime)
             job.lastResult = 'success'
             job.lastError = null
@@ -231,6 +265,8 @@ export class Scheduler {
                 operation: job.name,
                 error: job.lastError,
             })
+        } finally {
+            job.isRunning = false
         }
     }
 
@@ -301,8 +337,7 @@ export class Scheduler {
      * Digest job: compute analytics snapshot and persist to database.
      */
     private runDigest(): void {
-        const rawDb = this.db.getRawDb() as Database
-        const snapshot = computeDigest(rawDb)
+        const snapshot = this.db.computeDigest() as unknown as DigestSnapshot
         this.db.saveAnalyticsSnapshot('digest', snapshot as unknown as Record<string, unknown>)
         logger.info('Scheduled analytics digest computed', {
             module: 'Scheduler',

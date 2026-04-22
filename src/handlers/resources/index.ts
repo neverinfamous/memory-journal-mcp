@@ -11,13 +11,15 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import type { Scheduler } from '../../server/scheduler.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { BriefingConfig } from './shared.js'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+import { enforceAccessBoundary } from '../../auth/validation.js'
 
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
 
 // Import sub-module definitions
 import { getCoreResourceDefinitions } from './core/index.js'
-import { getGraphResourceDefinitions } from './graph.js'
+import { getDynamicGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
 import { getTeamResourceDefinitions } from './team.js'
@@ -26,7 +28,6 @@ import { getInsightResourceDefinitions } from './insights.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
-import { getGlobalAuditLogger } from '../tools/index.js'
 
 /**
  * Get all resource definitions for MCP list
@@ -94,10 +95,20 @@ export async function readResource(
     github?: GitHubIntegration | null,
     scheduler?: Scheduler | null,
     teamDb?: IDatabaseAdapter,
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig,
+    runtime?: ServerRuntime
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
-    const resources = getAllResourceDefinitions()
-    const context = { db, teamDb, vectorManager, filterConfig, github, scheduler, briefingConfig }
+    const resources = getAllResourceDefinitions(runtime)
+    const context = {
+        db,
+        teamDb,
+        vectorManager,
+        filterConfig,
+        github,
+        scheduler,
+        briefingConfig,
+        runtime,
+    }
 
     // Strip query parameters for matching, but pass full URI to handler
     const baseUri = getBaseUri(uri)
@@ -105,6 +116,9 @@ export async function readResource(
     // Check for exact match first (using base URI without query params)
     const exactMatch = resources.find((r) => r.uri === baseUri)
     if (exactMatch) {
+        // Authorization Hook: Enforce scope if auth context exists
+        enforceAccessBoundary(baseUri, 'resource', exactMatch.capabilities, runtime?.auditLogger)
+
         // Pass full URI (with query params) to handler so it can parse them
         const result = await Promise.resolve(exactMatch.handler(uri, context))
         if (isResourceResult(result)) {
@@ -116,16 +130,25 @@ export async function readResource(
     // Check for template matches (also use base URI)
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
+            const escapedUri = resource.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
             // Use (.+) for {+repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
-            const pattern = resource.uri.replace(
-                /\{([^}]+)\}/g,
+            const pattern = escapedUri.replace(
+                /\\{([^}]+)\\}/g,
                 (_match: string, paramName: string) => {
-                    const cleanParam = paramName.startsWith('+') ? paramName.slice(1) : paramName
+                    const cleanParam = paramName.replace(/^\\?\+/, '')
                     return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
                 }
             )
             const regex = new RegExp(`^${pattern}$`)
             if (regex.test(baseUri)) {
+                // Authorization Hook: Enforce scope if auth context exists
+                enforceAccessBoundary(
+                    baseUri,
+                    'resource',
+                    resource.capabilities,
+                    runtime?.auditLogger
+                )
+
                 const result = await Promise.resolve(resource.handler(uri, context))
                 if (isResourceResult(result)) {
                     return { data: result.data, annotations: result.annotations }
@@ -141,16 +164,16 @@ export async function readResource(
 /**
  * Get all resource definitions by composing sub-module definitions
  */
-function getAllResourceDefinitions(): InternalResourceDef[] {
+function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef[] {
     return [
         ...getCoreResourceDefinitions(),
-        ...getGraphResourceDefinitions(),
+        ...getDynamicGraphResourceDefinitions(),
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
         ...getInsightResourceDefinitions(),
-        // Audit resource — bound to the global audit logger (or null if unconfigured)
-        getAuditResourceDef(getGlobalAuditLogger),
+        // Audit resource — bound to the runtime's instance audit logger
+        getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]
 }

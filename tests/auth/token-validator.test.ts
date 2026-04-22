@@ -5,7 +5,7 @@
  * scope parsing, and JWKS integration.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TokenValidator, createTokenValidator } from '../../src/auth/token-validator.js'
 import type { TokenValidatorConfig } from '../../src/auth/types.js'
 import { AUTH_ERROR_CODES } from '../../src/auth/errors.js'
@@ -63,6 +63,51 @@ describe('TokenValidator', () => {
         it('should apply default clockTolerance', () => {
             const validator = new TokenValidator(config)
             expect(validator).toBeDefined()
+        })
+
+        it('should throw if issuer does not use HTTPS and is not loopback', () => {
+            expect(
+                () => new TokenValidator({ ...config, issuer: 'http://auth.example.com' })
+            ).toThrow(/Issuer must use HTTPS protocol/)
+        })
+
+        it('should throw if JWKS URI does not use HTTPS and is not loopback', () => {
+            expect(
+                () =>
+                    new TokenValidator({
+                        ...config,
+                        jwksUri: 'http://auth.example.com/.well-known/jwks.json',
+                    })
+            ).toThrow(/JWKS URI must use HTTPS protocol/)
+        })
+
+        it('should throw if JWKS URI origin does not match Issuer origin', () => {
+            expect(
+                () =>
+                    new TokenValidator({
+                        ...config,
+                        jwksUri: 'https://other.example.com/.well-known/jwks.json',
+                    })
+            ).toThrow(/JWKS URI origin.*does not match Issuer origin/)
+        })
+
+        it('should allow loopback for issuer and jwksUri', () => {
+            expect(
+                () =>
+                    new TokenValidator({
+                        jwksUri: 'http://localhost:8080/.well-known/jwks.json',
+                        issuer: 'http://localhost:8080',
+                        audience: 'memory-journal-mcp',
+                    })
+            ).not.toThrow()
+            expect(
+                () =>
+                    new TokenValidator({
+                        jwksUri: 'http://127.0.0.1:8080/.well-known/jwks.json',
+                        issuer: 'http://127.0.0.1:8080',
+                        audience: 'memory-journal-mcp',
+                    })
+            ).not.toThrow()
         })
     })
 
@@ -226,6 +271,42 @@ describe('TokenValidator', () => {
             expect(result.valid).toBe(true)
             expect(result.claims?.scopes).toEqual(['write', 'admin'])
         })
+
+        it('should parse scope array from payload.scope', async () => {
+            const { jwtVerify } = await import('jose')
+            const mockVerify = vi.mocked(jwtVerify)
+
+            mockVerify.mockResolvedValueOnce({
+                payload: {
+                    sub: 'user-3',
+                    scope: ['read', 'test'],
+                    exp: Math.floor(Date.now() / 1000) + 3600,
+                    iat: Math.floor(Date.now() / 1000),
+                },
+                protectedHeader: { alg: 'RS256' },
+            } as never)
+
+            const validator = new TokenValidator(config)
+            const result = await validator.validate('array-scope-token-2')
+
+            expect(result.valid).toBe(true)
+            expect(result.claims?.scopes).toEqual(['read', 'test'])
+        })
+
+        it('should handle JwksFetchError during getJwks', async () => {
+            const { createRemoteJWKSet } = await import('jose')
+            vi.mocked(createRemoteJWKSet).mockImplementationOnce(() => {
+                throw new Error('Network error')
+            })
+
+            const validator = new TokenValidator(config)
+            const result = await validator.validate('any-token')
+
+            // The validate method catches errors and passes them to handleValidationError,
+            // which falls back to TOKEN_INVALID for unknown errors
+            expect(result.valid).toBe(false)
+            expect(result.errorCode).toBe(AUTH_ERROR_CODES.TOKEN_INVALID)
+        })
     })
 
     describe('cache management', () => {
@@ -266,6 +347,37 @@ describe('TokenValidator', () => {
                 errorCode: AUTH_ERROR_CODES.TOKEN_INVALID,
             })
             expect(error.name).toBe('InvalidTokenError')
+        })
+    })
+
+    describe('preload', () => {
+        let originalFetch: typeof global.fetch
+
+        beforeEach(() => {
+            originalFetch = global.fetch
+        })
+
+        afterEach(() => {
+            global.fetch = originalFetch
+        })
+
+        it('should fetch JWKS and complete successfully', async () => {
+            global.fetch = vi.fn().mockResolvedValue({ ok: true }) as any
+            const validator = new TokenValidator(config)
+            await expect(validator.preload()).resolves.not.toThrow()
+            expect(global.fetch).toHaveBeenCalledWith(config.jwksUri, expect.any(Object))
+        })
+
+        it('should throw JwksFetchError if fetch is not ok', async () => {
+            global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 }) as any
+            const validator = new TokenValidator(config)
+            await expect(validator.preload()).rejects.toThrow('Failed to fetch JWKS')
+        })
+
+        it('should throw JwksFetchError on network error', async () => {
+            global.fetch = vi.fn().mockRejectedValue(new Error('Network error')) as any
+            const validator = new TokenValidator(config)
+            await expect(validator.preload()).rejects.toThrow('Failed to fetch JWKS')
         })
     })
 })
