@@ -2,8 +2,6 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.0...HEAD)
 
-### Added
-- Phase 16: Sandbox Basics Stability Verification
-  - Verified 15/15 cases passing for Code Mode via `mj_execute_code`
-  - Validated expression evaluation, async/await support, and built-in library availability
-  - Confirmed execution metrics (timing/memory) and timeout handling
+### Fixed
+- Verified Phase 21: Search & Semantics via Code Mode, confirming FTS5 queries (phrase, prefix, NOT/OR combinations, LIKE fallback), exhaustive filter integration across metadata properties, date range validations, cross-DB multi-source search, and semantic indexing constraints with robust error handling.
+- Certified Advanced Search features in Code Mode, validating importance-based sorting strategies (`sort_by: 'importance'`) and advanced analytics pipelines (`decisionDensity`, `relationshipComplexity`, `activityTrend`, and `causalMetrics`).
