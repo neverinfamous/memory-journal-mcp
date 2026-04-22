@@ -19,8 +19,12 @@ describe('utilities coverage', () => {
         try {
             let time = Date.now()
             vi.spyOn(Date, 'now').mockImplementation(() => time)
-            vi.spyOn(fs.promises, 'stat').mockResolvedValue({ mtimeMs: 1234 } as any)
-            const readFileSpy = vi.spyOn(fs.promises, 'readFile').mockResolvedValue('rules content')
+            const fileMock = {
+                stat: vi.fn().mockResolvedValue({ mtimeMs: 1234, size: 100 }),
+                readFile: vi.fn().mockResolvedValue('rules content'),
+                close: vi.fn().mockResolvedValue(undefined),
+            }
+            vi.spyOn(fs.promises, 'open').mockResolvedValue(fileMock as any)
 
             const dummyAllowedContext = {
                 briefingConfig: { allowedIoRoots: [process.cwd()] },
@@ -32,13 +36,13 @@ describe('utilities coverage', () => {
 
             // 2. Cache hit (advance time by 1ms)
             time += 1
-            readFileSpy.mockResolvedValue('should not happen')
+            fileMock.readFile.mockResolvedValue('should not happen')
             const result2 = (await rulesResource.handler('mem', dummyAllowedContext)) as any
             expect(result2.data).toBe('rules content')
 
             // 3. Error handling (cache expired)
             time += 10 * 60 * 1000
-            readFileSpy.mockRejectedValue('String error read')
+            fileMock.readFile.mockRejectedValue('String error read')
             const errResult = (await rulesResource.handler('mem', dummyAllowedContext)) as any
             expect(errResult.data.error).toContain('String error read')
         } finally {

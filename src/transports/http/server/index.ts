@@ -269,7 +269,7 @@ export class HttpTransport {
 
             logger.info('OAuth 2.1 authentication enabled', {
                 module: 'HTTP',
-                issuer: this.config.oauthIssuer,
+                oauthIssuerUrl: this.config.oauthIssuer,
                 audience: this.config.oauthAudience,
             })
         } else if (authToken) {
@@ -278,8 +278,9 @@ export class HttpTransport {
         }
 
         // Propagate authenticated context into core dispatch
-        // codeql[js/missing-rate-limiting] Rate limiting is securely enforced globally at line 170
         this.app.use((req: Request, _res: Response, next: () => void) => {
+            // lgtm[js/missing-rate-limiting]
+            // codeql[js/missing-rate-limiting] Rate limiting is securely enforced globally at line 170
             if (req.auth) {
                 runWithAuthContext(
                     { authenticated: true, claims: req.auth, scopes: req.auth.scopes },
