@@ -2,5 +2,5 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.0...HEAD)
 
-### Verified
-- Phase 18 Code Mode API Bridge verification. Confirmed `readonly: true` successfully restricts write operations by dynamically stripping write tools from the `mj.*` sandbox object, while allowing reads (e.g., `getRecentEntries`, `searchEntries`). Confirmed default mode permits full CRUD.
+### Added
+- **Stability Verification:** Certified Phase 24 (Code Mode API Bridge) for relationship and visualization workflows, completing a comprehensive matrix validating link creation (all 5 types), strict duplicate detection, structured validation errors, and parameter-driven Mermaid diagram generation (`visualize_relationships`), ensuring total functional parity with HTTP/SSE endpoints.
