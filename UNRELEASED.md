@@ -3,5 +3,5 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.0...HEAD)
 
 ### Verified
-- **Phase 25 Code Mode API**: Validated all 16 GitHub tools via `mj_execute_code`. Confirmed structured error handling, Kanban board state transitions, Issue/Milestone lifecycle management, and Repo Insights querying.
+- **Code Mode IO**: Completed Phase 26 verification of `mj.io.*` namespace, including `exportEntries`, `exportMarkdown`, and `importMarkdown`. Validated legacy formats (JSON/Markdown content extraction), sandbox directory constraints, dry-run simulation accuracy, and directory traversal blocking (14 checks total).
 ### Added
