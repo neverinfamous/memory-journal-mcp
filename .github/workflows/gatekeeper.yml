@@ -32,6 +32,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      security-events: write
 
   publish:
     needs: [lint, codeql, secrets, trivy]
