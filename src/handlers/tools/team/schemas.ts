@@ -169,7 +169,7 @@ export const TeamUpdateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number(),
+    project_number: z.number().optional(),
 })
 
 /** team_update_entry — relaxed */
@@ -178,19 +178,19 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_delete_entry — strict */
 export const TeamDeleteEntrySchema = z.object({
     entry_id: z.number(),
-    project_number: z.number(),
+    project_number: z.number().optional(),
 })
 
 /** team_delete_entry — relaxed */
 export const TeamDeleteEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_merge_tags — strict */
@@ -695,7 +695,7 @@ export const PassTeamFlagSchema = z.object({
     message: z.string().min(1).max(49_000).describe('Flag message describing the issue or request'),
     target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
     link: z.string().optional().describe('Related file path, URL, or reference'),
-    project_number: z.number(),
+    project_number: z.number().optional(),
     issue_number: z.number().optional(),
     author: z.string().optional(),
 })
@@ -706,7 +706,7 @@ export const PassTeamFlagSchemaMcp = z.object({
     message: z.string().optional(),
     target_user: z.string().optional(),
     link: z.string().optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     issue_number: relaxedNumber().optional(),
     author: z.string().optional(),
 })

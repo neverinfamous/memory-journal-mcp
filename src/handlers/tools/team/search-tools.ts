@@ -42,7 +42,9 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { query, tags, limit, sort_by, project_number } =
                         TeamSearchSchema.parse(params)
 
-                    if (project_number == null) {
+                    const isGlobalFlagSearch = tags?.some(t => t.startsWith('flag:'))
+
+                    if (project_number == null && !isGlobalFlagSearch) {
                         return {
                             success: false,
                             error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
@@ -128,7 +130,9 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         project_number,
                     } = TeamSearchByDateRangeSchema.parse(params)
 
-                    if (project_number == null) {
+                    const isGlobalFlagSearch = entry_type === 'flag' || tags?.some(t => t.startsWith('flag:'))
+
+                    if (project_number == null && !isGlobalFlagSearch) {
                         return {
                             success: false,
                             error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',

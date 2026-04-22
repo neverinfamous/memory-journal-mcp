@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.0...HEAD)
 
+### Fixed
+
+- Code Mode and standard test failures when creating, resolving, or searching global team flags by resolving strict `project_number` nullish schema validation errors.
+- Internal crash in `team_search` and `team_search_by_date_range` when filtering global flags by conditionally bypassing the strict multi-tenant `project_number` requirements when explicitly searching for `flag:` tags or `entry_type === 'flag'`.
+
 ## [7.6.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.6.0) - 2026-04-21
 
 ### Added

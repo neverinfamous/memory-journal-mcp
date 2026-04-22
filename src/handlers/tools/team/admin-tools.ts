@@ -45,9 +45,9 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     const { entry_id, content, entry_type, tags, project_number } =
                         TeamUpdateEntrySchema.parse(params)
 
-                    // Verify entry exists and belongs to the project
+                    // Verify entry exists and belongs to the project (if project_number is specified)
                     const existing = teamDb.getEntryById(entry_id)
-                    if (existing?.projectNumber !== project_number) {
+                    if (!existing || (project_number !== undefined && existing.projectNumber !== project_number)) {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
@@ -111,9 +111,9 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, project_number } = TeamDeleteEntrySchema.parse(params)
 
-                    // Verify entry exists and belongs to project
+                    // Verify entry exists and belongs to project (if project_number is specified)
                     const existing = teamDb.getEntryById(entry_id)
-                    if (existing?.projectNumber !== project_number) {
+                    if (!existing || (project_number !== undefined && existing.projectNumber !== project_number)) {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,

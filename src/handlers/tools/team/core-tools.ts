@@ -166,7 +166,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         TeamGetEntryByIdSchema.parse(params)
                     const entry = teamDb.getEntryById(entry_id)
 
-                    if (!entry || entry.projectNumber !== project_number) {
+                    if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} not found or does not belong to project ${project_number}`,
