@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import * as https from 'node:https'
 import { EventEmitter } from 'node:events'
 import {
     AuthorizationServerDiscovery,
