@@ -61,7 +61,7 @@ When you notice the user consistently applies patterns, preferences, or workflow
 
 ### Native Agent Skills (NPM Distribution)
 
-This server leverages the `neverinfamous-agent-skills` package. If the user's `SKILLS_DIR_PATH` environment variable targets these, you have native access to foundational frameworks (`mastering-typescript`, `react-best-practices`, `playwright-standard`, `golang`, `rust`, `python`, `docker`, `tailwind-css`, `shadcn-ui`) and the `github-commander` DevOps workflows (`issue-triage`, `pr-review`, `github-actions`, etc.).
+This server leverages the `neverinfamous-agent-skills` package. If the user's `SKILLS_DIR_PATH` environment variable targets these, you have native access to foundational frameworks (`typescript`, `react-best-practices`, `playwright-standard`, `golang`, `rust`, `python`, `docker`, `tailwind-css`, `shadcn-ui`) and the `github-commander` DevOps workflows (`issue-triage`, `pr-review`, `github-actions`, `copilot-audit`, etc.). The `adversarial-planner` skill provides multi-pass plan review with structured critique stages.
 
 - The user can distribute or update these skills across their repositories by running `npx neverinfamous-agent-skills@latest`.
 - If you need to create a new skill, reference the bundled `skill-builder` instructions!

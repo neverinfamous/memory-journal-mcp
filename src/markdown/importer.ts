@@ -75,6 +75,10 @@ const VALID_ENTRY_TYPES = new Set<string>([
     'milestone',
     'system_integration_test',
     'test_entry',
+    'plan_draft',
+    'adversarial_review',
+    'plan_refinement',
+    'copilot_validation',
     'other',
 ])
 

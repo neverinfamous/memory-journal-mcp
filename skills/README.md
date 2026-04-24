@@ -40,6 +40,7 @@ The markdown body contains the full instructions the agent follows once the skil
 
 | Skill                  | Description                                                                                                           |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `adversarial-planner`  | Multi-pass adversarial planning — iterative plan drafting, structured critique, and Copilot validation                |
 | `autonomous-dev`       | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
 | `bun`                  | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                |
 | `docker`               | Production-grade Docker — multi-stage builds, security hardening, Compose v2, BuildKit, and CI/CD integration         |
