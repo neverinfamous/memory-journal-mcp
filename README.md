@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/neverinfamous-memory-journal-mcp-badge.png)](https://mseep.ai/app/neverinfamous-memory-journal-mcp)
+
 # Memory Journal MCP Server
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
