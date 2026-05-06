@@ -32,4 +32,4 @@
 
 ### Verified
 
-- **Backup & Export Subsystem**: Successfully passed 100% of deterministic validation checks. `restore_backup` strictly handles nonexistent files, `backup_journal` successfully prevents path traversal, and `cleanup_backups` enforces minimum count boundaries. `export_entries` correctly applies date and tag filters without silent omissions. Total context token consumption: ~436 tokens.
+- Certified the `memory-journal-mcp` Core tool group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) against the strict error handling matrix, confirming 100% compliance with Zod validation, missing params, type mismatch, and domain constraint errors using structured `{ success: false }` responses.
