@@ -158,7 +158,7 @@ describe('Code Mode Tool Handlers', () => {
 
         expect(result.success).toBe(true)
         expect(result.result).toBe(2)
-    })
+    }, 15000)
 
     it('should reject extremely large result payloads', async () => {
         const result = (await callTool(

@@ -11,6 +11,7 @@
         "bin/",
         "README.md",
         "autonomous-dev/",
+        "adversarial-planner/",
         "bun/",
         "docker/",
         "github-actions/",

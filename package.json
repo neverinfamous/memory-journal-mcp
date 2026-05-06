@@ -1,6 +1,6 @@
 {
     "name": "memory-journal-mcp",
-    "version": "7.6.1",
+    "version": "7.7.0",
     "description": "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads",
     "type": "module",
     "main": "dist/index.js",
@@ -98,6 +98,7 @@
         "minimatch": "10.2.5",
         "tar": "7.5.13",
         "tmp": "^0.2.5",
-        "vite": "^8.0.5"
+        "vite": "^8.0.5",
+        "ip-address": "10.2.0"
     }
 }
