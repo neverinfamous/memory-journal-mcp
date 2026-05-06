@@ -5,6 +5,7 @@
 ### Security
 
 - Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
+- Fixed HIGH severity Trivy code scanning alert (CVE-2026-27135) by explicitly upgrading `nghttp2-libs` from Alpine edge repository in Dockerfile
 
 ### Changed
 
