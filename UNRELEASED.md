@@ -20,13 +20,13 @@
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
+### Tested
+
+- Certified Phase 22 Code Mode multi-step workflows (Read-only pipelines, conditional branching, create+read round-trips) via `mj_execute_code`.
+
 ### Fixed
 
 - Stale version `7.6.0` in `server.json` (version field and OCI identifier) → updated to `7.6.1`
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
-
-### Validated
-
-- Certified Phase 28 Team tools (Vector Operations, Cross-Project Insights) and cross-tool error path structures via Code Mode sandbox, ensuring no raw MCP exceptions leak.
