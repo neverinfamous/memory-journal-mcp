@@ -27,7 +27,6 @@
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 
-### Verified
+### Validated
 
-- Certified team flag tools (Hush Protocol) via Code Mode (Phase 28.12 - 28.15): validated `pass_team_flag`, `resolve_team_flag` behaviors, error paths, and flag searches successfully (12,699 tokens utilized).
-
+- Certified Phase 28 Team tools (Vector Operations, Cross-Project Insights) and cross-tool error path structures via Code Mode sandbox, ensuring no raw MCP exceptions leak.
