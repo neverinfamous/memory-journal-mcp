@@ -31,4 +31,4 @@
 
 ### Verified
 
-- Phase 11: Error Handling & Structured Responses (Prompt handler validation, structured error responses, numeric coercion, and `{}` empty parameter sweeps). All 51 tests passed successfully.
+- **Phase 12: Data Integrity & Boundary Validation**: Completed full regression sweep verifying 100% round-trip fidelity, strict bounds (50k payload caps), tag manipulation logic, and isolation of both soft-deleted and permanently-deleted resources across all query contexts (FTS5, semantic, date range). Zero remediations required.
