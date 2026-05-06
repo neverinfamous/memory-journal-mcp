@@ -17,7 +17,6 @@
 
 ### Added
 
-- Certified Code Mode Readonly Mode enforcement (Phase 18). Confirmed write operations are properly blocked while reads remain accessible.
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
@@ -27,3 +26,7 @@
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
+
+### Verified
+
+- Certified `memory-journal-mcp` Phase 24 (Code Mode: Relationships & Visualization) natively. Validated relationship linking, duplicate prevention, and Mermaid relationship graphs via dynamic `mj.*` sandbox API.
