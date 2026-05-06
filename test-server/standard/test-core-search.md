@@ -64,14 +64,14 @@
 
 ## Success Criteria
 
-- [x] `search_entries` with `mode: 'auto'` correctly identifies conversational prompts and bridges keyword + semantic via Reciprocal Rank Fusion
-- [x] `search_entries` `mode: 'fts'` phrase, prefix, and boolean operators work correctly
-- [x] `search_entries` gracefully falls back to LIKE for FTS5-unsafe queries (single quotes, `%`)
-- [x] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
-- [x] `search_by_date_range` filters work: `entry_type`, `tags`, `is_personal`, `project_number`
-- [x] `search_by_date_range` rejects non-YYYY-MM-DD date strings with structured errors
-- [x] Cross-DB merging includes `source: 'personal' | 'team'` marker
-- [x] `search_entries` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
-- [x] `get_recent_entries` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
-- [x] `search_by_date_range` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
-- [x] Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
+- [ ] `search_entries` with `mode: 'auto'` correctly identifies conversational prompts and bridges keyword + semantic via Reciprocal Rank Fusion
+- [ ] `search_entries` `mode: 'fts'` phrase, prefix, and boolean operators work correctly
+- [ ] `search_entries` gracefully falls back to LIKE for FTS5-unsafe queries (single quotes, `%`)
+- [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
+- [ ] `search_by_date_range` filters work: `entry_type`, `tags`, `is_personal`, `project_number`
+- [ ] `search_by_date_range` rejects non-YYYY-MM-DD date strings with structured errors
+- [ ] Cross-DB merging includes `source: 'personal' | 'team'` marker
+- [ ] `search_entries` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
+- [ ] `get_recent_entries` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
+- [ ] `search_by_date_range` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
+- [ ] Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present

@@ -79,15 +79,15 @@
 
 ## Success Criteria
 
-- [ ] All 24 static resources return valid data
-- [ ] All 7 template resources work with valid parameters
-- [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
-- [ ] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
-- [ ] `memory://tags` tag counts match `list_tags` output
-- [ ] `memory://statistics` structured stats match `get_statistics` output
-- [ ] `memory://github/insights` returns compact stats including traffic aggregates
-- [ ] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
-- [ ] `memory://instructions` references all 61 tools and key resources
-- [ ] `memory://flags` returns active flag dashboard (empty when no unresolved flags)
-- [ ] `memory://flags/vocabulary` returns configured vocabulary list
-- [ ] `memory://briefing` includes `localTime` field for chronological grounding
+- [x] All 24 static resources return valid data
+- [x] All 7 template resources work with valid parameters
+- [x] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- [x] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
+- [x] `memory://tags` tag counts match `list_tags` output
+- [x] `memory://statistics` structured stats match `get_statistics` output
+- [x] `memory://github/insights` returns compact stats including traffic aggregates
+- [x] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
+- [x] `memory://instructions` references all 61 tools and key resources
+- [x] `memory://flags` returns active flag dashboard (empty when no unresolved flags)
+- [x] `memory://flags/vocabulary` returns configured vocabulary list
+- [x] `memory://briefing` includes `localTime` field for chronological grounding

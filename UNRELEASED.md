@@ -2,10 +2,6 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.1...HEAD)
 
-### Verified
-
-- **Payload Optimization Verification**: Successfully verified Kanban throttling (`summary_only`, `item_limit`), Issue/PR body truncation (`truncate_body`), `MAX_QUERY_LIMIT` bounds (500), and Code Mode 100KB result caps.
-
 ### Security
 
 - Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
