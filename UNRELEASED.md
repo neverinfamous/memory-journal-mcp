@@ -25,3 +25,4 @@
 - Stale version `7.6.0` in `server.json` (version field and OCI identifier) → updated to `7.6.1`
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
+- Fixed `Database not initialized` error during `restore_backup` caused by `EBUSY` file locks crashing the rollback logic and permanently closing the SQLite connection

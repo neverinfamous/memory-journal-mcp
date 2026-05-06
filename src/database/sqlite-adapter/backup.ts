@@ -354,12 +354,19 @@ export class BackupManager {
                         module: 'SqliteAdapter',
                         operation: 'restoreFromFile',
                         error: error instanceof Error ? error.message : String(error),
+                        stack: error instanceof Error ? error.stack : undefined,
                     }
                 )
                 // Close DB to ensure handles are released before rollback
                 this.ctx.closeDbBeforeRestore()
                 // Rollback using fast atomic rename
-                await fs.promises.rename(oldDbBackupPath, this.ctx.getDbPath())
+                try {
+                    await fs.promises.rename(oldDbBackupPath, this.ctx.getDbPath())
+                } catch (rollbackErr) {
+                    if ((rollbackErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+                        logger.error('Rollback rename failed', { error: rollbackErr })
+                    }
+                }
                 await this.ctx.initialize()
                 throw error
             }
