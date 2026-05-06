@@ -14,6 +14,7 @@
   - Bumped `github/gh-aw-actions` to `v0.71.4` in GitHub Actions workflows
   - Bumped `aquasecurity/trivy-action` to `ed142fd0673e97e23eac54620cfb913e5ce36c25`
   - Bumped `github/codeql-action` to `95e58e9a2cdfd71adc6e0353d5c52f41a045d225`
+- Certified Code Mode Sandbox Basics (Phase 16), validating expression evaluation, async built-ins, robust metrics generation, and timeout handling mechanisms.
 
 ### Added
 
@@ -26,7 +27,3 @@
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
-
-### Verified
-
-- Certified `memory-journal-mcp` Phase 24 (Code Mode: Relationships & Visualization) natively. Validated relationship linking, duplicate prevention, and Mermaid relationship graphs via dynamic `mj.*` sandbox API.
