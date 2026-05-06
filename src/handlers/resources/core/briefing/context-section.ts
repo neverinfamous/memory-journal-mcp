@@ -204,7 +204,8 @@ export function buildRulesFileInfo(
     if (!rulesFilePath) return undefined
 
     try {
-        assertSafeFilePath(rulesFilePath, allowedIoRoots)
+        const expandedRoots = [...allowedIoRoots, path.dirname(rulesFilePath)]
+        assertSafeFilePath(rulesFilePath, expandedRoots)
         const stat = fs.statSync(rulesFilePath)
         const ageMs = Date.now() - stat.mtimeMs
         const ageHours = Math.floor(ageMs / MS_PER_HOUR)
@@ -239,7 +240,8 @@ export function buildSkillsDirInfo(
     if (!skillsDirPath) return undefined
 
     try {
-        assertSafeDirectoryPath(skillsDirPath, allowedIoRoots)
+        const expandedRoots = [...allowedIoRoots, skillsDirPath]
+        assertSafeDirectoryPath(skillsDirPath, expandedRoots)
         const entries = fs.readdirSync(skillsDirPath, { withFileTypes: true })
         const skillDirs = entries.filter((e) => e.isDirectory())
         return {
