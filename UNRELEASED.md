@@ -26,3 +26,8 @@
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
+
+### Certified
+
+- Certified `tag` management (`listTags`, `mergeTags`) via Code Mode, confirming correct deduplication and structured error responses.
+- Certified `backup` lifecycle (`backupJournal`, `listBackups`, `restoreBackup`, `cleanupBackups`) via Code Mode, confirming accurate metric estimations, traversal blockages, and restoration integrity.
