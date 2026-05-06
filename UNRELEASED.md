@@ -14,10 +14,10 @@
   - Bumped `github/gh-aw-actions` to `v0.71.4` in GitHub Actions workflows
   - Bumped `aquasecurity/trivy-action` to `ed142fd0673e97e23eac54620cfb913e5ce36c25`
   - Bumped `github/codeql-action` to `95e58e9a2cdfd71adc6e0353d5c52f41a045d225`
+- Certified Phase 23 Code Mode cross-group orchestration, validating compound API interaction and relationship indexing logic inside sandbox execution.
 
 ### Added
 
-- Certified Phase 26 Code Mode IO & Markdown Interoperability suite (verified `mj.io.*` export and dry-run mechanisms)
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
