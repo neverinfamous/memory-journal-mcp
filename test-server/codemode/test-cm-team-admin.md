@@ -135,7 +135,7 @@ return {
 const jsonExport = await mj.team.teamExportEntries({ format: 'json', limit: 5 })
 const mdExport = await mj.team.teamExportEntries({ format: 'markdown', limit: 5 })
 
-const MOCK_DIR = 'cm_team_export'
+const MOCK_DIR = 'C:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_team_export'
 
 const ioExport = await mj.team.teamExportMarkdown({
   output_dir: MOCK_DIR,
