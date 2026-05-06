@@ -62,12 +62,12 @@ engage different evaluation criteria than the ones that guided the draft.
 
 The protocol runs in 4 phases. Each phase produces a journaled artifact.
 
-| Phase | Agent | Output | Entry Type | Tags |
-|-------|-------|--------|------------|------|
-| 1. Plan Draft | A (Planner) | Structured plan document | `plan_draft` | `adversarial-planner`, `plan-draft` |
-| 2. Adversarial Review | B (Reviewer) | Critique table with severity ratings | `adversarial_review` | `adversarial-planner`, `review` |
-| 3. Plan Refinement | A (Planner) | Refined plan with disposition notes | `plan_refinement` | `adversarial-planner`, `refinement` |
-| 4. Copilot Validation | External | Independent architecture/security pass | `copilot_validation` | `adversarial-planner`, `copilot` |
+| Phase                 | Agent        | Output                                 | Entry Type           | Tags                                |
+| --------------------- | ------------ | -------------------------------------- | -------------------- | ----------------------------------- |
+| 1. Plan Draft         | A (Planner)  | Structured plan document               | `plan_draft`         | `adversarial-planner`, `plan-draft` |
+| 2. Adversarial Review | B (Reviewer) | Critique table with severity ratings   | `adversarial_review` | `adversarial-planner`, `review`     |
+| 3. Plan Refinement    | A (Planner)  | Refined plan with disposition notes    | `plan_refinement`    | `adversarial-planner`, `refinement` |
+| 4. Copilot Validation | External     | Independent architecture/security pass | `copilot_validation` | `adversarial-planner`, `copilot`    |
 
 For the full protocol with review dimensions, scoring weights, and output
 templates, read [references/multi-pass-protocol.md](references/multi-pass-protocol.md).
@@ -96,11 +96,11 @@ retrospective templates, read
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MAX_PLAN_PASSES` | `2` | Maximum refinement cycles (phases 2–3 repeat) |
-| `PLAN_REVIEW_DEPTH` | `standard` | Review depth: `light`, `standard`, or `deep` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot CLI validation phase |
+| Variable             | Default    | Description                                     |
+| -------------------- | ---------- | ----------------------------------------------- |
+| `MAX_PLAN_PASSES`    | `2`        | Maximum refinement cycles (phases 2–3 repeat)   |
+| `PLAN_REVIEW_DEPTH`  | `standard` | Review depth: `light`, `standard`, or `deep`    |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable the Copilot CLI validation phase |
 
 ### Review Depth Profiles
 
@@ -112,9 +112,9 @@ retrospective templates, read
 
 ## Synergies
 
-| Skill/Workflow | Relationship |
-|---------------|-------------|
-| `autonomous-dev` | The Generator/Evaluator pipeline in `autonomous-dev` applies at the code level; this skill applies the same adversarial pattern at the planning level |
-| `github-copilot-cli` | Provides the CLI setup and auth required for Phase 4 |
-| `github-commander/copilot-audit` | Full repo/PR audit; this skill uses Copilot for plan-specific review instead |
-| `skill-builder` | Use to refine this skill's instructions based on observed agent behavior |
+| Skill/Workflow                   | Relationship                                                                                                                                          |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `autonomous-dev`                 | The Generator/Evaluator pipeline in `autonomous-dev` applies at the code level; this skill applies the same adversarial pattern at the planning level |
+| `github-copilot-cli`             | Provides the CLI setup and auth required for Phase 4                                                                                                  |
+| `github-commander/copilot-audit` | Full repo/PR audit; this skill uses Copilot for plan-specific review instead                                                                          |
+| `skill-builder`                  | Use to refine this skill's instructions based on observed agent behavior                                                                              |

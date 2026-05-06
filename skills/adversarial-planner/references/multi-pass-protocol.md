@@ -30,26 +30,33 @@ Produce a Markdown plan document with these sections:
 # [Feature/Change Title]
 
 ## Scope
+
 What is included and explicitly excluded.
 
 ## Context
+
 Background, motivation, and dependencies on existing systems.
 
 ## Proposed Changes
+
 Group by component. For each file:
+
 - What changes and why
 - New dependencies introduced
 - Breaking changes (if any)
 
 ## Task Ordering
+
 Numbered sequence with dependencies noted.
 Which tasks can be parallelized.
 
 ## Risk Assessment
+
 | Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
+| ---- | ---------- | ------ | ---------- |
 
 ## Open Questions
+
 Anything requiring user input before proceeding.
 ```
 
@@ -76,13 +83,13 @@ job is to break them.
 Score each dimension on a 1–5 scale. Dimensions have different weights
 reflecting their relative importance:
 
-| Dimension | Weight | Focus Areas |
-|-----------|--------|-------------|
-| **Correctness** | 3 | Logic errors, edge cases, race conditions, error handling gaps, incorrect assumptions about existing APIs |
-| **Security** | 3 | Injection vectors, auth/authz gaps, data boundary validation, secret handling, input sanitization |
-| **Performance** | 2 | Algorithmic complexity, unnecessary allocations, N+1 queries, missing caching opportunities, hot-path impact |
-| **Maintainability** | 2 | Coupling, cohesion, single-responsibility violations, naming clarity, testability, documentation debt |
-| **Completeness** | 1 | Missing tests, missing docs, migration gaps, rollback strategy, monitoring/observability |
+| Dimension           | Weight | Focus Areas                                                                                                  |
+| ------------------- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| **Correctness**     | 3      | Logic errors, edge cases, race conditions, error handling gaps, incorrect assumptions about existing APIs    |
+| **Security**        | 3      | Injection vectors, auth/authz gaps, data boundary validation, secret handling, input sanitization            |
+| **Performance**     | 2      | Algorithmic complexity, unnecessary allocations, N+1 queries, missing caching opportunities, hot-path impact |
+| **Maintainability** | 2      | Coupling, cohesion, single-responsibility violations, naming clarity, testability, documentation debt        |
+| **Completeness**    | 1      | Missing tests, missing docs, migration gaps, rollback strategy, monitoring/observability                     |
 
 ### Depth Profiles
 
@@ -105,22 +112,22 @@ scrutiny:
 
 ### Findings
 
-| # | Dimension | Severity | Finding | Remediation |
-|---|-----------|----------|---------|-------------|
-| 1 | Security | Critical | API endpoint lacks auth middleware | Add scope check using existing hasScope() pattern |
-| 2 | Correctness | Moderate | Race condition in concurrent writes | Use DB transaction wrapping |
-| 3 | Performance | Low | Unnecessary full-table scan | Add index on lookup column |
+| #   | Dimension   | Severity | Finding                             | Remediation                                       |
+| --- | ----------- | -------- | ----------------------------------- | ------------------------------------------------- |
+| 1   | Security    | Critical | API endpoint lacks auth middleware  | Add scope check using existing hasScope() pattern |
+| 2   | Correctness | Moderate | Race condition in concurrent writes | Use DB transaction wrapping                       |
+| 3   | Performance | Low      | Unnecessary full-table scan         | Add index on lookup column                        |
 
 ### Dimension Scores
 
-| Dimension | Score | Weight | Weighted |
-|-----------|-------|--------|----------|
-| Correctness | 4 | 3 | 12 |
-| Security | 2 | 3 | 6 |
-| Performance | 4 | 2 | 8 |
-| Maintainability | 3 | 2 | 6 |
-| Completeness | 4 | 1 | 4 |
-| **Total** | | **11** | **36/55 = 3.27** |
+| Dimension       | Score | Weight | Weighted         |
+| --------------- | ----- | ------ | ---------------- |
+| Correctness     | 4     | 3      | 12               |
+| Security        | 2     | 3      | 6                |
+| Performance     | 4     | 2      | 8                |
+| Maintainability | 3     | 2      | 6                |
+| Completeness    | 4     | 1      | 4                |
+| **Total**       |       | **11** | **36/55 = 3.27** |
 
 ### Blocking Issues
 
@@ -147,11 +154,11 @@ review with an explicit disposition:
 
 For each finding, record one of:
 
-| Disposition | Meaning |
-|------------|---------|
-| **Accept** | Incorporate the suggestion into the refined plan |
-| **Reject** | Explain why the finding does not apply or is not worth addressing |
-| **Modify** | Accept the spirit of the finding but implement a different solution |
+| Disposition | Meaning                                                             |
+| ----------- | ------------------------------------------------------------------- |
+| **Accept**  | Incorporate the suggestion into the refined plan                    |
+| **Reject**  | Explain why the finding does not apply or is not worth addressing   |
+| **Modify**  | Accept the spirit of the finding but implement a different solution |
 
 ### Refined Plan Output
 
@@ -162,11 +169,11 @@ Produce the refined plan as a delta against the original:
 
 ### Disposition Summary
 
-| # | Finding | Disposition | Rationale |
-|---|---------|-------------|-----------|
-| 1 | API lacks auth | Accept | Added scope check to proposed changes |
-| 2 | Race condition | Modify | Using optimistic locking instead of transactions |
-| 3 | Full-table scan | Reject | Table has <100 rows, index overhead not justified |
+| #   | Finding         | Disposition | Rationale                                         |
+| --- | --------------- | ----------- | ------------------------------------------------- |
+| 1   | API lacks auth  | Accept      | Added scope check to proposed changes             |
+| 2   | Race condition  | Modify      | Using optimistic locking instead of transactions  |
+| 3   | Full-table scan | Reject      | Table has <100 rows, index overhead not justified |
 
 ### Updated Sections
 

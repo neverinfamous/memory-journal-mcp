@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Dependency Updates**
-  - Bumped npm packages: `@huggingface/transformers` to `^4.2.0`, `eslint` to `^10.3.0`, `globals` to `^17.6.0`, `jose` to `^6.2.3`, `typescript-eslint` to `^8.59.2`, and `zod` to `^4.4.3`
+  - Updated lockfile-resolved npm package versions within the existing `package.json` ranges: `@huggingface/transformers` resolved to `^4.2.0`, `eslint` resolved to `^10.3.0`, `globals` resolved to `^17.6.0`, `jose` resolved to `^6.2.3`, `typescript-eslint` resolved to `^8.59.2`, and `zod` resolved to `^4.4.3`
   - Bumped `github/gh-aw-actions` to `v0.71.4` in GitHub Actions workflows
   - Bumped `aquasecurity/trivy-action` to `ed142fd0673e97e23eac54620cfb913e5ce36c25`
   - Bumped `github/codeql-action` to `95e58e9a2cdfd71adc6e0353d5c52f41a045d225`
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Stale version `7.6.0` in `server.json` (version field and OCI identifier) → updated to `7.6.1`
+- Stale version `7.6.0` in `server.json` (version field and OCI identifier) → updated to `7.7.0`
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `assertSafeFilePath` validation in `buildRulesFileInfo` and `buildSkillsDirInfo` swallowing the output of `memory://briefing` metadata when paths were outside explicitly allowed IO roots.

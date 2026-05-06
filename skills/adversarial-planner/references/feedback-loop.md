@@ -137,12 +137,12 @@ create_entry({
 
 ## Tag Convention
 
-| Tag | Purpose |
-|-----|---------|
-| `adversarial-planner` | All entries from this skill (primary filter) |
-| `plan-draft` | Phase 1 output |
-| `review` | Phase 2 output |
-| `refinement` | Phase 3 output |
-| `copilot` | Phase 4 output |
-| `retrospective` | Post-cycle summary |
-| `session-summary` | Enables retrieval via session summary searches |
+| Tag                   | Purpose                                        |
+| --------------------- | ---------------------------------------------- |
+| `adversarial-planner` | All entries from this skill (primary filter)   |
+| `plan-draft`          | Phase 1 output                                 |
+| `review`              | Phase 2 output                                 |
+| `refinement`          | Phase 3 output                                 |
+| `copilot`             | Phase 4 output                                 |
+| `retrospective`       | Post-cycle summary                             |
+| `session-summary`     | Enables retrieval via session summary searches |

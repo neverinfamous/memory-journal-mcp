@@ -326,8 +326,13 @@ export class BackupManager {
                 // Copy current DB out of the way for rollback (bypasses Windows EBUSY locks on rename)
                 await fs.promises.copyFile(this.ctx.getDbPath(), oldDbBackupPath)
 
-                // Perform swap of new DB into place via copy
-                await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
+                try {
+                    // Attempt atomic swap of new DB into place
+                    await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
+                } catch {
+                    // Fallback to copyFile if atomic rename fails (e.g., Windows EBUSY or cross-device links)
+                    await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
+                }
 
                 // Re-initialize using the connection's standard initialize method
                 // This ensures extensions like sqlite-vec are properly loaded
@@ -349,25 +354,39 @@ export class BackupManager {
                     /* ignore cleanup errors */
                 }
             } catch (error) {
-                logger.error(
-                    'Restore failed, rolling back to pre-restore backup using copy',
-                    {
-                        module: 'SqliteAdapter',
-                        operation: 'restoreFromFile',
-                        error: error instanceof Error ? error.message : String(error),
-                        stack: error instanceof Error ? error.stack : undefined,
-                    }
-                )
+                logger.error('Restore failed, rolling back to pre-restore backup using copy', {
+                    module: 'SqliteAdapter',
+                    operation: 'restoreFromFile',
+                    error: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                })
                 // Close DB to ensure handles are released before rollback
                 this.ctx.closeDbBeforeRestore()
                 // Rollback using copy to bypass EBUSY
+                let rollbackSuccess = false
                 try {
                     await fs.promises.copyFile(oldDbBackupPath, this.ctx.getDbPath())
+                    rollbackSuccess = true
                 } catch (rollbackErr) {
                     if ((rollbackErr as NodeJS.ErrnoException).code !== 'ENOENT') {
                         logger.error('Rollback copy failed', { error: rollbackErr })
                     }
                 }
+
+                // Best-effort cleanup of temp files
+                if (rollbackSuccess) {
+                    try {
+                        await fs.promises.unlink(oldDbBackupPath)
+                    } catch { /* ignore cleanup errors */ }
+                }
+                try {
+                    await fs.promises.unlink(tempDbPath)
+                } catch { /* ignore cleanup errors */ }
+
+                if (!rollbackSuccess) {
+                    throw new Error(`CRITICAL: Database restore failed AND rollback failed. The database may be in an inconsistent state. Your previous database is preserved at: ${oldDbBackupPath}. Original error: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+                }
+
                 await this.ctx.initialize()
                 throw error
             }
