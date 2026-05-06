@@ -19,6 +19,7 @@
 
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
+- Verified Entry CRUD subsystem (creation with linked metadata, updates, soft/permanent deletion, and error handling) via direct MCP tool certification.
 
 ### Fixed
 
