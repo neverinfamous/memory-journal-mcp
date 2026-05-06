@@ -3,11 +3,11 @@
     "name": "io.github.neverinfamous/memory-journal-mcp",
     "title": "Memory Journal MCP",
     "description": "Persistent knowledge graphs and intelligent context recall across AI threads with GitHub integration",
-    "version": "7.6.1",
+    "version": "7.7.0",
     "packages": [
         {
             "registryType": "oci",
-            "identifier": "docker.io/writenotenow/memory-journal-mcp:v7.6.1",
+            "identifier": "docker.io/writenotenow/memory-journal-mcp:v7.7.0",
             "transport": {
                 "type": "stdio"
             }
