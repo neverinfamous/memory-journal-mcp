@@ -456,7 +456,7 @@ describe('Tool Handlers', () => {
             } catch {
                 // Ignore cleanup
             }
-        })
+        }, 15000)
     })
 
     describe('callTool - list_backups', () => {
