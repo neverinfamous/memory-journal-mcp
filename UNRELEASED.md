@@ -2,6 +2,18 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.1...HEAD)
 
+### Security
+
+- Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
+
+### Changed
+
+- **Dependency Updates**
+  - Bumped npm packages: `@huggingface/transformers` to `^4.2.0`, `eslint` to `^10.3.0`, `globals` to `^17.6.0`, `jose` to `^6.2.3`, `typescript-eslint` to `^8.59.2`, and `zod` to `^4.4.3`
+  - Bumped `github/gh-aw-actions` to `v0.71.4` in GitHub Actions workflows
+  - Bumped `aquasecurity/trivy-action` to `ed142fd0673e97e23eac54620cfb913e5ce36c25`
+  - Bumped `github/codeql-action` to `95e58e9a2cdfd71adc6e0353d5c52f41a045d225`
+
 ### Added
 
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
