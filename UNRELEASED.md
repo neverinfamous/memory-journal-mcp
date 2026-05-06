@@ -27,6 +27,6 @@
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 
-### Verified
+### Tested
 
-- Phase 17 API discoverability: top-level help, per-group help, method aliases, and positional arguments work correctly in Code Mode.
+- Completed Phase 20: Core CRUD via Code Mode certification, verifying parameter persistence, metadata handling, issueUrl auto-population, soft deletion, and personal privacy toggles through the `mj_execute_code` bridge.
