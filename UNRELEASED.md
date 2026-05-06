@@ -4,6 +4,7 @@
 
 ### Security
 
+- Verified Code Mode security constraints and error handling (Phase 19) - 100% pass rate for input validation, blocked patterns, runtime errors, and nulled globals.
 - Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
 - Fixed HIGH severity Trivy code scanning alert (CVE-2026-27135) by explicitly upgrading `nghttp2-libs` from Alpine edge repository in Dockerfile
 
@@ -26,7 +27,3 @@
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
-
-### Tested
-
-- Verified Phase 21 (Search & Semantics) via Code Mode, confirming full functionality of FTS5 patterns, metadata filters, cross-DB search, semantic vector search, analytics, and importance-sorted search without regressions.
