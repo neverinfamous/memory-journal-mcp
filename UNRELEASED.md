@@ -29,7 +29,4 @@
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 - Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
 - Fixed `restore_backup` returning a raw MCP JSON-RPC exception when called with missing required parameters by relaxing the outer schema.
-
-### Verified
-
-- Certified the `memory-journal-mcp` Core tool group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) against the strict error handling matrix, confirming 100% compliance with Zod validation, missing params, type mismatch, and domain constraint errors using structured `{ success: false }` responses.
+- Verified GitHub Tool Group compliance with structured error schemas and Zod validation, ensuring all operations gracefully handle 404s, configuration errors, and partial access failures without leaking unrecognized fields.
