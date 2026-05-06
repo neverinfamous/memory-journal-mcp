@@ -28,7 +28,4 @@
 - Fixed `assertSafeFilePath` validation in `buildRulesFileInfo` and `buildSkillsDirInfo` swallowing the output of `memory://briefing` metadata when paths were outside explicitly allowed IO roots.
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 - Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
-
-### Verified
-
-- Certified Admin Tool Group (`update_entry`, `delete_entry`, `merge_tags`, `add_to_vector_index`, `rebuild_vector_index`) for deterministic structured error handling, invalid type parsing, and non-existent entity checks.
+- Fixed `restore_backup` returning a raw MCP JSON-RPC exception when called with missing required parameters by relaxing the outer schema.

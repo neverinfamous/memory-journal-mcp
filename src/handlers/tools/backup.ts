@@ -154,6 +154,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 filename: z
                     .string()
+                    .optional()
                     .describe('Backup filename to restore from (e.g., backup_2025-01-01.db)'),
                 confirm: z
                     .boolean()
@@ -171,7 +172,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            filename: z.string(),
+                            filename: z.string().min(1, 'filename cannot be empty'),
                             confirm: z.boolean().optional(),
                         })
                         .parse(params)
