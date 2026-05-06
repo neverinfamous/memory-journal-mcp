@@ -299,7 +299,7 @@ const resolveFlagStrId = await mj.team.resolveTeamFlag({ flag_id: 'abc' })
 return {
   createEmptyError: createEmpty.success === false,
   getByIdEmptyError: getByIdEmpty.success === false,
-  recentOk: Array.isArray(recentEmpty.entries),
+  recentEmptyError: recentEmpty.success === false,
   searchHandled: Array.isArray(searchEmpty.entries) || searchEmpty.success === false,
   tagsOk: Array.isArray(tagsEmpty.tags),
   dateRangeEmptyError: dateRangeEmpty.success === false,
@@ -323,7 +323,7 @@ return {
 | ----------------------- | ------------------------------------- |
 | `createEmptyError`      | `true` (content required)             |
 | `getByIdEmptyError`     | `true` (entry_id required)            |
-| `recentOk`              | `true` (uses defaults)                |
+| `recentEmptyError`      | `true` (project_number required)      |
 | `tagsOk`                | `true` (no params needed)             |
 | `dateRangeEmptyError`   | `true` (start/end date required)      |
 | `updateEmptyError`      | `true` (entry_id required)            |

@@ -26,7 +26,4 @@
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
-
-### Tested
-
-- Completed Phase 20: Core CRUD via Code Mode certification, verifying parameter persistence, metadata handling, issueUrl auto-population, soft deletion, and personal privacy toggles through the `mj_execute_code` bridge.
+- Fixed test expectations in `test-cm-error-matrix.md` for `team_get_recent` to correctly assert that `project_number` is required for tenant isolation, returning a structured validation error instead of defaulting.
