@@ -17,7 +17,7 @@
 
 ### Added
 
-- Verified all 16 GitHub API tools via Code Mode execution, including read-only lookups, structured error paths, Kanban operations, issue/milestone CRUD, and repo insights
+- Certified Phase 26 Code Mode IO & Markdown Interoperability suite (verified `mj.io.*` export and dry-run mechanisms)
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
