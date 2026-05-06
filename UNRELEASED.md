@@ -19,10 +19,7 @@
 
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
-
-### Tested
-
-- Certified Phase 22 Code Mode multi-step workflows (Read-only pipelines, conditional branching, create+read round-trips) via `mj_execute_code`.
+- Verified Entry CRUD subsystem (Create, Read, Update, Delete) via Code Mode integration tests with 100% pass rate.
 
 ### Fixed
 
