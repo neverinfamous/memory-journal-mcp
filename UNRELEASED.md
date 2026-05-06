@@ -29,3 +29,7 @@
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 - Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
 - Fixed `restore_backup` returning a raw MCP JSON-RPC exception when called with missing required parameters by relaxing the outer schema.
+
+### Verified
+
+- **Backup & Export Subsystem**: Successfully passed 100% of deterministic validation checks. `restore_backup` strictly handles nonexistent files, `backup_journal` successfully prevents path traversal, and `cleanup_backups` enforces minimum count boundaries. `export_entries` correctly applies date and tag filters without silent omissions. Total context token consumption: ~436 tokens.
