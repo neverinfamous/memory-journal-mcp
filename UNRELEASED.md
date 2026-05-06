@@ -6,6 +6,7 @@
 
 - Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
 - Fixed HIGH severity Trivy code scanning alert (CVE-2026-27135) by explicitly upgrading `nghttp2-libs` from Alpine edge repository in Dockerfile
+- Verified path traversal defenses in Markdown export tooling via Code Mode sandbox
 
 ### Changed
 
@@ -19,7 +20,6 @@
 
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
-- Verified Entry CRUD subsystem (Create, Read, Update, Delete) via Code Mode integration tests with 100% pass rate.
 
 ### Fixed
 
