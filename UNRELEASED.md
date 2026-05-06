@@ -2,6 +2,10 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.1...HEAD)
 
+### Verified
+
+- **Payload Optimization Verification**: Successfully verified Kanban throttling (`summary_only`, `item_limit`), Issue/PR body truncation (`truncate_body`), `MAX_QUERY_LIMIT` bounds (500), and Code Mode 100KB result caps.
+
 ### Security
 
 - Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
@@ -28,7 +32,3 @@
 - Fixed `assertSafeFilePath` validation in `buildRulesFileInfo` and `buildSkillsDirInfo` swallowing the output of `memory://briefing` metadata when paths were outside explicitly allowed IO roots.
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 - Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
-
-### Verified
-
-- **Phase 12: Data Integrity & Boundary Validation**: Completed full regression sweep verifying 100% round-trip fidelity, strict bounds (50k payload caps), tag manipulation logic, and isolation of both soft-deleted and permanently-deleted resources across all query contexts (FTS5, semantic, date range). Zero remediations required.
