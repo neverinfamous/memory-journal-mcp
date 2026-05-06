@@ -9,7 +9,6 @@
 
 ### Changed
 
-- Certified payload optimizations (Kanban throttling, body truncation, `MAX_QUERY_LIMIT` enforcement, and Code Mode result size cap) via Code Mode.
 - **Dependency Updates**
   - Bumped npm packages: `@huggingface/transformers` to `^4.2.0`, `eslint` to `^10.3.0`, `globals` to `^17.6.0`, `jose` to `^6.2.3`, `typescript-eslint` to `^8.59.2`, and `zod` to `^4.4.3`
   - Bumped `github/gh-aw-actions` to `v0.71.4` in GitHub Actions workflows
@@ -18,6 +17,7 @@
 
 ### Added
 
+- Certified Code Mode Readonly Mode enforcement (Phase 18). Confirmed write operations are properly blocked while reads remain accessible.
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
