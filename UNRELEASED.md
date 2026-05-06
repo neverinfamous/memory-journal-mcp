@@ -17,7 +17,6 @@
 
 ### Added
 
-- Certified Phase 3.2 (Semantic Search) and Phase 3.3 (Analytics) via direct MCP execution
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
@@ -29,3 +28,7 @@
 - Fixed `assertSafeFilePath` validation in `buildRulesFileInfo` and `buildSkillsDirInfo` swallowing the output of `memory://briefing` metadata when paths were outside explicitly allowed IO roots.
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 - Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
+
+### Verified
+
+- Phase 11: Error Handling & Structured Responses (Prompt handler validation, structured error responses, numeric coercion, and `{}` empty parameter sweeps). All 51 tests passed successfully.
