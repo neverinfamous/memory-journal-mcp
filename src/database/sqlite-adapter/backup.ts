@@ -323,11 +323,11 @@ export class BackupManager {
             await fs.promises.copyFile(backupPath, tempDbPath)
 
             try {
-                // Atomic backup of current DB by renaming it out of the way
-                await fs.promises.rename(this.ctx.getDbPath(), oldDbBackupPath)
+                // Copy current DB out of the way for rollback (bypasses Windows EBUSY locks on rename)
+                await fs.promises.copyFile(this.ctx.getDbPath(), oldDbBackupPath)
 
-                // Perform atomic swap of new DB into place
-                await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
+                // Perform swap of new DB into place via copy
+                await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
 
                 // Re-initialize using the connection's standard initialize method
                 // This ensures extensions like sqlite-vec are properly loaded
@@ -344,12 +344,13 @@ export class BackupManager {
                 // Success: clean up old DB backup
                 try {
                     await fs.promises.unlink(oldDbBackupPath)
+                    await fs.promises.unlink(tempDbPath)
                 } catch {
                     /* ignore cleanup errors */
                 }
             } catch (error) {
                 logger.error(
-                    'Restore failed, rolling back to pre-restore backup using atomic rename',
+                    'Restore failed, rolling back to pre-restore backup using copy',
                     {
                         module: 'SqliteAdapter',
                         operation: 'restoreFromFile',
@@ -359,12 +360,12 @@ export class BackupManager {
                 )
                 // Close DB to ensure handles are released before rollback
                 this.ctx.closeDbBeforeRestore()
-                // Rollback using fast atomic rename
+                // Rollback using copy to bypass EBUSY
                 try {
-                    await fs.promises.rename(oldDbBackupPath, this.ctx.getDbPath())
+                    await fs.promises.copyFile(oldDbBackupPath, this.ctx.getDbPath())
                 } catch (rollbackErr) {
                     if ((rollbackErr as NodeJS.ErrnoException).code !== 'ENOENT') {
-                        logger.error('Rollback rename failed', { error: rollbackErr })
+                        logger.error('Rollback copy failed', { error: rollbackErr })
                     }
                 }
                 await this.ctx.initialize()

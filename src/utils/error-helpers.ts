@@ -79,8 +79,6 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         category: ErrorCategory.INTERNAL,
         recoverable: false,
         ...(matched?.suggestion ? { suggestion: matched.suggestion } : {}),
-        ...(process.env['DEBUG'] === 'true'
-            ? { details: { internal_message: sanitizedMessage } }
-            : {}),
+        ...(process.env['DEBUG'] === 'true' ? { details: { internal_message: sanitizedMessage } } : {}),
     }
 }
