@@ -26,4 +26,7 @@
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
-- Fixed path traversal error in `test-cm-team-admin.md` by using an absolute path within `ALLOWED_IO_ROOTS` for the markdown export test directory.
+
+### Certified
+
+- **Team DB Operations in Code Mode**: Verified full CRUD operations, author auto-population, text/tag/combined search, date range filtering, and structured error boundaries for the `mj.team.*` namespace via Code Mode (`mj_execute_code`).
