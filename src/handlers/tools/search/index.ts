@@ -503,7 +503,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: true,
-                        entries: personalEntries,
+                        entries: personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
                         count: personalEntries.length,
                         degraded: false,
                     }

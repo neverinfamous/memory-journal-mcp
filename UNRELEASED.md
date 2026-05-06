@@ -26,7 +26,4 @@
 - Stale skill name `mastering-typescript` in server instructions → corrected to `typescript`
 - Added `adversarial-planner` and `copilot-audit` to the native skills listing in server instructions
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
-
-### Verified
-
-- **Phase 4 Relationships & Visualization Test Suite**: 100% pass rate for basic relationships, duplicate link detection, error handling for nonexistent IDs, causal relationship mapping (`blocked_by`, `resolved`, `caused`), and Mermaid diagram output harmonization via Code Mode.
+- Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
