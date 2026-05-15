@@ -377,14 +377,21 @@ export class BackupManager {
                 if (rollbackSuccess) {
                     try {
                         await fs.promises.unlink(oldDbBackupPath)
-                    } catch { /* ignore cleanup errors */ }
+                    } catch {
+                        /* ignore cleanup errors */
+                    }
                 }
                 try {
                     await fs.promises.unlink(tempDbPath)
-                } catch { /* ignore cleanup errors */ }
+                } catch {
+                    /* ignore cleanup errors */
+                }
 
                 if (!rollbackSuccess) {
-                    throw new Error(`CRITICAL: Database restore failed AND rollback failed. The database may be in an inconsistent state. Your previous database is preserved at: ${oldDbBackupPath}. Original error: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+                    throw new Error(
+                        `CRITICAL: Database restore failed AND rollback failed. The database may be in an inconsistent state. Your previous database is preserved at: ${oldDbBackupPath}. Original error: ${error instanceof Error ? error.message : String(error)}`,
+                        { cause: error }
+                    )
                 }
 
                 await this.ctx.initialize()

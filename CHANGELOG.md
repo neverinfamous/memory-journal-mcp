@@ -5,7 +5,16 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.0...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
+
+## [7.7.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.7.1) - 2026-05-15
+
+### Changed
+
+- **Dependency Updates**:
+  - Bumped npm packages (`@playwright/test`, `@types/node`, `@vitest/coverage-v8`, `better-sqlite3`, `typescript-eslint`, `vitest`)
+  - Bumped Docker base image `node` from 24.15.0-alpine to 26.1.0-alpine
+  - Bumped GitHub Actions (`trufflesecurity/trufflehog`, `github/codeql-action`, `github/gh-aw-actions`)
 
 ## [7.7.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.7.0) - 2026-05-06
 
