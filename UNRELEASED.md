@@ -3,6 +3,10 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
 
 ### Added
+- **analytics**: Briefing analytics now compute on-read with 60s TTL cache when no scheduler or persisted snapshot exists, ensuring analytics appear in stdio transport and fresh databases
+- **analytics**: Server seeds an initial digest snapshot at startup when none exists, covering both stdio and HTTP transports
+- **analytics**: `memory://insights/digest` resource now falls back to live computation instead of returning "no digest available"
+- **scripts**: Added `npm run test:scheduler` convenience script for the HTTP scheduler E2E test
 - **admin**: `update_entry` and `team_update_entry` now accept `project_number`, `significance_type`, and all GitHub metadata fields (`project_owner`, `issue_number`, `issue_url`, `pr_number`, `pr_url`, `pr_status`, `workflow_run_id`, `workflow_name`, `workflow_status`), matching the field surface of `create_entry`
 - **codemode**: Added `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
 - **instructions**: Added 14 new `EntryType` values (e.g., `meeting_notes`, `adversarial_review`) and `breakthrough` / `technical_breakthrough` significance types to `overview.md`
@@ -27,6 +31,7 @@
 - **skills**: Disambiguated `cloudflare` and `workers-best-practices` to prevent trigger collisions
 
 ### Fixed
+- **scripts**: `test-scheduler.mjs` now prints actionable prerequisite instructions when the HTTP server is not running instead of bare `Fatal: fetch failed`
 - **codemode**: Added missing `add_kanban_item` and `delete_kanban_item` mapping to `inferGroupFromName` in `help.ts`
 - **instructions**: Corrected Hush Protocol tool names (`team_pass_flag`, `team_resolve_flag`) and added missing optional parameters
 - **instructions**: Corrected tag taxonomy examples to use valid Memory Journal groups instead of database groups
@@ -35,6 +40,7 @@
 - **docs**: Updated `code-map.md` directory tree and `README.md` file sizes to match architectural changes
 - **skills**: Remediated frontmatter formatting and token bloat across all 35 skills
 - **skills**: Fixed sync propagation by adding recursive `node_modules`/`package-lock.json` filtering and removing stale `gitlab` dependencies
+- **docs**: Updated `update_entry` and `team_update_entry` tool descriptions and `tool-reference.md` to reflect the expanded 11 metadata field surface
 
 ### Security
 - **codemode**: Added frozen built-in prototypes in VM sandbox to prevent dynamic constructor chain escapes

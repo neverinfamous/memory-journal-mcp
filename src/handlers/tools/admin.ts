@@ -129,7 +129,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'update_entry',
             title: 'Update Entry',
-            description: 'Update an existing journal entry',
+            description: 'Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field.',
             group: 'admin',
             inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,

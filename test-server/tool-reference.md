@@ -86,7 +86,7 @@ Entry mutations, vector index management, and tag maintenance.
 
 | Tool                   | Description                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `update_entry`         | Update an existing journal entry.                                                                                                    |
+| `update_entry`         | Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
 | `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                 |
 | `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge. |
 | `rebuild_vector_index` | Rebuild the semantic search vector index from all existing entries.                                                                  |
@@ -158,7 +158,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 | Tool                | Description                                                |
 | ------------------- | ---------------------------------------------------------- |
-| `team_update_entry` | Update a team entry (content, type, or tags).              |
+| `team_update_entry` | Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
 | `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).  |
 | `team_merge_tags`   | Merge a source tag into a target tag in the team database. |
 

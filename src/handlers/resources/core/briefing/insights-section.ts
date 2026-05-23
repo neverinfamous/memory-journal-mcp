@@ -8,6 +8,7 @@
 
 import type { DigestSnapshot } from '../../../../database/sqlite-adapter/entries/digest.js'
 import type { ResourceContext } from '../../shared.js'
+import { logger } from '../../../../utils/logger.js'
 
 /** Compact insights payload for the briefing JSON */
 export interface BriefingInsights {
@@ -18,14 +19,27 @@ export interface BriefingInsights {
     relationshipDensity?: number
 }
 
+// ============================================================================
+// TTL Cache — avoids recomputing live digest on every briefing read
+// ============================================================================
+
+/** Cached live digest with expiry timestamp */
+let liveDigestCache: { snapshot: DigestSnapshot; expiresAt: number } | null = null
+
+/** Cache TTL in milliseconds (60 seconds) */
+const LIVE_DIGEST_TTL_MS = 60_000
+
 /**
  * Build the insights section from the latest digest snapshot.
  *
- * Returns null if no digest is available (scheduler not configured or
- * hasn't run yet and no persisted snapshot exists).
+ * Resolution order:
+ * 1. Scheduler's in-memory digest (HTTP transport with digest job running)
+ * 2. Persisted DB snapshot (survives server restarts)
+ * 3. Live compute with 60s TTL cache (stdio transport, fresh databases)
+ *
+ * Returns null only if compute itself fails or database has no entries.
  */
 export function buildInsightsSection(context: ResourceContext): BriefingInsights | null {
-    // Try scheduler's in-memory digest first, fall back to DB-persisted snapshot
     const snapshot = resolveDigestSnapshot(context)
     if (!snapshot) return null
 
@@ -33,7 +47,7 @@ export function buildInsightsSection(context: ResourceContext): BriefingInsights
 }
 
 /**
- * Resolve the latest digest snapshot from scheduler or database.
+ * Resolve the latest digest snapshot from scheduler, database, or live compute.
  */
 function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null {
     // Primary: scheduler's accessor (includes just-computed data)
@@ -44,6 +58,32 @@ function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null 
     // Guards against undefined db (test mocks) and missing method (older adapters)
     const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
     if (dbSnapshot) return dbSnapshot.data as unknown as DigestSnapshot
+
+    // Live compute: real-time digest when no cached snapshot exists.
+    // Covers stdio transport (no scheduler) and fresh databases.
+    // TTL cache prevents redundant recomputation across rapid reads.
+    if (liveDigestCache && Date.now() < liveDigestCache.expiresAt) {
+        return liveDigestCache.snapshot
+    }
+
+    try {
+        const liveDigest = context.db?.computeDigest?.()
+        if (liveDigest !== undefined) {
+            const snapshot = liveDigest as unknown as DigestSnapshot
+            liveDigestCache = { snapshot, expiresAt: Date.now() + LIVE_DIGEST_TTL_MS }
+            logger.debug('Live digest computed for briefing (no scheduler/persisted snapshot)', {
+                module: 'BRIEFING',
+                operation: 'insights-live-compute',
+            })
+            return snapshot
+        }
+    } catch (error) {
+        logger.debug('Failed to compute live digest (non-critical)', {
+            module: 'BRIEFING',
+            operation: 'insights-live-compute',
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
 
     return null
 }

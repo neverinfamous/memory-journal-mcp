@@ -173,6 +173,17 @@ async function main() {
 }
 
 main().catch((err) => {
-    console.error('Fatal:', err.message)
+    const isConnRefused =
+        err.cause?.code === 'ECONNREFUSED' || err.message?.includes('fetch failed')
+    if (isConnRefused) {
+        console.error(`Fatal: Could not connect to ${BASE}`)
+        console.error('\nPrerequisite: Start the HTTP server first:')
+        console.error('  npm run build')
+        console.error(
+            '  node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2'
+        )
+    } else {
+        console.error('Fatal:', err.message)
+    }
     process.exit(1)
 })

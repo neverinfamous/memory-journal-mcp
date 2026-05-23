@@ -253,6 +253,23 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     }
 
+    // Seed initial digest snapshot so first briefing read has analytics.
+    // Runs for both stdio and HTTP transports. Skip if a snapshot already exists
+    // (e.g., from a previous server session or prior scheduler run).
+    try {
+        const existingSnapshot = db.getLatestAnalyticsSnapshot('digest')
+        if (!existingSnapshot) {
+            const digest = db.computeDigest()
+            db.saveAnalyticsSnapshot('digest', digest)
+            logger.info('Initial analytics digest seeded', { module: 'McpServer' })
+        }
+    } catch (error: unknown) {
+        logger.debug('Failed to seed initial digest (non-critical)', {
+            module: 'McpServer',
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+
     // ========================================================================
     // CACHED SESSION-INVARIANT STATE
     // Extracting heavy initialization out of createServerInstance improves
