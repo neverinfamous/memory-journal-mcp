@@ -31,6 +31,7 @@
 - **docs**: Updated `SECURITY.md` audit checklist with 7 new Code Mode hardening items
 
 ### Changed
+- **docs**: Standardized README.md layout and badges to match the fleet
 - **skills**: Migrated adversarial skill documentation (`adversarial-performance`, `adversarial-planner`, `adversarial-security`, `adversarial-skill-audit`) from deprecated `github-copilot-cli` npm package to the modern `gh copilot` GitHub CLI extension
 - **skills**: Restructured `wrangler`, `typescript`, `mcp-builder`, and `skill-builder` by moving verbose content into `references/` directories to optimize agent token limits (progressive disclosure)
 - **skills**: Rewrote `shadcn-ui` into a strict agent-facing imperative workflow, removing prior user-facing marketing copy
