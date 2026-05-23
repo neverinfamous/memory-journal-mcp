@@ -10,7 +10,7 @@
  */
 
 import { ICON_BRIEFING } from '../../constants/icons.js'
-import { GOTCHAS_CONTENT } from '../../constants/server-instructions.js'
+import { HELP_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
@@ -223,7 +223,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/help\/([a-z]+)/.exec(uri)
+                const match = /memory:\/\/help\/([a-z][a-z0-9-]*)/.exec(uri)
                 const groupName = match?.[1]
 
                 if (!groupName) {
@@ -235,15 +235,24 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
+                // Check for static help content first (gotchas, codemode, github, etc.)
+                const staticContent = HELP_CONTENT.get(groupName)
+                if (staticContent) {
+                    return { data: staticContent }
+                }
+
                 const tools = await getAllToolDefinitionsAsync(context)
                 const groupTools = tools.filter((t) => t.group === groupName)
 
                 if (groupTools.length === 0) {
                     const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
+                    // Also list static help keys
+                    const staticKeys = [...HELP_CONTENT.keys()]
                     return {
                         data: {
                             error: `Group "${groupName}" not found`,
                             availableGroups,
+                            staticHelpKeys: staticKeys,
                             hint: 'Read memory://help for a list of available groups.',
                         },
                     }
@@ -283,8 +292,9 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
             handler: (): ResourceResult => {
+                const content = HELP_CONTENT.get('gotchas')
                 return {
-                    data: GOTCHAS_CONTENT,
+                    data: content ?? '# No gotchas content available',
                 }
             },
         },

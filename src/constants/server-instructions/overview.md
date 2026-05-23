@@ -1,0 +1,105 @@
+# memory-journal-mcp
+
+## Quick Access
+
+| Purpose         | Action                      |
+| --------------- | --------------------------- |
+| Session context | `memory://briefing`         |
+| Recent entries  | `memory://recent`           |
+| Health/time     | `memory://health`           |
+| Full context    | `get-context-bundle` prompt |
+
+## Help Resources
+
+Read `memory://help` for tool group index and available help resources.
+Read `memory://help/{group}` for per-group tool reference (parameters, annotations, examples).
+Read `memory://help/gotchas` for critical field notes and usage patterns.
+Only help resources for your enabled tool groups are registered.
+
+## Behaviors
+
+### Essential Session Start
+
+1. You **MUST** read the `memory://briefing/{repo_name}` at the start of each chat!
+2. Use the standard MCP `read_resource` tool for this (do NOT use Code Mode/execute_code).
+3. Infer the `repo_name` from the user's prompt or your active workspace context.
+4. **ACKNOWLEDGE FLAGS**: If the briefing JSON contains `activeFlags` (count > 0), you MUST print an alert ABOVE the table: `⚠️ **{count} active flag(s)** — review before proceeding.` followed by each flag (`🚩 {flag_type} → @{target_user}: {preview}`).
+5. **RENDER TABLE**: Parse the remaining JSON into a dense 2-column Markdown Table (Field, Value).
+   - **RESTRICTION**: NO bulleted lists inside the table. Do NOT truncate summaries or issues.
+   - **FORMATTING**: Group related properties (use `<br>` for line breaks).
+   - **REQUIRED GROUPS**: GitHub, Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
+6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
+
+- **AntiGravity**: Tools are `mcp_{name}_{tool}` → server name = `memory-journal-mcp`
+- **Cursor**: Tools are `user-{name}-{tool}` → server name = `user-memory-journal-mcp`
+- **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
+
+### Journal Behaviors
+
+- **Personal vs Team**: **ALWAYS use the personal journal** (e.g., `create_entry`) by default. ONLY save to the team journal (e.g., `team_create_entry`) if the user explicitly requests it.
+- **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
+- **Search before**: major decisions, referencing prior work, understanding project context. Use `sort_by: "importance"` on `search_entries`, `get_recent_entries`, or `search_by_date_range` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
+- **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) before defining architectures. Use `team_get_collaboration_matrix` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (`memory://github/insights`) to gauge traction. View `memory://insights/digest` and `memory://insights/team-collaboration` for automated analytics snapshots.
+
+### Session Summaries
+
+Use `create_entry` to record session summaries. Required fields:
+
+- `entry_type: "retrospective"`
+- `tags: ["session-summary"]` (plus relevant domain/activity tags)
+- `project_number` from the briefing
+
+Structure content with these sections:
+
+- `## Accomplished` — What was done this session
+- `## Unfinished / Blocked` — What remains or what's blocked
+- `## Context for Next Session` — Key context the next agent needs
+
+Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
+
+### Entry Type Selection
+
+Choose the correct `entry_type` — do NOT default everything to `personal_reflection`:
+
+- `retrospective` — Session summaries, certification reports, any "what was accomplished" recap
+- `bug_fix` — Specific bug identification and/or resolution
+- `project_decision` — Architecture decisions, pattern adoptions, technology choices
+- `planning` — Roadmaps, sprint plans, project initialization
+- `code_review` — Security audits, code quality reviews, copilot findings
+- `technical_note` — Implementation notes, gotchas, reference documentation
+- `feature_implementation` — New feature completions
+- `research` — Investigation, benchmarking, evaluation of alternatives
+- `personal_reflection` — Only for genuinely personal notes that don't fit above
+
+### Tag Taxonomy
+
+Every entry MUST have at least one tag. Use kebab-case exclusively.
+
+- _Activity_: `session-summary`, `certification`, `stress-test`, `bug-fix`, `release`, `audit`, `remediation`, `refactor`
+- _Domain_: `security`, `performance`, `architecture`, `code-mode`, `documentation`, `ci-cd`, `github-integration`
+- _Tool group_: Name of the tool group being worked on (e.g., `core`, `stats`, `migration`, `roles`)
+- _Pattern_: `p154`, `split-schema`, `zod`, `error-handling`
+
+### Significance Marking
+
+Mark important entries with `significance_type`:
+
+- `release` — Version deployments
+- `milestone` — Major completions (full certification, security audit, feature launch)
+- `decision` — Architecture or technology decisions
+- `blocker_resolved` — Critical blockers that were resolved
+- `lesson_learned` — Documented lessons from failures or unexpected outcomes
+
+Do NOT mark routine session summaries or pass-only testing results as significant.
+
+### Link Entries
+
+Create relationships to build traversable context chains:
+
+- `implements` — implementation→spec, remediation→audit findings
+- `resolved` — bugfix→issue that reported the bug
+- `evolves_from` — v2→v1, new iteration→prior version
+- `references` — cross-project parity work, related entries
+- `clarifies` — documentation→implementation it explains
+
+Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.

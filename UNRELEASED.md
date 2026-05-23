@@ -20,6 +20,11 @@
 - **skills/mcp-builder**: Expanded `testing-reference.md` Layer 4 with db-mcp's granular test structure (sub-group prompts, codemode prompts, advanced stress tests, agent experience scenarios), test count taxonomy, standardized prompt format, WASM degradation testing, lockfile integrity, and Dockerfile patch drift CI patterns
 - **skills/mcp-builder**: Updated `oauth-reference.md` with fail-closed scope default (`?? 'admin'`), constant-time token comparison, JWT claims sanitization, bearer auth scope limitation warning, and auth module submodule variant
 - **instructions**: Enhanced server instructions with session summary format, entry type selection guide, tag taxonomy, significance marking criteria, and relationship linking patterns
+- **instructions**: Migrated from monolithic `server-instructions.md` with section delimiters to directory-per-group architecture (`server-instructions/`) matching db-mcp/postgres-mcp pattern
+- **instructions**: Reduced init payload from ~8,600 bytes (~2,200 tokens) to ~5,800 bytes (~1,500 tokens) by moving Code Mode, GitHub, Hush Protocol, skills, and server-access docs to pull-based `HELP_CONTENT` map
+- **instructions**: Added `HELP_CONTENT` map export for on-demand help delivery via `memory://help/{key}` resources
+- **instructions**: Enhanced `memory://help/{group}` handler to serve static help content (codemode, github, hush-protocol, server-access, skills) alongside dynamic tool schema data
+- **instructions**: Deleted `scripts/server-instructions-function-body.ts`, `scripts/server-instructions-gotchas.ts`, and `src/constants/server-instructions.md` (replaced by directory-based sources)
 
 ### Security
 - **codemode**: Added frozen built-in prototypes inside the vm sandbox context — prevents dynamic constructor chain escapes (e.g., `Error().constructor.constructor('return process')()`)
