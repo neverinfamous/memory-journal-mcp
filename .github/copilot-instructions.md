@@ -8,7 +8,7 @@ Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing
 
 ## Session Context
 
-Before starting work on this project, read `memory://briefing` from the `memory-journal-mcp` server for real-time context:
+Before starting work on this project, read `memory://briefing/memory-journal-mcp` from the `memory-journal-mcp` server for real-time context:
 
 - **Recent journal entries** — what was just worked on by the development agent
 - **GitHub status** — open issues, PRs, CI status, milestones
@@ -36,6 +36,9 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 
 - **Strict TypeScript** — `tsconfig.json` enforces strict mode
 - **Never use `eslint-disable`** to evade standards
+- **Never use `any`** — use `unknown` and narrow with type guards
+- **Never use `as` type assertions** — use `satisfies` operator or strict type guards
+- **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
 - **Zod schemas** for all tool input validation
 - **Output schemas** — All tools have Zod output schemas; error responses must pass validation
 - **Dual-schema pattern** — Relaxed schemas for SDK registration (to handle MCP client coercion), strict schemas inside handlers
@@ -115,8 +118,10 @@ When reviewing PRs, check for:
 - [ ] Hardcoded tool/group counts — should be dynamic or use `getAllToolNames().length`
 - [ ] Missing barrel exports in `src/types/index.ts` when new types are added
 - [ ] `eslint-disable` usage — always forbidden
+- [ ] `@ts-ignore` or `as any` — always forbidden
 - [ ] Raw exceptions from tool handlers — must use `formatHandlerErrorResponse()`
 - [ ] Files approaching 500 lines — flag for splitting
 - [ ] New tools missing from `src/filtering/ToolFilter.ts` TOOL_GROUPS
 - [ ] Missing Zod output schemas on new tools
 - [ ] Kebab-case violations in new filenames
+- [ ] `continue-on-error: true` in workflow files — forbidden per project standards
