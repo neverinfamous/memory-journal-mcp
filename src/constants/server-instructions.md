@@ -26,7 +26,69 @@
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use `sort_by: "importance"` on `search_entries`, `get_recent_entries`, or `search_by_date_range` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
 - **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) before defining architectures. Use `team_get_collaboration_matrix` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (`memory://github/insights`) to gauge traction. View `memory://insights/digest` and `memory://insights/team-collaboration` for automated analytics snapshots.
-- **Link entries**: implementation→spec, bugfix→issue, followup→prior work
+
+### Session Summaries
+
+Use Code Mode (`mj_execute_code`) with `mj.core.create({...})`. Required fields:
+
+- `entry_type: "retrospective"`
+- `tags: ["session-summary"]` (plus relevant domain/activity tags)
+- `project_number` from the briefing
+
+Structure content with these sections:
+
+- `## Accomplished` — What was done this session
+- `## Unfinished / Blocked` — What remains or what's blocked
+- `## Context for Next Session` — Key context the next agent needs
+
+Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
+
+### Entry Type Selection
+
+Choose the correct `entry_type` — do NOT default everything to `personal_reflection`:
+
+- `retrospective` — Session summaries, certification reports, any "what was accomplished" recap
+- `bug_fix` — Specific bug identification and/or resolution
+- `project_decision` — Architecture decisions, pattern adoptions, technology choices
+- `planning` — Roadmaps, sprint plans, project initialization
+- `code_review` — Security audits, code quality reviews, copilot findings
+- `technical_note` — Implementation notes, gotchas, reference documentation
+- `feature_implementation` — New feature completions
+- `research` — Investigation, benchmarking, evaluation of alternatives
+- `personal_reflection` — Only for genuinely personal notes that don't fit above
+
+### Tag Taxonomy
+
+Every entry MUST have at least one tag. Use kebab-case exclusively.
+
+- _Activity_: `session-summary`, `certification`, `stress-test`, `bug-fix`, `release`, `audit`, `remediation`, `refactor`
+- _Domain_: `security`, `performance`, `architecture`, `code-mode`, `documentation`, `ci-cd`, `github-integration`
+- _Tool group_: Name of the tool group being worked on (e.g., `core`, `stats`, `migration`, `roles`)
+- _Pattern_: `p154`, `split-schema`, `zod`, `error-handling`
+
+### Significance Marking
+
+Mark important entries with `significance_type`:
+
+- `release` — Version deployments
+- `milestone` — Major completions (full certification, security audit, feature launch)
+- `decision` — Architecture or technology decisions
+- `blocker_resolved` — Critical blockers that were resolved
+- `lesson_learned` — Documented lessons from failures or unexpected outcomes
+
+Do NOT mark routine session summaries or pass-only testing results as significant.
+
+### Relationship Linking
+
+Create relationships to build traversable context chains:
+
+- `implements` — implementation→spec, remediation→audit findings
+- `resolved` — bugfix→issue that reported the bug
+- `evolves_from` — v2→v1, new iteration→prior version
+- `references` — cross-project parity work, related entries
+- `clarifies` — documentation→implementation it explains
+
+Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.
 
 ### Rule & Skill Suggestions
 

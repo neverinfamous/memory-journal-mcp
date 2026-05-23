@@ -19,6 +19,7 @@
 - **skills/mcp-builder**: Expanded `error-handling.md` subclass table with `TransactionError`, `InternalError`, `AuthenticationError`, `AuthorizationError`, `ExtensionNotAvailableError` as formal entries; extended auto-refinement codes with `VECTOR_NOT_FOUND`, `DUPLICATE_MIGRATION`, `DUPLICATE_VERSION`, `ALREADY_ROLLED_BACK`
 - **skills/mcp-builder**: Expanded `testing-reference.md` Layer 4 with db-mcp's granular test structure (sub-group prompts, codemode prompts, advanced stress tests, agent experience scenarios), test count taxonomy, standardized prompt format, WASM degradation testing, lockfile integrity, and Dockerfile patch drift CI patterns
 - **skills/mcp-builder**: Updated `oauth-reference.md` with fail-closed scope default (`?? 'admin'`), constant-time token comparison, JWT claims sanitization, bearer auth scope limitation warning, and auth module submodule variant
+- **instructions**: Enhanced server instructions with session summary format, entry type selection guide, tag taxonomy, significance marking criteria, and relationship linking patterns
 
 ### Security
 - **codemode**: Added frozen built-in prototypes inside the vm sandbox context — prevents dynamic constructor chain escapes (e.g., `Error().constructor.constructor('return process')()`)
