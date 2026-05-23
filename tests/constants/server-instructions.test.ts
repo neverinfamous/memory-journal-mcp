@@ -69,11 +69,14 @@ describe('generateInstructions', () => {
             expect(result).toContain('get-context-bundle')
         })
 
-        it('should include all three Behaviors bullets', () => {
+        it('should include core Behaviors sections', () => {
             const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).toContain('Create entries for')
             expect(result).toContain('Search before')
-            expect(result).toContain('Link entries')
+            expect(result).toContain('### Link Entries')
+            expect(result).toContain('### Session Summaries')
+            expect(result).toContain('### Entry Type Selection')
+            expect(result).toContain('### Tag Taxonomy')
         })
 
         it('should not include GitHub Integration heading', () => {

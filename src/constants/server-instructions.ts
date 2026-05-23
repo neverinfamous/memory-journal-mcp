@@ -90,7 +90,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ### Session Summaries
 
-Use Code Mode (\`mj_execute_code\`) with \`mj.core.create({...})\`. Required fields:
+Use \`create_entry\` to record session summaries. Required fields:
 
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain/activity tags)
@@ -139,7 +139,7 @@ Mark important entries with \`significance_type\`:
 
 Do NOT mark routine session summaries or pass-only testing results as significant.
 
-### Relationship Linking
+### Link Entries
 
 Create relationships to build traversable context chains:
 
