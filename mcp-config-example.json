@@ -68,6 +68,11 @@
                 "AUDIT_LOG_MAX_SIZE": "10485760",
                 "MCP_METRICS_ENABLED": "true",
                 "AUTO_REBUILD_INDEX": "false",
+                "PRUNE_OLDER_THAN_DAYS": "0",
+                "PRUNE_IMPORTANCE_THRESHOLD": "0.15",
+                "TRUST_PROXY": "false",
+                "PUBLIC_ORIGIN": "",
+                "OAUTH_CLOCK_TOLERANCE": "60",
                 "ALLOWED_IO_ROOTS": "/app/data"
             }
         }
