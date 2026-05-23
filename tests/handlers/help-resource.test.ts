@@ -173,27 +173,32 @@ describe('Help Resource Handlers', () => {
         expect(result.data.group).toBe('backup')
     })
 
-    it('should handle codemode group (static help content)', async () => {
+    it('should handle codemode group (merged static + dynamic)', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
         const result = (await groupHelp!.handler('memory://help/codemode', getContext())) as any
-        // codemode has static help content from HELP_CONTENT map
-        expect(typeof result.data).toBe('string')
-        expect(result.data).toContain('Code Mode')
-        expect(result.data).toContain('mj_execute_code')
-        expect(result.data).toContain('mj.core')
+        // codemode returns JSON with both dynamic tool schema and static helpContent
+        expect(result.data.group).toBe('codemode')
+        expect(result.data.tools.length).toBeGreaterThan(0)
+        // Static help content merged in
+        expect(typeof result.data.helpContent).toBe('string')
+        expect(result.data.helpContent).toContain('Code Mode')
+        expect(result.data.helpContent).toContain('mj.core')
     })
 
-    it('should handle github group (static help content)', async () => {
+    it('should handle github group (merged static + dynamic)', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
         const result = (await groupHelp!.handler('memory://help/github', getContext())) as any
-        // github has static help content from HELP_CONTENT map
-        expect(typeof result.data).toBe('string')
-        expect(result.data).toContain('GitHub Integration')
-        expect(result.data).toContain('get_kanban_board')
+        // github returns JSON with both dynamic tool schema and static helpContent
+        expect(result.data.group).toBe('github')
+        expect(result.data.tools.length).toBeGreaterThanOrEqual(16)
+        // Static help content merged in
+        expect(typeof result.data.helpContent).toBe('string')
+        expect(result.data.helpContent).toContain('GitHub Integration')
+        expect(result.data.helpContent).toContain('get_kanban_board')
     })
 
     describe('Schema parsing edge cases', () => {

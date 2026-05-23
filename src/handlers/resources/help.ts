@@ -235,49 +235,58 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                // Check for static help content first (gotchas, codemode, github, etc.)
-                const staticContent = HELP_CONTENT.get(groupName)
-                if (staticContent) {
-                    return { data: staticContent }
-                }
-
+                // Resolve dynamic tool data for this group
                 const tools = await getAllToolDefinitionsAsync(context)
                 const groupTools = tools.filter((t) => t.group === groupName)
 
-                if (groupTools.length === 0) {
-                    const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
-                    // Also list static help keys
-                    const staticKeys = [...HELP_CONTENT.keys()]
-                    return {
-                        data: {
-                            error: `Group "${groupName}" not found`,
-                            availableGroups,
-                            staticHelpKeys: staticKeys,
-                            hint: 'Read memory://help for a list of available groups.',
+                // Check for static help content (codemode, github, hush-protocol, etc.)
+                const staticContent = HELP_CONTENT.get(groupName)
+
+                // If the group has dynamic tools, always return JSON (with optional helpContent)
+                if (groupTools.length > 0) {
+                    const toolDetails = groupTools.map((tool) => ({
+                        name: tool.name,
+                        title: tool.title,
+                        description: tool.description,
+                        parameters: extractParameters(tool.inputSchema),
+                        annotations: {
+                            readOnly: tool.annotations?.readOnlyHint ?? false,
+                            destructive: tool.annotations?.destructiveHint ?? false,
+                            idempotent: tool.annotations?.idempotentHint ?? false,
+                            openWorld: tool.annotations?.openWorldHint ?? false,
                         },
-                    }
-                }
+                        hasOutputSchema: tool.outputSchema !== undefined,
+                    }))
 
-                const toolDetails = groupTools.map((tool) => ({
-                    name: tool.name,
-                    title: tool.title,
-                    description: tool.description,
-                    parameters: extractParameters(tool.inputSchema),
-                    annotations: {
-                        readOnly: tool.annotations?.readOnlyHint ?? false,
-                        destructive: tool.annotations?.destructiveHint ?? false,
-                        idempotent: tool.annotations?.idempotentHint ?? false,
-                        openWorld: tool.annotations?.openWorldHint ?? false,
-                    },
-                    hasOutputSchema: tool.outputSchema !== undefined,
-                }))
-
-                return {
-                    data: {
+                    const result: Record<string, unknown> = {
                         group: groupName,
                         description: GROUP_DESCRIPTIONS[groupName] ?? groupName,
                         toolCount: toolDetails.length,
                         tools: toolDetails,
+                    }
+
+                    // Merge static help content alongside dynamic tool data
+                    if (staticContent) {
+                        result['helpContent'] = staticContent
+                    }
+
+                    return { data: result }
+                }
+
+                // Group has static content only (no dynamic tools) — return markdown
+                if (staticContent) {
+                    return { data: staticContent }
+                }
+
+                // Not found
+                const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
+                const staticKeys = [...HELP_CONTENT.keys()]
+                return {
+                    data: {
+                        error: `Group "${groupName}" not found`,
+                        availableGroups,
+                        staticHelpKeys: staticKeys,
+                        hint: 'Read memory://help for a list of available groups.',
                     },
                 }
             },
