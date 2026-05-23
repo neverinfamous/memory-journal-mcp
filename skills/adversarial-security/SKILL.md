@@ -121,7 +121,7 @@ patterns, read
 
 ## Copilot Integration
 
-Phase 4 triggers an independent validation pass using the GitHub Copilot CLI.
+Phase 4 triggers an independent validation pass using the GitHub CLI Copilot extension (`gh copilot`).
 This provides a fundamentally different model's perspective on the audit,
 reducing confirmation bias that persists even after adversarial self-review.
 
@@ -129,7 +129,7 @@ For Copilot-specific prompt templates and integration details, read
 [references/copilot-security-prompts.md](references/copilot-security-prompts.md).
 
 **Prerequisites:** The `github-copilot-cli` skill must be available for CLI
-setup and authentication. If the Copilot CLI is not installed, skip Phase 4
+setup and authentication. If the Copilot extension is not installed, skip Phase 4
 gracefully and note the skip in the journal entry.
 
 ## Feedback Loop & Documentation
@@ -147,7 +147,7 @@ retrospective templates, read
 | --- | --- | --- |
 | `MAX_AUDIT_PASSES` | `2` | Maximum red-team cycles (phases 2–3 repeat) |
 | `AUDIT_DEPTH` | `standard` | Depth: `recon`, `standard`, or `paranoid` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot CLI validation phase |
+| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot extension validation phase |
 | `PROJECT_TYPE` | `auto` | Auto-detect or explicit: `mcp-server`, `web-app`, `cli-tool`, `library` |
 
 ### Audit Depth Profiles

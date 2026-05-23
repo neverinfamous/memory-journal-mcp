@@ -4,7 +4,7 @@ description: |
   Multi-pass adversarial planning and review skill that improves agent-generated
   plans through structured critique stages. Combines an initial planning agent
   (structure, logic, task sequencing) with an adversarial review agent
-  (performance, security, maintainability) and a final Copilot CLI validation
+  (performance, security, maintainability) and a final Copilot extension validation
   pass. Use when creating implementation plans, designing architecture, planning
   roadmaps or milestones, or when the user says "plan this", "review my plan",
   "adversarial review", or "multi-pass plan".
@@ -74,7 +74,7 @@ templates, read [references/multi-pass-protocol.md](references/multi-pass-protoc
 
 ## Copilot Integration
 
-Phase 4 triggers an independent validation pass using the GitHub Copilot CLI.
+Phase 4 triggers an independent validation pass using the GitHub CLI Copilot extension (`gh copilot`).
 This provides a fundamentally different model's perspective on the plan,
 reducing confirmation bias that persists even after adversarial self-review.
 
@@ -100,7 +100,7 @@ retrospective templates, read
 | -------------------- | ---------- | ----------------------------------------------- |
 | `MAX_PLAN_PASSES`    | `2`        | Maximum refinement cycles (phases 2–3 repeat)   |
 | `PLAN_REVIEW_DEPTH`  | `standard` | Review depth: `light`, `standard`, or `deep`    |
-| `COPILOT_VALIDATION` | `true`     | Enable/disable the Copilot CLI validation phase |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable the Copilot extension validation phase |
 
 ### Review Depth Profiles
 

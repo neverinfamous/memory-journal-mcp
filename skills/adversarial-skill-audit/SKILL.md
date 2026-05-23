@@ -95,7 +95,7 @@ For the full checklist, read
 
 ## Copilot Integration
 
-Phase 4 triggers an independent review via the Copilot CLI. If unavailable,
+Phase 4 triggers an independent review via the Copilot extension (`gh copilot`). If unavailable,
 skip gracefully.
 
 For prompts, read
@@ -113,7 +113,7 @@ tag conventions, read
 | --- | --- | --- |
 | `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
 | `AUDIT_DEPTH` | `standard` | Depth: `surface`, `standard`, or `thorough` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable Copilot CLI validation phase |
+| `COPILOT_VALIDATION` | `true` | Enable/disable Copilot extension validation phase |
 | `INCLUDE_REFERENCES` | `true` | Whether to read and evaluate reference files too |
 
 ### Audit Depth Profiles

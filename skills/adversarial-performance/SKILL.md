@@ -120,7 +120,7 @@ optimization patterns, read
 
 ## Copilot Integration
 
-Phase 4 triggers an independent validation pass using the GitHub Copilot CLI.
+Phase 4 triggers an independent validation pass using the GitHub CLI Copilot extension (`gh copilot`).
 This provides a fundamentally different model's perspective on the audit,
 catching performance patterns that internal review normalizes.
 
@@ -128,7 +128,7 @@ For Copilot-specific prompt templates, read
 [references/copilot-performance-prompts.md](references/copilot-performance-prompts.md).
 
 **Prerequisites:** The `github-copilot-cli` skill must be available. If the
-Copilot CLI is not installed, skip Phase 4 gracefully and note the skip in
+Copilot extension is not installed, skip Phase 4 gracefully and note the skip in
 the journal entry.
 
 ## Feedback Loop & Documentation
@@ -146,7 +146,7 @@ For journal templates, tag conventions, and retrospective templates, read
 | --- | --- | --- |
 | `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
 | `AUDIT_DEPTH` | `standard` | Depth: `scan`, `standard`, or `intensive` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot CLI validation phase |
+| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot extension validation phase |
 | `PROJECT_PROFILE` | `auto` | Auto-detect or explicit profile list |
 | `RUN_COMMANDS` | `false` | Whether to execute measurement commands (`tsc --diagnostics`, `npm test`, etc.) or perform static analysis only |
 
