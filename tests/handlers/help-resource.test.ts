@@ -173,21 +173,27 @@ describe('Help Resource Handlers', () => {
         expect(result.data.group).toBe('backup')
     })
 
-    it('should handle codemode group', async () => {
+    it('should handle codemode group (static help content)', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
         const result = (await groupHelp!.handler('memory://help/codemode', getContext())) as any
-        expect(result.data.group).toBe('codemode')
-        expect(result.data.tools.length).toBeGreaterThan(0)
+        // codemode has static help content from HELP_CONTENT map
+        expect(typeof result.data).toBe('string')
+        expect(result.data).toContain('Code Mode')
+        expect(result.data).toContain('mj_execute_code')
+        expect(result.data).toContain('mj.core')
     })
 
-    it('should handle github group', async () => {
+    it('should handle github group (static help content)', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
         const result = (await groupHelp!.handler('memory://help/github', getContext())) as any
-        expect(result.data.group).toBe('github')
+        // github has static help content from HELP_CONTENT map
+        expect(typeof result.data).toBe('string')
+        expect(result.data).toContain('GitHub Integration')
+        expect(result.data).toContain('get_kanban_board')
     })
 
     describe('Schema parsing edge cases', () => {
