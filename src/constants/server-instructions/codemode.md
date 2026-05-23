@@ -16,6 +16,27 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Team          | `mj.team.*`          | `mj.team.teamCreateEntry("Team update")`           |
 
 **Features**: Positional args (`createEntry("note")`), aliases (`mj.core.create`), `mj.help()` for discovery. `mj.export.*` is a backward-compat alias for `mj.io.*`.
+
+**Parameter names are snake_case** (matching tool schemas), NOT camelCase:
+
+```js
+// ✅ Correct — snake_case params
+await mj.core.createEntry({
+  content: "Session summary",
+  entry_type: "retrospective",
+  tags: ["session-summary"],
+  significance_type: "milestone",
+  project_number: 5
+})
+
+// ❌ Wrong — camelCase params are silently ignored
+await mj.core.createEntry({
+  content: "Session summary",
+  entryType: "retrospective",      // IGNORED
+  significanceType: "milestone",    // IGNORED
+  projectNumber: 5                  // IGNORED
+})
+```
 **Readonly mode**: `readonly: true` restricts to read-only tools only. Read-only methods (e.g., `mj.search.searchEntries()`) work normally. Calling a mutation method (e.g., `mj.core.create(...)`) in readonly mode throws an error that halts execution — the sandbox returns `{ success: false, error: "Operation '...' is not found in group" }`. If a group has no methods at all (fully stripped), the error says `"no methods (read-only mode?)"`.
 **Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
 

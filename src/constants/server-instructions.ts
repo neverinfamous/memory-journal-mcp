@@ -160,11 +160,12 @@ Mark important entries with \`significance_type\`:
 
 - \`release\` — Version deployments
 - \`milestone\` — Major completions (full certification, security audit, feature launch)
-- \`decision\` — Architecture or technology decisions
+- \`decision\` — Technology or process decisions
+- \`architecture\` — Architecture decisions, pattern adoptions, structural changes
 - \`blocker_resolved\` — Critical blockers that were resolved
 - \`lesson_learned\` — Documented lessons from failures or unexpected outcomes
-- \`breakthrough\` — Significant technical breakthroughs
-- \`technical_breakthrough\` — Major technical achievements
+- \`breakthrough\` — Significant technical or conceptual breakthroughs
+- \`security\` — Security audit completions, vulnerability remediations, hardening milestones
 
 Do NOT mark routine session summaries or pass-only testing results as significant.
 
@@ -337,6 +338,27 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Team          | \`mj.team.*\`          | \`mj.team.teamCreateEntry("Team update")\`           |
 
 **Features**: Positional args (\`createEntry("note")\`), aliases (\`mj.core.create\`), \`mj.help()\` for discovery. \`mj.export.*\` is a backward-compat alias for \`mj.io.*\`.
+
+**Parameter names are snake_case** (matching tool schemas), NOT camelCase:
+
+\`\`\`js
+// ✅ Correct — snake_case params
+await mj.core.createEntry({
+  content: "Session summary",
+  entry_type: "retrospective",
+  tags: ["session-summary"],
+  significance_type: "milestone",
+  project_number: 5
+})
+
+// ❌ Wrong — camelCase params are silently ignored
+await mj.core.createEntry({
+  content: "Session summary",
+  entryType: "retrospective",      // IGNORED
+  significanceType: "milestone",    // IGNORED
+  projectNumber: 5                  // IGNORED
+})
+\`\`\`
 **Readonly mode**: \`readonly: true\` restricts to read-only tools only. Read-only methods (e.g., \`mj.search.searchEntries()\`) work normally. Calling a mutation method (e.g., \`mj.core.create(...)\`) in readonly mode throws an error that halts execution — the sandbox returns \`{ success: false, error: "Operation '...' is not found in group" }\`. If a group has no methods at all (fully stripped), the error says \`"no methods (read-only mode?)"\`.
 **Returns**: Last expression value. Errors return \`{ success: false, error: "..." }\`.
 
@@ -387,6 +409,9 @@ When the user has GitHub Copilot code review enabled:
 
 ## ⚠️ Critical Patterns
 
+- **Parameter case in Code Mode**: Method names are camelCase (\`mj.core.createEntry()\`), but all parameters use **snake_case** (\`entry_type\`, \`significance_type\`, \`project_number\`). This matches the underlying tool schemas. Do NOT use camelCase params (\`entryType\`, \`significanceType\`) — they will be silently ignored.
+- **\`significance_type\` values**: Only 8 values accepted: \`milestone\`, \`breakthrough\`, \`decision\`, \`architecture\`, \`lesson_learned\`, \`blocker_resolved\`, \`release\`, \`security\`. Using any other value (e.g., \`"important"\`, \`"major"\`, \`"critical"\`) causes a Zod validation error.
+- **\`entry_type\` defaults**: If omitted, defaults to \`personal_reflection\`. Always set explicitly — see the Entry Type Selection guide in \`memory://help/core\` for the full list.
 - **\`autoContext\`**: The user-facing filesystem monitoring feature was abandoned to reduce telemetry overhead. Existing data with \`autoContext: null\` is safely ignored. The database field itself is still used internally for Hush Protocol flag metadata (\`flag_type\`, \`target_user\`, \`resolved\`, etc.).
 - **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`. Neither returns orphan tags with zero usage.
 - **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).

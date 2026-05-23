@@ -101,11 +101,12 @@ Mark important entries with `significance_type`:
 
 - `release` — Version deployments
 - `milestone` — Major completions (full certification, security audit, feature launch)
-- `decision` — Architecture or technology decisions
+- `decision` — Technology or process decisions
+- `architecture` — Architecture decisions, pattern adoptions, structural changes
 - `blocker_resolved` — Critical blockers that were resolved
 - `lesson_learned` — Documented lessons from failures or unexpected outcomes
-- `breakthrough` — Significant technical breakthroughs
-- `technical_breakthrough` — Major technical achievements
+- `breakthrough` — Significant technical or conceptual breakthroughs
+- `security` — Security audit completions, vulnerability remediations, hardening milestones
 
 Do NOT mark routine session summaries or pass-only testing results as significant.
 

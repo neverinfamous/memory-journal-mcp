@@ -15,6 +15,9 @@
 - **skills**: Expanded the `mcp-builder` reference with 10 security hardening patterns, refined test taxonomies, error structures, OAuth secure defaults, and sandbox boundaries
 
 ### Changed
+- **instructions**: Added `architecture` and `security` significance types; collapsed `technical_breakthrough` into `breakthrough`
+- **instructions**: Added Code Mode parameter casing gotcha and significance/entry_type valid value lists to server instructions
+- **errors**: Added Zod enum validation error suggestions that return the full list of valid `significance_type` and `entry_type` values for agent self-correction
 - **docs**: Standardized `README.md` layout, badges, and automated auditing references
 - **instructions**: Refactored the monolithic `server-instructions.md` into a modular directory, reducing the initial payload from ~2,200 to ~1,500 tokens
 - **instructions**: Enhanced session summary formatting, tag taxonomy, and significance marking criteria in the core instructions

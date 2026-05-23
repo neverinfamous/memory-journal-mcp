@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **70 tools** across **10 groups** (core, search, analytics, relationships, export, admin, github, backup, team, codemode), **22 resources**, and **15 prompts**.
+Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **70 tools** across **10 groups** (core, search, analytics, relationships, io, admin, github, backup, team, codemode), **36 resources**, and **17 prompts**.
 
 **Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
@@ -77,8 +77,8 @@ src/
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
-│   ├── server-instructions.md  # Source for server instructions
-│   └── server-instructions.ts  # Auto-generated (npm run generate:instructions)
+│   ├── server-instructions/    # Modular instruction markdown sources
+│   └── server-instructions.ts  # Auto-generated (npx tsx scripts/generate-server-instructions.ts)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
@@ -104,12 +104,12 @@ src/
 
 ## Key Reference Files
 
-| File                                   | Purpose                                               |
-| -------------------------------------- | ----------------------------------------------------- |
-| `src/constants/server-instructions.md` | Full tool parameter reference and behavioral guidance |
-| `docs/code-map.md`                     | File → tool/handler mapping                           |
-| `docs/tool-reference.md`               | Categorized 44-tool inventory                         |
-| `CONTRIBUTING.md`                      | Development setup and PR guidelines                   |
+| File                                       | Purpose                                               |
+| ------------------------------------------ | ----------------------------------------------------- |
+| `src/constants/server-instructions/*.md`   | Modular instruction sources (overview, gotchas, codemode, etc.) |
+| `test-server/code-map.md`                  | File → tool/handler mapping                           |
+| `test-server/tool-reference.md`            | Categorized 70-tool inventory                         |
+| `CONTRIBUTING.md`                          | Development setup and PR guidelines                   |
 
 ## Review Checklist
 

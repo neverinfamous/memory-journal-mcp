@@ -55,11 +55,12 @@ export const ENTRY_TYPES = [
 export const SIGNIFICANCE_TYPES = [
     'milestone',
     'breakthrough',
-    'technical_breakthrough',
     'decision',
+    'architecture',
     'lesson_learned',
     'blocker_resolved',
     'release',
+    'security',
 ] as const
 
 /** Maximum content length for journal entries (chars) */
