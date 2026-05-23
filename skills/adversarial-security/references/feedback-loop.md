@@ -41,13 +41,13 @@ create_entry({
 })
 ```
 
-### Phase 4 — Copilot Validation
+### Phase 4 — External Validation
 
 ```
 create_entry({
-  content: "# Copilot Security Validation: [Repository Name]\n\n[copilot findings + final dispositions]",
-  entry_type: "security_copilot",
-  tags: ["adversarial-security", "copilot"],
+  content: "# External Security Validation: [Repository Name]\n\n[external review findings + final dispositions]",
+  entry_type: "copilot_validation",
+  tags: ["adversarial-security", "external-validation"],
   project_number: <project number>
 })
 ```
@@ -174,7 +174,7 @@ institutional security knowledge.
 
 ```
 create_entry({
-  content: "# Security Audit Retrospective: [Repository Name]\n\n## Key Insights\n- [What the Threat Modeler missed that the Red Team caught]\n- [What Copilot caught that internal review missed]\n- [Vulnerability patterns worth institutionalizing as CI checks]\n- [Defenses that proved effective under adversarial review]\n\n## Metrics\n- Initial security score: X/5.0 (Grade Y)\n- Final security score: X/5.0 (Grade Y)\n- Red team passes: N\n- Critical findings: N (addressed: N, deferred: N)\n- High findings: N (addressed: N, deferred: N)\n- New CWEs identified: [list]\n\n## Process Improvements\n- [Adjustments for future audit cycles]\n- [New patterns to add to audit-categories.md]\n- [Categories that need deeper scrutiny next time]",
+  content: "# Security Audit Retrospective: [Repository Name]\n\n## Key Insights\n- [What the Threat Modeler missed that the Red Team caught]\n- [What external validation caught that internal review missed]\n- [Vulnerability patterns worth institutionalizing as CI checks]\n- [Defenses that proved effective under adversarial review]\n\n## Metrics\n- Initial security score: X/5.0 (Grade Y)\n- Final security score: X/5.0 (Grade Y)\n- Red team passes: N\n- Critical findings: N (addressed: N, deferred: N)\n- High findings: N (addressed: N, deferred: N)\n- New CWEs identified: [list]\n\n## Process Improvements\n- [Adjustments for future audit cycles]\n- [New patterns to add to audit-categories.md]\n- [Categories that need deeper scrutiny next time]",
   entry_type: "retrospective",
   tags: ["adversarial-security", "retrospective", "session-summary"],
   project_number: <project number>
@@ -189,7 +189,7 @@ create_entry({
 | `recon` | Phase 1 output |
 | `redteam` | Phase 2 output |
 | `remediation` | Phase 3 output |
-| `copilot` | Phase 4 output |
+| `external-validation` | Phase 4 output |
 | `audit-complete` | Final consolidated summary |
 | `retrospective` | Post-cycle review |
 | `session-summary` | Enables retrieval via session summary searches |
@@ -201,6 +201,6 @@ create_entry({
 | `security_recon` | 1 | Reconnaissance and threat model |
 | `security_redteam` | 2 | Red team findings with scores |
 | `security_remediation` | 3 | Remediation plan with dispositions |
-| `security_copilot` | 4 | Copilot validation findings |
+| `copilot_validation` | 4 | External validation findings (via `gh copilot`) |
 | `security_audit_complete` | Final | Consolidated audit summary |
 | `retrospective` | Post | Session retrospective with metrics |

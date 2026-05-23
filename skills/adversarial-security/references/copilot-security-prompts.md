@@ -1,13 +1,13 @@
-# Copilot Security Prompts
+# GitHub CLI Security Prompts
 
 Reference for Phase 4 of the adversarial security protocol — the independent
-external validation pass using the GitHub Copilot CLI.
+external validation pass using the GitHub CLI.
 
-## Why Copilot?
+## Why External Validation?
 
 After self-adversarial review (Phases 2–3), confirmation bias can still
 persist because the same model produced both the reconnaissance and the red
-team critique. The Copilot CLI invokes a fundamentally different model with a
+team critique. The GitHub CLI invokes a fundamentally different model with a
 separate context window, catching blind spots that internal review misses.
 
 For security audits specifically, this matters because:
@@ -15,18 +15,18 @@ For security audits specifically, this matters because:
 - The Threat Modeler may have over-documented defenses that look stronger
   than they are, and the Red Team (same model) may not have fully challenged
   those assumptions
-- Copilot brings a fresh perspective without the context of prior phases,
-  which can surface entirely new attack vectors
+- An independent model brings a fresh perspective without the context of
+  prior phases, which can surface entirely new attack vectors
 - Independent review is a standard practice in professional security auditing
 
 ## Prerequisites
 
-1. **Copilot CLI installed**: `gh extension list | grep copilot` or install via `gh extension install github/gh-copilot`
-2. **Authenticated**: `gh auth status` and `gh copilot --version`
-3. **Skill dependency**: The `github-copilot-cli` skill documents setup
-   details
+1. **GitHub CLI installed**: `gh --version` (v2.x+)
+2. **Authenticated**: `gh auth status`
+3. **Copilot access**: `gh copilot --version` — the `copilot` subcommand is
+   built into modern `gh` CLI (no separate extension needed)
 
-If Copilot CLI is not available, skip Phase 4 gracefully and note the skip
+If `gh copilot` is not available, skip Phase 4 gracefully and note the skip
 in the journal entry. The audit is still valid with Phases 1–3 alone.
 
 ## Prompt Templates
@@ -37,13 +37,9 @@ focus on concrete code patterns rather than architectural decisions.
 
 ### Full Repository Security Audit
 
-> **Note:** The `gh copilot` CLI extension does not natively support non-interactive file stream piping for open-ended prompts like the deprecated `@github/copilot` npm package did.
-> For Phase 4 audits, you must either:
-> 1. Fall back to manual Copilot Chat window usage with the prompt templates.
-> 2. Use `gh copilot explain <file>` individually for high-risk files.
-> 3. Document the limitation in the `security_copilot` journal entry and mark Phase 4 as manually bypassed.
-
-If using Copilot Chat manually, you can use these prompts:
+> **Usage:** Pass these prompts to `gh copilot explain` or use them in
+> GitHub Copilot Chat. For file-specific review, use
+> `gh copilot explain <file>` for high-risk files identified in Phase 1.
 
 **General Security Review:**
 "You are a senior security engineer performing a code audit. Review this repository for security vulnerabilities. Focus on:
@@ -79,16 +75,16 @@ If using Copilot Chat manually, you can use these prompts:
 5. **Artifact exposure**
 6. **Supply chain**"
 
-## Parsing Copilot Output
+## Parsing Output
 
-Copilot returns unstructured Markdown. To integrate findings into the
-protocol:
+The external review returns unstructured Markdown. To integrate findings into
+the protocol:
 
 1. **Extract findings** — parse the Markdown for tables or numbered lists
 2. **Map to categories** — classify each finding against the 10 audit
    categories (Dependencies, Secrets, Injection, Auth, Transport, Docker,
    CI/CD, Information Disclosure, Supply Chain, MCP-Specific)
-3. **Assign CWE IDs** — if Copilot didn't provide CWEs, assign the most
+3. **Assign CWE IDs** — if the review didn't provide CWEs, assign the most
    relevant ID from the audit-categories reference
 4. **Deduplicate** — compare against Phase 2 findings; skip items already
    addressed in the remediation plan
@@ -106,8 +102,6 @@ protocol:
 
 ## Cross-References
 
-- **`github-copilot-cli` skill** — CLI installation, authentication, and
-  non-interactive piping patterns
 - **`adversarial-planner/references/copilot-integration.md`** — Plan-specific
   review prompts (architecture, roadmap); use this skill for code-level
   security review instead

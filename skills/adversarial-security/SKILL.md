@@ -119,18 +119,18 @@ For the full checklist with CWE IDs, vulnerable patterns, and secure
 patterns, read
 [references/audit-categories.md](references/audit-categories.md).
 
-## Copilot Integration
+## External Validation (Phase 4)
 
-Phase 4 triggers an independent validation pass using the GitHub CLI Copilot extension (`gh copilot`).
-This provides a fundamentally different model's perspective on the audit,
+Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).
+The `copilot` subcommand is built into modern `gh` CLI — no separate extension is
+needed. This provides a fundamentally different model's perspective on the audit,
 reducing confirmation bias that persists even after adversarial self-review.
 
-For Copilot-specific prompt templates and integration details, read
+For prompt templates and integration details, read
 [references/copilot-security-prompts.md](references/copilot-security-prompts.md).
 
-**Prerequisites:** The `github-copilot-cli` skill must be available for CLI
-setup and authentication. If the Copilot extension is not installed, skip Phase 4
-gracefully and note the skip in the journal entry.
+**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
+is not available, skip Phase 4 gracefully and note the skip in the journal entry.
 
 ## Feedback Loop & Documentation
 
@@ -147,7 +147,7 @@ retrospective templates, read
 | --- | --- | --- |
 | `MAX_AUDIT_PASSES` | `2` | Maximum red-team cycles (phases 2–3 repeat) |
 | `AUDIT_DEPTH` | `standard` | Depth: `recon`, `standard`, or `paranoid` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot extension validation phase |
+| `COPILOT_VALIDATION` | `true` | Enable/disable the external validation phase (Phase 4, `gh copilot`) |
 | `PROJECT_TYPE` | `auto` | Auto-detect or explicit: `mcp-server`, `web-app`, `cli-tool`, `library` |
 
 ### Audit Depth Profiles
@@ -168,6 +168,6 @@ retrospective templates, read
 | --- | --- |
 | `adversarial-planner` | Applies adversarial pattern to plans; this skill applies it to security posture |
 | `autonomous-dev` | Generator/Evaluator pipeline at code level; use after this skill to implement fixes |
-| `github-copilot-cli` | Provides CLI setup and auth required for Phase 4 |
+| GitHub CLI (`gh`) | Built-in `copilot` subcommand used for Phase 4 external validation |
 | `/security-audit` workflow | Provides the category checklist; this skill adds adversarial methodology on top |
 | `skill-builder` | Use to refine this skill's instructions based on observed agent behavior |

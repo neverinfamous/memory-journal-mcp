@@ -301,9 +301,9 @@ create_entry({
 
 ---
 
-## Phase 4 — Copilot Validation (External)
+## Phase 4 — External Validation (GitHub CLI)
 
-If `COPILOT_VALIDATION` is enabled (default: `true`) and the Copilot CLI is
+If `COPILOT_VALIDATION` is enabled (default: `true`) and `gh copilot` is
 available, invoke it for an independent review of the audit findings and
 remediation plan.
 
@@ -313,12 +313,12 @@ templates and parsing guidance.
 After the Copilot pass, any new findings follow the same disposition process
 from Phase 3. The final audit report is then presented to the user.
 
-If Copilot CLI is not available, skip this phase gracefully and note:
+If `gh copilot` is not available, skip this phase gracefully and note:
 
 ```markdown
-> **Phase 4 skipped**: Copilot CLI not available. The audit completed with
-> internal adversarial review only (Phases 1–3). Install the `gh copilot` extension
-> and re-run for external validation.
+> **Phase 4 skipped**: `gh copilot` not available. The audit completed with
+> internal adversarial review only (Phases 1–3). Install the GitHub CLI and
+> authenticate (`gh auth login`) for external validation.
 ```
 
 ### Journal
@@ -346,7 +346,7 @@ the primary deliverable for the user.
 **Audit Depth**: [recon | standard | paranoid]
 **Project Type**: [auto-detected type]
 **Passes Completed**: [N]
-**Copilot Validation**: [yes | skipped]
+**External Validation**: [yes | skipped]
 
 ## Executive Summary
 
