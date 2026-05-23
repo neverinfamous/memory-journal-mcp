@@ -15,6 +15,6 @@
 
 When the user has GitHub Copilot code review enabled:
 
-**Learn from reviews** — After a PR is merged or reviewed, use `get_copilot_reviews(pr_number)` to read Copilot's findings. If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged `copilot-finding` and link to the PR via `pr_number`.
+**Learn from reviews** — After a PR is merged or reviewed, use `get_copilot_reviews({ pr_number, repo })` to read Copilot's findings (pass `repo` in multi-project setups). If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged `copilot-finding` and link to the PR via `pr_number`.
 
 **Pre-emptive checking** — Before creating or modifying code, search journal entries with tag `copilot-finding` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.

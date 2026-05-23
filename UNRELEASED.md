@@ -3,6 +3,11 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
 
 ### Added
+- **instructions**: Documented all 23 `EntryType` values in `overview.md` (was 9) — includes `meeting_notes`, `learning`, `standup`, `milestone`, `technical_achievement`, `enhancement`, `development_note`, `adversarial_review`, `plan_draft`, `plan_refinement`, `copilot_validation`, `system_integration_test`, `test_entry`, `other`
+- **instructions**: Added `response_to`, `blocked_by`, and `caused` relationship types to `overview.md` Link Entries section (were only in `gotchas.md`)
+- **instructions**: Added `target_user` parameter documentation to `hush-protocol.md` for `pass_team_flag`
+- **instructions**: Added `repo` parameter guidance to `github.md` for multi-project `get_copilot_reviews` usage
+- **codemode**: Added `copilotReviews` alias and `getCopilotReviews` positional param mapping to `api-constants.ts`
 - **skills**: Migrated 14 skills from `adamic/skills` to canonical source: `agents-sdk`, `building-ai-agent-on-cloudflare`, `building-mcp-server-on-cloudflare`, `cloudflare`, `durable-objects`, `github-repo-setup`, `mcp-builder`, `next-best-practices`, `next-cache-components`, `next-upgrade`, `sandbox-sdk`, `web-perf`, `workers-best-practices`, `wrangler`
 - **skills**: Updated `README.md` inventory table to list all 35 skills
 - **skills**: Added `adversarial-security` skill — multi-pass adversarial repo-wide security audit (Threat Modeler + Red Team, 10-category checklist, CVSS-inspired scoring)
@@ -46,6 +51,12 @@
 - **skills**: Added Automated Auditing section to `README.md` referencing the `check-skills.ps1` and `run-copilot.ps1` evaluation scripts in the `adversarial-skill-audit` skill
 
 ### Fixed
+- **instructions**: Removed misleading `mj.export.*` row from `codemode.md` namespace table — `mj.export.*` is a backward-compat alias for `mj.io.*`, not a separate group
+- **instructions**: Clarified readonly mode behavior in `codemode.md` — read-only methods work normally, only mutations throw
+- **instructions**: Split dense semantic search threshold paragraph in `gotchas.md` into separate threshold and quality hint bullets
+- **instructions**: Updated `skills.md` to use category-based description instead of specific skill names (less prone to staleness)
+- **help**: Added missing `add_kanban_item` and `delete_kanban_item` to `inferGroupFromName` map in `help.ts` — these tools were incorrectly falling through to `core` group
+- **docs**: Updated `code-map.md` directory tree and Key Constants table to reference `server-instructions/` directory (was referencing deleted `server-instructions.md`)
 - **skills**: Added recursive `node_modules` and `package-lock.json` filter to `bin/sync.js` to prevent bloat propagation during sync
 - **skills**: Removed stale `gitlab/node_modules` directory (648 orphaned files)
 - **skills**: Remediated frontmatter formatting and token bloat issues identified across all 35 skills by the `adversarial-skill-audit` evaluator

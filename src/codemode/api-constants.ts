@@ -70,6 +70,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         repoInsights: 'getRepoInsights',
         createIssue: 'createGithubIssueWithEntry',
         closeIssue: 'closeGithubIssueWithEntry',
+        copilotReviews: 'getCopilotReviews',
     },
     backup: {
         save: 'backupJournal',
@@ -228,6 +229,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     deleteGithubMilestone: 'milestone_number',
     createGithubIssueWithEntry: 'title',
     closeGithubIssueWithEntry: 'issue_number',
+    getCopilotReviews: 'pr_number',
 
     // Backup
     restoreBackup: 'filename',

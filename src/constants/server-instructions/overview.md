@@ -69,6 +69,20 @@ Choose the correct `entry_type` — do NOT default everything to `personal_refle
 - `technical_note` — Implementation notes, gotchas, reference documentation
 - `feature_implementation` — New feature completions
 - `research` — Investigation, benchmarking, evaluation of alternatives
+- `meeting_notes` — Meeting minutes, sync notes, discussion summaries
+- `learning` — Lessons learned, tutorials completed, skill acquisition
+- `standup` — Daily standup notes, status updates
+- `milestone` — Major project milestones, release checkpoints
+- `technical_achievement` — Significant technical accomplishments
+- `enhancement` — Incremental improvements, optimizations
+- `development_note` — Day-to-day development context and progress
+- `adversarial_review` — Adversarial audit findings, red-team results
+- `plan_draft` — Draft plans awaiting review or refinement
+- `plan_refinement` — Iterated plan revisions based on feedback
+- `copilot_validation` — Copilot review validation results
+- `system_integration_test` — Integration test runs and results
+- `test_entry` — Test data or test-related entries
+- `other` — Anything that doesn't fit the above categories
 - `personal_reflection` — Only for genuinely personal notes that don't fit above
 
 ### Tag Taxonomy
@@ -101,5 +115,8 @@ Create relationships to build traversable context chains:
 - `evolves_from` — v2→v1, new iteration→prior version
 - `references` — cross-project parity work, related entries
 - `clarifies` — documentation→implementation it explains
+- `response_to` — reply to a question or issue raised in another entry
+- `blocked_by` — entry was blocked by another (blocker→resolution)
+- `caused` — entry caused or led to another outcome
 
 Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.

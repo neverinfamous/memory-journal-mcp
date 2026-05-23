@@ -14,7 +14,8 @@
 - **Indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use `rebuild_vector_index` or enable `AUTO_REBUILD_INDEX=true` for automatic reconciliation on server startup.
 - **Related by ID**: Provide `entry_id` instead of a query string to find entries semantically related to an existing entry (reuses the existing embedding to avoid inference costs).
 - **Metadata Filters**: Semantic search supports explicit filtering by `tags`, `entry_type`, `start_date`, and `end_date`.
-- **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches. A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The `hint_on_empty` flag (default true) only controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown.
+- **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
+- **Quality hints**: A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The `hint_on_empty` flag (default true) controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown independently.
 
 ## Search
 

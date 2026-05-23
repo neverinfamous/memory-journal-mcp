@@ -408,7 +408,7 @@ function inferGroupFromName(name: string): string {
         list_backups: 'backup',
         restore_backup: 'backup',
         cleanup_backups: 'backup',
-        // github (16)
+        // github (18)
         get_github_issues: 'github',
         get_github_prs: 'github',
         get_github_issue: 'github',
@@ -421,6 +421,8 @@ function inferGroupFromName(name: string): string {
         delete_github_milestone: 'github',
         get_kanban_board: 'github',
         move_kanban_item: 'github',
+        add_kanban_item: 'github',
+        delete_kanban_item: 'github',
         create_github_issue_with_entry: 'github',
         close_github_issue_with_entry: 'github',
         get_repo_insights: 'github',

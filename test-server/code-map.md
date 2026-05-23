@@ -29,8 +29,16 @@ src/
 │
 ├── constants/
 │   ├── icons.ts                    # MCP icon definitions per tool group (CDN SVG URLs)
-│   ├── server-instructions.md      # Source markdown for behavioral instruction levels
-│   └── server-instructions.ts      # Behavioral guidance + GOTCHAS_CONTENT export + generateInstructions() + composable segment builders (buildQuickAccess, buildCodeModeInstructions)
+│   ├── server-instructions/        # Source markdown files for behavioral instructions (directory-per-group)
+│   │   ├── overview.md             # Core behaviors, entry types, tag taxonomy, relationship patterns
+│   │   ├── codemode.md             # Code Mode namespace table, sandbox rules, readonly mode
+│   │   ├── github.md               # GitHub integration patterns, Copilot review workflow
+│   │   ├── gotchas.md              # Field notes, edge cases, critical usage patterns
+│   │   ├── hush-protocol.md        # Team flag protocol, flag types, resolution workflow
+│   │   ├── server-access.md        # Server access, maintenance mode, admin patterns
+│   │   ├── skills.md               # Agent skills index, SKILLS_DIR_PATH, skill-builder
+│   │   └── README.md               # Developer guide for the instruction system
+│   └── server-instructions.ts      # ⚠️ AUTO-GENERATED — HELP_CONTENT map + generateInstructions() + composable segments
 │
 ├── filtering/
 │   └── tool-filter.ts              # ToolFilter class — parse/apply --tool-filter expressions, group/shortcut/tool resolution
@@ -345,8 +353,8 @@ catch (error) {
 
 | What                               | Where                                  | Notes                                                                                                                                                                                                                                                                    |
 | ---------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `GOTCHAS_CONTENT` + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`)                                                                                                                               |
-| Instruction source markdown        | `src/constants/server-instructions.md` | 6 sections (`CORE`, `COPILOT`, `CODE_MODE`, `GITHUB`, `HELP_POINTERS`, `SERVER_ACCESS`); parsed by `npm run generate:instructions`                                                                                                                                       |
+| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `HELP_CONTENT` map + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`)                                                                                                                               |
+| Instruction source markdown        | `src/constants/server-instructions/`   | Directory-per-group: `overview.md`, `codemode.md`, `github.md`, `gotchas.md`, `hush-protocol.md`, `server-access.md`, `skills.md`; compiled by `npm run generate:instructions`                                                                                           |
 | Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating                                                                                                                                             |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                                                                                                                                                                                             |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`)                                                                                                              |

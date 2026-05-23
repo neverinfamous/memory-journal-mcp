@@ -128,6 +128,20 @@ Choose the correct \`entry_type\` — do NOT default everything to \`personal_re
 - \`technical_note\` — Implementation notes, gotchas, reference documentation
 - \`feature_implementation\` — New feature completions
 - \`research\` — Investigation, benchmarking, evaluation of alternatives
+- \`meeting_notes\` — Meeting minutes, sync notes, discussion summaries
+- \`learning\` — Lessons learned, tutorials completed, skill acquisition
+- \`standup\` — Daily standup notes, status updates
+- \`milestone\` — Major project milestones, release checkpoints
+- \`technical_achievement\` — Significant technical accomplishments
+- \`enhancement\` — Incremental improvements, optimizations
+- \`development_note\` — Day-to-day development context and progress
+- \`adversarial_review\` — Adversarial audit findings, red-team results
+- \`plan_draft\` — Draft plans awaiting review or refinement
+- \`plan_refinement\` — Iterated plan revisions based on feedback
+- \`copilot_validation\` — Copilot review validation results
+- \`system_integration_test\` — Integration test runs and results
+- \`test_entry\` — Test data or test-related entries
+- \`other\` — Anything that doesn't fit the above categories
 - \`personal_reflection\` — Only for genuinely personal notes that don't fit above
 
 ### Tag Taxonomy
@@ -160,6 +174,9 @@ Create relationships to build traversable context chains:
 - \`evolves_from\` — v2→v1, new iteration→prior version
 - \`references\` — cross-project parity work, related entries
 - \`clarifies\` — documentation→implementation it explains
+- \`response_to\` — reply to a question or issue raised in another entry
+- \`blocked_by\` — entry was blocked by another (blocker→resolution)
+- \`caused\` — entry caused or led to another outcome
 
 Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.`
 
@@ -310,14 +327,13 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Analytics     | \`mj.analytics.*\`     | \`mj.analytics.getStatistics()\`                     |
 | Relationships | \`mj.relationships.*\` | \`mj.relationships.linkEntries(1, 2, "implements")\` |
 | IO            | \`mj.io.*\`            | \`mj.io.importMarkdown("content")\`                  |
-| Export        | \`mj.export.*\`        | \`mj.export.exportEntries("json")\`                  |
 | Admin         | \`mj.admin.*\`         | \`mj.admin.rebuildVectorIndex()\`                    |
 | GitHub        | \`mj.github.*\`        | \`mj.github.getGithubIssues({ state: "open" })\`     |
 | Backup        | \`mj.backup.*\`        | \`mj.backup.backupJournal()\`                        |
 | Team          | \`mj.team.*\`          | \`mj.team.teamCreateEntry("Team update")\`           |
 
-**Features**: Positional args (\`createEntry("note")\`), aliases (\`mj.core.create\`), \`mj.help()\` for discovery.
-**Readonly mode**: \`readonly: true\` restricts to read-only tools only. Calling a mutation method (e.g., \`mj.core.create(...)\`) in readonly mode throws an error that halts execution — the sandbox returns \`{ success: false, error: "Operation '...' is not found in group" }\`. If a group has no methods at all (fully stripped), the error says \`"no methods (read-only mode?)"\`.
+**Features**: Positional args (\`createEntry("note")\`), aliases (\`mj.core.create\`), \`mj.help()\` for discovery. \`mj.export.*\` is a backward-compat alias for \`mj.io.*\`.
+**Readonly mode**: \`readonly: true\` restricts to read-only tools only. Read-only methods (e.g., \`mj.search.searchEntries()\`) work normally. Calling a mutation method (e.g., \`mj.core.create(...)\`) in readonly mode throws an error that halts execution — the sandbox returns \`{ success: false, error: "Operation '...' is not found in group" }\`. If a group has no methods at all (fully stripped), the error says \`"no methods (read-only mode?)"\`.
 **Returns**: Last expression value. Errors return \`{ success: false, error: "..." }\`.
 
 **GitHub Context Injection**: You can pass \`repo: 'my-repo'\` directly to \`mj_execute_code\` (e.g., \`mj_execute_code({ code, repo: 'memory-journal-mcp' })\`) to instantly bind that repository and its default Kanban board to all GitHub and Kanban tools running inside the sandbox, avoiding the need to pass \`owner\`/\`repo\` manually to individual methods inside.
@@ -360,7 +376,7 @@ return entries.map((e) => ({ id: e.id, content: e.content.slice(0, 50) }))
 
 When the user has GitHub Copilot code review enabled:
 
-**Learn from reviews** — After a PR is merged or reviewed, use \`get_copilot_reviews(pr_number)\` to read Copilot's findings. If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged \`copilot-finding\` and link to the PR via \`pr_number\`.
+**Learn from reviews** — After a PR is merged or reviewed, use \`get_copilot_reviews({ pr_number, repo })\` to read Copilot's findings (pass \`repo\` in multi-project setups). If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged \`copilot-finding\` and link to the PR via \`pr_number\`.
 
 **Pre-emptive checking** — Before creating or modifying code, search journal entries with tag \`copilot-finding\` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.`],
   ["gotchas", `# memory-journal-mcp — Field Notes & Gotchas
@@ -379,7 +395,8 @@ When the user has GitHub Copilot code review enabled:
 - **Indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use \`rebuild_vector_index\` or enable \`AUTO_REBUILD_INDEX=true\` for automatic reconciliation on server startup.
 - **Related by ID**: Provide \`entry_id\` instead of a query string to find entries semantically related to an existing entry (reuses the existing embedding to avoid inference costs).
 - **Metadata Filters**: Semantic search supports explicit filtering by \`tags\`, \`entry_type\`, \`start_date\`, and \`end_date\`.
-- **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches. A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The \`hint_on_empty\` flag (default true) only controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown.
+- **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
+- **Quality hints**: A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The \`hint_on_empty\` flag (default true) controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown independently.
 
 ## Search
 
@@ -410,7 +427,7 @@ When the user has GitHub Copilot code review enabled:
 
 Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
 
-**When to create a flag** (\`pass_team_flag\`):
+**When to create a flag** (\`pass_team_flag\` — accepts \`flag_type\`, \`message\`, and optional \`target_user\`):
 
 - \`blocker\` — work is blocked and requires another person's action
 - \`needs_review\` — code, document, or decision needs peer review
@@ -423,7 +440,7 @@ Flags are machine-actionable signals stored in the team database. They replace S
 
 **Dashboard**: Read \`memory://flags\` to see all active (unresolved) flags. Read \`memory://flags/vocabulary\` to see the configured flag types.
 
-**Code Mode**: \`mj.team.passTeamFlag({ flag_type, message })\` and \`mj.team.resolveTeamFlag({ flag_id })\`.`],
+**Code Mode**: \`mj.team.passTeamFlag({ flag_type, message, target_user })\` and \`mj.team.resolveTeamFlag({ flag_id })\`.`],
   ["server-access", `# How to Access This Server
 
 ## Server Name Discovery
@@ -482,7 +499,7 @@ When you notice the user consistently applies patterns, preferences, or workflow
 
 ## Native Agent Skills (NPM Distribution)
 
-This server leverages the \`neverinfamous-agent-skills\` package. If the user's \`SKILLS_DIR_PATH\` environment variable targets these, you have native access to foundational frameworks (\`typescript\`, \`react-best-practices\`, \`playwright-standard\`, \`golang\`, \`rust\`, \`python\`, \`docker\`, \`tailwind-css\`, \`shadcn-ui\`) and the \`github-commander\` DevOps workflows (\`issue-triage\`, \`pr-review\`, \`github-actions\`, \`copilot-audit\`, etc.). The \`adversarial-planner\` skill provides multi-pass plan review with structured critique stages.
+This server leverages the \`neverinfamous-agent-skills\` package. If the user's \`SKILLS_DIR_PATH\` environment variable targets these, you have native access to skills covering TypeScript, React, Playwright, Go, Rust, Python, Docker, Tailwind CSS, shadcn/ui, security auditing, MCP server development, and DevOps workflows (\`issue-triage\`, \`pr-review\`, \`github-actions\`, \`copilot-audit\`, etc.). The \`adversarial-planner\` skill provides multi-pass plan review with structured critique stages.
 
 - The user can distribute or update these skills across their repositories by running \`npx neverinfamous-agent-skills@latest\`.
 - If you need to create a new skill, reference the bundled \`skill-builder\` instructions!`],
