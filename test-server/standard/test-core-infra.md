@@ -65,7 +65,7 @@ node test-server/scripts/test-tool-annotations.mjs
 | Check              | Expected                                                             |
 | ------------------ | -------------------------------------------------------------------- |
 | Instruction levels | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations   | 67 tools, all with `annotations`, 45 `false` + 22 `true` = 0 missing |
+| Tool annotations   | 70 tools, all with `annotations`, 48 `false` + 22 `true` = 0 missing |
 
 ### 1.4 GitHub Status Resource
 
@@ -83,6 +83,6 @@ node test-server/scripts/test-tool-annotations.mjs
 - [ ] `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete JSON with all expected fields
 - [ ] Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
-- [ ] 45 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (67 total, 0 missing)
+- [ ] 48 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (70 total, 0 missing)
 - [ ] `get_statistics` returns all 4 enhanced analytics metrics
 - [ ] `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
