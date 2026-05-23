@@ -141,6 +141,7 @@ Choose the correct \`entry_type\` — do NOT default everything to \`personal_re
 - \`copilot_validation\` — Copilot review validation results
 - \`system_integration_test\` — Integration test runs and results
 - \`test_entry\` — Test data or test-related entries
+- \`flag\` — Auto-assigned by Hush Protocol tools (\`team_pass_flag\`). Do NOT set manually.
 - \`other\` — Anything that doesn't fit the above categories
 - \`personal_reflection\` — Only for genuinely personal notes that don't fit above
 
@@ -150,8 +151,8 @@ Every entry MUST have at least one tag. Use kebab-case exclusively.
 
 - _Activity_: \`session-summary\`, \`certification\`, \`stress-test\`, \`bug-fix\`, \`release\`, \`audit\`, \`remediation\`, \`refactor\`
 - _Domain_: \`security\`, \`performance\`, \`architecture\`, \`code-mode\`, \`documentation\`, \`ci-cd\`, \`github-integration\`
-- _Tool group_: Name of the tool group being worked on (e.g., \`core\`, \`stats\`, \`migration\`, \`roles\`)
-- _Pattern_: \`p154\`, \`split-schema\`, \`zod\`, \`error-handling\`
+- _Tool group_: Name of the tool group being worked on (e.g., \`core\`, \`search\`, \`github\`, \`admin\`)
+- _Pattern_: \`split-schema\`, \`zod\`, \`error-handling\`, \`dual-schema\`
 
 ### Significance Marking
 
@@ -162,6 +163,8 @@ Mark important entries with \`significance_type\`:
 - \`decision\` — Architecture or technology decisions
 - \`blocker_resolved\` — Critical blockers that were resolved
 - \`lesson_learned\` — Documented lessons from failures or unexpected outcomes
+- \`breakthrough\` — Significant technical breakthroughs
+- \`technical_breakthrough\` — Major technical achievements
 
 Do NOT mark routine session summaries or pass-only testing results as significant.
 
@@ -384,12 +387,13 @@ When the user has GitHub Copilot code review enabled:
 
 ## ⚠️ Critical Patterns
 
-- **\`autoContext\`**: Deprecated in v7.5.1. The feature was originally planned for background filesystem monitoring but has been abandoned to reduce telemetry overhead. Existing data with \`autoContext: null\` is safely ignored.
+- **\`autoContext\`**: The user-facing filesystem monitoring feature was abandoned to reduce telemetry overhead. Existing data with \`autoContext: null\` is safely ignored. The database field itself is still used internally for Hush Protocol flag metadata (\`flag_type\`, \`target_user\`, \`resolved\`, etc.).
 - **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`. Neither returns orphan tags with zero usage.
 - **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).
 - **\`merge_tags\` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.
 - **\`prStatus\` in entries**: Reflects PR state at entry creation time, not current state. Use \`get_github_pr\` for live status.
 - **\`restore_backup\` behavior**: Restores entire database state. Any recent changes (new entries, tag merges via \`merge_tags\`, relationships) are reverted. A pre-restore backup is automatically created for safety.
+- **\`cleanup_backups\` retention**: Removes oldest backups exceeding \`keep_count\`. Use periodically if auto-backups or pre-restore backups accumulate.
 
 ## Semantic Search
 
@@ -398,10 +402,11 @@ When the user has GitHub Copilot code review enabled:
 - **Metadata Filters**: Semantic search supports explicit filtering by \`tags\`, \`entry_type\`, \`start_date\`, and \`end_date\`.
 - **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
 - **Quality hints**: A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The \`hint_on_empty\` flag (default true) controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown independently.
+- **Diagnostics**: Use \`get_vector_index_stats\` to check index health (\`itemCount\`, \`modelName\`, \`dimensions\`). Compare \`itemCount\` against DB entry count to detect drift.
 
 ## Search
 
-- **Hybrid Ranking**: \`search_entries\` defaults to \`mode: 'auto'\`. Conversational prompts automatically utilize Reciprocal Rank Fusion (true Hybrid) bridging keyword and vector algorithms.
+- **Hybrid Ranking**: \`search_entries\` supports \`mode\`: \`auto\` (default — heuristic selects best strategy), \`fts\` (FTS5 keyword only), \`semantic\` (vector similarity only), \`hybrid\` (forced RRF fusion of FTS5+vector). In \`auto\` mode, conversational prompts automatically route to Reciprocal Rank Fusion bridging keyword and vector algorithms.
 - **\`search_entries\` FTS5 query syntax**: Uses FTS5 full-text search with Porter stemmer. Phrase queries: \`"error handling"\`. Prefix: \`auth*\`. Boolean: \`deploy OR release\`, \`error NOT warning\`. Word-boundary matching ("log" matches "log" but not "catalog"). Results ranked by BM25 relevance. Falls back to LIKE substring matching for queries with unbalanced quotes or special characters.
 
 ## Relationships & Analytics
@@ -428,14 +433,14 @@ When the user has GitHub Copilot code review enabled:
 
 Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
 
-**When to create a flag** (\`pass_team_flag\` — accepts \`flag_type\`, \`message\`, and optional \`target_user\`):
+**When to create a flag** (\`team_pass_flag\` — accepts \`flag_type\`, \`message\`, and optional \`target_user\`, \`link\`, \`project_number\`, \`issue_number\`):
 
 - \`blocker\` — work is blocked and requires another person's action
 - \`needs_review\` — code, document, or decision needs peer review
 - \`help_requested\` — stuck and need guidance or pairing
 - \`fyi\` — non-blocking awareness signal (completed migration, config change, etc.)
 
-**When to resolve** (\`resolve_team_flag\`): After the blocking condition is cleared. Include a brief resolution comment describing what was done. Resolving is idempotent — safe to call on already-resolved flags.
+**When to resolve** (\`team_resolve_flag\`): After the blocking condition is cleared. Include a brief resolution comment describing what was done. Resolving is idempotent — safe to call on already-resolved flags.
 
 **Briefing integration**: The \`memory://briefing\` payload includes \`activeFlags\` when unresolved flags exist. The user's agent rules may instruct you to render these prominently. Always check for and acknowledge active flags at session start.
 

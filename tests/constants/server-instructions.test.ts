@@ -443,8 +443,8 @@ describe('HELP_CONTENT', () => {
     it('should include hush-protocol help content', () => {
         const hush = HELP_CONTENT.get('hush-protocol')
         expect(hush).toBeDefined()
-        expect(hush).toContain('pass_team_flag')
-        expect(hush).toContain('resolve_team_flag')
+        expect(hush).toContain('team_pass_flag')
+        expect(hush).toContain('team_resolve_flag')
     })
 
     it('should include server-access help content', () => {

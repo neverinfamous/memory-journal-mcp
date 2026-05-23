@@ -92,6 +92,8 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         link: 'teamLinkEntries',
         graph: 'teamVisualizeRelationships',
         export: 'teamExportEntries',
+        exportMarkdown: 'teamExportMarkdown',
+        importMarkdown: 'teamImportMarkdown',
         backup: 'teamBackup',
         listBackups: 'teamListBackups',
         semanticSearch: 'teamSemanticSearch',

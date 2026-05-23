@@ -2,12 +2,13 @@
 
 ## ⚠️ Critical Patterns
 
-- **`autoContext`**: Deprecated in v7.5.1. The feature was originally planned for background filesystem monitoring but has been abandoned to reduce telemetry overhead. Existing data with `autoContext: null` is safely ignored.
+- **`autoContext`**: The user-facing filesystem monitoring feature was abandoned to reduce telemetry overhead. Existing data with `autoContext: null` is safely ignored. The database field itself is still used internally for Hush Protocol flag metadata (`flag_type`, `target_user`, `resolved`, etc.).
 - **`memory://tags` vs `list_tags`**: Resource includes `id`, `name`, `count`; tool returns only `name`, `count`. Neither returns orphan tags with zero usage.
 - **Tag naming**: Use lowercase with dashes (e.g., `bug-fix`, `phase-2`). Use `merge_tags` to consolidate duplicates (e.g., merge `phase2` into `phase-2`).
 - **`merge_tags` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.
 - **`prStatus` in entries**: Reflects PR state at entry creation time, not current state. Use `get_github_pr` for live status.
 - **`restore_backup` behavior**: Restores entire database state. Any recent changes (new entries, tag merges via `merge_tags`, relationships) are reverted. A pre-restore backup is automatically created for safety.
+- **`cleanup_backups` retention**: Removes oldest backups exceeding `keep_count`. Use periodically if auto-backups or pre-restore backups accumulate.
 
 ## Semantic Search
 
@@ -16,10 +17,11 @@
 - **Metadata Filters**: Semantic search supports explicit filtering by `tags`, `entry_type`, `start_date`, and `end_date`.
 - **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
 - **Quality hints**: A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The `hint_on_empty` flag (default true) controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown independently.
+- **Diagnostics**: Use `get_vector_index_stats` to check index health (`itemCount`, `modelName`, `dimensions`). Compare `itemCount` against DB entry count to detect drift.
 
 ## Search
 
-- **Hybrid Ranking**: `search_entries` defaults to `mode: 'auto'`. Conversational prompts automatically utilize Reciprocal Rank Fusion (true Hybrid) bridging keyword and vector algorithms.
+- **Hybrid Ranking**: `search_entries` supports `mode`: `auto` (default — heuristic selects best strategy), `fts` (FTS5 keyword only), `semantic` (vector similarity only), `hybrid` (forced RRF fusion of FTS5+vector). In `auto` mode, conversational prompts automatically route to Reciprocal Rank Fusion bridging keyword and vector algorithms.
 - **`search_entries` FTS5 query syntax**: Uses FTS5 full-text search with Porter stemmer. Phrase queries: `"error handling"`. Prefix: `auth*`. Boolean: `deploy OR release`, `error NOT warning`. Word-boundary matching ("log" matches "log" but not "catalog"). Results ranked by BM25 relevance. Falls back to LIKE substring matching for queries with unbalanced quotes or special characters.
 
 ## Relationships & Analytics

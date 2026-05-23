@@ -2,14 +2,14 @@
 
 Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
 
-**When to create a flag** (`pass_team_flag` — accepts `flag_type`, `message`, and optional `target_user`):
+**When to create a flag** (`team_pass_flag` — accepts `flag_type`, `message`, and optional `target_user`, `link`, `project_number`, `issue_number`):
 
 - `blocker` — work is blocked and requires another person's action
 - `needs_review` — code, document, or decision needs peer review
 - `help_requested` — stuck and need guidance or pairing
 - `fyi` — non-blocking awareness signal (completed migration, config change, etc.)
 
-**When to resolve** (`resolve_team_flag`): After the blocking condition is cleared. Include a brief resolution comment describing what was done. Resolving is idempotent — safe to call on already-resolved flags.
+**When to resolve** (`team_resolve_flag`): After the blocking condition is cleared. Include a brief resolution comment describing what was done. Resolving is idempotent — safe to call on already-resolved flags.
 
 **Briefing integration**: The `memory://briefing` payload includes `activeFlags` when unresolved flags exist. The user's agent rules may instruct you to render these prominently. Always check for and acknowledge active flags at session start.
 

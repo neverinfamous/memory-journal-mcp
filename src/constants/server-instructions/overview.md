@@ -82,6 +82,7 @@ Choose the correct `entry_type` — do NOT default everything to `personal_refle
 - `copilot_validation` — Copilot review validation results
 - `system_integration_test` — Integration test runs and results
 - `test_entry` — Test data or test-related entries
+- `flag` — Auto-assigned by Hush Protocol tools (`team_pass_flag`). Do NOT set manually.
 - `other` — Anything that doesn't fit the above categories
 - `personal_reflection` — Only for genuinely personal notes that don't fit above
 
@@ -91,8 +92,8 @@ Every entry MUST have at least one tag. Use kebab-case exclusively.
 
 - _Activity_: `session-summary`, `certification`, `stress-test`, `bug-fix`, `release`, `audit`, `remediation`, `refactor`
 - _Domain_: `security`, `performance`, `architecture`, `code-mode`, `documentation`, `ci-cd`, `github-integration`
-- _Tool group_: Name of the tool group being worked on (e.g., `core`, `stats`, `migration`, `roles`)
-- _Pattern_: `p154`, `split-schema`, `zod`, `error-handling`
+- _Tool group_: Name of the tool group being worked on (e.g., `core`, `search`, `github`, `admin`)
+- _Pattern_: `split-schema`, `zod`, `error-handling`, `dual-schema`
 
 ### Significance Marking
 
@@ -103,6 +104,8 @@ Mark important entries with `significance_type`:
 - `decision` — Architecture or technology decisions
 - `blocker_resolved` — Critical blockers that were resolved
 - `lesson_learned` — Documented lessons from failures or unexpected outcomes
+- `breakthrough` — Significant technical breakthroughs
+- `technical_breakthrough` — Major technical achievements
 
 Do NOT mark routine session summaries or pass-only testing results as significant.
 
