@@ -20,7 +20,10 @@ src/
 │   └── index.ts                    # Barrel
 │
 ├── server/
-│   └── mcp-server.ts               # McpServer setup, adapter registration
+│   ├── mcp-server.ts               # McpServer setup, adapter registration
+│   ├── built-in-tools.ts           # Built-in tool registration (server_info, server_health, list_adapters)
+│   ├── help-resources.ts           # Help resource registration (filtered by --tool-filter)
+│   └── audit-tools.ts              # Audit resource + snapshot resource registration (when audit enabled)
 │
 ├── types/                          # Core TS types (barrel: types/index.ts)
 │   ├── adapters.ts                 # ToolDefinition, ResourceDefinition, PromptDefinition
@@ -47,6 +50,8 @@ src/
 │   ├── where-clause.ts             # WHERE clause builder/validator
 │   ├── fts-config.ts               # FTS configuration name validation (SQL injection prevention)
 │   ├── query-helpers.ts            # coerceNumber(), coerceLimit(), buildLimitClause(), DEFAULT_QUERY_LIMIT, toStr()
+│   ├── validate-path.ts            # Path traversal validation (backup, dump, restore, attach tools)
+│   ├── insights-manager.ts         # In-memory insights memo (memo://insights resource)
 │   ├── progress-utils.ts           # MCP progress notification helpers (sendProgress, buildProgressContext)
 │   ├── resource-annotations.ts     # Resource annotation presets (HIGH/MEDIUM/LOW_PRIORITY, ASSISTANT_FOCUSED)
 │   ├── error-suggestions.ts        # Pattern-based error suggestions + findSuggestion() (auto-refinement)
@@ -81,6 +86,14 @@ src/
 │   ├── token-validator.ts          # JWT validation via jose, JWKS caching, claim extraction
 │   ├── transport-agnostic.ts       # Transport-agnostic auth utilities (createAuthenticatedContext, validateAuth)
 │   ├── types.ts                    # RFC 9728/8414/7591 type definitions, config interfaces
+│   └── index.ts                    # Barrel
+│   # Variant for complex auth (db-mcp): middleware.ts → middleware/index.ts, scopes.ts → scopes/index.ts
+│
+├── audit/                          # Audit logging subsystem (servers with --audit-log)
+│   ├── types.ts                    # AuditEntry, AuditConfig, AuditStats interfaces
+│   ├── logger.ts                   # Async-buffered JSONL writer with log rotation
+│   ├── interceptor.ts              # AuditInterceptor — scope-based tool invocation filtering
+│   ├── backup-manager.ts           # Pre-mutation DDL snapshot generator (.tar.gz compressed)
 │   └── index.ts                    # Barrel
 │
 ├── transports/
@@ -182,3 +195,14 @@ src/
 - **Codemode API bridge (two valid patterns):**
   - *Non-adapter servers*: Single `api.ts` + `api-constants.ts` (aliases, examples, positional maps co-located)
   - *Adapter servers* (50+ tools): `api/` subdirectory with dedicated `maps.ts`, `group-api.ts`, `aliases.ts`, `normalize.ts`
+- **Server file extraction (progressive decomposition):**
+  - When `mcp-server.ts` exceeds ~400 lines, extract into `server/` with dedicated files:
+  - `built-in-tools.ts` — server_info, server_health, list_adapters registration
+  - `help-resources.ts` — help resource registration filtered by `--tool-filter`
+  - `audit-tools.ts` — audit resource + snapshot resource (when audit enabled)
+- **Auth module (two valid patterns):**
+  - *Standard*: Flat 11-file `src/auth/` directory
+  - *Complex servers* (db-mcp): `middleware.ts` → `middleware/index.ts` and `scopes.ts` → `scopes/index.ts` when these files exceed ~500 lines
+- **Audit subsystem:** `src/audit/` directory (4 files + barrel) for servers with `--audit-log`. Separate from `utils/` because it has its own lifecycle (buffered writes, log rotation, graceful close)
+- **Path validation:** `utils/validate-path.ts` for tools that accept file paths. Resolves canonical path, rejects `..` traversal, enforces `ALLOWED_IO_ROOTS` boundary
+- **Insights manager:** `utils/insights-manager.ts` for servers with analysis/memo capabilities. In-memory bounded list exposed via `memo://insights` resource

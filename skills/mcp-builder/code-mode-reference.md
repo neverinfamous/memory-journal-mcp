@@ -54,11 +54,16 @@ Pre-execution security validation:
 - **Rate limiting** — sliding 1-minute window per client ID, configurable limit
 - **Result validation** — post-execution JSON serialization size check
 - **Cleanup** — periodic `cleanupRateLimits()` to prevent memory leaks
+- **Additional blocked patterns** — `Reflect.*`, `Symbol.*`, `new Proxy` (escape aids), `(SELECT` (WHERE clause subquery injection)
+
+> [!IMPORTANT]
+> The `(SELECT` pattern prevents blind data exfiltration via `CASE WHEN (SELECT ...) THEN ... ELSE ...` in WHERE clauses passed to Code Mode tools. This is distinct from the semicolon-chained patterns in `validateWhereClause()` — both layers are required.
 
 ### `sandbox.ts` (VM-based — dev/test only)
 Lightweight sandbox using `node:vm`. Use only for testing environments as it does not securely isolate memory or CPU execution boundaries:
 - **LRU script cache** (50 entries) — avoid recompilation
 - **Nulled globals** — `process`, `require`, `global`, `globalThis`, `setTimeout`, `setInterval`
+- **Frozen built-in prototypes** — All built-in prototypes (`Object`, `Function`, `Error`, `Array`, `Promise`, `String`, `Number`, `Boolean`, `RegExp`, `Map`, `Set`, typed arrays) must be frozen inside the `vm` context to prevent constructor chain escapes via string concatenation (e.g., `'con'+'structor'` bypasses static blocked pattern scanning)
 - **`microtaskMode: "afterEvaluate"`** — prevents async escapes (safe here because VM sandbox doesn't use async IIFE execution)
 - **`SandboxPool`** — concurrent execution with max instances guard
 - **Auto-return transform** — applies `transformAutoReturn()` before IIFE wrapping so bare expressions surface their return value
@@ -84,6 +89,7 @@ Runs inside the worker thread:
 - `_topLevel` methods are mounted directly on the API root (e.g., `mj.createEntry`)
 - Wraps code in `(async () => { transformAutoReturn(user_code) })()` for async support — `transformAutoReturn()` prepends `return` to the last expression statement so bare expressions surface their value (Node REPL semantics)
 - Secondary `vm.createContext` isolation within the worker — **do NOT use `microtaskMode: 'afterEvaluate'`** and **do NOT explicitly inject built-ins** (`Promise`, `JSON`, etc.) — they inherit from the worker's global scope
+- **Frozen built-in prototypes** — Same freezing as `sandbox.ts`. Apply `Object.freeze(builtin.prototype)` to all built-ins inside the `vm` context before executing user code
 - **Result path**: close `rpcPort` with `unref()` + `close()`, then send result via `parentPort.postMessage()`
 - Measures CPU time via `process.cpuUsage()`
 
@@ -102,6 +108,7 @@ The API bridge — transforms `ToolDefinition[]` into the namespaced API object:
 - `normalizeParams(method, args)` — maps positional args to named params using `POSITIONAL_PARAM_MAP`. Handles multiple input types: string, number, boolean single args (not just strings). For non-string primitives passed as a single positional arg, wraps into the first parameter name.
 - `createGroupApi(group, tools)` — builds one group namespace with handlers, aliases, and `help()`
 - `{Api}.createSandboxBindings()` — assembles the complete `{prefix}.*` object
+- `{prefix}.reportProgress(current, total, message)` — utility for sandboxed code to emit MCP progress notifications. Bridges to the main thread's `sendProgress()` via the RPC channel. Silently no-ops when the client doesn't request progress
 
 **`help()` behavior:** The `help()` method at both top level and per group lists **ALL methods regardless of the `readonly` flag**. Write methods are wrapped with readonly guards that return structured errors when called in readonly mode, but they still appear in the `help()` listing for discoverability.
 
@@ -149,6 +156,9 @@ The `{prefix}_execute_code` tool handler sits in `src/handlers/tools/codemode.ts
 // 7. Execute in sandbox pool
 // 8. Validate result size → return structured result
 ```
+
+> [!CAUTION]
+> **`outputSchema` pitfall**: Do NOT define `outputSchema` with `z.unknown()` on the Code Mode tool. It produces a bare `{}` JSON Schema that crashes AntiGravity's `structuredContent` processing. Omit `outputSchema` entirely — dynamically-typed results should use the plain text JSON response path.
 
 **Import strategy:** Import from leaf tool group modules (e.g., `./core.js`, `./search.js`) directly — NOT from the tool barrel `./index.js` to avoid circular dependencies.
 
@@ -211,4 +221,4 @@ When deploying an MCP server with Code Mode inside AntiGravity:
 - Add a system prompt rule instructing the agent to prefer Code Mode for multi-step operations:
   > *"When using this server, prefer `{prefix}_execute_code` (Code Mode) for multi-step operations to minimize token usage."*
 - The `help()` method at top level and per group provides runtime discoverability as a fallback
-- **`outputSchema` pitfall**: Do NOT define `outputSchema` with `z.unknown()` on the Code Mode tool. It produces a bare `{}` JSON Schema that crashes AntiGravity's `structuredContent` processing. Omit `outputSchema` entirely — dynamically-typed results should use the plain text JSON response path.
+- **`outputSchema` pitfall**: Do NOT define `outputSchema` with `z.unknown()` on the Code Mode tool. It produces a bare `{}` JSON Schema that crashes AntiGravity's `structuredContent` processing. Omit `outputSchema` entirely — dynamically-typed results should use the plain text JSON response path. (Also documented above in Tool Handler Pattern.)

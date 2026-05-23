@@ -57,6 +57,9 @@ OAuth is **opt-in** — servers always support a fallback chain: OAuth → simpl
 | `transport-agnostic.ts` | Transport-agnostic auth utilities (`createAuthenticatedContext`, `validateAuth`, `formatOAuthError`) | ~100 |
 | `index.ts` | Barrel re-exports | ~40 |
 
+> [!TIP]
+> **Auth module submodule variant:** For complex servers (db-mcp), `middleware.ts` → `middleware/index.ts` and `scopes.ts` → `scopes/index.ts` when these files exceed ~500 lines. All other files remain flat.
+
 ## RFC Compliance
 
 | RFC | Component | What It Does |
@@ -169,14 +172,14 @@ Build an O(1) map from individual tool names → required scope at startup:
 ```typescript
 const toolScopeMap = new Map<string, string>();
 for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
-  const scope = TOOL_GROUP_SCOPES[group] ?? 'read';
+  const scope = TOOL_GROUP_SCOPES[group] ?? 'admin';
   for (const toolName of tools) {
     toolScopeMap.set(toolName, scope);
   }
 }
 
 export function getRequiredScope(toolName: string): string {
-  return toolScopeMap.get(toolName) ?? 'read';
+  return toolScopeMap.get(toolName) ?? 'admin';  // Fail-closed: unknown tools require admin
 }
 ```
 
@@ -290,7 +293,7 @@ if (config.oauthEnabled) {
   const authMiddleware = createAuthMiddleware({ tokenValidator, resourceServer });
   app.use(authMiddleware);
 } else if (config.authToken) {
-  // Simple token auth fallback
+  // Simple token auth fallback — uses crypto.timingSafeEqual, NOT raw ===
   app.use(basicTokenMiddleware(config.authToken));
 }
 ```
@@ -312,6 +315,11 @@ if (config.oauthEnabled) {
 - Mock `jose` module for token validation tests (avoid real JWKS)
 - Mock `globalThis.fetch` for discovery tests (avoid real network)
 - Use `as never` casts for Express req/res in middleware tests
+
+**Token Validation Hardening:**
+- **JWT claims sanitization:** In `token-validator.ts`, filter prototype-polluting keys (`__proto__`, `constructor`, `prototype`) from JWT payload before spreading into `TokenClaims`. This prevents prototype pollution attacks via crafted JWT tokens.
+- **Constant-time token comparison:** In `basicTokenMiddleware`, use `crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))` with a length pre-check. Short-circuiting on different lengths is acceptable since length is not the secret.
+- **Bearer auth scope limitation:** Emit a startup warning when simple bearer auth (`--auth-token`) is configured: `"Simple token auth does not enforce per-tool scopes. Use OAuth 2.1 for granular access control."` This prevents operators from assuming bearer tokens provide scope-level access control.
 
 ## Integration Checklist
 

@@ -46,7 +46,7 @@ Scannable compliance table — see full sections below for details.
 | Rate limiting | Built-in `Map<string, {count, resetTime}>`, health endpoint exempt, `.unref()` timers | §2.2.1 |
 | Server timeouts | 120s request, 65s keep-alive, 66s headers | §2.2.1 |
 | Body size limit | 1 MB default, configurable, 413 on excess | §2.2.1 |
-| CORS | Wildcard subdomain matching, `Access-Control-Max-Age: 86400`, production warning | §2.2.1 |
+| CORS | Deny-all default (`[]`), explicit `--cors-origin` for cross-origin access | §2.2.1 |
 | DNS rebinding | `localhostHostValidation()` middleware from SDK ≥1.24.0 | §2.2.1 |
 | 404 handler | `{ error: "Not found" }`, no stack traces | §2.2.1 |
 | OAuth 2.1 | `src/auth/` — 11 files, opt-in, see [`oauth-reference.md`](./oauth-reference.md) | §2.2.0 |
@@ -70,6 +70,15 @@ Scannable compliance table — see full sections below for details.
 | Audit trails & Snapshots | Async-buffered JSONL logger, `AuditInterceptor` scope filtering, CLI/env config, `recent()` tail-read | §2.2.4 |
 | Log rotation | Max size configuration (e.g. 10MB) keeping up to 5 historical archives (`.1` through `.5`) | §2.2.4 |
 | Progress-path parity | Both cached and progress-token `callTool()` paths must apply identical interceptor wrapping | §2.2.4 |
+| Frozen prototypes | Code Mode sandbox freezes all built-in prototypes (`Object`, `Function`, `Error`, etc.) | §2.2.1 |
+| Fail-closed scope | `getRequiredScope()` defaults to `'admin'` for unmapped tools (`?? 'admin'`, not `'read'`) | §2.2.0 |
+| Constant-time token | `crypto.timingSafeEqual` for simple bearer token validation — never raw `===` | §2.2.1 |
+| JWT claims sanitization | Filter `__proto__`, `constructor`, `prototype` from JWT payload before spreading | §2.2.1 |
+| Path traversal validation | `validateSameDirPath()` for tools that write files (backup, dump, restore, attach) | §2.2.1 |
+| Filesystem boundaries | `ALLOWED_IO_ROOTS` fail-closed allowlist for file I/O tools | §2.2.1 |
+| Subquery blocking | `(SELECT` pattern in WHERE clause `DANGEROUS_PATTERNS` blocklist | §2.2.1 |
+| Sandbox escape patterns | `Reflect.*`, `Symbol.*`, `new Proxy` in Code Mode blocked patterns | §2.2.1 |
+| Bearer auth scope warning | Startup warning when `--auth-token` used without OAuth (no per-tool scope enforcement) | §2.2.0 |
 
 ---
 
@@ -85,7 +94,7 @@ Scannable compliance table — see full sections below for details.
 > active tool set manageable. Prefer focused, goal-oriented tools over raw
 > endpoint wrappers.
 
-**Code Mode (Standard for 15+ tool servers):** Sandboxed JS execution tool (e.g., `mj_execute_code`) exposing all tools as a namespaced API. **Must use true V8 isolates via `worker_threads`** for secure CPU/memory boundaries, not just the `node:vm` module. Enables 70-90% token reduction for multi-step operations. Named `{server_prefix}_execute_code`.
+**Code Mode (Standard for 15+ tool servers):** Sandboxed JS execution tool (e.g., `mj_execute_code`) exposing all tools as a namespaced API. **Must use true V8 isolates via `worker_threads`** for secure CPU/memory boundaries, not just the `node:vm` module. Enables 70-90% token reduction for multi-step operations. Named `{server_prefix}_execute_code`. Exposes `{prefix}.reportProgress(current, total, message)` utility for sandboxed code to emit MCP progress notifications.
 
 > See [`code-mode-reference.md`](./code-mode-reference.md) for architecture, file structure, security requirements, API bridge strategy, pitfalls, and testing patterns.
 
@@ -152,9 +161,9 @@ This avoids sending agents instructions for tools they can't use. Callers in `mc
 
 | Component | Purpose |
 |-----------|---------|
-| `src/constants/server-instructions/` | Per-group `.md` source files (human-readable) |
-| `npm run generate:instructions` | Builds `HELP_CONTENT` map from source `.md` files |
-| `server-instructions.ts` | Exported slim `INSTRUCTIONS` constant + `HELP_CONTENT` map |
+| `src/constants/server-instructions/` | Per-group `.md` source files (human-readable) + `gotchas.md` (always-available reference) |
+| `npm run generate:instructions` | Builds `HELP_CONTENT` map from source `.md` files, composable `CORE_INSTRUCTIONS` + builders |
+| `server-instructions.ts` | Exported `generateInstructions(enabledGroups, level, toolCount?)` + `HELP_CONTENT` ReadonlyMap |
 | `{prefix}://help` | Root resource — lists all available groups |
 | `{prefix}://help/{group}` | Per-group reference (e.g., `sqlite://help/json`) |
 
@@ -358,6 +367,8 @@ For database and infrastructure servers, implement an enterprise-grade audit sub
 > [!IMPORTANT]
 > Servers are responsible for emitting privacy/security annotations — they have
 > the most accurate context about their data. Clients must propagate and enforce them.
+>
+> **Adoption note:** These annotations (`privateHint`, `sensitiveHint`, `maliciousActivityHint`, `attribution`) are defined in the MCP 2025-11-25 spec but are not yet widely adopted by production servers. The practical required set remains `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. Implement privacy/security annotations when your server handles genuinely sensitive data or third-party content requiring attribution.
 
 **Resource Annotations:** Use centralized annotation presets in `utils/resource-annotations.ts`:
 - `HIGH_PRIORITY` (`priority: 0.9`, audience: `['user', 'assistant']`) — critical state (health, schema, activity)

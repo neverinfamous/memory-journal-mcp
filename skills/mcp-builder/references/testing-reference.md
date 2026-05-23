@@ -118,10 +118,18 @@ Exhaustive functional testing of all tools, resources, and prompts via direct MC
 | File | Purpose |
 |------|---------|
 | `README.md` | Agent-optimized orchestration doc — file inventory, conventions, script reference, troubleshooting |
-| `test-tools.md` | Pass 1: Core functionality — phased plan covering all tools + resources + prompts |
-| `test-tools2.md` | Pass 2: Validation, edge cases, boundary values |
-| `test-tools-codemode.md` | Pass 3: Code Mode sandbox testing |
+| `code-map.md` | Comprehensive architecture reference (directory layout, module responsibilities, cross-references) |
+| `tool-reference.md` | Tool inventory taxonomy (all tools by group with scope, annotations, schema status) |
+| `prompt-template.md` | Extracted testing prompt boilerplate for consistent formatting across all test prompts |
+| `test-tool-groups/*.md` | ~20 self-contained prompts at sub-group granularity (e.g., `test-core.md`, `test-json-get.md`) |
+| `test-codemode/*.md` | ~12 prompts for Code Mode groups + sandbox security + WASM degradation |
+| `test-advanced/*.md` | ~10 stress test prompts per tool group (Pattern P401: Agent-First Stress Testing) |
+| `test-resources.md` | Dedicated resource verification (all data + help resources) |
+| `test-prompts.md` | Dedicated prompt verification |
+| `test-agent-experience.md` | ~20 open-ended scenarios validating help resource sufficiency |
 | `*.mjs` | Integration scripts (Layer 3) |
+
+**Test count taxonomy:** Document tool counts using the formal taxonomy: Group tools (per-group subtotal) / Built-in tools (server_info, server_health, list_adapters) / Audit tools (when audit enabled) / Inventory tools (when applicable) / MCP total (sum visible to clients via `tools/list`).
 
 **Test plan conventions:**
 - Phases numbered 0-N, each with a table of `| Test | Command | Expected |`
@@ -129,6 +137,8 @@ Exhaustive functional testing of all tools, resources, and prompts via direct MC
 - Reporting: ❌ Fail, ⚠️ Issue, ✅ inline only (omit from summary)
 - Mermaid-producing resources must specify `text/plain` MIME in expected results
 - Script-based phases (help resources, scheduler) reference scripts, not inline commands
+
+**Standardized Prompt Format:** Use `prompt-template.md` boilerplate for all test prompts. This ensures consistent structure (Setup, Prerequisites, Test Matrix, Reporting Format) across 40+ test files. Generate or update prompts programmatically when adding new tool groups.
 
 **OAuth Tests:** 8 test files in `src/auth/tests/`. See [`oauth-reference.md`](../oauth-reference.md) §Testing Patterns for file list and mocking strategies.
 
@@ -139,6 +149,8 @@ Exhaustive functional testing of all tools, resources, and prompts via direct MC
 - No duplicated code, consistent error handling, full type coverage, <600 line modules
 - **SHA-pinned CI Actions:** Pin all GitHub Actions by SHA digest (not version tag) to prevent supply chain injection
 - **Version SSoT:** Create `src/version.ts` that reads `version` from `package.json` at runtime (via `createRequire`). **Both adapters** (if dual-backend) `import { VERSION }` — never hardcode version strings. On a bump, only `package.json` needs updating
+- **Lockfile integrity:** Verify lockfile SHA-256 checksum + `git diff --exit-code` before `npm ci` in CI pipelines. Prevents supply chain attacks via lockfile manipulation
+- **Dockerfile patch drift:** Weekly CI workflow to detect stale transitive dependency patches (e.g., `package.json` overrides) against upstream versions. Alert when patches diverge from upstream releases
 - Regular dependency scanning and artifact integrity
 
 **Compact JSON Serialization:** Use `JSON.stringify(result)` (no pretty-print) for tool responses — ~15-20% payload reduction on large results. Retain `JSON.stringify(result, null, 2)` only for error responses where human readability matters.
@@ -147,3 +159,9 @@ Exhaustive functional testing of all tools, resources, and prompts via direct MC
 - Features registered but always failing in one backend (e.g., FTS5 on WASM) must return structured "Feature Not Available" errors, not raw crashes
 - Test each backend independently — Code Mode can mask registration-only failures
 - Document backend-specific capabilities in help resources
+
+**WASM Degradation Testing:** For dual-backend servers, add dedicated degradation test suites:
+- Verify WASM-unsupported features return structured `{ success: false, code: 'FEATURE_NOT_AVAILABLE' }` errors
+- Test Code Mode gracefully degrades (e.g., `codemode-wasm-degradation.md` prompt)
+- Confirm tool count differences between backends match expected parity (`test-tool-annotations.mjs` validates this)
+- Document expected tool counts per backend in `test-server/README.md`

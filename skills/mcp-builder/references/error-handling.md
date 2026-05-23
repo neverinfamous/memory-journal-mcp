@@ -20,7 +20,7 @@ The auto-refinement mechanism:
 - `ERROR_SUGGESTIONS` entries include an optional `code` field
 - Constructor checks if the current code is generic (from a whitelist: `DB_QUERY_FAILED`, `DB_WRITE_FAILED`, `QUERY_ERROR`, `RESOURCE_ERROR`, `UNKNOWN_ERROR`)
 - If generic AND a matched suggestion has a specific `code`, the specific code replaces the generic one
-- Supported refinements: `TABLE_NOT_FOUND`, `COLUMN_NOT_FOUND`, `VIEW_NOT_FOUND`, `FILE_NOT_FOUND`, `MALFORMED_JSON`, `TRANSACTION_CONFLICT`, `DIMENSION_MISMATCH`, etc.
+- Supported refinements: `TABLE_NOT_FOUND`, `COLUMN_NOT_FOUND`, `VIEW_NOT_FOUND`, `FILE_NOT_FOUND`, `MALFORMED_JSON`, `TRANSACTION_CONFLICT`, `DIMENSION_MISMATCH`, `VECTOR_NOT_FOUND`, `DUPLICATE_MIGRATION`, `DUPLICATE_VERSION`, `ALREADY_ROLLED_BACK`, etc.
 
 **Standard Subclasses:**
 
@@ -32,8 +32,15 @@ The auto-refinement mechanism:
 | `ResourceNotFoundError` | `RESOURCE_NOT_FOUND` | resource | true |
 | `ConfigurationError` | `CONFIGURATION_ERROR` | configuration | false |
 | `PermissionError` | `PERMISSION_DENIED` | permission | true |
+| `TransactionError` | `TRANSACTION_FAILED` | query | true |
+| `InternalError` | `INTERNAL_ERROR` | internal | false |
+| `AuthenticationError` | `AUTH_FAILED` | authentication | false |
+| `AuthorizationError` | `AUTH_SCOPE_DENIED` | authorization | true |
+| `ExtensionNotAvailableError` | `EXTENSION_MISSING` | configuration | false |
 
-DB servers add: `PoolError`, `TransactionError` (with `ErrorContext` interface for optional `tool`/`table`/`sql` context), `AuthenticationError`, `AuthorizationError`, `ExtensionNotAvailableError` (auto-generates suggestion with extension name).
+`TransactionError` accepts optional `ErrorContext` (`tool`, `table`, `sql`) for diagnostic context. `ExtensionNotAvailableError` auto-generates a `suggestion` field containing the extension name (e.g., `"Install the SpatiaLite extension: --spatialite"`).
+
+DB servers also add `PoolError` (code: `POOL_ERROR`, category: connection, recoverable: false).
 
 **Single Formatter:** `formatHandlerError(err, context?)` — handles `{Server}McpError` (`.toResponse()`), `ZodError` (extracts field paths, e.g., `table: Required`), and raw `Error` (matches `ERROR_SUGGESTIONS`). Use in every handler's `catch` block.
 
