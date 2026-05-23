@@ -262,9 +262,14 @@ Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically re
 
 Code executes in a **worker_threads sandbox** designed as a secure multi-tenant process isolation environment. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
-- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
+- **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
+- **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
+- **Static code validation** — 18 regex rules blocking `require()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, and filesystem/network access
+- **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
+- **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
+- **Egress boundary enforcement** — result serialization capped to prevent OOM via oversized payloads
 - **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`, `mj.team.passTeamFlag()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured `{ success: false, error: "..." }` response to the agent instead of a raw MCP protocol exception.
 

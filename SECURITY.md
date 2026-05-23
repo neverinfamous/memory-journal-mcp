@@ -154,6 +154,31 @@ docker run -v ./data:/app/data:rw,noexec,nosuid,nodev memory-journal-mcp
 docker run --memory=1g --cpus=1 memory-journal-mcp
 ```
 
+## 🔒 **Code Mode Sandbox Security**
+
+Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `worker_threads` + `vm.createContext` sandbox:
+
+### **Engine-Level Restrictions**
+
+- ✅ **V8 code generation disabled** — `codeGeneration: { strings: false, wasm: false }` prevents `eval()` and `Function()` construction from strings at the V8 engine level
+- ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
+- ✅ **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
+- ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
+
+### **Static Code Validation**
+
+- ✅ **18 blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **50KB code size limit** — prevents payload-based resource exhaustion
+
+### **Runtime Protection**
+
+- ✅ **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
+- ✅ **Rate limiting** — 60 executions per minute per client
+- ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
+- ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) to prevent OOM via oversized payloads
+- ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
+- ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
+
 ## 🔍 **Data Privacy**
 
 ### **Architecture Characteristics**
@@ -216,6 +241,13 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture
 - [x] GitHub token error scrubbing
+- [x] Code Mode sandbox isolation (worker_threads V8 isolate + vm.createContext)
+- [x] Code Mode V8 codeGeneration restrictions (eval/Function disabled at engine level)
+- [x] Code Mode frozen built-in prototypes (constructor chain escape prevention)
+- [x] Code Mode blocked patterns (18 static regex rules)
+- [x] Code Mode Proxy constructor nullified in sandbox context
+- [x] Code Mode RPC allowlist validation (host-side method authorization)
+- [x] Code Mode readonly Proxy traps (structured errors for stripped methods)
 - [x] CI/CD security pipeline (CodeQL, Trivy, secret scanning)
 - [x] Comprehensive security documentation
 

@@ -19,6 +19,16 @@
 - **skills/mcp-builder**: Expanded `testing-reference.md` Layer 4 with db-mcp's granular test structure (sub-group prompts, codemode prompts, advanced stress tests, agent experience scenarios), test count taxonomy, standardized prompt format, WASM degradation testing, lockfile integrity, and Dockerfile patch drift CI patterns
 - **skills/mcp-builder**: Updated `oauth-reference.md` with fail-closed scope default (`?? 'admin'`), constant-time token comparison, JWT claims sanitization, bearer auth scope limitation warning, and auth module submodule variant
 
+### Security
+- **codemode**: Added frozen built-in prototypes inside the vm sandbox context — prevents dynamic constructor chain escapes (e.g., `Error().constructor.constructor('return process')()`)
+- **codemode**: Nullified `Proxy` constructor in sandbox globals (`Proxy: undefined`) — prevents meta-object protocol abuse
+- **codemode**: Added `Reflect.*` blocked pattern (full API coverage, upgraded from `Reflect.construct`-only)
+- **codemode**: Added `Symbol.*` blocked pattern — prevents `hasInstance`, `toPrimitive`, and other well-known symbol overrides
+- **codemode**: Added `new Proxy(` blocked pattern — defense-in-depth alongside Proxy nullification
+- **docs**: Updated `README.md` Code Mode security section with V8 codeGeneration restrictions, frozen prototypes, RPC allowlist, egress boundary, and expanded blocked pattern documentation
+- **docs**: Added Code Mode Sandbox Security section to `SECURITY.md` with engine-level restrictions, static validation, and runtime protection details
+- **docs**: Updated `SECURITY.md` audit checklist with 7 new Code Mode hardening items
+
 ### Changed
 - **skills**: Migrated adversarial skill documentation (`adversarial-performance`, `adversarial-planner`, `adversarial-security`, `adversarial-skill-audit`) from deprecated `github-copilot-cli` npm package to the modern `gh copilot` GitHub CLI extension
 

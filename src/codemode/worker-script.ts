@@ -135,6 +135,7 @@ async function executeCode(
             __filename: undefined,
             global: undefined,
             globalThis: undefined,
+            Proxy: undefined,
         }
 
         const context = vm.createContext(sandbox, {
@@ -144,6 +145,37 @@ async function executeCode(
                 wasm: false,
             },
         })
+
+        // Freeze built-in prototypes inside the sandbox to prevent dynamic
+        // constructor chain escapes like:
+        //   const c = 'con'+'structor'; Error()[c][c]('return process')()
+        // By freezing prototypes, the `constructor` property becomes
+        // non-configurable and returns a frozen function that cannot be
+        // used to reach the real Function constructor.
+        vm.runInContext(
+            `(function() {
+                "use strict";
+                const builtins = [
+                    Object, Function, Array, String, Number, Boolean, RegExp,
+                    Error, TypeError, RangeError, ReferenceError, SyntaxError,
+                    URIError, EvalError, Map, Set, WeakMap, WeakSet,
+                    Promise, Date, ArrayBuffer, DataView,
+                    Int8Array, Uint8Array, Uint8ClampedArray,
+                    Int16Array, Uint16Array, Int32Array, Uint32Array,
+                    Float32Array, Float64Array, BigInt64Array, BigUint64Array,
+                    JSON, Math,
+                ];
+                for (const B of builtins) {
+                    if (B && typeof B === "function" && B.prototype) {
+                        try { Object.freeze(B.prototype); } catch(e) {}
+                    }
+                    try { Object.freeze(B); } catch(e) {}
+                }
+                try { Object.freeze(Object.prototype); } catch(e) {}
+                try { Object.freeze(Function.prototype); } catch(e) {}
+            })()`,
+            context,
+        )
 
         const wrappedCode = `(async () => { ${transformAutoReturn(code)} })()`
         const script = new vm.Script(wrappedCode, {
