@@ -107,6 +107,12 @@ Every phase creates a journal entry for future retrieval. For templates and
 tag conventions, read
 [references/feedback-loop.md](references/feedback-loop.md).
 
+## Scripts
+
+This skill includes automated helper scripts located in the `scripts/` directory:
+- `scripts/check-skills.ps1`: Automated Phase 1 metric gathering (token count, trigger detection).
+- `scripts/run-copilot.ps1`: Automated Phase 4 Copilot validation pipeline.
+
 ## Configuration
 
 | Variable | Default | Description |

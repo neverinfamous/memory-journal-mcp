@@ -1,50 +1,37 @@
 ---
 name: next-upgrade
-description: Upgrade Next.js to the latest version following official migration guides and codemods
-argument-hint: "[target-version]"
+description: Upgrade Next.js to a specific target version using safe dependency bumps, codemods, and diff reviews.
 ---
 
 # Upgrade Next.js
 
-Upgrade the current project to the latest Next.js version following official migration guides.
+Upgrade the current project to a targeted Next.js version following official migration guides.
 
 ## Instructions
 
-1. **Detect current version**: Read `package.json` to identify the current Next.js version and related dependencies (React, React DOM, etc.)
+1. **Detect current environment**: 
+   - Read `package.json` to identify the current Next.js version, React version, and package manager (`npm`, `pnpm`, `yarn`).
+   - Read the lockfile to ensure you use the correct package manager.
 
-2. **Fetch the latest upgrade guide**: Use WebFetch to get the official upgrade documentation:
-   - Codemods: https://nextjs.org/docs/app/guides/upgrading/codemods
-   - Version-specific guides (adjust version as needed):
-     - https://nextjs.org/docs/app/guides/upgrading/version-16 
-     - https://nextjs.org/docs/app/guides/upgrading/version-15
-     - https://nextjs.org/docs/app/guides/upgrading/version-14
+2. **Determine target version**:
+   - Do NOT blindly use `@latest`. Always determine the explicit target version (e.g., `15.0.0`) based on user request or current LTS.
+   - For major version jumps, upgrade incrementally (e.g., 13 → 14 → 15).
 
-3. **Determine upgrade path**: Based on current version, identify which migration steps apply. For major version jumps, upgrade incrementally (e.g., 13 → 14 → 15).
+3. **Consult Upgrade Decision Tree**:
+   - Read [references/decision-tree.md](references/decision-tree.md) to find the correct codemods and checklists for your target version.
 
-4. **Run codemods first**: Next.js provides codemods to automate breaking changes:
-   ```bash
-   npx @next/codemod@latest <transform> <path>
-   ```
-   Common transforms:
-   - `next-async-request-api` - Updates async Request APIs (v15)
-   - `next-request-geo-ip` - Migrates geo/ip properties (v15)
-   - `next-dynamic-access-named-export` - Transforms dynamic imports (v15)
+4. **Run codemods FIRST (before installing new versions)**: 
+   - Next.js codemods should often be run against the *old* codebase before upgrading to automate breaking changes.
+   - Example: `npx @next/codemod@<target-version> <transform> <path>`
 
-5. **Update dependencies**: Upgrade Next.js and peer dependencies together:
-   ```bash
-   npm install next@latest react@latest react-dom@latest
-   ```
+5. **Pin dependencies**: 
+   - Upgrade Next.js and peer dependencies to the specific target version:
+   - Example: `pnpm install next@15.0.0 react@19.0.0 react-dom@19.0.0`
 
-6. **Review breaking changes**: Check the upgrade guide for manual changes needed:
-   - API changes (e.g., async params in v15)
-   - Configuration changes in `next.config.js`
-   - Deprecated features being removed
+6. **Review Diff (SECURITY GATE)**:
+   - After running codemods and installing new dependencies, you MUST run `git diff` or review the changes.
+   - Do NOT commit or ship without explicit user review of the codemod changes.
 
-7. **Update TypeScript types** (if applicable):
-   ```bash
-   npm install @types/react@latest @types/react-dom@latest
-   ```
-
-8. **Test the upgrade**:
-   - Run `npm run build` to check for build errors
-   - Run `npm run dev` and test key functionality
+7. **Test the upgrade**:
+   - Run `npm run build` (or equivalent) to check for build errors.
+   - If there are errors in `next.config.js` or routing, resolve them manually.

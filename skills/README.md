@@ -93,6 +93,12 @@ This package natively bundles the `github-commander` skill, which equips your AI
 - **`roadmap-kickoff`**: Parses implementation specifications to sequentially scaffold Epic hierarchies across issues and milestones.
 - **`update-deps`**: Dependency constraint tracking, security patching, and major bump safety tests.
 
+## Automated Auditing
+
+The `adversarial-skill-audit` skill includes automated scripts for evaluating the skills directory:
+- `skills/adversarial-skill-audit/scripts/check-skills.ps1`: Generates an inventory of all skills, checking line counts, trigger lengths, and frontmatter compliance.
+- `skills/adversarial-skill-audit/scripts/run-copilot.ps1`: Runs independent validation against the Copilot CLI.
+
 ## Adding a Skill
 
 1. Create a new directory: `skills/<skill-name>/`

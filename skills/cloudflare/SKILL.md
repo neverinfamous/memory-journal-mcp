@@ -1,6 +1,6 @@
 ---
 name: cloudflare
-description: Comprehensive Cloudflare platform skill covering Workers, Pages, storage (KV, D1, R2), AI (Workers AI, Vectorize, Agents SDK), networking (Tunnel, Spectrum), security (WAF, DDoS), and infrastructure-as-code (Terraform, Pulumi). Use for any Cloudflare development task.
+description: General Cloudflare platform skill for infrastructure, storage, and networking. Use when choosing between Cloudflare products (KV vs D1 vs R2) or doing general Cloudflare tasks. Do NOT use for code-reviewing Workers (use workers-best-practices instead) or for CLI deployment/management (use wrangler instead).
 references:
   - workers
   - pages

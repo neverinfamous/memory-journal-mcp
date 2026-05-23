@@ -1,6 +1,8 @@
 ---
 name: next-cache-components
-description: Next.js 16 Cache Components - PPR, use cache directive, cacheLife, cacheTag, updateTag
+description: |
+  Next.js 16 Cache Components guidance. Use when refactoring React Server Components for performance, debugging Partial Prerendering (PPR) issues, or applying the `use cache` directive, `cacheLife`, `cacheTag`, and `updateTag`.
+  Also use when deciding whether data should be static, cached, or dynamic, or when addressing stale data and cache invalidation.
 ---
 
 # Cache Components (Next.js 16+)
@@ -81,6 +83,19 @@ async function UserPreferences() {
   return <p>Theme: {theme}</p>
 }
 ```
+
+---
+
+## Selection Matrix: Static vs Cached vs Dynamic
+
+When designing a component, use this matrix to determine the correct caching strategy:
+
+| Data Type | Frequency of Change | Strategy | Implementation |
+|---|---|---|---|
+| Marketing copy, Layouts, Nav | Build-time or rarely | **Static** | Default Server Component |
+| Blog posts, Product catalog | Periodic / CMS-driven | **Cached** | `'use cache'` + `cacheLife` |
+| User profile, Shopping cart | Per-user / Real-time | **Dynamic** | Suspense + `await cookies()` |
+| Admin dashboard, Analytics | High-frequency / Secure | **Dynamic** | Suspense + `await headers()` |
 
 ---
 
@@ -256,6 +271,18 @@ async function getData() {
   return fetchData(session)
 }
 ```
+
+---
+
+## Caching Security & Auth Boundaries
+
+> **CRITICAL FAILURE MODE:** Caching user-specific or authorization-bound data globally will leak PII (Personally Identifiable Information) across different users' sessions.
+
+**Rules for Auth Boundaries:**
+1. **Never use standard `'use cache'` for PII:** Standard cache entries are shared globally. If a component fetches user profile data using an auth token, you MUST NOT use the standard global `'use cache'`.
+2. **Explicitly include user identities in cache keys:** If you must cache per-user data, extract the user ID in a dynamic context and pass it as an argument so it becomes part of the automatic cache key (e.g., `async function CachedProfile({ userId }) { 'use cache'; ... }`).
+3. **Use `'use cache: private'` cautiously:** This ensures data isn't shared across requests, but relies heavily on correct platform caching configuration.
+4. **Dynamic by default for Auth:** For dashboards, settings, and secure data, default to **Dynamic** (Suspense) rather than Cached.
 
 ---
 

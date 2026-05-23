@@ -1,5 +1,5 @@
 ---
-title: Rust Development
+name: rust
 description: |
   Master Rust development using a layer-based "meta-cognition" framework. Use whenever writing Rust code, resolving borrow checker errors (E0382, E0596), designing ownership patterns (Arc, Mutex), or performing crate selection.
 ---
@@ -14,8 +14,8 @@ When solving Rust problems, **do not immediately write code.** Trace through the
 
 What is the system trying to achieve?
 
-- **Web Service:** Concurrent, async, low-latency (Requires `axum`, `tokio`, `Arc<Mutex<T>>`).
-- **CLI Tool:** Fast startup, zero overhead, clean exit codes (Requires `clap`, `anyhow`, strict error formatting).
+- **Web Service:** Concurrent, async, low-latency (Often uses `axum`, `tokio`, `Arc<Mutex<T>>`).
+- **CLI Tool:** Fast startup, zero overhead, clean exit codes (Often uses `clap`, `anyhow`, strict error formatting).
 - **Embedded / Systems:** No heap allocation (Requires `no_std`, specific hardware limitations).
 
 ### Layer 2: Design Choices & Ownership (WHAT)
@@ -71,7 +71,7 @@ When debugging compiler errors, trace **up** from the syntax error to the fundam
 
 1. **Avoid Panic-Driven Development**: `clone()` is an acceptable escape hatch during prototyping, but do not scatter it throughout the code. Revisit the lifetime boundaries as soon as it works.
 2. **The Newtype Pattern**: Use tuple structs to prevent invalid state. `struct UserId(u64);` avoids mixing it up with `struct OrderId(u64);`.
-3. **Exhaustive Matching**: Always use `match` over `if let` when handling Enums or State Machines. The compiler will notify you when a new variant is added, preventing silent bugs.
+3. **Exhaustive Matching**: Prefer `match` over `if let` when handling Enums or State Machines. The compiler will notify you when a new variant is added, preventing silent bugs.
 4. **Data-Oriented Modeling**: Prefer small, flat structs that compose over deep, object-oriented inheritance hierarchies.
 
 ---

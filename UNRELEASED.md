@@ -31,7 +31,13 @@
 
 ### Changed
 - **skills**: Migrated adversarial skill documentation (`adversarial-performance`, `adversarial-planner`, `adversarial-security`, `adversarial-skill-audit`) from deprecated `github-copilot-cli` npm package to the modern `gh copilot` GitHub CLI extension
+- **skills**: Restructured `wrangler`, `typescript`, `mcp-builder`, and `skill-builder` by moving verbose content into `references/` directories to optimize agent token limits (progressive disclosure)
+- **skills**: Rewrote `shadcn-ui` into a strict agent-facing imperative workflow, removing prior user-facing marketing copy
+- **skills**: Expanded `next-upgrade` to enforce specific target versions, decision tree references, and strict code review gates before `npm install`
+- **skills**: Disambiguated `cloudflare` and `workers-best-practices` descriptions to prevent trigger collisions with `wrangler` and each other
+- **skills**: Added Automated Auditing section to `README.md` referencing the `check-skills.ps1` and `run-copilot.ps1` evaluation scripts in the `adversarial-skill-audit` skill
 
 ### Fixed
 - **skills**: Added recursive `node_modules` and `package-lock.json` filter to `bin/sync.js` to prevent bloat propagation during sync
 - **skills**: Removed stale `gitlab/node_modules` directory (648 orphaned files)
+- **skills**: Remediated frontmatter formatting and token bloat issues identified across all 35 skills by the `adversarial-skill-audit` evaluator
