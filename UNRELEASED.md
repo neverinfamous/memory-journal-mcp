@@ -5,6 +5,7 @@
 ### Added
 - **admin**: Expanded `update_entry` and `team_update_entry` to accept `project_number`, `significance_type`, and all GitHub metadata fields, reaching parity with `create_entry`
 - **analytics**: Enabled on-read computation with a 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest` to ensure availability across all transports
+- **auto-prune**: Added importance-based garbage collection that soft-deletes old, low-importance entries on server startup via `--prune-older-than-days` / `PRUNE_OLDER_THAN_DAYS` and `--prune-importance-threshold` / `PRUNE_IMPORTANCE_THRESHOLD`
 - **codemode**: Added `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
 - **instructions**: Added 14 new `EntryType` values, `breakthrough` significance types, new relationship types (`response_to`, `blocked_by`, `caused`), and missing tool parameters (`target_user`, `repo`)
 - **instructions**: Added Code Mode guidance for using the `mj.*` namespace and a `HELP_CONTENT` export for pull-based help delivery via `memory://help/{key}`
@@ -24,6 +25,7 @@
 ### Fixed
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` file sizes, and `tool-reference.md` with recent architectural and field surface changes
+- **docs (wiki)**: Added auto-prune CLI flags, `CODEMODE_INTERNAL_FULL_ACCESS` env var, and modular instructions directory to Configuration, Code-Mode, and Architecture wiki pages
 - **instructions**: Corrected Hush Protocol tool names, fixed tag taxonomy examples, and clarified `autoContext` deprecation and read-only mode behavior
 - **instructions**: Removed the misleading `mj.export.*` row from the Code Mode namespace table and expanded `search_entries` documentation
 - **scripts**: `test-scheduler.mjs` now prints actionable setup instructions instead of a bare fetch failure when the HTTP server is offline
