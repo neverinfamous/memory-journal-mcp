@@ -317,7 +317,7 @@ If Copilot CLI is not available, skip this phase gracefully and note:
 
 ```markdown
 > **Phase 4 skipped**: Copilot CLI not available. The audit completed with
-> internal adversarial review only (Phases 1–3). Install `@github/copilot`
+> internal adversarial review only (Phases 1–3). Install the `gh copilot` extension
 > and re-run for external validation.
 ```
 

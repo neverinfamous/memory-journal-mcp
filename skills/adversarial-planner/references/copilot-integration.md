@@ -12,8 +12,8 @@ blind spots that internal review misses.
 
 ## Prerequisites
 
-1. **Copilot CLI installed**: `npm list -g @github/copilot`
-2. **Authenticated**: `copilot auth` (requires browser approval)
+1. **Copilot CLI installed**: `gh extension list | grep copilot` or install via `gh extension install github/gh-copilot`
+2. **Authenticated**: `gh auth status` and `gh copilot --version`
 3. **Skill dependency**: The `github-copilot-cli` skill documents setup details
 
 If Copilot CLI is not available, skip Phase 4 gracefully and note the skip in
@@ -21,62 +21,36 @@ the journal entry.
 
 ## Plan-Specific Prompt Templates
 
-These prompts differ from the full codebase/PR audit prompts in
-`github-commander/workflows/copilot-audit.md` — they focus on architectural
-decisions rather than code diffs.
+> **Note:** The `gh copilot` CLI extension does not natively support non-interactive file stream piping for open-ended prompts like the deprecated `@github/copilot` npm package did.
+> For Phase 4 audits, you must either:
+> 1. Fall back to manual Copilot Chat window usage with the prompt templates.
+> 2. Document the limitation in the `copilot_validation` journal entry and mark Phase 4 as manually bypassed.
+
+If using Copilot Chat manually, you can use these prompts:
 
 ### Architecture Review
-
-```bash
-echo "You are a senior systems architect. Review this implementation plan for a software project. Focus on:
+"You are a senior systems architect. Review this implementation plan for a software project. Focus on:
 1. Architectural soundness — are the proposed abstractions appropriate?
 2. Security gaps — are there missing auth checks, injection vectors, or data boundary issues?
 3. Performance risks — will this scale? Are there N+1 queries or hot-path allocations?
 4. Missing considerations — what did the planner forget?
-5. Task ordering — are dependencies correctly sequenced?
-
-Here is the plan:
-
-$(cat plan.md)
-
-Output a Markdown table of findings with columns: #, Category, Severity (Critical/Moderate/Low), Finding, Suggestion." | copilot
-```
+5. Task ordering — are dependencies correctly sequenced?"
 
 ### Roadmap/Milestone Review
-
-```bash
-echo "You are a technical program manager reviewing a project roadmap. Evaluate:
+"You are a technical program manager reviewing a project roadmap. Evaluate:
 1. Scope creep — are the milestones focused and achievable?
 2. Risk distribution — are high-risk items front-loaded for early feedback?
 3. Dependency chains — are there single points of failure in the timeline?
 4. Resource assumptions — are the estimates realistic?
-5. Missing milestones — what validation checkpoints are missing?
-
-Here is the roadmap:
-
-$(cat roadmap.md)
-
-Output a structured assessment with recommendations." | copilot
-```
+5. Missing milestones — what validation checkpoints are missing?"
 
 ### Targeted Security Review
-
-For plans that touch authentication, data access, or external integrations:
-
-```bash
-echo "You are a security engineer. This implementation plan proposes changes to a system. Review it exclusively for security implications:
+"You are a security engineer. This implementation plan proposes changes to a system. Review it exclusively for security implications:
 1. New attack surfaces introduced
 2. Auth/authz gaps
 3. Data validation boundaries
 4. Secret management
-5. Supply chain risks from new dependencies
-
-Plan:
-
-$(cat plan.md)
-
-List each finding with severity and a concrete mitigation." | copilot
-```
+5. Supply chain risks from new dependencies"
 
 ## Parsing Copilot Output
 
