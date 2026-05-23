@@ -278,5 +278,8 @@ export interface IDatabaseAdapter {
     getVectorCount(): number
     cleanupStaleVectors(): void
 
+    // Auto-Prune
+    pruneByImportance(olderThanDays: number, importanceThreshold: number): number
+
     executeInTransaction<T>(cb: () => T): T
 }

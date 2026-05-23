@@ -130,6 +130,17 @@ program
         '--codemode-internal-full-access',
         'Bypass tool filter constraints within the Code Mode sandbox (env: CODEMODE_INTERNAL_FULL_ACCESS)'
     )
+    // Auto-prune
+    .option(
+        '--prune-older-than-days <days>',
+        'Soft-delete entries older than N days with importance below threshold (env: PRUNE_OLDER_THAN_DAYS, 0 = disabled)',
+        '0'
+    )
+    .option(
+        '--prune-importance-threshold <n>',
+        'Importance score threshold for pruning (env: PRUNE_IMPORTANCE_THRESHOLD, default: 0.15)',
+        '0.15'
+    )
     // Briefing configuration
     .option(
         '--briefing-entries <count>',
@@ -244,6 +255,8 @@ program
             auditReads?: boolean
             auditLogMaxSize: string
             codemodeInternalFullAccess?: boolean
+            pruneOlderThanDays: string
+            pruneImportanceThreshold: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -599,6 +612,14 @@ program
                             .map((s) => s.trim().toLowerCase())
                             .filter(Boolean)
                     })(),
+                    pruneOlderThanDays: parseConfigIntRequired(
+                        process.env['PRUNE_OLDER_THAN_DAYS'] ?? options.pruneOlderThanDays,
+                        'prune-older-than-days',
+                        0
+                    ),
+                    pruneImportanceThreshold: parseFloat(
+                        process.env['PRUNE_IMPORTANCE_THRESHOLD'] ?? options.pruneImportanceThreshold
+                    ),
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

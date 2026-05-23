@@ -20,6 +20,10 @@ import {
     getAnalyticsSnapshots as getSnapshots,
     computeDigest,
 } from './entries/digest.js'
+import {
+    buildImportanceCte,
+    buildImportanceSqlExpression,
+} from './entries/importance.js'
 
 import * as fs from 'node:fs'
 
@@ -388,6 +392,30 @@ export class DatabaseAdapter implements IDatabaseAdapter {
                 'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
             )
             .run()
+    }
+
+    pruneByImportance(olderThanDays: number, importanceThreshold: number): number {
+        const db = this.connection.getNativeDb()
+        const cte = buildImportanceCte()
+        const importanceExpr = buildImportanceSqlExpression()
+        const deletedAt = new Date().toISOString()
+
+        const sql = `
+            WITH ${cte}
+            UPDATE memory_journal
+            SET deleted_at = ?
+            WHERE id IN (
+                SELECT e.id
+                FROM memory_journal e
+                LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+                WHERE e.deleted_at IS NULL
+                  AND julianday('now') - julianday(e.timestamp) > ${String(olderThanDays)}
+                  AND ${importanceExpr} < ${String(importanceThreshold)}
+            )
+        `
+
+        const result = db.prepare(sql).run(deletedAt)
+        return result.changes
     }
 
     executeInTransaction<T>(cb: () => T): T {

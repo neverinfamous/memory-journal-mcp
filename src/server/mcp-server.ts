@@ -41,6 +41,7 @@ import {
 import { VERSION } from '../version.js'
 import { ServerRuntime } from '../utils/maintenance-lock.js'
 import { AuditLogger, createAuditInterceptor } from '../audit/index.js'
+import { runAutoPrune } from './auto-prune.js'
 
 export type McpServerFactory = () => McpServer
 
@@ -82,6 +83,9 @@ export interface ServerOptions {
     allowedIoRoots?: string[]
     // Admin override for Code Mode
     codemodeInternalFullAccess?: boolean
+    // Auto-prune
+    pruneOlderThanDays?: number
+    pruneImportanceThreshold?: number
 }
 
 /**
@@ -94,6 +98,19 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const db = await DatabaseAdapterFactory.create(dbPath)
     await db.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath })
+
+    // Auto-prune low-importance old entries if configured
+    if (options.pruneOlderThanDays !== undefined && options.pruneOlderThanDays > 0) {
+        const pruneResult = await runAutoPrune(db, {
+            olderThanDays: options.pruneOlderThanDays,
+            importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
+        })
+        logger.info('Auto-prune completed', {
+            module: 'McpServer',
+            prunedCount: pruneResult.prunedCount,
+            backupFile: pruneResult.backupFile,
+        })
+    }
 
     // Initialize ServerRuntime (handles instance-scoped globals)
     const runtime = new ServerRuntime()
