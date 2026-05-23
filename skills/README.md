@@ -44,6 +44,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `adversarial-planner`                | Multi-pass adversarial planning — iterative plan drafting, structured critique, and Copilot validation                |
 | `adversarial-security`               | Multi-pass adversarial security audit — iterative threat modeling, attack surface analysis, and Copilot validation    |
 | `adversarial-skill-audit`            | Multi-pass adversarial skill audit — iterative quality evaluation, trigger stress-testing, and Copilot validation     |
+| `adversarial-workflow-audit`         | Multi-pass adversarial workflow audit — sequential clarity, HITL safety gates, loop prevention, and Copilot validation |
 | `agents-sdk`                         | Build AI agents on Cloudflare Workers using the Agents SDK                                                            |
 | `autonomous-dev`                     | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
 | `building-ai-agent-on-cloudflare`    | End-to-end guide for stateful AI agents with WebSockets, state, and tools                                             |
