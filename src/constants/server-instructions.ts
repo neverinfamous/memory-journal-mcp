@@ -193,7 +193,8 @@ Top-level: \`mj.core.create()\`, \`mj.core.recent()\`, \`mj.search.searchEntries
 Positional: \`create("note")\`, \`searchEntries("performance")\`
 Discovery: \`mj.help()\` → \`{groups, totalMethods}\`. \`mj.core.help()\` for group-specific.
 Sandbox: No \`setTimeout\`, \`setInterval\`, \`fetch\`, or network access.
-Read \`memory://help/codemode\` for full namespace table, examples, and patterns.`
+Read \`memory://help/codemode\` for full namespace table, examples, and patterns.
+**Codemode-only**: When \`mj_execute_code\` is the only registered tool, all tool names referenced in these instructions (e.g., \`create_entry\`, \`search_entries\`) must be called via \`mj_execute_code\` using \`mj.*\` namespaces. Do NOT call them as direct MCP tools.`
 
 /**
  * All help keys that have content (for dynamic help pointer generation).

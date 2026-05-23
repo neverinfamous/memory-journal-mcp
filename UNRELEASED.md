@@ -8,6 +8,7 @@
 - **instructions**: Added `target_user` parameter documentation to `hush-protocol.md` for `pass_team_flag`
 - **instructions**: Added `repo` parameter guidance to `github.md` for multi-project `get_copilot_reviews` usage
 - **codemode**: Added `copilotReviews` alias and `getCopilotReviews` positional param mapping to `api-constants.ts`
+- **instructions**: Added codemode-only guidance to `CODE_MODE_INSTRUCTIONS` — tells agents that when `mj_execute_code` is the only tool, all bare tool names must be called via `mj.*` namespaces
 - **skills**: Migrated 14 skills from `adamic/skills` to canonical source: `agents-sdk`, `building-ai-agent-on-cloudflare`, `building-mcp-server-on-cloudflare`, `cloudflare`, `durable-objects`, `github-repo-setup`, `mcp-builder`, `next-best-practices`, `next-cache-components`, `next-upgrade`, `sandbox-sdk`, `web-perf`, `workers-best-practices`, `wrangler`
 - **skills**: Updated `README.md` inventory table to list all 35 skills
 - **skills**: Added `adversarial-security` skill — multi-pass adversarial repo-wide security audit (Threat Modeler + Red Team, 10-category checklist, CVSS-inspired scoring)
