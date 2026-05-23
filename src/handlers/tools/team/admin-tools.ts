@@ -42,27 +42,23 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, content, entry_type, tags, project_number } =
-                        TeamUpdateEntrySchema.parse(params)
+                    const input = TeamUpdateEntrySchema.parse(params)
 
-                    // Verify entry exists and belongs to the project (if project_number is specified)
-                    const existing = teamDb.getEntryById(entry_id)
-                    if (
-                        !existing ||
-                        (project_number !== undefined && existing.projectNumber !== project_number)
-                    ) {
+                    // Verify entry exists
+                    const existing = teamDb.getEntryById(input.entry_id)
+                    if (!existing) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: `Team entry ${String(input.entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                                'Verify the team entry ID and try again',
                             recoverable: true,
                         }
                     }
 
-                    const author = fetchAuthor(teamDb, entry_id)
+                    const author = fetchAuthor(teamDb, input.entry_id)
 
                     const currentUser = resolveAuthenticatedAuthor()
 
@@ -77,10 +73,21 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const updated = teamDb.updateEntry(entry_id, {
-                        content,
-                        entryType: entry_type,
-                        tags,
+                    const updated = teamDb.updateEntry(input.entry_id, {
+                        content: input.content,
+                        entryType: input.entry_type,
+                        tags: input.tags,
+                        significanceType: input.significance_type,
+                        projectNumber: input.project_number,
+                        projectOwner: input.project_owner,
+                        issueNumber: input.issue_number,
+                        issueUrl: input.issue_url,
+                        prNumber: input.pr_number,
+                        prUrl: input.pr_url,
+                        prStatus: input.pr_status,
+                        workflowRunId: input.workflow_run_id,
+                        workflowName: input.workflow_name,
+                        workflowStatus: input.workflow_status,
                     })
 
                     return {

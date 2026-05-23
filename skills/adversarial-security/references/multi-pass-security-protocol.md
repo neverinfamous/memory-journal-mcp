@@ -308,7 +308,16 @@ available, invoke it for an independent review of the audit findings and
 remediation plan.
 
 See [copilot-security-prompts.md](copilot-security-prompts.md) for prompt
-templates and parsing guidance.
+templates, correct CLI syntax, and parsing guidance.
+
+> **⚠️ CRITICAL**: You MUST use `gh copilot -p "<prompt>"` (non-interactive
+> mode). Do NOT use `gh copilot explain` which is interactive and will hang.
+> Always `Set-Location` to the target repository before invoking. Include
+> `--allow-tool "shell(find,cat,head,grep)"` so Copilot can read source files.
+
+> **⚠️ NO FABRICATION**: You MUST actually execute the `gh copilot` commands
+> and report their real output. Do NOT fabricate or predict Copilot findings.
+> If the command fails or is unavailable, skip Phase 4 and document why.
 
 After the Copilot pass, any new findings follow the same disposition process
 from Phase 3. The final audit report is then presented to the user.

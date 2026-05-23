@@ -104,18 +104,18 @@ export interface IDatabaseAdapter {
             entryType?: EntryType
             tags?: string[]
             isPersonal?: boolean
-            significanceType?: string
+            significanceType?: string | null
             autoContext?: string | null
-            projectNumber?: number
-            projectOwner?: string
-            issueNumber?: number
-            issueUrl?: string
-            prNumber?: number
-            prUrl?: string
-            prStatus?: string
-            workflowRunId?: number
-            workflowName?: string
-            workflowStatus?: string
+            projectNumber?: number | null
+            projectOwner?: string | null
+            issueNumber?: number | null
+            issueUrl?: string | null
+            prNumber?: number | null
+            prUrl?: string | null
+            prStatus?: string | null
+            workflowRunId?: number | null
+            workflowName?: string | null
+            workflowStatus?: string | null
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean

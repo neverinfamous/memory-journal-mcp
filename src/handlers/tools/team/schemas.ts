@@ -169,7 +169,17 @@ export const TeamUpdateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().optional(),
+    project_number: z.number().nullable().optional(),
+    significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: z.number().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: z.number().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
+    workflow_run_id: z.number().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
 })
 
 /** team_update_entry — relaxed */
@@ -178,7 +188,17 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().nullable().optional(),
+    significance_type: z.string().nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: relaxedNumber().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: relaxedNumber().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.string().nullable().optional(),
+    workflow_run_id: relaxedNumber().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.string().nullable().optional(),
 })
 
 /** team_delete_entry — strict */

@@ -29,6 +29,38 @@ For security audits specifically, this matters because:
 If `gh copilot` is not available, skip Phase 4 gracefully and note the skip
 in the journal entry. The audit is still valid with Phases 1–3 alone.
 
+## Execution Mode
+
+> **⚠️ NON-INTERACTIVE ONLY**: `gh copilot` must be run with the `-p`
+> (or `--prompt`) flag for non-interactive execution. The legacy
+> `gh copilot explain` syntax is interactive and will hang in agent contexts.
+
+**Correct invocation pattern:**
+```
+Set-Location <target-repo>
+gh copilot -p "<prompt text>" --allow-tool "shell(find,cat,head,grep)"
+```
+
+**Key flags:**
+- `-p` / `--prompt`: Non-interactive mode (REQUIRED for agents)
+- `--allow-tool "shell(find,cat,head,grep)"`: Grants Copilot read-only
+  shell access to browse the repository. Without this, Copilot cannot
+  inspect source files and findings will be shallow.
+
+**Operational notes:**
+- Always `Set-Location` (or `cd`) to the target repository BEFORE invoking.
+  Copilot uses the cwd as its workspace root.
+- Each prompt invocation runs independently — there is no conversation state
+  between calls.
+- Expect 60–120 seconds per prompt. Set a generous async timeout (120s+).
+- Long prompts work fine — the CLI accepts multi-line strings in quotes.
+
+> **⚠️ NO FABRICATION**: You MUST actually execute `gh copilot` and include
+> its real output verbatim. Do NOT fabricate, summarize from memory, or
+> predict what Copilot would say. If the command fails, document the failure
+> instead of producing synthetic output. The entire value of Phase 4 depends
+> on genuine independent analysis.
+
 ## Prompt Templates
 
 These prompts are tailored for repository-wide security auditing. They
@@ -36,10 +68,6 @@ differ from the adversarial-planner's plan-specific prompts in that they
 focus on concrete code patterns rather than architectural decisions.
 
 ### Full Repository Security Audit
-
-> **Usage:** Pass these prompts to `gh copilot explain` or use them in
-> GitHub Copilot Chat. For file-specific review, use
-> `gh copilot explain <file>` for high-risk files identified in Phase 1.
 
 **General Security Review:**
 "You are a senior security engineer performing a code audit. Review this repository for security vulnerabilities. Focus on:

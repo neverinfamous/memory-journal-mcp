@@ -132,6 +132,22 @@ For prompt templates and integration details, read
 **Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
 is not available, skip Phase 4 gracefully and note the skip in the journal entry.
 
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
+> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
+> will hang indefinitely in an automated agent context. Use:
+> ```
+> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> ```
+> The `--allow-tool` flag grants Copilot read access to the repository files.
+> Always `Set-Location` (or `cd`) to the target repository before invoking.
+
+> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
+> commands and include their real output. Do NOT fabricate, hallucinate, or
+> predict what Copilot would say. The entire value of Phase 4 is that it
+> provides a genuinely independent perspective. If you cannot run the command
+> (permissions, network, quota), skip Phase 4 and document the skip reason
+> instead of producing synthetic output.
+
 ## Feedback Loop & Documentation
 
 Every phase creates a journal entry with structured tags and entry types.
@@ -140,6 +156,23 @@ This builds a searchable audit trail that informs future security reviews.
 For journal templates, tag conventions, cross-session learning patterns, and
 retrospective templates, read
 [references/feedback-loop.md](references/feedback-loop.md).
+
+### Journal Opt-Out
+
+If the user explicitly requests **no journal entries** (e.g., "without entering
+anything in memory-journal-mcp"), skip all `create_entry` calls and produce
+only the final consolidated artifact. The audit is still valid without journal
+entries — they are a documentation benefit, not a correctness requirement.
+Note the opt-out in the report metadata.
+
+### Consolidated Report
+
+The final deliverable is a **single consolidated artifact** merging all four
+phases into one document, following the template in
+[references/multi-pass-security-protocol.md § Final Report Assembly](references/multi-pass-security-protocol.md).
+Do NOT produce separate artifacts per phase — the user should receive one
+comprehensive document with all findings, remediations, and external
+validation results.
 
 ## Configuration
 

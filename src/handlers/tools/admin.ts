@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
-import { ENTRY_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
@@ -22,6 +22,17 @@ const UpdateEntrySchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),
+    significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
+    project_number: z.number().nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: z.number().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: z.number().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
+    workflow_run_id: z.number().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -31,6 +42,17 @@ const UpdateEntrySchemaMcp = z.object({
     entry_type: z.string().optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),
+    significance_type: z.string().nullable().optional(),
+    project_number: relaxedNumber().nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: relaxedNumber().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: relaxedNumber().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.string().nullable().optional(),
+    workflow_run_id: relaxedNumber().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.string().nullable().optional(),
 })
 
 const DeleteEntrySchema = z.object({
@@ -120,6 +142,17 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         entryType: input.entry_type,
                         isPersonal: input.is_personal,
                         tags: input.tags,
+                        significanceType: input.significance_type,
+                        projectNumber: input.project_number,
+                        projectOwner: input.project_owner,
+                        issueNumber: input.issue_number,
+                        issueUrl: input.issue_url,
+                        prNumber: input.pr_number,
+                        prUrl: input.pr_url,
+                        prStatus: input.pr_status,
+                        workflowRunId: input.workflow_run_id,
+                        workflowName: input.workflow_name,
+                        workflowStatus: input.workflow_status,
                     })
                     if (!entry) {
                         return {

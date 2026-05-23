@@ -344,6 +344,81 @@ describe('Tool Handlers', () => {
             expect(result.success).toBe(true)
             expect(result.entry.content).toBe('Updated content')
         })
+
+        it('should update project_number on an existing entry', async () => {
+            const created = (await callTool(
+                'create_entry',
+                { content: 'Needs project reassignment' },
+                db
+            )) as { entry: { id: number; projectNumber: number | null } }
+
+            expect(created.entry.projectNumber).toBeNull()
+
+            const result = (await callTool(
+                'update_entry',
+                { entry_id: created.entry.id, project_number: 42 },
+                db
+            )) as { success: boolean; entry: { projectNumber: number | null } }
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(42)
+        })
+
+        it('should update multiple GitHub metadata fields', async () => {
+            const created = (await callTool(
+                'create_entry',
+                { content: 'Metadata update test' },
+                db
+            )) as { entry: { id: number } }
+
+            const result = (await callTool(
+                'update_entry',
+                {
+                    entry_id: created.entry.id,
+                    project_number: 7,
+                    significance_type: 'milestone',
+                    issue_number: 123,
+                    pr_number: 456,
+                    pr_status: 'open',
+                },
+                db
+            )) as {
+                success: boolean
+                entry: {
+                    projectNumber: number
+                    significanceType: string
+                    issueNumber: number
+                    prNumber: number
+                    prStatus: string
+                }
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(7)
+            expect(result.entry.significanceType).toBe('milestone')
+            expect(result.entry.issueNumber).toBe(123)
+            expect(result.entry.prNumber).toBe(456)
+            expect(result.entry.prStatus).toBe('open')
+        })
+
+        it('should clear a metadata field when null is passed', async () => {
+            const created = (await callTool(
+                'create_entry',
+                { content: 'Clear test', project_number: 99 },
+                db
+            )) as { entry: { id: number; projectNumber: number } }
+
+            expect(created.entry.projectNumber).toBe(99)
+
+            const result = (await callTool(
+                'update_entry',
+                { entry_id: created.entry.id, project_number: null },
+                db
+            )) as { success: boolean; entry: { projectNumber: number | null } }
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBeNull()
+        })
     })
 
     describe('callTool - delete_entry', () => {

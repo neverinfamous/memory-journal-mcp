@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
 
 ### Added
+- **admin**: `update_entry` and `team_update_entry` now accept `project_number`, `significance_type`, and all GitHub metadata fields (`project_owner`, `issue_number`, `issue_url`, `pr_number`, `pr_url`, `pr_status`, `workflow_run_id`, `workflow_name`, `workflow_status`), matching the field surface of `create_entry`
 - **codemode**: Added `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
 - **instructions**: Added 14 new `EntryType` values (e.g., `meeting_notes`, `adversarial_review`) and `breakthrough` / `technical_breakthrough` significance types to `overview.md`
 - **instructions**: Added `response_to`, `blocked_by`, and `caused` relationship types to Link Entries section
