@@ -6,14 +6,16 @@
  * tool groups. Also reports char counts and token estimates per configuration.
  *
  * Validated sections:
- *   CORE         — always present (Session Start, Behaviors, Rule & Skill Suggestions)
- *   COPILOT      — only when `github` group is enabled
+ *   CORE         — always present (Essential Session Start, Behaviors)
  *   CODE_MODE    — only when `codemode` group is enabled
- *   GITHUB       — only when `github` group is enabled (standard+ level)
- *   SEARCH_ROW   — `semantic_search` Quick Access row only when `search` group enabled
+ *   HELP_POINTERS — dynamic help pointers at standard+ level
+ *
+ * Note: GitHub Integration, Copilot Review Patterns, and the Semantic search
+ * Quick Access row have been moved to on-demand help (memory://help/{group})
+ * and are no longer part of the init payload.
  *
  * Usage:
- *   npm run build && node test-server/test-filter-instructions.mjs
+ *   npm run build && node test-server/scripts/test-filter-instructions.mjs
  */
 
 import { spawn } from 'child_process'
@@ -25,11 +27,9 @@ const PROJECT_DIR = resolve(__dirname, '../..')
 
 // Section markers — substrings we check for presence/absence in instructions
 const SECTIONS = {
-    CORE: 'Rule & Skill Suggestions', // Always present
-    COPILOT: 'Copilot Review Patterns', // github group only
-    CODE_MODE: 'Code Mode (Token-Efficient', // codemode group only
-    GITHUB_INTEGRATION: '## GitHub Integration', // github group, standard+ level
-    SEARCH_ROW: '| Semantic search |', // search group only
+    CORE: 'Essential Session Start', // Always present
+    CODE_MODE: '## Code Mode', // codemode group only
+    HELP_POINTERS: 'Available Help', // standard+ level only
 }
 
 // Test matrix: each entry defines a filter config and expected section presence
@@ -40,10 +40,8 @@ const TEST_CONFIGS = [
         level: 'standard',
         expect: {
             CORE: true,
-            COPILOT: true,
             CODE_MODE: true,
-            GITHUB_INTEGRATION: true,
-            SEARCH_ROW: true,
+            HELP_POINTERS: true,
         },
     },
     {
@@ -52,10 +50,8 @@ const TEST_CONFIGS = [
         level: 'standard',
         expect: {
             CORE: true,
-            COPILOT: false,
             CODE_MODE: true,
-            GITHUB_INTEGRATION: false,
-            SEARCH_ROW: false,
+            HELP_POINTERS: true,
         },
     },
     {
@@ -65,10 +61,8 @@ const TEST_CONFIGS = [
         // META_GROUPS.essential = ['core', 'codemode'] — no github, no search
         expect: {
             CORE: true,
-            COPILOT: false,
             CODE_MODE: true,
-            GITHUB_INTEGRATION: false,
-            SEARCH_ROW: false,
+            HELP_POINTERS: true,
         },
     },
     {
@@ -78,10 +72,8 @@ const TEST_CONFIGS = [
         // META_GROUPS.starter = ['core', 'search', 'codemode']
         expect: {
             CORE: true,
-            COPILOT: false,
             CODE_MODE: true,
-            GITHUB_INTEGRATION: false,
-            SEARCH_ROW: true,
+            HELP_POINTERS: true,
         },
     },
     {
@@ -90,10 +82,8 @@ const TEST_CONFIGS = [
         level: 'standard',
         expect: {
             CORE: true,
-            COPILOT: false,
             CODE_MODE: false,
-            GITHUB_INTEGRATION: false,
-            SEARCH_ROW: false,
+            HELP_POINTERS: false,
         },
     },
     {
@@ -102,10 +92,8 @@ const TEST_CONFIGS = [
         level: 'standard',
         expect: {
             CORE: true,
-            COPILOT: true,
             CODE_MODE: false,
-            GITHUB_INTEGRATION: true,
-            SEARCH_ROW: true,
+            HELP_POINTERS: true,
         },
     },
     {
@@ -114,10 +102,8 @@ const TEST_CONFIGS = [
         level: 'standard',
         expect: {
             CORE: true,
-            COPILOT: false,
             CODE_MODE: true,
-            GITHUB_INTEGRATION: false,
-            SEARCH_ROW: true,
+            HELP_POINTERS: true,
         },
     },
     {
@@ -127,22 +113,18 @@ const TEST_CONFIGS = [
         // META_GROUPS.readonly excludes github and codemode groups
         expect: {
             CORE: true,
-            COPILOT: false,
             CODE_MODE: false,
-            GITHUB_INTEGRATION: false,
-            SEARCH_ROW: true,
+            HELP_POINTERS: false,
         },
     },
     {
-        label: 'full — essential level (no github patterns even with github enabled)',
+        label: 'full — essential level (no help pointers at essential level)',
         filter: null,
         level: 'essential',
         expect: {
             CORE: true,
-            COPILOT: true,
             CODE_MODE: true,
-            GITHUB_INTEGRATION: false,
-            SEARCH_ROW: true,
+            HELP_POINTERS: false,
         },
     },
 ]
