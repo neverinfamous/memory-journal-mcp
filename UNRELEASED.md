@@ -11,6 +11,7 @@
 - **instructions**: Added Code Mode guidance for using the `mj.*` namespace and a `HELP_CONTENT` export for pull-based help delivery via `memory://help/{key}`
 - **scripts**: Added the `npm run test:scheduler` convenience script for HTTP scheduler E2E testing
 - **skills**: Added 4 adversarial auditing skills and migrated 14 skills from `adamic`, bringing the tracked inventory to 35 skills
+- **skills**: Added `journal-optimizer` skill with 5 guided workflows for database pruning and optimization using soft-delete safety and importance score transparency
 - **skills**: Expanded the `mcp-builder` reference with 10 security hardening patterns, refined test taxonomies, error structures, OAuth secure defaults, and sandbox boundaries
 
 ### Changed
@@ -25,7 +26,9 @@
 ### Fixed
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` file sizes, and `tool-reference.md` with recent architectural and field surface changes
+- **docs**: Added `TRUST_PROXY`, `PUBLIC_ORIGIN`, `OAUTH_CLOCK_TOLERANCE` to `mcp-config-example.json`
 - **docs (wiki)**: Added auto-prune CLI flags, `CODEMODE_INTERNAL_FULL_ACCESS` env var, and modular instructions directory to Configuration, Code-Mode, and Architecture wiki pages
+- **docs (wiki)**: Added 13 missing CLI flags, 6 missing env vars, and Auto-Prune (Garbage Collection) section to Configuration wiki page
 - **instructions**: Corrected Hush Protocol tool names, fixed tag taxonomy examples, and clarified `autoContext` deprecation and read-only mode behavior
 - **instructions**: Removed the misleading `mj.export.*` row from the Code Mode namespace table and expanded `search_entries` documentation
 - **scripts**: `test-scheduler.mjs` now prints actionable setup instructions instead of a bare fetch failure when the HTTP server is offline

@@ -58,6 +58,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `github-repo-setup`                  | Scaffold public TypeScript/Node.js repos under `neverinfamous`                                                        |
 | `gitlab`                             | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
 | `golang`                             | Master Go development with production-grade best practices from Google and Uber style guides                          |
+| `journal-optimizer`                  | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete |
 | `mcp-builder`                        | Build high-quality MCP servers with structured errors, HTTP hardening, OAuth, Code Mode, and dynamic instructions     |
 | `mysql`                              | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                    |
 | `next-best-practices`               | Next.js file conventions, RSC boundaries, data patterns, metadata, error handling                                     |
