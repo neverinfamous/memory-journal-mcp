@@ -72,18 +72,34 @@ The protocol runs in 4 phases. Each phase produces a journaled artifact.
 For the full protocol with review dimensions, scoring weights, and output
 templates, read [references/multi-pass-protocol.md](references/multi-pass-protocol.md).
 
-## Copilot Integration
+## External Validation (Phase 4)
 
-Phase 4 triggers an independent validation pass using the GitHub CLI Copilot extension (`gh copilot`).
-This provides a fundamentally different model's perspective on the plan,
+Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).
+The `copilot` subcommand is built into modern `gh` CLI — no separate extension is
+needed. This provides a fundamentally different model's perspective on the plan,
 reducing confirmation bias that persists even after adversarial self-review.
 
 For Copilot-specific prompt templates and integration details, read
 [references/copilot-integration.md](references/copilot-integration.md).
 
-**Prerequisites:** The `github-copilot-cli` skill must be available for CLI
-setup and authentication. The `copilot-audit` workflow in `github-commander`
-handles full repo audits — this skill focuses on plan-specific review.
+**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
+is not available, skip Phase 4 gracefully and note the skip in the journal entry.
+
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
+> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
+> will hang indefinitely in an automated agent context. Use:
+> ```
+> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> ```
+> The `--allow-tool` flag grants Copilot read access to the repository files.
+> Always `Set-Location` (or `cd`) to the target repository before invoking.
+
+> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
+> commands and include their real output. Do NOT fabricate, hallucinate, or
+> predict what Copilot would say. The entire value of Phase 4 is that it
+> provides a genuinely independent perspective. If you cannot run the command
+> (permissions, network, quota), skip Phase 4 and document the skip reason
+> instead of producing synthetic output.
 
 ## Feedback Loop & Documentation
 
@@ -115,6 +131,6 @@ retrospective templates, read
 | Skill/Workflow                   | Relationship                                                                                                                                          |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `autonomous-dev`                 | The Generator/Evaluator pipeline in `autonomous-dev` applies at the code level; this skill applies the same adversarial pattern at the planning level |
-| `github-copilot-cli`             | Provides the CLI setup and auth required for Phase 4                                                                                                  |
+| GitHub CLI (`gh copilot`)        | Built-in `copilot` subcommand used for Phase 4 external validation                                                                                    |
 | `github-commander/copilot-audit` | Full repo/PR audit; this skill uses Copilot for plan-specific review instead                                                                          |
 | `skill-builder`                  | Use to refine this skill's instructions based on observed agent behavior                                                                              |

@@ -93,13 +93,34 @@ Additionally, 4 **directory-level** categories assess the collection:
 For the full checklist, read
 [references/audit-categories.md](references/audit-categories.md).
 
-## Copilot Integration
+## External Validation (Phase 4)
 
-Phase 4 triggers an independent review via the Copilot extension (`gh copilot`). If unavailable,
-skip gracefully.
+Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).
+The `copilot` subcommand is built into modern `gh` CLI — no separate extension is
+needed. This provides a fundamentally different model's perspective on skill
+quality, catching issues that internal review normalizes.
 
 For prompts, read
 [references/copilot-skill-prompts.md](references/copilot-skill-prompts.md).
+
+**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
+is not available, skip Phase 4 gracefully and note the skip in the journal entry.
+
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
+> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
+> will hang indefinitely in an automated agent context. Use:
+> ```
+> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> ```
+> The `--allow-tool` flag grants Copilot read access to the repository files.
+> Always `Set-Location` (or `cd`) to the target repository before invoking.
+
+> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
+> commands and include their real output. Do NOT fabricate, hallucinate, or
+> predict what Copilot would say. The entire value of Phase 4 is that it
+> provides a genuinely independent perspective. If you cannot run the command
+> (permissions, network, quota), skip Phase 4 and document the skip reason
+> instead of producing synthetic output.
 
 ## Feedback Loop
 

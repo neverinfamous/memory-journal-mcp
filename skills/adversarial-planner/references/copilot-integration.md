@@ -1,7 +1,7 @@
 # Copilot Integration
 
 Reference for Phase 4 of the adversarial planning protocol — the independent
-external validation pass using the GitHub Copilot CLI.
+external validation pass using the GitHub CLI (`gh copilot`).
 
 ## Why Copilot?
 
@@ -12,21 +12,24 @@ blind spots that internal review misses.
 
 ## Prerequisites
 
-1. **Copilot CLI installed**: `gh extension list | grep copilot` or install via `gh extension install github/gh-copilot`
-2. **Authenticated**: `gh auth status` and `gh copilot --version`
-3. **Skill dependency**: The `github-copilot-cli` skill documents setup details
+1. **GitHub CLI installed**: `gh --version` (v2.x+)
+2. **Authenticated**: `gh auth status` passing
+3. **Copilot available**: `gh copilot --version` — the `copilot` subcommand is built into modern `gh` CLI (no separate extension needed)
 
 If Copilot CLI is not available, skip Phase 4 gracefully and note the skip in
 the journal entry.
 
 ## Plan-Specific Prompt Templates
 
-> **Note:** The `gh copilot` CLI extension does not natively support non-interactive file stream piping for open-ended prompts like the deprecated `@github/copilot` npm package did.
-> For Phase 4 audits, you must either:
-> 1. Fall back to manual Copilot Chat window usage with the prompt templates.
-> 2. Document the limitation in the `copilot_validation` journal entry and mark Phase 4 as manually bypassed.
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
+> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
+> will hang indefinitely in an automated agent context. Use:
+> ```
+> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> ```
+> The `--allow-tool` flag grants Copilot read access to the repository files.
 
-If using Copilot Chat manually, you can use these prompts:
+For automated agent use, pass prompts via the `-p` flag:
 
 ### Architecture Review
 "You are a senior systems architect. Review this implementation plan for a software project. Focus on:
@@ -65,8 +68,8 @@ Copilot returns unstructured Markdown. To integrate findings into the protocol:
 
 ## Cross-References
 
-- **`github-copilot-cli` skill** — CLI installation, authentication, and
-  non-interactive piping patterns
+- **GitHub CLI (`gh copilot`)** — built-in subcommand for non-interactive
+  reviews; no separate extension or npm package required
 - **`github-commander/workflows/copilot-audit.md`** — Full repo and PR-level
   audits; use that workflow for post-implementation validation rather than
   plan review

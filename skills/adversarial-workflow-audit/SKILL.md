@@ -21,6 +21,7 @@ and execute sequentially. This audit ensures they are deterministic, safe, and r
 | 1. Evaluator Pass | A (Evaluator) | Scorecards against the 5 Workflow Categories |
 | 2. Adversarial Pass | B (Adversarial) | Stress-test edge cases, missing gates, and loop vulnerabilities |
 | 3. Remediation | A (Evaluator) | Prioritized checklist of required fixes |
+| 4. Copilot Validation | External | Independent workflow quality review |
 
 ## Agent Roles
 
@@ -35,6 +36,33 @@ and execute sequentially. This audit ensures they are deterministic, safe, and r
 - If step 2 fails (e.g., tests fail), does the workflow explicitly define the fallback path?
 - Are destructive actions (commits, deployments, deletes) guarded by explicit HITL (Human-in-the-Loop) pauses?
 - Could a vague instruction cause an agent to infinite loop?
+
+## External Validation (Phase 4)
+
+Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).
+The `copilot` subcommand is built into modern `gh` CLI — no separate extension is
+needed. This provides a fundamentally different model's perspective on workflow
+quality, catching ambiguous steps and missing safety gates that internal review
+normalizes.
+
+**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
+is not available, skip Phase 4 gracefully and note the skip in the journal entry.
+
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
+> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
+> will hang indefinitely in an automated agent context. Use:
+> ```
+> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> ```
+> The `--allow-tool` flag grants Copilot read access to the repository files.
+> Always `Set-Location` (or `cd`) to the target repository before invoking.
+
+> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
+> commands and include their real output. Do NOT fabricate, hallucinate, or
+> predict what Copilot would say. The entire value of Phase 4 is that it
+> provides a genuinely independent perspective. If you cannot run the command
+> (permissions, network, quota), skip Phase 4 and document the skip reason
+> instead of producing synthetic output.
 
 ## Deep References
 
