@@ -37,19 +37,6 @@ export const digestInsightsResource: InternalResourceDef = {
             }
         }
 
-        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
-        if (dbSnapshot) {
-            return {
-                data: {
-                    success: true,
-                    snapshot: dbSnapshot.data,
-                    computedAt: dbSnapshot.createdAt,
-                    source: 'persisted',
-                },
-                annotations: { lastModified: dbSnapshot.createdAt },
-            }
-        }
-
         // Live compute fallback (stdio transport, fresh databases)
         try {
             const liveDigest = context.db?.computeDigest?.()
@@ -64,7 +51,20 @@ export const digestInsightsResource: InternalResourceDef = {
                 }
             }
         } catch {
-            // Non-critical — fall through to "no digest available" message
+            // Non-critical — fall through to "no digest available" message or persisted snapshot
+        }
+
+        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
+        if (dbSnapshot) {
+            return {
+                data: {
+                    success: true,
+                    snapshot: dbSnapshot.data,
+                    computedAt: dbSnapshot.createdAt,
+                    source: 'persisted',
+                },
+                annotations: { lastModified: dbSnapshot.createdAt },
+            }
         }
 
         return {

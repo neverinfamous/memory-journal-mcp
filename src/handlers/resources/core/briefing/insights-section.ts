@@ -54,11 +54,6 @@ function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null 
     const schedulerDigest = context.scheduler?.getLatestDigest?.()
     if (schedulerDigest) return schedulerDigest
 
-    // Fallback: persisted snapshot in database (survives server restarts)
-    // Guards against undefined db (test mocks) and missing method (older adapters)
-    const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
-    if (dbSnapshot) return dbSnapshot.data as unknown as DigestSnapshot
-
     // Live compute: real-time digest when no cached snapshot exists.
     // Covers stdio transport (no scheduler) and fresh databases.
     // TTL cache prevents redundant recomputation across rapid reads.
@@ -84,6 +79,11 @@ function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null 
             error: error instanceof Error ? error.message : String(error),
         })
     }
+
+    // Fallback: persisted snapshot in database (survives server restarts)
+    // Guards against undefined db (test mocks) and missing method (older adapters)
+    const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
+    if (dbSnapshot) return dbSnapshot.data as unknown as DigestSnapshot
 
     return null
 }
