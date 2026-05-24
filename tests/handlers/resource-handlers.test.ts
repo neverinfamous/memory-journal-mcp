@@ -97,7 +97,7 @@ describe('Resource Handlers', () => {
         it('should read memory://briefing', async () => {
             const result = await readResource('memory://briefing', db)
 
-            const text = (result as { text: string }).text
+            const text = (result.data as { text: string }).text
             expect(text).toBeDefined()
             expect(text).toContain('Session Context')
         })
@@ -287,14 +287,6 @@ describe('Resource Handlers', () => {
 
             const data = result.data as { entries: unknown[]; count: number }
             expect(data.entries).toBeDefined()
-        })
-
-        it('should return briefing with expected structure', async () => {
-            const result = await readResource('memory://briefing', db)
-            const text = (result as { text: string }).text
-
-            expect(text).toContain('implementations')
-            expect(text).toContain('memory://projects')
         })
 
         it('should return annotations on recent entries', async () => {

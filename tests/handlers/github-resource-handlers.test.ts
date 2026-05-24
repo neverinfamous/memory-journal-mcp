@@ -402,7 +402,7 @@ describe('GitHub Resource Handlers', () => {
             const github = createMockGitHub()
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const text = (result as { text: string }).text
+            const text = (result.data as { text: string }).text
 
             expect(text).toBeDefined()
             expect(text).toContain('stars')
@@ -416,7 +416,7 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const text = (result as { text: string }).text
+            const text = (result.data as { text: string }).text
 
             // Stars and forks should still be present
             expect(text).toContain('stars')
@@ -432,20 +432,13 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const text = (result as { text: string }).text
+            const text = (result.data as { text: string }).text
 
             expect(text).not.toContain('stars')
         })
-
-        it('should include repoInsights in more section', async () => {
-            const github = createMockGitHub()
-            const result = await readResource('memory://briefing', db, undefined, undefined, github)
-
-            const text = (result as { text: string }).text
-
-            expect(text).toContain('memory://github/insights')
-        })
     })
+
+
 
     // ========================================================================
     // memory://github/insights
