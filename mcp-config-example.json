@@ -47,6 +47,7 @@
                 "BRIEFING_MILESTONE_COUNT": "3",
                 "BRIEFING_WORKFLOW_COUNT": "0",
                 "BRIEFING_WORKFLOW_STATUS": "false",
+                "BRIEFING_INCLUDE_GRAPH": "false",
                 "BRIEFING_COPILOT_REVIEWS": "false",
                 "RULES_FILE_PATH": "",
                 "SKILLS_DIR_PATH": "",

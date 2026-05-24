@@ -157,7 +157,7 @@ export function formatUserMessage(opts: {
         flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent}`).join('\n')}\n\n`
     }
 
-    return `${flagsAlert}📋 **Session Context Loaded**
+    const tableOutput = `${flagsAlert}📋 **Session Context Loaded**
 | Context | Value |
 |---------|-------|
 | **Project** | ${escapeTableCell(repoName)} |
@@ -165,4 +165,10 @@ export function formatUserMessage(opts: {
 | **CI** | ${escapeTableCell(ciDisplay)} |
 | **Journal** | ${String(totalEntries)} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${String(opts.teamTotalEntries)} entries |` : ''}
 | **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${graphRow}${insightsRow}${copilotRow}${analyticsRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+
+    if (graphSummary?.mermaidGraph) {
+        return `${tableOutput}\n\n**Relationship Graph**\n\`\`\`mermaid\n${graphSummary.mermaidGraph}\n\`\`\``
+    }
+
+    return tableOutput
 }

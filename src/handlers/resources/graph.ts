@@ -11,6 +11,63 @@ import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
 
 /**
+ * Utility to generate a Mermaid diagram from relationship data
+ */
+export function buildMermaidGraph(relationships: { from_entry_id: number; to_entry_id: number; relationship_type: string; from_content: string; to_content: string }[]): string {
+    if (relationships.length === 0) {
+        return 'graph TD\n  NoData["No relationships found — use link_entries to create relationships"]'
+    }
+
+    // Build Mermaid graph
+    const lines: string[] = ['graph TD']
+    const seenNodes = new Set<number>()
+
+    // Relationship type to arrow style mapping
+    const arrowStyles: Record<string, string> = {
+        references: '-->',
+        evolves_from: '-->',
+        depends_on: '-->',
+        implements: '==>',
+        resolved: '==>',
+        clarifies: '-..->',
+        caused: '-.->',
+        related_to: '<-->',
+        response_to: '<-->',
+        blocked_by: '--x',
+    }
+
+    for (const rel of relationships) {
+        if (!seenNodes.has(rel.from_entry_id)) {
+            const label = rel.from_content
+                .slice(0, 30)
+                .replace(/[\]"'`[]]/g, ' ')
+                .trim()
+            lines.push(
+                `  E${String(rel.from_entry_id)}["#${String(rel.from_entry_id)}: ${label}..."]`
+            )
+            seenNodes.add(rel.from_entry_id)
+        }
+        if (!seenNodes.has(rel.to_entry_id)) {
+            const label = rel.to_content
+                .slice(0, 30)
+                .replace(/[\]"'`[]]/g, ' ')
+                .trim()
+            lines.push(
+                `  E${String(rel.to_entry_id)}["#${String(rel.to_entry_id)}: ${label}..."]`
+            )
+            seenNodes.add(rel.to_entry_id)
+        }
+
+        const arrow = arrowStyles[rel.relationship_type] ?? '-->'
+        lines.push(
+            `  E${String(rel.from_entry_id)} ${arrow}|${rel.relationship_type}| E${String(rel.to_entry_id)}`
+        )
+    }
+
+    return lines.join('\n')
+}
+
+/**
  * Get graph resource definitions
  */
 export function getGraphResourceDefinitions(): InternalResourceDef[] {
@@ -25,58 +82,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             annotations: MEDIUM_PRIORITY,
             handler: (_uri: string, context: ResourceContext) => {
                 const relationships = context.db.getRecentGraphRelationships(20)
-
-                if (relationships.length === 0) {
-                    return 'graph TD\n  NoData["No relationships found — use link_entries to create relationships"]'
-                }
-
-                // Build Mermaid graph
-                const lines: string[] = ['graph TD']
-                const seenNodes = new Set<number>()
-
-                // Relationship type to arrow style mapping
-                const arrowStyles: Record<string, string> = {
-                    references: '-->',
-                    evolves_from: '-->',
-                    depends_on: '-->',
-                    implements: '==>',
-                    resolved: '==>',
-                    clarifies: '-..->',
-                    caused: '-.->',
-                    related_to: '<-->',
-                    response_to: '<-->',
-                    blocked_by: '--x',
-                }
-
-                for (const rel of relationships) {
-                    if (!seenNodes.has(rel.from_entry_id)) {
-                        const label = rel.from_content
-                            .slice(0, 30)
-                            .replace(/[\]"'`[]]/g, ' ')
-                            .trim()
-                        lines.push(
-                            `  E${String(rel.from_entry_id)}["#${String(rel.from_entry_id)}: ${label}..."]`
-                        )
-                        seenNodes.add(rel.from_entry_id)
-                    }
-                    if (!seenNodes.has(rel.to_entry_id)) {
-                        const label = rel.to_content
-                            .slice(0, 30)
-                            .replace(/[\]"'`[]]/g, ' ')
-                            .trim()
-                        lines.push(
-                            `  E${String(rel.to_entry_id)}["#${String(rel.to_entry_id)}: ${label}..."]`
-                        )
-                        seenNodes.add(rel.to_entry_id)
-                    }
-
-                    const arrow = arrowStyles[rel.relationship_type] ?? '-->'
-                    lines.push(
-                        `  E${String(rel.from_entry_id)} ${arrow}|${rel.relationship_type}| E${String(rel.to_entry_id)}`
-                    )
-                }
-
-                return lines.join('\n')
+                return buildMermaidGraph(relationships)
             },
         },
         {
