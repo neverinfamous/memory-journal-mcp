@@ -61,9 +61,8 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(response.contents.length).toBeGreaterThan(0)
 
         const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        expect(parsed).toHaveProperty('userMessage')
-        expect(parsed).toHaveProperty('journal')
+        expect(text).toContain('Session Context Loaded')
+        expect(text).toContain('Journal')
     })
 
     test('should read memory://recent resource', async () => {

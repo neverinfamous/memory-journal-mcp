@@ -129,8 +129,7 @@ _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 Execute BEFORE fulfilling any user request in a new session:
 
 1. **Use memory-journal-mcp's `read_resource` tool to read `memory://briefing/{repo_name}`**. Infer the intended `repo_name` from context, or omit the repo name (i.e., `memory://briefing`) to use the default fallback configured in the MCP registry.
-2. **Display the literal exact contents of the resource directly to the user without any modifications**.
-3. **DO NOT** autonomously resume past tasks or start work on new issues mentioned in the briefing.
+2. Do NOT autonomously resume past tasks or start work on new issues mentioned in the briefing.
 
 </details>
 

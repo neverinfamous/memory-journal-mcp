@@ -22,6 +22,7 @@
 - **instructions**: Enhanced session summary formatting, tag taxonomy, and significance marking criteria
 - **instructions**: Updated `memory://help/{group}` handler to serve static content alongside tool schema data
 - **instructions**: Renamed the `technical_breakthrough` significance type to `breakthrough`
+- **resources**: Refactored `memory://briefing` and `memory://briefing/{repo}` to return `text/markdown` directly instead of JSON objects to improve token efficiency
 - **skills**: Restructured large skills (`wrangler`, `typescript`, `mcp-builder`, `skill-builder`) into `references/` directories for token efficiency
 - **skills**: Expanded `mcp-builder` with security patterns and rewrote `shadcn-ui` as a strict workflow
 - **skills**: Disambiguated `cloudflare` from `workers-best-practices` and migrated adversarial skills to `gh copilot`
@@ -34,9 +35,11 @@
 - **instructions**: Removed misleading `mj.export.*` from Code Mode namespace table and expanded `search_entries` docs
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
+- **tests**: Updated Playwright E2E tests (`resources.spec.ts`, `resources-briefing-env.spec.ts`) to correctly assert against markdown `memory://briefing` responses
 
 ### Removed
 - **github**: Removed Dependabot configuration to reduce PR noise and merge conflicts
+- **resources**: Removed redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints as `memory://briefing` now directly returns markdown
 
 ### Security
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
