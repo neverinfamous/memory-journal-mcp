@@ -11,10 +11,10 @@ import {
     withSessionInit,
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
-import { VERSION } from '../../../../version.js'
+
 import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
-import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
+import type { InternalResourceDef, ResourceContext } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
 import {
     buildJournalContext,
