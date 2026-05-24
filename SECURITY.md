@@ -200,7 +200,6 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **Trivy container scanning** - Docker image vulnerability detection
 - ✅ **TruffleHog** - secret scanning on push/PR
 - ✅ **npm audit** - dependency vulnerability checking
-- ✅ **Dependabot** - automated dependency update PRs
 
 ## 🚨 **Security Best Practices**
 
@@ -263,7 +262,7 @@ If you discover a security vulnerability, please:
 ## 🔄 **Security Updates**
 
 - **Container updates**: Rebuild Docker images when base images are updated
-- **Dependency updates**: Keep npm packages updated via `npm audit` and Dependabot
+- **Dependency updates**: Keep npm packages updated via manual update workflows
 - **Database maintenance**: Run `ANALYZE` and `PRAGMA optimize` regularly
 - **Security patches**: Apply host system security updates
 

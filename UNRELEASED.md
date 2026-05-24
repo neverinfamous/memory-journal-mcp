@@ -16,6 +16,7 @@
 - **skills**: Added 4 adversarial auditing skills, the `journal-optimizer` skill, and migrated 14 skills from `adamic`
 
 ### Changed
+- **docs**: Highlighted auto-prune in feature tables and radically simplified agent briefing instructions to resolve Docker Hub limit violations
 - **docs**: Standardized `README.md` layout, badges, and automated auditing references
 - **instructions**: Refactored monolithic `server-instructions.md` into a modular directory, reducing initial payload by ~700 tokens
 - **instructions**: Enhanced session summary formatting, tag taxonomy, and significance marking criteria
@@ -33,6 +34,9 @@
 - **instructions**: Removed misleading `mj.export.*` from Code Mode namespace table and expanded `search_entries` docs
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
+
+### Removed
+- **github**: Removed Dependabot configuration to reduce PR noise and merge conflicts
 
 ### Security
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse

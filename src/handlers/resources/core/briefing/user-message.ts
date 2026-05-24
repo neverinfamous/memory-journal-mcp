@@ -5,7 +5,7 @@
  */
 
 import type { BriefingGitHub } from './github-section.js'
-import type { RulesFile, SkillsDir, FlagSummary } from './context-section.js'
+import type { RulesFile, SkillsDir, FlagSummary, GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 
 const escapeTableCell = (text: string): string =>
@@ -27,6 +27,7 @@ export function formatUserMessage(opts: {
     skillsDir?: SkillsDir
     analyticsInsights?: BriefingInsights
     flagSummary?: FlagSummary
+    graphSummary?: GraphSummary
 }): string {
     const {
         repoName,
@@ -38,6 +39,7 @@ export function formatUserMessage(opts: {
         rulesFile,
         skillsDir,
         analyticsInsights,
+        graphSummary,
     } = opts
 
     // Build enhanced CI display
@@ -139,22 +141,28 @@ export function formatUserMessage(opts: {
             ? summaryPreviews.map((s) => `\n| **Summary** | ${escapeTableCell(s)} |`).join('')
             : ''
 
-    // Flags row (Hush Protocol)
-    let flagsRow = ''
-    if (opts.flagSummary && opts.flagSummary.count > 0) {
-        const flagParts = opts.flagSummary.flags.slice(0, 5).map((f) => {
-            const target = f.target_user ? ` → @${f.target_user}` : ''
-            return `🚩 ${f.flag_type}${target}: ${f.preview.slice(0, 50)}`
-        })
-        flagsRow = `\n| **Flags** | ${escapeTableCell(flagParts.join(' · '))}${opts.flagSummary.count > 5 ? ` (+${String(opts.flagSummary.count - 5)} more)` : ''} |`
+    // Graph row
+    let graphRow = ''
+    if (graphSummary) {
+        const topTypes = Object.entries(graphSummary.causalMetrics)
+            .filter(([_, count]) => count > 0)
+            .map(([type, count]) => `${type}: ${String(count)}`)
+            .join(', ') || 'none'
+        graphRow = `\n| **Graph** | 🔗 ${String(graphSummary.density)} density · ${String(graphSummary.totalRelationships)} relationships · Top: ${escapeTableCell(topTypes)} |`
     }
 
-    return `📋 **Session Context Loaded**
+    // Flags row (Hush Protocol)
+    let flagsAlert = ''
+    if (opts.flagSummary && opts.flagSummary.count > 0) {
+        flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent}`).join('\n')}\n\n`
+    }
+
+    return `${flagsAlert}📋 **Session Context Loaded**
 | Context | Value |
 |---------|-------|
 | **Project** | ${escapeTableCell(repoName)} |
 | **Branch** | ${escapeTableCell(branchName)} |
 | **CI** | ${escapeTableCell(ciDisplay)} |
-| **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${analyticsRow}${flagsRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+| **Journal** | ${String(totalEntries)} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${String(opts.teamTotalEntries)} entries |` : ''}
+| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${graphRow}${insightsRow}${copilotRow}${analyticsRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
 }

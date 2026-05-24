@@ -22,6 +22,7 @@ import {
     buildRulesFileInfo,
     buildSkillsDirInfo,
     buildFlagsContext,
+    buildGraphContext,
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
@@ -31,12 +32,11 @@ export const briefingResource: InternalResourceDef = {
     name: 'Initial Briefing',
     title: 'Session Initialization Context',
     description:
-        'AUTO-READ AT SESSION START: Project context for AI agents (~300 tokens). Contains userMessage to show user.',
+        'Project context for AI agents (~300 tokens). Contains userMessage to show user.',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: {
-        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
-        autoRead: true,
+        ...withPriority(0.9, ASSISTANT_FOCUSED),
     },
     handler: async (_uri: string, context: ResourceContext) => {
         return buildBriefingData(context)
@@ -58,6 +58,51 @@ export const dynamicBriefingResource: InternalResourceDef = {
         const match = /memory:\/\/briefing\/(.+)/.exec(uri)
         const repoName = match?.[1] ? decodeURIComponent(match[1]) : undefined
         return buildBriefingData(context, repoName)
+    },
+}
+
+export const briefingMessageResource: InternalResourceDef = {
+    uri: 'memory://briefing-message',
+    name: 'Initial Briefing Message',
+    title: 'Pre-Rendered Session Context',
+    description:
+        'AUTO-READ AT SESSION START: Returns the exact markdown string to display to the user for the briefing.',
+    mimeType: 'text/markdown',
+    icons: [ICON_BRIEFING],
+    annotations: {
+        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
+        autoRead: true,
+    },
+    handler: async (_uri: string, context: ResourceContext) => {
+        const res = await buildBriefingData(context)
+        return {
+            text: (res.data as { userMessage: string }).userMessage,
+            mimeType: 'text/markdown',
+            annotations: res.annotations,
+        }
+    },
+}
+
+export const dynamicBriefingMessageResource: InternalResourceDef = {
+    uri: 'memory://briefing-message/{+repo}',
+    name: 'Dynamic Briefing Message',
+    title: 'Pre-Rendered Project Session Context',
+    description:
+        'Returns the exact markdown string to display to the user for a specific repository.',
+    mimeType: 'text/markdown',
+    icons: [ICON_BRIEFING],
+    annotations: {
+        ...withPriority(0.9, ASSISTANT_FOCUSED),
+    },
+    handler: async (uri: string, context: ResourceContext) => {
+        const match = /memory:\/\/briefing-message\/(.+)/.exec(uri)
+        const repoName = match?.[1] ? decodeURIComponent(match[1]) : undefined
+        const res = await buildBriefingData(context, repoName)
+        return {
+            text: (res.data as { userMessage: string }).userMessage,
+            mimeType: 'text/markdown',
+            annotations: res.annotations,
+        }
     },
 }
 
@@ -84,6 +129,7 @@ async function buildBriefingData(
     const skillsDir = buildSkillsDirInfo(config.skillsDirPath, config.allowedIoRoots)
     const insights = buildInsightsSection(context)
     const flags = buildFlagsContext(context)
+    const graphStats = buildGraphContext(context)
 
     // Format the latest entry preview for user message
     const latestPreview = journal.latestEntries[0]
@@ -107,6 +153,7 @@ async function buildBriefingData(
         skillsDir,
         analyticsInsights: insights ?? undefined,
         flagSummary: flags,
+        graphSummary: graphStats,
     })
 
     return {
@@ -177,3 +224,4 @@ async function buildBriefingData(
         annotations: { lastModified: journal.lastModified },
     } satisfies ResourceResult
 }
+

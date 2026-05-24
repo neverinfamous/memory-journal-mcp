@@ -270,6 +270,7 @@ export interface FlagSummary {
         flag_type: string
         target_user: string | null
         preview: string
+        fullContent: string
         timestamp: string
     }[]
 }
@@ -300,6 +301,7 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
                     preview: markUntrustedContentInline(
                         content.slice(0, 80) + (content.length > 80 ? '...' : '')
                     ),
+                    fullContent: markUntrustedContentInline(content),
                     timestamp: entry.timestamp,
                 }
             })
@@ -315,6 +317,39 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
         logger.debug('Failed to build flags context', {
             module: 'BRIEFING',
             operation: 'flags-context',
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return undefined
+    }
+}
+
+// ============================================================================
+// Graph Context
+// ============================================================================
+
+export interface GraphSummary {
+    totalRelationships: number
+    density: number
+    causalMetrics: Record<string, number>
+}
+
+export function buildGraphContext(context: ResourceContext): GraphSummary | undefined {
+    try {
+        const stats = context.db.getStatistics('week')
+        const comp = stats['relationshipComplexity'] as { totalRelationships: number; avgPerEntry: number } | undefined
+        const causal = stats['causalMetrics'] as Record<string, number> | undefined
+
+        if (!comp || !causal) return undefined
+
+        return {
+            totalRelationships: comp.totalRelationships,
+            density: comp.avgPerEntry,
+            causalMetrics: causal,
+        }
+    } catch (error) {
+        logger.debug('Failed to build graph context', {
+            module: 'BRIEFING',
+            operation: 'graph-context',
             error: error instanceof Error ? error.message : String(error),
         })
         return undefined
