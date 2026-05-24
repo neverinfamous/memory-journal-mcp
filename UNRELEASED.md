@@ -24,6 +24,7 @@
 - **skills**: Restructured large skills (`wrangler`, `typescript`, `mcp-builder`, `skill-builder`) into `references/` directories for token efficiency
 - **skills**: Expanded `mcp-builder` with security patterns and rewrote `shadcn-ui` as a strict workflow
 - **skills**: Disambiguated `cloudflare` from `workers-best-practices` and migrated adversarial skills to `gh copilot`
+- **Dependency Updates**: Bumped npm dependencies (`@types/node`, `eslint`, `tsx`, `typescript-eslint`, `vitest`) to latest minor/patch versions
 
 ### Fixed
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
@@ -36,3 +37,4 @@
 ### Security
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
 - **docs**: Documented engine-level Code Mode sandbox restrictions and RPC allowlists in `SECURITY.md` and `README.md`
+- **skills**: Bumped `qs` dependency in `gitlab` skill to resolve a remotely triggerable DoS vulnerability
