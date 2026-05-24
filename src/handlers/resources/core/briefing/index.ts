@@ -14,7 +14,7 @@ import {
 
 import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
-import type { InternalResourceDef, ResourceContext } from '../../shared.js'
+import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
 import {
     buildJournalContext,
@@ -65,7 +65,7 @@ export const dynamicBriefingResource: InternalResourceDef = {
 async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string
-): Promise<{ text: string; mimeType: 'text/markdown'; annotations?: { lastModified?: string } }> {
+): Promise<ResourceResult> {
     const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
 
     let activeGithub = context.github
@@ -113,8 +113,7 @@ async function buildBriefingData(
     })
 
     return {
-        text: userMessage,
-        mimeType: 'text/markdown',
+        data: userMessage,
         annotations: { lastModified: journal.lastModified },
     }
 }

@@ -65,10 +65,10 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules |
 | **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                                |
 
-<details>
-<summary><strong>Recommended AI Agent Instructions/Rule</strong></summary>
-
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
+
+<details>
+<summary><strong>View Mandatory Session Start Routine</strong></summary>
 
 **🛑 MANDATORY SESSION START ROUTINE**
 
@@ -76,7 +76,11 @@ Execute BEFORE fulfilling any user request in a new session:
 
 1. **Use memory-journal-mcp's `read_resource` tool to read `memory://briefing/{repo_name}`**. Infer the intended `repo_name` from context, or omit the repo name (i.e., `memory://briefing`) to use the default fallback configured in the MCP registry.
 2. Do NOT autonomously resume past tasks or start work on new issues mentioned in the briefing.
+
 </details>
+
+> [!NOTE]
+> In clients like Antigravity, the resource payload may be visually truncated in the UI. Ensure you click "Show More" to read the full briefing content if you are reviewing the session context manually.
 
 ---
 

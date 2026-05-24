@@ -31,6 +31,7 @@
 ### Fixed
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, and `tool-reference.md` with recent architectural changes
+- **docs**: Corrected readonly tool group count across references and synchronized missing environment variables (`TRUST_PROXY`, `PUBLIC_ORIGIN`) in configuration templates
 - **instructions**: Corrected Hush Protocol tool names, tag taxonomy examples, and clarified read-only mode behavior
 - **instructions**: Removed misleading `mj.export.*` from Code Mode namespace table and expanded `search_entries` docs
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors

@@ -212,7 +212,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `full`               | 70    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 18    | Disable all mutations    |
+| `readonly`           | 17    | Disable all mutations    |
 | `-github`            | 52    | Exclude a group          |
 | `-github,-analytics` | 50    | Exclude multiple groups  |
 

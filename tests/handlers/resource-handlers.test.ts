@@ -97,7 +97,7 @@ describe('Resource Handlers', () => {
         it('should read memory://briefing', async () => {
             const result = await readResource('memory://briefing', db)
 
-            const text = (result.data as { text: string }).text
+            const text = result.data as string
             expect(text).toBeDefined()
             expect(text).toContain('Session Context')
         })

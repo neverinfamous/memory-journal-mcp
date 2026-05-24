@@ -402,7 +402,7 @@ describe('GitHub Resource Handlers', () => {
             const github = createMockGitHub()
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const text = (result.data as { text: string }).text
+            const text = result.data as string
 
             expect(text).toBeDefined()
             expect(text).toContain('stars')
@@ -416,7 +416,7 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const text = (result.data as { text: string }).text
+            const text = result.data as string
 
             // Stars and forks should still be present
             expect(text).toContain('stars')
@@ -432,7 +432,7 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const text = (result.data as { text: string }).text
+            const text = result.data as string
 
             expect(text).not.toContain('stars')
         })
