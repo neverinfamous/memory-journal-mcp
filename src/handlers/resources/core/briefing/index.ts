@@ -32,11 +32,12 @@ export const briefingResource: InternalResourceDef = {
     name: 'Initial Briefing',
     title: 'Session Initialization Context',
     description:
-        'Project context for AI agents (~300 tokens). Contains userMessage to show user.',
-    mimeType: 'application/json',
+        'AUTO-READ AT SESSION START: Returns the exact markdown string to display to the user for the briefing.',
+    mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
     annotations: {
-        ...withPriority(0.9, ASSISTANT_FOCUSED),
+        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
+        autoRead: true,
     },
     handler: async (_uri: string, context: ResourceContext) => {
         return buildBriefingData(context)
@@ -49,10 +50,10 @@ export const dynamicBriefingResource: InternalResourceDef = {
     title: 'Project-Specific Session Context',
     description:
         'Project-specific briefing context for AI agents. Same as memory://briefing but targets a specific repository name from the registered workspaces.',
-    mimeType: 'application/json',
+    mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
     annotations: {
-        ...withPriority(0.8, ASSISTANT_FOCUSED),
+        ...withPriority(0.9, ASSISTANT_FOCUSED),
     },
     handler: async (uri: string, context: ResourceContext) => {
         const match = /memory:\/\/briefing\/(.+)/.exec(uri)
@@ -61,55 +62,10 @@ export const dynamicBriefingResource: InternalResourceDef = {
     },
 }
 
-export const briefingMessageResource: InternalResourceDef = {
-    uri: 'memory://briefing-message',
-    name: 'Initial Briefing Message',
-    title: 'Pre-Rendered Session Context',
-    description:
-        'AUTO-READ AT SESSION START: Returns the exact markdown string to display to the user for the briefing.',
-    mimeType: 'text/markdown',
-    icons: [ICON_BRIEFING],
-    annotations: {
-        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
-        autoRead: true,
-    },
-    handler: async (_uri: string, context: ResourceContext) => {
-        const res = await buildBriefingData(context)
-        return {
-            text: (res.data as { userMessage: string }).userMessage,
-            mimeType: 'text/markdown',
-            annotations: res.annotations,
-        }
-    },
-}
-
-export const dynamicBriefingMessageResource: InternalResourceDef = {
-    uri: 'memory://briefing-message/{+repo}',
-    name: 'Dynamic Briefing Message',
-    title: 'Pre-Rendered Project Session Context',
-    description:
-        'Returns the exact markdown string to display to the user for a specific repository.',
-    mimeType: 'text/markdown',
-    icons: [ICON_BRIEFING],
-    annotations: {
-        ...withPriority(0.9, ASSISTANT_FOCUSED),
-    },
-    handler: async (uri: string, context: ResourceContext) => {
-        const match = /memory:\/\/briefing-message\/(.+)/.exec(uri)
-        const repoName = match?.[1] ? decodeURIComponent(match[1]) : undefined
-        const res = await buildBriefingData(context, repoName)
-        return {
-            text: (res.data as { userMessage: string }).userMessage,
-            mimeType: 'text/markdown',
-            annotations: res.annotations,
-        }
-    },
-}
-
 async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string
-): Promise<ResourceResult> {
+): Promise<{ text: string; mimeType: 'text/markdown'; annotations?: { lastModified?: string } }> {
     const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
 
     let activeGithub = context.github
@@ -157,71 +113,9 @@ async function buildBriefingData(
     })
 
     return {
-        data: {
-            version: VERSION,
-            serverTime: new Date().toISOString(),
-            localTime: new Intl.DateTimeFormat('en-US', {
-                dateStyle: 'full',
-                timeStyle: 'short',
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            }).format(new Date()),
-            journal: {
-                totalEntries: journal.totalEntries,
-                latestEntries: journal.latestEntries,
-                ...(journal.latestSessionSummary
-                    ? { latestSessionSummary: journal.latestSessionSummary }
-                    : {}),
-            },
-            github,
-            teamContext: team?.teamInfo,
-            ...(team?.teamLatestEntries ? { teamLatestEntries: team.teamLatestEntries } : {}),
-            ...(rulesFile ? { rulesFile } : {}),
-            ...(skillsDir ? { skillsDir } : {}),
-            ...(insights ? { insights } : {}),
-            ...(flags ? { activeFlags: flags } : {}),
-            ...(config.projectRegistry
-                ? {
-                      registeredWorkspaces: Object.fromEntries(
-                          Object.entries(config.projectRegistry).map(([k, v]) => {
-                              const strippedPath = v.path.split(/[\\/]/).pop() || v.path
-                              return [k, { ...v, path: strippedPath }]
-                          })
-                      ),
-                  }
-                : {}),
-            behaviors: {
-                create: 'implementations, decisions, bug-fixes, milestones',
-                search: 'before decisions, referencing prior work',
-                link: 'implementation→spec, bugfix→issue',
-            },
-            templateResources: [
-                'memory://github/status/{repo}',
-                'memory://github/insights/{repo}',
-                'memory://github/milestones/{repo}',
-                'memory://milestones/{repo}/{number}',
-                'memory://projects/{number}/timeline',
-                'memory://issues/{issue_number}/entries',
-                'memory://prs/{pr_number}/entries',
-                'memory://prs/{pr_number}/timeline',
-                'memory://kanban/{project_number}',
-                'memory://kanban/{project_number}/diagram',
-                'memory://milestones/{number}',
-            ],
-            more: {
-                fullHealth: 'memory://health',
-                allRecent: 'memory://recent',
-                githubStatus: 'memory://github/status',
-                repoInsights: 'memory://github/insights',
-                contextBundle: 'get-context-bundle prompt',
-            },
-            userMessage,
-            clientNote:
-                'For full tool reference and field notes, read memory://instructions — only if your client did NOT auto-inject server instructions at session start (most modern clients including AntiGravity do this automatically).\\n' +
-                (config.projectRegistry
-                    ? '\\nMulti-project registry detected. To retrieve CI status, branch, and issues for a specific project, use the get_github_context tool or dynamic resources (e.g. memory://github/status/{repo}) with the repository name.'
-                    : ''),
-        },
+        text: userMessage,
+        mimeType: 'text/markdown',
         annotations: { lastModified: journal.lastModified },
-    } satisfies ResourceResult
+    }
 }
 

@@ -47,7 +47,7 @@ describe('Briefing Resources', () => {
             },
         } as any)
 
-        expect((result as any).data).toBeDefined()
+        expect((result as any).text).toBeDefined()
         expect(getGitHubIntegration).toHaveBeenCalledTimes(1)
         expect(getGitHubIntegration).toHaveBeenCalledWith('/tmp/test', { type: 'stdio' })
     })
@@ -59,6 +59,6 @@ describe('Briefing Resources', () => {
             },
         } as any)
 
-        expect((result as any).data).toBeDefined()
+        expect((result as any).text).toBeDefined()
     })
 })

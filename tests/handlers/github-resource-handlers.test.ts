@@ -402,28 +402,12 @@ describe('GitHub Resource Handlers', () => {
             const github = createMockGitHub()
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const data = result.data as {
-                github: {
-                    repo: string
-                    insights?: {
-                        stars: number | null
-                        forks: number | null
-                        clones14d?: number
-                        views14d?: number
-                    }
-                }
-                userMessage: string
-            }
+            const text = (result as { text: string }).text
 
-            expect(data.github.repo).toBe('testowner/testrepo')
-            expect(data.github.insights).toBeDefined()
-            expect(data.github.insights!.stars).toBe(42)
-            expect(data.github.insights!.forks).toBe(7)
-            expect(data.github.insights!.clones14d).toBe(120)
-            expect(data.github.insights!.views14d).toBe(500)
-            expect(data.userMessage).toContain('stars')
-            expect(data.userMessage).toContain('forks')
-            expect(data.userMessage).toContain('clones')
+            expect(text).toBeDefined()
+            expect(text).toContain('stars')
+            expect(text).toContain('forks')
+            expect(text).toContain('clones')
         })
 
         it('should include insights without traffic when getTrafficData fails', async () => {
@@ -432,25 +416,14 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const data = result.data as {
-                github: {
-                    insights?: {
-                        stars: number | null
-                        forks: number | null
-                        clones14d?: number
-                        views14d?: number
-                    }
-                }
-                userMessage: string
-            }
+            const text = (result as { text: string }).text
 
             // Stars and forks should still be present
-            expect(data.github.insights).toBeDefined()
-            expect(data.github.insights!.stars).toBe(42)
-            expect(data.github.insights!.forks).toBe(7)
+            expect(text).toContain('stars')
+            expect(text).toContain('forks')
             // Traffic should be absent
-            expect(data.github.insights!.clones14d).toBeUndefined()
-            expect(data.github.insights!.views14d).toBeUndefined()
+            expect(text).not.toContain('clones')
+            expect(text).not.toContain('views')
         })
 
         it('should omit insights when getRepoStats fails', async () => {
@@ -459,24 +432,18 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const data = result.data as {
-                github: {
-                    insights?: unknown
-                }
-            }
+            const text = (result as { text: string }).text
 
-            expect(data.github.insights).toBeUndefined()
+            expect(text).not.toContain('stars')
         })
 
         it('should include repoInsights in more section', async () => {
             const github = createMockGitHub()
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const data = result.data as {
-                more: { repoInsights: string }
-            }
+            const text = (result as { text: string }).text
 
-            expect(data.more.repoInsights).toBe('memory://github/insights')
+            expect(text).toContain('memory://github/insights')
         })
     })
 

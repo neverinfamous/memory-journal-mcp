@@ -97,15 +97,9 @@ describe('Resource Handlers', () => {
         it('should read memory://briefing', async () => {
             const result = await readResource('memory://briefing', db)
 
-            expect(result.data).toBeDefined()
-            const data = result.data as {
-                version: string
-                journal: { totalEntries: number }
-                userMessage: string
-            }
-            expect(data.version).toBeDefined()
-            expect(data.journal.totalEntries).toBeGreaterThan(0)
-            expect(data.userMessage).toContain('Session Context')
+            const text = (result as { text: string }).text
+            expect(text).toBeDefined()
+            expect(text).toContain('Session Context')
         })
 
         it('should read memory://instructions', async () => {
@@ -297,16 +291,10 @@ describe('Resource Handlers', () => {
 
         it('should return briefing with expected structure', async () => {
             const result = await readResource('memory://briefing', db)
-            const data = result.data as {
-                version: string
-                journal: { totalEntries: number }
-                behaviors: { create: string }
-                userMessage: string
-                templateResources: string[]
-            }
+            const text = (result as { text: string }).text
 
-            expect(data.behaviors.create).toContain('implementations')
-            expect(data.templateResources).toContain('memory://projects/{number}/timeline')
+            expect(text).toContain('implementations')
+            expect(text).toContain('memory://projects')
         })
 
         it('should return annotations on recent entries', async () => {
