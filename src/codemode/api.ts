@@ -21,6 +21,7 @@ import {
     GROUP_PREFIX_MAP,
     KEEP_PREFIX_GROUPS,
 } from './api-constants.js'
+import { getZodTypeString } from './type-generator.js'
 
 /**
  * Dispatcher function signature for SEC-1.1 Code Mode dispatch gate.
@@ -314,6 +315,36 @@ export class JournalApi {
         }
 
         return bindings
+    }
+
+    /**
+     * Create the sandbox schemas object.
+     * Contains the TypeScript type string representation for each method.
+     */
+    createSandboxSchemas(): Record<string, Record<string, string>> {
+        const schemas: Record<string, Record<string, string>> = {}
+
+        for (const [groupName, tools] of this.toolsByGroup.entries()) {
+            const groupSchemas: Record<string, string> = {}
+            for (const tool of tools) {
+                const methodName = toolNameToMethodName(tool.name, groupName)
+                groupSchemas[methodName] = getZodTypeString(tool.inputSchema)
+            }
+            
+            // Handle aliases
+            const aliases = METHOD_ALIASES[groupName]
+            if (aliases) {
+                for (const [aliasName, canonicalName] of Object.entries(aliases)) {
+                    if (groupSchemas[canonicalName] !== undefined) {
+                        groupSchemas[aliasName] = groupSchemas[canonicalName]
+                    }
+                }
+            }
+            
+            schemas[groupName] = groupSchemas
+        }
+        
+        return schemas
     }
 }
 

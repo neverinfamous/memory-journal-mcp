@@ -2,7 +2,7 @@
 
 ## ⚠️ Critical Patterns
 
-- **Parameter case in Code Mode**: Method names are camelCase (`mj.core.createEntry()`), but all parameters use **snake_case** (`entry_type`, `significance_type`, `project_number`). This matches the underlying tool schemas. Do NOT use camelCase params (`entryType`, `significanceType`) — they will be silently ignored.
+- **Parameter case in Code Mode**: Method names are camelCase (`mj.core.createEntry()`), but all parameters use **snake_case** (`entry_type`, `significance_type`, `project_number`). This matches the underlying tool schemas. Do NOT use camelCase params (`entryType`, `significanceType`) — they will be silently ignored. You can inspect exact required parameters dynamically inside your execution context using `.schema()` (e.g. `mj.core.createEntry.schema()`).
 - **`significance_type` values**: Only 8 values accepted: `milestone`, `breakthrough`, `decision`, `architecture`, `lesson_learned`, `blocker_resolved`, `release`, `security`. Using any other value (e.g., `"important"`, `"major"`, `"critical"`) causes a Zod validation error.
 - **`entry_type` defaults**: If omitted, defaults to `personal_reflection`. Always set explicitly — see the Entry Type Selection guide in `memory://help/core` for the full list.
 - **`autoContext`**: The user-facing filesystem monitoring feature was abandoned to reduce telemetry overhead. Existing data with `autoContext: null` is safely ignored. The database field itself is still used internally for Hush Protocol flag metadata (`flag_type`, `target_user`, `resolved`, etc.).

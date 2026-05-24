@@ -55,6 +55,7 @@ const result = mj.core.recent({ limit: 5 })
 // ✅ Discovery
 const help = await mj.help() // { groups, totalMethods, usage }
 const groupHelp = await mj.core.help() // { group, methods }
+const schema = await mj.core.createEntry.schema() // Returns a string of TypeScript types (e.g. "{ content?: string, entry_type?: string, ... }")
 ```
 
 **`mj.core.recent()` return shape**: Returns `{ entries: JournalEntry[], count: number }` — not a plain array. Access `.entries` to iterate:

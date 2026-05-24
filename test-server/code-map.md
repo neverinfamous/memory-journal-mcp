@@ -89,6 +89,7 @@ src/
 │   ├── api.ts                      # mj.* API bridge (exposes tools to sandbox)
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
 │   ├── security.ts                 # Code validation (blocked patterns, injection prevention)
+│   ├── type-generator.ts           # Zod schema-to-TypeScript declaration generator
 │   ├── types.ts                    # Sandbox TypeScript types
 │   └── index.ts                    # Barrel
 │

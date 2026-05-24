@@ -21,6 +21,7 @@ export interface ISandbox {
     execute(
         code: string,
         bindings: Record<string, unknown>,
+        schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number
     ): Promise<SandboxResult>
 }
@@ -30,6 +31,7 @@ export interface ISandboxPool {
     execute(
         code: string,
         bindings: Record<string, unknown>,
+        schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number
     ): Promise<SandboxResult>
     getActiveCount(): number

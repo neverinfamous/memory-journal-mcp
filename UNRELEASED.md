@@ -6,6 +6,7 @@
 - **admin**: Added `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
+- **codemode**: Added runtime schema introspection (`.schema()`) for proxy tools and dynamically injected TypeScript declarations for the `mj_execute_code` payload
 - **codemode**: Added `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
 - **docs**: Added missing CLI flags, environment variables, and auto-prune documentation to the Wiki and configuration examples
 - **errors**: Added valid enum value lists to Zod validation error messages to assist agent self-correction

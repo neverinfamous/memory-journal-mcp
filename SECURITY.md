@@ -177,6 +177,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
 - ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) to prevent OOM via oversized payloads
 - ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
+- ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
 - ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
 
 ## 🔍 **Data Privacy**

@@ -27,6 +27,7 @@ import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
+import { generateTypescriptDeclarations } from '../../codemode/type-generator.js'
 
 // =============================================================================
 // Input / Output Schemas
@@ -188,6 +189,9 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 // =============================================================================
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
+    const availableTools = collectNonCodeModeTools(context)
+    const typeDeclarations = generateTypescriptDeclarations(availableTools)
+    
     return [
         {
             name: 'mj_execute_code',
@@ -197,7 +201,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 'Enables multi-step workflows in a single call, reducing token usage by 70-90%. ' +
                 'API groups: mj.core.*, mj.search.*, mj.analytics.*, mj.relationships.*, ' +
                 'mj.io.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +
-                'Use mj.help() for method listing. Returns the last expression value.',
+                'Use mj.help() for method listing. Returns the last expression value.\n\n' +
+                '### TypeScript Declarations\n```typescript\n' + typeDeclarations + '\n```',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,
             annotations: {
@@ -363,13 +368,14 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     const api = createJournalApi(tools, secureDispatcher)
                     const bindings = api.createSandboxBindings()
+                    const schemas = api.createSandboxSchemas()
 
                     // Execute in sandbox (override timeout if specified)
                     const pool = getSandboxPool()
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
-                    const result = await pool.execute(code, bindings, timeout)
+                    const result = await pool.execute(code, bindings, schemas, timeout)
                     // Result size is validated internally by the worker pool
                     return result
                 } catch (err) {

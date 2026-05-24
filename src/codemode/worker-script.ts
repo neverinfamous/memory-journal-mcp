@@ -45,13 +45,20 @@ function rpcCall(group: string, method: string, args: unknown[]): Promise<unknow
 // API Proxy Builder
 // =============================================================================
 
-function buildApiProxy(methods: Record<string, string[]>): Record<string, unknown> {
+function buildApiProxy(
+    methods: Record<string, string[]>,
+    schemas?: Record<string, Record<string, string>>
+): Record<string, unknown> {
     const api: Record<string, unknown> = {}
 
     for (const [group, methodNames] of Object.entries(methods)) {
         if (group === '_topLevel') {
             for (const methodName of methodNames) {
-                api[methodName] = (...args: unknown[]) => rpcCall('_topLevel', methodName, args)
+                const proxyFn = (...args: unknown[]): Promise<unknown> => rpcCall('_topLevel', methodName, args)
+                Object.assign(proxyFn, {
+                    schema: (): Promise<string> => Promise.resolve(schemas?.['_topLevel']?.[methodName] ?? 'any')
+                })
+                api[methodName] = proxyFn
             }
             continue
         }
@@ -59,7 +66,11 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
         const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
 
         for (const methodName of methodNames) {
-            groupProxy[methodName] = (...args: unknown[]) => rpcCall(group, methodName, args)
+            const proxyFn = (...args: unknown[]): Promise<unknown> => rpcCall(group, methodName, args)
+            Object.assign(proxyFn, {
+                schema: (): Promise<string> => Promise.resolve(schemas?.[group]?.[methodName] ?? 'any')
+            })
+            groupProxy[methodName] = proxyFn
         }
 
         groupProxy['help'] = () =>
@@ -95,7 +106,7 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
         return Promise.resolve({
             groups,
             totalMethods,
-            usage: 'Use mj.<group>.help() for group details. Example: mj.core.help()',
+            usage: 'Use mj.<group>.help() for group details. Use mj.<group>.<method>.schema() for parameter details.',
         })
     }
 
@@ -109,13 +120,14 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
 async function executeCode(
     code: string,
     methodList: Record<string, string[]>,
+    schemaList: Record<string, Record<string, string>> | undefined,
     timeoutMs: number
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
 
     try {
-        const mjApi = buildApiProxy(methodList)
+        const mjApi = buildApiProxy(methodList, schemaList)
 
         const sandbox: Record<string, unknown> = {
             mj: mjApi,
@@ -233,6 +245,7 @@ parentPort?.on('message', (msg: unknown) => {
                 id: number
                 code: string
                 methodList: Record<string, string[]>
+                schemaList?: Record<string, Record<string, string>>
                 timeoutMs?: number
                 maxResultSize?: number
                 rpcPort: MessagePort
@@ -241,6 +254,7 @@ parentPort?.on('message', (msg: unknown) => {
                 id,
                 code,
                 methodList,
+                schemaList,
                 timeoutMs,
                 maxResultSize,
                 rpcPort: newRpcPort,
@@ -262,7 +276,7 @@ parentPort?.on('message', (msg: unknown) => {
                 }
             })
 
-            const result = await executeCode(code, methodList, timeoutMs ?? 30000)
+            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000)
 
             if (result.success) {
                 try {

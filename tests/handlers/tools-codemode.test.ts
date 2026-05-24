@@ -30,7 +30,7 @@ describe('Code Mode Tools Coverage', () => {
         let capturedDispatcher!: any
         vi.spyOn(api, 'createJournalApi').mockImplementationOnce((tools, dispatcher) => {
             capturedDispatcher = dispatcher
-            return { createSandboxBindings: () => ({}) } as any
+            return { createSandboxBindings: () => ({}), createSandboxSchemas: () => ({}) } as any
         })
 
         vi.spyOn(sandboxFactory, 'createSandboxPool').mockImplementationOnce(() => {
