@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
 
 ### Added
+
 - **admin**: Added `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
@@ -17,6 +18,7 @@
 - **skills**: Added 4 adversarial auditing skills, the `journal-optimizer` skill, and migrated 14 skills from `adamic`
 
 ### Changed
+
 - **docs**: Highlighted auto-prune in feature tables and radically simplified agent briefing instructions to resolve Docker Hub limit violations
 - **docs**: Standardized `README.md` layout, badges, and automated auditing references
 - **instructions**: Refactored monolithic `server-instructions.md` into a modular directory, reducing initial payload by ~700 tokens
@@ -30,6 +32,7 @@
 - **Dependency Updates**: Bumped npm dependencies (`@types/node`, `eslint`, `tsx`, `typescript-eslint`, `vitest`) to latest minor/patch versions
 
 ### Fixed
+
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, and `tool-reference.md` with recent architectural changes
 - **docs**: Corrected readonly tool group count across references and synchronized missing environment variables (`TRUST_PROXY`, `PUBLIC_ORIGIN`) in configuration templates
@@ -38,13 +41,15 @@
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
 - **tests**: Updated Playwright E2E tests (`resources.spec.ts`, `resources-briefing-env.spec.ts`) to correctly assert against markdown `memory://briefing` responses
-- **tests**: Verified Phase 17 Code Mode API Discoverability and Phase 27 Code Mode Admin and Backup operations against the test database configuration
+- **tests**: Fixed Phase 20.12 Code Mode test script to include `project_number` for robust `issueUrl` auto-population in generic CWD environments
 
 ### Removed
+
 - **github**: Removed Dependabot configuration to reduce PR noise and merge conflicts
 - **resources**: Removed redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints as `memory://briefing` now directly returns markdown
 
 ### Security
+
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
 - **docs**: Documented engine-level Code Mode sandbox restrictions and RPC allowlists in `SECURITY.md` and `README.md`
 - **skills**: Bumped `qs` dependency in `gitlab` skill to resolve a remotely triggerable DoS vulnerability
