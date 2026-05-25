@@ -2,17 +2,19 @@
 
 **Scope:** Verify all 60 outputSchema tools return `structuredContent` (not raw text). `mj_execute_code` intentionally excluded — its dynamic return type produces a bare `{}` JSON Schema that crashes clients processing `structuredContent`.
 
-**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
+**Prerequisites:**
 
-**Prerequisites:** Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools whenever possible.** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
+- Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
 
 **Workflow after testing:**
 
-1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. If you made code changes/fixes, implement them, update `UNRELEASED.md`, and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`.
-3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---

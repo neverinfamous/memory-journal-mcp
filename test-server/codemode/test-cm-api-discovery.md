@@ -6,8 +6,9 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 **Prerequisites:**
 
-- Code Mode is included in all tool filtering presets by default.
+- Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
 
 **Workflow after testing:**
 

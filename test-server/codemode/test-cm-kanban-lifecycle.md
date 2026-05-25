@@ -2,13 +2,15 @@
 
 **Scope:** Automates the testing of `mj.github` Kanban integrations (`addProjectItem`, `moveProjectItem`, `deleteProjectItem`, `getProjectKanban`) natively via sandbox.
 
-**Execution:** Use ONLY the Code Mode Sandbox (`mj_execute_code`).
-Extract and report the `_meta.tokenEstimate` from the tool's outer response wrapper to guarantee performance logging. Do not try to reference `_meta` inside the Javascript code itself.
+**Prerequisites:**
+
+- Confirm MCP server instructions were auto-received before starting.
+- **Use codemode directly for all tests, NOT the terminal or scripts!**
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
@@ -122,8 +124,10 @@ try {
 }
 ```
 
-### Verification Checks
+## Success Criteria
 
-- [ ] Code properly parses internal node IDs natively matching external handler behavior.
-- [ ] No server crash or GraphQL mutation block.
-- [ ] The issue is safely restored back to default standalone status with no remnant project linkage.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Code properly parses internal node IDs natively matching external handler behavior.
+- No server crash or GraphQL mutation block.
+- The issue is safely restored back to default standalone status with no remnant project linkage.

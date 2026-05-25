@@ -6,9 +6,9 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 **Prerequisites:**
 
-- Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
 
 **Workflow after testing:**
 

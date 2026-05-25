@@ -11,8 +11,8 @@ Test the Hush Protocol flag system (`pass_team_flag`, `resolve_team_flag`) and f
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
