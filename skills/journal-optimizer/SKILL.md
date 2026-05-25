@@ -102,17 +102,16 @@ anything. This is the recommended starting point for all optimization work.
 ```javascript
 const s = await mj.analytics.getStatistics();
 return {
-  total: s.total_entries,
-  orphans: s.entries_without_relationships,
-  density: s.relationship_density,
-  types: s.entry_type_breakdown,
+  total: s.totalEntries,
+  density: s.relationshipComplexity?.avgPerEntry,
+  types: s.entriesByType,
 };
 ```
 
 **Step 2 — Score and tier all entries:**
 
 ```javascript
-const all = await mj.search.getRecentEntries({ limit: 500 });
+const all = await mj.core.getRecentEntries({ limit: 500 });
 const tiers = { critical: [], high: [], moderate: [], low: [], expendable: [] };
 
 for (const e of all.entries) {
@@ -130,7 +129,7 @@ return {
   ),
   expendableSample: tiers.expendable.slice(0, 10).map(e => ({
     id: e.id,
-    type: e.entry_type,
+    type: e.entryType,
     tags: e.tags,
     age: Math.floor((Date.now() - new Date(e.timestamp).getTime()) / 86400000) + 'd',
     snippet: e.content.substring(0, 80),
@@ -138,7 +137,7 @@ return {
   lowSample: tiers.low.slice(0, 5).map(e => ({
     id: e.id,
     score: e.importanceScore,
-    type: e.entry_type,
+    type: e.entryType,
     snippet: e.content.substring(0, 80),
   })),
 };
@@ -199,7 +198,7 @@ return { deleted: ok, failed: fail, backupFile: backup.filename };
 ```javascript
 await mj.core.createEntry({
   content: `Database optimization: soft-deleted ${ok} entries (batch). Backup: ${backup.filename}`,
-  entry_type: 'maintenance',
+  entry_type: 'enhancement',
   tags: ['database-optimizer', 'cleanup'],
 });
 ```
@@ -218,7 +217,7 @@ Find and soft-delete entries with zero relationships.
 
 ```javascript
 const s = await mj.analytics.getStatistics();
-return { orphans: s.entries_without_relationships, total: s.total_entries };
+return { total: s.totalEntries };
 ```
 
 2. Retrieve orphaned entries — these are entries with an importance score
@@ -226,11 +225,11 @@ return { orphans: s.entries_without_relationships, total: s.total_entries };
    components:
 
 ```javascript
-const all = await mj.search.getRecentEntries({ limit: 500, sort_by: 'importance' });
+const all = await mj.core.getRecentEntries({ limit: 500, sort_by: 'importance' });
 const orphans = all.entries.filter(e => (e.importanceScore ?? 0) === 0);
 return orphans.slice(0, 50).map(e => ({
   id: e.id,
-  type: e.entry_type,
+  type: e.entryType,
   tags: e.tags,
   significance: e.significanceType,
   age: Math.floor((Date.now() - new Date(e.timestamp).getTime()) / 86400000) + 'd',
@@ -259,7 +258,7 @@ Find entries with semantically similar content that may be redundant.
    entry, search for similar entries and flag high-similarity pairs:
 
 ```javascript
-const recent = await mj.search.getRecentEntries({ limit: 50 });
+const recent = await mj.core.getRecentEntries({ limit: 50 });
 const candidates = [];
 
 for (const entry of recent.entries) {
@@ -316,7 +315,7 @@ that were misclassified or have outlived their usefulness.
 
 ```javascript
 const s = await mj.analytics.getStatistics();
-return s.entry_type_breakdown;
+return s.entriesByType;
 ```
 
 2. Present the type breakdown as a table, sorted by count descending.

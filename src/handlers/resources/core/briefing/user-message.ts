@@ -220,10 +220,10 @@ export function formatUserMessage(opts: {
     }
     sysLines.push(sysLine2.join(' · '))
 
+    if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
     const sysLine3 = []
-    if (opts.localTime) sysLine3.push(opts.localTime)
-    if (rulesFile) sysLine3.push(`${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
-    if (skillsDir) sysLine3.push(`${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
+    if (rulesFile) sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
+    if (skillsDir) sysLine3.push(`🧠 ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
     if (sysLine3.length) sysLines.push(sysLine3.join(' · '))
 
     if (opts.hasCodeMap) {
@@ -237,21 +237,24 @@ export function formatUserMessage(opts: {
     
     const configLine1: string[] = []
     if (opts.isReadonly) configLine1.push('mode: readonly')
-    configLine1.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
-    configLine1.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
     if (opts.instructionLevel) configLine1.push(`level: ${opts.instructionLevel}`)
     if (configLine1.length) configLines.push(configLine1.join(' · '))
     
     const configLine2: string[] = []
+    configLine2.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
+    configLine2.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
+    if (configLine2.length) configLines.push(configLine2.join(' · '))
+    
+    const configLine3: string[] = []
     if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
-        configLine2.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
+        configLine3.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
     }
     if (opts.registryRepos && opts.registryRepos.length > 0) {
         const repoNames = opts.registryRepos.slice(0, 3).join(', ')
         const suffix = opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
-        configLine2.push(`registry: ${escapeCell(repoNames)}${suffix}`)
+        configLine3.push(`registry: ${escapeCell(repoNames)}${suffix}`)
     }
-    if (configLine2.length) configLines.push(configLine2.join(' · '))
+    if (configLine3.length) configLines.push(configLine3.join(' · '))
 
     // ========================================================================
     // FLAT LINES: Insights + Analytics
@@ -299,7 +302,7 @@ export function formatUserMessage(opts: {
             .map(([type, count]) => `${type}: ${String(count)}`)
             .join(', ') || 'none'
         flatLines.push(
-            `**Graph:** ${String(graphSummary.totalRelationships)} relationships · Top: ${escapeContent(topTypes)} (view: memory://graph/recent)`
+            `**Graph:** ${String(graphSummary.totalRelationships)} relationships\nTop: ${escapeContent(topTypes)} (view: memory://graph/recent)`
         )
     }
 
@@ -318,7 +321,7 @@ export function formatUserMessage(opts: {
                 : ''
             let line = `**Unreleased:** ${ageStr}${parts.join(' · ')}`
             if ((u.keyItems?.length ?? 0) > 0) {
-                line += ` | Recent focus: ${u.keyItems.join(', ')}`
+                line += `\nRecent focus: ${u.keyItems.join(', ')}`
             }
             flatLines.push(line)
         }
