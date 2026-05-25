@@ -280,15 +280,17 @@ return result
 
 ## Success Criteria
 
-- [ ] `pass_team_flag` creates entries with `entry_type: 'flag'` and structured `auto_context`
-- [ ] Flag tags include `flag:{type}` and `@{target}` when target_user is provided
-- [ ] `@` prefix on `target_user` is stripped before storage
-- [ ] Invalid vocabulary terms return `VALIDATION_ERROR` with suggestion listing valid types
-- [ ] Missing required fields (`flag_type`, `message`) return structured validation errors
-- [ ] `resolve_team_flag` transitions flag to resolved state with `[RESOLVED]` content marker
-- [ ] Resolution comment is stored in both content and `auto_context.resolution`
-- [ ] Idempotent: re-resolving an already-resolved flag returns success with original state
-- [ ] Resolving a non-flag entry returns `VALIDATION_ERROR`
-- [ ] Resolving a nonexistent entry returns `RESOURCE_NOT_FOUND`
-- [ ] Flags are searchable by tag (`flag:blocker`) and by `entry_type: 'flag'`
-- [ ] All test entries cleaned up after testing
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `pass_team_flag` creates entries with `entry_type: 'flag'` and structured `auto_context`
+- Flag tags include `flag:{type}` and `@{target}` when target_user is provided
+- `@` prefix on `target_user` is stripped before storage
+- Invalid vocabulary terms return `VALIDATION_ERROR` with suggestion listing valid types
+- Missing required fields (`flag_type`, `message`) return structured validation errors
+- `resolve_team_flag` transitions flag to resolved state with `[RESOLVED]` content marker
+- Resolution comment is stored in both content and `auto_context.resolution`
+- Idempotent: re-resolving an already-resolved flag returns success with original state
+- Resolving a non-flag entry returns `VALIDATION_ERROR`
+- Resolving a nonexistent entry returns `RESOURCE_NOT_FOUND`
+- Flags are searchable by tag (`flag:blocker`) and by `entry_type: 'flag'`
+- All test entries cleaned up after testing

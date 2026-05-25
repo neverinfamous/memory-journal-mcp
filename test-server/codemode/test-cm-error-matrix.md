@@ -369,9 +369,11 @@ return {
 
 ## Success Criteria
 
-- [ ] All 10 `mj.*` API groups tested with `{}` empty params
-- [ ] Type mismatches (string where number, number where string) return structured errors
-- [ ] Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
-- [ ] Security boundaries (path traversal, limit overflow) enforced
-- [ ] No sandbox crashes, no raw MCP exceptions leaked through Code Mode
-- [ ] All results map to compact summaries (no large payload inflation)
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- All 10 `mj.*` API groups tested with `{}` empty params
+- Type mismatches (string where number, number where string) return structured errors
+- Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
+- Security boundaries (path traversal, limit overflow) enforced
+- No sandbox crashes, no raw MCP exceptions leaked through Code Mode
+- All results map to compact summaries (no large payload inflation)

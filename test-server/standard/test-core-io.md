@@ -42,6 +42,8 @@
 
 ## Success Criteria
 
-- [ ] `export_markdown` reliably targets OS local directories and generates correctly named files.
-- [ ] `import_markdown` gracefully executes dry run detection parsing.
-- [ ] IO tooling throws structured path traversal errors `..` on local directory injections.
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `export_markdown` reliably targets OS local directories and generates correctly named files.
+- `import_markdown` gracefully executes dry run detection parsing.
+- IO tooling throws structured path traversal errors `..` on local directory injections.

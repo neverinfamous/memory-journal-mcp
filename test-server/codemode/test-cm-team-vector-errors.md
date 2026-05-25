@@ -199,10 +199,12 @@ return { cleaned: results.length, details: results }
 
 ## Success Criteria
 
-- [ ] `team_rebuild_vector_index` indexes team entries via Code Mode
-- [ ] `team_get_vector_index_stats` returns vector stats via Code Mode
-- [ ] `team_semantic_search` with threshold filtering works via Code Mode
-- [ ] `team_add_to_vector_index` succeeds for existing, errors for nonexistent via Code Mode
-- [ ] `team_get_cross_project_insights` returns schema-compliant response via Code Mode
-- [ ] All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
-- [ ] All test entries cleaned up after Phase 28
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `team_rebuild_vector_index` indexes team entries via Code Mode
+- `team_get_vector_index_stats` returns vector stats via Code Mode
+- `team_semantic_search` with threshold filtering works via Code Mode
+- `team_add_to_vector_index` succeeds for existing, errors for nonexistent via Code Mode
+- `team_get_cross_project_insights` returns schema-compliant response via Code Mode
+- All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
+- All test entries cleaned up after Phase 28

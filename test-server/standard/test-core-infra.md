@@ -79,10 +79,12 @@ node test-server/scripts/test-tool-annotations.mjs
 
 ## Success Criteria
 
-- [ ] `test_simple` returns echo message
-- [ ] `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
-- [ ] `memory://briefing` returns complete JSON with all expected fields
-- [ ] Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
-- [ ] 48 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (70 total, 0 missing)
-- [ ] `get_statistics` returns all 4 enhanced analytics metrics
-- [ ] `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `test_simple` returns echo message
+- `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
+- `memory://briefing` returns complete JSON with all expected fields
+- Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
+- 48 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (70 total, 0 missing)
+- `get_statistics` returns all 4 enhanced analytics metrics
+- `memory://github/status` returns compact JSON with CI, issues, PRs, milestones

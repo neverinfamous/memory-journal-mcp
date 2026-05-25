@@ -66,9 +66,11 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 ## Success Criteria
 
-- [ ] Simple expressions return correct types: integer, string, object, null, boolean
-- [ ] Async/await resolves correctly inside sandbox
-- [ ] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
-- [ ] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
-- [ ] Custom `timeout` parameter accepted and enforced
-- [ ] Infinite loop terminated with structured error (not hang or crash)
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Simple expressions return correct types: integer, string, object, null, boolean
+- Async/await resolves correctly inside sandbox
+- Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
+- `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
+- Custom `timeout` parameter accepted and enforced
+- Infinite loop terminated with structured error (not hang or crash)

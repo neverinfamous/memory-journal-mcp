@@ -64,8 +64,10 @@ Test the Code Mode security constraints: input validation, blocked patterns, run
 
 ## Success Criteria
 
-- [x] Empty code returns structured error (not raw MCP error)
-- [x] All 7 blocked patterns (`require`, `process`, `eval`, `import`, `Function`, `__proto__`, `child_process`) return structured security errors
-- [x] Syntax errors return `{ success: false, error: "..." }` with descriptive message
-- [x] Runtime errors (ReferenceError, TypeError) caught and returned as structured errors
-- [x] Nulled globals confirmed: `process`, `require`, `setTimeout`, `globalThis` are all `undefined`
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Empty code returns structured error (not raw MCP error)
+- All 7 blocked patterns (`require`, `process`, `eval`, `import`, `Function`, `__proto__`, `child_process`) return structured security errors
+- Syntax errors return `{ success: false, error: "..." }` with descriptive message
+- Runtime errors (ReferenceError, TypeError) caught and returned as structured errors
+- Nulled globals confirmed: `process`, `require`, `setTimeout`, `globalThis` are all `undefined`

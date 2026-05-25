@@ -43,7 +43,9 @@ node test-server/scripts/test-scheduler.mjs
 
 ## Success Criteria
 
-- [ ] `memory://health` shows `scheduler.active: false` and empty `jobs` array in stdio mode
-- [ ] All 4 jobs active with `nextRun` timestamps in HTTP mode
-- [ ] All `lastResult` values are `"success"` after jobs fire
-- [ ] Error in one job does not prevent others from running
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `memory://health` shows `scheduler.active: false` and empty `jobs` array in stdio mode
+- All 4 jobs active with `nextRun` timestamps in HTTP mode
+- All `lastResult` values are `"success"` after jobs fire
+- Error in one job does not prevent others from running

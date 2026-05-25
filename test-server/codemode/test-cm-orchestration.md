@@ -148,8 +148,10 @@ return {
 
 ## Success Criteria
 
-- [ ] Journal health dashboard aggregates stats + recent + tags correctly
-- [ ] GitHub-journal coverage report iterates issues and searches entries
-- [ ] Tag analysis pipeline processes multiple tags with search per tag
-- [ ] Relationship graph summary checks entries for relationship counts
-- [ ] Full pipeline (create → index → semantic search) completes end-to-end
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Journal health dashboard aggregates stats + recent + tags correctly
+- GitHub-journal coverage report iterates issues and searches entries
+- Tag analysis pipeline processes multiple tags with search per tag
+- Relationship graph summary checks entries for relationship counts
+- Full pipeline (create → index → semantic search) completes end-to-end

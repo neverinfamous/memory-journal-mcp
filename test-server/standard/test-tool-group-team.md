@@ -37,6 +37,8 @@
 
 ## Success Criteria
 
-- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- [ ] Team Database missing context natively halts and warns user without crashing the MCP worker.
-- [ ] Missing models do not crash vector fallback pipelines.
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
+- Team Database missing context natively halts and warns user without crashing the MCP worker.
+- Missing models do not crash vector fallback pipelines.

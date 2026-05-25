@@ -50,7 +50,9 @@
 
 ## Success Criteria
 
-- [ ] Causal relationship types (`blocked_by`, `resolved`, `caused`) create correctly
-- [ ] `link_entries` returns `success: false` for nonexistent entry IDs
-- [ ] `visualize_relationships` shows distinct arrows for causal types
-- [ ] `memory://graph/recent` uses harmonized arrows matching `visualize_relationships`
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Causal relationship types (`blocked_by`, `resolved`, `caused`) create correctly
+- `link_entries` returns `success: false` for nonexistent entry IDs
+- `visualize_relationships` shows distinct arrows for causal types
+- `memory://graph/recent` uses harmonized arrows matching `visualize_relationships`

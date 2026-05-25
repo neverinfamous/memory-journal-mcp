@@ -124,13 +124,15 @@ return {
 
 ## Success Criteria
 
-- [ ] `list_tags` returns tag list via Code Mode
-- [ ] `merge_tags` consolidates tags correctly — source removed, target exists
-- [ ] `merge_tags` returns structured errors for same-tag and nonexistent source
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
 
-- [ ] `backup_journal` named and auto-named both succeed
-- [ ] `backup_journal` path traversal blocked with structured error
-- [ ] `list_backups` returns backup metadata
-- [ ] `restore_backup` succeeds with `revertedChanges` field
-- [ ] `restore_backup` nonexistent file returns structured error
-- [ ] `cleanup_backups` deletes old backups
+- `list_tags` returns tag list via Code Mode
+- `merge_tags` consolidates tags correctly — source removed, target exists
+- `merge_tags` returns structured errors for same-tag and nonexistent source
+
+- `backup_journal` named and auto-named both succeed
+- `backup_journal` path traversal blocked with structured error
+- `list_backups` returns backup metadata
+- `restore_backup` succeeds with `revertedChanges` field
+- `restore_backup` nonexistent file returns structured error
+- `cleanup_backups` deletes old backups

@@ -106,13 +106,15 @@ After testing, permanently delete all entries created during Phase 12:
 
 ## Success Criteria
 
-- [ ] All field round-trips preserve data exactly (content, tags, PR fields, workflow fields, project number, is_personal)
-- [ ] Unicode, multiline, HTML-like, and long content stored and retrieved correctly
-- [ ] `update_entry` preserves unset fields (partial update semantics)
-- [ ] Content length boundaries enforced (max ~50K accepted, >100K rejected)
-- [ ] Limit boundaries enforced (1–500 accepted, 501 rejected, -1 rejected)
-- [ ] Tag merge operations correctly consolidate counts and delete source
-- [ ] Soft-deleted entries excluded from FTS5, semantic, and date range search results
-- [ ] Permanently deleted entries completely absent from all search methods
-- [ ] Filter enforcement validated — no silent filter ignored bugs
-- [ ] All relationship types persist and are queryable
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- All field round-trips preserve data exactly (content, tags, PR fields, workflow fields, project number, is_personal)
+- Unicode, multiline, HTML-like, and long content stored and retrieved correctly
+- `update_entry` preserves unset fields (partial update semantics)
+- Content length boundaries enforced (max ~50K accepted, >100K rejected)
+- Limit boundaries enforced (1–500 accepted, 501 rejected, -1 rejected)
+- Tag merge operations correctly consolidate counts and delete source
+- Soft-deleted entries excluded from FTS5, semantic, and date range search results
+- Permanently deleted entries completely absent from all search methods
+- Filter enforcement validated — no silent filter ignored bugs
+- All relationship types persist and are queryable

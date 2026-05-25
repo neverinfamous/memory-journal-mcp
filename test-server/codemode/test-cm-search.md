@@ -383,25 +383,27 @@ return {
 
 ## Success Criteria
 
-- [ ] `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
-- [ ] `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
-- [ ] FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
-- [ ] FTS5 LIKE fallback works for special characters (`test's`, `100%`)
-- [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
-- [ ] Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
-- [ ] `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
-- [ ] `search_by_date_range` rejects invalid date format with structured error
-- [ ] `search_by_date_range` rejects inverted date range (start > end) with structured error
-- [ ] `search_by_date_range` filters by `project_number`
-- [ ] `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
-- [ ] `semantic_search` correctly filters results downstream using `tags` and `is_personal`
-- [ ] `semantic_search` with custom threshold returns fewer results
-- [ ] `semantic_search` quality gate hint shown even with `hint_on_empty: false`
-- [ ] `get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
-- [ ] `rebuild_vector_index` and `add_to_vector_index` work via Code Mode
-- [ ] `get_statistics` returns all 4 enhanced analytics metrics via Code Mode
-- [ ] `get_cross_project_insights` returns schema-compliant response
-- [ ] `search_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- [ ] `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- [ ] `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- [ ] Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
+- `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
+- FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
+- FTS5 LIKE fallback works for special characters (`test's`, `100%`)
+- `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
+- Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
+- `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
+- `search_by_date_range` rejects invalid date format with structured error
+- `search_by_date_range` rejects inverted date range (start > end) with structured error
+- `search_by_date_range` filters by `project_number`
+- `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
+- `semantic_search` correctly filters results downstream using `tags` and `is_personal`
+- `semantic_search` with custom threshold returns fewer results
+- `semantic_search` quality gate hint shown even with `hint_on_empty: false`
+- `get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
+- `rebuild_vector_index` and `add_to_vector_index` work via Code Mode
+- `get_statistics` returns all 4 enhanced analytics metrics via Code Mode
+- `get_cross_project_insights` returns schema-compliant response
+- `search_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present

@@ -109,11 +109,13 @@
 
 ## Success Criteria
 
-- [ ] Kanban `summary_only` returns zero items per column with `itemCount` metadata
-- [ ] Kanban `item_limit: 101` is rejected by validation
-- [ ] Body truncation defaults to 800 chars with metadata flags
-- [ ] `include_comments: true` returns comment data
-- [ ] `MAX_QUERY_LIMIT` (500) enforced on core, github, and search tools
-- [ ] Code Mode 100KB cap produces agent-guidance error with KB values
-- [ ] No raw `-32602` errors from any new parameter
-- [ ] Agent reports the Total Token Estimate in the final summary
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Kanban `summary_only` returns zero items per column with `itemCount` metadata
+- Kanban `item_limit: 101` is rejected by validation
+- Body truncation defaults to 800 chars with metadata flags
+- `include_comments: true` returns comment data
+- `MAX_QUERY_LIMIT` (500) enforced on core, github, and search tools
+- Code Mode 100KB cap produces agent-guidance error with KB values
+- No raw `-32602` errors from any new parameter
+- Agent reports the Total Token Estimate in the final summary

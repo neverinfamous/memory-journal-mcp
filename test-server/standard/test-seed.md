@@ -95,11 +95,13 @@ After creating all 17 entries, verify the seed data is searchable:
 
 ## Success Criteria
 
-- [ ] All 17 seed entries (S1–S17) created successfully
-- [ ] FTS5 search returns results for `"architecture"` query
-- [ ] Filter search returns results for `issue_number: 44`
-- [ ] Cross-DB search includes `source: 'team'` entries
-- [ ] Vector index rebuilt with `entriesIndexed > 0`
-- [ ] Semantic search returns results for `"improving performance"`
-- [ ] `get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)
-- [ ] `team_get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- All 17 seed entries (S1–S17) created successfully
+- FTS5 search returns results for `"architecture"` query
+- Filter search returns results for `issue_number: 44`
+- Cross-DB search includes `source: 'team'` entries
+- Vector index rebuilt with `entriesIndexed > 0`
+- Semantic search returns results for `"improving performance"`
+- `get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)
+- `team_get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)

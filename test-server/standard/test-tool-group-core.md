@@ -46,7 +46,9 @@ For every tool, you must explicitly confirm that Zod validation errors and Domai
 
 ## Success Criteria
 
-- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
-- [ ] All tools return structured handler errors.
-- [ ] No raw MCP exceptions are thrown.
-- [ ] Boundary conditions behave as specified.
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
+- All tools return structured handler errors.
+- No raw MCP exceptions are thrown.
+- Boundary conditions behave as specified.

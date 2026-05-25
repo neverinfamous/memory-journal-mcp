@@ -237,8 +237,8 @@ return {
 
 ### 20.12 Create Entry — issueUrl Auto-Population
 
-| Test                    | Code                                                                                                                                                                                                 | Expected Result                                                      |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Test                    | Code                                                                                                                                                                                                                    | Expected Result                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ content: "CM3 issue link", issue_number: 1, project_number: 5 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
 
 ---
@@ -260,19 +260,21 @@ After testing, remove test entries created during Phase 20:
 
 ## Success Criteria
 
-- [x] `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
-- [x] `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
-- [x] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
-- [x] `create_entry` rejects empty content with structured error
-- [x] `create_entry` with `project_owner` persists the field
-- [x] `create_entry` with `auto_context: false` creates entry without auto-generated context
-- [x] `create_entry` with `issue_number` auto-populates `issueUrl`
-- [x] `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
-- [x] `get_entry_by_id` with `include_relationships: false` omits relationship data
-- [x] `update_entry` updates content, tags, and entry_type — verified via read-back
-- [x] `update_entry` `is_personal` toggle correctly changes personal status
-- [x] `update_entry` returns structured error for nonexistent IDs
-- [x] `delete_entry` soft delete hides entry from search
-- [x] `delete_entry` permanent delete and nonexistent ID both return structured responses
-- [x] `get_recent_entries` with `is_personal` filter returns correctly filtered entries
-- [x] `test_simple` callable via Code Mode
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
+- `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
+- `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
+- `create_entry` rejects empty content with structured error
+- `create_entry` with `project_owner` persists the field
+- `create_entry` with `auto_context: false` creates entry without auto-generated context
+- `create_entry` with `issue_number` auto-populates `issueUrl`
+- `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
+- `get_entry_by_id` with `include_relationships: false` omits relationship data
+- `update_entry` updates content, tags, and entry_type — verified via read-back
+- `update_entry` `is_personal` toggle correctly changes personal status
+- `update_entry` returns structured error for nonexistent IDs
+- `delete_entry` soft delete hides entry from search
+- `delete_entry` permanent delete and nonexistent ID both return structured responses
+- `get_recent_entries` with `is_personal` filter returns correctly filtered entries
+- `test_simple` callable via Code Mode

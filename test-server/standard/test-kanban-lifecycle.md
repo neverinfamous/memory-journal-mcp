@@ -50,6 +50,8 @@
 
 ## Success Criteria
 
-- [ ] Complete Add -> Move -> Remove pipeline succeeds consecutively.
-- [ ] Token count optimized through `itemDirectory` vs traditional bloated pagination.
-- [ ] Ensure the issue survives the `delete_kanban_item` mutation (check state `get_github_issue(issue_number: <#>)` is NOT closed).
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Complete Add -> Move -> Remove pipeline succeeds consecutively.
+- Token count optimized through `itemDirectory` vs traditional bloated pagination.
+- Ensure the issue survives the `delete_kanban_item` mutation (check state `get_github_issue(issue_number: <#>)` is NOT closed).

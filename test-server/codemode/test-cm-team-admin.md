@@ -216,13 +216,15 @@ return {
 
 ## Success Criteria
 
-- [ ] `team_update_entry` updates content, tags, and entry_type
-- [ ] `team_delete_entry` soft-deletes team entries
-- [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
-- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- [ ] `team_link_entries` creates relationships with duplicate detection
-- [ ] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
-- [ ] `team_export_entries` exports JSON and markdown with filters
-- [ ] `team_backup` creates named and auto-named backups
-- [ ] `team_list_backups` returns backup metadata
-- [ ] `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `team_update_entry` updates content, tags, and entry_type
+- `team_delete_entry` soft-deletes team entries
+- `team_merge_tags` consolidates tags — source removed, entries re-tagged
+- `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
+- `team_link_entries` creates relationships with duplicate detection
+- `team_visualize_relationships` returns Mermaid diagram with node/edge counts
+- `team_export_entries` exports JSON and markdown with filters
+- `team_backup` creates named and auto-named backups
+- `team_list_backups` returns backup metadata
+- `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings

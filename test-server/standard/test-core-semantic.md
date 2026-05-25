@@ -50,10 +50,12 @@
 
 ## Success Criteria
 
-- [ ] `semantic_search` accepts `entry_id` (Related by ID) in lieu of `query` string
-- [ ] `semantic_search` incorporates metadata filtering (`tags`, `entry_type`, dates) into similarity results
-- [ ] `semantic_search` with custom `similarity_threshold` affects result count
-- [ ] `get_statistics` returns all 4 enhanced analytics metrics with correct groupings
-- [ ] `get_cross_project_insights` returns `project_count ≥ 1` with seed entries S7, S13, S14 present (project 5 has 3 entries, meeting `min_entries: 3`)
-- [ ] `get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
-- [ ] `get_cross_project_insights` returns all required schema fields (including `projects: []`) when empty (tested with `min_entries: 9999`)
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `semantic_search` accepts `entry_id` (Related by ID) in lieu of `query` string
+- `semantic_search` incorporates metadata filtering (`tags`, `entry_type`, dates) into similarity results
+- `semantic_search` with custom `similarity_threshold` affects result count
+- `get_statistics` returns all 4 enhanced analytics metrics with correct groupings
+- `get_cross_project_insights` returns `project_count ≥ 1` with seed entries S7, S13, S14 present (project 5 has 3 entries, meeting `min_entries: 3`)
+- `get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
+- `get_cross_project_insights` returns all required schema fields (including `projects: []`) when empty (tested with `min_entries: 9999`)

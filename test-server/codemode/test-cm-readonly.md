@@ -53,7 +53,9 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ## Success Criteria
 
-- [ ] `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
-- [ ] `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
-- [ ] `readonly: false` (default) allows both read and write operations
-- [ ] `mj.help()` still works in readonly mode
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
+- `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
+- `readonly: false` (default) allows both read and write operations
+- `mj.help()` still works in readonly mode

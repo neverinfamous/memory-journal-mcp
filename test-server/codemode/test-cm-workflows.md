@@ -49,8 +49,10 @@ Test multi-step workflow execution: read-only pipelines, conditional branching, 
 
 ## Success Criteria
 
-- [ ] Chaining 2+ API calls in single execution works
-- [ ] Data transformation (map, flatMap, sort, reduce) works on results
-- [ ] Conditional branching based on query results works
-- [ ] Create + read round-trip produces matching data
-- [ ] Create + search finds the created entry
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- Chaining 2+ API calls in single execution works
+- Data transformation (map, flatMap, sort, reduce) works on results
+- Conditional branching based on query results works
+- Create + read round-trip produces matching data
+- Create + search finds the created entry

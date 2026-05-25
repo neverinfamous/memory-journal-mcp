@@ -53,7 +53,9 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 ## Success Criteria
 
-- [ ] `mj.help()` returns all 10 groups with correct `totalMethods` count
-- [ ] Per-group `help()` returns method names for each group
-- [ ] Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
-- [ ] Positional arguments work (e.g., `mj.core.get(id)`)
+> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+
+- `mj.help()` returns all 10 groups with correct `totalMethods` count
+- Per-group `help()` returns method names for each group
+- Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
+- Positional arguments work (e.g., `mj.core.get(id)`)
