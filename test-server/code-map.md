@@ -32,11 +32,8 @@ src/
 │   ├── icons.ts                    # MCP icon definitions per tool group (CDN SVG URLs)
 │   ├── server-instructions/        # Source markdown files for behavioral instructions (directory-per-group)
 │   │   ├── overview.md             # Core behaviors, entry types, tag taxonomy, relationship patterns
-│   │   ├── codemode.md             # Code Mode namespace table, sandbox rules, readonly mode
 │   │   ├── github.md               # GitHub integration patterns, Copilot review workflow
-│   │   ├── gotchas.md              # Field notes, edge cases, critical usage patterns
 │   │   ├── hush-protocol.md        # Team flag protocol, flag types, resolution workflow
-│   │   ├── server-access.md        # Server access, maintenance mode, admin patterns
 │   │   ├── skills.md               # Agent skills index, SKILLS_DIR_PATH, skill-builder
 │   │   └── README.md               # Developer guide for the instruction system
 │   └── server-instructions.ts      # ⚠️ AUTO-GENERATED — HELP_CONTENT map + generateInstructions() + composable segments
@@ -85,7 +82,7 @@ src/
 │   ├── sandbox-factory.ts          # Sandbox creation factory (engine-level restrictions: codeGeneration disabled, frozen prototypes, Proxy nullified)
 │   ├── auto-return.ts              # Last-expression auto-return transform (IIFE helper)
 │   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge)
-│   ├── worker-script.ts            # Worker thread entry point — builds mj.* API proxy; Proxy trap returns structured errors for readonly mode
+│   ├── worker-script.ts            # Worker thread entry point — builds mj.* API proxy (and `journal` alias); Proxy trap returns structured errors for readonly mode
 │   ├── api.ts                      # mj.* API bridge (exposes tools to sandbox)
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
 │   ├── security.ts                 # Code validation (18 blocked patterns, 50KB code size limit, injection prevention)
@@ -192,7 +189,7 @@ src/
     │   ├── graph.ts                # Graph resources (recent relationships, actions narrative)
     │   ├── insights.ts             # Insights resources (digest, team-collaboration)
     │   ├── team.ts                 # Team resources (recent, statistics)
-    │   ├── help.ts                 # Dynamic help resources (memory://help, memory://help/{group}, memory://help/gotchas)
+    │   ├── help.ts                 # Dynamic help resources (memory://help, memory://help/{group}) with codemode dynamic tool rewriting
     │   ├── templates.ts            # Template resources (projects, issues, PRs, kanban, milestones)
     │   └── core/
     │       ├── index.ts            # Core static resources barrel
@@ -282,7 +279,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `github.ts`                | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                                                                                            |
 | `graph.ts`                 | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                  |
 | `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`                                                                             |
-| `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details), `memory://help/gotchas` (field notes)                                                   |
+| `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)                                                                                          |
 | `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY) |
 | `audit/audit-resource.ts`  | `memory://audit` (ASSISTANT_FOCUSED) — last 50 write/admin audit entries from JSONL log; returns `audit: not configured` when `AUDIT_LOG_PATH` unset                          |
 
@@ -357,7 +354,7 @@ catch (error) {
 | What                               | Where                                  | Notes                                                                                                                                                                                                                                                                    |
 | ---------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `HELP_CONTENT` map + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`)                                                                                                                               |
-| Instruction source markdown        | `src/constants/server-instructions/`   | Directory-per-group: `overview.md`, `codemode.md`, `github.md`, `gotchas.md`, `hush-protocol.md`, `server-access.md`, `skills.md`; compiled by `npm run generate:instructions`                                                                                           |
+| Instruction source markdown        | `src/constants/server-instructions/`   | Directory-per-group: `overview.md`, `github.md`, `hush-protocol.md`, `skills.md`; compiled by `npm run generate:instructions`                                                                                           |
 | Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating                                                                                                                                             |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                                                                                                                                                                                             |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`)                                                                                                              |
