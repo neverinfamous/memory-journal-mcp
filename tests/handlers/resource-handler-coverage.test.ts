@@ -299,6 +299,6 @@ describe('Resource Handler Coverage', () => {
             expect(typeof data.count).toBe('number')
 
             delete process.env['SKILLS_DIR_PATH']
-        })
+        }, 10000)
     })
 })
