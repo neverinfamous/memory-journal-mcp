@@ -208,9 +208,5 @@ export function formatUserMessage(opts: {
 
     const tableOutput = `${flagsAlert}📋 **Session Context Loaded**\n\n| Context | Value |\n|---------|-------|\n${githubGroup}\n${journalGroup}${insightsGroup}${analyticsGroup}${systemGroup}`
 
-    if (graphSummary?.mermaidGraph) {
-        return `${tableOutput}\n\n**Relationship Graph**\n\`\`\`mermaid\n${graphSummary.mermaidGraph}\n\`\`\``
-    }
-
     return tableOutput
 }

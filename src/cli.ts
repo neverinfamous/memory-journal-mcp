@@ -197,10 +197,6 @@ program
         'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT_REVIEWS)'
     )
     .option(
-        '--briefing-include-graph',
-        'Include the recent relationship graph Mermaid diagram in briefing (env: BRIEFING_INCLUDE_GRAPH)'
-    )
-    .option(
         '--workflow-summary <text>',
         'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
     )
@@ -250,7 +246,6 @@ program
             briefingWorkflows: string
             briefingWorkflowStatus?: boolean
             briefingCopilot?: boolean
-            briefingIncludeGraph?: boolean
             workflowSummary?: string
             flagVocabulary?: string
             instructionLevel: string
@@ -588,9 +583,6 @@ program
                         copilotReviews:
                             options.briefingCopilot ??
                             process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
-                        includeGraph:
-                            options.briefingIncludeGraph ??
-                            process.env['BRIEFING_INCLUDE_GRAPH'] === 'true',
                         workflowSummary:
                             options.workflowSummary ??
                             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] ??

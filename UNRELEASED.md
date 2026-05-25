@@ -44,7 +44,7 @@
 - **tests**: Updated Playwright E2E tests (`resources.spec.ts`, `resources-briefing-env.spec.ts`) to correctly assert against markdown `memory://briefing` responses
 - **tests**: Fixed Phase 20.12 Code Mode test script to include `project_number` for robust `issueUrl` auto-population in generic CWD environments
 - **briefing**: Fixed missing blank line before markdown table in `memory://briefing` and stripped `<untrusted_remote_content>` tags to prevent IDE rendering cutoff
-- **briefing**: Grouped table properties into 5 distinct macro-categories via `<br>` elements and normalized whitespace in Mermaid graph node labels to resolve IDE history layout truncation
+- **briefing**: Grouped table properties into 5 distinct macro-categories via `<br>` elements and removed the inline Mermaid graph to permanently resolve IDE history truncation (graph remains available via `memory://graph/recent`)
 
 ### Removed
 

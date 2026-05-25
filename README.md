@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-91.03%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-91.07%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -378,7 +378,6 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "BRIEFING_PR_STATUS": "true",
         "BRIEFING_WORKFLOW_COUNT": "3",
         "BRIEFING_WORKFLOW_STATUS": "true",
-        "BRIEFING_INCLUDE_GRAPH": "true",
         "BRIEFING_COPILOT_REVIEWS": "true",
         "RULES_FILE_PATH": "/path/to/your/RULES.md",
         "SKILLS_DIR_PATH": "/path/to/your/skills",
@@ -539,7 +538,6 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `BRIEFING_MILESTONE_COUNT`        | Milestones to list in briefing; `0` = hide entirely (CLI: `--briefing-milestones`; default: `3`)                                                      |
 | `BRIEFING_WORKFLOW_COUNT`         | Workflow runs to list in briefing; `0` = status only (default: `0`)                                                                                   |
 | `BRIEFING_WORKFLOW_STATUS`        | Show workflow status breakdown in briefing (default: `false`)                                                                                         |
-| `BRIEFING_INCLUDE_GRAPH`          | Include the recent relationship graph Mermaid diagram in briefing (default: `false`)                                                                  |
 | `BRIEFING_COPILOT_REVIEWS`        | Aggregate Copilot review state in briefing (default: `false`)                                                                                         |
 | `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                                                                     |
 | `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                                                    |

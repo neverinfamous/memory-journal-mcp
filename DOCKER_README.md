@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-91.03%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-91.07%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -256,7 +256,6 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "BRIEFING_PR_STATUS": "true",
         "BRIEFING_WORKFLOW_COUNT": "1",
         "BRIEFING_WORKFLOW_STATUS": "true",
-        "BRIEFING_INCLUDE_GRAPH": "true",
         "BRIEFING_COPILOT_REVIEWS": "true",
         "RULES_FILE_PATH": "/app/rules.md",
         "SKILLS_DIR_PATH": "/app/skills",

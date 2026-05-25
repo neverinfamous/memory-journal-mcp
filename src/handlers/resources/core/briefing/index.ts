@@ -85,7 +85,7 @@ async function buildBriefingData(
     const skillsDir = buildSkillsDirInfo(config.skillsDirPath, config.allowedIoRoots)
     const insights = buildInsightsSection(context)
     const flags = buildFlagsContext(context)
-    const graphStats = buildGraphContext(context, config)
+    const graphStats = buildGraphContext(context)
 
     // Format the latest entry preview for user message
     const latestPreview = journal.latestEntries[0]

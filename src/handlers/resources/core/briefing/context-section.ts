@@ -15,7 +15,6 @@ import {
     assertSafeFilePath,
     assertSafeDirectoryPath,
 } from '../../../../utils/security-utils.js'
-import { buildMermaidGraph } from '../../graph.js'
 
 // ============================================================================
 // Journal Context
@@ -325,12 +324,10 @@ export interface GraphSummary {
     totalRelationships: number
     density: number
     causalMetrics: Record<string, number>
-    mermaidGraph?: string
 }
 
 export function buildGraphContext(
-    context: ResourceContext,
-    config: BriefingConfig
+    context: ResourceContext
 ): GraphSummary | undefined {
     try {
         const stats = context.db.getStatistics('week')
@@ -339,17 +336,10 @@ export function buildGraphContext(
 
         if (!comp || !causal) return undefined
 
-        let mermaidGraph: string | undefined = undefined
-        if (config.includeGraph) {
-            const relationships = context.db.getRecentGraphRelationships(20)
-            mermaidGraph = buildMermaidGraph(relationships)
-        }
-
         return {
             totalRelationships: comp.totalRelationships,
             density: comp.avgPerEntry,
             causalMetrics: causal,
-            mermaidGraph,
         }
     } catch (error) {
         logger.debug('Failed to build graph context', {
