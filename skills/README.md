@@ -47,6 +47,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `adversarial-skill-audit`            | Multi-pass adversarial skill audit — iterative quality evaluation, trigger stress-testing, and Copilot validation     |
 | `adversarial-workflow-audit`         | Multi-pass adversarial workflow audit — sequential clarity, HITL safety gates, loop prevention, and Copilot validation |
 | `agents-sdk`                         | Build AI agents on Cloudflare Workers using the Agents SDK                                                            |
+| `auth-identity`                      | Standards for Authentication and Identity management (OAuth, JWTs, RBAC)                                              |
 | `autonomous-dev`                     | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
 | `building-ai-agent-on-cloudflare`    | End-to-end guide for stateful AI agents with WebSockets, state, and tools                                             |
 | `building-mcp-server-on-cloudflare`  | Remote MCP servers on Cloudflare Workers with OAuth and deployment                                                    |
@@ -61,14 +62,18 @@ The markdown body contains the full instructions the agent follows once the skil
 | `gitlab`                             | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
 | `golang`                             | Master Go development with production-grade best practices from Google and Uber style guides                          |
 | `journal-optimizer`                  | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete |
+| `llm-app-engineering`                | Master modern LLM application engineering patterns — prompt chains, token management, streaming                       |
 | `mcp-builder`                        | Build high-quality MCP servers with structured errors, HTTP hardening, OAuth, Code Mode, and dynamic instructions     |
+| `multi-agent-orchestration`          | Patterns for multi-agent systems and agentic workflows (e.g. Plan-and-Execute, Supervisor)                            |
 | `mysql`                              | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                    |
 | `next-best-practices`               | Next.js file conventions, RSC boundaries, data patterns, metadata, error handling                                     |
 | `next-cache-components`             | Next.js 16 PPR, `use cache`, `cacheLife`, `cacheTag`, `updateTag`                                                     |
 | `next-upgrade`                       | Upgrade Next.js following official migration guides and codemods                                                       |
+| `opentelemetry`                      | Observability standards using OpenTelemetry — tracing, spans, metrics, exporters                                      |
 | `playwright-standard`               | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience                           |
 | `postgres`                           | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS                    |
 | `python`                             | Modern Python engineering — uv, ruff, type hints, pytest, Pydantic v2, and src/ layout project structure              |
+| `rag-pipelines`                      | Best practices for Retrieval-Augmented Generation (RAG) pipelines — embeddings, chunking, retrieval                   |
 | `react-best-practices`              | Vercel engineering guidelines for React/Next.js performance, hooks, and bundle optimization                           |
 | `rust`                               | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture     |
 | `sandbox-sdk`                        | Sandboxed code execution — interpreters, CI/CD, untrusted code                                                        |
