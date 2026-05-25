@@ -102,7 +102,7 @@ export function formatUserMessage(opts: {
             repoLines.push(`**PRs:** ${String(github.openPRs)} open`)
         }
 
-        if (github.milestones && github.milestones.length > 0) {
+        if (github.milestones.length > 0) {
             repoLines.push(
                 `**Milestones:** ${escapeTableCell(
                     github.milestones

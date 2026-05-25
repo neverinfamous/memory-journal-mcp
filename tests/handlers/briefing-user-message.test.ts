@@ -45,13 +45,13 @@ describe('formatUserMessage', () => {
             teamTotalEntries: 15,
         })
 
-        expect(result).toContain('**Team DB**')
+        expect(result).toContain('**Team DB:**')
         expect(result).toContain('15 entries')
     })
 
     it('should NOT include team DB row when teamTotalEntries is undefined', () => {
         const result = formatUserMessage(baseOpts())
-        expect(result).not.toContain('**Team DB**')
+        expect(result).not.toContain('**Team DB:**')
     })
 
     // ========================================================================
@@ -130,7 +130,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Issues**')
+        expect(result).toContain('**Issues:**')
         expect(result).toContain('#42 Fix bug')
         expect(result).toContain('#43 Add feature')
     })
@@ -148,7 +148,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Issues**')
+        expect(result).toContain('**Issues:**')
         expect(result).toContain('5 open')
     })
 
@@ -170,7 +170,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**PRs**')
+        expect(result).toContain('**PRs:**')
         expect(result).toContain('2 open')
         expect(result).toContain('5 merged')
         expect(result).toContain('1 closed')
@@ -190,7 +190,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**PRs**')
+        expect(result).toContain('**PRs:**')
         expect(result).toContain('#10 Add OAuth')
     })
 
@@ -207,7 +207,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**PRs**')
+        expect(result).toContain('**PRs:**')
         expect(result).toContain('7 open')
     })
 
@@ -231,7 +231,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Milestones**')
+        expect(result).toContain('**Milestones:**')
         expect(result).toContain('v1.0 (75%, due 2025-03-15)')
         expect(result).toContain('v2.0 (25%)')
     })
@@ -276,10 +276,10 @@ describe('formatUserMessage', () => {
         })
 
         expect(result).toContain('**Insights**')
-        expect(result).toContain('⭐ 120 stars')
-        expect(result).toContain('🍴 30 forks')
-        expect(result).toContain('📦 500 clones')
-        expect(result).toContain('👁️ 2000 views')
+        expect(result).toContain('⭐ 120')
+        expect(result).toContain('🍴 30')
+        expect(result).toContain('📦 500')
+        expect(result).toContain('👁️ 2000')
         expect(result).toContain('(14d)')
     })
 
@@ -323,7 +323,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot**')
+        expect(result).toContain('**Copilot:**')
         expect(result).toContain('5 reviewed')
         expect(result).toContain('3 approved')
         expect(result).toContain('1 changes requested')
@@ -349,7 +349,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot**')
+        expect(result).toContain('**Copilot:**')
         expect(result).not.toContain('changes requested')
         expect(result).not.toContain('comments')
     })
@@ -369,7 +369,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Rules**')
+        expect(result).toContain('**Rules:**')
         expect(result).toContain('.rules')
         expect(result).toContain('4 KB')
         expect(result).toContain('2h ago')
@@ -385,7 +385,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Skills**')
+        expect(result).toContain('**Skills:**')
         expect(result).toContain('3 skills available')
     })
 

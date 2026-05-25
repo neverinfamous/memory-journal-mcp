@@ -405,9 +405,9 @@ describe('GitHub Resource Handlers', () => {
             const text = result.data as string
 
             expect(text).toBeDefined()
-            expect(text).toContain('stars')
-            expect(text).toContain('forks')
-            expect(text).toContain('clones')
+            expect(text).toContain('⭐ 42')
+            expect(text).toContain('🍴 7')
+            expect(text).toContain('📦 120')
         })
 
         it('should include insights without traffic when getTrafficData fails', async () => {
@@ -419,11 +419,11 @@ describe('GitHub Resource Handlers', () => {
             const text = result.data as string
 
             // Stars and forks should still be present
-            expect(text).toContain('stars')
-            expect(text).toContain('forks')
+            expect(text).toContain('⭐ 42')
+            expect(text).toContain('🍴 7')
             // Traffic should be absent
-            expect(text).not.toContain('clones')
-            expect(text).not.toContain('views')
+            expect(text).not.toContain('📦')
+            expect(text).not.toContain('👁️')
         })
 
         it('should omit insights when getRepoStats fails', async () => {
@@ -434,7 +434,7 @@ describe('GitHub Resource Handlers', () => {
 
             const text = result.data as string
 
-            expect(text).not.toContain('stars')
+            expect(text).not.toContain('⭐')
         })
     })
 
