@@ -4,7 +4,7 @@ description: |
   Use when designing, querying, or managing a MySQL or MariaDB database.
   Enforces enterprise production rules for query safety (strict parameterization), 
   connection pooling, and strict schema configurations (STRICT_TRANS_TABLES).
-  Do NOT trigger for generic "set up a database" requests unless MySQL/MariaDB is explicitly chosen. Router must refuse to guess and ask for engine. NOT for Postgres or SQLite.
+  MUST-ASK: Require explicit database engine name before triggering. Never guess. Do NOT trigger for generic "set up a database" requests. NOT for Postgres or SQLite.
 ---
 
 # MySQL / MariaDB Production Standards

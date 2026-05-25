@@ -40,6 +40,12 @@ If Copilot CLI is not available, skip Phase 4 gracefully.
 - 'Build a server'
 - 'Set up CI/CD'"
 
+**Ecosystem Consistency and Coverage Gap Analysis:**
+"You are an expert in developer tooling ecosystems. Evaluate the overall structure and coverage of this skills directory. Identify:
+1. Are there common development tasks or technologies relevant to modern Node/TypeScript/Cloudflare stacks that are missing skill coverage?
+2. Are there organizational or naming inconsistencies across the skills?
+3. Which skills should potentially be merged or deprecated due to high overlap?"
+
 ## Parsing Copilot Output
 
 1. **Extract findings** — parse tables or numbered lists
@@ -53,5 +59,5 @@ If Copilot CLI is not available, skip Phase 4 gracefully.
 | Audit Depth | Prompts to Use |
 | --- | --- |
 | Surface | Skill Quality only |
-| Standard | Skill Quality + Trigger Collision |
-| Thorough | Both prompts |
+| Standard | Skill Quality + Trigger Collision + Ecosystem Consistency |
+| Thorough | All three prompts |
