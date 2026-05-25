@@ -61,7 +61,7 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(response.contents.length).toBeGreaterThan(0)
 
         const text = (response.contents[0] as { text: string }).text
-        expect(text).toContain('Session Context Loaded')
+        expect(text).toContain('**GitHub**')
         expect(text).toContain('Journal')
     })
 

@@ -106,7 +106,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         }
         const contentText = firstResource.text
         // Assert team block is populated
-        expect(contentText).toContain('Team DB')
-        expect(contentText).toContain('1 entries')
+        expect(contentText).toContain('Team: 1')
+        expect(contentText).toContain('entries')
     })
 })

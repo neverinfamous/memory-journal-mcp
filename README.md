@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-91.07%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-91.18%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -62,7 +62,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                 |
 | **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5 keywords, semantic vector similarity, auto-heuristics, and date-range filters                                                                           |
 | **Code Mode**                 | Execute multi-step operations in a trusted-admin execution environment — up to 90% token savings via `mj.*` API                                                                               |
-| **Configurable Briefing**     | 15 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness, chronological grounding                                                         |
+| **Upgraded Session Briefing** | `memory://briefing` delivers version, surface area, test health, unreleased changes, analytics, and `localTime` — all in ~350 tokens with 15 configurable env vars / CLI flags               |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                      |
 | **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                            |
 | **Team Collaboration**        | 25 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags                                                         |
@@ -208,7 +208,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Static Resources** (appear in resource lists):
 
-- `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens) — includes `localTime` and optional `activeFlags`
+- `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs

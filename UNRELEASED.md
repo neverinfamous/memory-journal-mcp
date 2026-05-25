@@ -4,6 +4,7 @@
 
 ### Added
 
+- **briefing**: Added server version, tool/resource/prompt surface area counts, test health indicators, unreleased change summary, `localTime`, word-boundary truncation (120 chars), and zero-relationship graph suppression to `memory://briefing` output
 - **admin**: Added `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables

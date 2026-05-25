@@ -94,7 +94,7 @@ describe('buildJournalContext', () => {
     })
 
     it('should truncate long content previews with ellipsis', () => {
-        const longContent = 'A'.repeat(100)
+        const longContent = 'A'.repeat(200)
         const db = createMockDb({
             getRecentEntries: vi.fn().mockReturnValue([
                 {
@@ -109,8 +109,9 @@ describe('buildJournalContext', () => {
 
         const result = buildJournalContext(context, createMockConfig() as never)
 
-        expect(result.latestEntries[0]!.preview).toHaveLength(83 + 53) // 80 + '...' + 53 for tags
-        expect(result.latestEntries[0]!.preview).toMatch(/\.\.\.<\/untrusted_remote_content>$/)
+        // 120-char preview with word-boundary truncation, using Unicode ellipsis
+        // No word boundaries in 'AAAA...' so it truncates at exactly 120
+        expect(result.latestEntries[0]!.preview).toContain('\u2026</untrusted_remote_content>')
     })
 
     it('should handle empty database', () => {
@@ -238,7 +239,7 @@ describe('buildTeamContext', () => {
     })
 
     it('should truncate long team content previews', () => {
-        const longContent = 'B'.repeat(100)
+        const longContent = 'B'.repeat(200)
         const teamDb = createMockDb({
             getRecentEntries: vi.fn().mockReturnValue([
                 {
@@ -255,11 +256,10 @@ describe('buildTeamContext', () => {
 
         const result = buildTeamContext(context, config as never)
 
-        // Team info preview uses 60 chars, team entries preview uses 80 chars
-        expect(result!.teamInfo.latestPreview).toContain('...')
-        expect(result!.teamLatestEntries![0]!.preview).toMatch(
-            /\.\.\.<\/untrusted_remote_content>$/
-        )
+        // Team info preview uses 60 chars, team entries preview uses 120 chars
+        // Unicode ellipsis (…) instead of ASCII dots (...)
+        expect(result!.teamInfo.latestPreview).toContain('\u2026')
+        expect(result!.teamLatestEntries![0]!.preview).toContain('\u2026')
     })
 })
 

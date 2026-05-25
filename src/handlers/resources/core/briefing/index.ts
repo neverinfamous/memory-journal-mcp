@@ -26,6 +26,7 @@ import {
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
+import { buildSystemContext } from './system-section.js'
 
 export const briefingResource: InternalResourceDef = {
     uri: 'memory://briefing',
@@ -87,21 +88,22 @@ async function buildBriefingData(
     const flags = buildFlagsContext(context)
     const graphStats = buildGraphContext(context)
 
-    // Format the latest entry preview for user message
-    const latestPreview = journal.latestEntries[0]
-        ? `#${journal.latestEntries[0].id} (${journal.latestEntries[0].type}): ${journal.latestEntries[0].preview}`
-        : 'No entries yet'
+    const latestPreviews = journal.latestEntries.map(
+        (e) => `#${e.id} (${e.type}): ${e.preview}`
+    )
 
     const summaryPreviews = journal.sessionSummaries
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
+
+    const system = buildSystemContext()
 
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
         branchName: github?.branch ?? 'unknown',
         ciStatus: github?.ci ?? 'unknown',
         totalEntries: journal.totalEntries,
-        latestPreview,
+        latestPreviews,
         summaryPreviews,
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,
@@ -110,6 +112,13 @@ async function buildBriefingData(
         analyticsInsights: insights ?? undefined,
         flagSummary: flags,
         graphSummary: graphStats,
+        version: system.version,
+        toolCount: system.toolCount,
+        resourceCount: system.resourceCount,
+        promptCount: system.promptCount,
+        localTime: system.localTime,
+        unreleasedSummary: system.unreleasedSummary ?? undefined,
+        testHealth: system.testHealth ?? undefined,
     })
 
     return {

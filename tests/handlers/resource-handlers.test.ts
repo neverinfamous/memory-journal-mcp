@@ -99,7 +99,7 @@ describe('Resource Handlers', () => {
 
             const text = result.data as string
             expect(text).toBeDefined()
-            expect(text).toContain('Session Context')
+            expect(text).toContain('**GitHub**')
         })
 
         it('should read memory://instructions', async () => {

@@ -303,6 +303,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `context-section.ts` | Journal context (entry count, recent entries, team DB)       |
 | `github-section.ts`  | GitHub context (repo, CI, issues, PRs, milestones, insights) |
 | `user-message.ts`    | User message (rules file, skills directory awareness)        |
+| `system-section.ts`  | System context (version, tool/resource/prompt counts, test health, unreleased summary, localTime) |
 
 ---
 

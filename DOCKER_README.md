@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-91.07%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-91.18%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                 |
 | **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5, semantic vector similarity, heuristics, and date filters                                                                                               |
 | **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                    |
-| **Configurable Briefing**     | 15 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness, chronological grounding                                                         |
+| **Upgraded Session Briefing** | `memory://briefing` delivers version, surface area, test health, unreleased changes, analytics, and `localTime` in ~350 tokens                                                               |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                      |
 | **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                            |
 | **Team Collaboration**        | 25 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution, Hush Protocol flags                                                 |

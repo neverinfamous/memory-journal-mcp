@@ -21,12 +21,18 @@ import {
 // ============================================================================
 
 /** Content preview length for briefing entry summaries */
-const PREVIEW_LENGTH = 80
+const PREVIEW_LENGTH = 120
 
 function cleanPreview(content: string | undefined | null, length: number): string {
     if (!content) return ''
     const clean = content.trim().replace(/\s+/g, ' ')
-    return clean.slice(0, length) + (clean.length > length ? '...' : '')
+    if (clean.length <= length) return clean
+
+    // Truncate at a word boundary to avoid cutting mid-word
+    const truncated = clean.slice(0, length)
+    const lastSpace = truncated.lastIndexOf(' ')
+    const boundary = lastSpace > length * 0.6 ? lastSpace : length
+    return clean.slice(0, boundary) + '…'
 }
 
 export interface JournalContext {

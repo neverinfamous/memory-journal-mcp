@@ -1,29 +1,36 @@
 /**
  * Briefing — User Message Formatter
  *
- * Formats the briefing summary table displayed to the user.
+ * Formats the briefing as a hybrid markdown layout:
+ * - Table rows for dense groups (GitHub, Journal, System) — compresses
+ *   multiple data points into single rows using · separators.
+ * - Flat lines for metrics/analytics — emoji-heavy content reads better
+ *   as standalone lines.
+ *
+ * No HTML `<br>` tags are used — table cells use · separators for
+ * universal renderer compatibility.
  */
 
 import type { BriefingGitHub } from './github-section.js'
 import type { RulesFile, SkillsDir, FlagSummary, GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
+import type { UnreleasedSummary, TestHealth } from './system-section.js'
 
-const escapeTableCell = (text: string): string =>
-    text
-        .replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
-        .replace(/\\/g, '\\\\')
-        .replace(/\|/g, '\\|')
-        .replace(/\r?\n/g, '<br>')
+const escapeContent = (text: string): string =>
+    text.replace(/<\/?untrusted_remote_content[^>]*>/gi, '').replace(/\r?\n/g, ' ')
+
+/** Escape pipe characters for use inside markdown table cells */
+const escapeCell = (text: string): string => escapeContent(text).replace(/\|/g, '\\|')
 
 /**
- * Build the user-facing markdown table for the briefing.
+ * Build the user-facing markdown output for the briefing.
  */
 export function formatUserMessage(opts: {
     repoName: string
     branchName: string
     ciStatus: string
     totalEntries: number
-    latestPreview: string
+    latestPreviews: string[]
     summaryPreviews?: string[] | null
     github: BriefingGitHub | null
     teamTotalEntries?: number
@@ -32,12 +39,19 @@ export function formatUserMessage(opts: {
     analyticsInsights?: BriefingInsights
     flagSummary?: FlagSummary
     graphSummary?: GraphSummary
+    version?: string
+    toolCount?: number
+    resourceCount?: number
+    promptCount?: number
+    localTime?: string
+    unreleasedSummary?: UnreleasedSummary
+    testHealth?: TestHealth
 }): string {
     const {
         repoName,
         branchName,
         totalEntries,
-        latestPreview,
+        latestPreviews,
         summaryPreviews,
         github,
         rulesFile,
@@ -69,42 +83,49 @@ export function formatUserMessage(opts: {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // Group 1: GitHub / Repo
-    // ------------------------------------------------------------------------
-    const repoLines = [
-        `**Repo:** ${escapeTableCell(repoName)}`,
-        `**Branch:** ${escapeTableCell(branchName)}`,
-        `**CI:** ${escapeTableCell(ciDisplay)}`,
+    // ========================================================================
+    // TABLE ROW 1: GitHub
+    // ========================================================================
+    const githubParts = [
+        escapeCell(repoName),
+        `${escapeCell(branchName)} · ${escapeCell(ciDisplay)}`,
     ]
 
+    // ========================================================================
+    // TABLE ROW 2: Tracking (Issues · PRs · Milestones)
+    // ========================================================================
+    const trackingParts: string[] = []
+
     if (github) {
+        // Issues
         if (github.openIssueList && github.openIssueList.length > 0) {
             const titles = github.openIssueList
                 .map((i) => `#${String(i.number)} ${i.title}`)
                 .join(' · ')
-            repoLines.push(`**Issues:** ${String(github.openIssues)} open: ${escapeTableCell(titles)}`)
+            trackingParts.push(`Issues: ${String(github.openIssues)} open: ${escapeCell(titles)}`)
         } else {
-            repoLines.push(`**Issues:** ${String(github.openIssues)} open`)
+            trackingParts.push(`Issues: ${String(github.openIssues)} open`)
         }
 
+        // PRs
         if (github.prStatusSummary) {
             const s = github.prStatusSummary
             const parts: string[] = []
             if (s.open > 0) parts.push(`${String(s.open)} open`)
             if (s.merged > 0) parts.push(`${String(s.merged)} merged`)
             if (s.closed > 0) parts.push(`${String(s.closed)} closed`)
-            repoLines.push(`**PRs:** ${parts.join(' · ') || '0'}`)
+            trackingParts.push(`PRs: ${parts.join(', ') || '0'}`)
         } else if (github.openPrList && github.openPrList.length > 0) {
             const titles = github.openPrList.map((p) => `#${String(p.number)} ${p.title}`).join(' · ')
-            repoLines.push(`**PRs:** ${String(github.openPRs)} open: ${escapeTableCell(titles)}`)
+            trackingParts.push(`PRs: ${String(github.openPRs)} open: ${escapeCell(titles)}`)
         } else {
-            repoLines.push(`**PRs:** ${String(github.openPRs)} open`)
+            trackingParts.push(`PRs: ${String(github.openPRs)} open`)
         }
 
+        // Milestones
         if (github.milestones.length > 0) {
-            repoLines.push(
-                `**Milestones:** ${escapeTableCell(
+            trackingParts.push(
+                `MS: ${escapeCell(
                     github.milestones
                         .map(
                             (m) =>
@@ -115,27 +136,65 @@ export function formatUserMessage(opts: {
             )
         }
     }
-    const githubGroup = `| **GitHub** | ${repoLines.join('<br>')} |`
 
-    // ------------------------------------------------------------------------
-    // Group 2: Journal
-    // ------------------------------------------------------------------------
-    const journalLines = [`**DB:** ${String(totalEntries)} entries`]
+    // ========================================================================
+    // TABLE ROW 2: Journal
+    // ========================================================================
+    const journalParts = [`${String(totalEntries)} entries`]
     if (opts.teamTotalEntries !== undefined) {
-        journalLines.push(`**Team DB:** ${String(opts.teamTotalEntries)} entries`)
+        journalParts.push(`Team: ${String(opts.teamTotalEntries)}`)
     }
-    journalLines.push(`**Latest:** ${escapeTableCell(latestPreview)}`)
+    if (latestPreviews.length > 0) {
+        journalParts.push(`Latest: ${escapeCell(latestPreviews[0] ?? '')}`)
+        for (let i = 1; i < latestPreviews.length; i++) {
+            journalParts.push(`Entry: ${escapeCell(latestPreviews[i] ?? '')}`)
+        }
+    } else {
+        journalParts.push('Latest: No entries yet')
+    }
     if (summaryPreviews && summaryPreviews.length > 0) {
         for (const s of summaryPreviews) {
-            journalLines.push(`**Summary:** ${escapeTableCell(s)}`)
+            journalParts.push(`Summary: ${escapeCell(s)}`)
         }
     }
-    const journalGroup = `| **Journal** | ${journalLines.join('<br>')} |`
 
-    // ------------------------------------------------------------------------
-    // Group 3: Insights & Copilot
-    // ------------------------------------------------------------------------
-    const insightsLines: string[] = []
+    // ========================================================================
+    // TABLE ROW 3: System
+    // ========================================================================
+    const systemParts: string[] = []
+
+    // Version + surface area
+    if (opts.version) systemParts.push(`v${opts.version}`)
+    if (opts.toolCount !== undefined) systemParts.push(`${String(opts.toolCount)} tools`)
+    if (opts.resourceCount !== undefined) systemParts.push(`${String(opts.resourceCount)} res`)
+    if (opts.promptCount !== undefined) systemParts.push(`${String(opts.promptCount)} prompts`)
+
+    // Test health
+    if (opts.testHealth) {
+        const th = opts.testHealth
+        const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}%)` : ''
+        systemParts.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
+    }
+
+    // Local time
+    if (opts.localTime) systemParts.push(opts.localTime)
+
+    // Rules + Skills
+    if (rulesFile) {
+        systemParts.push(
+            `${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`
+        )
+    }
+    if (skillsDir) {
+        systemParts.push(`${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
+    }
+
+    // ========================================================================
+    // FLAT LINES: Insights + Analytics
+    // ========================================================================
+    const flatLines: string[] = []
+
+    // Insights
     if (github?.insights) {
         const parts: string[] = []
         if (github.insights.stars !== null) parts.push(`⭐ ${String(github.insights.stars)}`)
@@ -146,67 +205,78 @@ export function formatUserMessage(opts: {
             parts.push(`👁️ ${String(github.insights.views14d)}`)
         if (parts.length > 0) {
             const trafficNote = github.insights.clones14d !== undefined ? ' (14d)' : ''
-            insightsLines.push(`${parts.join(' · ')}${trafficNote}`)
+            flatLines.push(`**Insights:** ${parts.join(' · ')}${trafficNote}`)
         }
     }
     if (github?.copilotReviews) {
         const cr = github.copilotReviews
-        insightsLines.push(
+        flatLines.push(
             `**Copilot:** ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
         )
     }
-    const insightsGroup =
-        insightsLines.length > 0 ? `\n| **Insights** | ${insightsLines.join('<br>')} |` : ''
 
-    // ------------------------------------------------------------------------
-    // Group 4: Analytics & Graph
-    // ------------------------------------------------------------------------
-    const analyticsLines: string[] = []
+    // Analytics
     if (analyticsInsights) {
-        analyticsLines.push(`📈 ${analyticsInsights.activityTrend}`)
+        flatLines.push(`📈 ${analyticsInsights.activityTrend}`)
+        const metricParts: string[] = []
         if (analyticsInsights.significanceSpike !== null)
-            analyticsLines.push(`🔥 ${analyticsInsights.significanceSpike}`)
+            metricParts.push(`🔥 ${analyticsInsights.significanceSpike}`)
         if (analyticsInsights.relationshipDensity !== undefined)
-            analyticsLines.push(`🔗 Density: ${analyticsInsights.relationshipDensity}`)
+            metricParts.push(`🔗 Density: ${analyticsInsights.relationshipDensity}`)
+        if (metricParts.length > 0) flatLines.push(metricParts.join(' · '))
         if (analyticsInsights.staleProjects.length > 0)
-            analyticsLines.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
+            flatLines.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
     }
-    if (graphSummary) {
+
+    // Graph (suppress when zero)
+    if (graphSummary && graphSummary.totalRelationships > 0) {
         const topTypes = Object.entries(graphSummary.causalMetrics)
             .filter(([_, count]) => count > 0)
             .map(([type, count]) => `${type}: ${String(count)}`)
             .join(', ') || 'none'
-        analyticsLines.push(
-            `**Graph:** ${String(graphSummary.totalRelationships)} relationships · Top: ${escapeTableCell(topTypes)}`
+        flatLines.push(
+            `**Graph:** ${String(graphSummary.totalRelationships)} relationships · Top: ${escapeContent(topTypes)}`
         )
     }
-    const analyticsGroup =
-        analyticsLines.length > 0 ? `\n| **Analytics** | ${escapeTableCell(analyticsLines.join('<br>'))} |` : ''
 
-    // ------------------------------------------------------------------------
-    // Group 5: System
-    // ------------------------------------------------------------------------
-    const systemLines: string[] = []
-    if (rulesFile)
-        systemLines.push(
-            `**Rules:** ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified})`
-        )
-    if (skillsDir)
-        systemLines.push(
-            `**Skills:** ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available`
-        )
-    const systemGroup =
-        systemLines.length > 0 ? `\n| **System** | ${systemLines.join('<br>')} |` : ''
+    // Unreleased
+    if (opts.unreleasedSummary) {
+        const u = opts.unreleasedSummary
+        const parts: string[] = []
+        if (u.added > 0) parts.push(`${String(u.added)} added`)
+        if (u.changed > 0) parts.push(`${String(u.changed)} changed`)
+        if (u.fixed > 0) parts.push(`${String(u.fixed)} fixed`)
+        if (u.security > 0) parts.push(`${String(u.security)} security`)
+        if (u.removed > 0) parts.push(`${String(u.removed)} removed`)
+        if (parts.length > 0) {
+            flatLines.push(`**Unreleased:** ${parts.join(' · ')}`)
+        }
+    }
 
-    // ------------------------------------------------------------------------
+    // ========================================================================
     // Assembly
-    // ------------------------------------------------------------------------
+    // ========================================================================
     let flagsAlert = ''
     if (opts.flagSummary && opts.flagSummary.count > 0) {
         flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
     }
 
-    const tableOutput = `${flagsAlert}📋 **Session Context Loaded**\n\n| Context | Value |\n|---------|-------|\n${githubGroup}\n${journalGroup}${insightsGroup}${analyticsGroup}${systemGroup}`
+    // Build table
+    const tableRows = [
+        '| Context | Details |',
+        '|---------|---------|',
+        `| **GitHub** | ${githubParts.join(' · ')} |`,
+    ]
+    if (trackingParts.length > 0) {
+        tableRows.push(`| **Tracking** | ${trackingParts.join(' · ')} |`)
+    }
+    tableRows.push(`| **Journal** | ${journalParts.join(' · ')} |`)
+    if (systemParts.length > 0) {
+        tableRows.push(`| **System** | ${systemParts.join(' · ')} |`)
+    }
 
-    return tableOutput
+    const sections: string[] = [tableRows.join('\n')]
+    if (flatLines.length > 0) sections.push(flatLines.join('\n'))
+
+    return `${flagsAlert}${sections.join('\n')}`
 }
