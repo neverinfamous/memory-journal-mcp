@@ -15,7 +15,13 @@ Before beginning implementation, you MUST cross-reference the proposed feature a
 - **Out-of-Scope**: Hard block. Halt work immediately and inform the user.
 - **Constraints**: Abide strictly by the constraints (language, architecture, dependencies) defined in the project file.
 
-## 2. Generator / Evaluator Pipeline
+## 2. Security Safety Nets
+
+- **Execution Sandboxing**: Never run unknown or unverified shell scripts directly. Execute isolated tasks within the `tmp/` scratch directory.
+- **Secret Protection**: Check for exposed credentials or PII in diffs before committing. Never commit `.env`.
+- **Command Gates**: Do not execute destructive commands (`rm -rf`, `git reset --hard`) without explicit Human-in-the-Loop approval.
+
+## 3. Generator / Evaluator Pipeline
 
 Features cannot simply be written and committed. They must navigate a rigid pipeline based on the adversarial evaluation pattern:
 

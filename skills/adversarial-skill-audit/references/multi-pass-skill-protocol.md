@@ -20,8 +20,8 @@ Before starting, gather context:
      tags: ["adversarial-skill-audit"]
    })
    ```
-4. **README inventory** — check if a `README.md` lists all skills and
-   whether it's current
+4. **README & Package inventory** — check if `README.md` lists all skills,
+   if `package.json` includes them in `files`, and whether they are current
 
 ### Per-Skill Scorecard
 
@@ -85,7 +85,7 @@ After scoring all skills individually, produce a directory-level overview:
 - **Potential overlaps**: [skills that cover similar domains]
 - **Coverage gaps**: [domains with no skill coverage]
 - **Consistency issues**: [naming conventions, structure differences]
-- **README accuracy**: [is the inventory table current?]
+- **Inventory accuracy**: [is the README table and package.json current?]
 ```
 
 ### Journal

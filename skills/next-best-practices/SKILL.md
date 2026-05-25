@@ -8,6 +8,9 @@ user-invocable: false
 
 Apply these rules when writing or reviewing Next.js code. 
 
+## Auto-Load Mechanism
+This skill is configured with `user-invocable: false` to avoid trigger collisions with other Next.js/React skills. It acts as an implicit dependency that provides detailed file convention and RSC rules when navigating Next.js architectures.
+
 ## 1. File Conventions & Routing
 - **App Router**: Always use the `app/` directory.
 - **Middleware**: Use `middleware.ts` at the root for routing logic.

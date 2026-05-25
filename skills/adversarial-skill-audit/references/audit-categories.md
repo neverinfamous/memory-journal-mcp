@@ -249,6 +249,7 @@ skills.
 - Similar structural patterns (SKILL.md layout, reference organization)
 - Consistent writing style (imperative, reasoning-first)
 - `README.md` inventory is complete and current
+- `package.json` `files` array is complete and current
 - Skill names follow a consistent scheme
 
 ---
@@ -301,7 +302,7 @@ descriptions disambiguate.
 **What to Evaluate:**
 
 - `package.json` (if present) is valid and version-matched
-- README inventory matches actual directory contents
+- README and package.json inventory matches actual directory contents
 - No orphan directories (skill folders without `SKILL.md`)
 - No orphan references (reference files not pointed to from SKILL.md)
 - Consistent file naming across all skills

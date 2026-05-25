@@ -198,7 +198,14 @@ class CreateUserRequest(BaseModel):
     age: int = Field(ge=0, le=150)
 ```
 
-## 8. Anti-Patterns (Never Do These)
+## 8. Security & Safety
+
+- **SQL Injection**: Never use string interpolation for SQL queries. Use an ORM (SQLAlchemy, Django ORM) or parameterized queries (e.g., `cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))`).
+- **Secrets Management**: Never commit `.env` files or hardcode credentials. Use `python-decouple` or `os.environ` to read secrets from the environment.
+- **CSRF & Auth**: Always enable CSRF protection in web frameworks (e.g., `CsrfViewMiddleware` in Django).
+- **Input Validation**: Validate all untrusted input at the boundaries using Pydantic models.
+
+## 9. Anti-Patterns (Never Do These)
 
 | Anti-Pattern                         | Why It's Wrong                     | Do This Instead              |
 | ------------------------------------ | ---------------------------------- | ---------------------------- |
@@ -209,7 +216,7 @@ class CreateUserRequest(BaseModel):
 | `print()` for logging                | No levels, no rotation             | Use `logging` or `structlog` |
 | `== None` / `== True`                | Wrong semantics                    | `is None` / `is True`        |
 
-## 9. Web Frameworks Quick Reference
+## 10. Web Frameworks Quick Reference
 
 | Framework   | Best For                     | Key Pattern                                               |
 | ----------- | ---------------------------- | --------------------------------------------------------- |

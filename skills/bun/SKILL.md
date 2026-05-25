@@ -1,6 +1,9 @@
 ---
 name: bun
-description: Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler.
+description: |
+  Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler.
+  Use when writing, running, testing, or bundling TypeScript/JavaScript with Bun.
+  Triggers on "bun", "bunx", "bun install", "bun test", "bun run".
 ---
 
 Bun is a fast, all-in-one JavaScript runtime, bundler, test runner, and package manager designed as a drop-in replacement for Node.js. When working on projects that use Bun, AI agents should leverage its integrated tooling and native APIs to maximize performance and simplify development.
@@ -78,6 +81,10 @@ await Bun.write('data.json', JSON.stringify({ a: 1 }))
 ### Shell Scripts (`bun:`)
 
 Replace `child_process` and `zx` with the native Bun shell (`$`).
+
+> [!CAUTION]
+> **Command Injection Risk**: Never interpolate untrusted user input directly into a `Bun.$` template literal (`Bun.$`echo ${userInput}``) as it operates like `exec()`. Always use array arguments `Bun.$`echo ${["arg1", "arg2"]}` for untrusted data.
+
 
 ```typescript
 import { $ } from 'bun'

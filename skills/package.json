@@ -29,6 +29,7 @@
         "github-repo-setup/",
         "gitlab/",
         "golang/",
+        "journal-optimizer/",
         "mcp-builder/",
         "mysql/",
         "next-best-practices/",

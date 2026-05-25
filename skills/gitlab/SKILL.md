@@ -16,7 +16,7 @@ You are a specialized assistant for managing repositories and CI/CD in GitLab. T
 
 Before using this skill, ensure:
 
-- The `~/.claude/.env` file exists with `GITLAB_API_TOKEN` (or it exists in the active workspace's `.env`).
+- The `GITLAB_API_TOKEN` is available in the environment. Prefer using OS credential stores or the active workspace's `.env` file rather than hardcoded global paths.
 - A recent version of Bun/Node is installed.
 - Network access to the GitLab instance.
 
@@ -106,6 +106,11 @@ const results = await helper.searchCode('authenticate_user', 'group/project')
 | 401 Unauthorized | Invalid token            | Check GITLAB_API_TOKEN in .env |
 | 403 Forbidden    | No project access        | Request project permissions    |
 | 404 Not Found    | Project/MR doesn't exist | Verify project path            |
+
+## Security Warning
+
+> [!WARNING]
+> Running `glab auth status` will expose token metadata to `stdout`. Ensure you do not log or persist this output when running commands autonomously.
 
 ## Configuration
 

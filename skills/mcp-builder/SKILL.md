@@ -22,6 +22,7 @@ When building or modifying MCP servers, follow these prioritized rules:
 
 - **Blocklists are Defense-in-Depth**: A blocklist (e.g., forbidding `rm -rf` in a terminal tool) is not a primary security boundary. Your primary security is the sandbox, container, or strict schema validation.
 - **No Secrets in Config**: MCP servers must rely on the environment variables for API keys and secrets, never hardcoded files inside the server repository.
+- **Rate Limiting & Input Sanitization**: Aggressively sanitize path arguments to prevent directory traversal (`../../`), and apply basic rate-limiting to tools that trigger heavy compute or external API calls.
 
 ## 3. Deep References
 
@@ -34,36 +35,30 @@ For the complete MCP implementation guide, architecture diagrams, and detailed t
 When you need a minimal, fully compliant MCP server scaffold, use this structure:
 
 ```typescript
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
-const server = new Server({ name: "my-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+// Initialize the modern McpServer pattern
+const server = new McpServer({ name: "my-mcp", version: "1.0.0" });
 
-const MyToolSchema = z.object({ id: z.string() });
-
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [{
-    name: "my_tool",
-    description: "Does something",
-    inputSchema: zodToJsonSchema(MyToolSchema) // Or pre-compiled JSON schema
-  }]
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "my_tool") {
+// Define tools using server.tool() which auto-registers schemas and handlers
+server.tool(
+  "my_tool",
+  "Does something using an ID",
+  { id: z.string().describe("The user ID to process") },
+  async ({ id }) => {
     try {
-      const args = MyToolSchema.parse(request.params.arguments);
-      return { content: [{ type: "text", text: `Got ID: ${args.id}` }] };
+      // Logic here (input is already validated by Zod)
+      return { content: [{ type: "text", text: `Got ID: ${id}` }] };
     } catch (err) {
-      return { isError: true, content: [{ type: "text", text: `Validation Error: ${err}` }] };
+      // Graceful error return
+      return { isError: true, content: [{ type: "text", text: `Error: ${err}` }] };
     }
   }
-  return { isError: true, content: [{ type: "text", text: "Unknown tool" }] };
-});
+);
 
+// Connect via standard I/O
 const transport = new StdioServerTransport();
 await server.connect(transport);
 ```

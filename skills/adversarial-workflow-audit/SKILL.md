@@ -14,15 +14,12 @@ A multi-pass quality auditing system adapted specifically for manual markdown wo
 Unlike agent skills (which trigger automatically), workflows are manually invoked by users 
 and execute sequentially. This audit ensures they are deterministic, safe, and robust.
 
-## The Multi-Pass Protocol
+## When to Load
 
-| Phase | Agent | Output |
-| --- | --- | --- |
-| 0. Web Standards Research | A (Evaluator) | Latest workflow injection vectors and formatting baselines |
-| 1. Evaluator Pass | A (Evaluator) | Scorecards against the 5 Workflow Categories |
-| 2. Adversarial Pass | B (Adversarial) | Stress-test edge cases, missing gates, and loop vulnerabilities |
-| 3. Remediation | A (Evaluator) | Prioritized checklist of required fixes |
-| 4. Copilot Validation | External | Independent workflow quality review |
+Load this skill when any of these apply:
+- Auditing an entire workflows directory for quality and safety.
+- Reviewing a new workflow before finalizing it.
+- The user asks for a workflow quality check or playbook review.
 
 ## Agent Roles
 
@@ -39,6 +36,21 @@ and execute sequentially. This audit ensures they are deterministic, safe, and r
 - If step 2 fails (e.g., tests fail), does the workflow explicitly define the fallback path?
 - Are destructive actions (commits, deployments, deletes) guarded by explicit HITL (Human-in-the-Loop) pauses?
 - Could a vague instruction cause an agent to infinite loop?
+
+## The Multi-Pass Protocol
+
+| Phase | Agent | Output | Entry Type | Tags |
+| --- | --- | --- | --- | --- |
+| 0. Web Standards Research | A (Evaluator) | Latest workflow injection vectors | `workflow_audit_research` | `adversarial-workflow-audit`, `research` |
+| 1. Evaluator Pass | A (Evaluator) | Scorecards against Workflow Categories | `workflow_audit_profile` | `adversarial-workflow-audit`, `profile` |
+| 2. Adversarial Pass | B (Adversarial) | Stress-test edge cases & loop vulnerabilities | `workflow_audit_stress` | `adversarial-workflow-audit`, `stress-test` |
+| 3. Remediation | A (Evaluator) | Prioritized checklist of required fixes | `workflow_audit_remediation` | `adversarial-workflow-audit`, `remediation` |
+| 4. Copilot Validation | External | Independent workflow quality review | `workflow_audit_copilot` | `adversarial-workflow-audit`, `copilot` |
+
+## Deep References
+
+For the specific audit categories and rubric, read:
+- **[Audit Categories Reference](references/audit-categories.md)**
 
 ## External Validation (Phase 4)
 
@@ -60,20 +72,14 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.
 > 
-> **⚠️ TIMEOUT GUIDANCE**: Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts (like Antigravity's 10s `WaitMsBeforeAsync` limit), allow the command to naturally fall into the background. Use the `schedule` tool or wait for the system notification to retrieve the results. Do not skip execution due to timeout constraints.
+> **⚠️ TIMEOUT GUIDANCE**: Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts, allow the command to naturally fall into the background.
 
-> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
-> commands and include their real output. Do NOT fabricate, hallucinate, or
-> predict what Copilot would say. The entire value of Phase 4 is that it
-> provides a genuinely independent perspective. If you cannot run the command
-> (permissions, network, quota), skip Phase 4 and document the skip reason
-> instead of producing synthetic output.
+> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot` commands. Do NOT fabricate or predict what Copilot would say.
 
-## Deep References
+## Feedback Loop
 
-For the specific audit categories and rubric, read:
-- **[Audit Categories Reference](references/audit-categories.md)**
+Every phase creates a journal entry for future retrieval. Ensure the `entry_type` and tags map to the protocol table above.
 
-## Helper Scripts
+## Scripts
 
 - `scripts/check-workflows.ps1`: Gathers baseline structural metrics across a workflows directory.

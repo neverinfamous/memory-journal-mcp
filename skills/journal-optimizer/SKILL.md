@@ -92,56 +92,12 @@ These rules are **mandatory** for all workflows:
 
 ## Workflow 1: Importance Audit (Dry Run)
 
-Analyze the database to surface low-importance entries without modifying
-anything. This is the recommended starting point for all optimization work.
+Analyze the database to surface low-importance entries without modifying anything. This is the recommended starting point for all optimization work.
 
 ### Steps
 
-**Step 1 — Gather statistics:**
-
-```javascript
-const s = await mj.analytics.getStatistics();
-return {
-  total: s.totalEntries,
-  density: s.relationshipComplexity?.avgPerEntry,
-  types: s.entriesByType,
-};
-```
-
-**Step 2 — Score and tier all entries:**
-
-```javascript
-const all = await mj.core.getRecentEntries({ limit: 500 });
-const tiers = { critical: [], high: [], moderate: [], low: [], expendable: [] };
-
-for (const e of all.entries) {
-  const score = e.importanceScore ?? 0;
-  if (score >= 0.50) tiers.critical.push(e);
-  else if (score >= 0.30) tiers.high.push(e);
-  else if (score >= 0.15) tiers.moderate.push(e);
-  else if (score > 0) tiers.low.push(e);
-  else tiers.expendable.push(e);
-}
-
-return {
-  distribution: Object.fromEntries(
-    Object.entries(tiers).map(([k, v]) => [k, v.length])
-  ),
-  expendableSample: tiers.expendable.slice(0, 10).map(e => ({
-    id: e.id,
-    type: e.entryType,
-    tags: e.tags,
-    age: Math.floor((Date.now() - new Date(e.timestamp).getTime()) / 86400000) + 'd',
-    snippet: e.content.substring(0, 80),
-  })),
-  lowSample: tiers.low.slice(0, 5).map(e => ({
-    id: e.id,
-    score: e.importanceScore,
-    type: e.entryType,
-    snippet: e.content.substring(0, 80),
-  })),
-};
-```
+**Step 1 & 2 — Gather stats and score entries:**
+*Execute the script from [references/optimizer-scripts.md#workflow-1-importance-audit](references/optimizer-scripts.md).*
 
 **Step 3 — Present results:**
 
@@ -166,44 +122,13 @@ Soft-delete entries matching user-selected criteria from the audit.
 
 ### Steps
 
-1. Run **Workflow 1** if not already completed this session
-2. Present the candidate list with importance breakdowns
-3. **HITL Gate**: Ask user to confirm which entries to delete. Offer
-   selection modes:
-   - By tier: "Delete all expendable entries"
-   - By age: "Delete entries older than 60 days scoring below 0.15"
-   - By type: "Delete all `personal_reflection` entries scoring 0.00"
-   - By ID list: "Delete entries 1234, 1235, 1240"
-4. Call `backup_journal` — **abort** if backup fails
+1. Run **Workflow 1** if not already completed this session.
+2. Present the candidate list with importance breakdowns.
+3. **HITL Gate**: Ask user to confirm which entries to delete. Offer selection modes (by tier, age, type, or ID).
+4. Call `backup_journal` — **abort** if backup fails.
 5. Execute the soft-delete batch:
-
-```javascript
-const ids = [/* user-approved IDs */];
-const backup = await mj.backup.backupJournal();
-if (!backup.success) return { error: 'Backup failed — aborting', backup };
-
-const results = [];
-for (const id of ids) {
-  const r = await mj.admin.deleteEntry({ entry_id: id });
-  results.push({ id, success: r.success });
-}
-
-const ok = results.filter(r => r.success).length;
-const fail = results.filter(r => !r.success).length;
-return { deleted: ok, failed: fail, backupFile: backup.filename };
-```
-
-6. Report results and log a maintenance entry:
-
-```javascript
-await mj.core.createEntry({
-  content: `Database optimization: soft-deleted ${ok} entries (batch). Backup: ${backup.filename}`,
-  entry_type: 'enhancement',
-  tags: ['database-optimizer', 'cleanup'],
-});
-```
-
-7. Provide revert instructions (see Revert Guide below)
+   *Execute the script from [references/optimizer-scripts.md#workflow-2-targeted-cleanup](references/optimizer-scripts.md).*
+6. Provide revert instructions (see Revert Guide below).
 
 ---
 
@@ -213,38 +138,13 @@ Find and soft-delete entries with zero relationships.
 
 ### Steps
 
-1. Get the orphan count from statistics:
+1. Retrieve orphaned statistics and entries:
+   *Execute the script from [references/optimizer-scripts.md#workflow-3-orphan-cleanup](references/optimizer-scripts.md).*
+2. Present the orphan list. Flag any with `significance_type` set — these should NOT be deleted without explicit approval.
+3. **HITL Gate**: User selects which orphans to delete.
+4. Backup → soft-delete batch → report → log maintenance entry.
 
-```javascript
-const s = await mj.analytics.getStatistics();
-return { total: s.totalEntries };
-```
-
-2. Retrieve orphaned entries — these are entries with an importance score
-   that has zero contributions from the `relationships` and `causal`
-   components:
-
-```javascript
-const all = await mj.core.getRecentEntries({ limit: 500, sort_by: 'importance' });
-const orphans = all.entries.filter(e => (e.importanceScore ?? 0) === 0);
-return orphans.slice(0, 50).map(e => ({
-  id: e.id,
-  type: e.entryType,
-  tags: e.tags,
-  significance: e.significanceType,
-  age: Math.floor((Date.now() - new Date(e.timestamp).getTime()) / 86400000) + 'd',
-  snippet: e.content.substring(0, 80),
-}));
-```
-
-3. Present the orphan list. Flag any with `significance_type` set —
-   these should NOT be deleted without explicit approval
-4. **HITL Gate**: User selects which orphans to delete
-5. Backup → soft-delete batch → report → log maintenance entry
-
-> **Alternative to deletion**: For orphans that have value but lack
-> connections, suggest using `link_entries` to connect them to related
-> entries instead of deleting them. This improves graph density.
+> **Alternative to deletion**: For orphans that have value but lack connections, suggest using `link_entries` to connect them to related entries instead of deleting them.
 
 ---
 
@@ -256,130 +156,38 @@ Find entries with semantically similar content that may be redundant.
 
 ### Steps
 
-1. Identify candidate duplicates using semantic search. For each recent
-   entry, search for similar entries and flag high-similarity pairs:
+1. Identify candidate duplicates using semantic search:
+   *Execute the script from [references/optimizer-scripts.md#workflow-4-duplicate-detection](references/optimizer-scripts.md).*
+2. Present duplicate pairs side-by-side with recommendations.
+3. **HITL Gate**: User selects which duplicates to remove.
+4. Backup → soft-delete the lower-scoring entry from each pair → report.
 
-```javascript
-const recent = await mj.core.getRecentEntries({ limit: 50 });
-const candidates = [];
-
-for (const entry of recent.entries) {
-  const similar = await mj.search.semanticSearch({
-    query: entry.content.substring(0, 200),
-    limit: 5,
-  });
-
-  for (const match of similar.entries) {
-    if (match.id !== entry.id && match.similarity > 0.85) {
-      candidates.push({
-        entryA: { id: entry.id, score: entry.importanceScore, snippet: entry.content.substring(0, 60) },
-        entryB: { id: match.id, score: match.importanceScore, snippet: match.content.substring(0, 60) },
-        similarity: match.similarity,
-      });
-    }
-  }
-}
-
-// Deduplicate pairs (A↔B and B↔A are the same pair)
-const seen = new Set();
-const unique = candidates.filter(c => {
-  const key = [Math.min(c.entryA.id, c.entryB.id), Math.max(c.entryA.id, c.entryB.id)].join('-');
-  if (seen.has(key)) return false;
-  seen.add(key);
-  return true;
-});
-
-return { duplicatePairs: unique.length, pairs: unique.slice(0, 15) };
-```
-
-2. Present duplicate pairs side-by-side with:
-   - Both entry IDs, importance scores, and content snippets
-   - Recommendation: keep the entry with the higher importance score
-   - Flag pairs where both entries have relationships (merging may be
-     better than deleting)
-3. **HITL Gate**: User selects which duplicates to remove
-4. Backup → soft-delete the lower-scoring entry from each pair → report
-
-> **Note**: Semantic search requires the vector index. If
-> `get_vector_index_stats` shows zero indexed entries, suggest running
-> `rebuild_vector_index` first.
+> **Note**: Semantic search requires the vector index. If `get_vector_index_stats` shows zero indexed entries, suggest running `rebuild_vector_index` first.
 
 ---
 
 ## Workflow 5: Type-Based Cleanup
 
-Clean up entries by `entry_type` — useful for removing bulk categories
-that were misclassified or have outlived their usefulness.
+Clean up entries by `entry_type` — useful for removing bulk categories that were misclassified or have outlived their usefulness.
 
 ### Steps
 
-1. Aggregate entry counts by type:
-
-```javascript
-const s = await mj.analytics.getStatistics();
-return s.entriesByType;
-```
-
-2. Present the type breakdown as a table, sorted by count descending.
-   Flag types that are commonly low-value:
-   - `personal_reflection` — often a default misclassification
-   - `retrospective` — session summaries that may be stale
-   - `note` — generic entries that lack specificity
-
-3. User selects which types to target and an age threshold (e.g.,
-   "delete all `personal_reflection` entries older than 30 days")
-
+1. Aggregate entry counts by type using `mj.analytics.getStatistics()`.
+2. Present the type breakdown. Flag commonly low-value types (`personal_reflection`, `retrospective`, `note`).
+3. User selects which types to target and an age threshold.
 4. Preview matching entries:
-
-```javascript
-const cutoff = new Date();
-cutoff.setDate(cutoff.getDate() - 30); // user-specified days
-const matches = await mj.search.searchByDateRange({
-  start_date: '2020-01-01',
-  end_date: cutoff.toISOString().split('T')[0],
-  entry_type: 'personal_reflection',
-  limit: 100,
-});
-return matches.entries.map(e => ({
-  id: e.id,
-  score: e.importanceScore,
-  tags: e.tags,
-  snippet: e.content.substring(0, 80),
-}));
-```
-
-5. **HITL Gate**: User reviews and approves the candidate list
-6. Backup → soft-delete → report → log maintenance entry
+   *Execute the script from [references/optimizer-scripts.md#workflow-5-type-based-cleanup](references/optimizer-scripts.md).*
+5. **HITL Gate**: User reviews and approves the candidate list.
+6. Backup → soft-delete → report → log maintenance entry.
 
 ---
 
 ## Revert Guide
 
 Every workflow creates a backup before mutations. To revert:
+*Follow the restoration commands in [references/optimizer-scripts.md#revert-guide](references/optimizer-scripts.md).*
 
-**Step 1 — Find the backup:**
-```javascript
-const backups = await mj.backup.listBackups();
-return backups.backups; // Find the pre-cleanup backup by timestamp
-```
-
-**Step 2 — Restore:**
-```javascript
-await mj.backup.restoreBackup({ filename: 'pre-cleanup-backup-TIMESTAMP.db' });
-```
-
-**Step 3 — Verify:**
-```javascript
-const s = await mj.analytics.getStatistics();
-return { total: s.total_entries }; // Should match pre-cleanup count
-```
-
-> **Important**: Soft-deleted entries are still physically present in the
-> database. They are excluded from queries but occupy disk space. The
-> entries are only permanently removed when:
-> - `delete_entry` is called with `permanent: true`
-> - A backup is restored from a point before the soft-delete
-> - The database is rebuilt from an export
+> **Important**: Soft-deleted entries are physically present but excluded from queries. They are only permanently removed via `permanent: true`, restoring an old backup, or rebuilding from an export.
 
 ---
 

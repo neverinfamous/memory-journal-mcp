@@ -14,6 +14,8 @@ The new GitHub Copilot agentic CLI is integrated directly into the GitHub CLI (`
 
 When integrated into an AI workflow (AI evaluating AI), it acts as a robust secondary reviewer mapping against different context windows and potentially different foundational models than the primary agent, significantly reducing confirmation bias during PR or full-repository reviews.
 
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in non-interactive mode using the `-p` (or `--prompt`) flag. Omitting this flag will launch an interactive UI and hang the agent indefinitely. Use `-s` (silent) to suppress styling/decorations and output raw text.
+
 ## Installation & Authentication Baseline
 
 Before using the CLI in automated pipelines, ensure the terminal environment is equipped and authenticated:
@@ -38,8 +40,6 @@ However, you can leverage its single-shot non-interactive mode (`-p`) for target
 
 ### Direct Tool Commands
 
-> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in non-interactive mode using the `-p` (or `--prompt`) flag. Omitting this flag will launch an interactive UI and hang the agent indefinitely. Use `-s` (silent) to suppress styling/decorations and output raw text.
-
 For precise shell suggestions or file explanations in automated workflows:
 
 ```bash
@@ -53,3 +53,7 @@ gh copilot -p -s "explain src/utils/crypto.ts"
 ## Workflows Integration
 
 This skill works synergistically with `github-commander`. Use the `copilot-audit` workflow via `github-commander` to execute a structured, auditable validation loop utilizing this CLI before generating PRs.
+
+### Quota & Rate Limiting
+
+Batch requests where possible when reviewing large repositories. Copilot CLI is subject to GitHub API rate limits. Instead of evaluating 50 files individually, group your prompts to evaluate architectural directories in conceptual batches.

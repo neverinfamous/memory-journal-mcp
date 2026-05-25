@@ -1,34 +1,18 @@
 ---
 name: building-ai-agent-on-cloudflare
 description: |
-  Builds AI agents on Cloudflare using the Agents SDK with state management,
-  real-time WebSockets, scheduled tasks, tool integration, and chat capabilities.
-  Generates production-ready agent code deployed to Workers.
-
-  Use when: user wants to "build an agent", "AI agent", "chat agent", "stateful
-  agent", mentions "Agents SDK", needs "real-time AI", "WebSocket AI", or asks
-  about agent "state management", "scheduled tasks", or "tool calling".
+  High-level integration guide for deploying AI agents on Cloudflare. 
+  Use when initializing a new Cloudflare agent project using the CLI `create cloudflare` tools.
+  For detailed implementation, state management, or WebSockets, refer to the `agents-sdk` skill.
 ---
 
-# Building Cloudflare Agents
+# Deploying AI Agents on Cloudflare
 
-Creates AI-powered agents using Cloudflare's Agents SDK with persistent state, real-time communication, and tool integration.
+This is a high-level integration guide for bootstrapping Cloudflare AI agents.
 
-## When to Use
+## 1. Project Initialization
 
-- User wants to build an AI agent or chatbot
-- User needs stateful, real-time AI interactions
-- User asks about the Cloudflare Agents SDK
-- User wants scheduled tasks or background AI work
-- User needs WebSocket-based AI communication
-
-## Prerequisites
-
-- Cloudflare account with Workers enabled
-- Node.js 18+ and npm/pnpm/yarn
-- Wrangler CLI (`npm install -g wrangler`)
-
-## Quick Start
+When asked to scaffold a new agent, use the official Cloudflare CLI template:
 
 ```bash
 npm create cloudflare@latest -- my-agent --template=cloudflare/agents-starter
@@ -36,229 +20,30 @@ cd my-agent
 npm start
 ```
 
-Agent runs at `http://localhost:8787`
+## 2. Delegation to `agents-sdk`
 
-## Core Concepts
+**CRITICAL**: This document no longer maintains detailed implementation logic to prevent duplication.
 
-### What is an Agent?
+For all code implementation details, including:
+- WebSockets (`onConnect`, `onMessage`)
+- State Management (`this.state`, `this.setState`)
+- Scheduled Tasks (`this.schedule`)
+- Durable Workflows
+- MCP Integration (`McpAgent`)
 
-An Agent is a stateful, persistent AI service that:
-- Maintains state across requests and reconnections
-- Communicates via WebSockets or HTTP
-- Runs on Cloudflare's edge via Durable Objects
-- Can schedule tasks and call tools
-- Scales horizontally (each user/session gets own instance)
+**→ You MUST refer to the `agents-sdk` skill and its references.**
 
-### Agent Lifecycle
+## 3. Deployment
 
-```
-Client connects → Agent.onConnect() → Agent processes messages
-                                    → Agent.onMessage()
-                                    → Agent.setState() (persists + syncs)
-Client disconnects → State persists → Client reconnects → State restored
-```
-
-## Basic Agent Structure
-
-See [references/websockets_and_state.md](references/websockets_and_state.md) for the basic agent structure and WebSocket (`onConnect`, `onMessage`) patterns.
-
-## Entry Point Configuration
-
-```typescript
-// src/index.ts
-import { routeAgentRequest } from "agents";
-import { MyAgent } from "./agent";
-
-export default {
-  async fetch(request: Request, env: Env) {
-    // routeAgentRequest handles routing to /agents/:class/:name
-    return (
-      (await routeAgentRequest(request, env)) ||
-      new Response("Not found", { status: 404 })
-    );
-  },
-};
-
-export { MyAgent };
-```
-
-Clients connect via: `wss://my-agent.workers.dev/agents/MyAgent/session-id`
-
-## Wrangler Configuration
-
-```toml
-name = "my-agent"
-main = "src/index.ts"
-compatibility_date = "2024-12-01"
-
-[ai]
-binding = "AI"
-
-[durable_objects]
-bindings = [{ name = "AGENT", class_name = "MyAgent" }]
-
-[[migrations]]
-tag = "v1"
-new_classes = ["MyAgent"]
-```
-
-## State Management
-
-See [references/websockets_and_state.md](references/websockets_and_state.md) for detailed examples on reading/updating state and using the embedded SQLite storage (`this.sql`).
-
-## Scheduled Tasks
-
-Agents can schedule future work:
-
-```typescript
-async onMessage(connection: Connection, message: string) {
-  const data = JSON.parse(message);
-
-  if (data.type === "schedule_reminder") {
-    // Schedule task for 1 hour from now
-    const { id } = await this.schedule(3600, "sendReminder", {
-      message: data.reminderText,
-      userId: data.userId,
-    });
-
-    connection.send(JSON.stringify({ type: "scheduled", taskId: id }));
-  }
-}
-
-// Called when scheduled task fires
-async sendReminder(data: { message: string; userId: string }) {
-  // Send notification, email, etc.
-  console.log(`Reminder for ${data.userId}: ${data.message}`);
-
-  // Can also update state
-  this.setState({
-    ...this.state,
-    lastReminder: new Date().toISOString(),
-  });
-}
-```
-
-### Schedule Options
-
-```typescript
-// Delay in seconds
-await this.schedule(60, "taskMethod", { data });
-
-// Specific date
-await this.schedule(new Date("2025-01-01T00:00:00Z"), "taskMethod", { data });
-
-// Cron expression (recurring)
-await this.schedule("0 9 * * *", "dailyTask", {});  // 9 AM daily
-await this.schedule("*/5 * * * *", "everyFiveMinutes", {});  // Every 5 min
-
-// Manage schedules
-const schedules = await this.getSchedules();
-await this.cancelSchedule(taskId);
-```
-
-## Chat Agent (AI-Powered)
-
-For chat-focused agents, extend `AIChatAgent`:
-
-```typescript
-import { AIChatAgent } from "agents/ai-chat-agent";
-
-export class ChatBot extends AIChatAgent<Env> {
-  // Called for each user message
-  async onChatMessage(message: string) {
-    const response = await this.env.AI.run("@cf/meta/llama-3-8b-instruct", {
-      messages: [
-        { role: "system", content: "You are a helpful assistant." },
-        ...this.messages,  // Automatic history management
-        { role: "user", content: message },
-      ],
-      stream: true,
-    });
-
-    // Stream response back to client
-    return response;
-  }
-}
-```
-
-Features included:
-- Automatic message history
-- Resumable streaming (survives disconnects)
-- Built-in `saveMessages()` for persistence
-
-## Client Integration
-
-### React Hook
-
-```tsx
-import { useAgent } from "agents/react";
-
-function Chat() {
-  const { state, send, connected } = useAgent({
-    agent: "my-agent",
-    name: userId,  // Agent instance ID
-  });
-
-  const sendMessage = (text: string) => {
-    send(JSON.stringify({ type: "chat", content: text }));
-  };
-
-  return (
-    <div>
-      {state.messages.map((msg, i) => (
-        <div key={i}>{msg.role}: {msg.content}</div>
-      ))}
-      <input onKeyDown={(e) => e.key === "Enter" && sendMessage(e.target.value)} />
-    </div>
-  );
-}
-```
-
-### Vanilla JavaScript
-
-```javascript
-const ws = new WebSocket("wss://my-agent.workers.dev/agents/MyAgent/user123");
-
-ws.onopen = () => {
-  console.log("Connected to agent");
-};
-
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log("Received:", data);
-};
-
-ws.send(JSON.stringify({ type: "chat", content: "Hello!" }));
-```
-
-## Common Patterns
-
-See [references/agent-patterns.md](references/agent-patterns.md) for:
-- Tool calling and function execution
-- Multi-agent orchestration
-- RAG (Retrieval Augmented Generation)
-- Human-in-the-loop workflows
-
-## Deployment
+Once the agent is implemented using `agents-sdk` paradigms, deploy using:
 
 ```bash
-# Deploy
+# Deploy to Cloudflare Workers
 npx wrangler deploy
 
-# View logs
+# View live logs
 wrangler tail
 
 # Test endpoint
-curl https://my-agent.workers.dev/agents/MyAgent/test-user
+curl https://my-agent.workers.dev/agents/MyAgent/test-session
 ```
-
-## Troubleshooting
-
-See [references/troubleshooting.md](references/troubleshooting.md) for common issues.
-
-## References
-
-- [references/examples.md](references/examples.md) — Official templates and production examples
-- [references/agent-patterns.md](references/agent-patterns.md) — Advanced patterns
-- [references/state-patterns.md](references/state-patterns.md) — State management strategies
-- [references/troubleshooting.md](references/troubleshooting.md) — Error solutions

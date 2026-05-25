@@ -34,39 +34,25 @@ Reference these guidelines when:
 | 7        | JavaScript Performance    | LOW-MEDIUM  | `js-`        |
 | 8        | Advanced Patterns         | LOW         | `advanced-`  |
 
-## Quick Reference
+## Core Rules (Actionable)
 
 ### 1. Eliminating Waterfalls (CRITICAL)
-- `async-defer-await` - Move await into branches where actually used
-- *(See AGENTS.md for full list of 57 rules)*
+- **`async-defer-await`**: Move `await` into branches where the data is actually used. Do not block the rendering of an entire component tree if only a deeply nested child requires the awaited data.
 
 ### 2. Bundle Size Optimization (CRITICAL)
-- `bundle-barrel-imports` - Import directly, avoid barrel files
-- *(See AGENTS.md for full list)*
+- **`bundle-barrel-imports`**: Avoid barrel files (`index.ts`). Import directly from submodules (e.g., `import { Button } from '@/components/ui/button'` instead of `import { Button } from '@/components'`).
 
 ### 3. Server-Side Performance (HIGH)
-- `server-auth-actions` - Authenticate server actions like API routes
-- *(See AGENTS.md for full list)*
+- **`server-auth-actions`**: Explicitly authenticate all Server Actions and API routes. Do not assume context is protected just because it's called from a protected UI component.
 
 ### 4. Client-Side Data Fetching (MEDIUM-HIGH)
-- `client-swr-dedup` - Use SWR for automatic request deduplication
-- *(See AGENTS.md for full list)*
+- **`client-swr-dedup`**: Use `SWR` or React Query for automatic request deduplication on the client instead of raw `useEffect` fetches.
 
 ### 5. Re-render Optimization (MEDIUM)
-- `rerender-defer-reads` - Don't subscribe to state only used in callbacks
-- *(See AGENTS.md for full list)*
+- **`rerender-defer-reads`**: Do not subscribe to state variables if they are only used inside an event callback. Use `useRef` for mutable values that do not require re-renders.
 
 ### 6. Rendering Performance (MEDIUM)
-- `rendering-animate-svg-wrapper` - Animate div wrapper, not SVG element
-- *(See AGENTS.md for full list)*
-
-### 7. JavaScript Performance (LOW-MEDIUM)
-- `js-batch-dom-css` - Group CSS changes via classes or cssText
-- *(See AGENTS.md for full list)*
-
-### 8. Advanced Patterns (LOW)
-- `advanced-event-handler-refs` - Store event handlers in refs
-- *(See AGENTS.md for full list)*
+- **`rendering-animate-svg-wrapper`**: When animating SVGs, animate the wrapping `div` instead of the internal SVG DOM nodes to leverage GPU acceleration.
 
 ## How to Use
 
