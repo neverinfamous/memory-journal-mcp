@@ -45,6 +45,40 @@ function rpcCall(group: string, method: string, args: unknown[]): Promise<unknow
 // API Proxy Builder
 // =============================================================================
 
+function wrapResult(result: unknown): unknown {
+    if (
+        result !== null &&
+        result !== undefined &&
+        typeof result === 'object' &&
+        'success' in result &&
+        (result as Record<string, unknown>)['success'] === false
+    ) {
+        const failedResult = result as Record<string | symbol, unknown>
+        return new Proxy(failedResult, {
+            get(target, prop) {
+                if (prop in target) return target[prop]
+                if (
+                    typeof prop === 'string' &&
+                    prop !== 'then' &&
+                    prop !== 'catch' &&
+                    prop !== 'finally' &&
+                    prop !== 'constructor' &&
+                    prop !== 'prototype' &&
+                    prop !== 'toJSON'
+                ) {
+                    const errVal = target['error']
+                    const errorMsg = typeof errVal === 'string' ? errVal : 'Unknown error'
+                    throw new Error(
+                        `Attempted to access missing property '${prop}' on a failed operation. API Error: ${errorMsg}`
+                    )
+                }
+                return undefined
+            },
+        })
+    }
+    return result
+}
+
 function buildApiProxy(
     methods: Record<string, string[]>,
     schemas?: Record<string, Record<string, string>>
@@ -54,7 +88,10 @@ function buildApiProxy(
     for (const [group, methodNames] of Object.entries(methods)) {
         if (group === '_topLevel') {
             for (const methodName of methodNames) {
-                const proxyFn = (...args: unknown[]): Promise<unknown> => rpcCall('_topLevel', methodName, args)
+                const proxyFn = async (...args: unknown[]): Promise<unknown> => {
+                    const result = await rpcCall('_topLevel', methodName, args)
+                    return wrapResult(result)
+                }
                 Object.assign(proxyFn, {
                     schema: (): Promise<string> => Promise.resolve(schemas?.['_topLevel']?.[methodName] ?? 'any')
                 })
@@ -66,7 +103,10 @@ function buildApiProxy(
         const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
 
         for (const methodName of methodNames) {
-            const proxyFn = (...args: unknown[]): Promise<unknown> => rpcCall(group, methodName, args)
+            const proxyFn = async (...args: unknown[]): Promise<unknown> => {
+                const result = await rpcCall(group, methodName, args)
+                return wrapResult(result)
+            }
             Object.assign(proxyFn, {
                 schema: (): Promise<string> => Promise.resolve(schemas?.[group]?.[methodName] ?? 'any')
             })

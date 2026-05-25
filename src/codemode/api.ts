@@ -60,6 +60,18 @@ export function toolNameToMethodName(toolName: string, groupName: string): strin
 // =============================================================================
 
 /**
+ * Convert camelCase object keys to snake_case
+ */
+function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+        const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        result[snakeKey] = value
+    }
+    return result
+}
+
+/**
  * Normalize parameters to support positional arguments.
  * Handles both single positional args and multiple positional args.
  */
@@ -69,9 +81,9 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
     if (args.length === 1) {
         const arg = args[0]
 
-        // Object arg — pass through
+        // Object arg — pass through and convert camelCase to snake_case
         if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-            return arg
+            return convertKeysToSnakeCase(arg as Record<string, unknown>)
         }
 
         // Primitive arg (string, number, boolean) — use positional mapping
@@ -104,7 +116,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
         if (args.length > 1) {
             const lastArg = args[args.length - 1]
             if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
-                Object.assign(result, lastArg)
+                Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>))
             }
         }
         return result
@@ -124,7 +136,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
     if (args.length > paramMapping.length) {
         const lastArg = args[args.length - 1]
         if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
-            Object.assign(result, lastArg)
+            Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>))
         }
     }
 

@@ -329,104 +329,7 @@ describe('HELP_CONTENT', () => {
         expect(HELP_CONTENT.size).toBeGreaterThan(0)
     })
 
-    it('should include gotchas entry', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')
-        expect(gotchas).toBeDefined()
-        expect(gotchas).toContain('Critical Patterns')
-    })
 
-    it('should include autoContext field note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('autoContext')
-    })
-
-    it('should include memory://tags vs list_tags note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('memory://tags')
-        expect(gotchas).toContain('list_tags')
-    })
-
-    it('should include tag naming guidance in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('Tag naming')
-        expect(gotchas).toContain('merge_tags')
-    })
-
-    it('should include prStatus field note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('prStatus')
-    })
-
-    it('should include restore_backup behavior note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('restore_backup')
-    })
-
-    it('should include semantic search thresholds note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('Default similarity threshold is 0.25')
-    })
-
-    it('should include causal relationship types note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('Causal relationship types')
-        expect(gotchas).toContain('blocked_by')
-        expect(gotchas).toContain('resolved')
-        expect(gotchas).toContain('caused')
-    })
-
-    it('should include enhanced analytics note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('decisionDensity')
-        expect(gotchas).toContain('relationshipComplexity')
-        expect(gotchas).toContain('activityTrend')
-        expect(gotchas).toContain('causalMetrics')
-    })
-
-    it('should include importance scores note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('importanceBreakdown')
-        expect(gotchas).toContain('significance (30%)')
-        expect(gotchas).toContain('relationships (35%)')
-    })
-
-    it('should include inactiveThresholdDays note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('inactiveThresholdDays')
-    })
-
-    it('should include GitHub metadata note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('GitHub metadata in entries')
-        expect(gotchas).toContain('issueNumber')
-        expect(gotchas).toContain('workflowRunId')
-    })
-
-    it('should include delete_entry soft-deleted note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('delete_entry')
-        expect(gotchas).toContain('soft-deleted')
-    })
-
-    it('should include team cross-database search note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('Team cross-database search')
-        expect(gotchas).toContain('source')
-    })
-
-    it('should include team tools without TEAM_DB_PATH note in gotchas', () => {
-        const gotchas = HELP_CONTENT.get('gotchas')!
-        expect(gotchas).toContain('TEAM_DB_PATH')
-        expect(gotchas).toContain(`${TOOL_GROUPS.team.length} team tools`)
-    })
-
-    it('should include codemode help content', () => {
-        const codemode = HELP_CONTENT.get('codemode')
-        expect(codemode).toBeDefined()
-        expect(codemode).toContain('mj_execute_code')
-        expect(codemode).toContain('mj.core')
-        expect(codemode).toContain('mj.help()')
-    })
 
     it('should include github help content', () => {
         const github = HELP_CONTENT.get('github')
@@ -447,13 +350,6 @@ describe('HELP_CONTENT', () => {
         expect(hush).toContain('team_resolve_flag')
     })
 
-    it('should include server-access help content', () => {
-        const access = HELP_CONTENT.get('server-access')
-        expect(access).toBeDefined()
-        expect(access).toContain('Server Name Discovery')
-        expect(access).toContain('AntiGravity')
-        expect(access).toContain('Cursor')
-    })
 
     it('should include skills help content', () => {
         const skills = HELP_CONTENT.get('skills')

@@ -41,6 +41,8 @@
 - **instructions**: Enhanced session summary formatting, tag taxonomy, and significance marking criteria
 - **instructions**: Updated `memory://help/{group}` handler to serve static content alongside tool schema data
 - **instructions**: Renamed the `technical_breakthrough` significance type to `breakthrough`
+- **codemode**: Optimized dynamically generated TypeScript declarations by removing redundant `| undefined` unions to save tokens in `mj_execute_code` prompts
+- **codemode**: Removed redundant `Use mj.help() for method listing.` string from the `mj_execute_code` schema description
 - **resources**: Refactored `memory://briefing` and `memory://briefing/{repo}` to return `text/markdown` directly instead of JSON objects to improve token efficiency
 - **skills**: Restructured large skills (`wrangler`, `typescript`, `mcp-builder`, `skill-builder`) into `references/` directories for token efficiency
 - **skills**: Expanded `mcp-builder` with security patterns and rewrote `shadcn-ui` as a strict workflow
@@ -60,6 +62,8 @@
 - **docs**: Corrected readonly tool group count across references and synchronized missing environment variables (`TRUST_PROXY`, `PUBLIC_ORIGIN`) in configuration templates
 - **docs**: Updated remaining hardcoded resource counts (36 -> 46) across READMEs and Copilot instructions to match the dynamic briefing output
 - **instructions**: Corrected Hush Protocol tool names, tag taxonomy examples, and clarified read-only mode behavior
+- **instructions**: Removed the deprecated `auto_context` field from agent-facing input schemas and updated `gotchas.md` to remove legacy limitations on `significance_type` values
+- **instructions**: Embedded memory-journal behavior defaults directly into tool schemas (`create_entry`, `search_entries`, `get_cross_project_insights`) to reduce global `GEMINI.md` briefing footprint.
 - **instructions**: Removed misleading `mj.export.*` from Code Mode namespace table and expanded `search_entries` docs
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
@@ -74,6 +78,7 @@
 
 ### Removed
 
+- **instructions**: Removed `gotchas.md`, `codemode.md`, and `server-access.md` static help files to reduce agent distraction and token usage
 - **github**: Removed Dependabot configuration to reduce PR noise and merge conflicts
 - **resources**: Removed redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints as `memory://briefing` now directly returns markdown
 

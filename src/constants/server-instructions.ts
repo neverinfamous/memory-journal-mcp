@@ -72,7 +72,6 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 Read \`memory://help\` for tool group index and available help resources.
 Read \`memory://help/{group}\` for per-group tool reference (parameters, annotations, examples).
-Read \`memory://help/gotchas\` for critical field notes and usage patterns.
 Only help resources for your enabled tool groups are registered.
 
 ## Behaviors
@@ -203,7 +202,7 @@ Read \`memory://help/codemode\` for full namespace table, examples, and patterns
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["codemode","github","hush-protocol","server-access","skills"]
+const HELP_GROUP_KEYS: readonly string[] = ["github","hush-protocol","skills"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -320,75 +319,6 @@ export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
  * Other keys are feature-specific help (memory://help/{key}).
  */
 export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
-  ["codemode", `# Code Mode (Token-Efficient Multi-Step Operations)
-
-For multi-step workflows (3+ operations), prefer \`mj_execute_code\` over individual tool calls.
-This executes JavaScript in a sandboxed environment with all tools available as \`mj.*\` API:
-
-| Group         | Namespace            | Example                                            |
-| ------------- | -------------------- | -------------------------------------------------- |
-| Core          | \`mj.core.*\`          | \`mj.core.createEntry("Implemented feature X")\`     |
-| Search        | \`mj.search.*\`        | \`mj.search.searchEntries("performance")\`           |
-| Analytics     | \`mj.analytics.*\`     | \`mj.analytics.getStatistics()\`                     |
-| Relationships | \`mj.relationships.*\` | \`mj.relationships.linkEntries(1, 2, "implements")\` |
-| IO            | \`mj.io.*\`            | \`mj.io.importMarkdown("content")\`                  |
-| Admin         | \`mj.admin.*\`         | \`mj.admin.rebuildVectorIndex()\`                    |
-| GitHub        | \`mj.github.*\`        | \`mj.github.getGithubIssues({ state: "open" })\`     |
-| Backup        | \`mj.backup.*\`        | \`mj.backup.backupJournal()\`                        |
-| Team          | \`mj.team.*\`          | \`mj.team.teamCreateEntry("Team update")\`           |
-
-**Features**: Positional args (\`createEntry("note")\`), aliases (\`mj.core.create\`), \`mj.help()\` for discovery. \`mj.export.*\` is a backward-compat alias for \`mj.io.*\`.
-
-**Parameter names are snake_case** (matching tool schemas), NOT camelCase:
-
-\`\`\`js
-// ✅ Correct — snake_case params
-await mj.core.createEntry({
-  content: "Session summary",
-  entry_type: "retrospective",
-  tags: ["session-summary"],
-  significance_type: "milestone",
-  project_number: 5
-})
-
-// ❌ Wrong — camelCase params are silently ignored
-await mj.core.createEntry({
-  content: "Session summary",
-  entryType: "retrospective",      // IGNORED
-  significanceType: "milestone",    // IGNORED
-  projectNumber: 5                  // IGNORED
-})
-\`\`\`
-**Readonly mode**: \`readonly: true\` restricts to read-only tools only. Read-only methods (e.g., \`mj.search.searchEntries()\`) work normally. Calling a mutation method (e.g., \`mj.core.create(...)\`) in readonly mode throws an error that halts execution — the sandbox returns \`{ success: false, error: "Operation '...' is not found in group" }\`. If a group has no methods at all (fully stripped), the error says \`"no methods (read-only mode?)"\`.
-**Returns**: Last expression value. Errors return \`{ success: false, error: "..." }\`.
-
-**GitHub Context Injection**: You can pass \`repo: 'my-repo'\` directly to \`mj_execute_code\` (e.g., \`mj_execute_code({ code, repo: 'memory-journal-mcp' })\`) to instantly bind that repository and its default Kanban board to all GitHub and Kanban tools running inside the sandbox, avoiding the need to pass \`owner\`/\`repo\` manually to individual methods inside.
-
-**Important — all \`mj.*\` methods return Promises. Always \`await\` them:**
-
-> ⚠️ **CRITICAL (Structured Error Pattern)**: All \`mj.*\` tools return a structured result object (e.g., \`{ success: true/false, ... }\`). They do NOT throw exceptions on API or validation failures. If \`result.success\` is \`false\`, the object will contain an \`error\` field. **ALWAYS** check \`if (!result.success)\` before attempting to access nested properties on the result object to prevent unhandled TypeError exceptions (e.g., \`result.columns is not iterable\`).
-
-
-\`\`\`js
-// ✅ Correct
-const result = await mj.core.recent({ limit: 5 })
-return result.entries.map((e) => e.id)
-
-// ❌ Wrong — returns a Promise object, not the entries
-const result = mj.core.recent({ limit: 5 })
-
-// ✅ Discovery
-const help = await mj.help() // { groups, totalMethods, usage }
-const groupHelp = await mj.core.help() // { group, methods }
-const schema = await mj.core.createEntry.schema() // Returns a string of TypeScript types (e.g. "{ content?: string, entry_type?: string, ... }")
-\`\`\`
-
-**\`mj.core.recent()\` return shape**: Returns \`{ entries: JournalEntry[], count: number }\` — not a plain array. Access \`.entries\` to iterate:
-
-\`\`\`js
-const { entries, count } = await mj.core.recent({ limit: 10 })
-return entries.map((e) => ({ id: e.id, content: e.content.slice(0, 50) }))
-\`\`\``],
   ["github", `# GitHub Integration
 
 - Include \`issue_number\`/\`pr_number\` in \`create_entry\` to auto-link
@@ -409,55 +339,6 @@ When the user has GitHub Copilot code review enabled:
 **Learn from reviews** — After a PR is merged or reviewed, use \`get_copilot_reviews({ pr_number, repo })\` to read Copilot's findings (pass \`repo\` in multi-project setups). If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged \`copilot-finding\` and link to the PR via \`pr_number\`.
 
 **Pre-emptive checking** — Before creating or modifying code, search journal entries with tag \`copilot-finding\` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.`],
-  ["gotchas", `# memory-journal-mcp — Field Notes & Gotchas
-
-## ⚠️ Critical Patterns
-
-- **Parameter case in Code Mode**: Method names are camelCase (\`mj.core.createEntry()\`), but all parameters use **snake_case** (\`entry_type\`, \`significance_type\`, \`project_number\`). This matches the underlying tool schemas. Do NOT use camelCase params (\`entryType\`, \`significanceType\`) — they will be silently ignored. You can inspect exact required parameters dynamically inside your execution context using \`.schema()\` (e.g. \`mj.core.createEntry.schema()\`).
-- **\`significance_type\` values**: Only 8 values accepted: \`milestone\`, \`breakthrough\`, \`decision\`, \`architecture\`, \`lesson_learned\`, \`blocker_resolved\`, \`release\`, \`security\`. Using any other value (e.g., \`"important"\`, \`"major"\`, \`"critical"\`) causes a Zod validation error.
-- **\`entry_type\` defaults**: If omitted, defaults to \`personal_reflection\`. Always set explicitly — see the Entry Type Selection guide in \`memory://help/core\` for the full list.
-- **\`autoContext\`**: The user-facing filesystem monitoring feature was abandoned to reduce telemetry overhead. Existing data with \`autoContext: null\` is safely ignored. The database field itself is still used internally for Hush Protocol flag metadata (\`flag_type\`, \`target_user\`, \`resolved\`, etc.).
-- **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`. Neither returns orphan tags with zero usage.
-- **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).
-- **\`merge_tags\` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.
-- **\`prStatus\` in entries**: Reflects PR state at entry creation time, not current state. Use \`get_github_pr\` for live status.
-- **\`restore_backup\` behavior**: Restores entire database state. Any recent changes (new entries, tag merges via \`merge_tags\`, relationships) are reverted. A pre-restore backup is automatically created for safety.
-- **\`cleanup_backups\` retention**: Removes oldest backups exceeding \`keep_count\`. Use periodically if auto-backups or pre-restore backups accumulate.
-
-## Semantic Search
-
-- **Indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use \`rebuild_vector_index\` or enable \`AUTO_REBUILD_INDEX=true\` for automatic reconciliation on server startup.
-- **Related by ID**: Provide \`entry_id\` instead of a query string to find entries semantically related to an existing entry (reuses the existing embedding to avoid inference costs).
-- **Metadata Filters**: Semantic search supports explicit filtering by \`tags\`, \`entry_type\`, \`start_date\`, and \`end_date\`.
-- **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
-- **Quality hints**: A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The \`hint_on_empty\` flag (default true) controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown independently.
-- **Diagnostics**: Use \`get_vector_index_stats\` to check index health (\`itemCount\`, \`modelName\`, \`dimensions\`). Compare \`itemCount\` against DB entry count to detect drift.
-
-## Search
-
-- **Hybrid Ranking**: \`search_entries\` supports \`mode\`: \`auto\` (default — heuristic selects best strategy), \`fts\` (FTS5 keyword only), \`semantic\` (vector similarity only), \`hybrid\` (forced RRF fusion of FTS5+vector). In \`auto\` mode, conversational prompts automatically route to Reciprocal Rank Fusion bridging keyword and vector algorithms.
-- **\`search_entries\` FTS5 query syntax**: Uses FTS5 full-text search with Porter stemmer. Phrase queries: \`"error handling"\`. Prefix: \`auth*\`. Boolean: \`deploy OR release\`, \`error NOT warning\`. Word-boundary matching ("log" matches "log" but not "catalog"). Results ranked by BM25 relevance. Falls back to LIKE substring matching for queries with unbalanced quotes or special characters.
-
-## Relationships & Analytics
-
-- **Causal relationship types**: Use \`blocked_by\` (A was blocked by B), \`resolved\` (A resolved B), \`caused\` (A caused B) for decision tracing and failure analysis. Visualizations use distinct arrow styles for causal types.
-- **Enhanced analytics**: \`get_statistics\` returns \`decisionDensity\` (significant entries per period), \`relationshipComplexity\` (avg relationships per entry), \`activityTrend\` (period-over-period growth %), and \`causalMetrics\` (counts for blocked_by/resolved/caused).
-- **Importance scores**: \`get_entry_by_id\` returns \`importance\` (0.0-1.0) and \`importanceBreakdown\` showing weighted components: significance (30%), relationships (35%), causal (20%), recency (15%). \`memory://significant\` sorts entries by importance.
-- **\`inactiveThresholdDays\`**: \`get_cross_project_insights\` includes \`inactiveThresholdDays: 7\` in output, documenting the inactive project classification cutoff.
-
-## GitHub Metadata
-
-- **GitHub metadata in entries**: Entry output includes 10 GitHub fields (\`issueNumber\`, \`issueUrl\`, \`prNumber\`, \`prUrl\`, \`prStatus\`, \`projectNumber\`, \`projectOwner\`, \`workflowRunId\`, \`workflowName\`, \`workflowStatus\`) in all tool responses.
-
-## Entry Operations
-
-- **\`delete_entry\` on soft-deleted**: \`delete_entry(id, permanent: true)\` works on previously soft-deleted entries. Returns \`success: false\` for nonexistent entries.
-
-## Team Database
-
-- **Team cross-database search**: \`search_entries\` and \`search_by_date_range\` automatically merge team DB results when \`TEAM_DB_PATH\` is configured. Results include a \`source\` field ("personal" or "team").
-- **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
-- **Team tools without \`TEAM_DB_PATH\`**: All 25 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.`],
   ["hush-protocol", `# Hush Protocol (Team Flags)
 
 Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
@@ -476,31 +357,6 @@ Flags are machine-actionable signals stored in the team database. They replace S
 **Dashboard**: Read \`memory://flags\` to see all active (unresolved) flags. Read \`memory://flags/vocabulary\` to see the configured flag types.
 
 **Code Mode**: \`mj.team.passTeamFlag({ flag_type, message, target_user })\` and \`mj.team.resolveTeamFlag({ flag_id })\`.`],
-  ["server-access", `# How to Access This Server
-
-## Server Name Discovery
-
-The server name used for resource and tool calls depends on your MCP client:
-
-- **AntiGravity**: Prefixes tools with \`mcp_\` and uses underscores. If the server is named \`memory-journal-mcp\` in config, tools appear as \`mcp_memory-journal-mcp_create_entry\`. Use \`memory-journal-mcp\` as the server name for resource calls.
-- **Cursor**: Prepends \`user-\` to the configured name. If the server is named \`memory-journal-mcp\` in config, use \`user-memory-journal-mcp\` for \`ListMcpResources\` and \`FetchMcpResource\` calls.
-- **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly. Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method if unsure.
-
-To identify your server name: look at the tool name prefix. Strip the tool name suffix to get the server name. Examples: \`mcp_memory-journal-mcp_create_entry\` → \`memory-journal-mcp\`; \`user-memory-journal-mcp-create_entry\` → \`user-memory-journal-mcp\`.
-
-## Calling Tools
-
-Use the tool functions directly — they are already available in your context by their full prefixed name.
-
-## Reading Resources
-
-Use the resource-reading mechanism provided by your MCP client with the discovered server name and \`memory://\` URIs.
-
-Do NOT try to browse filesystem paths for MCP tool/resource definitions — use the MCP protocol directly.
-
-## Quick Health Check
-
-Fetch \`memory://health\` to verify server status, database stats, and tool availability.`],
   ["skills", `# Rule & Skill Suggestions
 
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:

@@ -13,7 +13,6 @@
 
 Read `memory://help` for tool group index and available help resources.
 Read `memory://help/{group}` for per-group tool reference (parameters, annotations, examples).
-Read `memory://help/gotchas` for critical field notes and usage patterns.
 Only help resources for your enabled tool groups are registered.
 
 ## Behaviors

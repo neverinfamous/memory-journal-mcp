@@ -26,6 +26,7 @@ import {
     relaxedNumber,
     TagOutputSchema,
     MAX_QUERY_LIMIT,
+    coerceSignificanceAlias,
 } from './schemas.js'
 
 // ============================================================================
@@ -56,11 +57,26 @@ const CreateEntrySchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const CreateEntrySchemaMcp = z.object({
     content: z.string().optional(),
-    entry_type: z.string().optional().default('personal_reflection'),
-    tags: z.array(z.string().max(100)).max(50).optional().default([]),
+    entry_type: z
+        .string()
+        .optional()
+        .default('personal_reflection')
+        .describe('Choose the most accurate type. Do NOT default to personal_reflection.'),
+    tags: z
+        .array(z.string().max(100))
+        .max(50)
+        .optional()
+        .default([])
+        .describe(
+            'MANDATORY: Provide at least one tag. Use activity (bug-fix, release), domain (security, architecture), or tool group tags.'
+        ),
     is_personal: z.boolean().optional().default(true),
-    significance_type: z.string().optional(),
-    auto_context: z.boolean().optional().default(true),
+    significance_type: z
+        .string()
+        .optional()
+        .describe(
+            'Mark milestone completions, architecture decisions, and releases with a significance_type.'
+        ),
     project_number: relaxedNumber().optional(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
@@ -173,13 +189,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             name: 'create_entry',
             title: 'Create Journal Entry',
             description:
-                'Create a new journal entry with context and tags (v2.1.0: GitHub Actions support)',
+                'Create a new personal journal entry. MANDATORY: After creating, always attempt to causally link new entries to prior context (evolves_from, implements, blocked_by, resolved) using link_entries.',
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
+                    coerceSignificanceAlias(params)
+
                     if (params !== null && typeof params === 'object' && 'auto_context' in params) {
                         context.config?.runtime?.metrics?.recordDeprecationWarning('Agent recently used deprecated auto_context field in create_entry. This field is ignored.')
                     }
@@ -411,7 +429,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'list_tags',
             title: 'List Tags',
-            description: 'List all available tags',
+            description: 'List all available tags. Tags are auto-formatted to kebab-case. Returns only name and count. Does not return orphan tags with zero usage.',
             group: 'core',
             inputSchema: z.object({}).strict(),
             outputSchema: TagsListOutputSchema,

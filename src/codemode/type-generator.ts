@@ -14,8 +14,12 @@ export function getZodTypeString(schema: unknown): string {
         return `${getZodTypeString(schema.element)}[]`
     }
     
-    if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
-        return `${getZodTypeString(schema.unwrap())} | undefined`
+    if (schema instanceof z.ZodOptional) {
+        return getZodTypeString(schema.unwrap())
+    }
+    
+    if (schema instanceof z.ZodNullable) {
+        return `${getZodTypeString(schema.unwrap())} | null`
     }
     
     if (schema instanceof z.ZodDefault) {
@@ -33,7 +37,7 @@ export function getZodTypeString(schema: unknown): string {
     if (schema instanceof z.ZodObject) {
         const shape = schema.shape as Record<string, unknown>
         const props = Object.entries(shape).map(([k, v]) => {
-            const isOptional = v instanceof z.ZodOptional || v instanceof z.ZodDefault
+            const isOptional = v instanceof z.ZodOptional || v instanceof z.ZodDefault || v instanceof z.ZodNullable
             return `${k}${isOptional ? '?' : ''}: ${getZodTypeString(v)}`
         })
         return `{ ${props.join(', ')} }`
@@ -75,11 +79,13 @@ export function generateTypescriptDeclarations(tools: ToolDefinition[]): string 
         }
         
         // Add group-level help
+        dts += `    /** Get method list and examples for ${groupName} */\n`
         dts += `    function help(): Promise<any>;\n`
         dts += `  }\n`
     }
     
     // Top-level help
+    dts += `  /** Get top-level method list and usage */\n`
     dts += `  function help(): Promise<any>;\n`
     dts += `}\n`
     

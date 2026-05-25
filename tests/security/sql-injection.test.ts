@@ -167,9 +167,10 @@ describe('DatabaseAdapter SQL Injection Protection', () => {
             })
 
             const tags = entry.tags
-            expect(tags).toContain("tag'; DROP TABLE tags; --")
+            // Note: tags are automatically formatted to kebab-case by the adapter
+            expect(tags).toContain('tag-drop-table-tags')
             expect(tags).toContain('normal-tag')
-            expect(tags).toContain("tag' OR '1'='1")
+            expect(tags).toContain('tag-or-1-1')
         })
     })
 

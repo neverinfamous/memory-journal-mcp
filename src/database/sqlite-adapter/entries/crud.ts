@@ -74,7 +74,8 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
         // Link tags
         if (input.tags && input.tags.length > 0) {
-            tagsMgr.linkTagsToEntry(insertId, input.tags)
+            const formattedTags = input.tags.map(t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
+            tagsMgr.linkTagsToEntry(insertId, formattedTags)
         }
     })
 
@@ -241,7 +242,8 @@ export function updateEntry(
 
     if (input.tags !== undefined) {
         db.prepare('DELETE FROM entry_tags WHERE entry_id = ?').run(id)
-        tagsMgr.linkTagsToEntry(id, input.tags)
+        const formattedTags = input.tags.map(t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
+        tagsMgr.linkTagsToEntry(id, formattedTags)
     }
 
     return getEntryById(context, id)

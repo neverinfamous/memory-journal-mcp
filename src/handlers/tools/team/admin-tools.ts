@@ -19,6 +19,7 @@ import {
     TeamDeleteOutputSchema,
     TeamMergeTagsOutputSchema,
 } from './schemas.js'
+import { coerceSignificanceAlias } from '../schemas.js'
 
 // ============================================================================
 // Tool Definitions
@@ -41,6 +42,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
+
+                    coerceSignificanceAlias(params)
 
                     const input = TeamUpdateEntrySchema.parse(params)
 
@@ -103,7 +106,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             name: 'team_delete_entry',
             title: 'Delete Team Entry',
             description:
-                'Soft-delete a team entry (marks as deleted, preservable). Requires TEAM_DB_PATH.',
+                'Soft-delete a team entry (marks as deleted, preservable). Calling with permanent: true on a previously soft-deleted entry works. Returns success: false for nonexistent entries. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamDeleteEntrySchemaMcp,
             outputSchema: TeamDeleteOutputSchema,
@@ -169,7 +172,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             name: 'team_merge_tags',
             title: 'Merge Team Tags',
             description:
-                'Merge a source tag into a target tag in the team database. All entries with the source tag will be re-tagged with the target tag. Requires TEAM_DB_PATH.',
+                'Merge a source tag into a target tag in the team database. All entries with the source tag will be re-tagged with the target tag. Only updates non-deleted entries. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamMergeTagsSchemaMcp,
             outputSchema: TeamMergeTagsOutputSchema,

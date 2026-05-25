@@ -261,7 +261,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             name: 'get_github_pr',
             title: 'Get GitHub PR Details',
             description:
-                'Get detailed information about a specific GitHub pull request. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
+                'Get detailed information about a specific GitHub pull request, including live prStatus. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
                 pr_number: z.number(),

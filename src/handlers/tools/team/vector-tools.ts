@@ -41,7 +41,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             name: 'team_semantic_search',
             title: 'Team Semantic Search',
             description:
-                'Perform semantic/vector search on team entries using AI embeddings. Requires TEAM_DB_PATH.',
+                'Perform semantic/vector search on team entries using AI embeddings. Supports find-related-by-ID (entry_id) and metadata filters. Threshold default is 0.25 (try 0.15-0.2 for broader matches, 0.4+ for strict matches). Entries auto-indexed on creation. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamSemanticSearchSchemaMcp,
             outputSchema: TeamSemanticSearchOutputSchema,

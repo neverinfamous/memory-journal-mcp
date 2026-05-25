@@ -84,15 +84,7 @@ describe('Help Resource Handlers', () => {
         expect(result.data.error).toContain('Invalid group')
     })
 
-    it('should generate memory://help/gotchas', async () => {
-        const defs = getHelpResourceDefinitions()
-        const gotchasHelp = defs.find((d) => d.uri === 'memory://help/gotchas')
-        expect(gotchasHelp).toBeDefined()
 
-        const result = (await gotchasHelp!.handler('memory://help/gotchas', getContext())) as any
-        expect(result.data).toContain('# memory-journal-mcp — Field Notes &')
-        expect(gotchasHelp!.mimeType).toBe('text/markdown')
-    })
 
     it('should handle all tool groups including codemode and team', async () => {
         const defs = getHelpResourceDefinitions()
@@ -173,18 +165,13 @@ describe('Help Resource Handlers', () => {
         expect(result.data.group).toBe('backup')
     })
 
-    it('should handle codemode group (merged static + dynamic)', async () => {
+    it('should handle codemode group', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
         const result = (await groupHelp!.handler('memory://help/codemode', getContext())) as any
-        // codemode returns JSON with both dynamic tool schema and static helpContent
         expect(result.data.group).toBe('codemode')
         expect(result.data.tools.length).toBeGreaterThan(0)
-        // Static help content merged in
-        expect(typeof result.data.helpContent).toBe('string')
-        expect(result.data.helpContent).toContain('Code Mode')
-        expect(result.data.helpContent).toContain('mj.core')
     })
 
     it('should handle github group (merged static + dynamic)', async () => {

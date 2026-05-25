@@ -20,6 +20,7 @@
 export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     core: {
         create: 'createEntry',
+        add: 'createEntry',
         get: 'getEntryById',
         recent: 'getRecentEntries',
         getRecent: 'getRecentEntries',
@@ -28,6 +29,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     },
     search: {
         find: 'searchEntries',
+        search: 'searchEntries',
         byDate: 'searchByDateRange',
         similar: 'semanticSearch',
         stats: 'getVectorStats',
@@ -47,7 +49,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     },
     admin: {
         edit: 'updateEntry',
+        update: 'updateEntry',
         remove: 'deleteEntry',
+        delete: 'deleteEntry',
         rebuild: 'rebuildVectorIndex',
         addVector: 'addToVectorIndex',
         mergeTags: 'mergeTags',
@@ -86,7 +90,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         tags: 'teamListTags',
         byDate: 'teamSearchByDateRange',
         update: 'teamUpdateEntry',
+        edit: 'teamUpdateEntry',
         remove: 'teamDeleteEntry',
+        delete: 'teamDeleteEntry',
         mergeTags: 'teamMergeTags',
         stats: 'teamGetStatistics',
         link: 'teamLinkEntries',

@@ -23,6 +23,7 @@ import {
     TeamEntryDetailOutputSchema,
     TeamTagsListOutputSchema,
 } from './schemas.js'
+import { coerceSignificanceAlias } from '../schemas.js'
 import { parseFlagContext } from '../../../types/auto-context.js'
 
 // ============================================================================
@@ -37,7 +38,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             name: 'team_create_entry',
             title: 'Create Team Entry',
             description:
-                'Create an entry in the team database for sharing with collaborators. Requires TEAM_DB_PATH.',
+                'Create an entry in the team database for sharing with collaborators. ONLY use when explicitly requested by the user. Default to personal create_entry instead. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamCreateEntrySchemaMcp,
             outputSchema: TeamCreateOutputSchema,
@@ -47,6 +48,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
+
+                    coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
 

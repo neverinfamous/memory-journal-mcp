@@ -69,7 +69,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
             name: 'team_get_cross_project_insights',
             title: 'Team Cross-Project Insights',
             description:
-                'Analyze patterns across all GitHub Projects tracked in team entries. Requires TEAM_DB_PATH.',
+                'Analyze patterns across all GitHub Projects tracked in team entries. Use for architecture planning. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamCrossProjectInsightsSchemaMcp,
             outputSchema: TeamCrossProjectInsightsOutputSchema,

@@ -201,7 +201,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 'Enables multi-step workflows in a single call, reducing token usage by 70-90%. ' +
                 'API groups: mj.core.*, mj.search.*, mj.analytics.*, mj.relationships.*, ' +
                 'mj.io.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +
-                'Use mj.help() for method listing. Returns the last expression value.\n\n' +
+                'Returns the last expression value. ' +
+                'Methods accept camelCase or snake_case parameters. ' +
+                'All mj.* methods return Promises (always await). ' +
+                'Result shape: { success: boolean, error?: string, ...data }.\n\n' +
                 '### TypeScript Declarations\n```typescript\n' + typeDeclarations + '\n```',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,

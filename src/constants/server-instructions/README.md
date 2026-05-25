@@ -22,10 +22,8 @@ If you need to update a tool group's instructions or the general gotchas, follow
 ## File Structure
 
 - `overview.md`: The init payload sent to all clients on initialization. Contains behaviors (session start, entry types, tags, significance, linking) and the core quick-access table. Larger than the DB connectors' overviews (~7.0KB vs ~0.7KB) because MJ requires behavioral guidance before agents start work.
-- `gotchas.md`: Field notes and critical usage patterns returned for `memory://help/gotchas`.
-- `codemode.md`: Code Mode API reference returned for `memory://help/codemode`.
 - `github.md`: GitHub Integration patterns returned for `memory://help/github`.
-- `hush-protocol.md`, `server-access.md`, `skills.md`: Static help content for non-tool-group keys.
+- `hush-protocol.md`, `skills.md`: Static help content for non-tool-group keys.
 
 ## Guidelines
 

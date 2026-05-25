@@ -43,16 +43,7 @@ test.describe('Help Resources', () => {
         }
     })
 
-    test('memory://help/gotchas is listed in resources', async () => {
-        const client = await createClient()
-        try {
-            const list = await client.listResources()
-            const uris = list.resources.map((r) => r.uri)
-            expect(uris).toContain('memory://help/gotchas')
-        } finally {
-            await client.close()
-        }
-    })
+
 
     test('memory://help returns non-empty JSON with groups', async () => {
         const client = await createClient()
@@ -91,22 +82,7 @@ test.describe('Help Resources', () => {
         }
     })
 
-    test('memory://help/gotchas returns non-empty markdown', async () => {
-        const client = await createClient()
-        try {
-            const response = await client.readResource({ uri: 'memory://help/gotchas' })
 
-            expect(response.contents).toBeDefined()
-            expect(response.contents.length).toBe(1)
-            expect(response.contents[0].uri).toBe('memory://help/gotchas')
-            expect(response.contents[0].mimeType).toBe('text/markdown')
-
-            const text = (response.contents[0] as { text: string }).text
-            expect(text.length, 'gotchas content too short').toBeGreaterThan(50)
-        } finally {
-            await client.close()
-        }
-    })
 
     for (const group of HELP_GROUPS) {
         test(`memory://help/${group} returns non-empty JSON`, async () => {

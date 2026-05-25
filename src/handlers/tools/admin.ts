@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber, coerceSignificanceAlias } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
@@ -136,6 +136,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
+                    coerceSignificanceAlias(params)
+
                     if (params !== null && typeof params === 'object' && 'auto_context' in params) {
                         context.config?.runtime?.metrics?.recordDeprecationWarning('Agent recently used deprecated auto_context field in update_entry. This field is ignored.')
                     }
@@ -184,7 +186,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'delete_entry',
             title: 'Delete Entry',
-            description: 'Delete a journal entry (soft delete with timestamp)',
+            description: 'Delete a journal entry (soft delete with timestamp). Calling with permanent: true on a previously soft-deleted entry works. Returns success: false for nonexistent entries.',
             group: 'admin',
             inputSchema: DeleteEntrySchemaMcp,
             outputSchema: DeleteEntryOutputSchema,
@@ -233,7 +235,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             name: 'merge_tags',
             title: 'Merge Tags',
             description:
-                'Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.',
+                'Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge. Only updates non-deleted entries.',
             group: 'admin',
             inputSchema: z.object({
                 source_tag: z

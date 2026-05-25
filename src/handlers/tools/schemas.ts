@@ -63,6 +63,25 @@ export const SIGNIFICANCE_TYPES = [
     'security',
 ] as const
 
+/**
+ * Coerce common invalid significance_type aliases to their valid enum equivalents.
+ * Mutates the params object directly before Zod validation.
+ */
+export function coerceSignificanceAlias(params: unknown): void {
+    if (params !== null && params !== undefined && typeof params === 'object') {
+        const obj = params as Record<string, unknown>
+        if (typeof obj['significance_type'] === 'string') {
+            const lower = obj['significance_type'].toLowerCase()
+            if (lower === 'important') obj['significance_type'] = 'milestone'
+            if (lower === 'major') obj['significance_type'] = 'breakthrough'
+            if (lower === 'critical') obj['significance_type'] = 'security'
+            if (lower === 'learning') obj['significance_type'] = 'lesson_learned'
+            if (lower === 'key_decision') obj['significance_type'] = 'decision'
+            if (lower === 'resolved') obj['significance_type'] = 'blocker_resolved'
+        }
+    }
+}
+
 /** Maximum content length for journal entries (chars) */
 export const MAX_CONTENT_LENGTH = 50_000
 

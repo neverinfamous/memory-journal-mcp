@@ -207,8 +207,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         totalTools: tools.length,
                         totalGroups: groupList.length,
                         groups: groupList,
-                        gotchas: 'memory://help/gotchas',
-                        hint: 'Read memory://help/{group} for detailed parameter info on each tool. Read memory://help/gotchas for field notes and critical usage patterns.',
+                        hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
                     },
                 }
             },
@@ -291,22 +290,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 }
             },
         },
-        {
-            uri: 'memory://help/gotchas',
-            name: 'Help — Field Notes & Gotchas',
-            title: 'Critical Usage Patterns',
-            description:
-                'Field notes, edge cases, and critical usage patterns for memory-journal-mcp tools.',
-            mimeType: 'text/markdown',
-            icons: [ICON_BRIEFING],
-            annotations: ASSISTANT_FOCUSED,
-            handler: (): ResourceResult => {
-                const content = HELP_CONTENT.get('gotchas')
-                return {
-                    data: content ?? '# No gotchas content available',
-                }
-            },
-        },
+
     ]
 }
 
