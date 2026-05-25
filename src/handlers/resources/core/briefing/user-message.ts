@@ -261,11 +261,10 @@ export function formatUserMessage(opts: {
     if (configLine3.length) configLines.push(configLine3.join(' · '))
 
     // ========================================================================
-    // FLAT LINES: Insights + Analytics
+    // TABLE ROW 6: Insights + Analytics
     // ========================================================================
-    const flatLines: string[] = []
+    const insightsLines: string[] = []
 
-    // Insights
     if (github?.insights) {
         const parts: string[] = []
         if (github.insights.stars !== null) parts.push(`⭐ ${String(github.insights.stars)}`)
@@ -276,41 +275,46 @@ export function formatUserMessage(opts: {
             parts.push(`👁️ ${String(github.insights.views14d)}`)
         if (parts.length > 0) {
             const trafficNote = github.insights.clones14d !== undefined ? ' (14d)' : ''
-            flatLines.push(`**Insights:** ${parts.join(' · ')}${trafficNote}`)
+            insightsLines.push(`${parts.join(' · ')}${trafficNote}`)
         }
     }
     if (github?.copilotReviews) {
         const cr = github.copilotReviews
-        flatLines.push(
-            `**Copilot:** ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
+        insightsLines.push(
+            `Copilot: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
         )
     }
 
-    // Analytics
     if (analyticsInsights) {
-        flatLines.push(`📈 ${analyticsInsights.activityTrend}`)
+        insightsLines.push(`📈 ${escapeCell(analyticsInsights.activityTrend)}`)
         const metricParts: string[] = []
         if (analyticsInsights.significanceSpike !== null)
-            metricParts.push(`🔥 ${analyticsInsights.significanceSpike}`)
+            metricParts.push(`🔥 ${escapeCell(analyticsInsights.significanceSpike)}`)
         if (analyticsInsights.relationshipDensity !== undefined)
-            metricParts.push(`🔗 Density: ${analyticsInsights.relationshipDensity}`)
-        if (metricParts.length > 0) flatLines.push(metricParts.join(' · '))
+            metricParts.push(`🔗 Density: ${escapeCell(String(analyticsInsights.relationshipDensity))}`)
+        if (metricParts.length > 0) insightsLines.push(metricParts.join(' · '))
         if (analyticsInsights.staleProjects.length > 0)
-            flatLines.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
+            insightsLines.push(`💤 ${String(analyticsInsights.staleProjects.length)} stale projects`)
     }
 
-    // Graph (suppress when zero)
+    // ========================================================================
+    // TABLE ROW 7: Graph
+    // ========================================================================
+    const graphLines: string[] = []
     if (graphSummary && graphSummary.totalRelationships > 0) {
         const topTypes = Object.entries(graphSummary.causalMetrics)
             .filter(([_, count]) => count > 0)
             .map(([type, count]) => `${type}: ${String(count)}`)
             .join(', ') || 'none'
-        flatLines.push(
-            `**Graph:** ${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeContent(topTypes)} (view: memory://graph/recent)`
+        graphLines.push(
+            `${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
         )
     }
 
-    // Unreleased
+    // ========================================================================
+    // TABLE ROW 8: Unreleased
+    // ========================================================================
+    const unreleasedLines: string[] = []
     if (opts.unreleasedSummary) {
         const u = opts.unreleasedSummary
         const parts: string[] = []
@@ -323,26 +327,29 @@ export function formatUserMessage(opts: {
             const ageStr = opts.lastReleaseDaysAgo !== undefined
                 ? `(${String(opts.lastReleaseDaysAgo)}d) `
                 : ''
-            let line = `**Unreleased:** ${ageStr}${parts.join(' · ')}`
+            let line = `${ageStr}${parts.join(' · ')}`
             if ((u.keyItems?.length ?? 0) > 0) {
-                line += `<br>Recent focus: ${u.keyItems.join(', ')}`
+                line += `<br>Recent focus: ${escapeCell(u.keyItems.join(', '))}`
             }
-            flatLines.push(line)
+            unreleasedLines.push(line)
         }
     }
 
-    // Registered workspace paths (useful for non-IDE agents without <user_information>)
+    // ========================================================================
+    // TABLE ROW 9: Workspaces
+    // ========================================================================
+    const workspacesLines: string[] = []
     if (opts.registryPaths) {
         const entries = Object.entries(opts.registryPaths)
         if (entries.length > 0) {
             const pathList = entries
                 .map(([name, diskPath]) => {
                     const isActive = name === repoName || name === repoName.split('/').pop()
-                    const formatted = `${escapeContent(name)}: ${escapeContent(diskPath)}`
+                    const formatted = `${escapeCell(name)}: ${escapeCell(diskPath)}`
                     return isActive ? `**${formatted}** (active)` : formatted
                 })
                 .join('<br>')
-            flatLines.push(`**Workspaces:**<br>${pathList}`)
+            workspacesLines.push(pathList)
         }
     }
 
@@ -374,9 +381,18 @@ export function formatUserMessage(opts: {
     if (configLines.length > 0) {
         tableRows.push(`| **Config** | ${configLines.join('<br>')} |`)
     }
+    if (insightsLines.length > 0) {
+        tableRows.push(`| **Insights** | ${insightsLines.join('<br>')} |`)
+    }
+    if (graphLines.length > 0) {
+        tableRows.push(`| **Graph** | ${graphLines.join('<br>')} |`)
+    }
+    if (unreleasedLines.length > 0) {
+        tableRows.push(`| **Unreleased** | ${unreleasedLines.join('<br>')} |`)
+    }
+    if (workspacesLines.length > 0) {
+        tableRows.push(`| **Workspaces** | ${workspacesLines.join('<br>')} |`)
+    }
 
-    const sections: string[] = [tableRows.join('\n')]
-    if (flatLines.length > 0) sections.push(flatLines.join('\n\n'))
-
-    return `${flagsAlert}${sections.join('\n\n')}`
+    return `${flagsAlert}${tableRows.join('\n')}`
 }
