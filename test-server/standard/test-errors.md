@@ -100,7 +100,7 @@ All tools must accept `{}` without crashing. Tools with required logical params 
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `node test-server/scripts/test-prompts.mjs` reports `21 pass, 0 fail (21 total)`
 - Structured error responses include `success`, `error`, `code`, `category` fields

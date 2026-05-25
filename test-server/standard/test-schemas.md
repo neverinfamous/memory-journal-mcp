@@ -124,6 +124,6 @@
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - All 60 outputSchema tools return `structuredContent` (not raw text) — `mj_execute_code` excluded by design

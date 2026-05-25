@@ -95,7 +95,7 @@ After creating all 17 entries, verify the seed data is searchable:
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - All 17 seed entries (S1–S17) created successfully
 - FTS5 search returns results for `"architecture"` query

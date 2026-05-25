@@ -280,7 +280,7 @@ return result
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `pass_team_flag` creates entries with `entry_type: 'flag'` and structured `auto_context`
 - Flag tags include `flag:{type}` and `@{target}` when target_user is provided

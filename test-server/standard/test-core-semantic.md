@@ -50,7 +50,7 @@
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `semantic_search` accepts `entry_id` (Related by ID) in lieu of `query` string
 - `semantic_search` incorporates metadata filtering (`tags`, `entry_type`, dates) into similarity results

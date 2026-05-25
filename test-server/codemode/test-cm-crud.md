@@ -260,7 +260,7 @@ After testing, remove test entries created during Phase 20:
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
 - `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`

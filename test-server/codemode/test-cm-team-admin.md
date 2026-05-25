@@ -216,7 +216,7 @@ return {
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `team_update_entry` updates content, tags, and entry_type
 - `team_delete_entry` soft-deletes team entries

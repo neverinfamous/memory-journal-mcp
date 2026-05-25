@@ -53,7 +53,7 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
 - `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)

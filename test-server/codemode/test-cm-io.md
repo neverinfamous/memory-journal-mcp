@@ -100,7 +100,7 @@ return {
 
 ## Success Criteria
 
-> **Important:** Copy these success criteria to a `task.md` file in `C:\Users\chris\Desktop\memory-journal-mcp\tmp` and track your progress there. Do not check off items in this file.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `mj.io.exportEntries` provides JSON lists and raw markdown contents.
 - `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
