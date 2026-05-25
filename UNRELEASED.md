@@ -7,6 +7,8 @@
 - **briefing**: Added server version, tool/resource/prompt surface area counts, test health indicators, unreleased change summary, `localTime`, word-boundary truncation (120 chars), and zero-relationship graph suppression to `memory://briefing` output
 - **briefing**: Added Config table row surfacing active tool filter, instruction level, IO root count, and registered project names
 - **briefing**: Added code-map availability indicator (`📋 code-map`), active filter annotation in System row, unreleased key-items (`Key: ...`), and stale milestone `✅` indicator
+- **briefing**: Added days-since-release indicator to Unreleased line (parsed from `CHANGELOG.md`)
+- **briefing**: Added registered workspace disk paths to briefing for non-IDE agent context
 - **admin**: Added `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
@@ -22,6 +24,8 @@
 
 ### Changed
 
+- **briefing**: Improved quality by surfacing `readonly`, `TEAM_DB_PATH`, and `GITHUB_TOKEN` capability statuses directly in the Config row
+- **briefing**: Enhanced code-map indicator to include the exact file path and prioritized gatekeeper CI workflows in github status
 - **docs**: Highlighted auto-prune in feature tables and radically simplified agent briefing instructions to resolve Docker Hub limit violations
 - **docs**: Standardized `README.md` layout, badges, and automated auditing references
 - **instructions**: Refactored monolithic `server-instructions.md` into a modular directory, reducing initial payload by ~700 tokens
@@ -40,6 +44,7 @@
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, and `tool-reference.md` with recent architectural changes
 - **docs**: Corrected readonly tool group count across references and synchronized missing environment variables (`TRUST_PROXY`, `PUBLIC_ORIGIN`) in configuration templates
+- **docs**: Updated remaining hardcoded resource counts (36 -> 46) across READMEs and Copilot instructions to match the dynamic briefing output
 - **instructions**: Corrected Hush Protocol tool names, tag taxonomy examples, and clarified read-only mode behavior
 - **instructions**: Removed misleading `mj.export.*` from Code Mode namespace table and expanded `search_entries` docs
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
@@ -49,6 +54,9 @@
 - **briefing**: Fixed missing blank line before markdown table in `memory://briefing` and stripped `<untrusted_remote_content>` tags to prevent IDE rendering cutoff
 - **briefing**: Grouped table properties into 5 distinct macro-categories via `<br>` elements and removed the inline Mermaid graph to permanently resolve IDE history truncation (graph remains available via `memory://graph/recent`)
 - **briefing**: Corrected static `RESOURCE_COUNT` constant from `36` to the audited actual count of `46` (28 static + 18 template)
+- **briefing**: Replaced static `RESOURCE_COUNT` constant with lazy dynamic count from live resource registry to prevent future drift
+- **briefing**: Switched coverage % source from brittle README badge parsing to `coverage-summary.json` (vitest structured output)
+- **briefing**: Deduplicated `Latest:` and `Summary:` entry previews to diversify briefing content when retrospectives dominate recent activity
 
 ### Removed
 

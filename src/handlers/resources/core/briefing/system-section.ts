@@ -15,7 +15,7 @@ import { createRequire } from 'node:module'
 import * as path from 'node:path'
 
 import { VERSION } from '../../../../version.js'
-import { getAllToolNames } from '../../../../filtering/tool-filter.js'
+import { getAllToolNames, TOOL_GROUPS } from '../../../../filtering/tool-filter.js'
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
@@ -51,6 +51,8 @@ export interface SystemContext {
     testHealth: TestHealth | null
     /** Compact filter summary, e.g. "codemode (1/70)", or null when all tools exposed */
     filterSummary: string | null
+    /** Whether the system is in a read-only state (admin tools disabled) */
+    isReadonly: boolean
     /** Active instruction level (essential | standard | full) */
     instructionLevel: string
     /** Registered repo names from PROJECT_REGISTRY, null when unconfigured */
@@ -59,20 +61,37 @@ export interface SystemContext {
     ioRootCount: number
     /** Whether code-map.md exists in the project root */
     hasCodeMap: boolean
+    /** Days elapsed since the last tagged release in CHANGELOG.md */
+    lastReleaseDaysAgo: number | null
 }
 
 // ============================================================================
-// Constants
+// Lazy Resource Count (replaces former hardcoded RESOURCE_COUNT constant)
 // ============================================================================
 
+/** Startup-cached resource count derived from live registry */
+let cachedResourceCount: number | undefined
+
 /**
- * Static resource count — kept in sync with README.md and code-map.md.
- * Resource registration is static and doesn't change at runtime,
- * so this avoids importing the entire resource registry.
- *
- * Audited 2026-05-25: 28 static + 18 template = 46 total.
+ * Get the total resource count by lazy-loading the resource registry.
+ * Uses dynamic import() to avoid a circular dependency:
+ * system-section → resources/index → core/index → briefing/index → system-section
  */
-const RESOURCE_COUNT = 46
+async function getResourceCount(): Promise<number> {
+    if (cachedResourceCount !== undefined) return cachedResourceCount
+
+    try {
+        const { getResources } = await import('../../index.js')
+        cachedResourceCount = getResources().length
+    } catch {
+        logger.debug('Failed to dynamically load resource count (non-critical)', {
+            module: 'BRIEFING',
+            operation: 'resource-count',
+        })
+        cachedResourceCount = 0
+    }
+    return cachedResourceCount
+}
 
 // ============================================================================
 // Startup-Cached Parsers
@@ -229,16 +248,44 @@ function loadCachedTestHealth(): TestHealth | null {
 
     try {
         const root = resolveProjectRoot()
-        const filePath = path.join(root, 'README.md')
-        // Only read the first 2KB — badges are at the top of the file
-        const fd = fs.openSync(filePath, 'r')
-        const buf = Buffer.alloc(2048)
-        const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
-        fs.closeSync(fd)
-        const content = buf.toString('utf-8', 0, bytesRead)
-        cachedTestHealth = parseTestHealth(content)
+
+        // Primary: read structured coverage data from vitest json-summary output
+        const coveragePath = path.join(root, '.test-output', 'coverage', 'coverage-summary.json')
+        if (fs.existsSync(coveragePath)) {
+            const raw = fs.readFileSync(coveragePath, 'utf-8')
+            const summary = JSON.parse(raw) as {
+                total?: { lines?: { pct?: number } }
+            }
+            const coverage = summary.total?.lines?.pct ?? 0
+
+            // Badge parsing for test counts only (coverage-summary.json has no pass/fail counts)
+            let unitTests = 0
+            let e2eTests = 0
+            const readmePath = path.join(root, 'README.md')
+            if (fs.existsSync(readmePath)) {
+                const fd = fs.openSync(readmePath, 'r')
+                const buf = Buffer.alloc(2048)
+                const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
+                fs.closeSync(fd)
+                const badgeContent = buf.toString('utf-8', 0, bytesRead)
+                const unitMatch = /(?<!E2E[_ ]|E2E)Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(badgeContent)
+                const e2eMatch = /E2E(?:[_ ]|%20)*Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(badgeContent)
+                unitTests = unitMatch?.[1] ? parseInt(unitMatch[1], 10) : 0
+                e2eTests = e2eMatch?.[1] ? parseInt(e2eMatch[1], 10) : 0
+            }
+            cachedTestHealth = { unitTests, e2eTests, coverage }
+        } else {
+            // Fallback: parse everything from README badges (legacy path)
+            const readmePath = path.join(root, 'README.md')
+            const fd = fs.openSync(readmePath, 'r')
+            const buf = Buffer.alloc(2048)
+            const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
+            fs.closeSync(fd)
+            const content = buf.toString('utf-8', 0, bytesRead)
+            cachedTestHealth = parseTestHealth(content)
+        }
     } catch {
-        logger.debug('README.md not found or unreadable (non-critical)', {
+        logger.debug('Test health data not found or unreadable (non-critical)', {
             module: 'BRIEFING',
             operation: 'test-health-parse',
         })
@@ -246,6 +293,51 @@ function loadCachedTestHealth(): TestHealth | null {
     }
 
     return cachedTestHealth
+}
+
+// ============================================================================
+// Last Release Age (from CHANGELOG.md)
+// ============================================================================
+
+let cachedLastReleaseDaysAgo: number | null | undefined
+
+/**
+ * Parse the first versioned release header from CHANGELOG.md to compute
+ * days elapsed since the last tagged release.
+ *
+ * Expects Keep-a-Changelog headers: `## [x.y.z](url) - YYYY-MM-DD`
+ */
+export function parseLastReleaseAge(content: string): number | null {
+    // Match: ## [7.7.1](url) - 2026-05-15  OR  ## [7.7.1] - 2026-05-15
+    const match = /^## \[[\d.]+\].*?-\s*(\d{4}-\d{2}-\d{2})/m.exec(content)
+    if (!match?.[1]) return null
+    const releaseDate = new Date(match[1] + 'T00:00:00Z')
+    const elapsed = Date.now() - releaseDate.getTime()
+    return Math.max(0, Math.floor(elapsed / 86_400_000))
+}
+
+function loadCachedLastReleaseDaysAgo(): number | null {
+    if (cachedLastReleaseDaysAgo !== undefined) return cachedLastReleaseDaysAgo
+
+    try {
+        const root = resolveProjectRoot()
+        const filePath = path.join(root, 'CHANGELOG.md')
+        // Only read the first 1KB — the latest release header is near the top
+        const fd = fs.openSync(filePath, 'r')
+        const buf = Buffer.alloc(1024)
+        const bytesRead = fs.readSync(fd, buf, 0, 1024, 0)
+        fs.closeSync(fd)
+        const content = buf.toString('utf-8', 0, bytesRead)
+        cachedLastReleaseDaysAgo = parseLastReleaseAge(content)
+    } catch {
+        logger.debug('CHANGELOG.md not found or unreadable (non-critical)', {
+            module: 'BRIEFING',
+            operation: 'release-age-parse',
+        })
+        cachedLastReleaseDaysAgo = null
+    }
+
+    return cachedLastReleaseDaysAgo
 }
 
 // ============================================================================
@@ -260,10 +352,10 @@ function loadCachedTestHealth(): TestHealth | null {
  * localTime provides chronological grounding for date-relative agent queries.
  * Filter, instruction level, and registry state are derived from runtime config.
  */
-export function buildSystemContext(
+export async function buildSystemContext(
     config?: BriefingConfig,
     filterConfig?: ToolFilterConfig | null
-): SystemContext {
+): Promise<SystemContext> {
     const now = new Date()
 
     // Format localTime compactly: "2026-05-25 06:12 EDT"
@@ -296,6 +388,12 @@ export function buildSystemContext(
         }
     }
 
+    // Check if readonly (admin tools disabled)
+    let isReadonly = false
+    if (filterConfig) {
+        isReadonly = !TOOL_GROUPS.admin.some((t) => filterConfig.enabledTools.has(t))
+    }
+
     // Registry repos
     const registryRepos = config?.projectRegistry
         ? Object.keys(config.projectRegistry)
@@ -316,15 +414,17 @@ export function buildSystemContext(
     return {
         version: VERSION,
         toolCount: totalTools,
-        resourceCount: RESOURCE_COUNT,
+        resourceCount: await getResourceCount(),
         promptCount: getPrompts().length,
         localTime,
         unreleasedSummary: loadCachedUnreleased(),
         testHealth: loadCachedTestHealth(),
         filterSummary,
+        isReadonly,
         instructionLevel: 'standard',
         registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,
+        lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(),
     }
 }

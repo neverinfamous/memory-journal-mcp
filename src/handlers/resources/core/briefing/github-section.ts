@@ -189,11 +189,16 @@ async function fetchCiStatus(
     config: BriefingConfig
 ): Promise<CiResult> {
     try {
-        const runLimit = Math.max(1, config.workflowCount, config.workflowStatusBreakdown ? 10 : 1)
+        const runLimit = Math.max(5, config.workflowCount, config.workflowStatusBreakdown ? 10 : 1)
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
         if (runs.length === 0) return { status: 'unknown' }
 
-        const primaryRun =
+        let primaryRun = runs.find((r) => {
+            const name = r.name.toLowerCase()
+            return name.includes('ci') || name.includes('test') || name.includes('gatekeeper')
+        })
+
+        primaryRun ??=
             runs.find(
                 (r) =>
                     r.status !== 'completed' ||

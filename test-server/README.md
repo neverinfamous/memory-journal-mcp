@@ -10,7 +10,7 @@
 | [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 14 phase-aligned Code Mode test prompts. See `codemode/README.md` for full list. | After standard tests  |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
-| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 61 tools across 11 groups | Reference |
+| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 70 tools across 10 groups + codemode | Reference |
 | [`code-map.md`](code-map.md) | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns | When debugging source code or making changes |
 
 ## Integration Test Scripts
@@ -95,8 +95,8 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 ### Tool Annotations (Phase 1.3C)
 
-- [ ] 61 tools returned, all with `annotations` object
-- [ ] 45 tools with `openWorldHint: false`, 16 with `openWorldHint: true`, 0 missing
+- [ ] 70 tools returned, all with `annotations` object
+- [ ] Tools correctly categorized by `openWorldHint` with 0 missing
 
 ### Scheduler (Phase 9)
 

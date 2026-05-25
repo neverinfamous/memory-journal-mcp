@@ -82,13 +82,13 @@ src/
 │
 ├── codemode/                       # Code Mode sandbox (secure JS execution)
 │   ├── sandbox.ts                  # SandboxPool lifecycle manager
-│   ├── sandbox-factory.ts          # Sandbox creation factory
+│   ├── sandbox-factory.ts          # Sandbox creation factory (engine-level restrictions: codeGeneration disabled, frozen prototypes, Proxy nullified)
 │   ├── auto-return.ts              # Last-expression auto-return transform (IIFE helper)
 │   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge)
 │   ├── worker-script.ts            # Worker thread entry point — builds mj.* API proxy; Proxy trap returns structured errors for readonly mode
 │   ├── api.ts                      # mj.* API bridge (exposes tools to sandbox)
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
-│   ├── security.ts                 # Code validation (blocked patterns, injection prevention)
+│   ├── security.ts                 # Code validation (18 blocked patterns, 50KB code size limit, injection prevention)
 │   ├── type-generator.ts           # Zod schema-to-TypeScript declaration generator
 │   ├── types.ts                    # Sandbox TypeScript types
 │   └── index.ts                    # Barrel
@@ -147,7 +147,7 @@ src/
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
     │   ├── tools/                  # 70 tool handlers (10 groups)
-    │   ├── resources/              # 36 resource handlers group (4 tools)
+    │   ├── resources/              # 46 resource handlers group (4 tools)
     │   │   ├── index.ts            # Barrel — connects 4 search tools
     │   │   ├── helpers.ts          # Search helper functions
     │   │   ├── auto.ts             # Auto-mode query heuristic classifier
@@ -269,7 +269,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-38 resources total — 25 static + 13 template.
+46 resources total — 28 static + 18 template.
 
 ### Static Resources
 
@@ -446,7 +446,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | **Dual-Schema**         | SDK-facing `inputSchema` is fully optional (no `.min()`, all `.optional()`). Handler-internal schema (inside `try`) enforces strict validation. See § SDK Input Schema Validation above — **this is the #1 recurring issue**.                                                                                                                                                                                                                                                                                 |
 | **Tool Context**        | `ToolContext` passes `db`, `teamDb?`, `vectorManager?`, `teamVectorManager?`, `github?`, `config?`, `progress?` to all tool group modules. Each group factory receives context and returns `ToolDefinition[]`.                                                                                                                                                                                                                                                                                                |
 | **Tool Map Cache**      | `getTools()` + `callTool()` share a `Map<string, ToolDefinition>` cache (O(1) lookup). Cache invalidates when context refs change. `mappedToolsCache` avoids re-mapping for unfiltered calls.                                                                                                                                                                                                                                                                                                                 |
-| **Code Mode Bridge**    | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). Readonly mode halts execution gracefully and returns structured errors via proxy traps. Result cap 100KB default (configurable via `CODE_MODE_MAX_RESULT_SIZE`).                                                                                                                            |
+| **Code Mode Bridge**    | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). Readonly mode halts execution gracefully and returns structured errors via proxy traps. Result cap 100KB default (configurable via `CODE_MODE_MAX_RESULT_SIZE`). Secured via separate V8 isolates, disabled `codeGeneration`, frozen built-in prototypes, and nullified `Proxy`/`Reflect`/`Symbol` constructors. |
 | **Tool Filtering**      | `ToolFilter` parses `--tool-filter` string → whitelist/blacklist of tool names. `codemode` auto-injected unless explicitly excluded. Shortcuts: `starter`, `essential`, `readonly`.                                                                                                                                                                                                                                                                                                                           |
 | **Briefing System**     | `memory://briefing` assembled from modular sections (context, GitHub, user message). Configurable via 13 env vars / CLI flags (incl. `--workflow-summary`/`MEMORY_JOURNAL_WORKFLOW_SUMMARY` for `memory://workflows`). Instruction levels: `essential`, `standard`, `full`.                                                                                                                                                                                                                                   |
 | **GitHub Split**        | **Tools**: 67 specialized agents (across 10 domains). `GitHubIntegration` facade handles all API calls. Tools dynamically instantiate local `GitHubIntegration` bounds to the target project's physical path via `PROJECT_REGISTRY` if explicitly requested, falling back to the first registered project globally.                                                                                                                                                                                           |
@@ -500,7 +500,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/codemode/test-cm-sandbox-basics.md`       | Code mode — Phase 16: Sandbox basics (expressions, async, metrics, timeout)                                                                          |
 | `test-server/codemode/test-cm-api-discovery.md`        | Code mode — Phase 17: API discoverability (help, aliases, positional args)                                                                           |
 | `test-server/codemode/test-cm-readonly.md`             | Code mode — Phase 18: Readonly mode (read succeed, writes blocked)                                                                                   |
-| `test-server/codemode/test-cm-security.md`             | Code mode — Phase 19: Error handling & security (blocked patterns, globals)                                                                          |
+| `test-server/codemode/test-cm-security.md`             | Code mode — Phase 19: Error handling & security (18 blocked patterns, prototype freezing, nullified constructors)                                     |
 | `test-server/codemode/test-cm-crud.md`                 | Code mode — Phase 20: Core CRUD (create, read, update, delete, error paths)                                                                          |
 | `test-server/codemode/test-cm-search.md`               | Code mode — Phase 21: Search & semantics (FTS5, filters, analytics, vector)                                                                          |
 | `test-server/codemode/test-cm-workflows.md`            | Code mode — Phase 22: Multi-step workflows (pipelines, branching, round-trip)                                                                        |

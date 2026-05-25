@@ -187,8 +187,8 @@ No badges here.
 // ============================================================================
 
 describe('buildSystemContext', () => {
-    it('should return a complete SystemContext object', () => {
-        const result = buildSystemContext()
+    it('should return a complete SystemContext object', async () => {
+        const result = await buildSystemContext()
 
         expect(result).toHaveProperty('version')
         expect(typeof result.version).toBe('string')
@@ -211,8 +211,8 @@ describe('buildSystemContext', () => {
         expect(result.localTime.length).toBeGreaterThan(0)
     })
 
-    it('should include unreleased summary when UNRELEASED.md exists', () => {
-        const result = buildSystemContext()
+    it('should include unreleased summary when UNRELEASED.md exists', async () => {
+        const result = await buildSystemContext()
 
         // In dev environment, UNRELEASED.md should exist with content
         // In npm-installed scenarios, this may be null — both are valid
@@ -225,8 +225,8 @@ describe('buildSystemContext', () => {
         }
     })
 
-    it('should format localTime as YYYY-MM-DD HH:MM TZ', () => {
-        const result = buildSystemContext()
+    it('should format localTime as YYYY-MM-DD HH:MM TZ', async () => {
+        const result = await buildSystemContext()
 
         // Should match pattern like "2026-05-25 06:12 EDT" or "2026-05-25 06:12 UTC"
         expect(result.localTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \w+/)

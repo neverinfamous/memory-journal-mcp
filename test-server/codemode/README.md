@@ -38,7 +38,7 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                            |    Phase    | Focus                                                                 | When to Run        |
 | ------------------------------- | :---------: | --------------------------------------------------------------------- | ------------------ |
-| `test-cm-github.md`             |     25      | GitHub 16 tools (read, Kanban, issues, milestones, insights)          | After Phases 16–19 |
+| `test-cm-github.md`             |     25      | GitHub 18 tools (read, Kanban, issues, milestones, insights)          | After Phases 16–19 |
 | `test-cm-kanban-lifecycle.md`   |    25.1     | End-to-end Code Mode pipelined execution of Kanban lifecycle tools    | After Phases 16–19 |
 | `test-cm-io.md`                 |     26      | IO namespaces, Markdown orchestration roundtrips, and file schemas    | After Phases 16–19 |
 | `test-cm-admin-backup.md`       |     27      | Tag management, backup lifecycle                                      | After Phases 16–19 |

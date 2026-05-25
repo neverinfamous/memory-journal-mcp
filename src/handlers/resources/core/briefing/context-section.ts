@@ -48,20 +48,7 @@ export function buildJournalContext(
     config: BriefingConfig,
     projectNumber?: number | null
 ): JournalContext {
-    const recentEntries =
-        typeof projectNumber === 'number'
-            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
-            : context.db.getRecentEntries(config.entryCount)
-    const latestEntries = recentEntries.map((e) => {
-        return {
-            id: e.id,
-            timestamp: e.timestamp,
-            type: e.entryType,
-            preview: markUntrustedContentInline(cleanPreview(e.content, PREVIEW_LENGTH)),
-        }
-    })
-
-    // Fetch latest session summaries
+    // ── Session summaries (computed first to enable deduplication) ──────
     const summaryEntries =
         typeof projectNumber === 'number'
             ? context.db.searchEntries('', {
@@ -104,6 +91,25 @@ export function buildJournalContext(
         })
         latestSessionSummary = sessionSummaries[0]
     }
+
+    // ── Latest entries (deduplicated against summaries) ──────────────
+    const recentEntries =
+        typeof projectNumber === 'number'
+            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
+            : context.db.getRecentEntries(config.entryCount)
+
+    // Exclude entries already shown in the Summary slot to diversify briefing content
+    const summaryIds = new Set(finalSummaryEntries.map((e) => e.id))
+    const dedupedRecent = recentEntries.filter((e) => !summaryIds.has(e.id))
+
+    const latestEntries = dedupedRecent.map((e) => {
+        return {
+            id: e.id,
+            timestamp: e.timestamp,
+            type: e.entryType,
+            preview: markUntrustedContentInline(cleanPreview(e.content, PREVIEW_LENGTH)),
+        }
+    })
 
     const totalEntries = context.db.getActiveEntryCount()
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()

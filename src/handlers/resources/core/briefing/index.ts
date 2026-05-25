@@ -96,7 +96,14 @@ async function buildBriefingData(
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
-    const system = buildSystemContext(config, context.filterConfig)
+    const system = await buildSystemContext(config, context.filterConfig)
+
+    // Build registry paths map for non-IDE agent context
+    const registryPaths = config.projectRegistry
+        ? Object.fromEntries(
+              Object.entries(config.projectRegistry).map(([name, entry]) => [name, entry.path])
+          )
+        : undefined
 
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
@@ -120,10 +127,15 @@ async function buildBriefingData(
         unreleasedSummary: system.unreleasedSummary ?? undefined,
         testHealth: system.testHealth ?? undefined,
         filterSummary: system.filterSummary,
+        isReadonly: system.isReadonly,
+        teamConfigured: !!context.teamDb,
+        githubConfigured: !!activeGithub,
         instructionLevel: system.instructionLevel,
         registryRepos: system.registryRepos,
         ioRootCount: system.ioRootCount,
         hasCodeMap: system.hasCodeMap,
+        lastReleaseDaysAgo: system.lastReleaseDaysAgo ?? undefined,
+        registryPaths,
     })
 
     return {

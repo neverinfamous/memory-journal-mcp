@@ -47,10 +47,16 @@ export function formatUserMessage(opts: {
     unreleasedSummary?: UnreleasedSummary
     testHealth?: TestHealth
     filterSummary?: string | null
+    isReadonly?: boolean
+    teamConfigured?: boolean
+    githubConfigured?: boolean
     instructionLevel?: string
     registryRepos?: string[] | null
     ioRootCount?: number
     hasCodeMap?: boolean
+    lastReleaseDaysAgo?: number
+    /** Registered workspace paths for non-IDE agents: { repoName: diskPath } */
+    registryPaths?: Record<string, string>
 }): string {
     const {
         repoName,
@@ -202,7 +208,7 @@ export function formatUserMessage(opts: {
     }
     // Code-map indicator
     if (opts.hasCodeMap) {
-        systemParts.push('📋 code-map')
+        systemParts.push('📋 code-map (test-server/code-map.md)')
     }
 
     // ========================================================================
@@ -213,6 +219,11 @@ export function formatUserMessage(opts: {
     if (opts.filterSummary) {
         configParts.push(`filter: ${escapeCell(opts.filterSummary)}`)
     }
+    if (opts.isReadonly) {
+        configParts.push('mode: readonly')
+    }
+    configParts.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
+    configParts.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
     if (opts.instructionLevel && opts.instructionLevel !== 'standard') {
         configParts.push(`level: ${opts.instructionLevel}`)
     }
@@ -285,11 +296,25 @@ export function formatUserMessage(opts: {
         if (u.security > 0) parts.push(`${String(u.security)} security`)
         if (u.removed > 0) parts.push(`${String(u.removed)} removed`)
         if (parts.length > 0) {
-            let line = `**Unreleased:** ${parts.join(' · ')}`
+            const ageStr = opts.lastReleaseDaysAgo !== undefined
+                ? `(${String(opts.lastReleaseDaysAgo)}d) `
+                : ''
+            let line = `**Unreleased:** ${ageStr}${parts.join(' · ')}`
             if ((u.keyItems?.length ?? 0) > 0) {
                 line += ` | Key: ${u.keyItems.join(', ')}`
             }
             flatLines.push(line)
+        }
+    }
+
+    // Registered workspace paths (useful for non-IDE agents without <user_information>)
+    if (opts.registryPaths) {
+        const entries = Object.entries(opts.registryPaths)
+        if (entries.length > 0) {
+            const pathList = entries
+                .map(([name, diskPath]) => `${escapeContent(name)}: ${escapeContent(diskPath)}`)
+                .join(' · ')
+            flatLines.push(`**Workspaces:** ${pathList}`)
         }
     }
 
