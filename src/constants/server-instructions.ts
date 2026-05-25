@@ -366,6 +366,9 @@ await mj.core.createEntry({
 
 **Important — all \`mj.*\` methods return Promises. Always \`await\` them:**
 
+> ⚠️ **CRITICAL (Structured Error Pattern)**: All \`mj.*\` tools return a structured result object (e.g., \`{ success: true/false, ... }\`). They do NOT throw exceptions on API or validation failures. If \`result.success\` is \`false\`, the object will contain an \`error\` field. **ALWAYS** check \`if (!result.success)\` before attempting to access nested properties on the result object to prevent unhandled TypeError exceptions (e.g., \`result.columns is not iterable\`).
+
+
 \`\`\`js
 // ✅ Correct
 const result = await mj.core.recent({ limit: 5 })
