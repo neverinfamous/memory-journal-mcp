@@ -8,6 +8,7 @@
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
 - **briefing**: Added server version, resource/tool counts, test health indicators, workspace paths, git working tree status, code-map availability, `📊 memory://metrics/summary` breadcrumb, and unreleased change summary to `memory://briefing` output
+- **codemode**: Added `context` parameter to `mj_execute_code` schema and injected it into the VM worker thread to prevent string escaping syntax errors
 - **codemode**: Added runtime schema introspection (`.schema()`) for proxy tools and dynamically injected TypeScript declarations for the `mj_execute_code` payload
 - **codemode**: Added `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
 - **docs**: Added missing CLI flags, environment variables, and auto-prune documentation to the Wiki and configuration examples

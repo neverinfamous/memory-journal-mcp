@@ -306,7 +306,7 @@ export function formatUserMessage(opts: {
             .map(([type, count]) => `${type}: ${String(count)}`)
             .join(', ') || 'none'
         flatLines.push(
-            `**Graph:** ${String(graphSummary.totalRelationships)} relationships\nTop: ${escapeContent(topTypes)} (view: memory://graph/recent)`
+            `**Graph:** ${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeContent(topTypes)} (view: memory://graph/recent)`
         )
     }
 
@@ -325,7 +325,7 @@ export function formatUserMessage(opts: {
                 : ''
             let line = `**Unreleased:** ${ageStr}${parts.join(' · ')}`
             if ((u.keyItems?.length ?? 0) > 0) {
-                line += `\nRecent focus: ${u.keyItems.join(', ')}`
+                line += `<br>Recent focus: ${u.keyItems.join(', ')}`
             }
             flatLines.push(line)
         }
@@ -378,5 +378,5 @@ export function formatUserMessage(opts: {
     const sections: string[] = [tableRows.join('\n')]
     if (flatLines.length > 0) sections.push(flatLines.join('\n\n'))
 
-    return `${flagsAlert}${sections.join('\n')}`
+    return `${flagsAlert}${sections.join('\n\n')}`
 }

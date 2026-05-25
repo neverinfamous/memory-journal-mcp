@@ -38,6 +38,7 @@ const ExecuteCodeSchema = z.object({
     timeout: z.number().max(30000).optional().default(30000),
     readonly: z.boolean().optional().default(false),
     repo: z.string().optional(),
+    context: z.record(z.string(), z.unknown()).optional(),
 })
 
 /** Relaxed schema for MCP registration */
@@ -53,6 +54,12 @@ const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .describe(
             'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
+        ),
+    context: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe(
+            'Optional JSON object injected into the sandbox as a global `context` variable. Use this to pass strings or data without string-escaping issues.'
         ),
 })
 
@@ -220,6 +227,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         timeout,
                         readonly: readonlyMode,
                         repo,
+                        context: contextObj,
                     } = ExecuteCodeSchema.parse(params)
 
                     // Context extraction for rate limiting and tenant isolation
@@ -378,7 +386,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
-                    const result = await pool.execute(code, bindings, schemas, timeout)
+                    const result = await pool.execute(code, bindings, schemas, timeout, contextObj)
                     // Result size is validated internally by the worker pool
                     return result
                 } catch (err) {

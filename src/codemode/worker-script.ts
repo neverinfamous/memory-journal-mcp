@@ -161,7 +161,8 @@ async function executeCode(
     code: string,
     methodList: Record<string, string[]>,
     schemaList: Record<string, Record<string, string>> | undefined,
-    timeoutMs: number
+    timeoutMs: number,
+    contextObj?: Record<string, unknown>
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
@@ -172,6 +173,7 @@ async function executeCode(
         const sandbox: Record<string, unknown> = {
             mj: mjApi,
             journal: mjApi['core'],
+            context: contextObj ?? {},
             console: {
                 log: (...args: unknown[]) => args,
                 warn: (...args: unknown[]) => args,
@@ -290,6 +292,7 @@ parentPort?.on('message', (msg: unknown) => {
                 timeoutMs?: number
                 maxResultSize?: number
                 rpcPort: MessagePort
+                contextObj?: Record<string, unknown>
             }
             const {
                 id,
@@ -299,6 +302,7 @@ parentPort?.on('message', (msg: unknown) => {
                 timeoutMs,
                 maxResultSize,
                 rpcPort: newRpcPort,
+                contextObj,
             } = executeMsg
 
             rpcPort = newRpcPort
@@ -317,7 +321,7 @@ parentPort?.on('message', (msg: unknown) => {
                 }
             })
 
-            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000)
+            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj)
 
             if (result.success) {
                 try {
@@ -353,6 +357,9 @@ parentPort?.on('message', (msg: unknown) => {
                         if (byteLength > egressLimit) {
                             throw new Error(`EgressLimitExceeded:${byteLength}`)
                         }
+                        result.result = JSON.parse(resultJson)
+                    } else {
+                        result.result = undefined
                     }
                 } catch (err) {
                     result.success = false
