@@ -7,7 +7,8 @@ description: |
   trails, and human-in-the-loop checkpoints. Use this skill whenever you are
   working on a GitHub issue, reviewing or submitting a PR, running any kind of
   code audit, updating dependencies, or working through a milestone. Also use when the user
-  asks you to "fix", "triage", "audit", "review", or "update deps".
+  asks you to "fix a GitHub issue", "triage an issue", "audit a PR/repo", "review a PR", or "update deps".
+  Do NOT trigger on bare verbs (e.g. "fix this", "audit my code") — require a GitHub artifact context.
   NOT for dedicated security vulnerability fixing or adversarial security audits (use adversarial-security instead).
 ---
 

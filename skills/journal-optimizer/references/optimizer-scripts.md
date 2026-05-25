@@ -55,7 +55,7 @@ const fail = results.filter(r => !r.success).length;
 
 await mj.core.createEntry({
   content: `Database optimization: soft-deleted ${ok} entries (batch). Backup: ${backup.filename}`,
-  entry_type: 'enhancement',
+  entry_type: 'maintenance',
   tags: ['database-optimizer', 'cleanup'],
 });
 
@@ -68,7 +68,7 @@ return { deleted: ok, failed: fail, backupFile: backup.filename };
 ```javascript
 const s = await mj.analytics.getStatistics();
 const all = await mj.core.getRecentEntries({ limit: 500, sort_by: 'importance' });
-const orphans = all.entries.filter(e => (e.importanceScore ?? 0) === 0);
+const orphans = all.entries.filter(e => Object.keys(e.relationships || {}).length === 0);
 return {
   total: s.totalEntries,
   orphans: orphans.slice(0, 50).map(e => ({

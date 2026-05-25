@@ -4,6 +4,7 @@ description: |
   Comprehensive, opinionated guidance for Playwright test development. Use ONLY when
   writing E2E, API, component, or visual tests, debugging failures, implementing
   Page Object Model, or configuring CI/CD. For unit tests, use vitest-standard. Use Playwright solely for E2E, API, and component tests. NOT for unit testing (use Vitest).
+  If the user asks to "write tests" without specifying the type, you MUST ask "Unit, E2E, or both?" before proceeding.
 ---
 
 # Playwright Standard

@@ -6,7 +6,8 @@ description: |
   to assess skill completeness, instruction clarity, trigger accuracy,
   token efficiency, and security. Use when auditing a skills directory,
   reviewing skill quality, or when the user says "audit my skills",
-  "skill quality check", "review these skills", or "are my skills any good".
+  "skill quality check", "review these skills", "evaluate skills",
+  "validate skill quality", "check skill quality", or "are my skills any good".
 ---
 
 # Adversarial Skill Audit
@@ -37,13 +38,17 @@ Load this skill when any of these apply:
 
 - **Phase 0 (Web Research):** Use the `search_web` tool to find new agentic patterns, framework changes, or prompt injection vectors that the skills might be missing.
 - **Phase 0 (Ecosystem):** Use `grep_search` across the other local skills to map out existing domains, ensuring robust Trigger Collision Detection (Category 10).
+
+**Prerequisites & Fallbacks:**
+- If the `search_web` tool is unavailable, gracefully skip the Web Research phase and note it in the journal.
+- If the directory is empty or `skill-builder` standards are missing, abort the audit and inform the user.
+
 - Read each `SKILL.md` and its reference files
 - Score against the 8 audit categories (derived from `skill-builder`)
 - Catalog the directory's cross-skill properties (overlaps, gaps, coherence)
 - Establish a baseline quality inventory
 
-Think like a **QA lead** doing a thorough review. Your job is accurate
-assessment, not criticism — Agent B will find what you missed.
+Your job is analytical and structural measurement, not criticism. Verify presence of documentation, measure token counts, check reference links, and map trigger coverage objectively — Agent B will find what you missed.
 
 ### Agent B — The Adversarial User
 

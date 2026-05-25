@@ -3,8 +3,7 @@ name: docker
 description: |
   Production-grade Docker and container best practices. Use when containerizing apps with Docker, 
   writing Dockerfiles, or managing Docker Compose environments.
-  Triggers on "Docker", "Dockerfile", "container", "Compose", "BuildKit",
-  "multi-stage build", "image size", "docker-compose". NOT for serverless or Cloudflare Workers. NOT for generic app deployment without containers. NOT for orchestrating CI/CD pipelines natively (use github-actions instead).
+  "multi-stage build", "image size", "docker-compose". Use ONLY when a Dockerfile or container registry is the explicit target for deployment. NOT for serverless or Cloudflare Workers. NOT for generic app deployment without containers. NOT for orchestrating CI/CD pipelines natively (use github-actions instead).
 ---
 
 # Docker & Container Engineering Standards

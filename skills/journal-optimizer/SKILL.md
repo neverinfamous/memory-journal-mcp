@@ -5,8 +5,8 @@ description: |
   Uses importance scores, relationship density, and entry metadata to identify
   low-value entries for safe soft-deletion. Includes dry-run previews, backup
   gates, and revert guidance. Use when the user says "clean up the database",
-  "optimize entries", "prune old entries", "database maintenance", or
-  "what entries can I delete?".
+  "optimize entries", "prune old entries", "database maintenance",
+  "what entries can I delete?", "my journal is getting too big", or "archive old entries".
 ---
 
 # Journal Optimizer
@@ -15,17 +15,6 @@ Guided workflows for intelligently pruning, cleaning, and optimizing a
 memory-journal-mcp database. Every operation uses the soft-delete system
 as a safe first pass — entries remain recoverable via `restore_backup`
 until explicitly purged.
-
-## When to Load
-
-Load this skill when any of these apply:
-
-- User asks to clean up, prune, or optimize journal entries
-- User asks what entries are low-value or expendable
-- User wants to reduce database size or improve search relevance
-- User says "database maintenance", "clean up entries", "prune",
-  "optimize the database", or "what can I delete?"
-- Importance scores or relationship density need investigation
 
 ## Prerequisites
 
@@ -106,7 +95,7 @@ Analyze the database to surface low-importance entries without modifying anythin
 ### Steps
 
 **Step 1 & 2 — Gather stats and score entries:**
-*Execute the script from [references/optimizer-scripts.md#workflow-1-importance-audit](references/optimizer-scripts.md).*
+*Read and execute the Workflow 1 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
 
 **Step 3 — Present results:**
 
@@ -144,7 +133,7 @@ Find and soft-delete entries with zero relationships.
 ### Steps
 
 1. Retrieve orphaned statistics and entries:
-   *Execute the script from [references/optimizer-scripts.md#workflow-3-orphan-cleanup](references/optimizer-scripts.md).*
+   *Read and execute the Workflow 3 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
 2. Present the orphan list. Flag any with `significance_type` set — these should NOT be deleted without explicit approval.
 3. Execute the **Safe Deletion Protocol**.
 
@@ -161,7 +150,7 @@ Find entries with semantically similar content that may be redundant.
 ### Steps
 
 1. Identify candidate duplicates using semantic search:
-   *Execute the script from [references/optimizer-scripts.md#workflow-4-duplicate-detection](references/optimizer-scripts.md).*
+   *Read and execute the Workflow 4 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
 2. Present duplicate pairs side-by-side with recommendations.
 3. Execute the **Safe Deletion Protocol** (targeting the lower-scoring entry of each pair).
 
@@ -179,7 +168,7 @@ Clean up entries by `entry_type` — useful for removing bulk categories that we
 2. Present the type breakdown. Flag commonly low-value types (`personal_reflection`, `retrospective`, `note`).
 3. User selects which types to target and an age threshold.
 4. Preview matching entries:
-   *Execute the script from [references/optimizer-scripts.md#workflow-5-type-based-cleanup](references/optimizer-scripts.md).*
+   *Read and execute the Workflow 5 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
 5. Execute the **Safe Deletion Protocol**.
 
 ---
@@ -187,7 +176,7 @@ Clean up entries by `entry_type` — useful for removing bulk categories that we
 ## Revert Guide
 
 Every workflow creates a backup before mutations. To revert:
-*Follow the restoration commands in [references/optimizer-scripts.md#revert-guide](references/optimizer-scripts.md).*
+*Follow the restoration commands in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
 
 > **Important**: Soft-deleted entries are physically present but excluded from queries. They are only permanently removed via `permanent: true`, restoring an old backup, or rebuilding from an export.
 
