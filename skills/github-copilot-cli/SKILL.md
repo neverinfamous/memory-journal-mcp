@@ -19,11 +19,15 @@ When integrated into an AI workflow (AI evaluating AI), it acts as a robust seco
 Before using the CLI in automated pipelines, ensure the terminal environment is equipped and authenticated:
 
 ```bash
-# 1. Verify availability (will prompt to install the underlying component if missing)
-gh copilot --version
+# 1. Verify availability
+gh copilot --version || echo "Copilot not installed"
 
-# 2. Authenticate (Requires human interaction/browser approval)
-gh auth login
+# 2. Pre-check / Authenticate
+# Check auth status first. If this fails, the environment cannot use Copilot.
+gh auth status
+# If unauthenticated, human interaction is required (which agents cannot do).
+# Fallback: Gracefully skip the Copilot execution step, log the skip reason, and proceed with other tasks.
+# gh auth login
 ```
 
 ## Agentic Interaction Strategies

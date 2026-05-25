@@ -4,7 +4,7 @@ description: |
   Master GitHub Actions CI/CD workflows with production-grade security and
   performance patterns. Use when setting up CI/CD pipelines specifically via GitHub Actions, 
   setting up matrix strategies, caching dependencies, managing
-  artifacts, or implementing reusable workflows.
+  artifacts, or implementing reusable workflows. NOT for GitLab or autonomous-dev.
 ---
 
 # GitHub Actions CI/CD Engineering Standards

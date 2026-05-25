@@ -4,7 +4,7 @@ description: |
   Enforced meta-cognitive rules and production configurations for SQLite development.
   Use when designing SQLite schemas, PRAGMAs, transactions, migrations, locking, or backups.
   Also use when debugging SQLite performance or writing queries against an SQLite database.
-  Do NOT use for generic "set up a database" or "create a DB" requests unless SQLite is explicitly contextually required or requested.
+  Do NOT use for generic "set up a database" or "create a DB" requests unless SQLite is explicitly contextually required or requested. NOT for Postgres or MySQL.
 ---
 
 # SQLite Production Standards

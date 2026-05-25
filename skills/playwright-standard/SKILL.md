@@ -3,7 +3,7 @@ name: playwright-standard
 description: |
   Comprehensive, opinionated guidance for Playwright test development. Use when
   writing E2E, API, component, or visual tests, debugging failures, implementing
-  Page Object Model, or configuring CI/CD. For unit tests, use vitest-standard. Use Playwright solely for E2E, API, and component tests.
+  Page Object Model, or configuring CI/CD. For unit tests, use vitest-standard. Use Playwright solely for E2E, API, and component tests. NOT for unit testing (use Vitest).
 ---
 
 # Playwright Standard

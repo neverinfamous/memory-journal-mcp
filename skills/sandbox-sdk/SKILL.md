@@ -179,5 +179,6 @@ See `examples/openai-agents` for complete integration pattern.
 
 ## Security
 
-- **Command Injection**: Never pass unsanitized user input to `exec()`. Prefer `runCode()` with language constraints for LLM-generated code.
-- **Resource Limits**: Implement per-user rate limiting. Set `sleepAfter` to cap idle resource consumption.
+- **Command Injection**: Never pass unsanitized user input to `exec()`. EXPLICITLY BANNED: String interpolation (e.g. ``exec(`ls ${userInput}`)``) into exec calls. Prefer `runCode()` with language constraints for LLM-generated code.
+- **Resource Limits**: Implement per-user rate limiting. Set `sleepAfter` to cap idle resource consumption. Always set explicit timeouts on commands (e.g. using `timeout` or the SDK's execution limits).
+- **Allowlists**: Enforce allowlists for binaries/commands when executing untrusted input.

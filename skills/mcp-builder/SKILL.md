@@ -1,7 +1,7 @@
 ---
 name: mcp-builder
 description: |
-  Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses.
+  Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses. NOT for general REST APIs or Cloudflare Workers.
 ---
 
 # MCP Server Builder Guidelines

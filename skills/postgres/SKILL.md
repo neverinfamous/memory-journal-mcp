@@ -4,7 +4,7 @@ description: |
   Use when designing, querying, or managing a PostgreSQL database.
   Enforces enterprise production rules for advanced querying, composite indexing, 
   JSONB data handling, and strict optimization patterns (avoiding N+1).
-  Do NOT trigger for generic "set up a database" requests unless PostgreSQL is explicitly chosen.
+  Do NOT trigger for generic "set up a database" requests unless PostgreSQL is explicitly chosen. NOT for SQLite or MySQL.
 ---
 
 # PostgreSQL Production Standards

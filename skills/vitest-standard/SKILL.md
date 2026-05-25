@@ -4,7 +4,7 @@ description: |
   Comprehensive unit testing expertise covering Vitest, test-driven 
   development (TDD), mocking strategies, and production-grade best practices. 
   Activates for unit testing, Vitest, TDD, Red-Green-Refactor, mocking, 
-  stubbing, spying, test coverage, and test architecture in TypeScript/Node projects.
+  stubbing, spying, test coverage, and test architecture in TypeScript/Node projects. NOT for E2E testing (use Playwright).
 ---
 
 # Vitest Standard

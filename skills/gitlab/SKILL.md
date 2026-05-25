@@ -5,7 +5,7 @@ description: |
   Activate when the user asks about GitLab projects or repositories, wants to 
   see merge requests or pipelines, needs to search code or files, asks about 
   CI/CD status or job logs, or wants to browse repository contents. 
-  Mentions "GitLab", "MR", "pipeline", or "CI/CD".
+  Mentions "GitLab", "glab" CLI, or explicitly asks for GitLab MRs/pipelines. NOT for GitHub Actions.
 ---
 
 # GitLab Skill

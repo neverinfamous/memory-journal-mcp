@@ -16,7 +16,7 @@ Scaffold a new public TypeScript/Node.js repo with community standards, CI, and 
 - GitHub CLI (`gh`) authenticated as `neverinfamous`
 - Node.js 24+
 - Default branch: `main`
-- Credentials: `C:\Users\chris\Desktop\adamic\secrets.env`
+- Credentials: Load from `{{SECRETS_ENV_PATH}}` or standard environment variables.
 
 ## Parameters
 

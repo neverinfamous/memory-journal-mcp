@@ -4,7 +4,7 @@ description: |
   Use when designing, querying, or managing a MySQL or MariaDB database.
   Enforces enterprise production rules for query safety (strict parameterization), 
   connection pooling, and strict schema configurations (STRICT_TRANS_TABLES).
-  Do NOT trigger for generic "set up a database" requests unless MySQL/MariaDB is explicitly chosen.
+  Do NOT trigger for generic "set up a database" requests unless MySQL/MariaDB is explicitly chosen. NOT for Postgres or SQLite.
 ---
 
 # MySQL / MariaDB Production Standards

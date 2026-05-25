@@ -4,7 +4,7 @@ description: |
   Production-grade Docker and container best practices. Use when containerizing apps with Docker, 
   writing Dockerfiles, or managing Docker Compose environments.
   Triggers on "Docker", "Dockerfile", "container", "Compose", "BuildKit",
-  "multi-stage build", "image size", "docker-compose".
+  "multi-stage build", "image size", "docker-compose". NOT for serverless or Cloudflare Workers.
 ---
 
 # Docker & Container Engineering Standards

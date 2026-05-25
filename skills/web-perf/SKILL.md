@@ -2,7 +2,7 @@
 name: web-perf
 description: |
   Optimize page load, frontend Lighthouse metrics, and Core Web Vitals (LCP, INP, CLS).
-  Analyzes web performance using Chrome DevTools MCP. Measures Core Web Vitals (FCP, LCP, TBT, CLS, Speed Index), identifies render-blocking resources, network dependency chains, layout shifts, caching issues, and accessibility gaps. Use when asked to audit, profile, debug, or optimize page load performance, Lighthouse scores, or site speed.
+  Analyzes web performance using Chrome DevTools MCP. Measures Core Web Vitals (FCP, LCP, TBT, CLS, Speed Index), identifies render-blocking resources, network dependency chains, layout shifts, caching issues, and accessibility gaps. Use when asked to audit, profile, debug, or optimize page load performance, Lighthouse scores, or site speed. Use ONLY when Chrome DevTools MCP server is configured and attached.
 ---
 
 # Web Performance Audit

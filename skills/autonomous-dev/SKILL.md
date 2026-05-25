@@ -9,9 +9,9 @@ This skill provides a deterministic software engineering harness, designed to wr
 
 ## 1. Project Alignment Gate (PROJECT.md)
 
-Before beginning implementation, you MUST cross-reference the proposed feature against `PROJECT.md` at the repository root.
+Before beginning implementation, you MUST cross-reference the proposed feature against `PROJECT.md` at the repository root. If `PROJECT.md` is missing, ask the user to clarify the project goals or constraints before proceeding.
 
-- **In-Scope**: Proceed with confidence.
+- **In-Scope**: Confirm the feature directly serves a goal in `PROJECT.md`. Proceed.
 - **Out-of-Scope**: Hard block. Halt work immediately and inform the user.
 - **Constraints**: Abide strictly by the constraints (language, architecture, dependencies) defined in the project file.
 
@@ -29,9 +29,9 @@ Features cannot simply be written and committed. They must navigate a rigid pipe
 
 ## 3. Workflow Orchestration
 
-See [references/workflow_orchestration.md](references/workflow_orchestration.md) for strict version control (Conventional Commits, atomic commits) and CI/CD automation rules.
+Follow strict version control (Conventional Commits, atomic commits) and CI/CD automation rules. Test code locally before creating PRs.
 
-## 5. Context Management & Drift Prevention
+## 4. Context Management & Drift Prevention
 
 As the context window fills up, context anxiety can degrade performance.
 
