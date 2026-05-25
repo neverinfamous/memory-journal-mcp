@@ -143,6 +143,8 @@ async function buildBriefingData(
         ioRootCount: system.ioRootCount,
         hasCodeMap: system.hasCodeMap,
         lastReleaseDaysAgo: system.lastReleaseDaysAgo ?? undefined,
+        localCheck: system.localCheck ?? undefined,
+        deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
         registryPaths,
     })
 

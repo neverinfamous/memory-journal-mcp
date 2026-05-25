@@ -180,6 +180,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
+                    if (params !== null && typeof params === 'object' && 'auto_context' in params) {
+                        context.config?.runtime?.metrics?.recordDeprecationWarning('Agent recently used deprecated auto_context field in create_entry. This field is ignored.')
+                    }
+
                     const input = CreateEntrySchema.parse(params)
 
                     // The user's provided issueUrl (if any)

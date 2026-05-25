@@ -136,6 +136,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
+                    if (params !== null && typeof params === 'object' && 'auto_context' in params) {
+                        context.config?.runtime?.metrics?.recordDeprecationWarning('Agent recently used deprecated auto_context field in update_entry. This field is ignored.')
+                    }
+
                     const input = UpdateEntrySchema.parse(params)
                     const entry = db.updateEntry(input.entry_id, {
                         content: input.content,

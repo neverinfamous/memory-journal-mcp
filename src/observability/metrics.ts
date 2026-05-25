@@ -51,8 +51,23 @@ export interface SystemMetrics {
 
 export class MetricsAccumulator {
     private readonly toolData = new Map<string, ToolMetrics>()
+    private readonly deprecationWarnings = new Set<string>()
     readonly upSince: string = new Date().toISOString()
     private readonly startTime: number = Date.now()
+
+    /**
+     * Record a deprecation warning to be surfaced in the briefing.
+     */
+    recordDeprecationWarning(warning: string): void {
+        this.deprecationWarnings.add(warning)
+    }
+
+    /**
+     * Retrieve active deprecation warnings.
+     */
+    getDeprecationWarnings(): string[] {
+        return Array.from(this.deprecationWarnings)
+    }
 
     /**
      * Record a single tool invocation result.
@@ -174,6 +189,7 @@ export class MetricsAccumulator {
     reset(): void {
         this.toolData.clear()
         this.userCounts.clear()
+        this.deprecationWarnings.clear()
     }
 }
 

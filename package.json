@@ -20,7 +20,7 @@
         "lint": "eslint src/ tests/",
         "lint:fix": "eslint src/ tests/ --fix",
         "typecheck": "tsc --noEmit",
-        "check": "npm run lint && npm run typecheck",
+        "check": "tsx scripts/run-checks.ts",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage && npx tsx scripts/update-badges.ts",

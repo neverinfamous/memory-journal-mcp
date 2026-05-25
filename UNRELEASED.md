@@ -10,6 +10,9 @@
 - **briefing**: Added days-since-release indicator to Unreleased line (parsed from `CHANGELOG.md`)
 - **briefing**: Added registered workspace disk paths to briefing for non-IDE agent context
 - **briefing**: Added local Git working tree status (clean, modified, untracked) and explicit CI workflow outcomes to the GitHub row
+- **briefing**: Added the `📊 memory://metrics/summary` URI breadcrumb and `Local Check: ✅` status indicator to the System row.
+- **briefing**: Added conditional `⚠️ Deprecation Warning(s):` section to briefing output for recently utilized legacy fields.
+- **metrics**: Added dynamic tracking for deprecation warnings (`MetricsAccumulator.recordDeprecationWarning`).
 - **admin**: Added `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
@@ -26,6 +29,8 @@
 ### Changed
 
 - **briefing**: Improved quality by surfacing `readonly`, `TEAM_DB_PATH`, and `GITHUB_TOKEN` capability statuses directly in the Config row
+- **briefing**: Renamed the `Key:` designation inside Unreleased items to `Recent focus:` to prevent misinterpretation by LLMs as a cryptographic or mapping key.
+- **briefing**: Injected `(view: memory://graph/recent)` into the Graph stats line to serve as an explicit instruction for traversing relationships.
 - **briefing**: Enhanced code-map indicator to include the exact file path and prioritized gatekeeper CI workflows in github status
 - **briefing**: Explicitly noted the 100KB cap in the Code Mode filter summary and removed redundant filter details from the Config row
 - **docs**: Highlighted auto-prune in feature tables and radically simplified agent briefing instructions to resolve Docker Hub limit violations
@@ -43,8 +48,10 @@
 ### Fixed
 
 - **briefing**: Fixed dynamic context routing mismatch by gracefully extracting repository names when provided full URI strings (e.g., `memory://briefing/owner/repo`)
+- **briefing**: Remedied `undefined` runtime property crash in `context.runtime?.metrics?.getDeprecationWarnings()` logic.
 - **briefing**: Ensured the instruction level is always surfaced in the Config row and highlighted the active workspace in the Workspaces footer
 - **briefing**: Added the `use mj.* API` breadcrumb to the System row when the codemode filter is active
+- **admin/core**: Handled `strict-boolean-expressions` typescript errors when validating the `auto_context` parameter dynamically across tool handler architectures.
 - **relationships**: Fixed `visualize_relationships` returning `null` for the mermaid string when no relationships exist, ensuring consistent string types for the structured Code Mode API
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, and `tool-reference.md` with recent architectural changes

@@ -519,7 +519,7 @@ describe('formatUserMessage', () => {
         expect(result).toContain('2 fixed')
         expect(result).toContain('1 security')
         expect(result).not.toContain('removed')
-        expect(result).toContain('Key: feature-a, config')
+        expect(result).toContain('Recent focus: feature-a, config')
     })
 
     it('should omit unreleased when not provided', () => {

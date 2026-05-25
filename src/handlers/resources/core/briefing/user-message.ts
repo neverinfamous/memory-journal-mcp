@@ -55,6 +55,8 @@ export function formatUserMessage(opts: {
     ioRootCount?: number
     hasCodeMap?: boolean
     lastReleaseDaysAgo?: number
+    localCheck?: boolean
+    deprecationWarnings?: string[]
     /** Registered workspace paths for non-IDE agents: { repoName: diskPath } */
     registryPaths?: Record<string, string>
 }): string {
@@ -205,12 +207,17 @@ export function formatUserMessage(opts: {
     }
     if (opts.resourceCount !== undefined) systemParts.push(`${String(opts.resourceCount)} res`)
     if (opts.promptCount !== undefined) systemParts.push(`${String(opts.promptCount)} prompts`)
+    systemParts.push('📊 memory://metrics/summary')
 
     // Test health
     if (opts.testHealth) {
         const th = opts.testHealth
         const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}%)` : ''
         systemParts.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
+    }
+
+    if (opts.localCheck !== undefined) {
+        systemParts.push(`Local Check: ${opts.localCheck ? '✅' : '❌'}`)
     }
 
     // Local time
@@ -298,7 +305,7 @@ export function formatUserMessage(opts: {
             .map(([type, count]) => `${type}: ${String(count)}`)
             .join(', ') || 'none'
         flatLines.push(
-            `**Graph:** ${String(graphSummary.totalRelationships)} relationships · Top: ${escapeContent(topTypes)}`
+            `**Graph:** ${String(graphSummary.totalRelationships)} relationships · Top: ${escapeContent(topTypes)} (view: memory://graph/recent)`
         )
     }
 
@@ -317,7 +324,7 @@ export function formatUserMessage(opts: {
                 : ''
             let line = `**Unreleased:** ${ageStr}${parts.join(' · ')}`
             if ((u.keyItems?.length ?? 0) > 0) {
-                line += ` | Key: ${u.keyItems.join(', ')}`
+                line += ` | Recent focus: ${u.keyItems.join(', ')}`
             }
             flatLines.push(line)
         }
@@ -344,6 +351,10 @@ export function formatUserMessage(opts: {
     let flagsAlert = ''
     if (opts.flagSummary && opts.flagSummary.count > 0) {
         flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
+    }
+
+    if (opts.deprecationWarnings && opts.deprecationWarnings.length > 0) {
+        flagsAlert += `⚠️ **Deprecation Warning(s):**\n${opts.deprecationWarnings.map((w) => `🚩 ${w}`).join('\n')}\n\n`
     }
 
     // Build table

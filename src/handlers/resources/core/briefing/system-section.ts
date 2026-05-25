@@ -63,6 +63,8 @@ export interface SystemContext {
     hasCodeMap: boolean
     /** Days elapsed since the last tagged release in CHANGELOG.md */
     lastReleaseDaysAgo: number | null
+    /** Status of the local lint/tsc check, if available */
+    localCheck: boolean | null
 }
 
 // ============================================================================
@@ -411,6 +413,22 @@ export async function buildSystemContext(
         // Non-critical — code-map indicator is best-effort
     }
 
+    // Check for local health status
+    let localCheck: boolean | null = null
+    try {
+        const root = resolveProjectRoot()
+        const healthPath = path.join(root, '.test-output', 'health-status.json')
+        if (fs.existsSync(healthPath)) {
+            const content = fs.readFileSync(healthPath, 'utf-8')
+            const parsed = JSON.parse(content) as { ok?: boolean }
+            if (typeof parsed.ok === 'boolean') {
+                localCheck = parsed.ok
+            }
+        }
+    } catch {
+        // Non-critical
+    }
+
     return {
         version: VERSION,
         toolCount: totalTools,
@@ -426,5 +444,6 @@ export async function buildSystemContext(
         ioRootCount,
         hasCodeMap,
         lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(),
+        localCheck,
     }
 }
