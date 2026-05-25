@@ -1,11 +1,13 @@
 ---
 name: next-cache-components
 description: |
-  Next.js 16 Cache Components guidance. Use when refactoring React Server Components for performance, debugging Partial Prerendering (PPR) issues, or applying the `use cache` directive, `cacheLife`, `cacheTag`, and `updateTag`.
+  Next.js 16 Cache Components guidance. Use when refactoring React Server Components for performance, debugging Partial Prerendering (PPR) issues, or applying the `use cache` directive, `cacheLife`, `cacheTag`, `updateTag`, and `revalidateTag`.
   Also use when deciding whether data should be static, cached, or dynamic, or when addressing stale data and cache invalidation.
 ---
 
 # Cache Components (Next.js 16+)
+
+> **Note:** Cache Components are available in Next.js canary. Verify `cacheComponents` is supported in your target version before applying this guidance.
 
 Cache Components enable Partial Prerendering (PPR) - mix static, cached, and dynamic content in a single route.
 

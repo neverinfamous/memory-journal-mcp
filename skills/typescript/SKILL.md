@@ -14,7 +14,7 @@ Enterprise-grade rules for writing resilient, type-safe TypeScript in 2026. Foll
 
 - **Never use `any`**: Use `unknown` for unstructured data and narrow it with strict type guards or `typeof`/`instanceof` checks.
 - **Avoid `as` assertions**: Casting subverts the type system. Use the `satisfies` operator to validate shape without widening, or use strict type guards to preserve inference.
-- **Use Unions over Enums**: Always use literal union types (`type Status = "active" | "inactive"`) instead of `enum`. Enums create unnecessary runtime footprint and complex mapping issues.
+- **Use Unions over Enums**: Prefer literal union types (`type Status = "active" | "inactive"`). Only use `const enum` when an intentional zero-overhead interop contract is required. Enums create unnecessary runtime footprint and complex mapping issues.
 - **Boundary Validation**: Always use `Zod` (or equivalent schema validation) to parse unknown data at system boundaries (API payloads, database reads, file I/O). Never blindly cast external payloads.
 
 ## 2. Project Configuration (`tsconfig.json`)

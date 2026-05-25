@@ -2,7 +2,6 @@
 name: mcp-builder
 description: |
   Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses. Must see the explicit keyword "MCP" or "Model Context Protocol". NOT for general REST APIs or Cloudflare Workers. NOT for generic "build a server" requests.
-user-invocable: false
 ---
 
 # MCP Server Builder Guidelines
@@ -29,7 +28,7 @@ When building or modifying MCP servers, follow these prioritized rules:
 
 For the complete MCP implementation guide, architecture diagrams, and detailed tooling patterns, consult the full reference:
 
-- **[MCP Implementation Guide](references/implementation-guide.md)**
+- **[MCP Implementation Guide](references/implementation-guide.md)**: Contains transport selection (stdio vs. SSE), auth patterns, and multi-tool orchestration diagrams.
 
 ## 4. Scaffold Reference
 

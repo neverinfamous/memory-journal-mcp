@@ -1,5 +1,11 @@
-$targetDir = "C:\Users\chris\Desktop\memory-journal-mcp\skills"
-$skills = Get-ChildItem -Path $targetDir -Directory | Where-Object Name -notin 'bin', 'node_modules', '.git', 'tmp_check_skills.ps1'
+param (
+    [Parameter(Mandatory=$false)]
+    [switch]$FormatJson
+)
+
+# Resolve the skills root directory, assuming the script is in skills/adversarial-skill-audit/scripts
+$targetDir = Resolve-Path "$PSScriptRoot\..\.."
+$skills = Get-ChildItem -Path $targetDir -Directory | Where-Object Name -notin 'bin', 'node_modules', '.git', '.agents'
 
 $results = @()
 
@@ -35,4 +41,8 @@ foreach ($skill in $skills) {
     }
 }
 
-$results | ConvertTo-Json -Depth 2
+if ($FormatJson) {
+    $results | ConvertTo-Json -Depth 2
+} else {
+    $results | Format-Table -Property Name, Lines, DescWords, DescPreview
+}

@@ -25,7 +25,8 @@ Load this skill when any of these apply:
 - Profiling build times, runtime hot paths, or bundle size
 - The user asks for an adversarial performance review or stress-test analysis
 - The user says "perf audit", "performance review", "find bottlenecks",
-  "adversarial performance", or "optimize this repo"
+  "adversarial performance", "optimize this repo", "make this faster", 
+  "why is this slow", or "speed up my code"
 - Preparing a performance baseline report before a major release
 - You want to reduce blind spots in your own performance assessment
 
@@ -128,24 +129,10 @@ catching performance patterns that internal review normalizes.
 For Copilot-specific prompt templates, read
 [references/copilot-performance-prompts.md](references/copilot-performance-prompts.md).
 
-**Prerequisites:** `gh` CLI available on the system. If `gh copilot`
+**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
 is not available, skip Phase 4 gracefully and note the skip in the journal entry.
 
-> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
-> non-interactive mode using the `-p` (or `--prompt`) flag. Use `-s` to suppress
-> UI styling. Interactive mode will hang indefinitely in an automated agent context. Use:
-> ```
-> gh copilot -p -s "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
-> ```
-> The `--allow-tool` flag grants Copilot read access to the repository files.
-> Always `Set-Location` (or `cd`) to the target repository before invoking.
-
-> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
-> commands and include their real output. Do NOT fabricate, hallucinate, or
-> predict what Copilot would say. The entire value of Phase 4 is that it
-> provides a genuinely independent perspective. If you cannot run the command
-> (permissions, network, quota), skip Phase 4 and document the skip reason
-> instead of producing synthetic output.
+Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
 
 ## Feedback Loop & Documentation
 
@@ -155,6 +142,10 @@ across releases.
 
 For journal templates, tag conventions, and retrospective templates, read
 [references/feedback-loop.md](references/feedback-loop.md).
+
+### Journal Opt-Out
+
+See [references/journal-opt-out.md](references/journal-opt-out.md) for instructions on how to handle explicit opt-outs from journaling.
 
 ## Configuration
 

@@ -9,13 +9,6 @@ description: |
 
 This skill provides references for the Cloudflare Wrangler CLI. The CLI is extensive, so command references are split by product.
 
-## When to Load
-
-- When explicitly deploying code to Cloudflare Workers or Pages via CLI
-- When managing Cloudflare bindings, KV namespaces, D1 databases, R2 buckets via CLI
-- When configuring `wrangler.jsonc` or `wrangler.toml`
-- When generating TypeScript types from Cloudflare configuration
-
 ## Security Gates (CRITICAL)
 
 - **Confirmation Required:** You MUST ask for user confirmation before executing any `deploy`, `delete`, `drop`, or `secret put` commands.

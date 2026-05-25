@@ -36,8 +36,8 @@ skill-name/                     (kebab-case directory)
 The `description` field is the most important part of the skill because it determines whether the agent loads the skill at all. Use assertive "Use when..." phrasing. It MUST be strictly scoped to avoid cross-triggering with other skills.
 
 **Platform Configuration Flags**:
-- `disable-model-invocation: true` — **MANDATORY** for destructive actions or manual workflows (e.g., slash-commands) to prevent autonomous triggering.
-- `user-invocable: false` — Use for background knowledge skills that should only be invoked by the model contextually.
+- `disable-model-invocation: true` — Requires explicit user slash-command; prevents autonomous triggering. **MANDATORY** for destructive actions or manual workflows.
+- `user-invocable: false` — Model auto-triggers only; user cannot invoke. Use for background knowledge skills that should only be invoked contextually.
 - `dependencies`: `node>=18` (Required tools)
 - `context: fork` (Spawn isolated subagent)
 - `allowed-tools`: `['view_file']` (Restrict tool access)

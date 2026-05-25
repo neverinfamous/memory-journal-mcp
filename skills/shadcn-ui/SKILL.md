@@ -3,16 +3,10 @@ name: shadcn-ui
 description: |
   Use when adding, customizing, or structuring shadcn/ui components in a project.
   Also use when dealing with `components.json`, Tailwind configuration for shadcn, or component registries.
-  Triggers on "shadcn", "shadcn/ui", "components.json", "lucide-react", "radix-ui", "Tailwind components".
+  Use when working with shadcn/ui, `components.json`, `lucide-react`, `radix-ui`, or Tailwind component registries.
 ---
 
 # shadcn/ui Agent Workflow
-
-## When to Load
-Load this skill when:
-- The user asks to add or customize a UI component in a Next.js/React project using shadcn.
-- Modifying `components.json` or tailwind configuration related to shadcn.
-- Integrating Radix UI primitives or Lucide icons.
 
 When asked to work with shadcn/ui components, follow this imperative workflow to ensure you generate correct code that aligns with the project's configuration.
 

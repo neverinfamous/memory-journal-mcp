@@ -20,6 +20,7 @@ Load this skill when any of these apply:
 - Auditing an entire workflows directory for quality and safety.
 - Reviewing a new workflow before finalizing it.
 - The user asks for a workflow quality check or playbook review.
+- The user says "audit this workflow", "review this runbook", "check my playbook", or "review this slash command".
 
 ## Agent Roles
 
@@ -36,6 +37,8 @@ Load this skill when any of these apply:
 - If step 2 fails (e.g., tests fail), does the workflow explicitly define the fallback path?
 - Are destructive actions (commits, deployments, deletes) guarded by explicit HITL (Human-in-the-Loop) pauses?
 - Could a vague instruction cause an agent to infinite loop?
+
+The reason for explicit role separation is that it counteracts the natural tendency to validate existing instructions. By formally switching to a stress-testing perspective, you push past surface steps to find where agents might loop or fail.
 
 ## The Multi-Pass Protocol
 
@@ -63,18 +66,7 @@ normalizes.
 **Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
 is not available, skip Phase 4 gracefully and note the skip in the journal entry.
 
-> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
-> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
-> will hang indefinitely in an automated agent context. Use:
-> ```
-> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
-> ```
-> The `--allow-tool` flag grants Copilot read access to the repository files.
-> Always `Set-Location` (or `cd`) to the target repository before invoking.
-> 
-> **⚠️ TIMEOUT GUIDANCE**: Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts, allow the command to naturally fall into the background.
-
-> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot` commands. Do NOT fabricate or predict what Copilot would say.
+Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
 
 ## Feedback Loop
 
@@ -91,3 +83,14 @@ Every phase creates a journal entry for future retrieval. Ensure the `entry_type
 | `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
 | `AUDIT_DEPTH` | `standard` | Depth: `surface`, `standard`, or `thorough` |
 | `COPILOT_VALIDATION` | `true` | Enable/disable Copilot extension validation phase |
+
+### Audit Depth Profiles
+- **Surface**: Review structure, linear step numbering, and obvious prerequisites. Quick scan for workflow injection vectors.
+- **Standard**: Full audit with all review dimensions and Phase 2 stress testing. Default for most workflows.
+- **Thorough**: Full audit plus cross-workflow impact analysis, ecosystem comparisons, and rigorous infinite loop boundary testing.
+
+## Synergies
+| Skill/Workflow | Relationship |
+| --- | --- |
+| `adversarial-planner` | Parent pattern; this skill adapts it for manual execution workflows. |
+| `/doc-audit` | Audits documentation repositories, but not specifically executable workflow steps. |

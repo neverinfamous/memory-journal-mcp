@@ -7,7 +7,7 @@ description: |
   workflow's 10-category checklist with the adversarial-planner's
   structured critique methodology. Use when running security audits,
   threat modeling, or when the user says "security audit", "adversarial
-  security", "threat model this repo", "red team this repo", or "find vulnerabilities". NOT for supply chain dependency scanning.
+  security", "threat model this repo", "red team this repo", or "find vulnerabilities". NOT for supply chain dependency scanning. NOT for general workflow audits or code quality.
 ---
 
 # Adversarial Security
@@ -79,7 +79,7 @@ completeness and accuracy, not finding flaws (that's Agent B's job).
 - Challenge every security control's effectiveness
 - Find bypasses, edge cases, and overlooked vectors
 - Score findings by exploitability and impact using weighted dimensions
-- Provide concrete proof-of-concept attack scenarios, not vague concerns
+- Provide concrete proof-of-concept attack scenarios, not vague concerns. PoC scenarios must describe the attack vector and impact only — do not generate runnable exploit code or working credential-extraction scripts.
 
 The reason for explicit role separation is that it counteracts the natural
 tendency to validate existing defenses. By formally switching to an attacker
@@ -135,21 +135,7 @@ For prompt templates and integration details, read
 **Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
 is not available, skip Phase 4 gracefully and note the skip in the journal entry.
 
-> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
-> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
-> will hang indefinitely in an automated agent context. Use:
-> ```
-> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
-> ```
-> The `--allow-tool` flag grants Copilot read access to the repository files.
-> Always `Set-Location` (or `cd`) to the target repository before invoking.
-
-> **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
-> commands and include their real output. Do NOT fabricate, hallucinate, or
-> predict what Copilot would say. The entire value of Phase 4 is that it
-> provides a genuinely independent perspective. If you cannot run the command
-> (permissions, network, quota), skip Phase 4 and document the skip reason
-> instead of producing synthetic output.
+Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
 
 ## Feedback Loop & Documentation
 
@@ -171,7 +157,7 @@ phases into one document, following the template in
 [references/multi-pass-security-protocol.md § Final Report Assembly](references/multi-pass-security-protocol.md).
 Do NOT produce separate artifacts per phase — the user should receive one
 comprehensive document with all findings, remediations, and external
-validation results.
+validation results. Before sharing output outside the audit context, redact or generalize specific exploit details and avoid including live credentials or internal hostnames.
 
 ## Configuration
 

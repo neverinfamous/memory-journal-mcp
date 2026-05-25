@@ -4,7 +4,7 @@ description: |
   Enforced meta-cognitive rules and production configurations for SQLite development.
   Use when designing SQLite schemas, PRAGMAs, transactions, migrations, locking, or backups.
   Also use when debugging SQLite performance or writing queries against an SQLite database.
-  Do NOT use for generic "set up a database" or "create a DB" requests unless SQLite is explicitly contextually required or requested. Router must refuse to guess and ask for engine. NOT for Postgres or MySQL.
+  Do NOT use for generic "set up a database" or "create a DB" requests unless SQLite is explicitly contextually required or requested. NOT for Postgres or MySQL.
 ---
 
 # SQLite Production Standards
@@ -12,6 +12,8 @@ description: |
 SQLite provides lightweight, serverless SQL, but its default configurations are extremely permissive and optimized for backwards compatibility rather than production rigor.
 
 Any AI agent interacting with or scaffolding SQLite databases MUST adhere to the following strict guidelines to prevent catastrophic concurrency failures, silent data corruption, or locking issues.
+
+**Agent Routing Rule:** When encountering vague requests like "set up a database", you MUST refuse to guess and ask the user for the specific engine before assuming SQLite.
 
 ## Concurrency & Performance (Critical Mandates)
 
