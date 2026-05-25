@@ -25,11 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Dependency Updates**
-  - Updated lockfile-resolved npm package versions within the existing `package.json` ranges: `@huggingface/transformers` resolved to `^4.2.0`, `eslint` resolved to `^10.3.0`, `globals` resolved to `^17.6.0`, `jose` resolved to `^6.2.3`, `typescript-eslint` resolved to `^8.59.2`, and `zod` resolved to `^4.4.3`
-  - Bumped `github/gh-aw-actions` to `v0.71.4` in GitHub Actions workflows
-  - Bumped `aquasecurity/trivy-action` to `ed142fd0673e97e23eac54620cfb913e5ce36c25`
-  - Bumped `github/codeql-action` to `95e58e9a2cdfd71adc6e0353d5c52f41a045d225`
+- **Dependency Updates**:
+  - Bumped npm packages (`@huggingface/transformers`, `eslint`, `globals`, `jose`, `typescript-eslint`, `zod`)
+  - Bumped GitHub Actions (`github/gh-aw-actions`, `aquasecurity/trivy-action`, `github/codeql-action`)
 
 ### Added
 
@@ -53,12 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code Mode and standard test failures when creating, resolving, or searching global team flags by resolving strict `project_number` nullish schema validation errors.
 - Internal crash in `team_search` and `team_search_by_date_range` when filtering global flags by conditionally bypassing the strict multi-tenant `project_number` requirements when explicitly searching for `flag:` tags or `entry_type === 'flag'`.
 
-### Dependencies
+### Changed
 
-- Bumped `aquasecurity/trivy-action` from `v0.35.0` to `v0.36.0`.
-- Bumped `github/codeql-action` from `v4.35.1` to `v4.35.2`.
-- Bumped `trufflesecurity/trufflehog` from `v3.94.3` to `v3.95.2`.
-- Bumped `actions/attest-build-provenance` from `v2` to `v4.1.0` (SHA-pinned).
+- **Dependency Updates**:
+  - Bumped `aquasecurity/trivy-action` from `v0.35.0` to `v0.36.0`.
+  - Bumped `github/codeql-action` from `v4.35.1` to `v4.35.2`.
+  - Bumped `trufflesecurity/trufflehog` from `v3.94.3` to `v3.95.2`.
+  - Bumped `actions/attest-build-provenance` from `v2` to `v4.1.0` (SHA-pinned).
 
 ## [7.6.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.6.0) - 2026-04-21
 
@@ -341,9 +340,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deprecated `ICON_EXPORT` constant in favor of `ICON_IO` utilizing a bidirectional SVG visual design to signal interoperable data flow.
 - Lowercased group mappings for API Code Mode proxies.
 
-### Dependencies
-
-- `typescript-eslint` from 8.57.0 to 8.58.1
+- Bumped `typescript-eslint` from 8.57.0 to 8.58.1
 
 ## [7.0.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.0.1) - 2026-04-07
 
