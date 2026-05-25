@@ -11,7 +11,8 @@ Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing
 Before starting work on this project, read `memory://briefing/memory-journal-mcp` from the `memory-journal-mcp` server for real-time context:
 
 - **Recent journal entries** — what was just worked on by the development agent
-- **GitHub status** — open issues, PRs, CI status, milestones
+- **GitHub status** — open issues, PRs, explicit CI workflow outcomes, milestones
+- **Local Git status** — clean, modified, or untracked file counts
 - **Workflow runs** — recent CI/CD results
 - **Copilot review summaries** — your own recent review findings
 
