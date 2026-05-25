@@ -271,7 +271,8 @@ describe('Targeted Gap Closure — Batch 2', () => {
             )) as { entry_count: number; mermaid: string | null }
 
             expect(result.entry_count).toBe(0)
-            expect(result.mermaid).toBeNull()
+            expect(typeof result.mermaid).toBe('string')
+            expect(result.mermaid).toContain('No entries found')
         })
 
         it('visualize_relationships with nonexistent entry_id should return not found', async () => {
@@ -294,8 +295,7 @@ describe('Targeted Gap Closure — Batch 2', () => {
                 expect(typeof result.error).toBe('string')
             } else {
                 expect(typeof result.entry_count).toBe('number')
-                // mermaid may be a string diagram or null when no relationships exist
-                expect(result.mermaid === null || typeof result.mermaid === 'string').toBe(true)
+                expect(typeof result.mermaid).toBe('string')
             }
         })
     })
