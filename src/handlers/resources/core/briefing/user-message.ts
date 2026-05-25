@@ -9,7 +9,11 @@ import type { RulesFile, SkillsDir, FlagSummary, GraphSummary } from './context-
 import type { BriefingInsights } from './insights-section.js'
 
 const escapeTableCell = (text: string): string =>
-    text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
+    text
+        .replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
+        .replace(/\\/g, '\\\\')
+        .replace(/\|/g, '\\|')
+        .replace(/\r?\n/g, '<br>')
 
 /**
  * Build the user-facing markdown table for the briefing.
@@ -154,10 +158,11 @@ export function formatUserMessage(opts: {
     // Flags row (Hush Protocol)
     let flagsAlert = ''
     if (opts.flagSummary && opts.flagSummary.count > 0) {
-        flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent}`).join('\n')}\n\n`
+        flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
     }
 
     const tableOutput = `${flagsAlert}📋 **Session Context Loaded**
+
 | Context | Value |
 |---------|-------|
 | **Project** | ${escapeTableCell(repoName)} |

@@ -43,6 +43,7 @@
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
 - **tests**: Updated Playwright E2E tests (`resources.spec.ts`, `resources-briefing-env.spec.ts`) to correctly assert against markdown `memory://briefing` responses
 - **tests**: Fixed Phase 20.12 Code Mode test script to include `project_number` for robust `issueUrl` auto-population in generic CWD environments
+- **briefing**: Fixed missing blank line before markdown table in `memory://briefing` and stripped `<untrusted_remote_content>` tags to prevent IDE rendering cutoff
 
 ### Removed
 
