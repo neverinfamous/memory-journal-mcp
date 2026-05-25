@@ -58,8 +58,10 @@ you switch perspectives at phase boundaries.
 
 ### Agent A — The Threat Modeler
 
-**Mandate:** Map the attack surface and catalog existing defenses.
+**Mandate:** Establish ground truth via live threat intel, then map the attack surface and catalog existing defenses.
 
+- **Phase 0 (Threat Intel):** Use the `search_web` tool to look up recent CVEs, zero-days, or security advisories for the specific dependencies found in the repository.
+- **Phase 0 (Ecosystem):** Use `grep_search` to find and read related platform security standards in the local `skills/` directory (e.g., `docker`, `github-actions`) to establish a baseline.
 - Perform reconnaissance across all 10 security audit categories
 - Document trust boundaries, data flows, and entry points
 - Catalog existing security controls and their coverage
@@ -90,6 +92,7 @@ The protocol runs in 4 phases. Each phase produces a journaled artifact.
 
 | Phase | Agent | Output | Entry Type | Tags |
 | --- | --- | --- | --- | --- |
+| 0. Threat Intel & Web Research | A (Threat Modeler) | Live CVEs and baseline security standards | `security_intel` | `adversarial-security`, `intel` |
 | 1. Reconnaissance | A (Threat Modeler) | Attack surface map + existing defenses | `security_recon` | `adversarial-security`, `recon` |
 | 2. Red Team Review | B (Red Team) | Findings table with severity ratings | `security_redteam` | `adversarial-security`, `redteam` |
 | 3. Remediation Plan | A (Threat Modeler) | Prioritized fixes with disposition | `security_remediation` | `adversarial-security`, `remediation` |
@@ -136,7 +139,7 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 > non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
 > will hang indefinitely in an automated agent context. Use:
 > ```
-> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.

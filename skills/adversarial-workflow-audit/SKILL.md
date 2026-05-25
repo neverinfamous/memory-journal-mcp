@@ -18,6 +18,7 @@ and execute sequentially. This audit ensures they are deterministic, safe, and r
 
 | Phase | Agent | Output |
 | --- | --- | --- |
+| 0. Web Standards Research | A (Evaluator) | Latest workflow injection vectors and formatting baselines |
 | 1. Evaluator Pass | A (Evaluator) | Scorecards against the 5 Workflow Categories |
 | 2. Adversarial Pass | B (Adversarial) | Stress-test edge cases, missing gates, and loop vulnerabilities |
 | 3. Remediation | A (Evaluator) | Prioritized checklist of required fixes |
@@ -26,7 +27,9 @@ and execute sequentially. This audit ensures they are deterministic, safe, and r
 ## Agent Roles
 
 ### Agent A — The Evaluator
-**Mandate:** Systematically profile the workflow against the structural rubric.
+**Mandate:** Establish structural ground truth via web and local research, then systematically profile the workflow against the structural rubric.
+- **Phase 0 (Web Research):** Use the `search_web` tool to find newly discovered workflow injection or prompt injection vectors to test against safety gates.
+- **Phase 0 (Ecosystem):** Use `grep_search` to review `skill-builder` and other local workflows to calibrate what a robust safety gate and correct formatting looks like.
 - Check for explicit prerequisites before step 1.
 - Ensure linear step numbering.
 - Look for token bloat or unneeded narrative.
@@ -52,7 +55,7 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 > non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
 > will hang indefinitely in an automated agent context. Use:
 > ```
-> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.

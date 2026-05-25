@@ -442,7 +442,7 @@ describe('formatUserMessage', () => {
         })
 
         expect(result).toContain('70 tools')
-        expect(result).toContain('36 res')
+        expect(result).toContain('36 resources')
         expect(result).toContain('17 prompts')
     })
 
@@ -455,8 +455,9 @@ describe('formatUserMessage', () => {
             promptCount: 17,
         })
 
-        // All on the same line, separated by ·
-        expect(result).toContain('v7.7.1 · 70 tools · 36 res · 17 prompts')
+        // Version, resources, and prompts on one line. Tools on a separate line.
+        expect(result).toContain('v7.7.1 · 36 resources · 17 prompts')
+        expect(result).toContain('70 tools')
     })
 
     // ========================================================================

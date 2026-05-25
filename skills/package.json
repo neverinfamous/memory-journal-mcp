@@ -10,7 +10,11 @@
     "files": [
         "bin/",
         "README.md",
+        "adversarial-performance/",
         "adversarial-planner/",
+        "adversarial-security/",
+        "adversarial-skill-audit/",
+        "adversarial-workflow-audit/",
         "agents-sdk/",
         "autonomous-dev/",
         "building-ai-agent-on-cloudflare/",

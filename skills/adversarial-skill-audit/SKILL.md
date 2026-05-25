@@ -33,8 +33,10 @@ Load this skill when any of these apply:
 
 ### Agent A — The Evaluator
 
-**Mandate:** Systematically profile every skill against quality standards.
+**Mandate:** Establish ground truth via web research and local directory mapping, then systematically profile every skill against quality standards.
 
+- **Phase 0 (Web Research):** Use the `search_web` tool to find new agentic patterns, framework changes, or prompt injection vectors that the skills might be missing.
+- **Phase 0 (Ecosystem):** Use `grep_search` across the other local skills to map out existing domains, ensuring robust Trigger Collision Detection (Category 10).
 - Read each `SKILL.md` and its reference files
 - Score against the 8 audit categories (derived from `skill-builder`)
 - Catalog the directory's cross-skill properties (overlaps, gaps, coherence)
@@ -62,6 +64,7 @@ actually works when a real person types a real prompt.
 
 | Phase | Agent | Output | Entry Type | Tags |
 | --- | --- | --- | --- | --- |
+| 0. Ecosystem Web Research | A (Evaluator) | Modern agent patterns and trigger collision map | `skill_audit_research` | `adversarial-skill-audit`, `research` |
 | 1. Inventory & Profiling | A (Evaluator) | Per-skill scorecards + directory overview | `skill_audit_profile` | `adversarial-skill-audit`, `profile` |
 | 2. Adversarial User Review | B (Adversarial User) | Trigger tests, collision map, failure scenarios | `skill_audit_stress` | `adversarial-skill-audit`, `stress-test` |
 | 3. Improvement Plan | A (Evaluator) | Prioritized fixes with disposition | `skill_audit_remediation` | `adversarial-skill-audit`, `remediation` |
@@ -110,7 +113,7 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 > non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
 > will hang indefinitely in an automated agent context. Use:
 > ```
-> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.

@@ -54,8 +54,10 @@ you switch perspectives at phase boundaries.
 
 ### Agent A — The Profiler
 
-**Mandate:** Measure, baseline, and catalog performance characteristics.
+**Mandate:** Establish baseline targets via web research, then measure, baseline, and catalog performance characteristics.
 
+- **Phase 0 (Research & Benchmarks):** Use the `search_web` tool to find the latest performance benchmarks, Core Web Vitals thresholds, or engine-specific optimizations (e.g., V8) for the stack.
+- **Phase 0 (Ecosystem):** Use `grep_search` to cross-reference related performance skills in the local `skills/` directory (e.g., `web-perf`, `sqlite`) to understand target thresholds before profiling.
 - Profile build times, bundle output, dependency weight, and runtime patterns
 - Establish quantitative baselines where possible (compile time, file count,
   dependency count, output size)
@@ -92,6 +94,7 @@ The protocol runs in 4 phases. Each phase produces a journaled artifact.
 
 | Phase | Agent | Output | Entry Type | Tags |
 | --- | --- | --- | --- | --- |
+| 0. Baseline Web Research | A (Profiler) | Live benchmark targets and optimization standards | `perf_research` | `adversarial-performance`, `research` |
 | 1. Profiling | A (Profiler) | Baseline measurements + existing optimizations | `perf_profile` | `adversarial-performance`, `profile` |
 | 2. Stress Test Review | B (Stress Tester) | Findings table with impact ratings | `perf_stress_test` | `adversarial-performance`, `stress-test` |
 | 3. Optimization Plan | A (Profiler) | Prioritized improvements with disposition | `perf_optimization` | `adversarial-performance`, `optimization` |
@@ -135,7 +138,7 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 > non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
 > will hang indefinitely in an automated agent context. Use:
 > ```
-> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.

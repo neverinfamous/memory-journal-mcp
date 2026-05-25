@@ -196,31 +196,33 @@ export function formatUserMessage(opts: {
 
     const sysLine1 = []
     if (opts.version) sysLine1.push(`v${opts.version}`)
+    if (opts.resourceCount !== undefined) sysLine1.push(`${String(opts.resourceCount)} resources`)
+    if (opts.promptCount !== undefined) sysLine1.push(`${String(opts.promptCount)} prompts`)
+    if (sysLine1.length) sysLines.push(sysLine1.join(' · '))
+
     if (opts.toolCount !== undefined) {
         if (opts.filterSummary) {
             const isCodeMode = opts.filterSummary.includes('codemode')
             const codeModeNote = isCodeMode ? ' (100KB cap) — use mj.* API' : ''
-            sysLine1.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`)
+            sysLines.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`)
         } else {
-            sysLine1.push(`${String(opts.toolCount)} tools`)
+            sysLines.push(`${String(opts.toolCount)} tools`)
         }
     }
-    if (opts.resourceCount !== undefined) sysLine1.push(`${String(opts.resourceCount)} res`)
-    if (opts.promptCount !== undefined) sysLine1.push(`${String(opts.promptCount)} prompts`)
-    if (sysLine1.length) sysLines.push(sysLine1.join(' · '))
 
-    const sysLine2 = ['📊 memory://metrics/summary']
+    sysLines.push('📊 memory://metrics/summary')
+
+    const testLines: string[] = []
     if (opts.testHealth) {
         const th = opts.testHealth
         const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}%)` : ''
-        sysLine2.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
+        testLines.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
     }
     if (opts.localCheck !== undefined) {
-        sysLine2.push(`Local Check: ${opts.localCheck ? '✅' : '❌'}`)
+        testLines.push(`Lint & Typecheck: ${opts.localCheck ? '✅' : '❌'}`)
     }
-    sysLines.push(sysLine2.join(' · '))
+    if (testLines.length) sysLines.push(testLines.join(' · '))
 
-    if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
     const sysLine3 = []
     if (rulesFile) sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
     if (skillsDir) sysLine3.push(`🧠 ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
@@ -229,6 +231,8 @@ export function formatUserMessage(opts: {
     if (opts.hasCodeMap) {
         sysLines.push('📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)')
     }
+
+    if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
 
     // ========================================================================
     // TABLE ROW 5: Config (only when non-default values present)
