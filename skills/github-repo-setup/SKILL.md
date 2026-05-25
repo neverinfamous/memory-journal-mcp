@@ -2,7 +2,7 @@
 name: github-repo-setup
 description: |
   Reusable scaffold for public TypeScript/Node.js repositories under
-  {{ORG_NAME}}. Use when creating a new GitHub repository to generate all
+  a target organization. Use when creating a new GitHub repository to generate all
   community standards, CI/CD, config files, labels, and topics in one pass.
 ---
 
