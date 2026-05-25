@@ -13,7 +13,7 @@
 **Workflow after testing:**
 
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. Implement, update `UNRELEASED.md`, commit without push.
+2. If you made code changes/fixes, implement them, update `UNRELEASED.md`, and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`.
 3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. Re-test fixes with direct MCP calls.
 5. Brief final summary.

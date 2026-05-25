@@ -14,7 +14,7 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 1. Create a plan to fix any issues found or potential improvement opportunities.
 2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
