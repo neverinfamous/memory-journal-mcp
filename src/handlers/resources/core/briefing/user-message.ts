@@ -234,7 +234,7 @@ export function formatUserMessage(opts: {
     }
     // Code-map indicator
     if (opts.hasCodeMap) {
-        systemParts.push('📋 code-map (test-server/code-map.md)')
+        systemParts.push('📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)')
     }
 
     // ========================================================================

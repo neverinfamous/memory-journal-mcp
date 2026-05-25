@@ -363,9 +363,23 @@ async function fetchMilestones(
     if (limit <= 0) return { items: [] }
 
     try {
-        const msList = await github.getMilestones(owner, repo, 'open', limit)
+        const msList = await github.getMilestones(owner, repo, 'open', limit * 3)
+        const now = Date.now()
+        const twentyFourHours = 24 * 60 * 60 * 1000
+
+        const activeMilestones = msList.filter(m => {
+            const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
+            if (pct === 100 && m.updatedAt) {
+                const updatedTime = new Date(m.updatedAt).getTime()
+                if (now - updatedTime > twentyFourHours) {
+                    return false
+                }
+            }
+            return true
+        }).slice(0, limit)
+
         return {
-            items: msList.map((m) => {
+            items: activeMilestones.map((m) => {
                 const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
                 return {
                     title: m.title,

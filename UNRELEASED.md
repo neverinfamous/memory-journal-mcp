@@ -7,6 +7,7 @@
 - **briefing**: Added server version, tool/resource/prompt surface area counts, test health indicators, unreleased change summary, `localTime`, word-boundary truncation (120 chars), and zero-relationship graph suppression to `memory://briefing` output
 - **briefing**: Added Config table row surfacing active tool filter, instruction level, IO root count, and registered project names
 - **briefing**: Added code-map availability indicator (`📋 code-map`), active filter annotation in System row, unreleased key-items (`Key: ...`), and stale milestone `✅` indicator
+- **briefing**: Added a tool reference pointer (`🛠️ tools`) next to the code-map indicator
 - **briefing**: Added days-since-release indicator to Unreleased line (parsed from `CHANGELOG.md`)
 - **briefing**: Added registered workspace disk paths to briefing for non-IDE agent context
 - **briefing**: Added local Git working tree status (clean, modified, untracked) and explicit CI workflow outcomes to the GitHub row
@@ -32,6 +33,7 @@
 - **briefing**: Renamed the `Key:` designation inside Unreleased items to `Recent focus:` to prevent misinterpretation by LLMs as a cryptographic or mapping key.
 - **briefing**: Injected `(view: memory://graph/recent)` into the Graph stats line to serve as an explicit instruction for traversing relationships.
 - **briefing**: Enhanced code-map indicator to include the exact file path and prioritized gatekeeper CI workflows in github status
+- **briefing**: Filtered out stale milestones (100% completed and updated > 24h ago) to ensure the briefing cycles to active milestones automatically
 - **briefing**: Explicitly noted the 100KB cap in the Code Mode filter summary and removed redundant filter details from the Config row
 - **docs**: Highlighted auto-prune in feature tables and radically simplified agent briefing instructions to resolve Docker Hub limit violations
 - **docs**: Standardized `README.md` layout, badges, and automated auditing references
