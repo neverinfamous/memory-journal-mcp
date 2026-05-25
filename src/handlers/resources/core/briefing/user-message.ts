@@ -92,14 +92,31 @@ export function formatUserMessage(opts: {
             if (ws.cancelled > 0) parts.push(`${String(ws.cancelled)} cancelled`)
             ciDisplay = parts.join(' · ') || opts.ciStatus
         }
+    } else if (opts.ciStatus === 'failing' && github?.ciName) {
+        ciDisplay = `❌ ${github.ciName} (build failed)`
+    } else if (opts.ciStatus === 'passing' && github?.ciName) {
+        ciDisplay = `✅ ${github.ciName} (passing)`
     }
 
     // ========================================================================
     // TABLE ROW 1: GitHub
     // ========================================================================
+    let gitStatus = ''
+    if (github?.localGitStatus) {
+        const { modified, untracked, isClean } = github.localGitStatus
+        if (isClean) {
+            gitStatus = ' · Git: Clean'
+        } else {
+            const parts: string[] = []
+            if (modified > 0) parts.push(`${String(modified)} modified`)
+            if (untracked > 0) parts.push(`${String(untracked)} untracked`)
+            gitStatus = ` · Git: ${parts.join(', ')}`
+        }
+    }
+
     const githubParts = [
         escapeCell(repoName),
-        `${escapeCell(branchName)} · ${escapeCell(ciDisplay)}`,
+        `${escapeCell(branchName)}${escapeCell(gitStatus)} · ${escapeCell(ciDisplay)}`,
     ]
 
     // ========================================================================
@@ -178,9 +195,9 @@ export function formatUserMessage(opts: {
     if (opts.version) systemParts.push(`v${opts.version}`)
     if (opts.toolCount !== undefined) {
         if (opts.filterSummary) {
-            // Show filter annotation: "70 tools (filter: codemode → 1)"
+            // Show filter annotation: "70 tools (filter: codemode (100KB cap) — use mj.* API)"
             const isCodeMode = opts.filterSummary.includes('codemode')
-            const codeModeNote = isCodeMode ? ' — use mj.* API' : ''
+            const codeModeNote = isCodeMode ? ' (100KB cap) — use mj.* API' : ''
             systemParts.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`)
         } else {
             systemParts.push(`${String(opts.toolCount)} tools`)
@@ -218,9 +235,6 @@ export function formatUserMessage(opts: {
     // ========================================================================
     const configParts: string[] = []
 
-    if (opts.filterSummary) {
-        configParts.push(`filter: ${escapeCell(opts.filterSummary)}`)
-    }
     if (opts.isReadonly) {
         configParts.push('mode: readonly')
     }

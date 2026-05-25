@@ -9,6 +9,7 @@
 - **briefing**: Added code-map availability indicator (`📋 code-map`), active filter annotation in System row, unreleased key-items (`Key: ...`), and stale milestone `✅` indicator
 - **briefing**: Added days-since-release indicator to Unreleased line (parsed from `CHANGELOG.md`)
 - **briefing**: Added registered workspace disk paths to briefing for non-IDE agent context
+- **briefing**: Added local Git working tree status (clean, modified, untracked) and explicit CI workflow outcomes to the GitHub row
 - **admin**: Added `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
@@ -26,6 +27,7 @@
 
 - **briefing**: Improved quality by surfacing `readonly`, `TEAM_DB_PATH`, and `GITHUB_TOKEN` capability statuses directly in the Config row
 - **briefing**: Enhanced code-map indicator to include the exact file path and prioritized gatekeeper CI workflows in github status
+- **briefing**: Explicitly noted the 100KB cap in the Code Mode filter summary and removed redundant filter details from the Config row
 - **docs**: Highlighted auto-prune in feature tables and radically simplified agent briefing instructions to resolve Docker Hub limit violations
 - **docs**: Standardized `README.md` layout, badges, and automated auditing references
 - **instructions**: Refactored monolithic `server-instructions.md` into a modular directory, reducing initial payload by ~700 tokens

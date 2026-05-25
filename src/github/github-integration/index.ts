@@ -1,4 +1,4 @@
-import type { RepoInfo, IssueDetails, PullRequestDetails } from './types.js'
+import type { RepoInfo, IssueDetails, PullRequestDetails, LocalGitStatus } from './types.js'
 import { GitHubClient } from './client.js'
 import { IssuesManager } from './issues.js'
 import { PullRequestsManager } from './pull-requests.js'
@@ -100,6 +100,10 @@ export class GitHubIntegration {
 
     setCachedRepoInfo(info: RepoInfo): void {
         this.repositoryManager.setCachedRepoInfo(info)
+    }
+
+    async getLocalGitStatus(): Promise<LocalGitStatus> {
+        return this.repositoryManager.getLocalGitStatus()
     }
 
     async getIssues(

@@ -1,6 +1,6 @@
 import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
-import type { RepoInfo } from './types.js'
+import type { RepoInfo, LocalGitStatus } from './types.js'
 import type { GitHubWorkflowRun } from '../../types/index.js'
 
 export class RepositoryManager {
@@ -118,6 +118,23 @@ export class RepositoryManager {
                 error: error instanceof Error ? error.message : String(error),
             })
             throw error
+        }
+    }
+
+    async getLocalGitStatus(): Promise<LocalGitStatus> {
+        try {
+            const status = await this.client.git.status()
+            return {
+                modified: status.modified.length,
+                untracked: status.not_added.length,
+                isClean: status.isClean(),
+            }
+        } catch (error) {
+            logger.debug('Failed to get local git status', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return { modified: 0, untracked: 0, isClean: true }
         }
     }
 }

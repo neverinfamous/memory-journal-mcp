@@ -97,6 +97,11 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
             clones: { total: 120, uniqueCloners: 30 },
             views: { total: 500, uniqueVisitors: 80 },
         }),
+        getLocalGitStatus: vi.fn().mockResolvedValue({
+            modified: 0,
+            untracked: 0,
+            isClean: true,
+        }),
     }
     const finalMock = { ...mock, ...overrides } as any
     if (!overrides.getRepoContext) {
