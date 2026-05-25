@@ -38,6 +38,7 @@
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
 - **tests**: Updated Playwright E2E tests (`resources.spec.ts`, `resources-briefing-env.spec.ts`) to correctly assert against markdown `memory://briefing` responses
+- **tests**: Verified Phase 27 Code Mode Admin and Backup operations against the test database configuration
 
 ### Removed
 - **github**: Removed Dependabot configuration to reduce PR noise and merge conflicts
