@@ -50,6 +50,10 @@ Group by component. For each file:
 Numbered sequence with dependencies noted.
 Which tasks can be parallelized.
 
+## Copilot Security & Performance Scan
+
+Run a non-interactive `gh copilot` scan (`gh copilot -p "..." --allow-tool "shell(find,cat,head,grep)"`) focusing specifically on performance and security risks for the proposed changes, and embed the raw or summarized findings here.
+
 ## Risk Assessment
 
 | Risk | Likelihood | Impact | Mitigation |

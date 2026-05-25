@@ -43,6 +43,7 @@ switch perspectives at phase boundaries.
 - Structure the plan with clear scope, file changes, task ordering, and risk
   assessment
 - Optimize for completeness and logical sequencing
+- Execute a `gh copilot` scan for performance and security vulnerabilities, embedding the findings directly into the planning document
 - Reference prior planning sessions via journal search before starting
 
 ### Agent B — The Adversarial Reviewer

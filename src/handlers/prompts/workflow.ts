@@ -382,7 +382,7 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
 1. Summarize what was accomplished in this session (key changes, decisions, files modified)
 2. Note what's unfinished or blocked (pending items, open questions)
 3. Include context for the next session (relevant entry IDs, branch names, PR numbers)
-4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\`
+4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\` (If in Code Mode, use \`await mj.core.createEntry(...)\` via \`mj_execute_code\`)
 
 **Recent Entries:**
 ${markUntrustedContent(entrySummary)}`,
@@ -431,7 +431,7 @@ ${markUntrustedContent(entrySummary)}`,
 1. Summarize what the team accomplished in this session (key changes, decisions, files modified)
 2. Note what's unfinished or blocked for the team (pending items, open questions)
 3. Include context for the next team session (relevant entry IDs, branch names, PR numbers)
-4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\`
+4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\` (If in Code Mode, use \`await mj.team.teamCreateEntry(...)\` via \`mj_execute_code\`)
 5. YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
 
 **Recent Team Entries:**

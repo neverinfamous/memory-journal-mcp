@@ -171,6 +171,7 @@ async function executeCode(
 
         const sandbox: Record<string, unknown> = {
             mj: mjApi,
+            journal: mjApi['core'],
             console: {
                 log: (...args: unknown[]) => args,
                 warn: (...args: unknown[]) => args,

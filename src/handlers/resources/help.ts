@@ -243,9 +243,20 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
 
                 // If the group has dynamic tools, always return JSON (with optional helpContent)
                 if (groupTools.length > 0) {
-                    const toolDetails = groupTools.map((tool) => ({
-                        name: tool.name,
-                        title: tool.title,
+                    const isCodemodeOnly = context.filterConfig &&
+                        context.filterConfig.enabledTools.has('mj_execute_code') &&
+                        !context.filterConfig.enabledTools.has('create_entry')
+
+                    const toolDetails = groupTools.map((tool) => {
+                        let displayName = tool.name
+                        if (isCodemodeOnly) {
+                            const camelCase = tool.name.replace(/_([a-z])/g, (_: string, letter: string) => letter.toUpperCase())
+                            displayName = `mj.${tool.group}.${camelCase}`
+                        }
+                        
+                        return {
+                            name: displayName,
+                            title: tool.title,
                         description: tool.description,
                         parameters: extractParameters(tool.inputSchema),
                         annotations: {
@@ -255,7 +266,8 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                             openWorld: tool.annotations?.openWorldHint ?? false,
                         },
                         hasOutputSchema: tool.outputSchema !== undefined,
-                    }))
+                    }
+                    })
 
                     const result: Record<string, unknown> = {
                         group: groupName,

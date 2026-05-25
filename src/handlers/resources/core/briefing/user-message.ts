@@ -3,12 +3,9 @@
  *
  * Formats the briefing as a hybrid markdown layout:
  * - Table rows for dense groups (GitHub, Journal, System) — compresses
- *   multiple data points into single rows using · separators.
+ *   data points using `<br>` and `·` separators for human readability.
  * - Flat lines for metrics/analytics — emoji-heavy content reads better
  *   as standalone lines.
- *
- * No HTML `<br>` tags are used — table cells use · separators for
- * universal renderer compatibility.
  */
 
 import type { BriefingGitHub } from './github-section.js'
@@ -117,8 +114,9 @@ export function formatUserMessage(opts: {
     }
 
     const githubParts = [
-        escapeCell(repoName),
-        `${escapeCell(branchName)}${escapeCell(gitStatus)} · ${escapeCell(ciDisplay)}`,
+        `**${escapeCell(repoName)}**`,
+        `${escapeCell(branchName)}${escapeCell(gitStatus)}`,
+        escapeCell(ciDisplay),
     ]
 
     // ========================================================================
@@ -168,12 +166,15 @@ export function formatUserMessage(opts: {
     }
 
     // ========================================================================
-    // TABLE ROW 2: Journal
+    // TABLE ROW 3: Journal
     // ========================================================================
-    const journalParts = [`${String(totalEntries)} entries`]
+    const journalLine1 = [`${String(totalEntries)} entries`]
     if (opts.teamTotalEntries !== undefined) {
-        journalParts.push(`Team: ${String(opts.teamTotalEntries)}`)
+        journalLine1.push(`Team: ${String(opts.teamTotalEntries)}`)
     }
+    
+    const journalParts = [journalLine1.join(' · ')]
+    
     if (latestPreviews.length > 0) {
         journalParts.push(`Latest: ${escapeCell(latestPreviews[0] ?? '')}`)
         for (let i = 1; i < latestPreviews.length; i++) {
@@ -189,75 +190,68 @@ export function formatUserMessage(opts: {
     }
 
     // ========================================================================
-    // TABLE ROW 3: System
+    // TABLE ROW 4: System
     // ========================================================================
-    const systemParts: string[] = []
+    const sysLines: string[] = []
 
-    // Version + surface area
-    if (opts.version) systemParts.push(`v${opts.version}`)
+    const sysLine1 = []
+    if (opts.version) sysLine1.push(`v${opts.version}`)
     if (opts.toolCount !== undefined) {
         if (opts.filterSummary) {
-            // Show filter annotation: "70 tools (filter: codemode (100KB cap) — use mj.* API)"
             const isCodeMode = opts.filterSummary.includes('codemode')
             const codeModeNote = isCodeMode ? ' (100KB cap) — use mj.* API' : ''
-            systemParts.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`)
+            sysLine1.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`)
         } else {
-            systemParts.push(`${String(opts.toolCount)} tools`)
+            sysLine1.push(`${String(opts.toolCount)} tools`)
         }
     }
-    if (opts.resourceCount !== undefined) systemParts.push(`${String(opts.resourceCount)} res`)
-    if (opts.promptCount !== undefined) systemParts.push(`${String(opts.promptCount)} prompts`)
-    systemParts.push('📊 memory://metrics/summary')
+    if (opts.resourceCount !== undefined) sysLine1.push(`${String(opts.resourceCount)} res`)
+    if (opts.promptCount !== undefined) sysLine1.push(`${String(opts.promptCount)} prompts`)
+    if (sysLine1.length) sysLines.push(sysLine1.join(' · '))
 
-    // Test health
+    const sysLine2 = ['📊 memory://metrics/summary']
     if (opts.testHealth) {
         const th = opts.testHealth
         const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}%)` : ''
-        systemParts.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
+        sysLine2.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
     }
-
     if (opts.localCheck !== undefined) {
-        systemParts.push(`Local Check: ${opts.localCheck ? '✅' : '❌'}`)
+        sysLine2.push(`Local Check: ${opts.localCheck ? '✅' : '❌'}`)
     }
+    sysLines.push(sysLine2.join(' · '))
 
-    // Local time
-    if (opts.localTime) systemParts.push(opts.localTime)
+    const sysLine3 = []
+    if (opts.localTime) sysLine3.push(opts.localTime)
+    if (rulesFile) sysLine3.push(`${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
+    if (skillsDir) sysLine3.push(`${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
+    if (sysLine3.length) sysLines.push(sysLine3.join(' · '))
 
-    // Rules + Skills
-    if (rulesFile) {
-        systemParts.push(
-            `${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`
-        )
-    }
-    if (skillsDir) {
-        systemParts.push(`${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
-    }
-    // Code-map indicator
     if (opts.hasCodeMap) {
-        systemParts.push('📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)')
+        sysLines.push('📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)')
     }
 
     // ========================================================================
-    // TABLE ROW 4: Config (only when non-default values present)
+    // TABLE ROW 5: Config (only when non-default values present)
     // ========================================================================
-    const configParts: string[] = []
-
-    if (opts.isReadonly) {
-        configParts.push('mode: readonly')
-    }
-    configParts.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
-    configParts.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
-    if (opts.instructionLevel) {
-        configParts.push(`level: ${opts.instructionLevel}`)
-    }
+    const configLines: string[] = []
+    
+    const configLine1: string[] = []
+    if (opts.isReadonly) configLine1.push('mode: readonly')
+    configLine1.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
+    configLine1.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
+    if (opts.instructionLevel) configLine1.push(`level: ${opts.instructionLevel}`)
+    if (configLine1.length) configLines.push(configLine1.join(' · '))
+    
+    const configLine2: string[] = []
     if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
-        configParts.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
+        configLine2.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
     }
     if (opts.registryRepos && opts.registryRepos.length > 0) {
         const repoNames = opts.registryRepos.slice(0, 3).join(', ')
         const suffix = opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
-        configParts.push(`registry: ${escapeCell(repoNames)}${suffix}`)
+        configLine2.push(`registry: ${escapeCell(repoNames)}${suffix}`)
     }
+    if (configLine2.length) configLines.push(configLine2.join(' · '))
 
     // ========================================================================
     // FLAT LINES: Insights + Analytics
@@ -340,8 +334,8 @@ export function formatUserMessage(opts: {
                     const formatted = `${escapeContent(name)}: ${escapeContent(diskPath)}`
                     return isActive ? `**${formatted}** (active)` : formatted
                 })
-                .join(' · ')
-            flatLines.push(`**Workspaces:** ${pathList}`)
+                .join('<br>')
+            flatLines.push(`**Workspaces:**<br>${pathList}`)
         }
     }
 
@@ -361,21 +355,21 @@ export function formatUserMessage(opts: {
     const tableRows = [
         '| Context | Details |',
         '|---------|---------|',
-        `| **GitHub** | ${githubParts.join(' · ')} |`,
+        `| **GitHub** | ${githubParts.join('<br>')} |`,
     ]
     if (trackingParts.length > 0) {
-        tableRows.push(`| **Tracking** | ${trackingParts.join(' · ')} |`)
+        tableRows.push(`| **Tracking** | ${trackingParts.join('<br>')} |`)
     }
-    tableRows.push(`| **Journal** | ${journalParts.join(' · ')} |`)
-    if (systemParts.length > 0) {
-        tableRows.push(`| **System** | ${systemParts.join(' · ')} |`)
+    tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
+    if (sysLines.length > 0) {
+        tableRows.push(`| **System** | ${sysLines.join('<br>')} |`)
     }
-    if (configParts.length > 0) {
-        tableRows.push(`| **Config** | ${configParts.join(' · ')} |`)
+    if (configLines.length > 0) {
+        tableRows.push(`| **Config** | ${configLines.join('<br>')} |`)
     }
 
     const sections: string[] = [tableRows.join('\n')]
-    if (flatLines.length > 0) sections.push(flatLines.join('\n'))
+    if (flatLines.length > 0) sections.push(flatLines.join('\n\n'))
 
     return `${flagsAlert}${sections.join('\n')}`
 }
