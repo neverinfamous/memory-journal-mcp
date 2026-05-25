@@ -88,6 +88,15 @@ These rules are **mandatory** for all workflows:
 6. **Log all cleanup operations** as a journal entry with
    `entry_type: 'maintenance'` and tag `database-optimizer`
 
+## Safe Deletion Protocol
+
+For all destructive workflows (2–5), execute this exact sequence once the candidate list is prepared:
+
+1. **HITL Gate**: Ask the user to confirm the exact candidate list.
+2. **Backup**: Call `backup_journal`. **ABORT** immediately if the backup fails.
+3. **Execute**: Run the soft-delete batch script for the specific workflow (see [references/optimizer-scripts.md](references/optimizer-scripts.md)).
+4. **Log & Report**: Log a maintenance entry and provide revert instructions.
+
 ---
 
 ## Workflow 1: Importance Audit (Dry Run)
@@ -124,11 +133,7 @@ Soft-delete entries matching user-selected criteria from the audit.
 
 1. Run **Workflow 1** if not already completed this session.
 2. Present the candidate list with importance breakdowns.
-3. **HITL Gate**: Ask user to confirm which entries to delete. Offer selection modes (by tier, age, type, or ID).
-4. Call `backup_journal` — **abort** if backup fails.
-5. Execute the soft-delete batch:
-   *Execute the script from [references/optimizer-scripts.md#workflow-2-targeted-cleanup](references/optimizer-scripts.md).*
-6. Provide revert instructions (see Revert Guide below).
+3. Execute the **Safe Deletion Protocol** for user-selected entries.
 
 ---
 
@@ -141,8 +146,7 @@ Find and soft-delete entries with zero relationships.
 1. Retrieve orphaned statistics and entries:
    *Execute the script from [references/optimizer-scripts.md#workflow-3-orphan-cleanup](references/optimizer-scripts.md).*
 2. Present the orphan list. Flag any with `significance_type` set — these should NOT be deleted without explicit approval.
-3. **HITL Gate**: User selects which orphans to delete.
-4. Backup → soft-delete batch → report → log maintenance entry.
+3. Execute the **Safe Deletion Protocol**.
 
 > **Alternative to deletion**: For orphans that have value but lack connections, suggest using `link_entries` to connect them to related entries instead of deleting them.
 
@@ -159,8 +163,7 @@ Find entries with semantically similar content that may be redundant.
 1. Identify candidate duplicates using semantic search:
    *Execute the script from [references/optimizer-scripts.md#workflow-4-duplicate-detection](references/optimizer-scripts.md).*
 2. Present duplicate pairs side-by-side with recommendations.
-3. **HITL Gate**: User selects which duplicates to remove.
-4. Backup → soft-delete the lower-scoring entry from each pair → report.
+3. Execute the **Safe Deletion Protocol** (targeting the lower-scoring entry of each pair).
 
 > **Note**: Semantic search requires the vector index. If `get_vector_index_stats` shows zero indexed entries, suggest running `rebuild_vector_index` first.
 
@@ -177,8 +180,7 @@ Clean up entries by `entry_type` — useful for removing bulk categories that we
 3. User selects which types to target and an age threshold.
 4. Preview matching entries:
    *Execute the script from [references/optimizer-scripts.md#workflow-5-type-based-cleanup](references/optimizer-scripts.md).*
-5. **HITL Gate**: User reviews and approves the candidate list.
-6. Backup → soft-delete → report → log maintenance entry.
+5. Execute the **Safe Deletion Protocol**.
 
 ---
 

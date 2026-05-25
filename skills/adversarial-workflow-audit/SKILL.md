@@ -83,3 +83,11 @@ Every phase creates a journal entry for future retrieval. Ensure the `entry_type
 ## Scripts
 
 - `scripts/check-workflows.ps1`: Gathers baseline structural metrics across a workflows directory.
+
+## Configuration
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
+| `AUDIT_DEPTH` | `standard` | Depth: `surface`, `standard`, or `thorough` |
+| `COPILOT_VALIDATION` | `true` | Enable/disable Copilot extension validation phase |

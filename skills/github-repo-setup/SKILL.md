@@ -2,7 +2,7 @@
 name: github-repo-setup
 description: |
   Reusable scaffold for public TypeScript/Node.js repositories under
-  neverinfamous. Use when creating a new GitHub repository to generate all
+  {{ORG_NAME}}. Use when creating a new GitHub repository to generate all
   community standards, CI/CD, config files, labels, and topics in one pass.
 ---
 
@@ -13,20 +13,22 @@ Scaffold a new public TypeScript/Node.js repo with community standards, CI, and 
 ## Prerequisites
 
 - Git CLI with SSH (`~/.ssh/id_ed25519`)
-- GitHub CLI (`gh`) authenticated as `neverinfamous`
+- GitHub CLI (`gh`) authenticated as `{{ORG_NAME}}`
 - Node.js 24+
 - Default branch: `main`
-- Credentials: Load from a secure environment file (e.g., `C:\Users\chris\Desktop\adamic\secrets.env`) or OS credential stores. Do NOT hardcode this path in shared templates.
+- Credentials: Load from a secure environment file (e.g., `{{SECRETS_ENV_PATH}}`) or OS credential stores. Do NOT hardcode this path in shared templates.
 
 ## Parameters
 
 Replace these placeholders throughout:
 
-| Placeholder       | Example            |
-| ----------------- | ------------------ |
-| `{{REPO_NAME}}`   | `my-mcp-server`    |
-| `{{DESCRIPTION}}` | `MCP server for X` |
-| `{{YEAR}}`        | `2026`             |
+| Placeholder          | Example                  |
+| -------------------- | ------------------------ |
+| `{{ORG_NAME}}`       | `neverinfamous`          |
+| `{{REPO_NAME}}`      | `my-mcp-server`          |
+| `{{DESCRIPTION}}`    | `MCP server for X`       |
+| `{{YEAR}}`           | `2026`                   |
+| `{{SECRETS_ENV_PATH}}`| `C:\path\to\secrets.env` |
 
 ---
 
@@ -87,7 +89,7 @@ cd {{TARGET_DIRECTORY}}
 git init
 git add .
 git commit -m "Initial commit: Repository setup"
-gh repo create neverinfamous/{{REPO_NAME}} --public --source=. --remote=origin --description "{{DESCRIPTION}}"
+gh repo create {{ORG_NAME}}/{{REPO_NAME}} --public --source=. --remote=origin --description "{{DESCRIPTION}}"
 git push -u origin main
 ```
 
@@ -97,18 +99,18 @@ git push -u origin main
 
 ```powershell
 # Labels
-gh label create dependencies --description "Dependency PRs" --color 0052CC --repo neverinfamous/{{REPO_NAME}} --force
-gh label create github-actions --description "GitHub Actions" --color FF6B6B --repo neverinfamous/{{REPO_NAME}} --force
-gh label create npm --description "NPM updates" --color CB3837 --repo neverinfamous/{{REPO_NAME}} --force
-gh label create bug --description "Bug reports" --color d73a49 --repo neverinfamous/{{REPO_NAME}} --force
-gh label create enhancement --description "Feature requests" --color a2eeef --repo neverinfamous/{{REPO_NAME}} --force
+gh label create dependencies --description "Dependency PRs" --color 0052CC --repo {{ORG_NAME}}/{{REPO_NAME}} --force
+gh label create github-actions --description "GitHub Actions" --color FF6B6B --repo {{ORG_NAME}}/{{REPO_NAME}} --force
+gh label create npm --description "NPM updates" --color CB3837 --repo {{ORG_NAME}}/{{REPO_NAME}} --force
+gh label create bug --description "Bug reports" --color d73a49 --repo {{ORG_NAME}}/{{REPO_NAME}} --force
+gh label create enhancement --description "Feature requests" --color a2eeef --repo {{ORG_NAME}}/{{REPO_NAME}} --force
 
 # Topics
-gh repo edit neverinfamous/{{REPO_NAME}} --add-topic typescript --add-topic nodejs
+gh repo edit {{ORG_NAME}}/{{REPO_NAME}} --add-topic typescript --add-topic nodejs
 
 # Security settings (automate instead of manual UI)
-gh api repos/neverinfamous/{{REPO_NAME}} -X PATCH -f security_and_analysis.secret_scanning.status=enabled
-gh api repos/neverinfamous/{{REPO_NAME}} -X PATCH -f security_and_analysis.secret_scanning_push_protection.status=enabled
+gh api repos/{{ORG_NAME}}/{{REPO_NAME}} -X PATCH -f security_and_analysis.secret_scanning.status=enabled
+gh api repos/{{ORG_NAME}}/{{REPO_NAME}} -X PATCH -f security_and_analysis.secret_scanning_push_protection.status=enabled
 ```
 
 ## 4. Verify
@@ -120,7 +122,7 @@ npm run typecheck    # No errors
 npm run lint         # No errors
 git status           # .gitignore working
 npm outdated         # Update if needed
-git remote -v        # origin → github.com/neverinfamous/{{REPO_NAME}}
+git remote -v        # origin → github.com/{{ORG_NAME}}/{{REPO_NAME}}
 gh repo view         # Displays repo info
 ```
 

@@ -135,7 +135,7 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 > non-interactive mode using the `-p` (or `--prompt`) flag. Use `-s` to suppress
 > UI styling. Interactive mode will hang indefinitely in an automated agent context. Use:
 > ```
-> gh copilot -p -s "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "file-system,git"
+> gh copilot -p -s "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.

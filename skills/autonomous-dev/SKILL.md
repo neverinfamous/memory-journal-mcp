@@ -33,13 +33,42 @@ Features cannot simply be written and committed. They must navigate a rigid pipe
 5. **Adversarial Review**: Self-evaluate the code as a skeptical reviewer (evaluator). Actively search for edge cases, security vulnerabilities, efficiency loss, and anti-patterns.
 6. **Documentation**: Ensure docs stay tightly in sync with the codebase after the feature clears CI.
 
-## 3. Workflow Orchestration
+## 4. Workflow Orchestration
 
 Follow strict version control (Conventional Commits, atomic commits) and CI/CD automation rules. Test code locally before creating PRs.
 
-## 4. Context Management & Drift Prevention
+## 5. Context Management & Drift Prevention
 
 As the context window fills up, context anxiety can degrade performance.
 
 - Recognize when the session has spanned too many features or files (e.g., beyond 4-5 features).
 - Use session summaries or persistent memories to bookmark state, clear the context, and resume with a fresh perspective.
+
+## 6. Output Templates
+
+**Generator Plan Output:**
+```markdown
+### Feature Plan: [Feature Name]
+**Scope:** [In-Scope/Out-of-Scope based on PROJECT.md]
+**Constraints:** [Key constraints to respect]
+**Acceptance Criteria:**
+- [ ] Criterion 1
+- [ ] Criterion 2
+```
+
+**Evaluator Review Output:**
+```markdown
+### Adversarial Review: [Feature Name]
+**Pass/Fail:** [Result]
+**Security Risks:** [Identified risks or "None"]
+**Edge Cases Missed:** [Edge cases]
+**Required Fixes:** [List of fixes before proceeding]
+```
+
+## Synergies
+
+| Skill/Workflow | Relationship |
+| --- | --- |
+| `github-commander` | Complementary — handles issue orchestration while this handles the dev lifecycle |
+| `adversarial-planner` | Can be used during the Planning phase of the Generator pipeline |
+| `adversarial-security` | Can be used during the Evaluator phase |

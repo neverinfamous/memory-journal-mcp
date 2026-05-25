@@ -5,7 +5,7 @@ description: |
   into agentic workflows. Use this skill when you need a "second opinion" adversarial
   review of a local codebase, a pre-push PR review using alternative advanced models,
   or shell suggestion capabilities from GitHub. Activates on "Copilot CLI", "local PR review",
-  or "codebase Copilot review".
+  "codebase Copilot review", "second opinion", "use gh copilot", or "ask Copilot".
 ---
 
 # GitHub Copilot CLI
