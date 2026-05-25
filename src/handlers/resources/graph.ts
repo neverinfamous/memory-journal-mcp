@@ -39,6 +39,7 @@ export function buildMermaidGraph(relationships: { from_entry_id: number; to_ent
     for (const rel of relationships) {
         if (!seenNodes.has(rel.from_entry_id)) {
             const label = rel.from_content
+                .replace(/\s+/g, ' ')
                 .slice(0, 30)
                 .replace(/[\]"'`[]]/g, ' ')
                 .trim()
@@ -49,6 +50,7 @@ export function buildMermaidGraph(relationships: { from_entry_id: number; to_ent
         }
         if (!seenNodes.has(rel.to_entry_id)) {
             const label = rel.to_content
+                .replace(/\s+/g, ' ')
                 .slice(0, 30)
                 .replace(/[\]"'`[]]/g, ' ')
                 .trim()
