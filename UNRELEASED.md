@@ -40,6 +40,9 @@
 
 ### Fixed
 
+- **briefing**: Fixed dynamic context routing mismatch by gracefully extracting repository names when provided full URI strings (e.g., `memory://briefing/owner/repo`)
+- **briefing**: Ensured the instruction level is always surfaced in the Config row and highlighted the active workspace in the Workspaces footer
+- **briefing**: Added the `use mj.* API` breadcrumb to the System row when the codemode filter is active
 - **relationships**: Fixed `visualize_relationships` returning `null` for the mermaid string when no relationships exist, ensuring consistent string types for the structured Code Mode API
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, and `tool-reference.md` with recent architectural changes

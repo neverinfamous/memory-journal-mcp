@@ -179,7 +179,9 @@ export function formatUserMessage(opts: {
     if (opts.toolCount !== undefined) {
         if (opts.filterSummary) {
             // Show filter annotation: "70 tools (filter: codemode → 1)"
-            systemParts.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)})`)
+            const isCodeMode = opts.filterSummary.includes('codemode')
+            const codeModeNote = isCodeMode ? ' — use mj.* API' : ''
+            systemParts.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`)
         } else {
             systemParts.push(`${String(opts.toolCount)} tools`)
         }
@@ -224,7 +226,7 @@ export function formatUserMessage(opts: {
     }
     configParts.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
     configParts.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
-    if (opts.instructionLevel && opts.instructionLevel !== 'standard') {
+    if (opts.instructionLevel) {
         configParts.push(`level: ${opts.instructionLevel}`)
     }
     if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
@@ -312,7 +314,11 @@ export function formatUserMessage(opts: {
         const entries = Object.entries(opts.registryPaths)
         if (entries.length > 0) {
             const pathList = entries
-                .map(([name, diskPath]) => `${escapeContent(name)}: ${escapeContent(diskPath)}`)
+                .map(([name, diskPath]) => {
+                    const isActive = name === repoName || name === repoName.split('/').pop()
+                    const formatted = `${escapeContent(name)}: ${escapeContent(diskPath)}`
+                    return isActive ? `**${formatted}** (active)` : formatted
+                })
                 .join(' · ')
             flatLines.push(`**Workspaces:** ${pathList}`)
         }

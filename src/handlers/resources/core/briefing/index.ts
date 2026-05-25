@@ -72,10 +72,18 @@ async function buildBriefingData(
     let activeGithub = context.github
     let activeProjectNumber = config.defaultProjectNumber
 
-    if (targetRepo && config.projectRegistry?.[targetRepo]) {
-        const repoPath = config.projectRegistry[targetRepo].path
-        activeGithub = getGitHubIntegration(repoPath, context.runtime)
-        activeProjectNumber = config.projectRegistry[targetRepo].project_number ?? undefined
+    if (targetRepo) {
+        let resolvedRepo = targetRepo
+        if (!config.projectRegistry?.[resolvedRepo]) {
+            resolvedRepo = targetRepo.split('/').pop() || targetRepo
+        }
+        
+        const registryEntry = config.projectRegistry?.[resolvedRepo]
+        if (registryEntry) {
+            const repoPath = registryEntry.path
+            activeGithub = getGitHubIntegration(repoPath, context.runtime)
+            activeProjectNumber = registryEntry.project_number ?? undefined
+        }
     }
 
     // Build all sections
