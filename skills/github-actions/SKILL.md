@@ -2,11 +2,9 @@
 name: github-actions
 description: |
   Master GitHub Actions CI/CD workflows with production-grade security and
-  performance patterns. Use when writing workflow YAML, configuring CI/CD
-  pipelines, setting up matrix strategies, caching dependencies, managing
-  artifacts, or implementing reusable workflows. Triggers on "GitHub Actions",
-  "CI/CD", "workflow", "actions/checkout", "matrix strategy", "reusable
-  workflow", "SHA pinning", ".github/workflows".
+  performance patterns. Use when setting up CI/CD pipelines specifically via GitHub Actions, 
+  setting up matrix strategies, caching dependencies, managing
+  artifacts, or implementing reusable workflows.
 ---
 
 # GitHub Actions CI/CD Engineering Standards
@@ -30,6 +28,7 @@ This skill codifies 2026 GitHub Actions best practices — secure supply chains,
 - **ALWAYS** pin to full-length commit SHAs — tags are mutable and can be hijacked
 - **ALWAYS** add a trailing comment with the version for human readability
 - **Use tools** like `step-security/harden-runner` or `pin-github-action` CLI to automate SHA resolution
+- **Resolve SHA Manually**: `# Resolve SHA: gh api /repos/actions/checkout/git/refs/heads/main --jq '.object.sha'`
 - **Audit quarterly** — review all pinned SHAs when updating workflow dependencies
 
 ### Permission Hardening

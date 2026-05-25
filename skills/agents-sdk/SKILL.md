@@ -153,3 +153,8 @@ function App() {
 - **[references/mcp.md](references/mcp.md)** - MCP server integration
 - **[references/email.md](references/email.md)** - Email routing and handling
 - **[references/codemode.md](references/codemode.md)** - Code Mode (experimental)
+
+## Security
+
+- **Input Validation**: Validate all WebSocket messages with Zod before processing. Catch `JSON.parse` errors explicitly.
+- **RPC Security**: Define explicit input schemas (e.g. Zod) for all `@callable()` methods to prevent malformed execution.

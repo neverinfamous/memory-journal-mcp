@@ -1,6 +1,10 @@
 ---
 name: postgres
-description: Enterprise PostgreSQL production rules — advanced querying, indexing, JSONB data, and strict optimization patterns.
+description: |
+  Use when designing, querying, or managing a PostgreSQL database.
+  Enforces enterprise production rules for advanced querying, composite indexing, 
+  JSONB data handling, and strict optimization patterns (avoiding N+1).
+  Do NOT trigger for generic "set up a database" requests unless PostgreSQL is explicitly chosen.
 ---
 
 # PostgreSQL Production Standards

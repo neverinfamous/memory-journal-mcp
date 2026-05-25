@@ -142,33 +142,14 @@ const id = env.MY_DO.newUniqueId();
 const stub = env.MY_DO.get(id);
 ```
 
-## Storage Operations
+## Advanced Features
 
-```typescript
-// SQL (synchronous, recommended)
-this.ctx.storage.sql.exec("INSERT INTO t (c) VALUES (?)", value);
-const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM t").toArray();
+See [references/advanced_features.md](references/advanced_features.md) for detailed examples of Storage Operations (SQL and KV) and Alarms scheduling.
 
-// KV (async)
-await this.ctx.storage.put("key", value);
-const val = await this.ctx.storage.get<Type>("key");
-```
+## Security
 
-## Alarms
-
-```typescript
-// Schedule (replaces existing)
-await this.ctx.storage.setAlarm(Date.now() + 60_000);
-
-// Handler
-async alarm(): Promise<void> {
-  // Process scheduled work
-  // Optionally reschedule: await this.ctx.storage.setAlarm(...)
-}
-
-// Cancel
-await this.ctx.storage.deleteAlarm();
-```
+- **RPC Access Control**: RPC methods are public to any caller with a stub. Implement authorization inside the method body (e.g., check `this.env.AUTH_TOKEN`).
+- **WebSockets**: Validate WebSocket origin in `onConnect()` to prevent cross-site hijacking.
 
 ## Testing Quick Start
 

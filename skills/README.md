@@ -55,7 +55,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `durable-objects`                    | Create and review Durable Objects — RPC, SQLite storage, alarms, WebSockets                                           |
 | `github-actions`                     | GitHub Actions CI/CD — SHA pinning, reusable workflows, caching, matrix strategies, and artifacts v4                  |
 | `github-commander`                   | GitHub pipeline workflows for orchestrating issues, regressions, and deployments                                      |
-| `github-copilot-cli`                 | Adversarial pre-push validation and full repository code audits driven by the `gh copilot` terminal extension         |
+| `github-copilot-cli`                 | Adversarial pre-push validation and full repository code audits driven natively by the `gh copilot` CLI               |
 | `github-repo-setup`                  | Scaffold public TypeScript/Node.js repos under `neverinfamous`                                                        |
 | `gitlab`                             | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
 | `golang`                             | Master Go development with production-grade best practices from Google and Uber style guides                          |

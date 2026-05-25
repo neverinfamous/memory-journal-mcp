@@ -33,7 +33,7 @@ skill-name/                     (kebab-case directory)
 
 ## 3. Frontmatter & Triggers
 
-The `description` field is the most important part of the skill because it determines whether the agent loads the skill at all. Use assertive "Use when..." phrasing.
+The `description` field is the most important part of the skill because it determines whether the agent loads the skill at all. Use assertive "Use when..." phrasing. It MUST be strictly scoped to avoid cross-triggering with other skills.
 
 **Platform-Dependent / Example Frontmatter Options**:
 *(Note: These are speculative/platform-specific and may not be supported by all agents.)*
@@ -45,7 +45,7 @@ The `description` field is the most important part of the skill because it deter
 
 ## 4. Progressive Disclosure
 
-- Keep `SKILL.md` body under ~500 lines.
+- Keep `SKILL.md` body STRICTLY under 500 lines to preserve token context.
 - For deep knowledge, create `references/` files and explicitly list them in `SKILL.md`.
 
 ## 5. Deep References

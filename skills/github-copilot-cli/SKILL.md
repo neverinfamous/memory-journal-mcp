@@ -10,7 +10,7 @@ description: |
 
 # GitHub Copilot CLI
 
-The GitHub Copilot CLI (`gh copilot`) acts as an interactive, terminal-native representation of the Copilot agentic ecosystem.
+The new GitHub Copilot agentic CLI is integrated directly into the GitHub CLI (`gh`). The older standalone `github-copilot-cli` package and the `gh-copilot` extension are deprecated. You must use `gh copilot` which now triggers the new agentic experience natively.
 
 When integrated into an AI workflow (AI evaluating AI), it acts as a robust secondary reviewer mapping against different context windows and potentially different foundational models than the primary agent, significantly reducing confirmation bias during PR or full-repository reviews.
 
@@ -19,33 +19,31 @@ When integrated into an AI workflow (AI evaluating AI), it acts as a robust seco
 Before using the CLI in automated pipelines, ensure the terminal environment is equipped and authenticated:
 
 ```bash
-# 1. Verify availability
-gh extension list | grep copilot
-
-# 2. Install if missing
-gh extension install github/gh-copilot
-
-# 3. Authenticate (Requires human interaction/browser approval)
-gh auth login
+# 1. Verify availability (will prompt to install the underlying component if missing)
 gh copilot --version
+
+# 2. Authenticate (Requires human interaction/browser approval)
+gh auth login
 ```
 
 ## Agentic Interaction Strategies
 
 Because the Copilot CLI is primarily interactive, standalone non-interactive agents cannot easily navigate its interactive UI natively for arbitrary open-ended tasks.
 
-However, you can leverage its single-shot explanation or suggestion endpoints for targeted tasks:
+However, you can leverage its single-shot non-interactive mode (`-p`) for targeted tasks:
 
 ### Direct Tool Commands
 
-For precise shell suggestions or file explanations:
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in non-interactive mode using the `-p` (or `--prompt`) flag. Omitting this flag will launch an interactive UI and hang the agent indefinitely. Use `-s` (silent) to suppress styling/decorations and output raw text.
+
+For precise shell suggestions or file explanations in automated workflows:
 
 ```bash
 # Shell Suggestion (Evaluates context and produces command)
-gh copilot suggest "find all files over 5mb in the current directory"
+gh copilot -p -s "find all files over 5mb in the current directory"
 
 # File Explanation
-gh copilot explain "src/utils/crypto.ts"
+gh copilot -p -s "explain src/utils/crypto.ts"
 ```
 
 ## Workflows Integration

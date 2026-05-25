@@ -3,9 +3,7 @@ name: playwright-standard
 description: |
   Comprehensive, opinionated guidance for Playwright test development. Use when
   writing E2E, API, component, or visual tests, debugging failures, implementing
-  Page Object Model, or configuring CI/CD. Includes "Golden Rules" for resilient
-  tests and provides on-demand reference for specialized scenarios (Electron,
-  WebSockets, mobile, security audits).
+  Page Object Model, or configuring CI/CD. For unit tests, use vitest-standard. Use Playwright solely for E2E, API, and component tests.
 ---
 
 # Playwright Standard
@@ -20,7 +18,7 @@ This skill combines battle-tested coding standards with industrial-scale infrast
 4.  **Isolate every test** — Every test must run independently in any order (no shared state).
 5.  **Fixtures over globals** — Share state via `test.extend()`, not module-level variables.
 6.  **`baseURL` in config** — ZERO hardcoded URLs in test files.
-7.  **Auth: Reuse storage state** — Use `browserContext.storageState` to avoid UI login in every test.
+7.  **Auth: Reuse storage state** — Use `browserContext.storageState` to avoid UI login in every test. Store `storageState` files in `.gitignore`d paths (e.g., `playwright/.auth/`). Never commit auth state files to version control.
 8.  **Network: Mock third-party only** — Never mock your own app; mock external APIs, gateways, and emails.
 9.  **Traces: `'on-first-retry'`** — High-fidelity debugging without CI performance penalties.
 10. **One behavior per test** — Avoid "mega-tests": keep focus narrow and assertions meaningful.

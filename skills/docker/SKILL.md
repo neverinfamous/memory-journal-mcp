@@ -1,9 +1,8 @@
 ---
 name: docker
 description: |
-  Production-grade Docker and container best practices. Use when writing
-  Dockerfiles, configuring Docker Compose, optimizing image size and build
-  speed, implementing security hardening, or debugging container issues.
+  Production-grade Docker and container best practices. Use when containerizing apps with Docker, 
+  writing Dockerfiles, or managing Docker Compose environments.
   Triggers on "Docker", "Dockerfile", "container", "Compose", "BuildKit",
   "multi-stage build", "image size", "docker-compose".
 ---

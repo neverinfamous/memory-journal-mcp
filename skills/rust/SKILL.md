@@ -1,7 +1,7 @@
 ---
 name: rust
 description: |
-  Master Rust development using a layer-based "meta-cognition" framework. Use whenever writing Rust code, resolving borrow checker errors (E0382, E0596), designing ownership patterns (Arc, Mutex), or performing crate selection.
+  Master production Rust code, lifetimes, and systems programming using a layer-based "meta-cognition" framework. Use whenever writing production Rust code, resolving borrow checker errors (E0382, E0596), designing ownership patterns (Arc, Mutex), or performing crate selection. Do NOT trigger for generic WASM or TS questions unless Rust is the primary focus.
 ---
 
 # Rust Development & Meta-Cognition
@@ -84,3 +84,9 @@ When debugging compiler errors, trace **up** from the syntax error to the fundam
 - **Testing**: `cargo test`
 
 **Agent Directive:** When writing or editing Rust code, always invoke `cargo clippy` and `cargo test` dynamically to validate your implementations before concluding your task.
+
+---
+
+## 🔒 6. Security & `unsafe` Blocks
+
+Avoid `unsafe` blocks. If you must use `unsafe` for FFI or performance, you MUST thoroughly document the exact safety invariants being upheld inside the block.

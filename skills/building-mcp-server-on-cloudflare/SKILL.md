@@ -5,9 +5,7 @@ description: |
   with tools, OAuth authentication, and production deployment. Generates
   server code, configures auth providers, and deploys to Workers.
 
-  Use when: user wants to "build MCP server", "create MCP tools", "remote
-  MCP", "deploy MCP", add "OAuth to MCP", or mentions Model Context Protocol
-  on Cloudflare. Also triggers on "MCP authentication" or "MCP deployment".
+  Use when: user wants to build a remote, Cloudflare-hosted MCP server.
 ---
 
 # Building MCP Servers on Cloudflare
@@ -186,9 +184,10 @@ this.server.tool(
 ```typescript
 export class MyMCP extends McpAgent<Env> {
   async init() {
-    this.server.tool("query_db", { sql: z.string() }, async ({ sql }) => {
-      // Access D1 binding
-      const result = await this.env.DB.prepare(sql).all();
+    this.server.tool("get_user", { id: z.number() }, async ({ id }) => {
+      // Access D1 binding safely with parameterized query
+      // NOTE: Never pass raw SQL strings from tool arguments directly to prepare()
+      const result = await this.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).all();
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     });
   }

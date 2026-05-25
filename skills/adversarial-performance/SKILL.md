@@ -3,11 +3,9 @@ name: adversarial-performance
 description: |
   Multi-pass adversarial performance audit for entire repositories. Combines
   structured profiling (Agent A) with adversarial stress-testing critique
-  (Agent B) through iterative passes. Merges the perf-audit workflow's
-  7-category checklist with the adversarial-planner's structured critique
-  methodology. Use when running performance audits, profiling, or when
-  the user says "perf audit", "adversarial performance", "find bottlenecks",
-  or "optimize this repo".
+  (Agent B) through iterative passes. Optimize repo/backend performance, hot-paths, 
+  or bundle sizes (NOT page load metrics). Do NOT use for frontend page load metrics 
+  or Lighthouse audits (use web-perf).
 ---
 
 # Adversarial Performance
@@ -124,21 +122,20 @@ optimization patterns, read
 ## External Validation (Phase 4)
 
 Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).
-The `copilot` subcommand is built into modern `gh` CLI — no separate extension is
-needed. This provides a fundamentally different model's perspective on the audit,
+This provides a fundamentally different model's perspective on the audit,
 catching performance patterns that internal review normalizes.
 
 For Copilot-specific prompt templates, read
 [references/copilot-performance-prompts.md](references/copilot-performance-prompts.md).
 
-**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
+**Prerequisites:** `gh` CLI available on the system. If `gh copilot`
 is not available, skip Phase 4 gracefully and note the skip in the journal entry.
 
 > **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
-> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
-> will hang indefinitely in an automated agent context. Use:
+> non-interactive mode using the `-p` (or `--prompt`) flag. Use `-s` to suppress
+> UI styling. Interactive mode will hang indefinitely in an automated agent context. Use:
 > ```
-> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
+> gh copilot -p -s "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "file-system,git"
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.

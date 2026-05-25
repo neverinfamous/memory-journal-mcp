@@ -23,6 +23,7 @@ This skill provides opinionated, production-tested guidance for high-integrity u
 8.  **Meaningful Names** — Use `it('should [action] when [condition]')` or Given-When-Then.
 9.  **Mock at Boundaries** — Mock external APIs, databases, and third-party SDKs; test your own logic.
 10. **Red-Green-Refactor** — Prefer writing tests before code to drive API design.
+11. **Security** — Use fake/mock credentials in all tests — never real API keys, tokens, or passwords. Load sensitive test config from `.env.test.local` (gitignored).
 
 ## Core Patterns
 

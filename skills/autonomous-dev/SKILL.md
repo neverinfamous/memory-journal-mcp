@@ -1,6 +1,6 @@
 ---
 name: autonomous-dev
-description: Harness for autonomous software development. Enforces lifecycle through alignment gates (PROJECT.md), adversarial generator/evaluator agents, CI/CD pipeline automation, and strict Git workflows (Conventional Commits, Branching).
+description: Harness for autonomous software development. Enforces lifecycle through alignment gates (PROJECT.md), adversarial generator/evaluator agents, and autonomous orchestration of project issues.
 ---
 
 # Autonomous Development Workflow
@@ -27,26 +27,9 @@ Features cannot simply be written and committed. They must navigate a rigid pipe
 5. **Adversarial Review**: Self-evaluate the code as a skeptical reviewer (evaluator). Actively search for edge cases, security vulnerabilities, efficiency loss, and anti-patterns.
 6. **Documentation**: Ensure docs stay tightly in sync with the codebase after the feature clears CI.
 
-## 3. Git Workflow & Versioning
+## 3. Workflow Orchestration
 
-Enforce strict version control standards on all changes:
-
-- **Branching**: Use feature branches (`feature/my-feature`), bugfix branches (`fix/bug-name`), or standard trunk-based branching flows depending on the repository context.
-- **Atomic Commits**: Group distinct changes into smaller, logical, single-purpose commits. Do not lump refactoring with new logic.
-- **Conventional Commits**: You MUST format all commits according to the Conventional Commits specification:
-  - `feat: <description>` for new features (MINOR bump)
-  - `fix: <description>` for bug fixes (PATCH bump)
-  - `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`, `chore:` for specific maintenance scopes.
-  - Suffix `!` for breaking changes (e.g., `feat!: remove API v1`) (MAJOR bump).
-
-## 4. Continuous Integration/Deployment (CI/CD)
-
-When designing automation and pipelines:
-
-- **GitHub Actions First**: Prioritize GitHub Actions for CI/CD pipeline orchestration, favoring Reusable Workflows and matrix builds.
-- **Validation Blocks**: Every PR or merge MUST require passing lint, test, and type-check gates.
-- **Automation Constraints**: Automate Semantic Versioning (using conventional commits) to power automated release notes and changelog generation.
-- **Security Scans**: Mandate security scanning (e.g. CodeQL, Trivy) on standard PR flows.
+See [references/workflow_orchestration.md](references/workflow_orchestration.md) for strict version control (Conventional Commits, atomic commits) and CI/CD automation rules.
 
 ## 5. Context Management & Drift Prevention
 

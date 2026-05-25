@@ -1,6 +1,9 @@
 ---
 name: next-upgrade
-description: Upgrade Next.js to a specific target version using safe dependency bumps, codemods, and diff reviews.
+description: |
+  Upgrade Next.js to a specific target version using safe dependency bumps, codemods, 
+  and diff reviews. Use when you need to execute major version bumps, resolve breaking changes, 
+  or safely run @next/codemod against the repository before upgrading.
 ---
 
 # Upgrade Next.js

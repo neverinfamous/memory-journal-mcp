@@ -1,7 +1,7 @@
 ---
 name: mcp-builder
 description: |
-  Core rules for scaffolding, implementing, and securing Model Context Protocol (MCP) servers. Use when building a new MCP server, adding tools to an existing one, or fixing tool schemas and error responses.
+  Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses.
 ---
 
 # MCP Server Builder Guidelines
@@ -28,3 +28,41 @@ When building or modifying MCP servers, follow these prioritized rules:
 For the complete MCP implementation guide, architecture diagrams, and detailed tooling patterns, consult the full reference:
 
 - **[MCP Implementation Guide](references/implementation-guide.md)**
+
+## 4. Scaffold Reference
+
+When you need a minimal, fully compliant MCP server scaffold, use this structure:
+
+```typescript
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+const server = new Server({ name: "my-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+
+const MyToolSchema = z.object({ id: z.string() });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [{
+    name: "my_tool",
+    description: "Does something",
+    inputSchema: import("zod-to-json-schema").then(m => m.zodToJsonSchema(MyToolSchema)) // Or pre-compiled JSON schema
+  }]
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  if (request.params.name === "my_tool") {
+    try {
+      const args = MyToolSchema.parse(request.params.arguments);
+      return { content: [{ type: "text", text: `Got ID: ${args.id}` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Validation Error: ${err}` }] };
+    }
+  }
+  return { isError: true, content: [{ type: "text", text: "Unknown tool" }] };
+});
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```

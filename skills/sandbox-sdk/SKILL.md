@@ -118,7 +118,8 @@ Base image (`docker.io/cloudflare/sandbox:0.7.0`) includes Python 3.11, Node.js 
 Add dependencies by extending the Dockerfile:
 
 ```dockerfile
-FROM docker.io/cloudflare/sandbox:0.7.0
+FROM docker.io/cloudflare/sandbox:latest
+# Pin to specific version in production: `npx wrangler versions latest sandbox`
 
 # Python packages
 RUN pip install requests beautifulsoup4
@@ -175,3 +176,8 @@ See `examples/openai-agents` for complete integration pattern.
 
 - **[references/api-quick-ref.md](references/api-quick-ref.md)** - Full API with options and return types
 - **[references/examples.md](references/examples.md)** - Example index with use cases
+
+## Security
+
+- **Command Injection**: Never pass unsanitized user input to `exec()`. Prefer `runCode()` with language constraints for LLM-generated code.
+- **Resource Limits**: Implement per-user rate limiting. Set `sleepAfter` to cap idle resource consumption.

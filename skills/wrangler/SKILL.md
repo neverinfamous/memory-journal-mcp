@@ -1,7 +1,7 @@
 ---
 name: wrangler
 description: |
-  Cloudflare Wrangler CLI dispatcher. Use when running wrangler commands to deploy, tail logs, manage secrets, or provision Cloudflare resources (D1, KV, R2, Vectorize). 
+  Cloudflare Wrangler CLI dispatcher. Use when deploying code to Cloudflare Workers or managing Cloudflare bindings using the wrangler CLI. 
   Do NOT use for general Cloudflare product discovery (use cloudflare instead) or for writing/reviewing Worker code (use workers-best-practices instead).
 ---
 
@@ -19,6 +19,21 @@ This skill provides references for the Cloudflare Wrangler CLI. The CLI is exten
 Before executing a Wrangler command, read the corresponding reference file to ensure you have the correct syntax.
 
 - **[Full CLI Commands Reference](references/cli-commands.md)**: Contains all commands for Workers, Pages, KV, R2, D1, Vectorize, Hyperdrive, Queues, Pipelines, Containers, Workflows, Observability, and Secrets.
+
+## Quick Reference (Top Commands)
+
+| Command | Description |
+|---------|-------------|
+| `npx wrangler dev` | Start local development server |
+| `npx wrangler deploy` | Deploy to production |
+| `npx wrangler tail` | Tail production logs |
+| `npx wrangler secret put <name>` | Create/update a secret |
+| `npx wrangler d1 execute <db> --local --file=...` | Execute SQL locally |
+| `npx wrangler kv:key put --binding=<name> <key> <value>` | Put KV pair |
+| `npx wrangler r2 object put <bucket>/<key> --file=...` | Upload R2 object |
+| `npx wrangler types` | Generate TS types from config |
+| `npx wrangler login` | Authenticate CLI |
+| `npx wrangler whoami` | Check auth status |
 
 ## Local Development Workflow
 
