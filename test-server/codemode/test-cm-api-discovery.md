@@ -53,7 +53,7 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 ## Success Criteria
 
-- [ ] `mj.help()` returns all 10 groups with correct `totalMethods` count
-- [ ] Per-group `help()` returns method names for each group
-- [ ] Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
-- [ ] Positional arguments work (e.g., `mj.core.get(id)`)
+- [x] `mj.help()` returns all 10 groups with correct `totalMethods` count
+- [x] Per-group `help()` returns method names for each group
+- [x] Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
+- [x] Positional arguments work (e.g., `mj.core.get(id)`)
