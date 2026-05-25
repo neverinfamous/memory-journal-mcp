@@ -56,6 +56,8 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 > Always `Set-Location` (or `cd`) to the target repository before invoking.
+> 
+> **⚠️ TIMEOUT GUIDANCE**: Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts (like Antigravity's 10s `WaitMsBeforeAsync` limit), allow the command to naturally fall into the background. Use the `schedule` tool or wait for the system notification to retrieve the results. Do not skip execution due to timeout constraints.
 
 > **⚠️ CRITICAL — No Fabrication**: You MUST actually execute `gh copilot`
 > commands and include their real output. Do NOT fabricate, hallucinate, or

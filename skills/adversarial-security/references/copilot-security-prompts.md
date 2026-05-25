@@ -52,7 +52,7 @@ gh copilot -p "<prompt text>" --allow-tool "shell(find,cat,head,grep)"
   Copilot uses the cwd as its workspace root.
 - Each prompt invocation runs independently — there is no conversation state
   between calls.
-- Expect 60–120 seconds per prompt. Set a generous async timeout (120s+).
+- Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts (like Antigravity's 10s `WaitMsBeforeAsync` limit), allow the command to naturally fall into the background. Use the `schedule` tool or wait for the system notification to retrieve the results. Do not skip execution due to timeout constraints.
 - Long prompts work fine — the CLI accepts multi-line strings in quotes.
 
 > **⚠️ NO FABRICATION**: You MUST actually execute `gh copilot` and include

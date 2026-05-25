@@ -29,7 +29,7 @@ the journal entry.
 > ```
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 
-For automated agent use, pass prompts via the `-p` flag:
+- Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts (like Antigravity's 10s `WaitMsBeforeAsync` limit), allow the command to naturally fall into the background. Use the `schedule` tool or wait for the system notification to retrieve the results. Do not skip execution due to timeout constraints.
 
 ### Architecture Review
 "You are a senior systems architect. Review this implementation plan for a software project. Focus on:

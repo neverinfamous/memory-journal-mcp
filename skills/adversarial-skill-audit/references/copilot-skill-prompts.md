@@ -4,21 +4,23 @@ Reference for Phase 4 — independent validation via the GitHub Copilot CLI.
 
 ## Prerequisites
 
-1. **Copilot CLI installed**: `gh extension list | grep copilot` or install via `gh extension install github/gh-copilot`
-2. **Authenticated**: `gh auth status` and `gh copilot --version`
+1. **GitHub CLI installed**: `gh --version` (v2.x+)
+2. **Authenticated**: `gh auth status` passing
+3. **Copilot available**: `gh copilot --version` — the `copilot` subcommand is built into modern `gh` CLI (no separate extension needed)
 
-If unavailable, skip Phase 4 gracefully.
+If Copilot CLI is not available, skip Phase 4 gracefully.
 
 ## Prompt Templates
 
-### Skill Quality Review
+> **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
+> non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
+> will hang indefinitely in an automated agent context. Use:
+> ```
+> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> ```
+> The `--allow-tool` flag grants Copilot read access to the repository files.
 
-> **Note:** The `gh copilot` CLI extension does not natively support non-interactive file stream piping for open-ended prompts like the deprecated `@github/copilot` npm package did.
-> For Phase 4 audits, you must either:
-> 1. Fall back to manual Copilot Chat window usage with the prompt templates.
-> 2. Document the limitation in the `skill_audit_copilot` journal entry and mark Phase 4 as manually bypassed.
-
-If using Copilot Chat manually, you can use these prompts:
+- Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts (like Antigravity's 10s `WaitMsBeforeAsync` limit), allow the command to naturally fall into the background. Use the `schedule` tool or wait for the system notification to retrieve the results. Do not skip execution due to timeout constraints.
 
 **Skill Quality:**
 "You are an expert in AI agent instruction design. Review these agent skill files for quality. Evaluate each skill on:
