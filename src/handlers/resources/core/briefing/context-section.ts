@@ -24,6 +24,12 @@ import { buildMermaidGraph } from '../../graph.js'
 /** Content preview length for briefing entry summaries */
 const PREVIEW_LENGTH = 80
 
+function cleanPreview(content: string | undefined | null, length: number): string {
+    if (!content) return ''
+    const clean = content.trim().replace(/\s+/g, ' ')
+    return clean.slice(0, length) + (clean.length > length ? '...' : '')
+}
+
 export interface JournalContext {
     totalEntries: number
     latestEntries: { id: number; timestamp: string; type: string; preview: string }[]
@@ -42,14 +48,11 @@ export function buildJournalContext(
             ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
             : context.db.getRecentEntries(config.entryCount)
     const latestEntries = recentEntries.map((e) => {
-        const content = e.content ?? ''
         return {
             id: e.id,
             timestamp: e.timestamp,
             type: e.entryType,
-            preview: markUntrustedContentInline(
-                content.slice(0, PREVIEW_LENGTH) + (content.length > PREVIEW_LENGTH ? '...' : '')
-            ),
+            preview: markUntrustedContentInline(cleanPreview(e.content, PREVIEW_LENGTH)),
         }
     })
 
@@ -87,14 +90,11 @@ export function buildJournalContext(
     let sessionSummaries
     if (finalSummaryEntries.length > 0) {
         sessionSummaries = finalSummaryEntries.map((entry) => {
-            const c = entry.content ?? ''
             return {
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: markUntrustedContentInline(
-                    c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')
-                ),
+                preview: markUntrustedContentInline(cleanPreview(entry.content, PREVIEW_LENGTH)),
             }
         })
         latestSessionSummary = sessionSummaries[0]
@@ -136,7 +136,7 @@ export function buildTeamContext(
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
             : ''
         const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry['id'])}: ${markUntrustedContentInline(teamContent.slice(0, TEAM_PREVIEW_LENGTH) + (teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''))}`
+            ? `#${String(teamLatestEntry['id'])}: ${markUntrustedContentInline(cleanPreview(teamContent, TEAM_PREVIEW_LENGTH))}`
             : null
         const teamInfo = {
             totalEntries: teamTotalEntries,
@@ -153,15 +153,11 @@ export function buildTeamContext(
                     ? context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber })
                     : context.teamDb.getRecentEntries(config.entryCount)
             teamLatestEntries = teamEntries.map((e) => {
-                const content = e.content ?? ''
                 return {
                     id: e.id,
                     timestamp: e.timestamp,
                     type: e.entryType,
-                    preview: markUntrustedContentInline(
-                        content.slice(0, TEAM_PREVIEW_LENGTH) +
-                            (content.length > TEAM_PREVIEW_LENGTH ? '...' : '')
-                    ),
+                    preview: markUntrustedContentInline(cleanPreview(e.content, TEAM_PREVIEW_LENGTH)),
                 }
             })
         }
@@ -294,15 +290,12 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
                 const ctx = parseFlagContext(entry.autoContext)
                 if (!ctx || ctx.resolved) return null
 
-                const content = entry.content ?? ''
                 return {
                     id: entry.id,
                     flag_type: ctx.flag_type,
                     target_user: ctx.target_user ?? null,
-                    preview: markUntrustedContentInline(
-                        content.slice(0, 80) + (content.length > 80 ? '...' : '')
-                    ),
-                    fullContent: markUntrustedContentInline(content),
+                    preview: markUntrustedContentInline(cleanPreview(entry.content, 80)),
+                    fullContent: markUntrustedContentInline(entry.content),
                     timestamp: entry.timestamp,
                 }
             })
