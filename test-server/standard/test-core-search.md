@@ -49,6 +49,7 @@
 | Date range + personal | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", is_personal: true)`      | Only personal entries in date range                                                                                                                                                           |
 | Date range + project  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", project_number: 5)`      | Only project #5 entries in date range                                                                                                                                                         |
 | Inverted date range   | `search_by_date_range(start_date: "2026-12-31", end_date: "2026-01-01")`                         | Returns `{ success: false, error: "Invalid date range: start_date (...) is after end_date (...)", code: "VALIDATION_ERROR", suggestion: "Ensure start_date is before or equal to end_date" }` |
+| Query too long        | `search_entries(query: "a".repeat(300))`                                                         | Returns `{ success: false, error: "..." }` with Zod validation hint |
 | Importance sort       | `search_entries(query: "architecture", sort_by: "importance")`                                   | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
 | Importance sort rcnt  | `get_recent_entries(limit: 5, sort_by: "importance")`                                            | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
 | Importance sort date  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", sort_by: "importance")`  | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
@@ -74,6 +75,7 @@
 - `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
 - `search_by_date_range` filters work: `entry_type`, `tags`, `is_personal`, `project_number`
 - `search_by_date_range` rejects non-YYYY-MM-DD date strings with structured errors
+- `search_entries` rejects queries exceeding 250 characters with structured Zod errors
 - Cross-DB merging includes `source: 'personal' | 'team'` marker
 - `search_entries` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
 - `get_recent_entries` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending

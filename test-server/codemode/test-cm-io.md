@@ -8,6 +8,7 @@ Test the unified IO namespace, testing both legacy `exportEntries` formats and t
 
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Ensure `ALLOWED_IO_ROOTS` is configured in the environment to permit access to the mock directory.
 
 **Workflow after testing:**
 
@@ -37,6 +38,7 @@ const tagExport = await mj.io.exportEntries({
 return {
   jsonHasEntries: Array.isArray(jsonExport.entries),
   jsonCount: jsonExport.entries?.length ?? 0,
+  jsonTruncatedFlag: typeof jsonExport.truncated === 'boolean' || jsonExport.truncated === undefined,
   mdHasContent: typeof mdExport.content === 'string',
   tagFiltered:
     tagExport.entries?.every(
@@ -48,6 +50,7 @@ return {
 | Check            | Expected                                      |
 | ---------------- | --------------------------------------------- |
 | `jsonHasEntries` | `true`                                        |
+| `jsonTruncatedFlag`| `true`                                        |
 | `mdHasContent`   | `true`                                        |
 | `tagFiltered`    | `true` (only entries with "architecture" tag) |
 
@@ -103,6 +106,7 @@ return {
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `mj.io.exportEntries` provides JSON lists and raw markdown contents.
+- JSON exports that exceed size limits return `truncated: true`.
 - `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
 - `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
-- `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
+- `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal or lacking `ALLOWED_IO_ROOTS` permission.

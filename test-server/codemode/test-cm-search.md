@@ -152,12 +152,13 @@ return {
 | `personalCount`   | ≥ 0                                    |
 | `projectCount`    | ≥ 0 (entries linked to project #5)     |
 
-### 21.5 Search by Date Range — Error Paths
+### 21.5 Search by Date Range & Input — Error Paths
 
 | Test                | Code                                                                                              | Expected Result                                             |
 | ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Invalid date format | `return await mj.search.searchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
 | Inverted date range | `return await mj.search.searchByDateRange({ start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
+| Query too long      | `return await mj.search.searchEntries({ query: "a".repeat(300) });`                               | `{ success: false, error: "..." }` with Zod validation hint |
 
 ### 21.6 Semantic Search
 
@@ -394,6 +395,7 @@ return {
 - `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
 - `search_by_date_range` rejects invalid date format with structured error
 - `search_by_date_range` rejects inverted date range (start > end) with structured error
+- `search_entries` rejects queries exceeding 250 characters with structured Zod error
 - `search_by_date_range` filters by `project_number`
 - `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
 - `semantic_search` correctly filters results downstream using `tags` and `is_personal`

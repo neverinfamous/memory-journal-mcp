@@ -30,6 +30,7 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 | Integer return  | `return 42;`                     | `{ success: true, result: 42 }`                             |
 | String return   | `return "hello from code mode";` | `{ success: true, result: "hello from code mode" }`         |
 | Object return   | `return { a: 1, b: [2, 3] };`    | `{ success: true, result: { a: 1, b: [2, 3] } }`            |
+| Circular return | `const a = {}; a.b = a; return a;` | `{ success: true, result: { b: "[Circular]" } }`            |
 | Null return     | `return null;`                   | `{ success: true, result: null }`                           |
 | No return value | `const x = 1;`                   | `{ success: true, result: undefined }` (implicit undefined) |
 | Boolean return  | `return true;`                   | `{ success: true, result: true }`                           |
@@ -69,6 +70,7 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Simple expressions return correct types: integer, string, object, null, boolean
+- Circular object references are safely serialized as "[Circular]" without crashing
 - Async/await resolves correctly inside sandbox
 - Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
 - `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`

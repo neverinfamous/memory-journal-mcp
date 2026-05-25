@@ -7,6 +7,7 @@
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools whenever possible.** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
 - Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
+- Ensure `ALLOWED_IO_ROOTS` is configured in the environment to permit access to the mock directory.
 
 **Workflow after testing:**
 
@@ -26,6 +27,7 @@
 | Test            | Command/Action                                                         | Expected Result                               |
 | --------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
 | Export JSON     | `export_entries(format: "json", limit: 5)`                             | JSON export with `entries` array              |
+| Export JSON Lrg | `export_entries(format: "json", limit: 5000)`                          | JSON export with `truncated: true` flag set   |
 | Export markdown | `export_entries(format: "markdown", limit: 5)`                         | Markdown export with `content` string         |
 | Export with tag | `export_entries(format: "json", tags: ["architecture"], limit: 10)`    | Only entries with "architecture" tag returned |
 | Export future   | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)` | Returns 0 entries (date filter enforced)      |
@@ -48,4 +50,5 @@
 
 - `export_markdown` reliably targets OS local directories and generates correctly named files.
 - `import_markdown` gracefully executes dry run detection parsing.
-- IO tooling throws structured path traversal errors `..` on local directory injections.
+- IO tooling throws structured path traversal errors `..` on local directory injections or when missing `ALLOWED_IO_ROOTS`.
+- Large JSON exports return `truncated: true` to prevent memory exhaustion.
