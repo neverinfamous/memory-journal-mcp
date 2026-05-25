@@ -28,8 +28,12 @@ proc.stdout.on('data', (chunk) => {
                 let withAnnotations = 0
                 let openWorldTrue = 0
                 let openWorldFalse = 0
+                let readOnlyTrue = 0
+                let destructiveTrue = 0
+                let idempotentTrue = 0
                 let missing = 0
-                const trueNames = []
+                const openWorldNames = []
+                const destructiveNames = []
                 const missingNames = []
 
                 for (const tool of tools) {
@@ -37,13 +41,20 @@ proc.stdout.on('data', (chunk) => {
                         withAnnotations++
                         if (tool.annotations.openWorldHint === true) {
                             openWorldTrue++
-                            trueNames.push(tool.name)
+                            openWorldNames.push(tool.name)
                         } else if (tool.annotations.openWorldHint === false) {
                             openWorldFalse++
                         } else {
                             missing++
                             missingNames.push(tool.name)
                         }
+
+                        if (tool.annotations.readOnlyHint === true) readOnlyTrue++
+                        if (tool.annotations.destructiveHint === true) {
+                            destructiveTrue++
+                            destructiveNames.push(tool.name)
+                        }
+                        if (tool.annotations.idempotentHint === true) idempotentTrue++
                     } else {
                         missing++
                         missingNames.push(tool.name)
@@ -53,10 +64,16 @@ proc.stdout.on('data', (chunk) => {
                 console.log(`Tools with annotations: ${withAnnotations}`)
                 console.log(`openWorldHint=true (GitHub): ${openWorldTrue}`)
                 console.log(`openWorldHint=false (core/local): ${openWorldFalse}`)
+                console.log(`readOnlyHint=true: ${readOnlyTrue}`)
+                console.log(`destructiveHint=true: ${destructiveTrue}`)
+                console.log(`idempotentHint=true: ${idempotentTrue}`)
                 console.log(`Missing openWorldHint: ${missing}`)
 
-                if (trueNames.length > 0) {
-                    console.log(`\nopenWorldHint=true tools: ${trueNames.join(', ')}`)
+                if (openWorldNames.length > 0) {
+                    console.log(`\nopenWorldHint=true tools: ${openWorldNames.join(', ')}`)
+                }
+                if (destructiveNames.length > 0) {
+                    console.log(`\ndestructiveHint=true tools: ${destructiveNames.join(', ')}`)
                 }
                 if (missingNames.length > 0) {
                     console.log(`\nMISSING annotations: ${missingNames.join(', ')}`)
