@@ -509,6 +509,7 @@ describe('formatUserMessage', () => {
                 fixed: 2,
                 security: 1,
                 removed: 0,
+                keyItems: ['feature-a', 'config'],
             },
         })
 
@@ -518,6 +519,7 @@ describe('formatUserMessage', () => {
         expect(result).toContain('2 fixed')
         expect(result).toContain('1 security')
         expect(result).not.toContain('removed')
+        expect(result).toContain('Key: feature-a, config')
     })
 
     it('should omit unreleased when not provided', () => {

@@ -3,7 +3,8 @@
  *
  * Assembles system-level metadata for the briefing resource:
  * server version, tool/resource/prompt surface area counts,
- * local time, unreleased change summary, and test health indicators.
+ * local time, unreleased change summary, test health indicators,
+ * active filter state, and operational configuration context.
  *
  * Heavy operations (file reads) are cached at module load to avoid
  * repeated I/O on every briefing read.
@@ -15,8 +16,10 @@ import * as path from 'node:path'
 
 import { VERSION } from '../../../../version.js'
 import { getAllToolNames } from '../../../../filtering/tool-filter.js'
+import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
+import type { BriefingConfig } from '../../shared.js'
 
 // ============================================================================
 // Types
@@ -28,6 +31,8 @@ export interface UnreleasedSummary {
     fixed: number
     security: number
     removed: number
+    /** Top 3 bold-prefixed category names from Added/Changed/Fixed sections */
+    keyItems: string[]
 }
 
 export interface TestHealth {
@@ -44,6 +49,16 @@ export interface SystemContext {
     localTime: string
     unreleasedSummary: UnreleasedSummary | null
     testHealth: TestHealth | null
+    /** Compact filter summary, e.g. "codemode (1/70)", or null when all tools exposed */
+    filterSummary: string | null
+    /** Active instruction level (essential | standard | full) */
+    instructionLevel: string
+    /** Registered repo names from PROJECT_REGISTRY, null when unconfigured */
+    registryRepos: string[] | null
+    /** Count of ALLOWED_IO_ROOTS entries */
+    ioRootCount: number
+    /** Whether code-map.md exists in the project root */
+    hasCodeMap: boolean
 }
 
 // ============================================================================
@@ -54,8 +69,10 @@ export interface SystemContext {
  * Static resource count — kept in sync with README.md and code-map.md.
  * Resource registration is static and doesn't change at runtime,
  * so this avoids importing the entire resource registry.
+ *
+ * Audited 2026-05-25: 28 static + 18 template = 46 total.
  */
-const RESOURCE_COUNT = 36
+const RESOURCE_COUNT = 46
 
 // ============================================================================
 // Startup-Cached Parsers
@@ -88,9 +105,13 @@ export function parseUnreleasedSummary(content: string): UnreleasedSummary | nul
         fixed: 0,
         security: 0,
         removed: 0,
+        keyItems: [],
     }
 
-    const headerMap: Record<string, keyof UnreleasedSummary> = {
+    /** Count-only fields of UnreleasedSummary (excludes keyItems) */
+    type CountKey = 'added' | 'changed' | 'fixed' | 'security' | 'removed'
+
+    const headerMap: Record<string, CountKey> = {
         'added': 'added',
         'changed': 'changed',
         'fixed': 'fixed',
@@ -98,7 +119,7 @@ export function parseUnreleasedSummary(content: string): UnreleasedSummary | nul
         'removed': 'removed',
     }
 
-    let currentCategory: keyof UnreleasedSummary | null = null
+    let currentCategory: CountKey | null = null
 
     for (const line of content.split('\n')) {
         const trimmed = line.trim()
@@ -118,7 +139,41 @@ export function parseUnreleasedSummary(content: string): UnreleasedSummary | nul
     }
 
     const total = counts.added + counts.changed + counts.fixed + counts.security + counts.removed
-    return total > 0 ? counts : null
+    return total > 0 ? { ...counts, keyItems: parseUnreleasedKeyItems(content) } : null
+}
+
+/**
+ * Extract the top 3 unique bold-prefixed category names from UNRELEASED.md.
+ *
+ * Looks for lines matching `- **category**: description` under Added/Changed/Fixed
+ * headers and returns deduplicated category names.
+ */
+export function parseUnreleasedKeyItems(content: string): string[] {
+    const categories = new Set<string>()
+    let inRelevantSection = false
+
+    for (const line of content.split('\n')) {
+        const trimmed = line.trim()
+
+        // Track if we're under Added, Changed, or Fixed headers
+        const headerMatch = /^###\s+(\w+)/.exec(trimmed)
+        if (headerMatch?.[1]) {
+            const section = headerMatch[1].toLowerCase()
+            inRelevantSection = section === 'added' || section === 'changed' || section === 'fixed'
+            continue
+        }
+
+        // Extract bold prefix from top-level bullets: - **prefix**: ...
+        if (inRelevantSection && line.startsWith('- ')) {
+            const boldMatch = /^-\s+\*\*([^*]+)\*\*/.exec(line)
+            if (boldMatch?.[1]) {
+                categories.add(boldMatch[1].trim())
+            }
+        }
+    }
+
+    // Return top 3 unique items
+    return [...categories].slice(0, 3)
 }
 
 /**
@@ -203,8 +258,12 @@ function loadCachedTestHealth(): TestHealth | null {
  * Version, tool count, and prompt count are derived from live registries.
  * Unreleased summary and test health are startup-cached from project files.
  * localTime provides chronological grounding for date-relative agent queries.
+ * Filter, instruction level, and registry state are derived from runtime config.
  */
-export function buildSystemContext(): SystemContext {
+export function buildSystemContext(
+    config?: BriefingConfig,
+    filterConfig?: ToolFilterConfig | null
+): SystemContext {
     const now = new Date()
 
     // Format localTime compactly: "2026-05-25 06:12 EDT"
@@ -227,13 +286,45 @@ export function buildSystemContext(): SystemContext {
         localTime = now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
     }
 
+    // Filter summary — only show when a filter is actually narrowing the tool set
+    const totalTools = getAllToolNames().length
+    let filterSummary: string | null = null
+    if (filterConfig) {
+        const enabled = filterConfig.enabledTools.size
+        if (enabled < totalTools) {
+            filterSummary = `${filterConfig.raw} (${String(enabled)}/${String(totalTools)})`
+        }
+    }
+
+    // Registry repos
+    const registryRepos = config?.projectRegistry
+        ? Object.keys(config.projectRegistry)
+        : null
+
+    // IO roots count
+    const ioRootCount = config?.allowedIoRoots?.length ?? 0
+
+    // Check for code-map.md in project root
+    let hasCodeMap = false
+    try {
+        const root = resolveProjectRoot()
+        hasCodeMap = fs.existsSync(path.join(root, 'test-server', 'code-map.md'))
+    } catch {
+        // Non-critical — code-map indicator is best-effort
+    }
+
     return {
         version: VERSION,
-        toolCount: getAllToolNames().length,
+        toolCount: totalTools,
         resourceCount: RESOURCE_COUNT,
         promptCount: getPrompts().length,
         localTime,
         unreleasedSummary: loadCachedUnreleased(),
         testHealth: loadCachedTestHealth(),
+        filterSummary,
+        instructionLevel: 'standard',
+        registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
+        ioRootCount,
+        hasCodeMap,
     }
 }

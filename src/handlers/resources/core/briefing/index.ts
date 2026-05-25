@@ -96,7 +96,7 @@ async function buildBriefingData(
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
-    const system = buildSystemContext()
+    const system = buildSystemContext(config, context.filterConfig)
 
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
@@ -119,6 +119,11 @@ async function buildBriefingData(
         localTime: system.localTime,
         unreleasedSummary: system.unreleasedSummary ?? undefined,
         testHealth: system.testHealth ?? undefined,
+        filterSummary: system.filterSummary,
+        instructionLevel: system.instructionLevel,
+        registryRepos: system.registryRepos,
+        ioRootCount: system.ioRootCount,
+        hasCodeMap: system.hasCodeMap,
     })
 
     return {

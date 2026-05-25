@@ -5,6 +5,8 @@
 ### Added
 
 - **briefing**: Added server version, tool/resource/prompt surface area counts, test health indicators, unreleased change summary, `localTime`, word-boundary truncation (120 chars), and zero-relationship graph suppression to `memory://briefing` output
+- **briefing**: Added Config table row surfacing active tool filter, instruction level, IO root count, and registered project names
+- **briefing**: Added code-map availability indicator (`📋 code-map`), active filter annotation in System row, unreleased key-items (`Key: ...`), and stale milestone `✅` indicator
 - **admin**: Added `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: Added on-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Added importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
@@ -46,6 +48,7 @@
 - **tests**: Fixed Phase 20.12 Code Mode test script to include `project_number` for robust `issueUrl` auto-population in generic CWD environments
 - **briefing**: Fixed missing blank line before markdown table in `memory://briefing` and stripped `<untrusted_remote_content>` tags to prevent IDE rendering cutoff
 - **briefing**: Grouped table properties into 5 distinct macro-categories via `<br>` elements and removed the inline Mermaid graph to permanently resolve IDE history truncation (graph remains available via `memory://graph/recent`)
+- **briefing**: Corrected static `RESOURCE_COUNT` constant from `36` to the audited actual count of `46` (28 static + 18 template)
 
 ### Removed
 

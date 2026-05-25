@@ -46,6 +46,11 @@ export function formatUserMessage(opts: {
     localTime?: string
     unreleasedSummary?: UnreleasedSummary
     testHealth?: TestHealth
+    filterSummary?: string | null
+    instructionLevel?: string
+    registryRepos?: string[] | null
+    ioRootCount?: number
+    hasCodeMap?: boolean
 }): string {
     const {
         repoName,
@@ -129,7 +134,7 @@ export function formatUserMessage(opts: {
                     github.milestones
                         .map(
                             (m) =>
-                                `${m.title} (${m.progress}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`
+                                `${m.title} (${m.progress}${m.progress === '100%' ? ' ✅' : ''}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`
                         )
                         .join(', ')
                 )}`
@@ -165,7 +170,14 @@ export function formatUserMessage(opts: {
 
     // Version + surface area
     if (opts.version) systemParts.push(`v${opts.version}`)
-    if (opts.toolCount !== undefined) systemParts.push(`${String(opts.toolCount)} tools`)
+    if (opts.toolCount !== undefined) {
+        if (opts.filterSummary) {
+            // Show filter annotation: "70 tools (filter: codemode → 1)"
+            systemParts.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)})`)
+        } else {
+            systemParts.push(`${String(opts.toolCount)} tools`)
+        }
+    }
     if (opts.resourceCount !== undefined) systemParts.push(`${String(opts.resourceCount)} res`)
     if (opts.promptCount !== undefined) systemParts.push(`${String(opts.promptCount)} prompts`)
 
@@ -187,6 +199,30 @@ export function formatUserMessage(opts: {
     }
     if (skillsDir) {
         systemParts.push(`${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
+    }
+    // Code-map indicator
+    if (opts.hasCodeMap) {
+        systemParts.push('📋 code-map')
+    }
+
+    // ========================================================================
+    // TABLE ROW 4: Config (only when non-default values present)
+    // ========================================================================
+    const configParts: string[] = []
+
+    if (opts.filterSummary) {
+        configParts.push(`filter: ${escapeCell(opts.filterSummary)}`)
+    }
+    if (opts.instructionLevel && opts.instructionLevel !== 'standard') {
+        configParts.push(`level: ${opts.instructionLevel}`)
+    }
+    if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
+        configParts.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
+    }
+    if (opts.registryRepos && opts.registryRepos.length > 0) {
+        const repoNames = opts.registryRepos.slice(0, 3).join(', ')
+        const suffix = opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
+        configParts.push(`registry: ${escapeCell(repoNames)}${suffix}`)
     }
 
     // ========================================================================
@@ -249,7 +285,11 @@ export function formatUserMessage(opts: {
         if (u.security > 0) parts.push(`${String(u.security)} security`)
         if (u.removed > 0) parts.push(`${String(u.removed)} removed`)
         if (parts.length > 0) {
-            flatLines.push(`**Unreleased:** ${parts.join(' · ')}`)
+            let line = `**Unreleased:** ${parts.join(' · ')}`
+            if ((u.keyItems?.length ?? 0) > 0) {
+                line += ` | Key: ${u.keyItems.join(', ')}`
+            }
+            flatLines.push(line)
         }
     }
 
@@ -273,6 +313,9 @@ export function formatUserMessage(opts: {
     tableRows.push(`| **Journal** | ${journalParts.join(' · ')} |`)
     if (systemParts.length > 0) {
         tableRows.push(`| **System** | ${systemParts.join(' · ')} |`)
+    }
+    if (configParts.length > 0) {
+        tableRows.push(`| **Config** | ${configParts.join(' · ')} |`)
     }
 
     const sections: string[] = [tableRows.join('\n')]

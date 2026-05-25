@@ -47,6 +47,7 @@ describe('parseUnreleasedSummary', () => {
             fixed: 1,
             security: 2,
             removed: 1,
+            keyItems: [],
         })
     })
 
@@ -81,6 +82,7 @@ describe('parseUnreleasedSummary', () => {
             fixed: 3,
             security: 0,
             removed: 0,
+            keyItems: [],
         })
     })
 
@@ -101,6 +103,7 @@ describe('parseUnreleasedSummary', () => {
             fixed: 0,
             security: 0,
             removed: 0,
+            keyItems: [],
         })
     })
 
@@ -122,6 +125,7 @@ describe('parseUnreleasedSummary', () => {
             fixed: 0,
             security: 0,
             removed: 0,
+            keyItems: [],
         })
     })
 })
