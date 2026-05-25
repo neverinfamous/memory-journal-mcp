@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- **relationships**: Fixed `visualize_relationships` returning `null` for the mermaid string when no relationships exist, ensuring consistent string types for the structured Code Mode API
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, and `tool-reference.md` with recent architectural changes
 - **docs**: Corrected readonly tool group count across references and synchronized missing environment variables (`TRUST_PROXY`, `PUBLIC_ORIGIN`) in configuration templates

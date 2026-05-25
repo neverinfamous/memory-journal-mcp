@@ -260,7 +260,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             relationship_count: 0,
                             root_entry: input.entry_id ?? null,
                             depth: input.depth,
-                            mermaid: null,
+                            mermaid: '```mermaid\ngraph TD\n  NoData["No entries found with relationships matching your criteria"]\n```',
                             message: 'No entries found with relationships matching your criteria',
                         }
                     }
