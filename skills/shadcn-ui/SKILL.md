@@ -28,3 +28,7 @@ When assembling components (e.g., forms, dashboards, settings pages):
 - **Follow patterns:** Use established shadcn/ui composition rules. For example, use `Form` and `FormField` wrappers for forms, and `ToggleGroup` for option sets.
 - **Semantic CSS:** Use the project's semantic CSS variables (e.g., `bg-background text-foreground`, `bg-primary`) rather than hardcoded Tailwind colors.
 - **Customization:** To customize a component, edit its source code in the `components/ui/` directory directly. Do not wrap it in unnecessary outer `div`s just to apply styles if modifying the component itself is cleaner.
+
+## 4. Version Upgrades
+
+When upgrading shadcn/ui components or the CLI itself, always review the [official changelog](https://ui.shadcn.com/docs/changelog) before running update commands to ensure no breaking changes affect customized components.

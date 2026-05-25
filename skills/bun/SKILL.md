@@ -1,5 +1,5 @@
 ---
-title: Bun Development
+name: bun
 description: Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler.
 ---
 

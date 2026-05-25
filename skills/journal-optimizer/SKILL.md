@@ -250,6 +250,8 @@ return orphans.slice(0, 50).map(e => ({
 
 ## Workflow 4: Duplicate Detection
 
+> **WARN: High tool-call budget** — This workflow executes an N×N semantic search loop. Limit the search set to 50 entries to avoid exhausting rate limits.
+
 Find entries with semantically similar content that may be redundant.
 
 ### Steps

@@ -136,6 +136,9 @@ take_snapshot(verbose: true)
 - Elements with poor contrast ratios (check against WCAG AA: 4.5:1 for normal text, 3:1 for large text)
 - Focus traps or missing focus indicators
 - Interactive elements without accessible names
+- Missing `alt` attributes on non-decorative images
+- Improper heading hierarchy (e.g., skipping from `<h1>` to `<h3>`)
+- Insufficient tap target sizes on mobile layouts (minimum 44x44 CSS pixels)
 
 ## Phase 5: Codebase Analysis
 

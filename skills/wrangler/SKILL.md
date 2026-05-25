@@ -1,13 +1,20 @@
 ---
 name: wrangler
 description: |
-  Cloudflare Wrangler CLI dispatcher. Use when deploying code to Cloudflare Workers or managing Cloudflare bindings using the wrangler CLI. 
+  Cloudflare Wrangler CLI dispatcher. Use ONLY when explicitly deploying code to Cloudflare Workers or managing Cloudflare bindings using the wrangler CLI. 
   Do NOT use for general Cloudflare product discovery (use cloudflare instead) or for writing/reviewing Worker code (use workers-best-practices instead).
 ---
 
 # Wrangler CLI
 
 This skill provides references for the Cloudflare Wrangler CLI. The CLI is extensive, so command references are split by product.
+
+## When to Load
+
+- When explicitly deploying code to Cloudflare Workers or Pages via CLI
+- When managing Cloudflare bindings, KV namespaces, D1 databases, R2 buckets via CLI
+- When configuring `wrangler.jsonc` or `wrangler.toml`
+- When generating TypeScript types from Cloudflare configuration
 
 ## Security Gates (CRITICAL)
 

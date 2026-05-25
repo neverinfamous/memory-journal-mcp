@@ -4,7 +4,7 @@ description: |
   Enforced meta-cognitive rules and production configurations for SQLite development.
   Use when designing SQLite schemas, PRAGMAs, transactions, migrations, locking, or backups.
   Also use when debugging SQLite performance or writing queries against an SQLite database.
-  Do NOT use for generic "set up a database" or "create a DB" requests unless SQLite is explicitly contextually required or requested. NOT for Postgres or MySQL.
+  Do NOT use for generic "set up a database" or "create a DB" requests unless SQLite is explicitly contextually required or requested. Router must refuse to guess and ask for engine. NOT for Postgres or MySQL.
 ---
 
 # SQLite Production Standards
@@ -43,5 +43,5 @@ SQLite's default type system uses "Type Affinity" (it will happily accept the st
 
 ## Maintenance & Backups
 
-- **Vacuuming**: Deleted data does not shrink the `.db` file. After bulk deletes, run `VACUUM;` to reclaim space. Ensure the host system has at least 2x the database size in temporary disk space.
+- **Vacuuming**: Deleted data does not shrink the `.db` file. After bulk deletes, run `VACUUM;` to reclaim space. Ensure the host system has at least 2x the database size in temporary disk space. WARNING: If running in WAL mode, you MUST execute `PRAGMA wal_checkpoint(TRUNCATE);` before vacuuming to safely merge the journal.
 - **Safety**: NEVER blindly copy an open `.db` file using standard OS commands, as it will corrupt if a write is in progress. Use the `.backup` command in the CLI, the native backup API, or `VACUUM INTO 'backup.db'`.

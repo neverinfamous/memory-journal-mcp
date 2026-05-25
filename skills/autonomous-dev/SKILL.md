@@ -1,6 +1,6 @@
 ---
 name: autonomous-dev
-description: Harness for autonomous software development. Enforces lifecycle through alignment gates (PROJECT.md), adversarial generator/evaluator agents, and autonomous orchestration of project issues.
+description: Harness for autonomous software development. Enforces lifecycle through alignment gates (PROJECT.md), adversarial generator/evaluator agents, and autonomous orchestration of project issues. NOT for setting up standalone CI/CD pipelines.
 ---
 
 # Autonomous Development Workflow

@@ -10,7 +10,7 @@ Apply these rules when writing or reviewing Next.js code.
 
 ## 1. File Conventions & Routing
 - **App Router**: Always use the `app/` directory.
-- **Middleware**: In v16, middleware has been renamed to `proxy.ts`.
+- **Middleware**: Use `middleware.ts` at the root for routing logic.
 - **Parallel/Intercepting**: Use `@folder` for parallel routes and `(.)` for intercepting routes (e.g. modals).
 - **Default**: Use `default.tsx` for fallbacks in parallel routes.
 

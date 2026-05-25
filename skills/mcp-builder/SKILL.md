@@ -1,7 +1,7 @@
 ---
 name: mcp-builder
 description: |
-  Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses. NOT for general REST APIs or Cloudflare Workers.
+  Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses. Must see the explicit keyword "MCP" or "Model Context Protocol". NOT for general REST APIs or Cloudflare Workers. NOT for generic "build a server" requests.
 ---
 
 # MCP Server Builder Guidelines
@@ -38,6 +38,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 const server = new Server({ name: "my-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
 
@@ -47,7 +48,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [{
     name: "my_tool",
     description: "Does something",
-    inputSchema: import("zod-to-json-schema").then(m => m.zodToJsonSchema(MyToolSchema)) // Or pre-compiled JSON schema
+    inputSchema: zodToJsonSchema(MyToolSchema) // Or pre-compiled JSON schema
   }]
 }));
 

@@ -1,7 +1,7 @@
 ---
 name: playwright-standard
 description: |
-  Comprehensive, opinionated guidance for Playwright test development. Use when
+  Comprehensive, opinionated guidance for Playwright test development. Use ONLY when
   writing E2E, API, component, or visual tests, debugging failures, implementing
   Page Object Model, or configuring CI/CD. For unit tests, use vitest-standard. Use Playwright solely for E2E, API, and component tests. NOT for unit testing (use Vitest).
 ---
@@ -27,11 +27,7 @@ This skill combines battle-tested coding standards with industrial-scale infrast
 
 ### Locators Priority
 
-1.  **Role**: `page.getByRole('button', { name: 'Submit' })`
-2.  **Label**: `page.getByLabel('User Name')`
-3.  **Placeholder**: `page.getByPlaceholder('Search...')`
-4.  **Text**: `page.getByText('Success')`
-5.  **TestID**: `page.getByTestId('submit-btn')` (Last resort)
+See **[locators.md](references/locators.md)** for the strict hierarchy of Playwright locator strategies (Role > Label > TestID).
 
 ### Synchronization
 

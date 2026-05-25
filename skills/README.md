@@ -18,9 +18,10 @@ This command will automatically download and synchronize the latest `SKILL.md` f
 skills/
 └── <skill-name>/
     ├── SKILL.md          # Main instruction file (required)
+    ├── references/       # Progressive disclosure docs to reduce token bloat
     ├── scripts/          # Helper scripts and utilities
     ├── examples/         # Reference implementations
-    └── resources/        # Templates, assets, reference docs
+    └── resources/        # Templates, assets, external docs
 ```
 
 ### SKILL.md Format

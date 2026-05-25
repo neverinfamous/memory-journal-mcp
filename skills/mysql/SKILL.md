@@ -4,7 +4,7 @@ description: |
   Use when designing, querying, or managing a MySQL or MariaDB database.
   Enforces enterprise production rules for query safety (strict parameterization), 
   connection pooling, and strict schema configurations (STRICT_TRANS_TABLES).
-  Do NOT trigger for generic "set up a database" requests unless MySQL/MariaDB is explicitly chosen. NOT for Postgres or SQLite.
+  Do NOT trigger for generic "set up a database" requests unless MySQL/MariaDB is explicitly chosen. Router must refuse to guess and ask for engine. NOT for Postgres or SQLite.
 ---
 
 # MySQL / MariaDB Production Standards
@@ -31,4 +31,4 @@ MySQL and MariaDB are powerful relationship-driven databases, but AI agents MUST
 ## 4. Ecosystem & Diagnostics
 
 - **Error Handling**: When intercepting connection drops or authentication failures (e.g., ER_ACCESS_DENIED_ERROR), instruct the user to verify their `.env` configurations (`MYSQL_URL`, `MYSQL_HOST`, etc.). Do not hallucinate database names.
-- **Using MCP**: If the `mysql-mcp` server is attached, prefer utilizing its formal 227+ structured tools over executing raw Bash CLI scripts (`mysql -h ...`) to guarantee payload optimizations and schema intelligence.
+- **Using MCP**: If the `mysql-mcp` server is attached, prefer utilizing its formal structured tools over executing raw Bash CLI scripts (`mysql -h ...`) to guarantee payload optimizations and schema intelligence.

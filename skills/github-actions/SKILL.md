@@ -2,7 +2,7 @@
 name: github-actions
 description: |
   Master GitHub Actions CI/CD workflows with production-grade security and
-  performance patterns. Use when setting up CI/CD pipelines specifically via GitHub Actions, 
+  performance patterns. Use ONLY when explicitly setting up CI/CD pipelines specifically via GitHub Actions, 
   setting up matrix strategies, caching dependencies, managing
   artifacts, or implementing reusable workflows. NOT for GitLab or autonomous-dev.
 ---
@@ -28,7 +28,7 @@ This skill codifies 2026 GitHub Actions best practices — secure supply chains,
 - **ALWAYS** pin to full-length commit SHAs — tags are mutable and can be hijacked
 - **ALWAYS** add a trailing comment with the version for human readability
 - **Use tools** like `step-security/harden-runner` or `pin-github-action` CLI to automate SHA resolution
-- **Resolve SHA Manually**: `# Resolve SHA: gh api /repos/actions/checkout/git/refs/heads/main --jq '.object.sha'`
+- **Resolve SHA Manually**: See [templates.md](references/templates.md) for the `gh api` command to resolve SHAs.
 - **Audit quarterly** — review all pinned SHAs when updating workflow dependencies
 
 ### Permission Hardening
@@ -55,59 +55,7 @@ jobs:
 
 ### Standard CI Template
 
-```yaml
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@<sha> # v4
-      - uses: actions/setup-node@<sha> # v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run lint
-      - run: pnpm run typecheck
-
-  test:
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - uses: actions/checkout@<sha> # v4
-      - uses: actions/setup-node@<sha> # v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@<sha> # v4
-      - uses: actions/setup-node@<sha> # v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-```
+See **[templates.md](references/templates.md)** for a complete, production-ready CI workflow template.
 
 ### Key Structural Rules
 

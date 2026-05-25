@@ -2,6 +2,7 @@
 name: golang
 description: |
   Master Go development using production-grade best practices merged from the Google and Uber style guides. Use whenever writing backend Go microservices, designing APIs, handling errors, managing goroutines, or configuring linters.
+  Keywords: channels, context propagation, go.mod, Go generics.
 ---
 
 # Golang Engineering Standards
