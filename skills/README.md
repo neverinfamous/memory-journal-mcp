@@ -63,6 +63,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `github-repo-setup`                  | Scaffold public TypeScript/Node.js repos under `{{ORG_NAME}}`                                                         |
 | `gitlab`                             | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
 | `golang`                             | Master Go development with production-grade best practices from Google and Uber style guides                          |
+| `graphql`                            | GraphQL best practices — schema design, resolvers, DataLoader for N+1 issues, and mutations                           |
 | `hono`                               | Hono framework best practices — edge runtimes, RPC, middleware, validation                                            |
 | `journal-optimizer`                  | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete |
 | `llm-app-engineering`                | Master modern LLM application engineering patterns — prompt chains, token management, streaming                       |
@@ -76,6 +77,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `python`                             | Modern Python engineering — uv, ruff, type hints, pytest, Pydantic v2, and src/ layout project structure              |
 | `rag-pipelines`                      | Best practices for Retrieval-Augmented Generation (RAG) pipelines — embeddings, chunking, retrieval                   |
 | `react-best-practices`              | Vercel engineering guidelines for React/Next.js performance, hooks, and bundle optimization                           |
+| `redis`                              | Redis best practices — caching strategies, connection pooling, TTLs, and data structures                              |
 | `render`                             | Render deployment best practices — Blueprints, Web Services, databases, and persistent disks            |
 | `rust`                               | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture     |
 | `sandbox-sdk`                        | Sandboxed code execution — interpreters, CI/CD, untrusted code                                                        |
@@ -109,7 +111,7 @@ The `adversarial-skill-audit` skill includes automated scripts for evaluating th
 - `skills/adversarial-skill-audit/scripts/check-skills.ps1`: Generates an inventory of all skills, checking line counts, trigger lengths, and frontmatter compliance.
 - `skills/adversarial-skill-audit/scripts/run-copilot.ps1`: Runs independent validation against the Copilot CLI.
 
-> **Latest Audit**: May 26, 2026. The 47 skills in this repository were audited via a multi-pass GitHub Copilot validation sweep, achieving a B+ directory-level quality score.
+> **Latest Audit**: May 26, 2026. The 49 skills in this repository were audited via a multi-pass GitHub Copilot validation sweep, achieving an A- directory-level quality score.
 
 ## Adding a Skill
 

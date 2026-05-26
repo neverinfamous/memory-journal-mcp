@@ -1,7 +1,7 @@
 ---
 name: render
 description: |
-  Render platform deployment and management best practices. Use when configuring render.yaml (Blueprint specs), deploying web services, background workers, cron jobs, or managing Render PostgreSQL/Redis instances. NOT for AWS, GCP, Azure, or generic container orchestration. Require explicit target environment before triggering.
+  Render platform deployment and management best practices. Use when configuring render.yaml (Blueprint specs), deploying web services, background workers, cron jobs, or managing Render PostgreSQL/Redis instances. NOT for AWS, GCP, Azure, or generic container orchestration. Do NOT trigger for generic "deploy my app" requests without clarifying the target platform.
 ---
 
 # Render Deployment Best Practices

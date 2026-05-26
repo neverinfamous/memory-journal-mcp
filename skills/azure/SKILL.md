@@ -1,7 +1,7 @@
 ---
 name: azure
 description: |
-  Microsoft Azure best practices. Use when deploying to Azure App Service, Azure Functions, AKS (Azure Kubernetes Service), Cosmos DB, configuring Azure Entra ID (Active Directory), or managing Azure Resource Manager (ARM/Bicep) templates.
+  Microsoft Azure best practices. Use when deploying to Azure App Service, Azure Functions, AKS (Azure Kubernetes Service), Cosmos DB, configuring Azure Entra ID (Active Directory), or managing Azure Resource Manager (ARM/Bicep) templates. Do NOT trigger for generic "deploy my app" requests without clarifying the target platform.
 ---
 
 # Microsoft Azure Best Practices
