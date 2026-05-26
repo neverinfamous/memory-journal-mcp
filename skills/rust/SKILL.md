@@ -1,7 +1,7 @@
 ---
 name: rust
 description: |
-  Master production Rust code, lifetimes, and systems programming using a layer-based "meta-cognition" framework. Use whenever writing production Rust code, resolving borrow checker errors (E0382, E0596), designing ownership patterns (Arc, Mutex), or performing crate selection. Do NOT trigger for generic WASM or TS questions unless Rust is the primary focus.
+  Master production Rust code, lifetimes, and systems programming using a layer-based "meta-cognition" framework. Use whenever writing production Rust code, resolving borrow checker errors (E0382, E0596), designing ownership patterns (Arc, Mutex), or performing crate selection. Do NOT trigger for generic WASM or TS questions unless Rust is the primary focus. Do NOT trigger for generic 'build a server' requests unless the platform/language is explicitly specified.
 ---
 
 # Rust Development & Meta-Cognition

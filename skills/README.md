@@ -111,7 +111,7 @@ The `adversarial-skill-audit` skill includes automated scripts for evaluating th
 - `skills/adversarial-skill-audit/scripts/check-skills.ps1`: Generates an inventory of all skills, checking line counts, trigger lengths, and frontmatter compliance.
 - `skills/adversarial-skill-audit/scripts/run-copilot.ps1`: Runs independent validation against the Copilot CLI.
 
-> **Latest Audit**: May 26, 2026. The 49 skills in this repository were audited via a multi-pass GitHub Copilot validation sweep, achieving an A- directory-level quality score.
+> **Latest Audit**: May 26, 2026. The 55 skills in this repository were audited via a multi-pass GitHub Copilot validation sweep, achieving a 3.1/5.0 (C) directory-level quality score with structural gaps addressed.
 
 ## Adding a Skill
 

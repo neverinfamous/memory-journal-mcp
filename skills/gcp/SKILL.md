@@ -1,7 +1,7 @@
 ---
 name: gcp
 description: |
-  Google Cloud Platform (GCP) best practices. Use when provisioning GCP infrastructure, configuring IAM, deploying to Cloud Run, GKE (Kubernetes Engine), Cloud Functions, Cloud SQL, or managing BigQuery.
+  Google Cloud Platform (GCP) best practices. Use when provisioning GCP infrastructure, configuring IAM, deploying to Cloud Run, GKE (Kubernetes Engine), Cloud Functions, Cloud SQL, or managing BigQuery. Do NOT trigger for generic "deploy my app" requests without clarifying the target platform.
 ---
 
 # Google Cloud Platform (GCP) Best Practices

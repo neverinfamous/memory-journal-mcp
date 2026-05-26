@@ -3,7 +3,7 @@ name: bun
 description: |
   Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler.
   Use when writing, running, testing, or bundling TypeScript/JavaScript with Bun.
-  Triggers on "bun", "bunx", "bun install", "bun test", "bun run".
+  Triggers on "bun", "bunx", "bun install", "bun test", "bun run". If the user asks to 'write tests' without specifying the type, you MUST ask 'Unit, E2E, or both?' before proceeding.
 ---
 
 Bun is a fast, all-in-one JavaScript runtime, bundler, test runner, and package manager designed as a drop-in replacement for Node.js. When working on projects that use Bun, AI agents should leverage its integrated tooling and native APIs to maximize performance and simplify development.

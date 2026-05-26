@@ -7,7 +7,7 @@ description: |
   workflow's 10-category checklist with the adversarial-planner's
   structured critique methodology. Use when running security audits,
   threat modeling, or when the user says "security audit", "adversarial
-  security", "threat model this repo", "red team this repo", or "find vulnerabilities". NOT for fixing or remediating known security issues (use autonomous-dev instead). NOT for supply chain dependency scanning. NOT for general workflow audits or code quality.
+  security", "threat model this repo", "red team this repo", or "find vulnerabilities". NOT for fixing or remediating known security issues (use autonomous-dev instead). NOT for supply chain dependency scanning. NOT for general workflow audits or code quality. If user says 'fix security issues', ask whether they want to audit first or fix known issues.
 ---
 
 # Adversarial Security

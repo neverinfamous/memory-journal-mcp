@@ -20,6 +20,7 @@
         "autonomous-dev/",
         "aws/",
         "azure/",
+        "biome/",
         "bun/",
         "cloudflare/",
         "docker/",
@@ -37,9 +38,13 @@
         "journal-optimizer/",
         "llm-app-engineering/",
         "mcp-builder/",
+        "monorepo/",
         "multi-agent-orchestration/",
         "mysql/",
         "next-best-practices/",
+        "next-cache-components/",
+        "next-upgrade/",
+        "nodejs/",
         "opentelemetry/",
         "playwright-standard/",
         "postgres/",
@@ -54,11 +59,14 @@
         "skill-builder/",
         "sqlite/",
         "tailwind-css/",
+        "trpc/",
         "typescript/",
+        "vercel-ai-sdk/",
         "vitest-standard/",
         "web-perf/",
         "workers-best-practices/",
-        "wrangler/"
+        "wrangler/",
+        "zod/"
     ],
     "scripts": {
         "sync": "node bin/sync.js"

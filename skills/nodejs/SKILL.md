@@ -1,7 +1,7 @@
 ---
 name: nodejs
 description: |
-  Node.js core runtime standards. Use when working with native Node.js APIs like streams, buffers, child_process, worker_threads, filesystem, or event loop tuning.
+  Node.js core runtime standards. Use when working with native Node.js APIs like streams, buffers, child_process, worker_threads, filesystem, or event loop tuning. Do NOT trigger for generic 'build a server' requests unless the platform/language is explicitly specified.
 ---
 
 # Node.js Core Standards

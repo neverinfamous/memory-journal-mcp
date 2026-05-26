@@ -1,7 +1,7 @@
 ---
 name: redis
 description: |
-  Redis best practices. Use when configuring caching strategies, connection pooling, handling TTLs (Time-To-Live), or managing Redis data structures (Hash, Set, List) in Node/TypeScript projects.
+  Redis best practices. Use when configuring caching strategies, connection pooling, handling TTLs (Time-To-Live), or managing Redis data structures (Hash, Set, List) in Node/TypeScript projects. MUST-ASK: Require explicit database engine name before triggering. Never guess. Do NOT use for generic "set up a database" or "create a DB" requests without clarifying.
 ---
 
 # Redis Best Practices
