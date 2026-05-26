@@ -1,15 +1,11 @@
 ---
 name: github-commander
 description: |
-  Structured workflows for triaging GitHub issues, reviewing PRs, sprinting
-  through milestones, and running security/quality/performance audits — with
-  configurable validation gates, auto-detected security scanning, journal audit
-  trails, and human-in-the-loop checkpoints. Use this skill whenever you are
-  working on a GitHub issue, reviewing or submitting a PR, running any kind of
-  code audit, updating dependencies, or working through a milestone. Also use when the user
-  asks you to "fix a GitHub issue", "triage an issue", "audit a PR/repo", "review a PR", or "update deps".
-  Do NOT trigger on bare verbs (e.g. "fix this", "audit my code") — require a GitHub artifact context.
-  NOT for dedicated security vulnerability fixing or adversarial security audits (use adversarial-security instead).
+  Structured workflows for GitHub issues, PRs, milestones, and code audits with validation gates and HITL checkpoints. 
+  Use when assigned a GitHub issue, reviewing a PR, sprinting through a milestone, updating dependencies, or running code audits. 
+  Also use when asked to "triage an issue", "review a PR", or "update deps". 
+  Do NOT trigger on bare verbs (e.g. "fix this"); require GitHub context. 
+  NOT for adversarial security audits (use adversarial-security).
 ---
 
 # GitHub Commander
