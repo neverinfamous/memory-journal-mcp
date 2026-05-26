@@ -49,12 +49,15 @@ The markdown body contains the full instructions the agent follows once the skil
 | `agents-sdk`                         | Build AI agents on Cloudflare Workers using the Agents SDK                                                            |
 | `auth-identity`                      | Standards for Authentication and Identity management (OAuth, JWTs, RBAC)                                              |
 | `autonomous-dev`                     | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
+| `aws`                                | Comprehensive AWS best practices — IAM, Serverless, S3, RDS, networking, and IaC                      |
+| `azure`                              | Microsoft Azure best practices — Entra ID, App Service, AKS, Cosmos DB, networking, and Bicep         |
 | `building-ai-agent-on-cloudflare`    | End-to-end guide for stateful AI agents with WebSockets, state, and tools                                             |
 | `building-mcp-server-on-cloudflare`  | Remote MCP servers on Cloudflare Workers with OAuth and deployment                                                    |
 | `bun`                                | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                |
 | `cloudflare`                         | Comprehensive Cloudflare platform skill — decision trees, product index, retrieval sources                            |
 | `docker`                             | Production-grade Docker — multi-stage builds, security hardening, Compose v2, BuildKit, and CI/CD integration         |
 | `durable-objects`                    | Create and review Durable Objects — RPC, SQLite storage, alarms, WebSockets                                           |
+| `gcp`                                | Google Cloud Platform best practices — IAM, Cloud Run, BigQuery, VPC SC, and Terraform                |
 | `github-actions`                     | GitHub Actions CI/CD — SHA pinning, reusable workflows, caching, matrix strategies, and artifacts v4                  |
 | `github-commander`                   | GitHub pipeline workflows for orchestrating issues, regressions, and deployments                                      |
 | `github-copilot-cli`                 | Adversarial pre-push validation and full repository code audits driven natively by the `gh copilot` CLI               |
@@ -75,6 +78,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `python`                             | Modern Python engineering — uv, ruff, type hints, pytest, Pydantic v2, and src/ layout project structure              |
 | `rag-pipelines`                      | Best practices for Retrieval-Augmented Generation (RAG) pipelines — embeddings, chunking, retrieval                   |
 | `react-best-practices`              | Vercel engineering guidelines for React/Next.js performance, hooks, and bundle optimization                           |
+| `render`                             | Render deployment best practices — Blueprints, Web Services, databases, and persistent disks            |
 | `rust`                               | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture     |
 | `sandbox-sdk`                        | Sandboxed code execution — interpreters, CI/CD, untrusted code                                                        |
 | `shadcn-ui`                          | Deep knowledge of shadcn/ui components, patterns, forms, and best practices                                           |

@@ -273,7 +273,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Insights:**')
+        expect(result).toContain('**Insights**')
         expect(result).toContain('⭐ 120')
         expect(result).toContain('🍴 30')
         expect(result).toContain('📦 500')
@@ -295,7 +295,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).not.toContain('**Insights:**')
+        expect(result).not.toContain('**Insights**')
     })
 
     // ========================================================================
@@ -321,7 +321,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot:**')
+        expect(result).toContain('**Copilot**')
         expect(result).toContain('5 reviewed')
         expect(result).toContain('3 approved')
         expect(result).toContain('1 changes requested')
@@ -347,7 +347,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot:**')
+        expect(result).toContain('**Copilot**')
         expect(result).not.toContain('changes requested')
         expect(result).not.toContain('comments')
     })
@@ -514,7 +514,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Unreleased:**')
+        expect(result).toContain('**Unreleased**')
         expect(result).toContain('5 added')
         expect(result).toContain('3 changed')
         expect(result).toContain('2 fixed')
@@ -525,7 +525,7 @@ describe('formatUserMessage', () => {
 
     it('should omit unreleased when not provided', () => {
         const result = formatUserMessage(baseOpts())
-        expect(result).not.toContain('**Unreleased:**')
+        expect(result).not.toContain('**Unreleased**')
     })
 
     // ========================================================================
@@ -542,7 +542,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).not.toContain('**Graph:**')
+        expect(result).not.toContain('**Graph**')
     })
 
     it('should include graph line when totalRelationships > 0', () => {
@@ -555,7 +555,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Graph:**')
+        expect(result).toContain('**Graph**')
         expect(result).toContain('15 relationships')
         expect(result).toContain('evolves_from: 8')
     })

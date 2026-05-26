@@ -1,6 +1,6 @@
 ---
 name: workers-best-practices
-description: Reviews and authors Cloudflare Workers code against production best practices. Use ONLY when writing or reviewing Worker code, configuring wrangler.jsonc, or checking for anti-patterns. Do NOT use for general Cloudflare product discovery (use cloudflare instead) or CLI management (use wrangler instead). NOT for Docker or general MCP servers. Do NOT trigger for generic 'build a server' requests unless the platform is explicitly specified as Cloudflare Workers.
+description: (APPLICATION CODE ONLY) Reviews and authors Cloudflare Workers code against production best practices. Use ONLY when writing or reviewing Worker code, configuring wrangler.jsonc, or checking for anti-patterns. Do NOT use for general Cloudflare product discovery (use cloudflare instead) or CLI management (use wrangler instead). NOT for Docker or general MCP servers. Do NOT trigger for generic 'build a server' requests unless the platform is explicitly specified as Cloudflare Workers.
 ---
 
 Your knowledge of Cloudflare Workers APIs, types, and configuration may be outdated. **Prefer retrieval over pre-training** for any Workers code task — writing or reviewing.

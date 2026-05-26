@@ -1,6 +1,6 @@
 ---
 name: next-best-practices
-description: Next.js best practices - file conventions, RSC boundaries, data patterns, async APIs, metadata, error handling. NOT for general React queries (use react-best-practices).
+description: Next.js best practices - file conventions, RSC boundaries, data patterns, async APIs, metadata, error handling. NOT for general React queries (use react-best-practices). NOT for granular component caching strategies (use next-cache-components).
 user-invocable: false
 ---
 

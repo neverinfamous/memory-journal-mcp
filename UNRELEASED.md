@@ -17,6 +17,7 @@
 - **metrics**: Dynamic tracking for deprecation warnings (`MetricsAccumulator.recordDeprecationWarning`)
 - **scripts**: `test:scheduler` npm script for HTTP scheduler E2E testing
 - **skills**: 4 adversarial auditing skills, the `journal-optimizer` skill, and migrated 14 skills from `adamic`
+- **skills**: Official vendor skills for AWS, GCP, Azure, and Render added to the inventory
 
 ### Changed
 
@@ -43,7 +44,9 @@
 - **relationships**: Fixed `visualize_relationships` returning `null` for the mermaid string when no relationships exist
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
+- **skills**: Elaborated 4 stub skills, delineated Cloudflare and testing topologies, and verified database triggers per the adversarial skill audit
 - **tests**: Fixed Code Mode scripts to include `project_number` and updated Playwright specs to assert against markdown `memory://briefing` responses
+- **tests**: Fixed formatting assertions in briefing user message tests
 
 ### Removed
 
