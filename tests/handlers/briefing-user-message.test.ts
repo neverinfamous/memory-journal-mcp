@@ -321,7 +321,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot**')
+        expect(result).toContain('**Insights**')
         expect(result).toContain('5 reviewed')
         expect(result).toContain('3 approved')
         expect(result).toContain('1 changes requested')
@@ -347,7 +347,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot**')
+        expect(result).toContain('**Insights**')
         expect(result).not.toContain('changes requested')
         expect(result).not.toContain('comments')
     })

@@ -34,7 +34,7 @@ node test-server/scripts/test-prompts.mjs
 
 | Test                         | Result                                                  |
 | ---------------------------- | ------------------------------------------------------- |
-| List all prompts             | ✅ 17 prompts listed (11 workflow + 6 GitHub)           |
+| List all prompts             | ✅ 18 prompts listed (11 workflow + 6 GitHub + 1 adversarial) |
 | All 19 named prompt calls    | ✅ 19/19 PASS with non-empty `messages[0].content.text` |
 | `nonexistent-prompt`         | ✅ MCP error returned (code `-32602`)                   |
 | `find-related({})` (no args) | ✅ Error returned gracefully                            |

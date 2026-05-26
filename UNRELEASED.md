@@ -4,6 +4,7 @@
 
 ### Added
 
+- **prompts**: `adversarial-plan-review` prompt bootstrapping multi-pass adversarial planning with structured review dimensions, scoring rubric, and prior plan context from the journal
 - **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: On-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
