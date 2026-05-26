@@ -54,6 +54,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `bun`                                | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                |
 | `cloudflare`                         | Comprehensive Cloudflare platform skill — decision trees, product index, retrieval sources                            |
 | `docker`                             | Production-grade Docker — multi-stage builds, security hardening, Compose v2, BuildKit, and CI/CD integration         |
+| `docs-marketer`                      | Documentation marketability audit — feature visibility, first impressions, competitive differentiation, and cross-surface consistency |
 | `drizzle-orm`                        | Drizzle ORM best practices — database configuration, schemas, relational queries, migrations                          |
 | `durable-objects`                    | Create and review Durable Objects — RPC, SQLite storage, alarms, WebSockets                                           |
 | `gcp`                                | Google Cloud Platform best practices — IAM, Cloud Run, BigQuery, VPC SC, and Terraform                |

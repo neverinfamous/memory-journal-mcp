@@ -24,6 +24,7 @@
         "bun/",
         "cloudflare/",
         "docker/",
+        "docs-marketer/",
         "drizzle-orm/",
         "durable-objects/",
         "gcp/",
