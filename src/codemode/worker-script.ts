@@ -161,7 +161,7 @@ function buildApiProxy(
                 return (..._args: unknown[]) => Promise.reject(new Error(`'mj.${prop}' is not a function. Tools are grouped. Did you mean 'mj.core.createEntry()' or 'journal.createEntry()'?`))
             }
 
-            const available = Object.keys(target).filter(k => k !== '_topLevel').join(', ')
+            const available = Object.keys(methods).filter(k => k !== '_topLevel').join(', ')
             const reason = `Group or property '${prop}' is not found on 'mj'. Available groups: ${available}. Use mj.help() for more info.`
 
             // Return a proxy that rejects any method call
