@@ -1,6 +1,6 @@
 ---
 name: next-best-practices
-description: Next.js best practices - file conventions, RSC boundaries, data patterns, async APIs, metadata, error handling. NOT for general React queries (use react-best-practices). NOT for granular component caching strategies (use next-cache-components).
+description: Next.js and React performance optimization best practices - file conventions, RSC boundaries, data patterns, async APIs, Core Web Vitals, and bundle size. NOT for granular component caching strategies (use next-cache-components).
 user-invocable: false
 ---
 
@@ -47,4 +47,26 @@ This skill is configured with `user-invocable: false` to avoid trigger collision
 - **Cache Data Leaks**: Be extremely careful with Next.js aggressive caching. Never use `fetch()` without `{ cache: 'no-store' }` or similar cache opt-outs when fetching user-specific or sensitive data.
 - **Server Actions**: Always verify authorization and re-validate inputs inside Server Actions. They are public API endpoints, even if they look like internal functions.
 
-*(For deeper details, consult the `references/*.md` files when needed).*
+## 8. React Performance Guidelines (Vercel)
+
+Comprehensive performance optimization guide for React and Next.js applications, maintained by Vercel. Contains rules across 8 categories, prioritized by impact to guide automated refactoring and code generation.
+
+### Priority 1: Eliminating Waterfalls (CRITICAL)
+- **`async-defer-await`**: Move `await` into branches where the data is actually used. Do not block the rendering of an entire component tree if only a deeply nested child requires the awaited data.
+
+### Priority 2: Bundle Size Optimization (CRITICAL)
+- **`bundle-barrel-imports`**: Avoid barrel files (`index.ts`). Import directly from submodules (e.g., `import { Button } from '@/components/ui/button'` instead of `import { Button } from '@/components'`).
+
+### Priority 3: Server-Side Performance (HIGH)
+- **`server-auth-actions`**: Explicitly authenticate all Server Actions and API routes. Do not assume context is protected just because it's called from a protected UI component.
+
+### Priority 4: Client-Side Data Fetching (MEDIUM-HIGH)
+- **`client-swr-dedup`**: Use `SWR` or React Query for automatic request deduplication on the client instead of raw `useEffect` fetches.
+
+### Priority 5: Re-render Optimization (MEDIUM)
+- **`rerender-defer-reads`**: Do not subscribe to state variables if they are only used inside an event callback. Use `useRef` for mutable values that do not require re-renders.
+
+### Priority 6: Rendering Performance (MEDIUM)
+- **`rendering-animate-svg-wrapper`**: When animating SVGs, animate the wrapping `div` instead of the internal SVG DOM nodes to leverage GPU acceleration.
+
+*(For deeper details, consult the `references/*.md` and `rules/*.md` files when needed).*

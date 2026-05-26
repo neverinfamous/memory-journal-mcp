@@ -1,7 +1,7 @@
 ---
 name: auth-identity
 description: |
-  Standards for Authentication and Identity management. Use when configuring OAuth, JWTs, sessions, RBAC (Role-Based Access Control), or integrating auth providers (Auth0, Clerk, NextAuth).
+  Standards for Authentication and Identity management. Use when configuring OAuth, JWTs, sessions, RBAC (Role-Based Access Control), or integrating auth providers (Auth0, Clerk, NextAuth). SECURITY: Implementing auth requires strict fallback logic. Never fail-open. Handle token expiration and revocation gracefully.
 ---
 
 # Authentication & Identity

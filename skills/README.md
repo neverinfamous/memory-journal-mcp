@@ -67,7 +67,6 @@ The markdown body contains the full instructions the agent follows once the skil
 | `hono`                               | Hono framework best practices — edge runtimes, RPC, middleware, validation                                            |
 | `journal-optimizer`                  | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete |
 | `llm-app-engineering`                | Master modern LLM application engineering patterns — prompt chains, token management, streaming                       |
-| `mcp-builder`                        | Build high-quality MCP servers with structured errors, HTTP hardening, OAuth, Code Mode, and dynamic instructions     |
 | `multi-agent-orchestration`          | Patterns for multi-agent systems and agentic workflows (e.g. Plan-and-Execute, Supervisor)                            |
 | `mysql`                              | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                    |
 | `next-best-practices`               | Next.js file conventions, RSC boundaries, data patterns, metadata, error handling                                     |
@@ -76,7 +75,6 @@ The markdown body contains the full instructions the agent follows once the skil
 | `postgres`                           | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS                    |
 | `python`                             | Modern Python engineering — uv, ruff, type hints, pytest, Pydantic v2, and src/ layout project structure              |
 | `rag-pipelines`                      | Best practices for Retrieval-Augmented Generation (RAG) pipelines — embeddings, chunking, retrieval                   |
-| `react-best-practices`              | Vercel engineering guidelines for React/Next.js performance, hooks, and bundle optimization                           |
 | `redis`                              | Redis best practices — caching strategies, connection pooling, TTLs, and data structures                              |
 | `render`                             | Render deployment best practices — Blueprints, Web Services, databases, and persistent disks            |
 | `rust`                               | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture     |
@@ -93,7 +91,7 @@ The markdown body contains the full instructions the agent follows once the skil
 
 ## GitHub Commander Workflows
 
-This package natively bundles the `github-commander` skill, which equips your AI agent with 8 autonomous DevOps workflows for repository stewardship:
+This package natively bundles the `github-commander` skill, which equips your AI agent with 4 autonomous DevOps workflows for repository stewardship:
 
 - **`issue-triage`**: End-to-end bug replication, PR submission, and Kanban lifecycle linking.
 - **`milestone-sprint`**: Sequential traversal of all open issues mapped to a specific release target.
@@ -111,7 +109,7 @@ The `adversarial-skill-audit` skill includes automated scripts for evaluating th
 - `skills/adversarial-skill-audit/scripts/check-skills.ps1`: Generates an inventory of all skills, checking line counts, trigger lengths, and frontmatter compliance.
 - `skills/adversarial-skill-audit/scripts/run-copilot.ps1`: Runs independent validation against the Copilot CLI.
 
-> **Latest Audit**: May 26, 2026. The 55 skills in this repository were audited via a multi-pass GitHub Copilot validation sweep, achieving a 3.1/5.0 (C) directory-level quality score with structural gaps addressed.
+> **Latest Audit**: May 26, 2026. The 59 skills in this repository were audited via a multi-pass GitHub Copilot validation sweep, evaluating Trigger Reliability, Instruction Clarity, Completeness, Token Efficiency, and Security. Key improvements identified: consolidating overlapping Next.js and testing skills, enhancing security gating on broad skills, and addressing Cloudflare product-specific coverage gaps.
 
 ## Adding a Skill
 

@@ -1,7 +1,7 @@
 ---
 name: biome
 description: |
-  Biome formatting and linting standards. Use when configuring Biome (biome.json) for fast formatting, linting, and sorting imports as a replacement for Prettier and ESLint.
+  Biome formatting and linting standards. Use when configuring Biome (biome.json) for fast formatting, linting, and sorting imports. NOT for Prettier or ESLint configuration. Do NOT trigger for generic formatting/linting tasks unless Biome is explicitly requested.
 ---
 
 # Biome Guidelines

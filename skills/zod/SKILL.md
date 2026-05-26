@@ -1,7 +1,7 @@
 ---
 name: zod
 description: |
-  Zod schema validation standards. Use when defining schemas, parsing user input, transforming data, or integrating type-safe boundaries in API endpoints and configurations.
+  Zod schema validation standards. Use when defining schemas, parsing user input, transforming data, or integrating type-safe boundaries in API endpoints and configurations. SECURITY: Zod schemas are your primary security boundary. Ensure they are strict and handle all edge cases.
 ---
 
 # Zod Schema Validation

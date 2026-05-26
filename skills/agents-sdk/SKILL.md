@@ -1,6 +1,6 @@
 ---
 name: agents-sdk
-description: Build AI agents on Cloudflare Workers using the Agents SDK. Load when creating stateful agents, durable workflows, real-time WebSocket apps, scheduled tasks, MCP servers, or chat applications. Covers Agent class, state management, callable RPC, Workflows integration, and React hooks. Do NOT trigger for generic 'build a server' requests unless the platform is explicitly specified as Cloudflare Agents.
+description: Build AI agents on Cloudflare Workers using the Agents SDK or build Model Context Protocol (MCP) servers. Load when creating stateful agents, durable workflows, MCP servers, checking MCP schema/error responses, or reviewing MCP code quality. Covers Agent class, state management, callable RPC, Workflows integration, and MCP implementation rules. Do NOT trigger for generic 'build a server' requests unless the platform is explicitly specified as Cloudflare Agents or an MCP server.
 ---
 
 # Cloudflare Agents SDK
@@ -175,3 +175,45 @@ function App() {
 
 - **Input Validation**: Validate all WebSocket messages with Zod before processing. Catch `JSON.parse` errors explicitly.
 - **RPC Security**: Define explicit input schemas (e.g. Zod) for all `@callable()` methods to prevent malformed execution.
+
+## MCP Server Construction (Core Rules)
+
+When building or modifying MCP servers, follow these prioritized rules:
+
+- **Must**: Use Zod for all tool argument validation. Do not blindly trust MCP client inputs.
+- **Must**: Return structured errors (`{ isError: true, content: [...] }`) from tools rather than throwing raw unhandled exceptions that crash the server.
+- **Should**: Wrap handlers in try/catch blocks that gracefully surface errors to the LLM context.
+- **Should**: Centralize error logging using standard prefixes (e.g., `[MCP Error]`).
+- **Optional**: Depending on the repository, implement integration testing via Playwright for dual HTTP/SSE verification.
+
+**Security (Defense-in-Depth):**
+- **Blocklists are Defense-in-Depth**: A blocklist is not a primary security boundary. Primary security is the sandbox, container, or strict schema validation.
+- **No Secrets in Config**: MCP servers must rely on the environment variables for API keys and secrets, never hardcoded files inside the server repository.
+- **Rate Limiting & Input Sanitization**: Aggressively sanitize path arguments to prevent directory traversal, and apply basic rate-limiting.
+
+**MCP Scaffold Reference:**
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+const server = new McpServer({ name: "my-mcp", version: "1.0.0" });
+
+server.tool(
+  "my_tool",
+  "Does something using an ID",
+  { id: z.string().describe("The user ID to process") },
+  async ({ id }) => {
+    try {
+      return { content: [{ type: "text", text: `Got ID: ${id}` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err}` }] };
+    }
+  }
+);
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+For advanced MCP references, consult `references/mcp/` (Code Mode, OAuth, Implementation Guides).

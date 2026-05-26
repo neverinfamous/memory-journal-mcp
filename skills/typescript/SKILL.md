@@ -4,6 +4,8 @@ description: |
   Comprehensive enterprise-grade TypeScript operational guide.
   Use when configuring TS projects, writing complex generics, or enforcing strict type safety.
   Triggers on "TypeScript", "tsconfig.json", "generics", "type errors", "strict mode".
+  SECURITY: Do not bypass type checks with 'any' or '@ts-ignore'.
+disable-model-invocation: true
 ---
 
 # TypeScript Operational Guide

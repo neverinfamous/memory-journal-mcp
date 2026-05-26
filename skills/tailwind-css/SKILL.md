@@ -5,7 +5,7 @@ description: |
   writing utility classes, configuring design tokens via @theme, implementing
   dark mode, migrating from v3, or integrating with React/Vue/Svelte. Triggers
   on "Tailwind", "utility CSS", "Tailwind v4", "@theme", "dark mode classes",
-  "responsive design", "Tailwind migration".
+  "responsive design", "Tailwind migration". CAUTION: Emitting extensive Tailwind utility classes consumes significant token space; prioritize semantic component extraction.
 ---
 
 # Tailwind CSS v4 Engineering Standards

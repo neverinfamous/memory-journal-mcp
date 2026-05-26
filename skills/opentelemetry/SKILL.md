@@ -1,7 +1,7 @@
 ---
 name: opentelemetry
 description: |
-  Observability standards using OpenTelemetry. Use when instrumenting applications for distributed tracing, metrics, and structured logging. NOT for Cloudflare Workers observability (use workers-best-practices). NOT for performance optimization — use adversarial-performance or web-perf.
+  Observability standards using OpenTelemetry. Use when instrumenting applications for distributed tracing, metrics, and structured logging. NOT for Cloudflare Workers observability (use workers-best-practices). NOT for performance optimization - use adversarial-performance or web-perf. SECURITY: Ensure sensitive PII/secrets are scrubbed before logging.
 ---
 
 # OpenTelemetry (OTel)

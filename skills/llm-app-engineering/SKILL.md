@@ -1,7 +1,7 @@
 ---
 name: llm-app-engineering
 description: |
-  Master modern LLM application engineering patterns. Use when designing prompt chains, evaluating output quality, managing token limits, streaming responses, or integrating LLMs into full-stack applications.
+  Master modern LLM application engineering patterns. Use when designing prompt chains, evaluating output quality, managing token limits, streaming responses, or integrating LLMs into full-stack applications. SECURITY: Always sanitize user input before passing to LLM prompts to prevent prompt injection.
 ---
 
 # LLM App Engineering

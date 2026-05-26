@@ -1,7 +1,7 @@
 ---
 name: trpc
 description: |
-  tRPC standards for TypeScript backends. Use when building end-to-end typesafe APIs, defining routers, procedures, middleware, or integrating with React and Next.js.
+  tRPC standards for TypeScript backends. Use when building end-to-end typesafe APIs, defining routers, procedures, middleware, or integrating with React and Next.js. SECURITY: Always validate input with Zod and verify caller authorization.
 ---
 
 # tRPC Guidelines

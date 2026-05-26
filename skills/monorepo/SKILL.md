@@ -1,7 +1,7 @@
 ---
 name: monorepo
 description: |
-  Monorepo architecture and configuration standards. Use when working with Turborepo, pnpm workspaces, npm workspaces, or configuring shared packages, tsconfig bases, and internal dependencies.
+  Monorepo architecture and configuration standards. Use when working with Turborepo, pnpm workspaces, npm workspaces, or configuring shared packages, tsconfig bases, and internal dependencies. NOT for generic package management or single-package repositories. Require explicit monorepo context.
 ---
 
 # Monorepo Standards

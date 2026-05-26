@@ -1,6 +1,6 @@
 {
     "name": "neverinfamous-agent-skills",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "description": "Foundational AI agent metacognitive skills and workflows for the Adamic ecosystem.",
     "type": "module",
     "main": "README.md",
@@ -37,7 +37,6 @@
         "hono/",
         "journal-optimizer/",
         "llm-app-engineering/",
-        "mcp-builder/",
         "monorepo/",
         "multi-agent-orchestration/",
         "mysql/",
@@ -50,7 +49,6 @@
         "postgres/",
         "python/",
         "rag-pipelines/",
-        "react-best-practices/",
         "redis/",
         "render/",
         "rust/",

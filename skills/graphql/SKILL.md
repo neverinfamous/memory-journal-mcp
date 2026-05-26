@@ -1,7 +1,7 @@
 ---
 name: graphql
 description: |
-  GraphQL best practices. Use when designing GraphQL schemas, writing resolvers, handling mutations, avoiding N+1 query problems (DataLoader), or configuring GraphQL servers.
+  GraphQL best practices. Use when designing GraphQL schemas, writing resolvers, handling mutations, avoiding N+1 query problems (DataLoader), or configuring GraphQL servers. NOT for REST APIs, generic database design, or ORM setups.
 ---
 
 # GraphQL Best Practices

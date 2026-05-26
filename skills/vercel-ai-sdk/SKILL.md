@@ -1,7 +1,7 @@
 ---
 name: vercel-ai-sdk
 description: |
-  Vercel AI SDK best practices and patterns. Use when building AI applications with React/Next.js and `@ai-sdk/react`, `@ai-sdk/core`, or `@ai-sdk/ui`. Covers `useChat`, `streamText`, `generateObject`, tool calling, and streaming architectures.
+  Vercel AI SDK best practices and patterns. Use when building AI applications with React/Next.js and `@ai-sdk/react`, `@ai-sdk/core`, or `@ai-sdk/ui`. Covers `useChat`, `streamText`, `generateObject`, tool calling, and streaming architectures. SECURITY: Never pass raw user inputs to executable tools without strict Zod schema validation.
 ---
 
 # Vercel AI SDK Guidelines
