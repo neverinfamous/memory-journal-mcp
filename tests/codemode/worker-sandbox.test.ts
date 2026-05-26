@@ -100,8 +100,8 @@ describe('WorkerSandbox', () => {
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
-        // TypeError because mj.nonexistent is undefined
-        expect(String(result.result)).toContain('Cannot read properties of undefined')
+        // The worker proxy now traps unknown groups and rejects gracefully
+        expect(String(result.result)).toContain("Group or property 'nonexistent' is not found on 'mj'")
     })
 
     it('should handle RPC calls to non-existent methods within a valid group', async () => {
@@ -146,7 +146,7 @@ describe('WorkerSandbox', () => {
 
     it('should handle custom timeout parameter', async () => {
         const sandbox = new WorkerSandbox({ timeoutMs: 30000 })
-        const result = await sandbox.execute('return "ok"', {}, 5000)
+        const result = await sandbox.execute('return "ok"', {}, undefined, 5000)
         expect(result.success).toBe(true)
         expect(result.result).toBe('ok')
     })

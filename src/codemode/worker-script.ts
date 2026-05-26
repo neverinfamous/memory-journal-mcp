@@ -150,7 +150,35 @@ function buildApiProxy(
         })
     }
 
-    return api
+    return new Proxy(api, {
+        get(target, prop) {
+            if (typeof prop === 'symbol') return undefined
+            if (prop in target) return target[prop]
+            if (prop === 'then') return undefined
+
+            // Common hallucinated top-level method traps
+            if (prop === 'addEntry' || prop === 'createEntry') {
+                return (..._args: unknown[]) => Promise.reject(new Error(`'mj.${prop}' is not a function. Tools are grouped. Did you mean 'mj.core.createEntry()' or 'journal.createEntry()'?`))
+            }
+
+            const available = Object.keys(target).filter(k => k !== '_topLevel').join(', ')
+            const reason = `Group or property '${prop}' is not found on 'mj'. Available groups: ${available}. Use mj.help() for more info.`
+
+            // Return a proxy that rejects any method call
+            return new Proxy(() => {
+                // no-op function target for the proxy
+            }, {
+                apply() {
+                    return Promise.reject(new Error(reason))
+                },
+                get(_t, subProp) {
+                    if (typeof subProp === 'symbol') return undefined
+                    if (subProp === 'then') return undefined
+                    return (..._args: unknown[]) => Promise.reject(new Error(`${reason} (Attempted to access 'mj.${prop}.${subProp}')`))
+                }
+            })
+        }
+    })
 }
 
 // =============================================================================

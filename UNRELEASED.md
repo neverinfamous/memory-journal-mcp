@@ -41,6 +41,7 @@
 - **admin/core**: Handled `strict-boolean-expressions` TypeScript errors when validating the `auto_context` parameter dynamically
 - **briefing**: Fixed dynamic context routing mismatch, `undefined` runtime property crash, and missing blank lines/tags causing IDE rendering cutoff
 - **briefing**: Corrected static `RESOURCE_COUNT` to lazy dynamic count, switched coverage % source to vitest structured output, and deduplicated entry previews
+- **codemode**: Added root Proxy boundary to catch hallucinated top-level flat methods (e.g. `mj.addEntry`) and return structured error recommendations instead of raw TypeErrors
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, missing environment variables, and tool reference counts with recent architectural changes
 - **docs**: Synchronized prompt count (18 → 19) and `flag-dashboard` marketing across `README.md`, `DOCKER_README.md`, `CONTRIBUTING.md`, `copilot-instructions.md`, `test-errors.md`, and 6 wiki pages
