@@ -5,6 +5,7 @@
 ### Added
 
 - **prompts**: `adversarial-plan-review` prompt bootstrapping multi-pass adversarial planning with structured review dimensions, scoring rubric, and prior plan context from the journal
+- **prompts**: `flag-dashboard` prompt for triaging active Hush Protocol flags with severity grouping, staleness detection, and resolution guidance
 - **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: On-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
@@ -23,6 +24,7 @@
 ### Changed
 
 - **briefing**: Surfaced capability statuses directly in the Config row and renamed designations for clarity
+- **prompts**: `prepare-standup` and `prepare-retro` now surface active team flags as contextual signals alongside analytics digest
 - **briefing**: Enhanced the code-map indicator to include exact file paths and prioritized gatekeeper CI workflows in github status
 - **briefing**: Filtered out stale milestones (100% completed and updated > 24h ago) to ensure the briefing cycles automatically
 - **codemode**: Optimized dynamically generated TypeScript declarations and removed redundant strings to save tokens in `mj_execute_code` prompts
@@ -41,6 +43,7 @@
 - **briefing**: Corrected static `RESOURCE_COUNT` to lazy dynamic count, switched coverage % source to vitest structured output, and deduplicated entry previews
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
 - **docs**: Synchronized `code-map.md`, `README.md` sizes, missing environment variables, and tool reference counts with recent architectural changes
+- **docs**: Synchronized prompt count (18 → 19) and `flag-dashboard` marketing across `README.md`, `DOCKER_README.md`, `CONTRIBUTING.md`, `copilot-instructions.md`, `test-errors.md`, and 6 wiki pages
 - **instructions**: Corrected tool schemas, removed deprecated `auto_context` field, and embedded behavior defaults directly into tool schemas
 - **relationships**: Fixed `visualize_relationships` returning `null` for the mermaid string when no relationships exist
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors

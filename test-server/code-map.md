@@ -205,7 +205,9 @@ src/
     └── prompts/                    # Prompt handlers
         ├── index.ts                # Prompt registration barrel
         ├── workflow.ts             # 11 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
-        └── github.ts              # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
+        ├── github.ts               # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
+        ├── adversarial.ts          # 1 adversarial prompt (adversarial-plan-review)
+        └── team.ts                 # 1 team prompt (flag-dashboard)
 
 skills/
 ├── bun/                            # Bun ecosystem conventions and testing patterns
@@ -306,14 +308,15 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-18 prompts total (11 workflow + 6 GitHub + 1 adversarial).
+19 prompts total (11 workflow + 6 GitHub + 1 adversarial + 1 team).
 
-| File          | Prompts                                                                                                                                                                                                          |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary`, `team-session-summary` |
-| `github.ts`   | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                                            |
+| File             | Prompts                                                                                                                                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workflow.ts`    | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary`, `team-session-summary` |
+| `github.ts`      | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                                            |
 | `adversarial.ts` | `adversarial-plan-review`                                                                                                                                                                                        |
-| `index.ts`    | Barrel — re-exports workflow + GitHub + adversarial prompts, `getPrompt()` / `getPrompts()` dispatch                                                                                                                           |
+| `team.ts`        | `flag-dashboard`                                                                                                                                                                                                 |
+| `index.ts`       | Barrel — re-exports workflow + GitHub + adversarial + team prompts, `getPrompt()` / `getPrompts()` dispatch                                                                                                      |
 
 ---
 

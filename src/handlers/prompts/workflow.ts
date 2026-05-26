@@ -11,6 +11,7 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
+import { parseFlagContext } from '../../types/auto-context.js'
 
 /** Milliseconds in one day */
 const MS_PER_DAY = 86_400_000
@@ -56,7 +57,11 @@ ${markUntrustedContent(entries.map((e) => `- [${String(e.id)}] ${e.content.slice
             description: 'Daily standup summaries',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
+            handler: (
+                _args: Record<string, string>,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
                 const today = new Date().toISOString().split('T')[0] ?? ''
                 const yesterday =
                     new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
@@ -65,6 +70,7 @@ ${markUntrustedContent(entries.map((e) => `- [${String(e.id)}] ${e.content.slice
 
                 // Inject digest signals when available
                 const digestSignal = buildDigestSignalForPrompt(db)
+                const flagSignal = buildFlagSignalForPrompt(teamDb)
 
                 return {
                     messages: [
@@ -72,7 +78,7 @@ ${markUntrustedContent(entries.map((e) => `- [${String(e.id)}] ${e.content.slice
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}Prepare a standup summary based on these recent entries.
+                                text: `${digestSignal}${flagSignal}Prepare a standup summary based on these recent entries.
 Format as:
 - Yesterday: <summary>
 - Today: <planned work>
@@ -97,7 +103,11 @@ ${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.
                     required: false,
                 },
             ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
+            handler: (
+                args: Record<string, string>,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
                 const days = parseInt(args['days'] ?? '14', 10)
                 const endDate = new Date().toISOString().split('T')[0] ?? ''
                 const startDate =
@@ -107,6 +117,7 @@ ${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.
 
                 // Inject digest signals when available
                 const digestSignal = buildDigestSignalForPrompt(db)
+                const flagSignal = buildFlagSignalForPrompt(teamDb)
 
                 return {
                     messages: [
@@ -114,7 +125,7 @@ ${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}Prepare a retrospective for the last ${String(days)} days based on these entries.
+                                text: `${digestSignal}${flagSignal}Prepare a retrospective for the last ${String(days)} days based on these entries.
 Format as:
 - What went well
 - What could improve
@@ -489,4 +500,54 @@ function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
     // Only return if we have actual signals beyond the header
     if (lines.length <= 1) return ''
     return lines.join('\\n') + '\\n\\n'
+}
+
+/**
+ * Build a concise active-flags signal string for injection into standup/retro prompts.
+ * Returns empty string when team DB is not configured or no active flags exist.
+ */
+function buildFlagSignalForPrompt(teamDb?: IDatabaseAdapter): string {
+    if (!teamDb) return ''
+
+    try {
+        const flagEntries = teamDb.searchEntries('', {
+            entryType: 'flag',
+            limit: 20,
+        })
+
+        const now = Date.now()
+        const activeFlags: { flag_type: string; preview: string; target_user: string | null; age: string }[] = []
+
+        for (const entry of flagEntries) {
+            const ctx = parseFlagContext(entry.autoContext)
+            if (!ctx || ctx.resolved) continue
+
+            const ageMs = now - new Date(entry.timestamp).getTime()
+            const hours = Math.floor(ageMs / 3_600_000)
+            const days = Math.floor(ageMs / 86_400_000)
+            const age = days > 0 ? `${String(days)}d ago` : hours > 0 ? `${String(hours)}h ago` : 'just now'
+
+            const preview = entry.content.length > 80 ? entry.content.slice(0, 80) + '…' : entry.content
+
+            activeFlags.push({
+                flag_type: ctx.flag_type,
+                preview,
+                target_user: ctx.target_user ?? null,
+                age,
+            })
+        }
+
+        if (activeFlags.length === 0) return ''
+
+        const lines: string[] = ['[Active Flags]']
+        for (const f of activeFlags) {
+            const target = f.target_user ? ` → @${f.target_user}` : ''
+            lines.push(`🚩 ${f.flag_type}${target}: ${f.preview} (${f.age})`)
+        }
+
+        return lines.join('\\n') + '\\n\\n'
+    } catch {
+        // Graceful degradation — flags are supplementary context
+        return ''
+    }
 }

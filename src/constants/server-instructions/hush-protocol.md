@@ -15,4 +15,6 @@ Flags are machine-actionable signals stored in the team database. They replace S
 
 **Dashboard**: Read `memory://flags` to see all active (unresolved) flags. Read `memory://flags/vocabulary` to see the configured flag types.
 
+**Triage prompt**: Use the `flag-dashboard` prompt to triage active flags with priority assessment, staleness detection, and resolution guidance.
+
 **Code Mode**: `mj.team.passTeamFlag({ flag_type, message, target_user })` and `mj.team.resolveTeamFlag({ flag_id })`.
