@@ -1,7 +1,7 @@
 ---
 name: hono
 description: |
-  Hono framework best practices. Use when building, reviewing, or debugging Hono applications, especially on Cloudflare Workers. Covers routing, middleware, context (c), and RPC patterns.
+  Hono framework best practices. Use when building, reviewing, or debugging Hono applications, especially on Cloudflare Workers. Covers routing, middleware, context (c), and RPC patterns. Do NOT trigger for generic 'build a server' requests unless Hono or Cloudflare Workers is explicitly requested.
 ---
 
 # Hono Framework Guidelines

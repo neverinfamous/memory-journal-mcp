@@ -1,7 +1,7 @@
 ---
 name: drizzle-orm
 description: |
-  Drizzle ORM best practices. Use when configuring databases, designing schemas, writing queries, or handling migrations with Drizzle ORM, particularly with Cloudflare D1 or SQLite.
+  Drizzle ORM best practices. Use when configuring databases, designing schemas, writing queries, or handling migrations with Drizzle ORM, particularly with Cloudflare D1 or SQLite. NOT for database setup without an explicit engine. Require engine specification (Postgres/MySQL/SQLite).
 ---
 
 # Drizzle ORM Guidelines
