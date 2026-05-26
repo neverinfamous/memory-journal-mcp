@@ -50,3 +50,13 @@ tracer.startActiveSpan('database.query', (span) => {
 
 - **OTLP Exporters**: Always export telemetry using the OpenTelemetry Protocol (OTLP) via gRPC or HTTP to an OpenTelemetry Collector, rather than exporting directly to backend vendors (Datadog, Honeycomb) from the application.
 - **Batching**: Use batch span processors (`BatchSpanProcessor`) in production to minimize performance overhead. Only use `SimpleSpanProcessor` for local debugging.
+
+## 5. Cloudflare Workers Integration
+
+- **Trace Exporters**: When running on Cloudflare Workers, standard OTLP exporters may fail due to runtime constraints. Use `@microlabs/otel-cf-workers` or specifically tailored fetch-based HTTP exporters for compatibility.
+- **Context Preservation**: Always wrap the Worker's `fetch` handler or Scheduled handler using the telemetry wrapper to ensure trace context flows correctly through the V8 isolate.
+
+## 6. Structured Logging
+
+- **Correlated Logs**: Ensure all log lines emit the current `trace_id` and `span_id`. This allows bridging between logs and traces.
+- **JSON Format**: Output logs in JSON format in production. Avoid unstructured string logging.

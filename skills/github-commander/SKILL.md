@@ -5,7 +5,8 @@ description: |
   Use when assigned a GitHub issue, reviewing a PR, sprinting through a milestone, updating dependencies, or running code audits. 
   Also use when asked to "triage an issue", "review a PR", or "update deps". 
   Do NOT trigger on bare verbs (e.g. "fix this"); require GitHub context. 
-  NOT for adversarial security audits (use adversarial-security).
+  NOT for pipeline authoring (use github-actions instead).
+  NOT for skill/workflow/security audits (use dedicated adversarial skills instead).
 ---
 
 # GitHub Commander

@@ -2,12 +2,8 @@
 name: adversarial-skill-audit
 description: |
   Multi-pass adversarial quality audit for agent skill directories. Combines
-  structured evaluation (Agent A) with adversarial stress-testing (Agent B)
-  to assess skill completeness, instruction clarity, trigger accuracy,
-  token efficiency, and security. Use when auditing a skills directory,
-  reviewing skill quality, or when the user says "audit my skills",
-  "skill quality check", "review these skills", "evaluate skills",
-  "validate skill quality", "check skill quality", or "are my skills any good".
+  structured evaluation with adversarial stress-testing to assess skill completeness,
+  instruction clarity, trigger accuracy, and security. Use when auditing a skills directory.
 ---
 
 # Adversarial Skill Audit

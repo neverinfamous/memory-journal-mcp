@@ -2,7 +2,7 @@
 name: wrangler
 description: |
   (CLI OPERATIONS ONLY) Cloudflare Wrangler CLI dispatcher. Use ONLY when Cloudflare Workers or Pages is the explicitly named target platform for deployment, or when managing Cloudflare bindings using the wrangler CLI. 
-  Do NOT use for general Cloudflare product discovery (use cloudflare instead) or for writing/reviewing Worker code (use workers-best-practices instead).
+  Do NOT use for general Cloudflare product discovery (use cloudflare instead) or for writing/reviewing Worker code (use workers-best-practices instead). (Invoke explicitly — does not auto-trigger).
 disable-model-invocation: true
 ---
 

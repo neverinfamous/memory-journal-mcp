@@ -1,7 +1,7 @@
 ---
 name: mcp-builder
 description: |
-  Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses. Must see the explicit keyword "MCP" or "Model Context Protocol". NOT for general REST APIs or Cloudflare Workers. Do NOT trigger for generic 'build a server' requests unless the type is explicitly specified as an MCP server. (Invoke explicitly — does not auto-trigger).
+  Core rules for code quality and specifications of Model Context Protocol (MCP) servers. Use when reviewing MCP code quality, enforcing specification rules, or checking schemas/error responses. Must see the explicit keyword "MCP" or "Model Context Protocol". NOT for general REST APIs or Cloudflare Workers. Do NOT trigger for generic 'build a server' requests unless the type is explicitly specified as an MCP server. (Invoke explicitly with `/mcp-builder` — does not auto-trigger).
 disable-model-invocation: true
 ---
 

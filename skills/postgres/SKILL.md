@@ -5,7 +5,7 @@ description: |
   Enforces enterprise production rules for advanced querying, composite indexing, 
   JSONB data handling, and strict optimization patterns (avoiding N+1).
   Keywords: PostgreSQL query, JSONB, pg, pgvector, RLS, Postgres migration.
-  MUST-ASK: Require explicit database engine name before triggering. Never guess. Do NOT trigger for generic "set up a database" requests. NOT for SQLite or MySQL.
+  MUST-ASK: Require explicit database engine name before triggering. Never guess. Do NOT trigger for generic "set up a database" requests. NOT for SQLite or MySQL. NOT for ORM-managed migrations.
 ---
 
 # PostgreSQL Production Standards

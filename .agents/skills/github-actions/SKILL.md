@@ -4,7 +4,7 @@ description: |
   Master GitHub Actions CI/CD workflows with production-grade security and
   performance patterns. Use ONLY when explicitly setting up CI/CD pipelines specifically via GitHub Actions, 
   setting up matrix strategies, caching dependencies, managing
-  artifacts, or implementing reusable workflows. For deployment requests, use ONLY when the deploy step is inside a .github/workflows file. NOT for GitLab or autonomous-dev.
+  artifacts, or implementing reusable workflows. For deployment requests, use ONLY when the deploy step is inside a .github/workflows file. NOT for GitLab or autonomous-dev. NOT for Render, AWS, Azure, or GCP deployments unless explicitly triggered from within a CI/CD workflow context.
 ---
 
 # GitHub Actions CI/CD Engineering Standards

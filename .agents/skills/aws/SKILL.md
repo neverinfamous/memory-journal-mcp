@@ -1,7 +1,7 @@
 ---
 name: aws
 description: |
-  Comprehensive AWS (Amazon Web Services) best practices and infrastructure guidelines. Use when deploying to AWS, writing CloudFormation/CDK/Terraform for AWS, configuring IAM permissions, S3 buckets, EC2 instances, Lambda functions, or ECS/EKS clusters.
+  Comprehensive AWS (Amazon Web Services) best practices and infrastructure guidelines. Use when deploying to AWS, writing CloudFormation/CDK/Terraform for AWS, configuring IAM permissions, S3 buckets, EC2 instances, Lambda functions, or ECS/EKS clusters. Do NOT trigger for generic "deploy my app" requests without clarifying the target platform.
 ---
 
 # Amazon Web Services (AWS) Best Practices

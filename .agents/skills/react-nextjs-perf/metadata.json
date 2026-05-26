@@ -1,0 +1,17 @@
+{
+    "version": "1.0.0",
+    "organization": "Memory Journal MCP",
+    "date": "January 2026",
+    "abstract": "Original React and Next.js performance best-practices guidance for AI agents and LLMs, informed by publicly available documentation and articles. Covers optimization patterns such as reducing waterfalls, managing bundle size, and applying advanced rendering and caching techniques, with examples and prioritization intended to support automated refactoring and code generation.",
+    "attribution": "This skill package contains original summary and guidance text maintained in this repository. External vendor and project links are provided for attribution and further reading only.",
+    "redistributionNotice": "Referenced third-party documentation and blog posts remain the property of their respective owners. This package does not claim redistribution rights to full third-party text and should include only original wording or short quotations where permitted.",
+    "references": [
+        "https://react.dev",
+        "https://nextjs.org",
+        "https://swr.vercel.app",
+        "https://github.com/shuding/better-all",
+        "https://github.com/isaacs/node-lru-cache",
+        "https://vercel.com/blog/how-we-optimized-package-imports-in-next-js",
+        "https://vercel.com/blog/how-we-made-the-vercel-dashboard-twice-as-fast"
+    ]
+}

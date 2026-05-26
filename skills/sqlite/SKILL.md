@@ -4,7 +4,7 @@ description: |
   Enforced meta-cognitive rules and production configurations for SQLite development.
   Use when designing SQLite schemas, PRAGMAs, transactions, migrations, locking, or backups.
   Also use when debugging SQLite performance or writing queries against an SQLite database.
-  MUST-ASK: Require explicit database engine name before triggering. Never guess. Do NOT use for generic "set up a database" or "create a DB" requests without clarifying. NOT for Postgres or MySQL.
+  MUST-ASK: Require explicit database engine name before triggering. Never guess. Do NOT use for generic "set up a database" or "create a DB" requests without clarifying. NOT for Postgres or MySQL. NOT for ORM-managed migrations.
 ---
 
 # SQLite Production Standards
