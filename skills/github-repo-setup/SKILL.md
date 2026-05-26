@@ -84,6 +84,8 @@ See **[inline-templates.md](references/inline-templates.md)** for the boilerplat
 
 ## 2. Init Repo & Push
 
+> **CRITICAL HITL GATE**: You MUST stop and ask the user for explicit confirmation before running the `gh repo create` and `git push` commands. Creating a public repository is a destructive and public action.
+
 ```powershell
 cd {{TARGET_DIRECTORY}}
 git init
@@ -128,7 +130,7 @@ gh repo view         # Displays repo info
 
 ## Reference Repos
 
-- `neverinfamous/db-mcp` (SQLite)
-- `neverinfamous/mysql-mcp` (MySQL)
-- `neverinfamous/postgres-mcp` (PostgreSQL)
-- `neverinfamous/memory-journal-mcp` (Memory Journal)
+- `{{ORG_NAME}}/db-mcp` (SQLite)
+- `{{ORG_NAME}}/mysql-mcp` (MySQL)
+- `{{ORG_NAME}}/postgres-mcp` (PostgreSQL)
+- `{{ORG_NAME}}/memory-journal-mcp` (Memory Journal)

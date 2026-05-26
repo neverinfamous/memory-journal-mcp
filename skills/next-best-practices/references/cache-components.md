@@ -184,7 +184,7 @@ async function getData() {
 
 For complete examples, migration strategies from `unstable_cache`, runtime constraints, and cache invalidation APIs (`cacheTag`, `updateTag`, `revalidateTag`), read the reference file:
 
-**[Read: references/examples.md](references/examples.md)**
+**[Read: cache-components-examples.md](cache-components-examples.md)**
 
 ## Limitations
 

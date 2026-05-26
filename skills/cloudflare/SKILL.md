@@ -1,6 +1,6 @@
 ---
 name: cloudflare
-description: (GENERIC ROUTING ONLY) General Cloudflare platform skill for infrastructure, storage, and networking. Use when choosing between Cloudflare products (KV vs D1 vs R2) or doing general Cloudflare tasks. NOT for building AI agents (use building-ai-agent-on-cloudflare). NOT for building MCP servers (use building-mcp-server-on-cloudflare). NOT for deploying applications unless Cloudflare is the explicit target platform. Do NOT use for code-reviewing Workers (use workers-best-practices instead) or for CLI deployment/management (use wrangler instead). NOT for orchestrating CI/CD pipelines (use github-actions instead).
+description: (GENERIC ROUTING ONLY) General Cloudflare platform skill for infrastructure, storage, and networking. Use when choosing between Cloudflare products (KV vs D1 vs R2) or doing general Cloudflare tasks. NOT for building AI agents (use agents-sdk). NOT for building MCP servers (use mcp-builder). NOT for deploying applications unless Cloudflare is the explicit target platform. Do NOT use for code-reviewing Workers (use workers-best-practices instead) or for CLI deployment/management (use wrangler instead). NOT for orchestrating CI/CD pipelines (use github-actions instead). Use specific skills like `wrangler` or `workers-best-practices` when the task is narrowly scoped.
 references:
   - workers
   - pages

@@ -1,23 +1,6 @@
----
-name: building-mcp-server-on-cloudflare
-description: |
-  Builds remote MCP (Model Context Protocol) servers on Cloudflare Workers
-  with tools, OAuth authentication, and production deployment. Generates
-  server code, configures auth providers, and deploys to Workers.
-
-  Use when: user wants to build a remote, Cloudflare-hosted MCP server.
----
-
 # Building MCP Servers on Cloudflare
 
 Creates production-ready Model Context Protocol servers on Cloudflare Workers with tools, authentication, and deployment.
-
-## When to Use
-
-- User wants to build a remote MCP server
-- User needs to expose tools via MCP
-- User asks about MCP authentication or OAuth
-- User wants to deploy MCP to Cloudflare Workers
 
 ## Prerequisites
 
@@ -46,7 +29,7 @@ npm create cloudflare@latest -- my-mcp-server \
 cd my-mcp-server
 ```
 
-Requires OAuth app setup. See [references/oauth-setup.md](references/oauth-setup.md).
+Requires OAuth app setup.
 
 ## Core Workflow
 
@@ -110,8 +93,6 @@ export default {
 export { MyMCP };
 ```
 
-**Authenticated server** — See [references/oauth-setup.md](references/oauth-setup.md).
-
 ### Step 3: Test Locally
 
 ```bash
@@ -124,6 +105,8 @@ npx @modelcontextprotocol/inspector@latest
 ```
 
 ### Step 4: Deploy
+
+> **CRITICAL HITL GATE**: You MUST stop and ask the user for explicit confirmation before running the `npx wrangler deploy` command. Deploying to production requires consent.
 
 ```bash
 npx wrangler deploy
@@ -148,41 +131,7 @@ Server accessible at `https://[worker-name].[account].workers.dev/mcp`
 
 Restart Claude Desktop after updating config.
 
-## Tool Patterns
-
-### Return Types
-
-```typescript
-// Text response
-return { content: [{ type: "text", text: "result" }] };
-
-// Multiple content items
-return {
-  content: [
-    { type: "text", text: "Here's the data:" },
-    { type: "text", text: JSON.stringify(data, null, 2) },
-  ],
-};
-```
-
-### Input Validation with Zod
-
-```typescript
-this.server.tool(
-  "create_user",
-  {
-    email: z.string().email(),
-    name: z.string().min(1).max(100),
-    role: z.enum(["admin", "user", "guest"]),
-    age: z.number().int().min(0).optional(),
-  },
-  async (params) => {
-    // params are fully typed and validated
-  }
-);
-```
-
-### Accessing Environment/Bindings
+## Accessing Environment/Bindings
 
 ```typescript
 export class MyMCP extends McpAgent<Env> {
@@ -196,18 +145,6 @@ export class MyMCP extends McpAgent<Env> {
   }
 }
 ```
-
-## Authentication
-
-For OAuth-protected servers, see [references/oauth-setup.md](references/oauth-setup.md).
-
-Supported providers:
-- GitHub
-- Google
-- Auth0
-- Stytch
-- WorkOS
-- Any OAuth 2.0 compliant provider
 
 ## Wrangler Configuration
 
@@ -225,43 +162,3 @@ bindings = [{ name = "MCP", class_name = "MyMCP" }]
 tag = "v1"
 new_classes = ["MyMCP"]
 ```
-
-With bindings (D1, KV, etc.):
-
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "my-db"
-database_id = "xxx"
-
-[[kv_namespaces]]
-binding = "KV"
-id = "xxx"
-```
-
-## Common Issues
-
-### "Tool not found" in Client
-
-1. Verify tool name matches exactly (case-sensitive)
-2. Ensure `init()` registers tools before connections
-3. Check server logs: `wrangler tail`
-
-### Connection Fails
-
-1. Confirm endpoint path is `/mcp`
-2. Check CORS if browser-based client
-3. Verify Worker is deployed: `wrangler deployments list`
-
-### OAuth Redirect Errors
-
-1. Callback URL must match OAuth app config exactly
-2. Check `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set
-3. For local dev, use `http://localhost:8788/callback`
-
-## References
-
-- [references/examples.md](references/examples.md) — Official templates and production examples
-- [references/oauth-setup.md](references/oauth-setup.md) — OAuth provider configuration
-- [references/tool-patterns.md](references/tool-patterns.md) — Advanced tool examples
-- [references/troubleshooting.md](references/troubleshooting.md) — Error codes and fixes

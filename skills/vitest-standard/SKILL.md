@@ -3,7 +3,7 @@ name: vitest-standard
 description: |
   Comprehensive unit testing expertise covering Vitest, test-driven 
   development (TDD), mocking strategies, and production-grade best practices. 
-  Activates ONLY for unit testing scope (Vitest, TDD, Red-Green-Refactor, mocking, 
+  Activates ONLY for unit testing scope (unit tests, integration tests, Vitest, TDD, Red-Green-Refactor, mocking, 
   stubbing, spying, test coverage, and test architecture in TypeScript/Node projects). NOT for E2E testing (use Playwright).
   If the user asks to "write tests" without specifying the type, you MUST ask "Unit, E2E, or both?" before proceeding.
 ---

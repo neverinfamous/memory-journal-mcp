@@ -51,10 +51,10 @@ The markdown body contains the full instructions the agent follows once the skil
 | `autonomous-dev`                     | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
 | `aws`                                | Comprehensive AWS best practices — IAM, Serverless, S3, RDS, networking, and IaC                      |
 | `azure`                              | Microsoft Azure best practices — Entra ID, App Service, AKS, Cosmos DB, networking, and Bicep         |
-| `building-mcp-server-on-cloudflare`  | Remote MCP servers on Cloudflare Workers with OAuth and deployment                                                    |
 | `bun`                                | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                |
 | `cloudflare`                         | Comprehensive Cloudflare platform skill — decision trees, product index, retrieval sources                            |
 | `docker`                             | Production-grade Docker — multi-stage builds, security hardening, Compose v2, BuildKit, and CI/CD integration         |
+| `drizzle-orm`                        | Drizzle ORM best practices — database configuration, schemas, relational queries, migrations                          |
 | `durable-objects`                    | Create and review Durable Objects — RPC, SQLite storage, alarms, WebSockets                                           |
 | `gcp`                                | Google Cloud Platform best practices — IAM, Cloud Run, BigQuery, VPC SC, and Terraform                |
 | `github-actions`                     | GitHub Actions CI/CD — SHA pinning, reusable workflows, caching, matrix strategies, and artifacts v4                  |
@@ -63,14 +63,13 @@ The markdown body contains the full instructions the agent follows once the skil
 | `github-repo-setup`                  | Scaffold public TypeScript/Node.js repos under `{{ORG_NAME}}`                                                         |
 | `gitlab`                             | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
 | `golang`                             | Master Go development with production-grade best practices from Google and Uber style guides                          |
+| `hono`                               | Hono framework best practices — edge runtimes, RPC, middleware, validation                                            |
 | `journal-optimizer`                  | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete |
 | `llm-app-engineering`                | Master modern LLM application engineering patterns — prompt chains, token management, streaming                       |
 | `mcp-builder`                        | Build high-quality MCP servers with structured errors, HTTP hardening, OAuth, Code Mode, and dynamic instructions     |
 | `multi-agent-orchestration`          | Patterns for multi-agent systems and agentic workflows (e.g. Plan-and-Execute, Supervisor)                            |
 | `mysql`                              | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                    |
 | `next-best-practices`               | Next.js file conventions, RSC boundaries, data patterns, metadata, error handling                                     |
-| `next-cache-components`             | Next.js 16 PPR, `use cache`, `cacheLife`, `cacheTag`, `updateTag`                                                     |
-| `next-upgrade`                       | Upgrade Next.js following official migration guides and codemods                                                       |
 | `opentelemetry`                      | Observability standards using OpenTelemetry — tracing, spans, metrics, exporters                                      |
 | `playwright-standard`               | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience                           |
 | `postgres`                           | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS                    |
@@ -109,6 +108,8 @@ This package natively bundles the `github-commander` skill, which equips your AI
 The `adversarial-skill-audit` skill includes automated scripts for evaluating the skills directory:
 - `skills/adversarial-skill-audit/scripts/check-skills.ps1`: Generates an inventory of all skills, checking line counts, trigger lengths, and frontmatter compliance.
 - `skills/adversarial-skill-audit/scripts/run-copilot.ps1`: Runs independent validation against the Copilot CLI.
+
+> **Latest Audit**: May 26, 2026. The 48 skills in this repository were audited via a multi-pass GitHub Copilot validation sweep, achieving a B+ directory-level quality score.
 
 ## Adding a Skill
 
