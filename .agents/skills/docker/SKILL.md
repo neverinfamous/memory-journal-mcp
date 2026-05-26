@@ -1,0 +1,168 @@
+---
+name: docker
+description: |
+  Production-grade Docker and container best practices. Use when containerizing apps with Docker, 
+  writing Dockerfiles, or managing Docker Compose environments.
+  "multi-stage build", "image size", "docker-compose". Use ONLY when a Dockerfile or container registry is the explicit target for deployment. NOT for serverless or Cloudflare Workers. NOT for generic app deployment without containers. NOT for orchestrating CI/CD pipelines natively (use github-actions instead).
+---
+
+# Docker & Container Engineering Standards
+
+This skill codifies 2026 Docker best practices — secure, minimal, reproducible container images using BuildKit, multi-stage builds, and Compose v2.
+
+## 1. Dockerfile Fundamentals
+
+### Always Start With BuildKit Syntax
+
+```dockerfile
+# syntax=docker/dockerfile:1
+```
+
+Place this as the **first line** of every Dockerfile. It enables:
+
+- Parallel stage execution
+- Cache mounts (`--mount=type=cache`)
+- Secret mounts (`--mount=type=secret`)
+- Reproducible builds across Docker versions
+
+### Base Image Selection
+
+| Use Case    | Recommended Base          | Why                                     |
+| ----------- | ------------------------- | --------------------------------------- |
+| **Node.js** | `node:22-slim`            | Debian Slim — small, has essential libs |
+| **Python**  | `python:3.13-slim`        | Minimal Debian, no build tools          |
+| **Go**      | `scratch` or `distroless` | Static binary needs nothing             |
+| **General** | `debian:bookworm-slim`    | Stable, well-patched, small             |
+
+- **NEVER** use `:latest` — always pin to a specific version tag
+- **Prefer `-slim` variants** over full images to reduce attack surface
+- **Consider `distroless`** for production — no shell, no package manager = minimal attack surface
+
+## 2. Multi-Stage Builds (Required for Production)
+
+Multi-stage builds are **mandatory** for any production image. They separate build-time dependencies from runtime.
+See **[templates.md](references/templates.md)** for the full annotated Multi-Stage Build template.
+
+### Key Rules
+
+- **Name every stage**: `FROM ... AS builder` — makes builds readable and targetable
+- **Copy only artifacts**: Use `COPY --from=builder` to cherry-pick built files
+- **Never install dev dependencies in the runtime stage**
+- **The runtime stage should have ZERO build tools** (no compilers, no git, no curl)
+
+## 3. Security Hardening
+
+### Non-Root Execution (Mandatory)
+
+```dockerfile
+# Create a system user with no home directory, no login shell
+RUN groupadd -r appgroup && useradd -r -g appgroup -s /usr/sbin/nologin appuser
+
+# Switch to the non-root user BEFORE CMD
+USER appuser
+```
+
+- **NEVER** run containers as root in production
+- **NEVER** use `--privileged` flag unless absolutely required
+- **Set `USER` as late as possible** — after all `RUN` commands that need root
+
+### Secret Handling
+
+```dockerfile
+# ✅ Good: BuildKit secret mount (never stored in layers)
+RUN --mount=type=secret,id=npm_token \
+    NPM_TOKEN=$(cat /run/secrets/npm_token) \
+    npm config set //registry.npmjs.org/:_authToken=$NPM_TOKEN
+
+# ❌ Bad: ARG/ENV secrets (visible in image history)
+ARG NPM_TOKEN
+ENV NPM_TOKEN=$NPM_TOKEN
+```
+
+- **NEVER** use `ARG` or `ENV` for secrets — they are baked into image layers
+- **NEVER** `COPY` `.env` files into the image
+- Use `--mount=type=secret` (BuildKit) for build-time secrets
+- Use Docker Compose `secrets:` or orchestrator secrets for runtime
+
+### Vulnerability Scanning
+
+```bash
+docker scout cves <image>          # Docker Scout
+trivy image <image>                # Trivy (open source)
+grype <image>                      # Grype (Anchore)
+```
+
+- Run scanning in CI — **hard-fail** on HIGH/CRITICAL vulnerabilities
+- Never use `continue-on-error: true` for security gates
+
+## 4. Layer Optimization
+
+### Instruction Ordering
+
+Docker caches each layer. Order instructions from **least-changing to most-changing**:
+
+```dockerfile
+# 1. Base image (rarely changes)
+FROM node:22-slim
+
+# 2. System deps (changes infrequently)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Application deps (changes when lock file changes)
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# 4. Application code (changes most frequently)
+COPY . .
+RUN pnpm build
+```
+
+### Cache Mounts (BuildKit)
+
+```dockerfile
+# Cache package manager downloads between builds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+```
+
+### `.dockerignore` (Required)
+
+Create a `.dockerignore` in every project with a Dockerfile:
+
+```
+.git
+.github
+node_modules
+dist
+*.md
+.env*
+.vscode
+.idea
+tmp/
+coverage/
+```
+
+- **ALWAYS** exclude `.git` — it can be hundreds of MB
+- **ALWAYS** exclude `node_modules` — reinstall inside the container
+- **ALWAYS** exclude `.env*` — prevents secret leaks
+
+## 5. Advanced Examples & CI/CD
+
+For advanced Docker Compose configurations and GitHub Actions CI/CD workflows, see the reference file:
+
+**[Read: references/advanced-examples.md](references/advanced-examples.md)**
+
+## 7. Anti-Patterns (Never Do These)
+
+| Anti-Pattern               | Why It's Wrong                          | Do This Instead                                 |
+| -------------------------- | --------------------------------------- | ----------------------------------------------- |
+| `FROM ubuntu:latest`       | Unpinned, large, unpredictable          | Pin version, use `-slim`                        |
+| `RUN apt-get update` alone | Cache goes stale across builds          | Combine with `install` in one `RUN`             |
+| `ADD` for local files      | Unpredictable (auto-extracts)           | Use `COPY` explicitly                           |
+| Multiple `RUN apt-get`     | Creates unnecessary layers              | Chain with `&&` in one `RUN`                    |
+| `COPY . .` before deps     | Breaks layer cache on every code change | Copy lock file first, install, then copy source |
+| Running as root            | Security vulnerability                  | Create and switch to `appuser`                  |
+| Secrets in `ENV`/`ARG`     | Visible in image history                | Use `--mount=type=secret`                       |
+| No `.dockerignore`         | Bloated context, potential secret leaks | Always create one                               |

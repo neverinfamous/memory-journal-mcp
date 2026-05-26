@@ -51,7 +51,6 @@ The markdown body contains the full instructions the agent follows once the skil
 | `autonomous-dev`                     | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
 | `aws`                                | Comprehensive AWS best practices — IAM, Serverless, S3, RDS, networking, and IaC                      |
 | `azure`                              | Microsoft Azure best practices — Entra ID, App Service, AKS, Cosmos DB, networking, and Bicep         |
-| `building-ai-agent-on-cloudflare`    | End-to-end guide for stateful AI agents with WebSockets, state, and tools                                             |
 | `building-mcp-server-on-cloudflare`  | Remote MCP servers on Cloudflare Workers with OAuth and deployment                                                    |
 | `bun`                                | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                |
 | `cloudflare`                         | Comprehensive Cloudflare platform skill — decision trees, product index, retrieval sources                            |

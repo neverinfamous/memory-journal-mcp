@@ -1,0 +1,139 @@
+---
+name: adversarial-performance
+description: |
+  Multi-pass adversarial performance audit for entire repositories. Combines
+  structured profiling (Agent A) with adversarial stress-testing critique
+  (Agent B) through iterative passes. Optimize repo/backend performance, hot-paths, build size, and server throughput. Do NOT use for frontend page load metrics 
+  or Lighthouse audits (use web-perf). NOT for frontend Core Web Vitals (use web-perf).
+---
+
+# Adversarial Performance
+
+A multi-pass performance auditing system that produces high-confidence
+optimization assessments by introducing structured adversarial critique
+stages. Audits pass through an iterative pipeline of profiling,
+stress-testing critique, optimization planning, and optional external
+validation — producing output optimized for measurable impact, effort
+efficiency, and regression safety.
+
+## When to Load
+
+Load this skill when any of these apply:
+
+- Running a performance audit against an entire repository
+- Profiling build times, runtime hot paths, or bundle size
+- The user asks for an adversarial performance review or stress-test analysis
+- The user says "perf audit", "performance review", "find bottlenecks",
+  "adversarial performance", "optimize this repo", "make this faster", 
+  "why is this slow", or "speed up my code"
+- Preparing a performance baseline report before a major release
+- You want to reduce blind spots in your own performance assessment
+
+## Auto-Detection
+
+Before starting, auto-detect the project profile by scanning the repository:
+
+| Signal | Project Profile | Extra Categories |
+| --- | --- | --- |
+| MCP SDK imports, tool handlers, `tools/list` | `mcp-server` | Token & Context Efficiency (Category 7) — full depth |
+| Express/Hono/Fastify, HTTP handlers, `listen()` | `web-app` | Runtime Performance (Category 4) — extra API latency focus |
+| `bin` field, CLI arg parsing | `cli-tool` | Startup Cost analysis in Category 4 |
+| Vitest/Jest/Playwright config | `tested` | Test Suite Performance (Category 5) — full depth |
+| Dockerfile present | `containerized` | Build Performance (Category 1) — Docker layer analysis |
+| Database imports (better-sqlite3, pg, mysql2) | `data-layer` | Database & I/O (Category 6) — full depth |
+
+Profiles stack. A typical MCP server might be `mcp-server + cli-tool +
+tested + containerized + data-layer`.
+
+## Adversarial Protocol
+
+This skill follows the standard dual-agent adversarial pattern (Agent A: The Profiler, Agent B: The Stress Tester).
+For the core pipeline rules, phase definitions, and agent switching protocols, read:
+**[../adversarial-security/references/adversarial-base-protocol.md](../adversarial-security/references/adversarial-base-protocol.md)**
+
+For the performance-specific protocol with review dimensions, scoring weights, and output templates, read:
+**[references/multi-pass-performance-protocol.md](references/multi-pass-performance-protocol.md)**
+
+## Audit Categories
+
+The 7 performance categories audited during Phase 1 (Profiling) and
+challenged during Phase 2 (Stress Test) are:
+
+1. Build Performance
+2. Bundle & Output Analysis
+3. Dependency Weight
+4. Runtime Performance
+5. Test Suite Performance
+6. Database & I/O Performance
+7. Token & Context Efficiency (MCP servers — graceful degradation)
+
+For the full checklist with measurement methods, anti-patterns, and
+optimization patterns, read
+[references/audit-categories.md](references/audit-categories.md).
+
+## External Validation (Phase 4)
+
+Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).
+This provides a fundamentally different model's perspective on the audit,
+catching performance patterns that internal review normalizes.
+
+For Copilot-specific prompt templates, read
+[references/copilot-performance-prompts.md](references/copilot-performance-prompts.md).
+
+**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
+is not available, skip Phase 4 gracefully and note the skip in the journal entry.
+
+Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
+
+## Feedback Loop & Documentation
+
+Every phase creates a journal entry with structured tags and entry types.
+This builds a searchable audit trail that tracks performance evolution
+across releases.
+
+For journal templates, tag conventions, and retrospective templates, read
+[references/feedback-loop.md](references/feedback-loop.md).
+
+### Journal Opt-Out
+
+See [references/journal-opt-out.md](references/journal-opt-out.md) for instructions on how to handle explicit opt-outs from journaling.
+
+### Consolidated Report
+
+The final deliverable is a **single consolidated artifact** merging all four
+phases into one document. Do NOT produce separate artifacts per phase — the user should receive one
+comprehensive document with all findings, optimizations, and external
+validation results. Before sharing output outside the audit context, redact or generalize sensitive query patterns, specific API payloads, and avoid including live credentials or internal hostnames.
+
+## Configuration
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
+| `AUDIT_DEPTH` | `standard` | Depth: `scan`, `standard`, or `intensive` |
+| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot extension validation phase |
+| `PROJECT_PROFILE` | `auto` | Auto-detect or explicit profile list |
+| `RUN_COMMANDS` | `false` | Whether to execute measurement commands (`tsc --diagnostics`, `npm test`, etc.) or perform static analysis only |
+
+### Audit Depth Profiles
+
+- **Scan**: Quick triage — Categories 1, 3, 4 only. Focus on the most
+  impactful bottlenecks. Best for small repos or time-constrained reviews.
+- **Standard**: Full 7-category audit with all review dimensions. Default
+  for most repositories.
+- **Intensive**: Extended audit with additional focus on:
+  - Algorithmic complexity analysis (Big-O) on hot paths
+  - Memory allocation profiling patterns
+  - Cold start vs. warm path divergence
+  - Concurrency bottleneck analysis (event loop blocking, worker saturation)
+  - Historical regression tracking (compare against prior audit baselines)
+
+## Synergies
+
+| Skill/Workflow | Relationship |
+| --- | --- |
+| `adversarial-security` | Sibling skill — applies adversarial pattern to security; this applies it to performance |
+| `adversarial-planner` | Parent pattern — plan-level adversarial review; this and security extend it to audits |
+| `autonomous-dev` | Generator/Evaluator pipeline at code level; use after this skill to implement optimizations |
+| `/perf-audit` workflow | Provides the category checklist; this skill adds adversarial methodology on top |
+| `web-perf` | Web-specific performance skill; use alongside for frontend-heavy projects |
