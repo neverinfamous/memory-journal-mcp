@@ -156,11 +156,6 @@ function buildApiProxy(
             if (prop in target) return target[prop]
             if (prop === 'then') return undefined
 
-            // Common hallucinated top-level method traps
-            if (prop === 'addEntry' || prop === 'createEntry') {
-                return (..._args: unknown[]) => Promise.reject(new Error(`'mj.${prop}' is not a function. Tools are grouped. Did you mean 'mj.core.createEntry()' or 'journal.createEntry()'?`))
-            }
-
             const available = Object.keys(methods).filter(k => k !== '_topLevel').join(', ')
             const reason = `Group or property '${prop}' is not found on 'mj'. Available groups: ${available}. Use mj.help() for more info.`
 

@@ -307,6 +307,10 @@ export class JournalApi {
             searchEntries: this.search['searchEntries'],
             getStatistics: this.analytics['getStatistics'],
 
+            // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
+            addEntry: this.core['createEntry'],
+            entries: this.core,
+
             // Top-level help
             help: (): Promise<{
                 groups: string[]
