@@ -26,6 +26,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         getRecent: 'getRecentEntries',
         quick: 'createEntryMinimal',
         tags: 'listTags',
+        appendInsight: 'createEntry',
     },
     search: {
         find: 'searchEntries',

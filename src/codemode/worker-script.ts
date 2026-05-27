@@ -196,6 +196,10 @@ async function executeCode(
         const sandbox: Record<string, unknown> = {
             mj: mjApi,
             journal: mjApi['core'],
+            sqlite: mjApi,
+            postgres: mjApi,
+            mysql: mjApi,
+            db: mjApi,
             context: contextObj ?? {},
             console: {
                 log: (...args: unknown[]) => args,
