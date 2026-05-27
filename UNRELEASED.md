@@ -42,6 +42,7 @@
 - **codemode**: Refined static security blocked patterns (e.g., `http.`, `fs.`, `process.`) with negative lookbehinds (`(?<![.-])`) to eliminate false positives when these sequences appear within legitimate filenames or safe property chains (e.g., `streamable-http.spec.ts`)
 - **codemode**: Added `writeQuery` as an alias to `createEntry` in the core API group to gracefully handle cross-server agent hallucinations attempting to log database queries directly into the journal
 - **codemode**: Intercepted Code Mode `SyntaxError` exceptions (e.g., missing parenthesis) to append actionable tips advising the use of template literals (backticks) for long, multi-line markdown payloads to prevent escaping errors
+- **codemode**: Handled common agent parameter hallucinations by dynamically mapping `id` keys to `entry_id` within the `normalizeParams` pipeline, fixing `deleteEntry({ id: ... })` failures
 - **skills**: Addressed critical findings from the adversarial skill audit (removed `{{ORG_NAME}}` placeholder from `github-repo-setup`, removed duplicate description fragment from `adversarial-performance`, added missing `disable-model-invocation: true` to `mcp-builder`).
 - **admin/core**: Handled `strict-boolean-expressions` TypeScript errors when validating the `auto_context` parameter dynamically
 - **briefing**: Fixed dynamic context routing mismatch, `undefined` runtime property crash, and missing blank lines/tags causing IDE rendering cutoff

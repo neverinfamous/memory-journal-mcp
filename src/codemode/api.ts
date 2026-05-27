@@ -65,7 +65,13 @@ export function toolNameToMethodName(toolName: string, groupName: string): strin
 function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {
-        const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        
+        // Handle common agent hallucination where they pass 'id' instead of 'entry_id'
+        if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
+            snakeKey = 'entry_id'
+        }
+        
         result[snakeKey] = value
     }
     return result
