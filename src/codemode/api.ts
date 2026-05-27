@@ -261,6 +261,13 @@ export class JournalApi {
         this.github = createGroupApi('github', this.toolsByGroup.get('github') ?? [], dispatcher)
         this.backup = createGroupApi('backup', this.toolsByGroup.get('backup') ?? [], dispatcher)
         this.team = createGroupApi('team', this.toolsByGroup.get('team') ?? [], dispatcher)
+
+        // Smooth out common cross-group agent hallucinations
+        const searchEntriesFn = this.search['searchEntries']
+        if (searchEntriesFn) {
+            this.core['searchEntries'] = searchEntriesFn
+            this.core['search'] = searchEntriesFn
+        }
     }
 
     /**

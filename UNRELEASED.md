@@ -42,7 +42,7 @@
 - **admin/core**: Handled `strict-boolean-expressions` TypeScript errors when validating the `auto_context` parameter dynamically
 - **briefing**: Fixed dynamic context routing mismatch, `undefined` runtime property crash, and missing blank lines/tags causing IDE rendering cutoff
 - **briefing**: Corrected static `RESOURCE_COUNT` to lazy dynamic count, switched coverage % source to vitest structured output, and deduplicated entry previews
-- **codemode**: Mapped `mj.addEntry` and `mj.entries` as dynamic proxies to `mj.core` to automatically smooth out and natively fulfill frequent agent hallucinations without erroring
+- **codemode**: Mapped `mj.addEntry`, `mj.entries`, and `mj.core.searchEntries` as dynamic proxies to natively fulfill frequent agent hallucinations without erroring
 - **codemode**: Added root Proxy boundary to catch hallucinated top-level flat methods (e.g. `mj.addEntry`) and return structured error recommendations instead of raw TypeErrors
 - **codemode**: Excluded flat top-level method aliases (e.g., `createEntry`, `getStatistics`) from the "Available groups" list in the Code Mode Proxy error boundary
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
