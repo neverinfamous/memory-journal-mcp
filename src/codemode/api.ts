@@ -322,7 +322,11 @@ export class JournalApi {
             entries: this.core,
             deleteEntry: (params: number | { entry_id: number }) => {
                 const entry_id = typeof params === 'number' ? params : params.entry_id
-                return this.admin['deleteEntry']({ entry_id })
+                const deleteFn = this.admin['deleteEntry']
+                if (deleteFn === undefined) {
+                    return Promise.reject(new Error('deleteEntry method not found'))
+                }
+                return deleteFn({ entry_id })
             },
             updateEntry: this.admin['updateEntry'],
 
