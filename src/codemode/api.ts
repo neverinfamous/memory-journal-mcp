@@ -320,6 +320,11 @@ export class JournalApi {
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
             addEntry: this.core['createEntry'],
             entries: this.core,
+            deleteEntry: (params: number | { entry_id: number }) => {
+                const entry_id = typeof params === 'number' ? params : params.entry_id
+                return this.admin['deleteEntry']({ entry_id })
+            },
+            updateEntry: this.admin['updateEntry'],
 
             // Top-level help
             help: (): Promise<{
