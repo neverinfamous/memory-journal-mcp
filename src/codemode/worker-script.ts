@@ -323,17 +323,21 @@ async function executeCode(
         const endTime = performance.now()
         const endCpu = process.cpuUsage(startCpu)
         const error = err instanceof Error ? err : new Error(String(err))
-        const metrics: ExecutionMetrics = {
-            wallTimeMs: Math.round(endTime - startTime),
-            cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
-            memoryUsedMb: 0,
+        
+        // Add tip for syntax errors
+        if (error instanceof SyntaxError && error.message.includes('missing ) after argument list')) {
+            error.message += '\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes, use template literals (backticks `) instead of single/double quotes to avoid escaping SyntaxErrors.'
         }
-
+        
         return {
             success: false,
             error: error.message,
             stack: error.stack,
-            metrics,
+            metrics: {
+                wallTimeMs: Math.round(endTime - startTime),
+                cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
+                memoryUsedMb: 0,
+            },
         }
     }
 }

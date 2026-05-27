@@ -27,6 +27,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         quick: 'createEntryMinimal',
         tags: 'listTags',
         appendInsight: 'createEntry',
+        writeQuery: 'createEntry',
     },
     search: {
         find: 'searchEntries',
@@ -204,6 +205,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     getRecentEntries: 'limit',
     createEntryMinimal: 'content',
     testSimple: 'message',
+    writeQuery: 'content',
 
     // Search
     searchEntries: 'query',
