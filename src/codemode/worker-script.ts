@@ -193,13 +193,53 @@ async function executeCode(
     try {
         const mjApi = buildApiProxy(methodList, schemaList)
 
+        // Permissive shim to smooth out common agent hallucinations across different repos
+        const shimMj: Record<string, unknown> = new Proxy(mjApi, {
+            get(target: Record<string, unknown>, prop: string | symbol): unknown {
+                // Handle infinite chaining
+                if (prop === 'mj' || prop === 'journal' || prop === 'memory') return shimMj;
+                // Handle `sqlite.mj.executeCode` (from db-mcp parity)
+                if (prop === 'executeCode') {
+                    if ('codemode' in target) {
+                        const codemodeGroup = target['codemode'] as Record<string, unknown>;
+                        return codemodeGroup['mjExecuteCode'] ?? codemodeGroup['executeCode'];
+                    }
+                    return () => Promise.reject(new Error("You are already inside Code Mode execution. You do not need to call executeCode again. Just write your logic directly (e.g., return await mj.core.createEntry(...))."));
+                }
+                // Handle `memory.journal.addEntry` natural hallucination
+                if (prop === 'addEntry' && 'core' in target) {
+                    const coreGroup = target['core'] as Record<string, unknown>;
+                    return coreGroup['createEntry'];
+                }
+                // Handle `memory.append(tags, content, metadata)` natural hallucination
+                if (prop === 'append' && 'core' in target) {
+                    const coreGroup = target['core'] as Record<string, unknown>;
+                    const createEntry = coreGroup['createEntry'] as (args: unknown) => unknown;
+                    return (arg1: unknown, arg2: unknown, arg3: unknown) => {
+                        const tags = Array.isArray(arg1) ? arg1 : [typeof arg1 === 'string' ? arg1 : 'test'];
+                        const content = typeof arg2 === 'string' ? arg2 : (arg2 != null ? JSON.stringify(arg2) : '');
+                        const metadata = typeof arg3 === 'object' && arg3 !== null ? { ...(arg3 as Record<string, unknown>) } : undefined;
+                        
+                        const typeVal = metadata?.['type'];
+                        const type = typeof typeVal === 'string' && typeVal !== '' ? typeVal : 'test_entry';
+                        if (metadata && 'type' in metadata) delete metadata['type'];
+
+                        return createEntry({ type, tags, content, metadata });
+                    };
+                }
+                // Fall back to the strict `mjApi` proxy which provides exact error messages
+                return Reflect.get(target, prop) as unknown;
+            }
+        });
+
         const sandbox: Record<string, unknown> = {
-            mj: mjApi,
-            journal: mjApi['core'],
-            sqlite: mjApi,
-            postgres: mjApi,
-            mysql: mjApi,
-            db: mjApi,
+            mj: shimMj,
+            journal: shimMj,
+            sqlite: shimMj,
+            postgres: shimMj,
+            mysql: shimMj,
+            db: shimMj,
+            memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
             context: contextObj ?? {},
             console: {
                 log: (...args: unknown[]) => args,
