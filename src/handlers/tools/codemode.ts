@@ -225,7 +225,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Smooth out legacy tool hallucination (e.g. mj_create_entry payload passed directly to mj_execute_code)
                     // If the agent sends { content: "...", title: "..." } instead of { code: "..." }, wrap it natively
                     if (
-                        params &&
+                        params != null &&
                         typeof params === 'object' &&
                         !('code' in params) &&
                         ('content' in params || 'title' in params)
