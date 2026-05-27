@@ -39,6 +39,7 @@
 ### Fixed
 
 - **codemode**: Added `shimMj` proxy fallback in worker sandbox to seamlessly intercept and route common agent API hallucinations (e.g., `sqlite.mj.executeCode`, `memory.journal.addEntry`, `memory.append`) to valid tools
+- **codemode**: Refined static security blocked patterns (e.g., `http.`, `fs.`, `process.`) with negative lookbehinds (`(?<![.-])`) to eliminate false positives when these sequences appear within legitimate filenames or safe property chains (e.g., `streamable-http.spec.ts`)
 - **skills**: Addressed critical findings from the adversarial skill audit (removed `{{ORG_NAME}}` placeholder from `github-repo-setup`, removed duplicate description fragment from `adversarial-performance`, added missing `disable-model-invocation: true` to `mcp-builder`).
 - **admin/core**: Handled `strict-boolean-expressions` TypeScript errors when validating the `auto_context` parameter dynamically
 - **briefing**: Fixed dynamic context routing mismatch, `undefined` runtime property crash, and missing blank lines/tags causing IDE rendering cutoff

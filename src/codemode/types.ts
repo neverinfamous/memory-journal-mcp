@@ -112,9 +112,9 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     blockedPatterns: [
         /\brequire\s*\(/, // No require()
         /\bimport\s*\(/, // No dynamic import()
-        /\bprocess\./, // No process access
-        /\bglobal\./, // No global access
-        /\bglobalThis\./, // No globalThis access
+        /(?<![.-])\bprocess\./, // No process access
+        /(?<![.-])\bglobal\./, // No global access
+        /(?<![.-])\bglobalThis\./, // No globalThis access
         /\beval\s*\(/, // No eval()
         /\bFunction\s*\(/, // No Function constructor
         /\b__proto__\b/, // No prototype pollution
@@ -123,11 +123,11 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
         /\bReflect\s*\./i, // No Reflect API access (getPrototypeOf, ownKeys, construct, etc.)
         /\bSymbol\s*\./i, // No Symbol access (hasInstance, toPrimitive, etc.)
         /\bnew\s+Proxy\s*\(/i, // No Proxy construction
-        /\bchild_process/, // No child processes
-        /\bfs\./, // No filesystem
-        /\bnet\./, // No networking
-        /\bhttp\./, // No HTTP
-        /\bhttps\./, // No HTTPS
+        /(?<![.-])\bchild_process/, // No child processes
+        /(?<![.-])\bfs\./, // No filesystem
+        /(?<![.-])\bnet\./, // No networking
+        /(?<![.-])\bhttp\./, // No HTTP
+        /(?<![.-])\bhttps\./, // No HTTPS
     ],
 }
 
