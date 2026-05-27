@@ -125,6 +125,9 @@ dmypy.json
 *.swo
 *~
 
+# Synced consumer skills (installed by npx neverinfamous-agent-skills)
+.agents/
+
 # OS files
 .DS_Store
 Thumbs.db
