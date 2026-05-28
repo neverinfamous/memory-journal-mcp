@@ -89,7 +89,19 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
 
         // Object arg — pass through and convert camelCase to snake_case
         if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-            return convertKeysToSnakeCase(arg as Record<string, unknown>)
+            const obj = convertKeysToSnakeCase(arg as Record<string, unknown>)
+            
+            // Handle common agent hallucination where they omit 'content' and pass arbitrary fields
+            if ((methodName === 'createEntry' || methodName === 'createEntryMinimal') && !('content' in obj)) {
+                let content = ''
+                for (const [key, value] of Object.entries(obj)) {
+                    if (key === 'type' || key === 'tags') continue
+                    content += `**${key}**\n${typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}\n\n`
+                }
+                obj.content = content.trim() || 'No content provided.'
+            }
+            
+            return obj
         }
 
         // Primitive arg (string, number, boolean) — use positional mapping
@@ -325,6 +337,7 @@ export class JournalApi {
 
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
             addEntry: this.core['createEntry'],
+            sqlite_journal_add_entry: this.core['createEntry'],
             entries: this.core,
             deleteEntry: (params: number | { entry_id: number }) => {
                 const entry_id = typeof params === 'number' ? params : params.entry_id
