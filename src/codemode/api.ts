@@ -96,9 +96,10 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
                 let content = ''
                 for (const [key, value] of Object.entries(obj)) {
                     if (key === 'type' || key === 'tags') continue
-                    content += `**${key}**\n${typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}\n\n`
+                    const strValue = typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)
+                    content += `**${key}**\n${strValue}\n\n`
                 }
-                obj.content = content.trim() || 'No content provided.'
+                obj['content'] = content.trim() || 'No content provided.'
             }
             
             return obj
