@@ -240,6 +240,7 @@ async function executeCode(
             mysql: shimMj,
             db: shimMj,
             memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
+            sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'],
             context: contextObj ?? {},
             console: {
                 log: (...args: unknown[]) => args,
