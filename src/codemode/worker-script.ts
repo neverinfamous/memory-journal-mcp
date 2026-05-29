@@ -283,6 +283,18 @@ async function executeCode(
             Proxy: undefined,
         }
 
+        // Spread callable top-level methods (e.g., find, recent, createEntry) from
+        // shimMj into the sandbox as standalone globals so agents can call `find({...})`
+        // without the `mj.` prefix. Only functions are spread; group namespaces (objects)
+        // and existing sandbox keys are skipped to avoid collisions.
+        for (const key of Object.keys(mjApi)) {
+            if (key in sandbox) continue
+            const val = shimMj[key]
+            if (typeof val === 'function') {
+                sandbox[key] = val
+            }
+        }
+
         const context = vm.createContext(sandbox, {
             name: 'codemode-worker-sandbox',
             codeGeneration: {
