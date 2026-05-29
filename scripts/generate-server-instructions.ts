@@ -136,12 +136,13 @@ lines.push('const CODE_MODE_INSTRUCTIONS = ' + BT + escapeForTemplateLiteral([
     '## Code Mode',
     '',
     'API: `tool_name` → `mj.group.action()` (e.g., `search_entries` → `mj.search.searchEntries()`)',
-    'Top-level: `mj.core.create()`, `mj.core.recent()`, `mj.search.searchEntries()`, etc.',
+    'Globals: `createEntry()`, `find()`, `recent()`, `searchEntries()`, `deleteEntry()`, `help()` work without the `mj.` prefix.',
     'Positional: `create("note")`, `searchEntries("performance")`',
+    'Aliases: Common parameter names are auto-corrected (`text`→`content`, `entry`→`entry_id`, `q`→`query`, `tag`→`tags[]`).',
     'Discovery: `mj.help()` → `{groups, totalMethods}`. `mj.core.help()` for group-specific.',
     'Sandbox: No `setTimeout`, `setInterval`, `fetch`, or network access.',
     'Read `memory://help/codemode` for full namespace table, examples, and patterns.',
-    '**Codemode-only**: When `mj_execute_code` is the only registered tool, all tool names referenced in these instructions (e.g., `create_entry`, `search_entries`) must be called via `mj_execute_code` using `mj.*` namespaces. Do NOT call them as direct MCP tools.',
+    '**Codemode-only**: When `mj_execute_code` is the only registered tool, all tool names referenced in these instructions (e.g., `create_entry`, `search_entries`) must be called via `mj_execute_code` using `mj.*` namespaces or bare globals. Do NOT call them as direct MCP tools.',
 ].join('\n')) + BT)
 lines.push('')
 
