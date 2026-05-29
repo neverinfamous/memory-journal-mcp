@@ -38,8 +38,14 @@
 - **skills**: Restructured large skills, expanded `mcp-builder`, disambiguated terminology, and upgraded `adversarial-planner` to embed `gh copilot` performance/security scans directly in the planning document
 - **system**: Bumped npm dependencies (`@types/node`, `eslint`, `tsx`, `typescript-eslint`, `vitest`) to latest minor/patch versions
 
+### Removed
+
+- **instructions**: `gotchas.md`, `codemode.md`, and `server-access.md` static help files to reduce agent distraction and token usage
+- **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
+
 ### Fixed
 
+- **scripts**: Fixed `generate-server-instructions.ts` help pointer mapping logic to handle global vs group-specific help resources, resolving `test-filter-instructions.mjs` test failures
 - **codemode**: Added `shimMj` proxy fallback in worker sandbox to seamlessly intercept and route common agent API hallucinations (e.g., `sqlite.mj.executeCode`, `memory.journal.addEntry`, `memory.append`) to valid tools
 - **codemode**: Refined static security blocked patterns (e.g., `http.`, `fs.`, `process.`) with negative lookbehinds (`(?<![.-])`) to eliminate false positives when these sequences appear within legitimate filenames or safe property chains (e.g., `streamable-http.spec.ts`)
 - **codemode**: Added `writeQuery` as an alias to `createEntry` in the core API group to gracefully handle cross-server agent hallucinations attempting to log database queries directly into the journal
@@ -76,11 +82,6 @@
 - **codemode**: Extended top-level sandbox bindings with 7 additional flat-function aliases (`find`, `recent`, `listTags`, `semanticSearch`, `linkEntries`, `mergeTags`, `exportEntries`)
 - **resources**: Added `RESOURCE_URI_ALIASES` with `generateResourceAliases` to register 6 alias resource URIs (`memory://journal/recent`, `memory://journal/briefing`, `memory://entries/recent`, `memory://status`, `memory://server`, `memory://tools`) at the SDK level, delegating to canonical handlers to silently resolve common agent URI hallucinations
 - **codemode**: Promoted all callable top-level methods from `shimMj` (e.g., `createEntry`, `find`, `recent`, `searchEntries`, `deleteEntry`) as standalone VM sandbox globals, allowing agents to call `find({...})` without the `mj.` prefix
-
-### Removed
-
-- **instructions**: `gotchas.md`, `codemode.md`, and `server-access.md` static help files to reduce agent distraction and token usage
-- **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Security
 

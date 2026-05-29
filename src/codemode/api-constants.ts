@@ -136,6 +136,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         resolveTeamFlag: 'teamResolveFlag',
         passFlag: 'teamPassFlag',
         resolveFlag: 'teamResolveFlag',
+        collaborationMatrix: 'teamGetCollaborationMatrix',
     },
 }
 

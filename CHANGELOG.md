@@ -18,21 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [7.7.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.7.0) - 2026-05-06
 
-### Security
+### Added
 
-- Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
-- Fixed HIGH severity Trivy code scanning alert (CVE-2026-27135) by explicitly upgrading `nghttp2-libs` from Alpine edge repository in Dockerfile
+- `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
+- New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
 ### Changed
 
 - **Dependency Updates**:
   - Bumped npm packages (`@huggingface/transformers`, `eslint`, `globals`, `jose`, `typescript-eslint`, `zod`)
   - Bumped GitHub Actions (`github/gh-aw-actions`, `aquasecurity/trivy-action`, `github/codeql-action`)
-
-### Added
-
-- `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
-- New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
 
 ### Fixed
 
@@ -43,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `INTERNAL_ERROR` during `restore_backup` in Code Mode by migrating atomic database swap from `fs.rename` to `fs.copyFile` to bypass Windows `EBUSY` file locks from `sqlite-vec`.
 - Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
 - Fixed `restore_backup` returning a raw MCP JSON-RPC exception when called with missing required parameters by relaxing the outer schema.
+
+### Security
+
+- Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
+- Fixed HIGH severity Trivy code scanning alert (CVE-2026-27135) by explicitly upgrading `nghttp2-libs` from Alpine edge repository in Dockerfile
 
 ## [7.6.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.6.1) - 2026-04-22
 
