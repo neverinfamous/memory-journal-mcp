@@ -209,7 +209,11 @@ const HELP_GROUP_KEYS: readonly string[] = ["github","hush-protocol","skills"]
  * Build dynamic help pointers listing only the enabled groups.
  */
 function buildHelpPointers(groups: Set<ToolGroup>): string {
-    const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => groups.has(k as ToolGroup))
+    const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => {
+        if (k === 'hush-protocol') return groups.has('team')
+        if (k === 'skills') return true
+        return groups.has(k as ToolGroup)
+    })
     if (enabledHelpGroups.length === 0) {
         return '\n\nRead `memory://help` for gotchas and critical usage patterns.'
     }

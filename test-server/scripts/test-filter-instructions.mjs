@@ -83,7 +83,7 @@ const TEST_CONFIGS = [
         expect: {
             CORE: true,
             CODE_MODE: false,
-            HELP_POINTERS: false,
+            HELP_POINTERS: true,
         },
     },
     {
@@ -114,7 +114,7 @@ const TEST_CONFIGS = [
         expect: {
             CORE: true,
             CODE_MODE: false,
-            HELP_POINTERS: false,
+            HELP_POINTERS: true,
         },
     },
     {
