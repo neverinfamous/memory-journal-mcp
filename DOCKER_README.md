@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-89.61%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-89.62%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -44,26 +44,26 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 **70 MCP Tools** · **19 Workflow Prompts** · **46 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
-| Feature                       | Description                                                                                                                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                     |
-| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                               |
-| **Dynamic Project Routing**   | Switch contexts across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                                                            |
-| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                 |
-| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5, semantic vector similarity, heuristics, and date filters                                                                                               |
-| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                    |
+| Feature                       | Description                                                                                                                                                                                         |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                           |
+| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                     |
+| **Dynamic Project Routing**   | Switch contexts across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                                                                  |
+| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                       |
+| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5, semantic vector similarity, heuristics, and date filters                                                                                                     |
+| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                          |
 | **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens |
-| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                      |
-| **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                            |
-| **Team Collaboration**        | 25 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution, Hush Protocol flags                                                 |
-| **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                              |
-| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                         |
-| **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                               |
-| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                            |
-| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                     |
-| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                  |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules |
-| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                                |
+| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                            |
+| **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                  |
+| **Team Collaboration**        | 25 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution, Hush Protocol flags                                                       |
+| **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                                    |
+| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                               |
+| **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                     |
+| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                  |
+| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                           |
+| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                        |
+| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules       |
+| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                                      |
 
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
@@ -72,11 +72,18 @@ _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
 **🛑 MANDATORY SESSION START ROUTINE**
 
-Execute BEFORE fulfilling any user request in a new session:
+Before addressing the user's request, complete these steps in order:
 
-1. **Use memory-journal-mcp's `read_resource` tool to read `memory://briefing/{repo_name}`**. Infer the intended `repo_name` from context, or omit the repo name (i.e., `memory://briefing`) to use the default fallback configured in the MCP registry.
-2. Do NOT autonomously resume past tasks or start work on new issues mentioned in the briefing.
+1. Read the briefing using memory-journal-mcp's `read_resource` tool (not `mj_execute_code`): `memory://briefing/{repo_name}`.
+   - Infer `repo_name` from context. Use `memory://briefing` as fallback only if necessary.
+2. Your first response MUST begin with the briefing content. Use this format:
 
+   > **📋 Briefing loaded** — `{repo_name}`
+   >
+   > _{paste ENTIRE briefing here}_ (The resource isn't easy for user to access in some IDEs)
+
+3. Then address the user's request below the briefing.
+4. Do NOT autonomously resume work on issues mentioned in the briefing.
 </details>
 
 > [!NOTE]
@@ -269,6 +276,18 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 ```
 
 > 💡 **Tip:** Optimize your context window! **Journal entries** (`BRIEFING_ENTRY_COUNT`) capture frequent, granular actions (e.g. bug fixes, implementation steps). **Session summaries** (`BRIEFING_SUMMARY_COUNT`) surface high-level retrospectives meant to pass strategic context continuously across distinct AI sessions. Use both appropriately to keep the agent briefing highly focused!
+
+### 📋 Customizing the Session Briefing
+
+The `memory://briefing` resource is dynamically assembled at each session start. Control what your agent sees by tuning three dimensions via environment variables:
+
+- **Depth** — `INSTRUCTION_LEVEL`: `essential`, `standard` (default), or `full`
+- **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`
+- **GitHub Enrichment** — `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS`
+
+Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as companion resources. In multi-repo setups, agents read `memory://briefing/{repo}` for repo-scoped context.
+
+**[Full briefing customization guide with presets →](https://github.com/neverinfamous/memory-journal-mcp#-customizing-the-session-briefing)**
 
 **Variants** (modify the config array above):
 

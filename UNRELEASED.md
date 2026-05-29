@@ -22,6 +22,7 @@
 - **skills**: 4 adversarial auditing skills, the `journal-optimizer` skill, and migrated 14 skills from `adamic`
 - **skills**: Official vendor skills for AWS, GCP, Azure, and Render added to the inventory
 - **skills**: `docs-marketer` skill for documentation marketability auditing with 10-category scoring, optional adversarial dual-agent mode, and Copilot validation
+- **docs**: Added "Customizing the Session Briefing" sections to `README.md`, `DOCKER_README.md`, and wiki `Configuration.md` with three-dimensional customization guide (depth, journal content, GitHub enrichment), context injections, repo-scoped briefings, and preset recipes
 
 ### Changed
 
