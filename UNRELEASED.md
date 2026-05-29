@@ -4,6 +4,7 @@
 
 ### Added
 
+- **github**: Re-added Dependabot configuration scoped to `github-actions` only (no npm, no auto-merge) for passive version update notifications
 - **prompts**: `adversarial-plan-review` prompt bootstrapping multi-pass adversarial planning with structured review dimensions, scoring rubric, and prior plan context from the journal
 - **prompts**: `flag-dashboard` prompt for triaging active Hush Protocol flags with severity grouping, staleness detection, and resolution guidance
 - **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
@@ -68,7 +69,6 @@
 
 ### Removed
 
-- **github**: Dependabot configuration to reduce PR noise and merge conflicts
 - **instructions**: `gotchas.md`, `codemode.md`, and `server-access.md` static help files to reduce agent distraction and token usage
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
