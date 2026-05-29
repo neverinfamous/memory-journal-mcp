@@ -227,6 +227,28 @@ async function executeCode(
                         return createEntry({ type, tags, content, metadata });
                     };
                 }
+                // db-mcp bleedover: silently route database-specific methods to closest journal equivalents
+                if (typeof prop === 'string') {
+                    const DB_TO_JOURNAL: Record<string, [string, string]> = {
+                        listTables: ['analytics', 'getStatistics'],
+                        describeTable: ['analytics', 'getStatistics'],
+                        count: ['analytics', 'getStatistics'],
+                        analyze: ['analytics', 'getStatistics'],
+                        vacuum: ['analytics', 'getStatistics'],
+                        integrityCheck: ['analytics', 'getStatistics'],
+                        exists: ['core', 'getEntryById'],
+                        upsert: ['core', 'createEntry'],
+                        batchInsert: ['core', 'createEntry'],
+                        readQuery: ['search', 'searchEntries'],
+                    };
+                    const mapping = DB_TO_JOURNAL[prop];
+                    if (mapping !== undefined) {
+                        const [group, method] = mapping;
+                        if (group in target) {
+                            return (target[group] as Record<string, unknown>)[method];
+                        }
+                    }
+                }
                 // Fall back to the strict `mjApi` proxy which provides exact error messages
                 return Reflect.get(target, prop) as unknown;
             }

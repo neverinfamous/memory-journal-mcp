@@ -67,6 +67,14 @@
 - **skills**: Elaborated 4 stub skills, delineated Cloudflare and testing topologies, and verified database triggers per the adversarial skill audit
 - **tests**: Fixed Code Mode scripts to include `project_number` and updated Playwright specs to assert against markdown `memory://briefing` responses
 - **tests**: Fixed formatting assertions in briefing user message tests
+- **codemode**: Expanded `METHOD_ALIASES` with ~25 predicted high-probability hallucination aliases covering CRUD verb confusion (`newEntry`, `insert`, `write`, `log`, `record`, `note`, `save`, `getEntry`, `fetch`, `read`, `list`, `all`, `latest`), search verb variants (`query`, `lookup`, `findEntries`), admin verb variants (`editEntry`, `modifyEntry`, `modify`, `removeEntry`), and backup shortcuts (`create`, `backup`)
+- **codemode**: Added `PARAM_ALIASES` map to `convertKeysToSnakeCase` to silently remap hallucinated parameter names (`text`/`body`/`note` → `content`, `entry` → `entry_id`, `q` → `query`, `issue` → `issue_number`, `pr` → `pr_number`, `project` → `project_number`) with conflict-safe guards
+- **codemode**: Added singular `tag` → `tags` array coercion in parameter normalization to handle agents passing `{ tag: "foo" }` instead of `{ tags: ["foo"] }`
+- **codemode**: Expanded `JournalApi` constructor cross-group wiring to route admin operations (`deleteEntry`, `updateEntry`, `mergeTags`) and io/backup operations (`exportEntries`, `backupJournal`) through `core` group, and mapped db-mcp admin operations (`backup`, `restore`, `analyze`) to their journal equivalents
+- **codemode**: Added db-mcp bleedover cross-wiring: `readQuery` → `searchEntries`, `upsert` → `createEntry`, `count`/`listTables`/`describeTable` → `getStatistics`, `exists` → `getEntryById` for agents confused about which MCP server they're talking to
+- **codemode**: Added `DB_TO_JOURNAL` mapping in `shimMj` proxy to silently route 10 db-mcp-specific top-level method hallucinations (`listTables`, `describeTable`, `count`, `analyze`, `vacuum`, `integrityCheck`, `exists`, `upsert`, `batchInsert`, `readQuery`) to their closest journal equivalents
+- **codemode**: Extended top-level sandbox bindings with 7 additional flat-function aliases (`find`, `recent`, `listTags`, `semanticSearch`, `linkEntries`, `mergeTags`, `exportEntries`)
+- **resources**: Added `RESOURCE_URI_ALIASES` with `generateResourceAliases` to register 6 alias resource URIs (`memory://journal/recent`, `memory://journal/briefing`, `memory://entries/recent`, `memory://status`, `memory://server`, `memory://tools`) at the SDK level, delegating to canonical handlers to silently resolve common agent URI hallucinations
 
 ### Removed
 

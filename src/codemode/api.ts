@@ -60,6 +60,22 @@ export function toolNameToMethodName(toolName: string, groupName: string): strin
 // =============================================================================
 
 /**
+ * Known parameter alias map for common agent hallucinations.
+ * Maps hallucinated parameter names to their canonical equivalents.
+ * Only applied when the canonical name is not already present.
+ */
+const PARAM_ALIASES: Record<string, string> = {
+    text: 'content',
+    body: 'content',
+    note: 'content',
+    entry: 'entry_id',
+    q: 'query',
+    issue: 'issue_number',
+    pr: 'pr_number',
+    project: 'project_number',
+}
+
+/**
  * Convert camelCase object keys to snake_case
  */
 function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -71,9 +87,23 @@ function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, un
         if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
             snakeKey = 'entry_id'
         }
+
+        // Remap known parameter aliases (only when canonical name is absent)
+        const alias = PARAM_ALIASES[snakeKey]
+        if (alias !== undefined && !(alias in obj) && !(alias in result)) {
+            snakeKey = alias
+        }
         
         result[snakeKey] = value
     }
+
+    // Coerce singular 'tag' to 'tags' array
+    if ('tag' in result && !('tags' in result)) {
+        const tagVal = result['tag']
+        result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
+        delete result['tag']
+    }
+
     return result
 }
 
@@ -288,7 +318,44 @@ export class JournalApi {
         if (searchEntriesFn) {
             this.core['searchEntries'] = searchEntriesFn
             this.core['search'] = searchEntriesFn
+            this.core['readQuery'] = searchEntriesFn // db-mcp bleedover
         }
+
+        // db-mcp bleedover: upsert maps to createEntry in journal context
+        const createEntryFn = this.core['createEntry']
+        if (createEntryFn) {
+            this.core['upsert'] = createEntryFn
+        }
+
+        // Cross-group: admin operations commonly attempted on core
+        const deleteEntryFn = this.admin['deleteEntry']
+        if (deleteEntryFn) this.core['deleteEntry'] = deleteEntryFn
+        const updateEntryFn = this.admin['updateEntry']
+        if (updateEntryFn) this.core['updateEntry'] = updateEntryFn
+        const mergeTagsFn = this.admin['mergeTags']
+        if (mergeTagsFn) this.core['mergeTags'] = mergeTagsFn
+
+        // Cross-group: io/backup operations commonly attempted on core
+        const exportFn = this.io['exportEntries']
+        if (exportFn) this.core['exportEntries'] = exportFn
+        const backupFn = this.backup['backupJournal']
+        if (backupFn) this.core['backupJournal'] = backupFn
+
+        // Cross-group: db-mcp admin operations mapping to backup
+        const restoreFn = this.backup['restoreBackup']
+        if (backupFn) this.admin['backup'] = backupFn
+        if (restoreFn) this.admin['restore'] = restoreFn
+
+        // db-mcp bleedover: database operations → closest journal equivalents
+        const statsFn = this.analytics['getStatistics']
+        if (statsFn) {
+            this.core['count'] = statsFn
+            this.core['listTables'] = statsFn
+            this.core['describeTable'] = statsFn
+            this.admin['analyze'] = statsFn
+        }
+        const getByIdFn = this.core['getEntryById']
+        if (getByIdFn) this.core['exists'] = getByIdFn
     }
 
     /**
@@ -349,6 +416,15 @@ export class JournalApi {
                 return deleteFn({ entry_id })
             },
             updateEntry: this.admin['updateEntry'],
+
+            // Extended top-level convenience aliases for common hallucinations
+            find: this.search['searchEntries'],
+            recent: this.core['getRecentEntries'],
+            listTags: this.core['listTags'],
+            semanticSearch: this.search['semanticSearch'],
+            linkEntries: this.relationships['linkEntries'],
+            mergeTags: this.admin['mergeTags'],
+            exportEntries: this.io['exportEntries'],
 
             // Top-level help
             help: (): Promise<{
