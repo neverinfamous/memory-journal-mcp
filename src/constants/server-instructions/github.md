@@ -3,7 +3,7 @@
 - Include `issue_number`/`pr_number` in `create_entry` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → `actions-failure-digest` prompt or `memory://actions/recent`
-- Kanban: `get_kanban_board` → `add_kanban_item` / `move_kanban_item` / `delete_kanban_item` → document completion (project_number auto-resolves if repo is registered)
+- Kanban: `get_kanban_board` → `add_kanban_item` / `move_kanban_item` / `delete_kanban_item` → document completion (project_number auto-resolves if repo is registered). **⚠️ Eventual Consistency:** GitHub Projects V2 read index is heavily eventually consistent. Do NOT rely on `get_kanban_board` to immediately reflect items that were just added or moved.
 - Milestones: `get_github_milestones` → track project progress, `memory://github/milestones`
 - **Project Initialization**: To register a new project workspace, create an entry with `project_number: N`. Instruct the user to manually update their `PROJECT_REGISTRY` config, as agents cannot directly edit protected IDE config files.
 - **Multi-Project Routing**: If `memory://briefing` shows "Registered Workspaces":

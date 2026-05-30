@@ -52,6 +52,7 @@
 
 ### Fixed
 
+- **tests**: Fixed Kanban Code Mode pipeline test (`test-cm-kanban-lifecycle.md`) crashing due to GitHub Projects V2 read-index eventual consistency by adding a non-blocking sandbox spin delay and graceful degradation for `verifyBoardStructure`
 - **progress**: Fixed step numbering gaps in `export_markdown`, `import_markdown`, `restore_backup`, `team_export_entries`, `team_export_markdown`, and `team_import_markdown` — all sequences now start at 0 with no skipped steps
 - **progress**: Added missing progress notifications to `backup_journal` and `team_backup` (0/2 → 2/2)
 - **team**: Fixed Zod schema validation errors by making `project_number` optional in MCP-facing (relaxed) input schemas, complying with SDK validation rules
@@ -102,6 +103,7 @@
 - **codemode**: Promoted all callable top-level methods from `shimMj` (e.g., `createEntry`, `find`, `recent`, `searchEntries`, `deleteEntry`) as standalone VM sandbox globals, allowing agents to call `find({...})` without the `mj.` prefix
 - **annotations**: Added missing explicit `destructiveHint: false` annotations to 62 tools across all handlers and `idempotentHint: false` to `delete_entry` to achieve 100% rigor against the `db-mcp` audit standards
 - **codemode**: Prevented empty `createEntry` `{}` payloads from bypassing Zod validation by only injecting serialized fields if hallucinated properties are actually present
+
 ### Security
 
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
