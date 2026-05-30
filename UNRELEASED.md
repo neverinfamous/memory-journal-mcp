@@ -104,7 +104,9 @@
 - **codemode**: Promoted all callable top-level methods from `shimMj` (e.g., `createEntry`, `find`, `recent`, `searchEntries`, `deleteEntry`) as standalone VM sandbox globals, allowing agents to call `find({...})` without the `mj.` prefix
 - **annotations**: Added missing explicit `destructiveHint: false` annotations to 62 tools across all handlers and `idempotentHint: false` to `delete_entry` to achieve 100% rigor against the `db-mcp` audit standards
 - **codemode**: Prevented empty `createEntry` `{}` payloads from bypassing Zod validation by only injecting serialized fields if hallucinated properties are actually present
-- **codemode**: Added `repo_name` as an automatic fallback mapped to `repo` within `mj_execute_code` input sanitization to prevent context loss on common agent hallucinations
+- **repo**: Added `repo_name` as an automatic fallback mapped to `repo` within `mj_execute_code` input sanitization to prevent context loss on common agent hallucinations
+- **team**: Fixed `team_pass_flag` stripping `:` and `@` from tags in SQLite adapter
+- **codemode**: Default `project_number` to 1 for all team group operations when omitted by the agent
 
 ### Security
 

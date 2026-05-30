@@ -112,7 +112,7 @@ function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, un
  * Normalize parameters to support positional arguments.
  * Handles both single positional args and multiple positional args.
  */
-function normalizeParams(methodName: string, args: unknown[]): unknown {
+function normalizeParams(groupName: string, methodName: string, args: unknown[]): unknown {
     if (args.length === 0) return undefined
 
     if (args.length === 1) {
@@ -134,6 +134,11 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
                 if (trimmed) {
                     obj['content'] = trimmed
                 }
+            }
+            
+            // Default project_number to 1 for team tools if omitted
+            if (groupName === 'team' && !('project_number' in obj)) {
+                obj['project_number'] = 1
             }
             
             return obj
@@ -193,6 +198,11 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
         }
     }
 
+    // Default project_number to 1 for team tools if omitted
+    if (groupName === 'team' && !('project_number' in result)) {
+        result['project_number'] = 1
+    }
+
     return result
 }
 
@@ -223,7 +233,7 @@ function createGroupApi(
         const methodName = toolNameToMethodName(tool.name, groupName)
 
         api[methodName] = (...args: unknown[]): Promise<unknown> => {
-            const normalizedParams = normalizeParams(methodName, args) ?? {}
+            const normalizedParams = normalizeParams(groupName, methodName, args) ?? {}
             // SEC-1.1: Route through dispatcher (callTool gate) when available.
             // Dispatcher enforces scope checks, maintenance mode, and audit.
             if (dispatcher) {
