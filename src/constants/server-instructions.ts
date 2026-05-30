@@ -94,6 +94,7 @@ Only help resources for your enabled tool groups are registered.
 
 ### Journal Behaviors
 
+- **Strict Validation**: The \`project_number\` parameter is STRICTLY REQUIRED for almost all core and team tool operations (e.g., \`create_entry\`, \`search_entries\`, \`team_update_entry\`). You will receive a \`VALIDATION_ERROR\` if you omit it.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
@@ -327,7 +328,7 @@ export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
 export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
   ["github", `# GitHub Integration
 
-- Include \`issue_number\`/\`pr_number\` in \`create_entry\` to auto-link
+- Include \`issue_number\`/\`pr_number\` and \`project_number\` in \`create_entry\` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
 - Kanban: \`get_kanban_board\` → \`add_kanban_item\` / \`move_kanban_item\` / \`delete_kanban_item\` → document completion (project_number auto-resolves if repo is registered). **⚠️ Eventual Consistency:** GitHub Projects V2 read index is heavily eventually consistent. Do NOT rely on \`get_kanban_board\` to immediately reflect items that were just added or moved.
@@ -349,7 +350,7 @@ When the user has GitHub Copilot code review enabled:
 
 Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
 
-**When to create a flag** (\`team_pass_flag\` — accepts \`flag_type\`, \`message\`, and optional \`target_user\`, \`link\`, \`project_number\`, \`issue_number\`):
+**When to create a flag** (\`team_pass_flag\` — accepts required \`flag_type\`, \`message\`, \`project_number\`, and optional \`target_user\`, \`link\`, \`issue_number\`):
 
 - \`blocker\` — work is blocked and requires another person's action
 - \`needs_review\` — code, document, or decision needs peer review
@@ -364,7 +365,7 @@ Flags are machine-actionable signals stored in the team database. They replace S
 
 **Triage prompt**: Use the \`flag-dashboard\` prompt to triage active flags with priority assessment, staleness detection, and resolution guidance.
 
-**Code Mode**: \`mj.team.passTeamFlag({ flag_type, message, target_user })\` and \`mj.team.resolveTeamFlag({ flag_id })\`.`],
+**Code Mode**: \`mj.team.passTeamFlag({ project_number: 1, flag_type, message, target_user })\` and \`mj.team.resolveTeamFlag({ flag_id })\`.`],
   ["skills", `# Rule & Skill Suggestions
 
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:

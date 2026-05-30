@@ -35,6 +35,7 @@ Only help resources for your enabled tool groups are registered.
 
 ### Journal Behaviors
 
+- **Strict Validation**: The `project_number` parameter is STRICTLY REQUIRED for almost all core and team tool operations (e.g., `create_entry`, `search_entries`, `team_update_entry`). You will receive a `VALIDATION_ERROR` if you omit it.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., `create_entry`) by default. ONLY save to the team journal (e.g., `team_create_entry`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use `sort_by: "importance"` on `search_entries`, `get_recent_entries`, or `search_by_date_range` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.

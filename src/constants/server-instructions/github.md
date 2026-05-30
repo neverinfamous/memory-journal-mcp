@@ -1,6 +1,6 @@
 # GitHub Integration
 
-- Include `issue_number`/`pr_number` in `create_entry` to auto-link
+- Include `issue_number`/`pr_number` and `project_number` in `create_entry` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → `actions-failure-digest` prompt or `memory://actions/recent`
 - Kanban: `get_kanban_board` → `add_kanban_item` / `move_kanban_item` / `delete_kanban_item` → document completion (project_number auto-resolves if repo is registered). **⚠️ Eventual Consistency:** GitHub Projects V2 read index is heavily eventually consistent. Do NOT rely on `get_kanban_board` to immediately reflect items that were just added or moved.

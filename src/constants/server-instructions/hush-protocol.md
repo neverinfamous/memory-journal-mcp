@@ -2,7 +2,7 @@
 
 Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
 
-**When to create a flag** (`team_pass_flag` — accepts `flag_type`, `message`, and optional `target_user`, `link`, `project_number`, `issue_number`):
+**When to create a flag** (`team_pass_flag` — accepts required `flag_type`, `message`, `project_number`, and optional `target_user`, `link`, `issue_number`):
 
 - `blocker` — work is blocked and requires another person's action
 - `needs_review` — code, document, or decision needs peer review
@@ -17,4 +17,4 @@ Flags are machine-actionable signals stored in the team database. They replace S
 
 **Triage prompt**: Use the `flag-dashboard` prompt to triage active flags with priority assessment, staleness detection, and resolution guidance.
 
-**Code Mode**: `mj.team.passTeamFlag({ flag_type, message, target_user })` and `mj.team.resolveTeamFlag({ flag_id })`.
+**Code Mode**: `mj.team.passTeamFlag({ project_number: 1, flag_type, message, target_user })` and `mj.team.resolveTeamFlag({ flag_id })`.
