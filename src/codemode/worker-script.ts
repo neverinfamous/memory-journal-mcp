@@ -132,7 +132,7 @@ function buildApiProxy(
                     : methodNames.length === 0
                         ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
                         : `Operation '${key}' is not found in group. Available: ${available}.`
-                return (..._args: unknown[]) => Promise.resolve({ success: false, error: reason, code: 'METHOD_NOT_FOUND' })
+                return (..._args: unknown[]) => { throw new Error(reason) }
             },
         })
 
@@ -166,12 +166,12 @@ function buildApiProxy(
                 // no-op function target for the proxy
             }, {
                 apply() {
-                    return Promise.resolve({ success: false, error: reason, code: 'METHOD_NOT_FOUND' })
+                    throw new Error(reason)
                 },
                 get(_t, subProp) {
                     if (typeof subProp === 'symbol') return undefined
                     if (subProp === 'then') return undefined
-                    return (..._args: unknown[]) => Promise.resolve({ success: false, error: `${reason} (Attempted to access 'mj.${prop}.${subProp}')`, code: 'METHOD_NOT_FOUND' })
+                    return (..._args: unknown[]) => { throw new Error(`${reason} (Attempted to access 'mj.${prop}.${subProp}')`) }
                 }
             })
         }

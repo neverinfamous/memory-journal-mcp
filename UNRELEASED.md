@@ -66,7 +66,7 @@
 - **briefing**: Fixed dynamic context routing mismatch, `undefined` runtime property crash, and missing blank lines/tags causing IDE rendering cutoff
 - **briefing**: Corrected static `RESOURCE_COUNT` to lazy dynamic count, switched coverage % source to vitest structured output, and deduplicated entry previews
 - **codemode**: Mapped `mj.addEntry`, `mj.entries`, and `mj.core.searchEntries` as dynamic proxies to natively fulfill frequent agent hallucinations without erroring
-- **codemode**: Added root Proxy boundary to catch hallucinated top-level flat methods (e.g. `mj.addEntry`) and return structured error recommendations instead of raw TypeErrors
+- **codemode**: Added root Proxy boundary to catch hallucinated top-level flat methods (e.g. `mj.addEntry`) and throw descriptive execution errors with available groups instead of generic TypeErrors
 - **codemode**: Excluded flat top-level method aliases (e.g., `createEntry`, `getStatistics`) from the "Available groups" list in the Code Mode Proxy error boundary
 - **codemode**: Excluded `memory` and `entries` aliases from the `groups` list returned by `mj.help()` to ensure accurate discoverability count
 - **codemode**: Dynamically intercepted legacy `mj_create_entry` hallucinated payloads sent directly to `mj_execute_code` (missing `code` field) to seamlessly wrap them in valid native sandbox execution scripts without throwing Zod errors
