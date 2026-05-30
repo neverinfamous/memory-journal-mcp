@@ -73,11 +73,16 @@ export function coerceSignificanceAlias(params: unknown): void {
         if (typeof obj['significance_type'] === 'string') {
             const lower = obj['significance_type'].toLowerCase()
             if (lower === 'important') obj['significance_type'] = 'milestone'
-            if (lower === 'major') obj['significance_type'] = 'breakthrough'
-            if (lower === 'critical') obj['significance_type'] = 'security'
-            if (lower === 'learning') obj['significance_type'] = 'lesson_learned'
-            if (lower === 'key_decision') obj['significance_type'] = 'decision'
-            if (lower === 'resolved') obj['significance_type'] = 'blocker_resolved'
+            else if (lower === 'major') obj['significance_type'] = 'breakthrough'
+            else if (lower === 'critical') obj['significance_type'] = 'security'
+            else if (lower === 'learning') obj['significance_type'] = 'lesson_learned'
+            else if (lower === 'key_decision') obj['significance_type'] = 'decision'
+            else if (lower === 'resolved') obj['significance_type'] = 'blocker_resolved'
+            else if (!(SIGNIFICANCE_TYPES as readonly string[]).includes(lower)) {
+                // Smooth out hallucinated invalid significance types (like "minor")
+                // by silently dropping them so the entry still gets created.
+                delete obj['significance_type']
+            }
         }
     }
 }
