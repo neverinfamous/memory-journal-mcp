@@ -75,6 +75,7 @@ All tool handlers return structured error responses — never raw exceptions:
 src/
 ├── cli.ts                      # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
+├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
@@ -92,6 +93,8 @@ src/
 │   ├── tools/                  # 70 tool handlers (10 groups)
 │   ├── resources/              # 46 resource handlers
 │   └── prompts/                # 19 prompt handlers
+├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
+├── observability/              # Metrics interceptor, token estimator
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration
