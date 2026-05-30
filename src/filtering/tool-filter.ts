@@ -104,7 +104,7 @@ export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
         'team',
         'codemode',
     ],
-    readonly: ['core', 'search', 'analytics', 'relationships', 'io'],
+    readonly: ['core', 'search', 'analytics', 'relationships', 'io', 'codemode'],
 }
 
 /**

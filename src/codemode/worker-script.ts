@@ -81,7 +81,8 @@ function wrapResult(result: unknown): unknown {
 
 function buildApiProxy(
     methods: Record<string, string[]>,
-    schemas?: Record<string, Record<string, string>>
+    schemas?: Record<string, Record<string, string>>,
+    readonlyMode?: boolean
 ): Record<string, unknown> {
     const api: Record<string, unknown> = {}
 
@@ -126,11 +127,12 @@ function buildApiProxy(
                 if (key in target) return target[key]
                 if (key === 'then') return undefined
                 const available = methodNames.join(', ') || 'none'
-                const reason =
-                    methodNames.length === 0
+                const reason = readonlyMode
+                    ? `Operation '${key}' is blocked in readonly mode. Read operations only.`
+                    : methodNames.length === 0
                         ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
                         : `Operation '${key}' is not found in group. Available: ${available}.`
-                return (..._args: unknown[]) => Promise.reject(new Error(reason))
+                return (..._args: unknown[]) => Promise.resolve({ success: false, error: reason, code: 'METHOD_NOT_FOUND' })
             },
         })
 
@@ -164,12 +166,12 @@ function buildApiProxy(
                 // no-op function target for the proxy
             }, {
                 apply() {
-                    return Promise.reject(new Error(reason))
+                    return Promise.resolve({ success: false, error: reason, code: 'METHOD_NOT_FOUND' })
                 },
                 get(_t, subProp) {
                     if (typeof subProp === 'symbol') return undefined
                     if (subProp === 'then') return undefined
-                    return (..._args: unknown[]) => Promise.reject(new Error(`${reason} (Attempted to access 'mj.${prop}.${subProp}')`))
+                    return (..._args: unknown[]) => Promise.resolve({ success: false, error: `${reason} (Attempted to access 'mj.${prop}.${subProp}')`, code: 'METHOD_NOT_FOUND' })
                 }
             })
         }
@@ -185,13 +187,14 @@ async function executeCode(
     methodList: Record<string, string[]>,
     schemaList: Record<string, Record<string, string>> | undefined,
     timeoutMs: number,
-    contextObj?: Record<string, unknown>
+    contextObj?: Record<string, unknown>,
+    readonlyMode?: boolean
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
 
     try {
-        const mjApi = buildApiProxy(methodList, schemaList)
+        const mjApi = buildApiProxy(methodList, schemaList, readonlyMode)
 
         // Permissive shim to smooth out common agent hallucinations across different repos
         const shimMj: Record<string, unknown> = new Proxy(mjApi, {
@@ -399,6 +402,7 @@ parentPort?.on('message', (msg: unknown) => {
                 maxResultSize?: number
                 rpcPort: MessagePort
                 contextObj?: Record<string, unknown>
+                readonlyMode?: boolean
             }
             const {
                 id,
@@ -409,6 +413,7 @@ parentPort?.on('message', (msg: unknown) => {
                 maxResultSize,
                 rpcPort: newRpcPort,
                 contextObj,
+                readonlyMode,
             } = executeMsg
 
             rpcPort = newRpcPort
@@ -427,7 +432,7 @@ parentPort?.on('message', (msg: unknown) => {
                 }
             })
 
-            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj)
+            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode)
 
             if (result.success) {
                 try {

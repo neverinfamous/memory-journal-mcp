@@ -197,6 +197,7 @@ Positional: \`create("note")\`, \`searchEntries("performance")\`
 Aliases: Common parameter names are auto-corrected (\`text\`→\`content\`, \`entry\`→\`entry_id\`, \`q\`→\`query\`, \`tag\`→\`tags[]\`).
 Discovery: \`mj.help()\` → \`{groups, totalMethods}\`. \`mj.core.help()\` for group-specific.
 Sandbox: No \`setTimeout\`, \`setInterval\`, \`fetch\`, or network access.
+Readonly: Pass \`readonly: true\` to \`mj_execute_code\` to restrict execution to read-only operations.
 Read \`memory://help/codemode\` for full namespace table, examples, and patterns.
 **Codemode-only**: When \`mj_execute_code\` is the only registered tool, all tool names referenced in these instructions (e.g., \`create_entry\`, \`search_entries\`) must be called via \`mj_execute_code\` using \`mj.*\` namespaces or bare globals. Do NOT call them as direct MCP tools.`
 

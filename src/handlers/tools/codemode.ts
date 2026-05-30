@@ -409,7 +409,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
-                    const result = await pool.execute(code, bindings, schemas, timeout, contextObj)
+                    const result = await pool.execute(code, bindings, schemas, timeout, contextObj, readonlyMode)
                     // Result size is validated internally by the worker pool
                     return result
                 } catch (err) {

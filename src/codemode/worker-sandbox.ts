@@ -156,7 +156,8 @@ export class WorkerSandbox {
         apiBindings: Record<string, unknown>,
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
-        contextObj?: Record<string, unknown>
+        contextObj?: Record<string, unknown>,
+        readonlyMode?: boolean
     ): Promise<SandboxResult> {
         let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         if (effectiveTimeout > 30000) effectiveTimeout = 30000
@@ -228,6 +229,7 @@ export class WorkerSandbox {
                     maxResultSize,
                     rpcPort: workerPort,
                     contextObj,
+                    readonlyMode,
                 },
                 [workerPort]
             )
@@ -301,7 +303,8 @@ export class WorkerSandboxPool {
         apiBindings: Record<string, unknown>,
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
-        contextObj?: Record<string, unknown>
+        contextObj?: Record<string, unknown>,
+        readonlyMode?: boolean
     ): Promise<SandboxResult> {
         let availableSandbox = this.pool.find((s) => !s.isBusy)
 
@@ -318,7 +321,7 @@ export class WorkerSandboxPool {
             }
         }
 
-        return await availableSandbox.execute(code, apiBindings, schemas, timeoutMs, contextObj)
+        return await availableSandbox.execute(code, apiBindings, schemas, timeoutMs, contextObj, readonlyMode)
     }
 
     getActiveCount(): number {

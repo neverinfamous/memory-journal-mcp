@@ -12,6 +12,7 @@
 - **auto-prune**: Importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
 - **briefing**: Server version, resource/tool counts, test health indicators, workspace paths, git working tree status, code-map availability, `📊 memory://metrics/summary` breadcrumb, and unreleased change summary to `memory://briefing` output
 - **codemode**: `context` parameter to `mj_execute_code` schema, injected into the VM worker thread to prevent string escaping syntax errors
+- **codemode**: `readonly` parameter to `mj_execute_code` schema to restrict execution to read-only API methods, returning structured errors on violation
 - **codemode**: Runtime schema introspection (`.schema()`) for proxy tools and dynamically injected TypeScript declarations for `mj_execute_code` payload
 - **codemode**: `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
 - **docs**: Missing CLI flags, environment variables, and auto-prune documentation to the Wiki and configuration examples
