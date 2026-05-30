@@ -29,6 +29,7 @@
 
 ### Changed
 
+- **tests**: Updated `test-core-infra.md` to include comprehensive test scripts for progress, prompts, team DB fallback, filter instructions, and scheduler under Phase 1.3
 - **tests**: Updated team flag Code Mode test script (`test-cm-team-flags.md`) to ensure proper permanent hard deletion of testing flags/artifacts to prevent Briefing pollution
 - **schemas**: Enforced `project_number` strict validation across all relevant Core and Team journal tools, rejecting omissions with a formatted, actionable validation error instead of defaulting to silent configuration fallbacks
 - **tests**: Appended explicit hallucination interception directives to the standard "Workflow after testing" block across all 41 Code Mode and Standard test prompts

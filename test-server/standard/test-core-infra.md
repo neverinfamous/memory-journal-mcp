@@ -51,7 +51,7 @@
 ### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
 
 > [!IMPORTANT]
-> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. Ensure the project is built first. See `test-server/README.md` for full details.
+> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. Ensure the project is built first. See `test-server/scripts/README.md` for full details.
 
 ```powershell
 # Ensure latest build
@@ -60,14 +60,35 @@ npm run build
 # Test A — Instruction levels (essential < standard < full)
 node test-server/scripts/test-instruction-levels.mjs
 
-# Test B — Tool annotations (67 tools, 45 openWorldHint=false, 22 openWorldHint=true, 0 missing)
+# Test B — Tool annotations
 node test-server/scripts/test-tool-annotations.mjs
+
+# Test C — Filter instructions token ordering
+node test-server/scripts/test-filter-instructions.mjs
+
+# Test D — Prompts API
+node test-server/scripts/test-prompts.mjs
+
+# Test E — Progress notifications
+node test-server/scripts/test-progress.mjs
+
+# Test F — Team DB Fallback
+node test-server/scripts/test-team-db-fallback.mjs
+
+# Test G — Scheduler (Requires background server)
+# Term 1: node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
+# Term 2: node test-server/scripts/test-scheduler.mjs
 ```
 
 | Check              | Expected                                                             |
 | ------------------ | -------------------------------------------------------------------- |
 | Instruction levels | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
 | Tool annotations   | 70 tools, all with `annotations`, 48 `false` + 22 `true` = 0 missing |
+| Filter instructions| Output confirms correct filtering of config sections                 |
+| Prompts API        | Successfully fetches and parses all 16 prompts                       |
+| Progress           | Both native and code-mode progress APIs successfully complete        |
+| Team DB Fallback   | Graceful rejection when TEAM_DB_PATH is missing                      |
+| Scheduler          | HTTP server executes backup, vacuum, and index jobs                  |
 
 ### 1.4 GitHub Status Resource
 
