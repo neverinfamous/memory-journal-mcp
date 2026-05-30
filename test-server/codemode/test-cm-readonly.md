@@ -49,6 +49,12 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | Create works in default | `const r = await mj.core.createEntryMinimal({content: "readonly=false test"}); return { success: r.success, id: r.entry?.id };` | `success: true`, entry created |
 
+### 18.4 Cleanup
+
+| Test                    | Code                                                                                                 | Expected Result                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Clean up test artifact  | `return await mj.admin.deleteEntry({entry_id: <ID_FROM_PREVIOUS_STEP>});`                                                       | `success: true`                |
+
 ---
 
 ## Success Criteria
@@ -59,3 +65,4 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 - `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
 - `readonly: false` (default) allows both read and write operations
 - `mj.help()` still works in readonly mode
+- Test artifact created in 18.3 is successfully deleted in 18.4
