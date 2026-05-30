@@ -67,7 +67,7 @@
         "@octokit/graphql": "^9.0.3",
         "@octokit/rest": "^22.0.1",
         "better-sqlite3": "^12.8.0",
-        "commander": "^14.0.3",
+        "commander": "^15.0.0",
         "express": "^5.2.1",
         "jose": "^6.2.1",
         "simple-git": "^3.35.2",

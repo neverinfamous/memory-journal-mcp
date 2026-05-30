@@ -26,6 +26,8 @@
 
 ### Changed
 
+- **deps**: Bumped `commander` to `^15.0.0` and `eslint` to `10.4.1`
+- **docker**: Bumped Node.js base image from `26.1.0-alpine` to `26.2.0-alpine` (#563)
 - **briefing**: Surfaced capability statuses directly in the Config row and renamed designations for clarity
 - **prompts**: `prepare-standup` and `prepare-retro` now surface active team flags as contextual signals alongside analytics digest
 - **briefing**: Enhanced the code-map indicator to include exact file paths and prioritized gatekeeper CI workflows in github status
