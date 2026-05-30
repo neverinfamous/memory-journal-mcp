@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Code Mode: Team Flags (Hush Protocol)
 
-Test the Hush Protocol flag system (`pass_team_flag`, `resolve_team_flag`) and flag resources through Code Mode.
+Test the Hush Protocol flag system (`team_pass_flag`, `team_resolve_flag`) and flag resources through Code Mode.
 
 **Scope:** 1 tool (`mj_execute_code`), Phase 28.12–28.15 — ~12 test cases covering flag creation, vocabulary validation, resolution lifecycle, idempotency, and error paths via Code Mode.
 
@@ -11,9 +11,9 @@ Test the Hush Protocol flag system (`pass_team_flag`, `resolve_team_flag`) and f
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
-2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -282,12 +282,12 @@ return result
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- `pass_team_flag` creates entries with `entry_type: 'flag'` and structured `auto_context`
+- `team_pass_flag` creates entries with `entry_type: 'flag'` and structured `auto_context`
 - Flag tags include `flag:{type}` and `@{target}` when target_user is provided
 - `@` prefix on `target_user` is stripped before storage
 - Invalid vocabulary terms return `VALIDATION_ERROR` with suggestion listing valid types
 - Missing required fields (`flag_type`, `message`) return structured validation errors
-- `resolve_team_flag` transitions flag to resolved state with `[RESOLVED]` content marker
+- `team_resolve_flag` transitions flag to resolved state with `[RESOLVED]` content marker
 - Resolution comment is stored in both content and `auto_context.resolution`
 - Idempotent: re-resolving an already-resolved flag returns success with original state
 - Resolving a non-flag entry returns `VALIDATION_ERROR`

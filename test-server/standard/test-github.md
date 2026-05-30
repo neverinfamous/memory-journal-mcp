@@ -10,18 +10,18 @@
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
-2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
-## Phase 2: GitHub Integration (16 tools)
+## Phase 13: GitHub Integration (16 tools)
 
-### 2.1 Read-Only Tools
+### 13.1 Read-Only Tools
 
 | Test                  | Command/Action                                 | Expected Result                                          |
 | --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
@@ -38,7 +38,7 @@
 | Get nonexistent issue | `get_github_issue(issue_number: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
 | Get nonexistent PR    | `get_github_pr(pr_number: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
 
-### 2.2 Issue Lifecycle Tools
+### 13.2 Issue Lifecycle Tools
 
 > [!CAUTION]
 > These tools **create and close real GitHub issues**. Use with awareness.
@@ -54,7 +54,7 @@
 | Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                   |
 | Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }` |
 
-### 2.3 Kanban Tools
+### 13.3 Kanban Tools
 
 | Test                | Command/Action                                                                     | Expected Result                                                       |
 | ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -65,7 +65,7 @@
 | Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
 | Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
 
-### 2.4 Milestone Tools
+### 13.4 Milestone Tools
 
 > [!CAUTION]
 > These tools **create, modify, and delete real GitHub milestones**. Clean up test milestones after testing.
@@ -83,7 +83,7 @@
 | Milestone resource   | Read `memory://github/milestones`                                                                | Static resource lists open milestones with completion %                                                           |
 | Milestone detail     | Read `memory://milestones/<N>`                                                                   | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
 
-### 2.5 Repository Insights Tool
+### 13.5 Repository Insights Tool
 
 | Test              | Command/Action                             | Expected Result                                    |
 | ----------------- | ------------------------------------------ | -------------------------------------------------- |
@@ -93,7 +93,7 @@
 | Paths section     | `get_repo_insights(sections: "paths")`     | Returns top 5 popular content paths                |
 | All sections      | `get_repo_insights(sections: "all")`       | Returns full payload with all sections above       |
 
-### 2.6 Copilot Review Tool
+### 13.6 Copilot Review Tool
 
 | Test                  | Command/Action                                        | Expected Result                                                               |
 | --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -102,7 +102,7 @@
 | Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                        |
 | No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
 
-### 2.7 GitHub Test Cleanup
+### 13.7 GitHub Test Cleanup
 
 > [!IMPORTANT]
 > After GitHub testing, ensure all test artifacts are removed. Use the checklist below.

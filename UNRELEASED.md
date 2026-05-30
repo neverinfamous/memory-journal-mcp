@@ -26,6 +26,8 @@
 
 ### Changed
 
+- **tests**: Standardized 42+ testing prompt files across `standard/` and `codemode/` directories, fixing phase numbering collisions, tool name discrepancies (`team_pass_flag`), header templates, and resource coverage gaps
+
 - **deps**: Bumped `commander` to `^15.0.0` and `eslint` to `10.4.1`
 - **docker**: Bumped Node.js base image from `26.1.0-alpine` to `26.2.0-alpine` (#563)
 - **briefing**: Surfaced capability statuses directly in the Config row and renamed designations for clarity

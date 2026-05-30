@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Team Tool Group
 
-**Scope:** Deterministic verification of Team tools (`team_create_entry`, `team_search`, `pass_team_flag`, `resolve_team_flag`, etc.) against strict error handling constraints.
+**Scope:** Deterministic verification of Team tools (`team_create_entry`, `team_search`, `team_pass_flag`, `team_resolve_flag`, etc.) against strict error handling constraints.
 
 **Prerequisites:**
 
@@ -10,16 +10,16 @@
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
-2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
-## 1. Structured Error Matrix
+## 1. Zod Boundary & Type Mismatch Matrix
 
 | Tool                        | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | --------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
@@ -28,16 +28,16 @@
 | `team_update_entry`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
 | `team_search_by_date_range` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
 | `team_merge_tags`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
-| `pass_team_flag`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`  |
-| `resolve_team_flag`         | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
+| `team_pass_flag`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`  |
+| `team_resolve_flag`         | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
 
 ### Specific Domain Checks
 
 - **Unavailable Team Vector**: Use `team_semantic_search` without vector initialization -> verify structured JSON error.
 - **Team Insights**: Verify `team_get_cross_project_insights` returns the requisite fields even when the query returns absolutely zero rows.
-- **Flag Vocabulary Validation**: Verify `pass_team_flag` returns `VALIDATION_ERROR` with `suggestion` listing valid vocabulary types.
-- **Resolve Non-Flag Entry**: Verify `resolve_team_flag` on a non-flag entry returns `VALIDATION_ERROR` (not crash).
-- **Resolve Idempotency**: Verify calling `resolve_team_flag` on an already-resolved flag returns `success: true` with original resolution.
+- **Flag Vocabulary Validation**: Verify `team_pass_flag` returns `VALIDATION_ERROR` with `suggestion` listing valid vocabulary types.
+- **Resolve Non-Flag Entry**: Verify `team_resolve_flag` on a non-flag entry returns `VALIDATION_ERROR` (not crash).
+- **Resolve Idempotency**: Verify calling `team_resolve_flag` on an already-resolved flag returns `success: true` with original resolution.
 
 ## Success Criteria
 
