@@ -29,6 +29,7 @@
 
 ### Changed
 
+- **tests**: Appended explicit hallucination interception directives to the standard "Workflow after testing" block across all 41 Code Mode and Standard test prompts
 - **tests**: Standardized 42+ testing prompt files across `standard/` and `codemode/` directories, fixing phase numbering collisions, tool name discrepancies (`team_pass_flag`), header templates, and resource coverage gaps
 
 - **deps**: Bumped `commander` to `^15.0.0` and `eslint` to `10.4.1`
@@ -103,6 +104,7 @@
 - **codemode**: Promoted all callable top-level methods from `shimMj` (e.g., `createEntry`, `find`, `recent`, `searchEntries`, `deleteEntry`) as standalone VM sandbox globals, allowing agents to call `find({...})` without the `mj.` prefix
 - **annotations**: Added missing explicit `destructiveHint: false` annotations to 62 tools across all handlers and `idempotentHint: false` to `delete_entry` to achieve 100% rigor against the `db-mcp` audit standards
 - **codemode**: Prevented empty `createEntry` `{}` payloads from bypassing Zod validation by only injecting serialized fields if hallucinated properties are actually present
+- **codemode**: Added `repo_name` as an automatic fallback mapped to `repo` within `mj_execute_code` input sanitization to prevent context loss on common agent hallucinations
 
 ### Security
 

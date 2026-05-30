@@ -245,6 +245,13 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    if (params != null && typeof params === 'object') {
+                        const p = params as Record<string, unknown>
+                        if ('repo_name' in p && !('repo' in p)) {
+                            p['repo'] = p['repo_name']
+                        }
+                    }
+
                     const {
                         code,
                         timeout,
