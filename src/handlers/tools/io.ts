@@ -333,6 +333,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         significance: e.significanceType ?? undefined,
                     }))
 
+                    await sendProgress(progress, 2, 3, 'Writing markdown files...')
+
                     const result = await exportEntriesToMarkdown(
                         exportable,
                         input.output_dir,
@@ -377,6 +379,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const allowedRoots = context.config?.allowedIoRoots ?? []
 
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
+
+                    await sendProgress(progress, 1, 2, 'Importing entries...')
 
                     const result = await importMarkdownEntries(
                         input.source_dir,

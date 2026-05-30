@@ -199,6 +199,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? undefined,
                     }))
 
+                    await sendProgress(progress, 2, 3, 'Writing markdown files...')
+
                     const result = await exportEntriesToMarkdown(
                         exportable,
                         input.output_dir,
@@ -236,6 +238,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
+
+                    await sendProgress(progress, 1, 2, 'Importing team entries...')
 
                     const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
                     const result = await importMarkdownEntries(

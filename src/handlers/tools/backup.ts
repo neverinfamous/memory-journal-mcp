@@ -103,7 +103,9 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                             name: z.string().optional(),
                         })
                         .parse(params)
+                    await sendProgress(progress, 0, 2, 'Creating backup...')
                     const result = await db.exportToFile(input.name)
+                    await sendProgress(progress, 2, 2, 'Backup complete')
                     return {
                         success: true,
                         message: `Backup created successfully`,
@@ -192,6 +194,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     const progressServer = progress?.server
                     const progressTokenValue = progress?.progressToken
 
+                    await sendProgress(progress, 0, 3, 'Validating backup...')
                     await sendProgress(progress, 1, 3, 'Preparing restore...')
                     await sendProgress(progress, 2, 3, 'Restoring database from backup...')
 

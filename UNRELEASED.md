@@ -15,11 +15,13 @@
 - **codemode**: `readonly` parameter to `mj_execute_code` schema to restrict execution to read-only API methods, returning structured errors on violation
 - **codemode**: Runtime schema introspection (`.schema()`) for proxy tools and dynamically injected TypeScript declarations for `mj_execute_code` payload
 - **codemode**: `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
+- **codemode**: `mj.reportProgress(progress, total?, message?)` binding to Code Mode sandbox for agent-driven progress notifications (parity with db-mcp)
 - **docs**: Missing CLI flags, environment variables, and auto-prune documentation to the Wiki and configuration examples
 - **errors**: Valid enum value lists to Zod validation error messages
 - **instructions**: 14 new `EntryType` values, `architecture`/`security` significance types, missing tool parameters, and `HELP_CONTENT` export
 - **metrics**: Dynamic tracking for deprecation warnings (`MetricsAccumulator.recordDeprecationWarning`)
 - **scripts**: `test:scheduler` npm script for HTTP scheduler E2E testing
+- **scripts**: `test-progress.mjs` progress notification integration test (ported from db-mcp, adapted for memory-journal-mcp IO pipeline)
 - **skills**: 4 adversarial auditing skills, the `journal-optimizer` skill, and migrated 14 skills from `adamic`
 - **skills**: Official vendor skills for AWS, GCP, Azure, and Render added to the inventory
 - **skills**: `docs-marketer` skill for documentation marketability auditing with 10-category scoring, optional adversarial dual-agent mode, and Copilot validation
@@ -50,6 +52,8 @@
 
 ### Fixed
 
+- **progress**: Fixed step numbering gaps in `export_markdown`, `import_markdown`, `restore_backup`, `team_export_entries`, `team_export_markdown`, and `team_import_markdown` — all sequences now start at 0 with no skipped steps
+- **progress**: Added missing progress notifications to `backup_journal` and `team_backup` (0/2 → 2/2)
 - **team**: Fixed Zod schema validation errors by making `project_number` optional in MCP-facing (relaxed) input schemas, complying with SDK validation rules
 - **tests**: Updated Code Mode and Standard test scripts to systematically supply `project_number: 1` to all team-related tool calls
 - **tests**: Mapped `MOCK_DIR` to a valid allowed IO root in Phase 28 Codemode Tests

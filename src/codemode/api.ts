@@ -14,6 +14,7 @@
 
 import type { ToolDefinition } from '../types/index.js'
 import type { ToolGroup } from '../types/filtering.js'
+import { sendProgress, type ProgressContext } from '../utils/progress-utils.js'
 import {
     METHOD_ALIASES,
     GROUP_EXAMPLES,
@@ -384,7 +385,7 @@ export class JournalApi {
      * This is the object injected as `mj` in the sandbox.
      * Includes group namespaces + top-level aliases for common operations.
      */
-    createSandboxBindings(): Record<string, unknown> {
+    createSandboxBindings(progressCtx?: ProgressContext): Record<string, unknown> {
         const bindings: Record<string, unknown> = {
             // Group namespaces
             core: this.core,
@@ -446,6 +447,15 @@ export class JournalApi {
                     usage: 'Use mj.<group>.help() for group details. Example: mj.core.help()',
                 })
             },
+        }
+
+        // Progress notification reporting
+        bindings['reportProgress'] = async (
+            progress: number,
+            total?: number,
+            message?: string
+        ): Promise<void> => {
+            await sendProgress(progressCtx, progress, total, message)
         }
 
         return bindings

@@ -401,7 +401,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const api = createJournalApi(tools, secureDispatcher)
-                    const bindings = api.createSandboxBindings()
+                    const bindings = api.createSandboxBindings(context.progress)
                     const schemas = api.createSandboxSchemas()
 
                     // Execute in sandbox (override timeout if specified)

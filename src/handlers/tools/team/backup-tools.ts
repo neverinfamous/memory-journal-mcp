@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sendProgress } from '../../../utils/progress-utils.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import { TeamBackupSchema, TeamBackupOutputSchema, TeamBackupsListOutputSchema } from './schemas.js'
 import * as path from 'node:path'
@@ -16,7 +17,7 @@ import * as path from 'node:path'
 // ============================================================================
 
 export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb } = context
+    const { teamDb, progress } = context
 
     return [
         {
@@ -35,6 +36,8 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
 
                     const input = TeamBackupSchema.parse(params)
 
+                    await sendProgress(progress, 0, 2, 'Creating team backup...')
+
                     let result
                     try {
                         result = await teamDb.exportToFile(input.name)
@@ -49,6 +52,8 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
+
+                    await sendProgress(progress, 2, 2, 'Team backup complete')
 
                     return {
                         success: true,

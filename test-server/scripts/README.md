@@ -19,6 +19,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 22 true = 67)                                                                | stdio         | ~5s      |
 | `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)                                                                    | stdio         | ~10s     |
 | `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
+| `test-progress.mjs`            | Validates `notifications/progress` delivery when a client sends a `progressToken` in `_meta`. Seeds an entry, calls `export_entries`, and asserts ≥ 2 progress events. | stdio         | ~5s      |
 | `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests.    | stdio         | ~1s      |
 
 ## Scheduler Notes
