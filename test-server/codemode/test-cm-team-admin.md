@@ -26,16 +26,16 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ limit: 1, project_number: 1 })
+const r = await mj.team.teamGetRecent({ project_number: 1, limit: 1, project_number: 1 })
 const id = r.entries[0].id
 
-const updated = await mj.team.teamUpdateEntry({ project_number: 1, entry_id: id,
+const updated = await mj.team.teamUpdateEntry({project_number: 1,  project_number: 1, entry_id: id,
   content: 'CM4 updated team content',
   tags: ['cm4-updated-team'], })
-const verify = await mj.team.teamGetEntryById({ project_number: 1, entry_id: id })
+const verify = await mj.team.teamGetEntryById({project_number: 1,  project_number: 1, entry_id: id })
 
 // Merge tags
-await mj.team.teamCreateEntry({ content: 'CM4 merge source', tags: ['cm4-team-old'], project_number: 1 })
+await mj.team.teamCreateEntry({ project_number: 1, content: 'CM4 merge source', tags: ['cm4-team-old'], project_number: 1 })
 const merged = await mj.team.teamMergeTags({ project_number: 1, source_tag: 'cm4-team-old',
   target_tag: 'cm4-team-new', })
 const afterTags = await mj.team.teamListTags({})
@@ -43,8 +43,8 @@ const oldGone = !afterTags.tags?.some((t) => t.name === 'cm4-team-old')
 const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
 
 // Soft delete
-const toDelete = await mj.team.teamCreateEntry({ content: 'CM4 delete me', project_number: 1 })
-const deleted = await mj.team.teamDeleteEntry({ project_number: 1, entry_id: toDelete.entry.id })
+const toDelete = await mj.team.teamCreateEntry({ project_number: 1, content: 'CM4 delete me', project_number: 1 })
+const deleted = await mj.team.teamDeleteEntry({project_number: 1,  project_number: 1, entry_id: toDelete.entry.id })
 
 return {
   updateSuccess: updated.success,
@@ -90,18 +90,18 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ limit: 2, project_number: 1 })
+const r = await mj.team.teamGetRecent({ project_number: 1, limit: 2, project_number: 1 })
 const [a, b] = r.entries.map((e) => e.id)
 
 const linked = await mj.team.teamLinkEntries({
-  from_entry_id: a,
+  project_number: 1, from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
   description: 'CM4 team link test',
   project_number: 1,
 })
 const dup = await mj.team.teamLinkEntries({
-  from_entry_id: a,
+  project_number: 1, from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
   project_number: 1,

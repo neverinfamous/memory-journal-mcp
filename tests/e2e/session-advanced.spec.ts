@@ -69,7 +69,7 @@ test.describe('Advanced Session Management', () => {
 
                 const result = await client.callTool({
                     name: 'get_recent_entries',
-                    arguments: { limit: 1 },
+                    arguments: { project_number: 1, limit: 1 },
                 })
 
                 expect(result.isError).toBeUndefined()

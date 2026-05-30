@@ -47,7 +47,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Core ---
     test('team_create_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_create_entry', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             content: 'test',
             author: 'e2e',
         })
@@ -56,7 +56,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_get_entry_by_id → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_get_entry_by_id', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)
@@ -64,7 +64,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_get_recent → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_get_recent', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
         })
         expectConfigError(payload)
     })
@@ -79,7 +79,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Search ---
     test('team_search → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_search', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             query: 'test',
         })
         expectConfigError(payload)
@@ -87,7 +87,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_search_by_date_range → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_search_by_date_range', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             start_date: '2020-01-01',
             end_date: '2030-12-31',
         })
@@ -97,7 +97,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Admin ---
     test('team_update_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_update_entry', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             entry_id: 1,
             content: 'updated',
         })
@@ -106,7 +106,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_delete_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)
@@ -114,7 +114,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_merge_tags → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_merge_tags', {
-            source_tag: 'old',
+            project_number: 1, source_tag: 'old',
             target_tag: 'new',
         })
         expectConfigError(payload)
@@ -134,7 +134,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Relationships ---
     test('team_link_entries → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_link_entries', {
-            from_entry_id: 1,
+            project_number: 1, from_entry_id: 1,
             to_entry_id: 2,
         })
         expectConfigError(payload)
@@ -142,7 +142,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_visualize_relationships → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_visualize_relationships', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)
@@ -175,7 +175,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     // --- Vector ---
     test('team_semantic_search → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_semantic_search', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             query: 'test',
         })
         expectConfigError(payload)
@@ -190,13 +190,13 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     })
 
     test('team_rebuild_vector_index → CONFIGURATION_ERROR', async () => {
-        const payload = await callToolAndParse(client, 'team_rebuild_vector_index', {})
+        const payload = await callToolAndParse(client, 'team_rebuild_vector_index', {project_number: 1, })
         expectConfigError(payload)
     })
 
     test('team_add_to_vector_index → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_add_to_vector_index', {
-            project_number: 1,
+           project_number: 1,  project_number: 1,
             entry_id: 1,
         })
         expectConfigError(payload)

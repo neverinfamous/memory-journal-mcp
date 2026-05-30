@@ -117,7 +117,7 @@ describe('Tool Handlers', () => {
         it('should create a basic entry', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Tool handler test entry' },
+                { project_number: 1, content: 'Tool handler test entry' },
                 db
             )) as { success: boolean; entry: { id: number; content: string } }
 
@@ -131,6 +131,7 @@ describe('Tool Handlers', () => {
             const result = (await callTool(
                 'create_entry',
                 {
+                    project_number: 1,
                     content: 'Full tool entry',
                     entry_type: 'project_decision',
                     tags: ['tool-tag-a', 'tool-tag-b'],
@@ -163,7 +164,7 @@ describe('Tool Handlers', () => {
         it('should retrieve an entry by ID', async () => {
             const created = (await callTool(
                 'create_entry',
-                { content: 'Retrievable entry' },
+                { project_number: 1, content: 'Retrievable entry' },
                 db
             )) as { entry: { id: number } }
 
@@ -214,7 +215,7 @@ describe('Tool Handlers', () => {
 
     describe('callTool - search_entries', () => {
         it('should search by content', async () => {
-            await callTool('create_entry', { content: 'Unique unicorn xyz99' }, db)
+            await callTool('create_entry', { project_number: 1, content: 'Unique unicorn xyz99' }, db)
 
             const result = (await callTool('search_entries', { query: 'xyz99', limit: 5 }, db)) as {
                 entries: unknown[]
@@ -244,7 +245,7 @@ describe('Tool Handlers', () => {
             const tomorrowStr = tomorrow.toISOString().split('T')[0]!
 
             // Ensure an entry exists today
-            await callTool('create_entry', { content: 'Date range test entry' }, db)
+            await callTool('create_entry', { project_number: 1, content: 'Date range test entry' }, db)
 
             const result = (await callTool(
                 'search_by_date_range',
@@ -286,10 +287,10 @@ describe('Tool Handlers', () => {
 
     describe('callTool - link_entries', () => {
         it('should link two entries', async () => {
-            const e1 = (await callTool('create_entry', { content: 'Link source' }, db)) as {
+            const e1 = (await callTool('create_entry', { project_number: 1, content: 'Link source' }, db)) as {
                 entry: { id: number }
             }
-            const e2 = (await callTool('create_entry', { content: 'Link target' }, db)) as {
+            const e2 = (await callTool('create_entry', { project_number: 1, content: 'Link target' }, db)) as {
                 entry: { id: number }
             }
 
@@ -331,7 +332,7 @@ describe('Tool Handlers', () => {
         it('should update entry content', async () => {
             const created = (await callTool(
                 'create_entry',
-                { content: 'Original content' },
+                { project_number: 1, content: 'Original content' },
                 db
             )) as { entry: { id: number } }
 
@@ -348,11 +349,11 @@ describe('Tool Handlers', () => {
         it('should update project_number on an existing entry', async () => {
             const created = (await callTool(
                 'create_entry',
-                { content: 'Needs project reassignment' },
+                { project_number: 1, content: 'Needs project reassignment' },
                 db
             )) as { entry: { id: number; projectNumber: number | null } }
 
-            expect(created.entry.projectNumber).toBeNull()
+            expect(created.entry.projectNumber).toBe(1)
 
             const result = (await callTool(
                 'update_entry',
@@ -367,7 +368,7 @@ describe('Tool Handlers', () => {
         it('should update multiple GitHub metadata fields', async () => {
             const created = (await callTool(
                 'create_entry',
-                { content: 'Metadata update test' },
+                { project_number: 1, content: 'Metadata update test' },
                 db
             )) as { entry: { id: number } }
 
@@ -423,7 +424,7 @@ describe('Tool Handlers', () => {
 
     describe('callTool - delete_entry', () => {
         it('should soft delete an entry', async () => {
-            const created = (await callTool('create_entry', { content: 'To be deleted' }, db)) as {
+            const created = (await callTool('create_entry', { project_number: 1, content: 'To be deleted' }, db)) as {
                 entry: { id: number }
             }
 
@@ -465,7 +466,7 @@ describe('Tool Handlers', () => {
 
     describe('callTool - merge_tags', () => {
         it('should merge tags', async () => {
-            await callTool('create_entry', { content: 'Merge tag source', tags: ['merge-src'] }, db)
+            await callTool('create_entry', { project_number: 1, content: 'Merge tag source', tags: ['merge-src'] }, db)
 
             const result = (await callTool(
                 'merge_tags',
@@ -566,10 +567,10 @@ describe('Tool Handlers', () => {
 
     describe('callTool - visualize_relationships', () => {
         it('should generate mermaid diagram', async () => {
-            const e1 = (await callTool('create_entry', { content: 'Viz entry A' }, db)) as {
+            const e1 = (await callTool('create_entry', { project_number: 1, content: 'Viz entry A' }, db)) as {
                 entry: { id: number }
             }
-            const e2 = (await callTool('create_entry', { content: 'Viz entry B' }, db)) as {
+            const e2 = (await callTool('create_entry', { project_number: 1, content: 'Viz entry B' }, db)) as {
                 entry: { id: number }
             }
             await callTool(
@@ -593,13 +594,13 @@ describe('Tool Handlers', () => {
         })
 
         it('should filter by relationship_type', async () => {
-            const e1 = (await callTool('create_entry', { content: 'Node X' }, db)) as {
+            const e1 = (await callTool('create_entry', { project_number: 1, content: 'Node X' }, db)) as {
                 entry: { id: number }
             }
-            const e2 = (await callTool('create_entry', { content: 'Node Y' }, db)) as {
+            const e2 = (await callTool('create_entry', { project_number: 1, content: 'Node Y' }, db)) as {
                 entry: { id: number }
             }
-            const e3 = (await callTool('create_entry', { content: 'Node Z' }, db)) as {
+            const e3 = (await callTool('create_entry', { project_number: 1, content: 'Node Z' }, db)) as {
                 entry: { id: number }
             }
 

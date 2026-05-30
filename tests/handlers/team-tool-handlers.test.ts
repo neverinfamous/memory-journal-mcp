@@ -364,7 +364,7 @@ describe('Team Tool Handlers', () => {
         it('should not include sharedWithTeam when share_with_team is false', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Not shared to team', share_with_team: false },
+                { project_number: 1, content: 'Not shared to team', share_with_team: false },
                 personalDb,
                 undefined,
                 undefined,
@@ -380,7 +380,7 @@ describe('Team Tool Handlers', () => {
         it('should still save personal entry even without team DB', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Personal only entry', share_with_team: true },
+                { project_number: 1, content: 'Personal only entry', share_with_team: true },
                 personalDb
                 // No teamDb — share_with_team is silently ignored
             )) as { success: boolean; entry: { content: string }; sharedWithTeam?: boolean }

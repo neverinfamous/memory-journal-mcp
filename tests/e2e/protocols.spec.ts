@@ -119,7 +119,7 @@ test.describe('HTTP Transport Protocols', () => {
 
                 const response = await client.callTool({
                     name: 'get_recent_entries',
-                    arguments: { limit: 1 },
+                    arguments: { project_number: 1, limit: 1 },
                 })
 
                 expect(response.isError).toBeUndefined()

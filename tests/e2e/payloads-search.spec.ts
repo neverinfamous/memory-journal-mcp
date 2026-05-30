@@ -18,7 +18,7 @@ test.describe('Payload Contracts: Search', () => {
         client = await createClient()
         // Seed an entry for search tests
         await callToolAndParse(client, 'create_entry', {
-            content: 'Searchable payload contract test entry about performance',
+            project_number: 1, content: 'Searchable payload contract test entry about performance',
             entry_type: 'test_entry',
             tags: ['search-test'],
         })
@@ -30,7 +30,7 @@ test.describe('Payload Contracts: Search', () => {
 
     test('search_entries returns { entries, count }', async () => {
         const payload = await callToolAndParse(client, 'search_entries', {
-            query: 'performance',
+            project_number: 1, query: 'performance',
         })
         expectSuccess(payload)
         expect(Array.isArray(payload.entries)).toBe(true)
@@ -39,7 +39,7 @@ test.describe('Payload Contracts: Search', () => {
 
     test('search_by_date_range returns { entries, count }', async () => {
         const payload = await callToolAndParse(client, 'search_by_date_range', {
-            start_date: '2020-01-01',
+            project_number: 1, start_date: '2020-01-01',
             end_date: '2030-12-31',
         })
         expectSuccess(payload)

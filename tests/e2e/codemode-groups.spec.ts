@@ -274,7 +274,7 @@ test.describe('Code Mode Groups: Representative Calls', () => {
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
                 code: `
-                    const result = await mj.core.getRecentEntries({ limit: 2 });
+                    const result = await mj.core.getRecentEntries({ project_number: 1, limit: 2 });
                     return { count: result.count, hasEntries: Array.isArray(result.entries) };
                 `,
             })
@@ -292,7 +292,7 @@ test.describe('Code Mode Groups: Representative Calls', () => {
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
                 code: `
-                    const result = await mj.search.searchEntries({ query: 'test' });
+                    const result = await mj.search.searchEntries({ project_number: 1, query: 'test' });
                     return { count: result.count, hasEntries: Array.isArray(result.entries) };
                 `,
             })
@@ -309,7 +309,7 @@ test.describe('Code Mode Groups: Representative Calls', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
-                code: 'return await mj.analytics.getStatistics({});',
+                code: 'return await mj.analytics.getStatistics({ project_number: 1 });',
             })
             expectSuccess(p)
             const result = p.result as Record<string, unknown>
@@ -324,7 +324,7 @@ test.describe('Code Mode Groups: Representative Calls', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
-                code: `return await mj.export.exportEntries({ format: 'json', limit: 1 });`,
+                code: `return await mj.export.exportEntries({ project_number: 1, format: 'json', limit: 1 });`,
             })
             expectSuccess(p)
             const result = p.result as Record<string, unknown>
@@ -375,7 +375,7 @@ test.describe('Code Mode Groups: Representative Calls', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
-                code: 'return await mj.core.listTags({});',
+                code: 'return await mj.core.listTags({ project_number: 1 });',
             })
             expectSuccess(p)
             const result = p.result as Record<string, unknown>
@@ -396,7 +396,7 @@ test.describe('Code Mode Groups: Method Aliases', () => {
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
                 code: `
-                    const r1 = await mj.core.create({ content: 'Alias test entry', entry_type: 'test_entry' });
+                    const r1 = await mj.core.create({ project_number: 1, content: 'Alias test entry', entry_type: 'test_entry' });
                     return { success: r1.success, hasEntry: !!r1.entry };
                 `,
             })
@@ -414,8 +414,8 @@ test.describe('Code Mode Groups: Method Aliases', () => {
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
                 code: `
-                    const r1 = await mj.core.recent({ limit: 1 });
-                    const r2 = await mj.core.getRecentEntries({ limit: 1 });
+                    const r1 = await mj.core.recent({ project_number: 1, limit: 1 });
+                    const r2 = await mj.core.getRecentEntries({ project_number: 1, limit: 1 });
                     return { aliasCount: r1.count, canonicalCount: r2.count };
                 `,
             })
@@ -432,7 +432,7 @@ test.describe('Code Mode Groups: Method Aliases', () => {
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
                 code: `
-                    const r1 = await mj.search.find({ query: 'test' });
+                    const r1 = await mj.search.find({ project_number: 1, query: 'test' });
                     return { hasEntries: Array.isArray(r1.entries), count: r1.count };
                 `,
             })

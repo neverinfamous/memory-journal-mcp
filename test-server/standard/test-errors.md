@@ -60,15 +60,15 @@ The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify th
 
 | Test                  | Input                                          | Expected Result                                                                |
 | --------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| String limit (core)   | `get_recent_entries(limit: "abc")`             | `VALIDATION_ERROR`: structured, not raw `-32602`                               |
-| String limit (search) | `search_entries(query: "x", limit: "abc")`     | `VALIDATION_ERROR`: structured, not raw `-32602`                               |
-| String entry_id       | `get_entry_by_id(entry_id: "abc")`             | `VALIDATION_ERROR`: structured, not raw `-32602`                               |
+| String limit (core)   | `get_recent_entries(project_number: 1, limit: "abc")`             | `VALIDATION_ERROR`: structured, not raw `-32602`                               |
+| String limit (search) | `search_entries(project_number: 1, query: "x", limit: "abc")`     | `VALIDATION_ERROR`: structured, not raw `-32602`                               |
+| String entry_id       | `get_entry_by_id(project_number: 1, entry_id: "abc")`             | `VALIDATION_ERROR`: structured, not raw `-32602`                               |
 | String threshold      | `semantic_search(query: "x", similarity_threshold: "abc")` | `VALIDATION_ERROR`: structured, not raw `-32602`               |
-| Negative limit        | `get_recent_entries(limit: -1)`                | `VALIDATION_ERROR`: min boundary enforced (`>=1`)                              |
-| Zero limit            | `get_recent_entries(limit: 0)`                 | `VALIDATION_ERROR`: min boundary enforced (`>=1`)                              |
-| Float entry_id        | `get_entry_by_id(entry_id: 1.5)`              | `VALIDATION_ERROR`: non-integer rejected                                       |
-| Boolean where string  | `create_entry(content: true)`                  | ⚠️ SDK coerces to string `"true"` — accepted (expected SDK behavior)           |
-| Array where string    | `create_entry(content: ["array"])`             | ⚠️ SDK coerces to `'["array"]'` — accepted (expected SDK behavior)             |
+| Negative limit        | `get_recent_entries(project_number: 1, limit: -1)`                | `VALIDATION_ERROR`: min boundary enforced (`>=1`)                              |
+| Zero limit            | `get_recent_entries(project_number: 1, limit: 0)`                 | `VALIDATION_ERROR`: min boundary enforced (`>=1`)                              |
+| Float entry_id        | `get_entry_by_id(project_number: 1, entry_id: 1.5)`              | `VALIDATION_ERROR`: non-integer rejected                                       |
+| Boolean where string  | `create_entry(project_number: 1, content: true)`                  | ⚠️ SDK coerces to string `"true"` — accepted (expected SDK behavior)           |
+| Array where string    | `create_entry(project_number: 1, content: ["array"])`             | ⚠️ SDK coerces to `'["array"]'` — accepted (expected SDK behavior)             |
 
 > [!NOTE]
 > The two ⚠️ findings (boolean and array coercion) are MCP SDK-layer behavior. The SDK serializes all JSON values to strings before Zod sees them when the schema type is `string`. **No action required** — this is expected protocol-layer coercion and does not pose a security or data integrity risk for `content`.

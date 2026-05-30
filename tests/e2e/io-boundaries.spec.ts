@@ -16,7 +16,7 @@ test.describe('Boundary: allowedIoRoots', () => {
             // Attempt to export to a directory outside the implicit/explicit allowed roots
             const outsideDir = os.tmpdir()
             const p = await callToolAndParse(client, 'export_markdown', {
-                output_dir: outsideDir,
+                project_number: 1, output_dir: outsideDir,
             })
             // Must strictly fail closed without exposing ambient authority
             expect(p.success).toBe(false)

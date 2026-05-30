@@ -71,7 +71,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
     test('should execute get_recent_entries and return entries array', async () => {
         const response = await client.callTool({
             name: 'get_recent_entries',
-            arguments: { limit: 3 },
+            arguments: { project_number: 1, limit: 3 },
         })
 
         expect(response.isError).toBeUndefined()
@@ -87,7 +87,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         const response = await client.callTool({
             name: 'create_entry',
             arguments: {
-                content: 'test validation',
+                project_number: 1, content: 'test validation',
                 entry_type: 'invalid_type',
             },
         })

@@ -26,9 +26,9 @@
 | Test              | Command/Action                                                | Expected Result                                                             |
 | ----------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | List tags         | `list_tags`                                                   | Returns all tags with counts                                                |
-| Create source tag | `create_entry(content: "Test tag merge", tags: ["test-old"])` | Creates "test-old" tag (pre-req)                                            |
+| Create source tag | `create_entry(project_number: 1, content: "Test tag merge", tags: ["test-old"])` | Creates "test-old" tag (pre-req)                                            |
 | Merge tags        | `merge_tags(source_tag: "test-old", target_tag: "test-new")`  | Merges source into target, deletes source                                   |
-| Verify merge      | `list_tags` + `search_entries(query: "Test tag merge")`       | "test-old" gone, "test-new" exists, entry now has "test-new" tag            |
+| Verify merge      | `list_tags` + `search_entries(project_number: 1, query: "Test tag merge")`       | "test-old" gone, "test-new" exists, entry now has "test-new" tag            |
 | Merge same tag    | `merge_tags(source_tag: "test-new", target_tag: "test-new")`  | Structured error: `{ success: false, error: "..." }` (source equals target) |
 | Merge nonexistent | `merge_tags(source_tag: "nonexistent-xyz", target_tag: "x")`  | Structured error: `{ success: false, error: "Source tag not found: ..." }`  |
 

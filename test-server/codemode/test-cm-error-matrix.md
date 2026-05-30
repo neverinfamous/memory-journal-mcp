@@ -29,18 +29,18 @@ Systematic verification of structured error handling across all `mj.*` API group
 
 ```javascript
 // Test code:
-const createEmpty = await mj.core.createEntry({})
+const createEmpty = await mj.core.createEntry({project_number: 1, })
 const createMinEmpty = await mj.core.createEntryMinimal({})
 const getByIdEmpty = await mj.core.getEntryById({})
-const recentEmpty = await mj.core.getRecentEntries({})
+const recentEmpty = await mj.core.getRecentEntries({project_number: 1, })
 const statsEmpty = await mj.analytics.getStatistics({})
 const tagsEmpty = await mj.core.listTags({})
 
 // Type mismatches
-const contentNum = await mj.core.createEntry({ content: 123 })
-const limitStr = await mj.core.getRecentEntries({ limit: 'abc' })
+const contentNum = await mj.core.createEntry({ project_number: 1, content: 123 })
+const limitStr = await mj.core.getRecentEntries({ project_number: 1, limit: 'abc' })
 const idStr = await mj.core.getEntryById({ entry_id: 'abc' })
-const limitNeg = await mj.core.getRecentEntries({ limit: -1 })
+const limitNeg = await mj.core.getRecentEntries({ project_number: 1, limit: -1 })
 
 return {
   createEmpty: createEmpty.success === false,
@@ -73,17 +73,17 @@ return {
 
 ```javascript
 // Test code:
-const searchEmpty = await mj.search.searchEntries({})
-const dateRangeEmpty = await mj.search.searchByDateRange({})
+const searchEmpty = await mj.search.searchEntries({project_number: 1, })
+const dateRangeEmpty = await mj.search.searchByDateRange({project_number: 1, })
 const semanticEmpty = await mj.search.semanticSearch({})
 const vectorStatsEmpty = await mj.search.getVectorIndexStats({})
 
 // Boundary tests
-const limitOver = await mj.search.searchEntries({ query: 'test', limit: 501 })
+const limitOver = await mj.search.searchEntries({ project_number: 1, query: 'test', limit: 501 })
 const thresholdStr = await mj.search.semanticSearch({ query: 'test', similarity_threshold: 'abc' })
-const dateInvalid = await mj.search.searchByDateRange({ start_date: 'Jan 1', end_date: 'Jan 31' })
+const dateInvalid = await mj.search.searchByDateRange({ project_number: 1, start_date: 'Jan 1', end_date: 'Jan 31' })
 const dateInverted = await mj.search.searchByDateRange({
-  start_date: '2026-12-31',
+  project_number: 1, start_date: '2026-12-31',
   end_date: '2026-01-01',
 })
 
@@ -270,30 +270,30 @@ return {
 
 ```javascript
 // Test code:
-const createEmpty = await mj.team.teamCreateEntry({ project_number: 1 })
-const getByIdEmpty = await mj.team.teamGetEntryById({ project_number: 1 })
-const recentEmpty = await mj.team.teamGetRecent({ project_number: 1 })
-const searchEmpty = await mj.team.teamSearch({ project_number: 1 })
+const createEmpty = await mj.team.teamCreateEntry({project_number: 1,  project_number: 1 })
+const getByIdEmpty = await mj.team.teamGetEntryById({project_number: 1,  project_number: 1 })
+const recentEmpty = await mj.team.teamGetRecent({project_number: 1,  project_number: 1 })
+const searchEmpty = await mj.team.teamSearch({project_number: 1,  project_number: 1 })
 const tagsEmpty = await mj.team.teamListTags({})
-const dateRangeEmpty = await mj.team.teamSearchByDateRange({ project_number: 1 })
-const updateEmpty = await mj.team.teamUpdateEntry({ project_number: 1 })
-const deleteEmpty = await mj.team.teamDeleteEntry({ project_number: 1 })
+const dateRangeEmpty = await mj.team.teamSearchByDateRange({project_number: 1,  project_number: 1 })
+const updateEmpty = await mj.team.teamUpdateEntry({project_number: 1,  project_number: 1 })
+const deleteEmpty = await mj.team.teamDeleteEntry({project_number: 1,  project_number: 1 })
 const mergeEmpty = await mj.team.teamMergeTags({ project_number: 1 })
-const linkEmpty = await mj.team.teamLinkEntries({ project_number: 1 })
+const linkEmpty = await mj.team.teamLinkEntries({project_number: 1,  project_number: 1 })
 const vizEmpty = await mj.team.teamVisualizeRelationships({ project_number: 1 })
 const exportEmpty = await mj.team.teamExportEntries({ project_number: 1 })
 const backupEmpty = await mj.team.teamBackup({})
 const listBackupsEmpty = await mj.team.teamListBackups({})
-const semanticEmpty = await mj.team.teamSemanticSearch({ project_number: 1 })
+const semanticEmpty = await mj.team.teamSemanticSearch({project_number: 1,  project_number: 1 })
 const vecStatsEmpty = await mj.team.teamGetVectorIndexStats({})
 const statsEmpty = await mj.team.teamGetStatistics({})
 const insightsEmpty = await mj.team.teamGetCrossProjectInsights({})
-const passFlagEmpty = await mj.team.passTeamFlag({})
+const passFlagEmpty = await mj.team.passTeamFlag({project_number: 1, })
 const resolveFlagEmpty = await mj.team.resolveTeamFlag({})
 
 // Type mismatches
-const createNumContent = await mj.team.teamCreateEntry({ project_number: 1, content: 123 })
-const updateStrId = await mj.team.teamUpdateEntry({ project_number: 1, entry_id: 'abc', content: 'test' })
+const createNumContent = await mj.team.teamCreateEntry({project_number: 1,  project_number: 1, content: 123 })
+const updateStrId = await mj.team.teamUpdateEntry({project_number: 1,  project_number: 1, entry_id: 'abc', content: 'test' })
 const resolveFlagStrId = await mj.team.resolveTeamFlag({ flag_id: 'abc' })
 
 return {

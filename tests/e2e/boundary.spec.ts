@@ -21,7 +21,7 @@ test.describe('Boundary: Empty Results', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'search_entries', {
-                query: '_e2e_xyzzy_nonexistent_term_that_matches_nothing_',
+                project_number: 1, query: '_e2e_xyzzy_nonexistent_term_that_matches_nothing_',
             })
             expectSuccess(p)
             expect(Array.isArray(p.entries)).toBe(true)
@@ -35,7 +35,7 @@ test.describe('Boundary: Empty Results', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'search_by_date_range', {
-                start_date: '2099-01-01',
+                project_number: 1, start_date: '2099-01-01',
                 end_date: '2099-12-31',
             })
             expectSuccess(p)
@@ -72,7 +72,7 @@ test.describe('Boundary: Date Ranges', () => {
         try {
             const today = new Date().toISOString().split('T')[0]
             const p = await callToolAndParse(client, 'search_by_date_range', {
-                start_date: today,
+                project_number: 1, start_date: today,
                 end_date: today,
             })
             // Same day range is valid — should return 0 or more entries
@@ -87,7 +87,7 @@ test.describe('Boundary: Date Ranges', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'search_by_date_range', {
-                start_date: '1970-01-01',
+                project_number: 1, start_date: '1970-01-01',
                 end_date: '2099-12-31',
             })
             expectSuccess(p)
@@ -107,7 +107,7 @@ test.describe('Boundary: Nonexistent Entries', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'get_entry_by_id', {
-                entry_id: 999999999,
+                project_number: 1, entry_id: 999999999,
             })
             expect(p.success).toBe(false)
             expect(typeof p.error).toBe('string')
@@ -120,7 +120,7 @@ test.describe('Boundary: Nonexistent Entries', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'update_entry', {
-                entry_id: 999999999,
+                project_number: 1, entry_id: 999999999,
                 content: 'should not update',
             })
             expect(p.success).toBe(false)
@@ -183,7 +183,7 @@ test.describe('Boundary: Relationship Edge Cases', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'create_entry', {
-                content: 'Boundary test entry for self-loop validation',
+                project_number: 1, content: 'Boundary test entry for self-loop validation',
                 entry_type: 'test_entry',
             })
             expectSuccess(p)
@@ -214,7 +214,7 @@ test.describe('Boundary: Relationship Edge Cases', () => {
         try {
             // Create a fresh entry with no relationships
             const create = await callToolAndParse(client, 'create_entry', {
-                content: 'Isolated entry for relationship visualization boundary test',
+                project_number: 1, content: 'Isolated entry for relationship visualization boundary test',
                 entry_type: 'test_entry',
             })
             expectSuccess(create)
@@ -240,7 +240,7 @@ test.describe('Boundary: Export', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'export_entries', {
-                start_date: '2099-01-01',
+                project_number: 1, start_date: '2099-01-01',
                 end_date: '2099-12-31',
                 format: 'json',
             })

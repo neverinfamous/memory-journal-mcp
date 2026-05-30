@@ -84,9 +84,9 @@ After creating all 17 entries, verify the seed data is searchable:
 
 | Check                       | Command                                           | Expected                                                                                                            |
 | --------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| FTS5 indexed                | `search_entries(query: "architecture")`           | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
-| Filters work                | `search_entries(issue_number: 44)`                | ≥ 1 result (S7)                                                                                                     |
-| Cross-DB merged             | `search_entries(query: "architecture")`           | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs               |
+| FTS5 indexed                | `search_entries(project_number: 1, query: "architecture")`           | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
+| Filters work                | `search_entries(project_number: 1, issue_number: 44)`                | ≥ 1 result (S7)                                                                                                     |
+| Cross-DB merged             | `search_entries(project_number: 1, query: "architecture")`           | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs               |
 | Rebuild vector index        | `rebuild_vector_index`                            | `entriesIndexed` > 0                                                                                                |
 | Semantic search             | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar)                                                                 |
 | Cross-project insights      | `get_cross_project_insights({})`                  | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |

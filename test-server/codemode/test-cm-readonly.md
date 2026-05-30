@@ -30,8 +30,8 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 | Test               | Code (readonly: true)                                              | Expected Result               |
 | ------------------ | ------------------------------------------------------------------ | ----------------------------- |
-| Get recent entries | `return await mj.core.getRecentEntries({limit: 2});`               | `{ count, entries }` returned |
-| Search entries     | `return await mj.search.searchEntries({query: "test", limit: 2});` | `{ count, entries }` returned |
+| Get recent entries | `return await mj.core.getRecentEntries({project_number: 1, limit: 2});`               | `{ count, entries }` returned |
+| Search entries     | `return await mj.search.searchEntries({project_number: 1, query: "test", limit: 2});` | `{ count, entries }` returned |
 | Get statistics     | `return await mj.analytics.getStatistics({});`                     | data returned                 |
 | Help still works   | `return await mj.help();`                                          | Groups and methods listed     |
 
@@ -39,7 +39,7 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 | Test                 | Code (readonly: true)                                                | Expected Result                                                     |
 | -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Create entry blocked | `return await mj.core.createEntry({content: "should fail"});`        | ⚠️ Verify: either method doesn't exist (TypeError) or returns error |
+| Create entry blocked | `return await mj.core.createEntry({project_number: 1, content: "should fail"});`        | ⚠️ Verify: either method doesn't exist (TypeError) or returns error |
 | Update entry blocked | `return await mj.admin.updateEntry({entry_id: 1, content: "fail"});` | ⚠️ Verify: blocked or error                                         |
 | Delete entry blocked | `return await mj.admin.deleteEntry({entry_id: 999999});`             | ⚠️ Verify: blocked or error                                         |
 

@@ -168,7 +168,7 @@
 
 | Test        | Command/Action                                     | Expected Result                 |
 | ----------- | -------------------------------------------------- | ------------------------------- |
-| Delete test | `delete_entry(entry_id: <team_test_id>)` on teamDb | Test entries removed (optional) |
+| Delete test | `delete_entry(project_number: 1, entry_id: <team_test_id>)` on teamDb | Test entries removed (optional) |
 
 ### 14.16 Hush Protocol — Flag Creation
 

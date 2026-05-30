@@ -76,12 +76,12 @@
 
 | #   | Test                | Command                                     | Expected Result                 |
 | --- | ------------------- | ------------------------------------------- | ------------------------------- |
-| 14  | Under limit         | `get_recent_entries(limit: 100)`            | Accepted, returns ≤ 100 entries |
-| 15  | At limit            | `get_recent_entries(limit: 500)`            | Accepted, returns ≤ 500 entries |
-| 16  | Over limit (core)   | `get_recent_entries(limit: 501)`            | Structured validation error     |
+| 14  | Under limit         | `get_recent_entries(project_number: 1, limit: 100)`            | Accepted, returns ≤ 100 entries |
+| 15  | At limit            | `get_recent_entries(project_number: 1, limit: 500)`            | Accepted, returns ≤ 500 entries |
+| 16  | Over limit (core)   | `get_recent_entries(project_number: 1, limit: 501)`            | Structured validation error     |
 | 17  | Over limit (issues) | `get_github_issues(limit: 501)`             | Structured validation error     |
 | 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                | Structured validation error     |
-| 19  | Over limit (search) | `search_entries(query: "test", limit: 501)` | Structured validation error     |
+| 19  | Over limit (search) | `search_entries(project_number: 1, query: "test", limit: 501)` | Structured validation error     |
 
 ### Verification Checks
 
