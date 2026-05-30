@@ -1,19 +1,24 @@
 /**
  * Test Progress Notifications
  *
- * Validates that the MCP server emits `notifications/progress` messages when
- * a client provides a `progressToken` in `_meta`.  Uses `export_entries` as
- * the trigger because it naturally sends progress through the IO handler
- * pipeline (0/2 → 1/2 → 2/2).
+ * Phase 1: Validates that the MCP server emits `notifications/progress`
+ * messages when a client provides a `progressToken` in `_meta`.
+ * Uses `export_entries` as the trigger because it naturally sends progress
+ * through the IO handler pipeline (0/2 → 1/2 → 2/2).
+ *
+ * Phase 2: Validates that Code Mode scripts can send progress notifications
+ * via `mj.reportProgress(progress, total, message)` — the sandbox binding
+ * added for parity with db-mcp's `sqlite.reportProgress()`.
  *
  * Ported from db-mcp's test-progress.mjs, adapted for memory-journal-mcp:
  *   - CLI args: plain `dist/cli.js` (default journal.db path)
- *   - Tool name: `export_entries` (IO group, always sends progress)
- *   - Expected: ≥ 2 progress notification events
+ *   - Phase 1 tool: `export_entries` (IO group, always sends progress)
+ *   - Phase 2 tool: `mj_execute_code` with `mj.reportProgress()`
+ *   - Expected: ≥ 2 progress events per phase
  *
  * Prerequisites: `npm run build` (executes dist/cli.js directly)
  * Transport: stdio
- * Duration: ~5s
+ * Duration: ~8s
  */
 import { spawn } from 'child_process'
 import { resolve, dirname } from 'path'
@@ -93,6 +98,8 @@ function notify(method, params = {}) {
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
 
+let failures = 0
+
 async function main() {
     console.log('Initializing MCP Server...')
     await rpc('initialize', {
@@ -118,22 +125,23 @@ async function main() {
         return
     }
 
-    console.log('\nCalling export_entries with progressToken...')
-    progressEvents.length = 0 // Reset before the measured call
+    // =========================================================================
+    // Phase 1: Native tool progress (export_entries → IO handler pipeline)
+    // =========================================================================
+    console.log('\n--- Phase 1: Native tool progress (export_entries) ---')
+    progressEvents.length = 0
 
     const response = await rpc('tools/call', {
         name: 'export_entries',
         arguments: { format: 'json', limit: 5 },
-        _meta: { progressToken: 'test-token' },
+        _meta: { progressToken: 'phase1-token' },
     })
 
     if (response.error) {
         console.error('FAIL: Tool returned error:', response.error)
-        process.exitCode = 1
+        failures++
     } else {
         console.log('\nTool finished successfully!')
-
-        // export_entries sends: 0/2 (Fetching), 1/2 (Processing), 2/2 (Complete) = 3 notifications
         if (progressEvents.length >= 2) {
             console.log(
                 `PASS: Received ${progressEvents.length} progress notifications (expected ≥ 2)`
@@ -142,8 +150,68 @@ async function main() {
             console.error(
                 `FAIL: Expected ≥ 2 progress notifications, got ${progressEvents.length}`
             )
-            process.exitCode = 1
+            failures++
         }
+    }
+
+    // =========================================================================
+    // Phase 2: Code Mode mj.reportProgress() sandbox binding
+    // =========================================================================
+    console.log('\n--- Phase 2: Code Mode mj.reportProgress() ---')
+    progressEvents.length = 0
+
+    const codeResponse = await rpc('tools/call', {
+        name: 'mj_execute_code',
+        arguments: {
+            code: [
+                'await mj.reportProgress(0, 3, "Starting workflow...");',
+                'await mj.reportProgress(1, 3, "Processing data...");',
+                'await mj.reportProgress(2, 3, "Finalizing...");',
+                'await mj.reportProgress(3, 3, "Workflow complete");',
+                'return { success: true, stepsReported: 4 };',
+            ].join('\n'),
+        },
+        _meta: { progressToken: 'phase2-codemode' },
+    })
+
+    // Allow a moment for any trailing notifications to arrive
+    await delay(200)
+
+    if (codeResponse.error) {
+        console.error('FAIL: mj_execute_code returned error:', codeResponse.error)
+        failures++
+    } else {
+        const result = codeResponse.result?.content?.[0]?.text
+        let parsed
+        try {
+            parsed = JSON.parse(result)
+        } catch {
+            parsed = result
+        }
+
+        console.log('\nCode Mode result:', JSON.stringify(parsed))
+
+        if (progressEvents.length >= 3) {
+            console.log(
+                `PASS: Received ${progressEvents.length} Code Mode progress notifications (expected ≥ 3)`
+            )
+        } else {
+            console.error(
+                `FAIL: Expected ≥ 3 Code Mode progress notifications, got ${progressEvents.length}`
+            )
+            failures++
+        }
+    }
+
+    // =========================================================================
+    // Summary
+    // =========================================================================
+    console.log('\n--- Summary ---')
+    if (failures === 0) {
+        console.log('ALL PHASES PASSED')
+    } else {
+        console.error(`${failures} phase(s) FAILED`)
+        process.exitCode = 1
     }
 
     proc.kill()
@@ -154,3 +222,4 @@ main().catch((err) => {
     proc.kill()
     process.exitCode = 1
 })
+
