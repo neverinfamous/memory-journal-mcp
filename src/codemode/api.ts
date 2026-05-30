@@ -125,11 +125,14 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
             if ((methodName === 'createEntry' || methodName === 'createEntryMinimal') && !('content' in obj)) {
                 let content = ''
                 for (const [key, value] of Object.entries(obj)) {
-                    if (key === 'type' || key === 'tags') continue
+                    if (key === 'type' || key === 'tags' || key === 'entry_type' || key === 'is_personal' || key === 'share_with_team') continue
                     const strValue = typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)
                     content += `**${key}**\n${strValue}\n\n`
                 }
-                obj['content'] = content.trim() || 'No content provided.'
+                const trimmed = content.trim()
+                if (trimmed) {
+                    obj['content'] = trimmed
+                }
             }
             
             return obj

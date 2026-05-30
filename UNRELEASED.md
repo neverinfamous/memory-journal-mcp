@@ -93,7 +93,7 @@
 - **resources**: Added `RESOURCE_URI_ALIASES` with `generateResourceAliases` to register 6 alias resource URIs (`memory://journal/recent`, `memory://journal/briefing`, `memory://entries/recent`, `memory://status`, `memory://server`, `memory://tools`) at the SDK level, delegating to canonical handlers to silently resolve common agent URI hallucinations
 - **codemode**: Promoted all callable top-level methods from `shimMj` (e.g., `createEntry`, `find`, `recent`, `searchEntries`, `deleteEntry`) as standalone VM sandbox globals, allowing agents to call `find({...})` without the `mj.` prefix
 - **annotations**: Added missing explicit `destructiveHint: false` annotations to 62 tools across all handlers and `idempotentHint: false` to `delete_entry` to achieve 100% rigor against the `db-mcp` audit standards
-
+- **codemode**: Prevented empty `createEntry` `{}` payloads from bypassing Zod validation by only injecting serialized fields if hallucinated properties are actually present
 ### Security
 
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
