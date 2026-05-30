@@ -49,7 +49,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubIssuesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -111,7 +111,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubPRsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -173,7 +173,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .describe('Include issue comments (default false). Each comment adds tokens.'),
             }),
             outputSchema: GitHubIssueResultOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -275,7 +275,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     ),
             }),
             outputSchema: GitHubPRResultOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -356,7 +356,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name (use this to switch projects dynamically)'),
             }),
             outputSchema: GitHubContextOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 try {
                     const input = z

@@ -45,7 +45,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamSemanticSearchSchemaMcp,
             outputSchema: TeamSemanticSearchOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -196,7 +196,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: z.object({}).strict(),
             outputSchema: TeamVectorStatsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: (_params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -228,7 +228,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: z.object({}).strict(),
             outputSchema: TeamRebuildVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (_params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -275,7 +275,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamAddToVectorIndexSchemaMcp,
             outputSchema: TeamAddToVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {

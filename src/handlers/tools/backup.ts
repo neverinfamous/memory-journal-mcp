@@ -95,7 +95,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Custom backup name (optional, defaults to timestamp)'),
             }),
             outputSchema: BackupResultOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -123,7 +123,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             group: 'backup',
             inputSchema: z.object({}).strict(),
             outputSchema: BackupsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: (_params: unknown) => {
                 try {
                     const backups = db.listBackups()
@@ -262,7 +262,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Number of most recent backups to keep (default: 5)'),
             }),
             outputSchema: CleanupBackupsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { keep_count } = z

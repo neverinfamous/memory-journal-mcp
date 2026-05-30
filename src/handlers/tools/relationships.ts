@@ -128,7 +128,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             group: 'relationships',
             inputSchema: LinkEntriesSchemaMcp,
             outputSchema: LinkEntriesOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = LinkEntriesSchema.parse(params)
@@ -230,7 +230,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             group: 'relationships',
             inputSchema: VisualizeInputSchemaMcp,
             outputSchema: VisualizationOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(params)

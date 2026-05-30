@@ -181,7 +181,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'analytics',
             inputSchema: GetStatisticsSchemaMcp,
             outputSchema: StatisticsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { group_by, start_date, end_date, project_breakdown } =
@@ -205,7 +205,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'analytics',
             inputSchema: CrossProjectInsightsInputSchemaMcp,
             outputSchema: CrossProjectInsightsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)

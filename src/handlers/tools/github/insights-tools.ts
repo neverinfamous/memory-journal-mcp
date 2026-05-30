@@ -40,7 +40,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: RepoInsightsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 try {
                     const input = z

@@ -36,7 +36,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -176,7 +176,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamMergeTagsSchemaMcp,
             outputSchema: TeamMergeTagsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {

@@ -31,7 +31,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
             group: 'team',
             inputSchema: TeamLinkEntriesSchemaMcp,
             outputSchema: TeamLinkEntriesOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -129,7 +129,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
             group: 'team',
             inputSchema: TeamVisualizeRelationshipsSchemaMcp,
             outputSchema: TeamVisualizeOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {

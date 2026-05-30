@@ -217,6 +217,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             inputSchema: ExecuteCodeSchemaMcp,
             annotations: {
                 readOnlyHint: false,
+                destructiveHint: false,
                 idempotentHint: false,
                 openWorldHint: false,
             },

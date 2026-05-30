@@ -133,7 +133,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     coerceSignificanceAlias(params)
@@ -190,7 +190,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: DeleteEntrySchemaMcp,
             outputSchema: DeleteEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent } = DeleteEntrySchema.parse(params)
@@ -248,7 +248,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     .describe('Tag to merge into (will be created if not exists)'),
             }),
             outputSchema: MergeTagsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { source_tag, target_tag } = z
@@ -319,7 +319,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({}).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (_params: unknown) => {
                 try {
                     if (!vectorManager) {
@@ -358,7 +358,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({ entry_id: relaxedNumber().optional() }),
             outputSchema: AddToVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const { entry_id } = z.object({ entry_id: z.number() }).parse(params)
