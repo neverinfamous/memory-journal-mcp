@@ -62,6 +62,7 @@
 - **codemode**: Mapped `mj.addEntry`, `mj.entries`, and `mj.core.searchEntries` as dynamic proxies to natively fulfill frequent agent hallucinations without erroring
 - **codemode**: Added root Proxy boundary to catch hallucinated top-level flat methods (e.g. `mj.addEntry`) and return structured error recommendations instead of raw TypeErrors
 - **codemode**: Excluded flat top-level method aliases (e.g., `createEntry`, `getStatistics`) from the "Available groups" list in the Code Mode Proxy error boundary
+- **codemode**: Excluded `memory` and `entries` aliases from the `groups` list returned by `mj.help()` to ensure accurate discoverability count
 - **codemode**: Dynamically intercepted legacy `mj_create_entry` hallucinated payloads sent directly to `mj_execute_code` (missing `code` field) to seamlessly wrap them in valid native sandbox execution scripts without throwing Zod errors
 - **codemode**: Refined hallucinated parameter smoothing in `mj_execute_code` to natively support aliases (`script`, `javascript`, `query`, `snippet`) and correctly delegate invalid structures to `createEntry` while preserving strict Zod failure behavior for purely empty objects
 - **core**: Silently dropped unrecognized `significance_type` string hallucinations (e.g., `"minor"`) in parameter coercion to prevent Zod validation failures during entry creation

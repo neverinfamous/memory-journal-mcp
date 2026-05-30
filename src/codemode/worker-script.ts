@@ -138,7 +138,7 @@ function buildApiProxy(
     }
 
     api['help'] = () => {
-        const groups = Object.keys(methods).filter((g) => g !== '_topLevel')
+        const groups = Object.keys(methods).filter((g) => g !== '_topLevel' && g !== 'memory' && g !== 'entries')
         let totalMethods = 0
         for (const group of groups) {
             totalMethods += methods[group]?.length ?? 0
