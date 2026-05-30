@@ -49,6 +49,7 @@
 
 ### Fixed
 
+- **team**: Made `project_number` optional in `team_get_recent` schema to correctly match actual implementation defaults
 - **core**: Enforced strict validation for `significance_type` by removing silent parameter dropping in `coerceSignificanceAlias`
 - **core**: Fixed `auto_context: false` persistence bug by properly mapping the field in `create_entry`
 - **scripts**: Fixed `generate-server-instructions.ts` help pointer mapping logic to handle global vs group-specific help resources, resolving `test-filter-instructions.mjs` test failures

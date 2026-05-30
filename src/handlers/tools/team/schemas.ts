@@ -66,7 +66,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
-    project_number: z.number(),
+    project_number: z.number().optional(),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -77,7 +77,7 @@ export const TeamGetRecentSchema = z.object({
 /** team_get_recent — relaxed */
 export const TeamGetRecentSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(10),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     sort_by: z
         .string()
         .optional()
