@@ -26,7 +26,7 @@ Test team CRUD operations, error paths, and date range search through Code Mode.
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured. If not configured, all team tools should return structured `{ success: false, error: "Team database not configured..." }`.
 >
-> **`team_delete_entry` is soft-delete only** — no `permanent` flag.
+> **`team_delete_entry(project_number: 1)` is soft-delete only** — no `permanent` flag.
 
 ### 28.1 Team CRUD
 
@@ -151,12 +151,12 @@ return {
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- `team_create_entry` with auto-detected and explicit `author` works
-- `team_get_recent` returns entries with `author` field
-- `team_search` filters by text, tags, and combined
-- `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
+- `team_create_entry(project_number: 1)` with auto-detected and explicit `author` works
+- `team_get_recent(project_number: 1)` returns entries with `author` field
+- `team_search(project_number: 1)` filters by text, tags, and combined
+- `team_get_entry_by_id(project_number: 1)` returns entry detail with `importance` and optional `relationships`
 - `team_list_tags` returns tag list from team database
-- `team_search_by_date_range` filters by date range, entry_type, and tags
+- `team_search_by_date_range(project_number: 1)` filters by date range, entry_type, and tags
 - Invalid `entry_type` on team create returns structured error
 - Nonexistent IDs return structured errors for get, update, delete, link
 - Invalid date range returns structured error with format hint

@@ -51,7 +51,8 @@
 ### Fixed
 
 - **team**: Fixed Zod schema validation errors by making `project_number` optional in MCP-facing (relaxed) input schemas, complying with SDK validation rules
-- **tests**: Updated Code Mode test scripts for Phase 28 to correctly supply `project_number` to team tools and mapped `MOCK_DIR` to a valid allowed IO root
+- **tests**: Updated Code Mode and Standard test scripts to systematically supply `project_number: 1` to all team-related tool calls
+- **tests**: Mapped `MOCK_DIR` to a valid allowed IO root in Phase 28 Codemode Tests
 - **team**: Made `project_number` optional in `team_get_recent` schema to correctly match actual implementation defaults
 - **core**: Enforced strict validation for `significance_type` by removing silent parameter dropping in `coerceSignificanceAlias`
 - **core**: Fixed `auto_context: false` persistence bug by properly mapping the field in `create_entry`

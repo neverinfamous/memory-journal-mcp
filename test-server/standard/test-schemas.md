@@ -101,25 +101,25 @@
 
 | Tool                              | Schema                                 | Verification                                                               |
 | --------------------------------- | -------------------------------------- | -------------------------------------------------------------------------- |
-| `team_create_entry`               | `TeamCreateOutputSchema`               | `success`, `entry` (with `author`), `author` field                         |
-| `team_get_recent`                 | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
-| `team_search`                     | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
-| `team_get_entry_by_id`            | `TeamEntryDetailOutputSchema`          | `success`, `entry` (with `author`), optional `relationships`, `importance` |
+| `team_create_entry(project_number: 1)`               | `TeamCreateOutputSchema`               | `success`, `entry` (with `author`), `author` field                         |
+| `team_get_recent(project_number: 1)`                 | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
+| `team_search(project_number: 1)`                     | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
+| `team_get_entry_by_id(project_number: 1)`            | `TeamEntryDetailOutputSchema`          | `success`, `entry` (with `author`), optional `relationships`, `importance` |
 | `team_list_tags`                  | `TeamTagsListOutputSchema`             | `tags` array with `name`, `count`                                          |
-| `team_search_by_date_range`       | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
-| `team_update_entry`               | `TeamUpdateOutputSchema`               | `success`, `entry` (updated)                                               |
-| `team_delete_entry`               | `TeamDeleteOutputSchema`               | `success`, `message`                                                       |
-| `team_merge_tags`                 | `TeamMergeTagsOutputSchema`            | `success`, `message`, `entriesUpdated`, `sourceDeleted`                    |
+| `team_search_by_date_range(project_number: 1)`       | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
+| `team_update_entry(project_number: 1)`               | `TeamUpdateOutputSchema`               | `success`, `entry` (updated)                                               |
+| `team_delete_entry(project_number: 1)`               | `TeamDeleteOutputSchema`               | `success`, `message`                                                       |
+| `team_merge_tags(project_number: 1)`                 | `TeamMergeTagsOutputSchema`            | `success`, `message`, `entriesUpdated`, `sourceDeleted`                    |
 | `team_get_statistics`             | `TeamStatisticsOutputSchema`           | `totalEntries`, `entryTypes`, `topTags`, `authors`                         |
-| `team_link_entries`               | `TeamLinkEntriesOutputSchema`          | `success`, `relationship`, optional `alreadyExists`                        |
-| `team_visualize_relationships`    | `TeamVisualizeOutputSchema`            | `mermaid`, `nodeCount`, `edgeCount`                                        |
-| `team_export_entries`             | `TeamExportOutputSchema`               | `format`, `data`, `count`                                                  |
+| `team_link_entries(project_number: 1)`               | `TeamLinkEntriesOutputSchema`          | `success`, `relationship`, optional `alreadyExists`                        |
+| `team_visualize_relationships(project_number: 1)`    | `TeamVisualizeOutputSchema`            | `mermaid`, `nodeCount`, `edgeCount`                                        |
+| `team_export_entries(project_number: 1)`             | `TeamExportOutputSchema`               | `format`, `data`, `count`                                                  |
 | `team_backup`                     | `TeamBackupOutputSchema`               | `success`, `filename`, `path`, `sizeBytes`                                 |
 | `team_list_backups`               | `TeamBackupsListOutputSchema`          | `backups` array, `total`, `backupsDirectory`                               |
-| `team_semantic_search`            | `TeamSemanticSearchOutputSchema`       | `query`, `entries` (with `similarity`), `count`                            |
+| `team_semantic_search(project_number: 1)`            | `TeamSemanticSearchOutputSchema`       | `query`, `entries` (with `similarity`), `count`                            |
 | `team_get_vector_index_stats`     | `TeamVectorStatsOutputSchema`          | `available`, `itemCount`, `modelName`, `dimensions`, `success`             |
 | `team_rebuild_vector_index`       | `TeamRebuildVectorIndexOutputSchema`   | `success`, `entriesIndexed`, optional `failedEntries`                      |
-| `team_add_to_vector_index`        | `TeamAddToVectorIndexOutputSchema`     | `success`, `entryId`                                                       |
+| `team_add_to_vector_index(project_number: 1)`        | `TeamAddToVectorIndexOutputSchema`     | `success`, `entryId`                                                       |
 | `team_get_cross_project_insights` | `TeamCrossProjectInsightsOutputSchema` | `project_count`, `total_entries`, `projects`                               |
 
 ---

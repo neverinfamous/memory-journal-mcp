@@ -51,8 +51,8 @@ Every tool must return `{success: false, error, code, category, suggestion, reco
 | **admin**  | `merge_tags`           | `source_tag: "x", target_tag: "x"`                 | `success:false`, same-tag error with `category:"validation"`               |
 | **backup** | `restore_backup`       | `filename: "nonexistent.db"`                       | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `details.resourceType`       |
 | **github** | `get_github_issue`     | `issue_number: 999999`                             | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`        |
-| **team**   | `team_create_entry`    | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error           |
-| **team**   | `team_update_entry`    | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`           |
+| **team**   | `team_create_entry(project_number: 1)`    | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error           |
+| **team**   | `team_update_entry(project_number: 1)`    | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`           |
 
 ### 11.3 Numeric Coercion Boundaries
 
