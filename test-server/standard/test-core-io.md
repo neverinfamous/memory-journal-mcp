@@ -17,6 +17,7 @@
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+6. Clean up any testing artifacts created in `C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export` by deleting the directory after testing is complete.
 
 ---
 
