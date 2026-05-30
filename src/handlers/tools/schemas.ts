@@ -78,6 +78,7 @@ export function coerceSignificanceAlias(params: unknown): void {
             else if (lower === 'learning') obj['significance_type'] = 'lesson_learned'
             else if (lower === 'key_decision') obj['significance_type'] = 'decision'
             else if (lower === 'resolved') obj['significance_type'] = 'blocker_resolved'
+            else if (lower === 'maintenance' || lower === 'minor') delete obj['significance_type']
         }
     }
 }
