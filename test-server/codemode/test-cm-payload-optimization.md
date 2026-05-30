@@ -166,11 +166,11 @@ return {
 const failures = []
 
 // At limit — should accept
-const atLimit = await mj.core.getRecentEntries({ project_number: 1, limit: 500 })
+const atLimit = await mj.core.getRecentEntries({ project_number: 5, limit: 500 })
 if (atLimit.success === false) failures.push('limit 500 rejected: ' + atLimit.error)
 
 // Over limit — should reject
-const overLimit = await mj.core.getRecentEntries({ project_number: 1, limit: 501 })
+const overLimit = await mj.core.getRecentEntries({ project_number: 5, limit: 501 })
 if (overLimit.success !== false) failures.push('limit 501 should be rejected')
 
 // GitHub issues over limit
@@ -182,7 +182,7 @@ const prsOver = await mj.github.getGithubPrs({ limit: 501 })
 if (prsOver.success !== false) failures.push('github PRs limit 501 should be rejected')
 
 // Search over limit
-const searchOver = await mj.search.searchEntries({ project_number: 1, query: 'test', limit: 501 })
+const searchOver = await mj.search.searchEntries({ project_number: 5, query: 'test', limit: 501 })
 if (searchOver.success !== false) failures.push('search limit 501 should be rejected')
 
 return {

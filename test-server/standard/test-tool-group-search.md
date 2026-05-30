@@ -31,15 +31,15 @@
 
 | Test                  | Action                                                 | Verification                                                                       |
 | --------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| Maximum Limit         | `search_entries(project_number: 1, ..., limit: 500)`                      | Returns 500 or fewer entries.                                                      |
-| Limit Exceeded        | `search_entries(project_number: 1, ..., limit: 501)`                      | Structured validation error.                                                       |
+| Maximum Limit         | `search_entries(project_number: 5, ..., limit: 500)`                      | Returns 500 or fewer entries.                                                      |
+| Limit Exceeded        | `search_entries(project_number: 5, ..., limit: 501)`                      | Structured validation error.                                                       |
 | Threshold Limits      | `semantic_search(..., similarity_threshold: 0.0)`      | Returns all indexed entries.                                                       |
 | Threshold Limits      | `semantic_search(..., similarity_threshold: 1.0)`      | Returns exact match or zero entries.                                               |
 | Soft Delete Isolation | Search after deleting entry                            | Verify deleted entry does not appear in search results or semantic search results. |
 | Filter Ignored Bug    | `search_by_date_range` with `issue_number: 44`         | ⚠️ Verify if issue filter applies (should not silently ignore).                    |
 | Filter Ignored Bug    | `search_by_date_range` with `workflow_run_id: 999`     | ⚠️ Verify if filter applies.                                                       |
-| Invalid sort_by       | `search_entries(project_number: 1, query: "test", sort_by: "invalid")`    | Structured validation error (Zod enum).                                            |
-| Importance sort       | `search_entries(project_number: 1, query: "test", sort_by: "importance")` | Returns entries with `importanceScore` field, sorted descending.                   |
+| Invalid sort_by       | `search_entries(project_number: 5, query: "test", sort_by: "invalid")`    | Structured validation error (Zod enum).                                            |
+| Importance sort       | `search_entries(project_number: 5, query: "test", sort_by: "importance")` | Returns entries with `importanceScore` field, sorted descending.                   |
 
 ## Success Criteria
 

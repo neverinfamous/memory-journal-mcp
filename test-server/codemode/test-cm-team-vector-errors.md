@@ -30,13 +30,13 @@ Test team vector search, cross-project insights, and comprehensive cross-tool er
 const rebuild = await mj.team.teamRebuildVectorIndex({})
 const stats = await mj.team.teamGetVectorIndexStats({})
 
-const recent = await mj.team.teamGetRecent({project_number: 1,  project_number: 1, limit: 1 })
-const addResult = await mj.team.teamAddToVectorIndex({project_number: 1,  project_number: 1, entry_id: recent.entries[0].id, })
-const addBad = await mj.team.teamAddToVectorIndex({project_number: 1,  project_number: 1, entry_id: 999999 })
+const recent = await mj.team.teamGetRecent({project_number: 5,  project_number: 5, limit: 1 })
+const addResult = await mj.team.teamAddToVectorIndex({project_number: 5,  project_number: 5, entry_id: recent.entries[0].id, })
+const addBad = await mj.team.teamAddToVectorIndex({project_number: 5,  project_number: 5, entry_id: 999999 })
 
-const search = await mj.team.teamSemanticSearch({project_number: 1,  project_number: 1, query: 'standup' })
-const relatedById = await mj.team.teamSemanticSearch({project_number: 1,  project_number: 1, entry_id: recent.entries[0].id })
-const strict = await mj.team.teamSemanticSearch({project_number: 1,  project_number: 1, query: 'standup',
+const search = await mj.team.teamSemanticSearch({project_number: 5,  project_number: 5, query: 'standup' })
+const relatedById = await mj.team.teamSemanticSearch({project_number: 5,  project_number: 5, entry_id: recent.entries[0].id })
+const strict = await mj.team.teamSemanticSearch({project_number: 5,  project_number: 5, query: 'standup',
   similarity_threshold: 0.5, })
 
 const insights = await mj.team.teamGetCrossProjectInsights({})
@@ -86,7 +86,7 @@ return {
 const errors = {}
 
 // Core errors
-errors.createEmpty = await mj.core.createEntry({ project_number: 1, content: '' })
+errors.createEmpty = await mj.core.createEntry({ project_number: 5, content: '' })
 errors.getNotFound = await mj.core.getEntryById({ entry_id: 999999 })
 errors.updateNotFound = await mj.admin.updateEntry({ entry_id: 999999, content: 'x' })
 errors.deleteNotFound = await mj.admin.deleteEntry({ entry_id: 999999 })
@@ -119,15 +119,15 @@ errors.mergeNonexistent = await mj.admin.mergeTags({
 errors.addVectorBad = await mj.admin.addToVectorIndex({ entry_id: 999999 })
 
 // Team errors
-errors.teamGetNotFound = await mj.team.teamGetEntryById({project_number: 1,  project_number: 1, entry_id: 999999 })
-errors.teamUpdateNotFound = await mj.team.teamUpdateEntry({project_number: 1,  project_number: 1, entry_id: 999999, content: 'x' })
-errors.teamDeleteNotFound = await mj.team.teamDeleteEntry({project_number: 1,  project_number: 1, entry_id: 999999 })
-errors.teamLinkBad = await mj.team.teamLinkEntries({project_number: 1,  project_number: 1, from_entry_id: 999999,
+errors.teamGetNotFound = await mj.team.teamGetEntryById({project_number: 5,  project_number: 5, entry_id: 999999 })
+errors.teamUpdateNotFound = await mj.team.teamUpdateEntry({project_number: 5,  project_number: 5, entry_id: 999999, content: 'x' })
+errors.teamDeleteNotFound = await mj.team.teamDeleteEntry({project_number: 5,  project_number: 5, entry_id: 999999 })
+errors.teamLinkBad = await mj.team.teamLinkEntries({project_number: 5,  project_number: 5, from_entry_id: 999999,
   to_entry_id: 1,
   relationship_type: 'references', })
 
 // Team vector errors (only true error paths)
-errors.teamAddVectorBad = await mj.team.teamAddToVectorIndex({project_number: 1,  project_number: 1, entry_id: 999999 })
+errors.teamAddVectorBad = await mj.team.teamAddToVectorIndex({project_number: 5,  project_number: 5, entry_id: 999999 })
 
 // Verify all errors are structured (not raw throws)
 const allStructured = Object.entries(errors).every(([key, val]) => {
@@ -167,7 +167,7 @@ After testing, remove all entries and backups created during Phases 25-27:
 
 ```javascript
 // Cleanup code:
-const entries = await mj.search.searchEntries({ project_number: 1, query: 'CM4', limit: 50 })
+const entries = await mj.search.searchEntries({ project_number: 5, query: 'CM4', limit: 50 })
 const cm4Entries = entries.entries.filter(
   (e) => e.content?.includes('CM4') || e.tags?.some((t) => t.startsWith('codemode4'))
 )
@@ -178,10 +178,10 @@ for (const e of cm4Entries) {
 }
 
 // Clean up team entries created during Phase 28
-const teamEntries = await mj.team.teamSearch({project_number: 1,  project_number: 1, query: 'CM4', limit: 50 })
+const teamEntries = await mj.team.teamSearch({project_number: 5,  project_number: 5, query: 'CM4', limit: 50 })
 for (const e of teamEntries.entries ?? []) {
   if (e.content?.includes('CM4')) {
-    const del = await mj.team.teamDeleteEntry({project_number: 1,  project_number: 1, entry_id: e.id })
+    const del = await mj.team.teamDeleteEntry({project_number: 5,  project_number: 5, entry_id: e.id })
     results.push({ id: e.id, source: 'team', deleted: del.success })
   }
 }
@@ -197,8 +197,8 @@ return { cleaned: results.length, details: results }
 
 - `team_rebuild_vector_index` indexes team entries via Code Mode
 - `team_get_vector_index_stats` returns vector stats via Code Mode
-- `team_semantic_search(project_number: 1)` with threshold filtering works via Code Mode
-- `team_add_to_vector_index(project_number: 1)` succeeds for existing, errors for nonexistent via Code Mode
+- `team_semantic_search(project_number: 5)` with threshold filtering works via Code Mode
+- `team_add_to_vector_index(project_number: 5)` succeeds for existing, errors for nonexistent via Code Mode
 - `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 - All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
 - All test entries cleaned up after Phase 28

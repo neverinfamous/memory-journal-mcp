@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Code Mode: Team Flags (Hush Protocol)
 
-Test the Hush Protocol flag system (`team_pass_flag(project_number: 1)`, `team_resolve_flag(project_number: 1)`) and flag resources through Code Mode.
+Test the Hush Protocol flag system (`team_pass_flag(project_number: 5)`, `team_resolve_flag(project_number: 5)`) and flag resources through Code Mode.
 
 **Scope:** 1 tool (`mj_execute_code`), Phase 28.12–28.15 — ~12 test cases covering flag creation, vocabulary validation, resolution lifecycle, idempotency, and error paths via Code Mode.
 
@@ -32,32 +32,32 @@ Test the Hush Protocol flag system (`team_pass_flag(project_number: 1)`, `team_r
 ```javascript
 // Test code:
 const blocker = await mj.team.passTeamFlag({
-  project_number: 1, flag_type: 'blocker',
+  project_number: 5, flag_type: 'blocker',
   message: 'FK constraint prevents migration from running',
   target_user: '@sarah',
   link: 'src/database/migrations/005.ts',
-  project_number: 1,
+  project_number: 5,
 })
 const fyi = await mj.team.passTeamFlag({
-  project_number: 1, flag_type: 'fyi',
+  project_number: 5, flag_type: 'fyi',
   message: 'New linting rule added for strict-boolean-expressions',
-  project_number: 1,
+  project_number: 5,
 })
 const review = await mj.team.passTeamFlag({
-  project_number: 1, flag_type: 'needs_review',
+  project_number: 5, flag_type: 'needs_review',
   message: 'Authentication refactor ready for review',
   target_user: 'chris',
   issue_number: 42,
-  project_number: 1,
+  project_number: 5,
 })
 const help = await mj.team.passTeamFlag({
-  project_number: 1, flag_type: 'help_requested',
+  project_number: 5, flag_type: 'help_requested',
   message: 'Cannot reproduce the race condition on Windows',
-  project_number: 1,
+  project_number: 5,
 })
 
 // Verify entry structure
-const detail = await mj.team.teamGetEntryById({project_number: 1,  project_number: 1, entry_id: blocker.entry?.id })
+const detail = await mj.team.teamGetEntryById({project_number: 5,  project_number: 5, entry_id: blocker.entry?.id })
 const flagMeta = detail.entry?.flagMetadata || null
 
 const result = {
@@ -105,15 +105,15 @@ return result
 
 // Invalid vocabulary term
 const badType = await mj.team.passTeamFlag({
-  project_number: 1, flag_type: 'urgent',
+  project_number: 5, flag_type: 'urgent',
   message: 'This should fail vocabulary check',
-  project_number: 1,
+  project_number: 5,
 })
 
 // Missing required fields
-const noType = await mj.team.passTeamFlag({ project_number: 1, message: 'no type', project_number: 1 })
-const noMessage = await mj.team.passTeamFlag({ project_number: 1, flag_type: 'blocker', project_number: 1 })
-const empty = await mj.team.passTeamFlag({project_number: 1,  project_number: 1 })
+const noType = await mj.team.passTeamFlag({ project_number: 5, message: 'no type', project_number: 5 })
+const noMessage = await mj.team.passTeamFlag({ project_number: 5, flag_type: 'blocker', project_number: 5 })
+const empty = await mj.team.passTeamFlag({project_number: 5,  project_number: 5 })
 
 // Resolve nonexistent flag
 const resolveGhost = await mj.team.resolveTeamFlag({ flag_id: 999999 })
@@ -122,7 +122,7 @@ const resolveGhost = await mj.team.resolveTeamFlag({ flag_id: 999999 })
 const resolveEmpty = await mj.team.resolveTeamFlag({})
 
 // Resolve a non-flag entry (get a recent non-flag entry first)
-const recent = await mj.team.teamGetRecent({project_number: 1,  project_number: 1, limit: 10 })
+const recent = await mj.team.teamGetRecent({project_number: 5,  project_number: 5, limit: 10 })
 const nonFlagEntry = recent.entries?.find((e) => e.entryType !== 'flag')
 let resolveWrongType = { skipped: true }
 if (nonFlagEntry) {
@@ -164,9 +164,9 @@ return result
 
 // Create a flag to resolve
 const flag = await mj.team.passTeamFlag({
-  project_number: 1, flag_type: 'blocker',
+  project_number: 5, flag_type: 'blocker',
   message: 'CM test flag for resolution',
-  project_number: 1,
+  project_number: 5,
 })
 const flagId = flag.entry?.id
 
@@ -177,7 +177,7 @@ const resolved = await mj.team.resolveTeamFlag({
 })
 
 // Verify resolved state
-const after = await mj.team.teamGetEntryById({project_number: 1,  project_number: 1, entry_id: flagId })
+const after = await mj.team.teamGetEntryById({project_number: 5,  project_number: 5, entry_id: flagId })
 const afterCtx = after.entry?.flagMetadata || null
 
 // Idempotent re-resolve
@@ -188,9 +188,9 @@ const reResolved = await mj.team.resolveTeamFlag({
 
 // Resolve without comment
 const flag2 = await mj.team.passTeamFlag({
-  project_number: 1, flag_type: 'fyi',
+  project_number: 5, flag_type: 'fyi',
   message: 'CM bare resolve test',
-  project_number: 1,
+  project_number: 5,
 })
 const bareResolved = await mj.team.resolveTeamFlag({ flag_id: flag2.entry?.id })
 
@@ -234,18 +234,18 @@ return result
 // Test code:
 
 // Search flags by tag
-const tagSearch = await mj.team.teamSearch({project_number: 1,  project_number: 1, tags: ['flag:blocker'] })
+const tagSearch = await mj.team.teamSearch({project_number: 5,  project_number: 5, tags: ['flag:blocker'] })
 
 // Search flags by entry_type
-const typeSearch = await mj.team.teamSearchByDateRange({project_number: 1,  project_number: 1, start_date: '2026-01-01',
+const typeSearch = await mj.team.teamSearchByDateRange({project_number: 5,  project_number: 5, start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'flag', })
 
 // Cleanup: delete all cm-test flag entries
-const allFlags = await mj.team.teamSearch({project_number: 1,  project_number: 1, tags: ['flag:blocker'] })
-const allFyi = await mj.team.teamSearch({project_number: 1,  project_number: 1, tags: ['flag:fyi'] })
-const allReview = await mj.team.teamSearch({project_number: 1,  project_number: 1, tags: ['flag:needs_review'] })
-const allHelp = await mj.team.teamSearch({project_number: 1,  project_number: 1, tags: ['flag:help_requested'] })
+const allFlags = await mj.team.teamSearch({project_number: 5,  project_number: 5, tags: ['flag:blocker'] })
+const allFyi = await mj.team.teamSearch({project_number: 5,  project_number: 5, tags: ['flag:fyi'] })
+const allReview = await mj.team.teamSearch({project_number: 5,  project_number: 5, tags: ['flag:needs_review'] })
+const allHelp = await mj.team.teamSearch({project_number: 5,  project_number: 5, tags: ['flag:help_requested'] })
 
 const allIds = [
   ...(allFlags.entries || []),
@@ -259,7 +259,7 @@ const allIds = [
 const uniqueIds = [...new Set(allIds)]
 let deleted = 0
 for (const id of uniqueIds) {
-  const r = await mj.team.teamDeleteEntry({project_number: 1,  project_number: 1, entry_id: id })
+  const r = await mj.team.teamDeleteEntry({project_number: 5,  project_number: 5, entry_id: id })
   if (r.success) deleted++
 }
 
@@ -286,12 +286,12 @@ return result
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- `team_pass_flag(project_number: 1)` creates entries with `entry_type: 'flag'` and structured `auto_context`
+- `team_pass_flag(project_number: 5)` creates entries with `entry_type: 'flag'` and structured `auto_context`
 - Flag tags include `flag:{type}` and `@{target}` when target_user is provided
 - `@` prefix on `target_user` is stripped before storage
 - Invalid vocabulary terms return `VALIDATION_ERROR` with suggestion listing valid types
 - Missing required fields (`flag_type`, `message`) return structured validation errors
-- `team_resolve_flag(project_number: 1)` transitions flag to resolved state with `[RESOLVED]` content marker
+- `team_resolve_flag(project_number: 5)` transitions flag to resolved state with `[RESOLVED]` content marker
 - Resolution comment is stored in both content and `auto_context.resolution`
 - Idempotent: re-resolving an already-resolved flag returns success with original state
 - Resolving a non-flag entry returns `VALIDATION_ERROR`

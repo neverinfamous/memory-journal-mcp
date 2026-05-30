@@ -25,42 +25,42 @@
 
 | Test                 | Command/Action                                                                                              | Expected Result                                                                       |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Minimal create       | `create_entry_minimal(project_number: 1, content: "Test entry")`                                                               | Returns entry ID                                                                      |
-| Full create          | `create_entry(project_number: 1, content: "...", entry_type: "planning", tags: ["test"])`                                      | Entry created with metadata                                                           |
-| With GitHub linking  | `create_entry(project_number: 1, ..., issue_number: <N>)`                                                                      | Entry links to issue                                                                  |
-| issueUrl auto-pop    | `create_entry(project_number: 1, content: "...", issue_number: <N>)` — omit issueUrl                                           | `issueUrl` auto-populated from cached repo info (requires prior `get_github_context`) |
-| Invalid entry_type   | `create_entry(project_number: 1, content: "test", entry_type: "invalid")`                                                      | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
-| Invalid significance | `create_entry(project_number: 1, content: "test", significance_type: "invalid")`                                               | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
-| With PR fields       | `create_entry(project_number: 1, content: "PR test", pr_number: 67, pr_status: "merged")`                                      | Entry created with `prNumber`, `prStatus` fields persisted                            |
-| With workflow fields | `create_entry(project_number: 1, content: "CI test", workflow_run_id: 123, workflow_name: "CI", workflow_status: "completed")` | Entry created with all workflow fields persisted                                      |
+| Minimal create       | `create_entry_minimal(project_number: 5, content: "Test entry")`                                                               | Returns entry ID                                                                      |
+| Full create          | `create_entry(project_number: 5, content: "...", entry_type: "planning", tags: ["test"])`                                      | Entry created with metadata                                                           |
+| With GitHub linking  | `create_entry(project_number: 5, ..., issue_number: <N>)`                                                                      | Entry links to issue                                                                  |
+| issueUrl auto-pop    | `create_entry(project_number: 5, content: "...", issue_number: <N>)` — omit issueUrl                                           | `issueUrl` auto-populated from cached repo info (requires prior `get_github_context`) |
+| Invalid entry_type   | `create_entry(project_number: 5, content: "test", entry_type: "invalid")`                                                      | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
+| Invalid significance | `create_entry(project_number: 5, content: "test", significance_type: "invalid")`                                               | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
+| With PR fields       | `create_entry(project_number: 5, content: "PR test", pr_number: 67, pr_status: "merged")`                                      | Entry created with `prNumber`, `prStatus` fields persisted                            |
+| With workflow fields | `create_entry(project_number: 5, content: "CI test", workflow_run_id: 123, workflow_name: "CI", workflow_status: "completed")` | Entry created with all workflow fields persisted                                      |
 | With project_owner   | `create_entry(content: "...", project_number: 5, project_owner: "neverinfamous")`                           | Entry created with `projectOwner` field                                               |
-| auto_context off     | `create_entry(project_number: 1, content: "No context", auto_context: false)`                                                  | Entry created without auto-generated context                                          |
-| share_with_team      | `create_entry(project_number: 1, content: "Shared entry", share_with_team: true)`                                              | Entry in personal DB + team DB; response has `sharedWithTeam: true`, `author`         |
+| auto_context off     | `create_entry(project_number: 5, content: "No context", auto_context: false)`                                                  | Entry created without auto-generated context                                          |
+| share_with_team      | `create_entry(project_number: 5, content: "Shared entry", share_with_team: true)`                                              | Entry in personal DB + team DB; response has `sharedWithTeam: true`, `author`         |
 
 ### 2.2 Read & Update
 
 | Test                      | Command/Action                                                 | Expected Result                                                          |
 | ------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Get by ID                 | `get_entry_by_id(project_number: 1, entry_id: <N>)`                               | Returns `structuredContent` with relationships                           |
-| Importance score          | `get_entry_by_id(project_number: 1, entry_id: <N>)`                               | Response includes `importance` field (0.0-1.0) and `importanceBreakdown` |
-| No relationships          | `get_entry_by_id(project_number: 1, entry_id: <N>, include_relationships: false)` | Response omits `relationships` array (or returns empty)                  |
-| Update tags               | `update_entry(project_number: 1, entry_id: <N>, tags: ["updated"])`               | Tags changed                                                             |
-| Update content            | `update_entry(project_number: 1, entry_id: <N>, content: "Updated content")`      | Content changed; verify via `get_entry_by_id`                            |
-| Update entry_type         | `update_entry(project_number: 1, entry_id: <N>, entry_type: "technical_note")`    | Entry type changed                                                       |
-| Update is_personal        | `update_entry(project_number: 1, entry_id: <N>, is_personal: false)`              | `isPersonal` toggled                                                     |
-| Update nonexistent        | `update_entry(project_number: 1, entry_id: 999999, tags: ["x"])`                  | Returns `{ success: false, error: "Entry 999999 not found" }`            |
-| Update invalid type       | `update_entry(project_number: 1, entry_id: <N>, entry_type: "invalid")`           | Structured error listing valid enum values                               |
-| Get recent                | `get_recent_entries(project_number: 1, limit: 5)`                                 | Returns `structuredContent` array                                        |
-| Get recent (personal)     | `get_recent_entries(project_number: 1, limit: 5, is_personal: true)`              | Only personal entries returned                                           |
-| Get recent (not personal) | `get_recent_entries(project_number: 1, limit: 5, is_personal: false)`             | Only non-personal entries returned                                       |
+| Get by ID                 | `get_entry_by_id(project_number: 5, entry_id: <N>)`                               | Returns `structuredContent` with relationships                           |
+| Importance score          | `get_entry_by_id(project_number: 5, entry_id: <N>)`                               | Response includes `importance` field (0.0-1.0) and `importanceBreakdown` |
+| No relationships          | `get_entry_by_id(project_number: 5, entry_id: <N>, include_relationships: false)` | Response omits `relationships` array (or returns empty)                  |
+| Update tags               | `update_entry(project_number: 5, entry_id: <N>, tags: ["updated"])`               | Tags changed                                                             |
+| Update content            | `update_entry(project_number: 5, entry_id: <N>, content: "Updated content")`      | Content changed; verify via `get_entry_by_id`                            |
+| Update entry_type         | `update_entry(project_number: 5, entry_id: <N>, entry_type: "technical_note")`    | Entry type changed                                                       |
+| Update is_personal        | `update_entry(project_number: 5, entry_id: <N>, is_personal: false)`              | `isPersonal` toggled                                                     |
+| Update nonexistent        | `update_entry(project_number: 5, entry_id: 999999, tags: ["x"])`                  | Returns `{ success: false, error: "Entry 999999 not found" }`            |
+| Update invalid type       | `update_entry(project_number: 5, entry_id: <N>, entry_type: "invalid")`           | Structured error listing valid enum values                               |
+| Get recent                | `get_recent_entries(project_number: 5, limit: 5)`                                 | Returns `structuredContent` array                                        |
+| Get recent (personal)     | `get_recent_entries(project_number: 5, limit: 5, is_personal: true)`              | Only personal entries returned                                           |
+| Get recent (not personal) | `get_recent_entries(project_number: 5, limit: 5, is_personal: false)`             | Only non-personal entries returned                                       |
 
 ### 2.3 Delete (Test Last!)
 
 | Test                     | Command/Action                                        | Expected Result                                           |
 | ------------------------ | ----------------------------------------------------- | --------------------------------------------------------- |
-| Soft delete              | `delete_entry(project_number: 1, entry_id: <test_id>, permanent: false)` | Entry hidden from search                                  |
-| Permanent delete         | `delete_entry(project_number: 1, entry_id: <test_id>, permanent: true)`  | Entry removed                                             |
-| Delete nonexistent entry | `delete_entry(project_number: 1, entry_id: 999999, permanent: false)`    | Returns `success: false, error: "Entry 999999 not found"` |
+| Soft delete              | `delete_entry(project_number: 5, entry_id: <test_id>, permanent: false)` | Entry hidden from search                                  |
+| Permanent delete         | `delete_entry(project_number: 5, entry_id: <test_id>, permanent: true)`  | Entry removed                                             |
+| Delete nonexistent entry | `delete_entry(project_number: 5, entry_id: 999999, permanent: false)`    | Returns `success: false, error: "Entry 999999 not found"` |
 
 ---
 

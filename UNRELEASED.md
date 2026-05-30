@@ -55,6 +55,7 @@
 
 ### Fixed
 
+- **tests**: Fixed local environment resolution failures in 26 test scripts by updating hardcoded `project_number: 1` assignments to `project_number: 5` to align with the registry configuration
 - **tests**: Fixed Kanban Code Mode pipeline test (`test-cm-kanban-lifecycle.md`) crashing due to GitHub Projects V2 read-index eventual consistency by adding a non-blocking sandbox spin delay and graceful degradation for `verifyBoardStructure`
 - **progress**: Fixed step numbering gaps in `export_markdown`, `import_markdown`, `restore_backup`, `team_export_entries`, `team_export_markdown`, and `team_import_markdown` — all sequences now start at 0 with no skipped steps
 - **progress**: Added missing progress notifications to `backup_journal` and `team_backup` (0/2 → 2/2)

@@ -28,7 +28,7 @@ Test search, semantic search, date range, analytics, and vector index operations
 >
 > ```javascript
 > await mj.core.createEntry({
-project_number: 1, >   content: "This is a test's string with 100% coverage",
+project_number: 5, >   content: "This is a test's string with 100% coverage",
 >   issue_number: 44,
 >   pr_status: 'merged',
 >   workflow_run_id: 12345,
@@ -41,28 +41,28 @@ project_number: 1, >   content: "This is a test's string with 100% coverage",
 
 | Test            | Code                                                                                          | Expected Result                 |
 | --------------- | --------------------------------------------------------------------------------------------- | ------------------------------- |
-| Basic query     | `return await mj.search.searchEntries({ project_number: 1, query: "architecture" });`                            | ≥ 2 results (S1, S11)           |
-| Phrase          | `return await mj.search.searchEntries({ project_number: 1, query: '"error handling"' });`                        | ≥ 1 result (S2)                 |
-| Prefix          | `return await mj.search.searchEntries({ project_number: 1, query: "auth*" });`                                   | ≥ 2 results (S1, S8)            |
-| FTS5 NOT        | `return await mj.search.searchEntries({ project_number: 1, query: "deploy NOT staging", mode: "fts" });`         | Returns S3 but NOT S5           |
-| FTS5 OR         | `return await mj.search.searchEntries({ project_number: 1, query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
-| LIKE fallback   | `return await mj.search.searchEntries({ project_number: 1, query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
-| Special chars   | `return await mj.search.searchEntries({ project_number: 1, query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
-| Hybrid auto     | `return await mj.search.searchEntries({ project_number: 1, query: "how did we fix performance" });`              | Heuristic RRF triggering S7     |
-| Forced semantic | `return await mj.search.searchEntries({ project_number: 1, query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
+| Basic query     | `return await mj.search.searchEntries({ project_number: 5, query: "architecture" });`                            | ≥ 2 results (S1, S11)           |
+| Phrase          | `return await mj.search.searchEntries({ project_number: 5, query: '"error handling"' });`                        | ≥ 1 result (S2)                 |
+| Prefix          | `return await mj.search.searchEntries({ project_number: 5, query: "auth*" });`                                   | ≥ 2 results (S1, S8)            |
+| FTS5 NOT        | `return await mj.search.searchEntries({ project_number: 5, query: "deploy NOT staging", mode: "fts" });`         | Returns S3 but NOT S5           |
+| FTS5 OR         | `return await mj.search.searchEntries({ project_number: 5, query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
+| LIKE fallback   | `return await mj.search.searchEntries({ project_number: 5, query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
+| Special chars   | `return await mj.search.searchEntries({ project_number: 5, query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
+| Hybrid auto     | `return await mj.search.searchEntries({ project_number: 5, query: "how did we fix performance" });`              | Heuristic RRF triggering S7     |
+| Forced semantic | `return await mj.search.searchEntries({ project_number: 5, query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
 
 ### 21.2 Search Filters
 
 ```javascript
 // Test code:
-const byIssue = await mj.search.searchEntries({ project_number: 1, issue_number: 44 })
-const byPr = await mj.search.searchEntries({ project_number: 1, pr_status: 'merged' })
-const byWorkflow = await mj.search.searchEntries({ project_number: 1, workflow_run_id: 12345 })
-const byProject = await mj.search.searchEntries({project_number: 1,  project_number: 5 })
-const personal = await mj.search.searchEntries({ project_number: 1, query: 'test', is_personal: true })
-const tagged = await mj.search.searchEntries({ project_number: 1, tags: ['testing'] })
-const typed = await mj.search.searchEntries({ project_number: 1, entry_type: 'planning' })
-const dated = await mj.search.searchEntries({ project_number: 1, start_date: '2026-01-01', end_date: '2026-12-31' })
+const byIssue = await mj.search.searchEntries({ project_number: 5, issue_number: 44 })
+const byPr = await mj.search.searchEntries({ project_number: 5, pr_status: 'merged' })
+const byWorkflow = await mj.search.searchEntries({ project_number: 5, workflow_run_id: 12345 })
+const byProject = await mj.search.searchEntries({project_number: 5,  project_number: 5 })
+const personal = await mj.search.searchEntries({ project_number: 5, query: 'test', is_personal: true })
+const tagged = await mj.search.searchEntries({ project_number: 5, tags: ['testing'] })
+const typed = await mj.search.searchEntries({ project_number: 5, entry_type: 'planning' })
+const dated = await mj.search.searchEntries({ project_number: 5, start_date: '2026-01-01', end_date: '2026-12-31' })
 return {
   issueResults: byIssue.entries.length,
   prResults: byPr.entries.length,
@@ -91,7 +91,7 @@ return {
 
 ```javascript
 // Test code:
-const results = await mj.search.searchEntries({ project_number: 1, query: 'architecture', limit: 20 })
+const results = await mj.search.searchEntries({ project_number: 5, query: 'architecture', limit: 20 })
 const sources = results.entries.map((e) => e.source)
 return {
   totalResults: results.entries.length,
@@ -111,26 +111,26 @@ return {
 ```javascript
 // Test code:
 const basic = await mj.search.searchByDateRange({
-  project_number: 1, start_date: '2026-01-01',
+  project_number: 5, start_date: '2026-01-01',
   end_date: '2026-12-31',
 })
 const withType = await mj.search.searchByDateRange({
-  project_number: 1, start_date: '2026-01-01',
+  project_number: 5, start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'planning',
 })
 const withTags = await mj.search.searchByDateRange({
-  project_number: 1, start_date: '2026-01-01',
+  project_number: 5, start_date: '2026-01-01',
   end_date: '2026-12-31',
   tags: ['deploy'],
 })
 const withPersonal = await mj.search.searchByDateRange({
-  project_number: 1, start_date: '2026-01-01',
+  project_number: 5, start_date: '2026-01-01',
   end_date: '2026-12-31',
   is_personal: true,
 })
 const withProject = await mj.search.searchByDateRange({
-  project_number: 1, start_date: '2026-01-01',
+  project_number: 5, start_date: '2026-01-01',
   end_date: '2026-12-31',
   project_number: 5,
 })
@@ -156,15 +156,15 @@ return {
 
 | Test                | Code                                                                                              | Expected Result                                             |
 | ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Invalid date format | `return await mj.search.searchByDateRange({ project_number: 1, start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
-| Inverted date range | `return await mj.search.searchByDateRange({ project_number: 1, start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
-| Query too long      | `return await mj.search.searchEntries({ project_number: 1, query: "a".repeat(300) });`                               | `{ success: false, error: "..." }` with Zod validation hint |
+| Invalid date format | `return await mj.search.searchByDateRange({ project_number: 5, start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
+| Inverted date range | `return await mj.search.searchByDateRange({ project_number: 5, start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
+| Query too long      | `return await mj.search.searchEntries({ project_number: 5, query: "a".repeat(300) });`                               | `{ success: false, error: "..." }` with Zod validation hint |
 
 ### 21.6 Semantic Search
 
 ```javascript
 // Test code:
-const related = await mj.core.getRecentEntries({ project_number: 1, limit: 1 })
+const related = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
 const basic = await mj.search.semanticSearch({ query: 'improving performance' })
 const byId = await mj.search.semanticSearch({ entry_id: related.entries[0].id })
 const strict = await mj.search.semanticSearch({
@@ -249,7 +249,7 @@ return {
 | Test                  | Code                                                                                                                             | Expected Result                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | Rebuild index         | `return await mj.admin.rebuildVectorIndex({});`                                                                                  | `{ success: true, entriesIndexed: N }` where N > 0 |
-| Add existing to index | `const r = await mj.core.getRecentEntries({ project_number: 1, limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
+| Add existing to index | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
 | Add nonexistent       | `return await mj.admin.addToVectorIndex({ entry_id: 999999 });`                                                                  | `{ success: false, error: "..." }`                 |
 
 ---
@@ -262,18 +262,18 @@ return {
 ```javascript
 // Setup: create test entries with different importance profiles
 const e1 = await mj.core.createEntry({
-  project_number: 1, content: 'IMPSORT_TEST_LOW: no significance, no relationships',
+  project_number: 5, content: 'IMPSORT_TEST_LOW: no significance, no relationships',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
 })
 const e2 = await mj.core.createEntry({
-  project_number: 1, content: 'IMPSORT_TEST_HIGH: milestone with relationships',
+  project_number: 5, content: 'IMPSORT_TEST_HIGH: milestone with relationships',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
   significance_type: 'milestone',
 })
 const e3 = await mj.core.createEntry({
-  project_number: 1, content: 'IMPSORT_TEST_MED: decision with causal link',
+  project_number: 5, content: 'IMPSORT_TEST_MED: decision with causal link',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
   significance_type: 'decision',
@@ -297,7 +297,7 @@ await mj.relationships.linkEntries({
 
 // T1: search_entries with sort_by: 'importance'
 const impSearch = await mj.search.searchEntries({
-  project_number: 1, query: 'IMPSORT_TEST',
+  project_number: 5, query: 'IMPSORT_TEST',
   sort_by: 'importance',
   mode: 'fts',
   limit: 10,
@@ -305,20 +305,20 @@ const impSearch = await mj.search.searchEntries({
 
 // T2: search_entries with default sort_by (timestamp)
 const tsSearch = await mj.search.searchEntries({
-  project_number: 1, query: 'IMPSORT_TEST',
+  project_number: 5, query: 'IMPSORT_TEST',
   limit: 10,
 })
 
 // T3: get_recent_entries with sort_by: 'importance'
-const impRecent = await mj.core.getRecentEntries({ project_number: 1, limit: 5, sort_by: 'importance' })
+const impRecent = await mj.core.getRecentEntries({ project_number: 5, limit: 5, sort_by: 'importance' })
 
 // T4: get_recent_entries with default sort_by (timestamp)
-const tsRecent = await mj.core.getRecentEntries({ project_number: 1, limit: 5 })
+const tsRecent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
 
 // T5: search_by_date_range with sort_by: 'importance'
 const today = new Date().toISOString().split('T')[0]
 const impDateRange = await mj.search.searchByDateRange({
-  project_number: 1, start_date: '2026-01-01',
+  project_number: 5, start_date: '2026-01-01',
   end_date: today,
   sort_by: 'importance',
   limit: 5,
@@ -326,7 +326,7 @@ const impDateRange = await mj.search.searchByDateRange({
 
 // T6: search_by_date_range with default sort_by (timestamp)
 const tsDateRange = await mj.search.searchByDateRange({
-  project_number: 1, start_date: '2026-01-01',
+  project_number: 5, start_date: '2026-01-01',
   end_date: today,
   limit: 5,
 })

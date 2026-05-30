@@ -26,25 +26,25 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ project_number: 1, limit: 1, project_number: 1 })
+const r = await mj.team.teamGetRecent({ project_number: 5, limit: 1, project_number: 5 })
 const id = r.entries[0].id
 
-const updated = await mj.team.teamUpdateEntry({project_number: 1,  project_number: 1, entry_id: id,
+const updated = await mj.team.teamUpdateEntry({project_number: 5,  project_number: 5, entry_id: id,
   content: 'CM4 updated team content',
   tags: ['cm4-updated-team'], })
-const verify = await mj.team.teamGetEntryById({project_number: 1,  project_number: 1, entry_id: id })
+const verify = await mj.team.teamGetEntryById({project_number: 5,  project_number: 5, entry_id: id })
 
 // Merge tags
-await mj.team.teamCreateEntry({ project_number: 1, content: 'CM4 merge source', tags: ['cm4-team-old'], project_number: 1 })
-const merged = await mj.team.teamMergeTags({ project_number: 1, source_tag: 'cm4-team-old',
+await mj.team.teamCreateEntry({ project_number: 5, content: 'CM4 merge source', tags: ['cm4-team-old'], project_number: 5 })
+const merged = await mj.team.teamMergeTags({ project_number: 5, source_tag: 'cm4-team-old',
   target_tag: 'cm4-team-new', })
 const afterTags = await mj.team.teamListTags({})
 const oldGone = !afterTags.tags?.some((t) => t.name === 'cm4-team-old')
 const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
 
 // Soft delete
-const toDelete = await mj.team.teamCreateEntry({ project_number: 1, content: 'CM4 delete me', project_number: 1 })
-const deleted = await mj.team.teamDeleteEntry({project_number: 1,  project_number: 1, entry_id: toDelete.entry.id })
+const toDelete = await mj.team.teamCreateEntry({ project_number: 5, content: 'CM4 delete me', project_number: 5 })
+const deleted = await mj.team.teamDeleteEntry({project_number: 5,  project_number: 5, entry_id: toDelete.entry.id })
 
 return {
   updateSuccess: updated.success,
@@ -90,24 +90,24 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ project_number: 1, limit: 2, project_number: 1 })
+const r = await mj.team.teamGetRecent({ project_number: 5, limit: 2, project_number: 5 })
 const [a, b] = r.entries.map((e) => e.id)
 
 const linked = await mj.team.teamLinkEntries({
-  project_number: 1, from_entry_id: a,
+  project_number: 5, from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
   description: 'CM4 team link test',
-  project_number: 1,
+  project_number: 5,
 })
 const dup = await mj.team.teamLinkEntries({
-  project_number: 1, from_entry_id: a,
+  project_number: 5, from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
-  project_number: 1,
+  project_number: 5,
 })
-const viz = await mj.team.teamVisualizeRelationships({ project_number: 1, entry_id: a })
-const vizTag = await mj.team.teamVisualizeRelationships({ project_number: 1, tag: 'codemode4-team-test' })
+const viz = await mj.team.teamVisualizeRelationships({ project_number: 5, entry_id: a })
+const vizTag = await mj.team.teamVisualizeRelationships({ project_number: 5, tag: 'codemode4-team-test' })
 
 return {
   linkSuccess: linked.success,
@@ -130,21 +130,21 @@ return {
 
 ```javascript
 // Test code:
-const jsonExport = await mj.team.teamExportEntries({ project_number: 1, format: 'json', limit: 5 })
-const mdExport = await mj.team.teamExportEntries({ project_number: 1, format: 'markdown', limit: 5 })
+const jsonExport = await mj.team.teamExportEntries({ project_number: 5, format: 'json', limit: 5 })
+const mdExport = await mj.team.teamExportEntries({ project_number: 5, format: 'markdown', limit: 5 })
 
 const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_team_export'
 
 const ioExport = await mj.team.teamExportMarkdown({
   output_dir: MOCK_DIR,
   limit: 5,
-  project_number: 1,
+  project_number: 5,
 })
 
 const ioImport = await mj.team.teamImportMarkdown({
   source_dir: MOCK_DIR,
   dry_run: true,
-  project_number: 1,
+  project_number: 5,
 })
 
 return {
@@ -218,13 +218,13 @@ return {
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- `team_update_entry(project_number: 1)` updates content, tags, and entry_type
-- `team_delete_entry(project_number: 1)` soft-deletes team entries
-- `team_merge_tags(project_number: 1)` consolidates tags — source removed, entries re-tagged
+- `team_update_entry(project_number: 5)` updates content, tags, and entry_type
+- `team_delete_entry(project_number: 5)` soft-deletes team entries
+- `team_merge_tags(project_number: 5)` consolidates tags — source removed, entries re-tagged
 - `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- `team_link_entries(project_number: 1)` creates relationships with duplicate detection
-- `team_visualize_relationships(project_number: 1)` returns Mermaid diagram with node/edge counts
-- `team_export_entries(project_number: 1)` exports JSON and markdown with filters
+- `team_link_entries(project_number: 5)` creates relationships with duplicate detection
+- `team_visualize_relationships(project_number: 5)` returns Mermaid diagram with node/edge counts
+- `team_export_entries(project_number: 5)` exports JSON and markdown with filters
 - `team_backup` creates named and auto-named backups
 - `team_list_backups` returns backup metadata
 - `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings

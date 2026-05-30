@@ -27,7 +27,7 @@ Test relationship linking (all types), duplicate detection, error paths, and Mer
 
 ```javascript
 // Test code:
-const r = await mj.core.getRecentEntries({ project_number: 1, limit: 4 })
+const r = await mj.core.getRecentEntries({ project_number: 5, limit: 4 })
 const ids = r.entries.map((e) => e.id)
 if (ids.length < 4) return { error: 'Need at least 4 entries' }
 
@@ -77,7 +77,7 @@ return {
 
 ```javascript
 // Test code (run after 24.1):
-const r = await mj.core.getRecentEntries({ project_number: 1, limit: 2 })
+const r = await mj.core.getRecentEntries({ project_number: 5, limit: 2 })
 const [a, b] = r.entries.map((e) => e.id)
 
 const dup = await mj.relationships.linkEntries({
@@ -120,7 +120,7 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.core.getRecentEntries({ project_number: 1, limit: 1 })
+const r = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
 const id = r.entries[0].id
 
 const viz = await mj.relationships.visualizeRelationships({ entry_id: id })
@@ -155,7 +155,7 @@ After testing, remove all entries created during Phases 22-24:
 
 ```javascript
 // Cleanup code:
-const cmEntries = await mj.search.searchEntries({ project_number: 1, query: 'CodeMode', limit: 50 })
+const cmEntries = await mj.search.searchEntries({ project_number: 5, query: 'CodeMode', limit: 50 })
 const results = []
 for (const e of cmEntries.entries) {
   if (

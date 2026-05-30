@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Team Tool Group
 
-**Scope:** Deterministic verification of Team tools (`team_create_entry(project_number: 1)`, `team_search(project_number: 1)`, `team_pass_flag(project_number: 1)`, `team_resolve_flag(project_number: 1)`, etc.) against strict error handling constraints.
+**Scope:** Deterministic verification of Team tools (`team_create_entry(project_number: 5)`, `team_search(project_number: 5)`, `team_pass_flag(project_number: 5)`, `team_resolve_flag(project_number: 5)`, etc.) against strict error handling constraints.
 
 **Prerequisites:**
 
@@ -24,20 +24,20 @@
 | Tool                        | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | --------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools              | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
-| `team_create_entry(project_number: 1)`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
-| `team_update_entry(project_number: 1)`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `team_search_by_date_range(project_number: 1)` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
-| `team_merge_tags(project_number: 1)`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
-| `team_pass_flag(project_number: 1)`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`  |
-| `team_resolve_flag(project_number: 1)`         | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
+| `team_create_entry(project_number: 5)`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
+| `team_update_entry(project_number: 5)`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_search_by_date_range(project_number: 5)` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_merge_tags(project_number: 5)`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
+| `team_pass_flag(project_number: 5)`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`  |
+| `team_resolve_flag(project_number: 5)`         | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
 
 ### Specific Domain Checks
 
-- **Unavailable Team Vector**: Use `team_semantic_search(project_number: 1)` without vector initialization -> verify structured JSON error.
+- **Unavailable Team Vector**: Use `team_semantic_search(project_number: 5)` without vector initialization -> verify structured JSON error.
 - **Team Insights**: Verify `team_get_cross_project_insights` returns the requisite fields even when the query returns absolutely zero rows.
-- **Flag Vocabulary Validation**: Verify `team_pass_flag(project_number: 1)` returns `VALIDATION_ERROR` with `suggestion` listing valid vocabulary types.
-- **Resolve Non-Flag Entry**: Verify `team_resolve_flag(project_number: 1)` on a non-flag entry returns `VALIDATION_ERROR` (not crash).
-- **Resolve Idempotency**: Verify calling `team_resolve_flag(project_number: 1)` on an already-resolved flag returns `success: true` with original resolution.
+- **Flag Vocabulary Validation**: Verify `team_pass_flag(project_number: 5)` returns `VALIDATION_ERROR` with `suggestion` listing valid vocabulary types.
+- **Resolve Non-Flag Entry**: Verify `team_resolve_flag(project_number: 5)` on a non-flag entry returns `VALIDATION_ERROR` (not crash).
+- **Resolve Idempotency**: Verify calling `team_resolve_flag(project_number: 5)` on an already-resolved flag returns `success: true` with original resolution.
 
 ## Success Criteria
 

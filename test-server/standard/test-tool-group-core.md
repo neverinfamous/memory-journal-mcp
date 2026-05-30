@@ -41,11 +41,11 @@ For every tool, you must explicitly confirm that Zod validation errors and Domai
 
 | Test                | Action                                                                                | Verification                                                     |
 | ------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Round-Trip          | `create_entry(project_number: 1, content: "RT test", entry_type: "planning")` then `get_entry_by_id(project_number: 1, id)` | All fields persist correctly.                                    |
-| Boundary Max Length | `create_entry(project_number: 1, content: <50k chars>)`                                                  | Entry created successfully.                                      |
-| Boundary Empty      | `create_entry(project_number: 1, content: "")`                                                           | Structured validation error.                                     |
-| Maximum Limit       | `get_recent_entries(project_number: 1, limit: 500)`                                                      | Returns 500 or fewer entries.                                    |
-| Limit Exceeded      | `get_recent_entries(project_number: 1, limit: 501)`                                                      | Structured validation error.                                     |
+| Round-Trip          | `create_entry(project_number: 5, content: "RT test", entry_type: "planning")` then `get_entry_by_id(project_number: 5, id)` | All fields persist correctly.                                    |
+| Boundary Max Length | `create_entry(project_number: 5, content: <50k chars>)`                                                  | Entry created successfully.                                      |
+| Boundary Empty      | `create_entry(project_number: 5, content: "")`                                                           | Structured validation error.                                     |
+| Maximum Limit       | `get_recent_entries(project_number: 5, limit: 500)`                                                      | Returns 500 or fewer entries.                                    |
+| Limit Exceeded      | `get_recent_entries(project_number: 5, limit: 501)`                                                      | Structured validation error.                                     |
 | Filter Ignored Bug  | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")`                    | ⚠️ SHOULD return 0. If returns all, handler is ignoring filters. |
 
 ## Success Criteria
