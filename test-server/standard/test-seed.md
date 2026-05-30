@@ -5,7 +5,7 @@
 **Prerequisites:**
 
 - Confirm MCP server instructions were auto-received before starting.
-- **Use direct MCP tools whenever possible.** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
 
 **Workflow after testing:**
 
