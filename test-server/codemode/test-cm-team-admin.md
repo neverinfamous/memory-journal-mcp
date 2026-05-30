@@ -26,7 +26,7 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ limit: 1 })
+const r = await mj.team.teamGetRecent({ limit: 1, project_number: 1 })
 const id = r.entries[0].id
 
 const updated = await mj.team.teamUpdateEntry({
@@ -37,7 +37,7 @@ const updated = await mj.team.teamUpdateEntry({
 const verify = await mj.team.teamGetEntryById({ entry_id: id })
 
 // Merge tags
-await mj.team.teamCreateEntry({ content: 'CM4 merge source', tags: ['cm4-team-old'] })
+await mj.team.teamCreateEntry({ content: 'CM4 merge source', tags: ['cm4-team-old'], project_number: 1 })
 const merged = await mj.team.teamMergeTags({
   source_tag: 'cm4-team-old',
   target_tag: 'cm4-team-new',
@@ -47,7 +47,7 @@ const oldGone = !afterTags.tags?.some((t) => t.name === 'cm4-team-old')
 const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
 
 // Soft delete
-const toDelete = await mj.team.teamCreateEntry({ content: 'CM4 delete me' })
+const toDelete = await mj.team.teamCreateEntry({ content: 'CM4 delete me', project_number: 1 })
 const deleted = await mj.team.teamDeleteEntry({ entry_id: toDelete.entry.id })
 
 return {
@@ -94,7 +94,7 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ limit: 2 })
+const r = await mj.team.teamGetRecent({ limit: 2, project_number: 1 })
 const [a, b] = r.entries.map((e) => e.id)
 
 const linked = await mj.team.teamLinkEntries({
@@ -102,11 +102,13 @@ const linked = await mj.team.teamLinkEntries({
   to_entry_id: b,
   relationship_type: 'references',
   description: 'CM4 team link test',
+  project_number: 1,
 })
 const dup = await mj.team.teamLinkEntries({
   from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
+  project_number: 1,
 })
 const viz = await mj.team.teamVisualizeRelationships({ entry_id: a })
 const vizTag = await mj.team.teamVisualizeRelationships({ tag: 'codemode4-team-test' })
@@ -135,16 +137,18 @@ return {
 const jsonExport = await mj.team.teamExportEntries({ format: 'json', limit: 5 })
 const mdExport = await mj.team.teamExportEntries({ format: 'markdown', limit: 5 })
 
-const MOCK_DIR = 'cm_team_export'
+const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_team_export'
 
 const ioExport = await mj.team.teamExportMarkdown({
   output_dir: MOCK_DIR,
   limit: 5,
+  project_number: 1,
 })
 
 const ioImport = await mj.team.teamImportMarkdown({
   source_dir: MOCK_DIR,
   dry_run: true,
+  project_number: 1,
 })
 
 return {

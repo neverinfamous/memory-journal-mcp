@@ -44,7 +44,7 @@ const TeamExportMarkdownSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -75,7 +75,7 @@ const TeamImportMarkdownSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber()
         .optional()
         .default(100)

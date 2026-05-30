@@ -53,7 +53,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.string().optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
@@ -270,7 +270,7 @@ export const TeamLinkEntriesSchemaMcp = z.object({
     to_entry_id: relaxedNumber().optional(),
     relationship_type: z.string().optional().default('references'),
     description: z.string().optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_visualize_relationships — strict */
@@ -510,7 +510,7 @@ export const TeamSemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_add_to_vector_index — strict */
@@ -522,7 +522,7 @@ export const TeamAddToVectorIndexSchema = z.object({
 /** team_add_to_vector_index — relaxed */
 export const TeamAddToVectorIndexSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 // ============================================================================
