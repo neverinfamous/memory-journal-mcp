@@ -506,15 +506,15 @@ describe('Tool Handler Coverage', () => {
             expect(result.error).toBeDefined()
         })
 
-        it('should smooth out invalid significance_type by dropping it', async () => {
+        it('should reject invalid significance_type with validation error', async () => {
             const result = (await callTool(
                 'create_entry',
                 { content: 'Test', significance_type: 'invalid_sig' },
                 db
-            )) as { success: boolean; entry: { significanceType: string | null } }
+            )) as { success: boolean; error: string; code?: string }
 
-            expect(result.success).toBe(true)
-            expect(result.entry.significanceType).toBeNull()
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('significance_type')
         })
 
         it('should return error for empty content', async () => {

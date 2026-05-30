@@ -49,6 +49,8 @@
 
 ### Fixed
 
+- **core**: Enforced strict validation for `significance_type` by removing silent parameter dropping in `coerceSignificanceAlias`
+- **core**: Fixed `auto_context: false` persistence bug by properly mapping the field in `create_entry`
 - **scripts**: Fixed `generate-server-instructions.ts` help pointer mapping logic to handle global vs group-specific help resources, resolving `test-filter-instructions.mjs` test failures
 - **codemode**: Added `shimMj` proxy fallback in worker sandbox to seamlessly intercept and route common agent API hallucinations (e.g., `sqlite.mj.executeCode`, `memory.journal.addEntry`, `memory.append`) to valid tools
 - **codemode**: Refined static security blocked patterns (e.g., `http.`, `fs.`, `process.`) with negative lookbehinds (`(?<![.-])`) to eliminate false positives when these sequences appear within legitimate filenames or safe property chains (e.g., `streamable-http.spec.ts`)

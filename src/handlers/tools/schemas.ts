@@ -78,11 +78,6 @@ export function coerceSignificanceAlias(params: unknown): void {
             else if (lower === 'learning') obj['significance_type'] = 'lesson_learned'
             else if (lower === 'key_decision') obj['significance_type'] = 'decision'
             else if (lower === 'resolved') obj['significance_type'] = 'blocker_resolved'
-            else if (!(SIGNIFICANCE_TYPES as readonly string[]).includes(lower)) {
-                // Smooth out hallucinated invalid significance types (like "minor")
-                // by silently dropping them so the entry still gets created.
-                delete obj['significance_type']
-            }
         }
     }
 }

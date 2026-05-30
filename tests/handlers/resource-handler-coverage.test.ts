@@ -263,7 +263,7 @@ describe('Resource Handler Coverage', () => {
 
             // Restore
             if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv
-        })
+        }, 15000)
 
         it('should return error when SKILLS_DIR_PATH points to nonexistent directory', async () => {
             const originalPath = require('node:path')

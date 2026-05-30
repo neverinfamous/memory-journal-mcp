@@ -213,6 +213,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         significanceType: input.significance_type ?? null,
+                        autoContext: !input.auto_context ? JSON.stringify({ disabled: true }) : undefined,
                         projectNumber: input.project_number ?? context.config?.defaultProjectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
