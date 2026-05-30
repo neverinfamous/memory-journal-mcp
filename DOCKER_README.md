@@ -70,13 +70,13 @@ _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 <details>
 <summary><strong>View Mandatory Session Start Routine</strong></summary>
 
-**🛑 MANDATORY SESSION START ROUTINE**
+## 🛑 MANDATORY SESSION START ROUTINE
 
-Before addressing the user's request, complete these steps in order:
+Before addressing user's first request in a session, complete these steps:
 
 1. Read the briefing using memory-journal-mcp's `read_resource` tool (not `mj_execute_code`): `memory://briefing/{repo_name}`.
-   - Infer `repo_name` from context. Use `memory://briefing` as fallback only if necessary.
-2. Your first response MUST begin with the briefing content. Use this format:
+   - Infer `repo_name` from context of user's prompt. Use `memory://briefing` as fallback only if necessary.
+2. Your first response MUST begin with the entire briefing content. Use this format:
 
    > **📋 Briefing loaded** — `{repo_name}`
    >
@@ -85,9 +85,6 @@ Before addressing the user's request, complete these steps in order:
 3. Then address the user's request below the briefing.
 4. Do NOT autonomously resume work on issues mentioned in the briefing.
 </details>
-
-> [!NOTE]
-> In clients like Antigravity, the resource payload may be visually truncated in the UI. Ensure you click "Show More" to read the full briefing content if you are reviewing the session context manually.
 
 ---
 
@@ -277,7 +274,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 
 ### 📋 Customizing the Session Briefing
 
-The `memory://briefing` resource is dynamically assembled at each session start. Control what your agent sees by tuning three dimensions via environment variables:
+The `memory://briefing` resource is dynamically assembled at each session start, automatically providing ambient context like test health, workspace paths, unreleased changes, and git status. Control what your agent sees by tuning three dimensions via environment variables:
 
 - **Depth** — `INSTRUCTION_LEVEL`: `essential`, `standard` (default), or `full`
 - **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`
