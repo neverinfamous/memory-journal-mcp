@@ -113,6 +113,16 @@ export const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'
 export const relaxedNumber = (): z.ZodUnion<[z.ZodNumber, z.ZodString]> =>
     z.union([z.number(), z.string()])
 
+/**
+ * Strict schema for project_number validation.
+ * Used in handler strict schemas to provide an informative error when missing,
+ * since project_number is left optional in the SDK's MCP schema so it reaches the handler.
+ */
+export const StrictProjectNumberSchema = z.number({
+    message:
+        'Missing project_number. You MUST provide a valid project_number (e.g., 1) to associate this action with a specific project context.',
+})
+
 // ============================================================================
 // Cross-Group Output Schemas
 // ============================================================================

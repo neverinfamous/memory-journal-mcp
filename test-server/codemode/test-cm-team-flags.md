@@ -36,21 +36,24 @@ const blocker = await mj.team.passTeamFlag({
   message: 'FK constraint prevents migration from running',
   target_user: '@sarah',
   link: 'src/database/migrations/005.ts',
-  project_number: 5,
+  project_number: 1,
 })
 const fyi = await mj.team.passTeamFlag({
   flag_type: 'fyi',
   message: 'New linting rule added for strict-boolean-expressions',
+  project_number: 1,
 })
 const review = await mj.team.passTeamFlag({
   flag_type: 'needs_review',
   message: 'Authentication refactor ready for review',
   target_user: 'chris',
   issue_number: 42,
+  project_number: 1,
 })
 const help = await mj.team.passTeamFlag({
   flag_type: 'help_requested',
   message: 'Cannot reproduce the race condition on Windows',
+  project_number: 1,
 })
 
 // Verify entry structure
@@ -104,12 +107,13 @@ return result
 const badType = await mj.team.passTeamFlag({
   flag_type: 'urgent',
   message: 'This should fail vocabulary check',
+  project_number: 1,
 })
 
 // Missing required fields
-const noType = await mj.team.passTeamFlag({ message: 'no type' })
-const noMessage = await mj.team.passTeamFlag({ flag_type: 'blocker' })
-const empty = await mj.team.passTeamFlag({})
+const noType = await mj.team.passTeamFlag({ message: 'no type', project_number: 1 })
+const noMessage = await mj.team.passTeamFlag({ flag_type: 'blocker', project_number: 1 })
+const empty = await mj.team.passTeamFlag({ project_number: 1 })
 
 // Resolve nonexistent flag
 const resolveGhost = await mj.team.resolveTeamFlag({ flag_id: 999999 })

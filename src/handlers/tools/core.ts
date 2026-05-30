@@ -24,9 +24,10 @@ import {
     RelationshipOutputSchema,
     ImportanceBreakdownSchema,
     relaxedNumber,
-    TagOutputSchema,
     MAX_QUERY_LIMIT,
     coerceSignificanceAlias,
+    StrictProjectNumberSchema,
+    TagOutputSchema,
 } from './schemas.js'
 
 // ============================================================================
@@ -41,7 +42,7 @@ const CreateEntrySchema = z.object({
     is_personal: z.boolean().optional().default(true),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
     auto_context: z.boolean().optional().default(true),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     project_owner: z.string().optional(),
     issue_number: z.number().optional(),
     issue_url: z.string().optional(),

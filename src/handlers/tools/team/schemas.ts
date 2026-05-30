@@ -16,6 +16,7 @@ import {
     relaxedNumber,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    StrictProjectNumberSchema,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
@@ -37,7 +38,7 @@ export const TeamCreateEntrySchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
     project_owner: z.string().optional(),
     issue_number: z.number().optional(),
     issue_url: z.string().optional(),
@@ -66,7 +67,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -89,7 +90,7 @@ export const TeamGetRecentSchemaMcp = z.object({
 export const TeamSearchSchema = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     limit: z.number().max(500).optional().default(10),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -115,7 +116,7 @@ export const TeamSearchSchemaMcp = z.object({
 export const TeamGetEntryByIdSchema = z.object({
     entry_id: z.number(),
     include_relationships: z.boolean().optional().default(true),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_get_entry_by_id — relaxed */
@@ -135,7 +136,7 @@ export const TeamSearchByDateRangeSchema = z.object({
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     limit: z.number().max(500).optional().default(50),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -169,7 +170,7 @@ export const TeamUpdateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().nullable().optional(),
+    project_number: StrictProjectNumberSchema,
     significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
     project_owner: z.string().nullable().optional(),
     issue_number: z.number().nullable().optional(),
@@ -204,7 +205,7 @@ export const TeamUpdateEntrySchemaMcp = z.object({
 /** team_delete_entry — strict */
 export const TeamDeleteEntrySchema = z.object({
     entry_id: z.number(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_delete_entry — relaxed */
@@ -261,7 +262,7 @@ export const TeamLinkEntriesSchema = z.object({
         .optional()
         .default('references'),
     description: z.string().optional(),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_link_entries — relaxed */
@@ -492,7 +493,7 @@ export const TeamSemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_semantic_search — relaxed */
@@ -516,7 +517,7 @@ export const TeamSemanticSearchSchemaMcp = z.object({
 /** team_add_to_vector_index — strict */
 export const TeamAddToVectorIndexSchema = z.object({
     entry_id: z.number(),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_add_to_vector_index — relaxed */
@@ -715,7 +716,7 @@ export const PassTeamFlagSchema = z.object({
     message: z.string().min(1).max(49_000).describe('Flag message describing the issue or request'),
     target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
     link: z.string().optional().describe('Related file path, URL, or reference'),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     issue_number: z.number().optional(),
     author: z.string().optional(),
 })
