@@ -222,16 +222,25 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    // Smooth out legacy tool hallucination (e.g. mj_create_entry payload passed directly to mj_execute_code)
-                    // If the agent sends { content: "...", title: "..." } instead of { code: "..." }, wrap it natively
-                    if (
-                        params != null &&
-                        typeof params === 'object' &&
-                        !('code' in params) &&
-                        ('content' in params || 'title' in params)
-                    ) {
-                        params = {
-                            code: `return await mj.core.createEntry(${JSON.stringify(params)});`
+                    if (typeof params === 'string') {
+                        params = { code: params }
+                    } else if (params != null && typeof params === 'object' && !('code' in params)) {
+                        const p = params as Record<string, unknown>
+                        const keys = Object.keys(p)
+                        const hasCodeModeParamsOnly = keys.every((k) => ['timeout', 'readonly', 'repo', 'context'].includes(k))
+
+                        if ('script' in p && typeof p['script'] === 'string') {
+                            p['code'] = p['script']
+                        } else if ('javascript' in p && typeof p['javascript'] === 'string') {
+                            p['code'] = p['javascript']
+                        } else if ('query' in p && typeof p['query'] === 'string') {
+                            p['code'] = p['query']
+                        } else if ('snippet' in p && typeof p['snippet'] === 'string') {
+                            p['code'] = p['snippet']
+                        } else if (!hasCodeModeParamsOnly) {
+                            params = {
+                                code: `return await mj.core.createEntry(${JSON.stringify(params)});`
+                            }
                         }
                     }
 
