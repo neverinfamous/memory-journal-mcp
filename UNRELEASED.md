@@ -105,8 +105,8 @@
 - **annotations**: Added missing explicit `destructiveHint: false` annotations to 62 tools across all handlers and `idempotentHint: false` to `delete_entry` to achieve 100% rigor against the `db-mcp` audit standards
 - **codemode**: Prevented empty `createEntry` `{}` payloads from bypassing Zod validation by only injecting serialized fields if hallucinated properties are actually present
 - **repo**: Added `repo_name` as an automatic fallback mapped to `repo` within `mj_execute_code` input sanitization to prevent context loss on common agent hallucinations
+- **tests**: Fixed Phase 28.14 `team_pass_flag` test script to include `project_number: 1`
 - **team**: Fixed `team_pass_flag` stripping `:` and `@` from tags in SQLite adapter
-- **codemode**: Default `project_number` to 1 for all team group operations when omitted by the agent
 
 ### Security
 

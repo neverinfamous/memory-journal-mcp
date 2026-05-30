@@ -136,11 +136,6 @@ function normalizeParams(groupName: string, methodName: string, args: unknown[])
                 }
             }
             
-            // Default project_number to 1 for team tools if omitted
-            if (groupName === 'team' && !('project_number' in obj)) {
-                obj['project_number'] = 1
-            }
-            
             return obj
         }
 
@@ -196,11 +191,6 @@ function normalizeParams(groupName: string, methodName: string, args: unknown[])
         if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
             Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>))
         }
-    }
-
-    // Default project_number to 1 for team tools if omitted
-    if (groupName === 'team' && !('project_number' in result)) {
-        result['project_number'] = 1
     }
 
     return result

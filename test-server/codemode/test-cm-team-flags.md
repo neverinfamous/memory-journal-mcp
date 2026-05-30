@@ -162,6 +162,7 @@ return result
 const flag = await mj.team.passTeamFlag({
   flag_type: 'blocker',
   message: 'CM test flag for resolution',
+  project_number: 1,
 })
 const flagId = flag.entry?.id
 
@@ -185,6 +186,7 @@ const reResolved = await mj.team.resolveTeamFlag({
 const flag2 = await mj.team.passTeamFlag({
   flag_type: 'fyi',
   message: 'CM bare resolve test',
+  project_number: 1,
 })
 const bareResolved = await mj.team.resolveTeamFlag({ flag_id: flag2.entry?.id })
 
