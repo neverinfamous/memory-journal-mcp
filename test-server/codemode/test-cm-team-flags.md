@@ -15,7 +15,8 @@ Test the Hush Protocol flag system (`team_pass_flag(project_number: 5)`, `team_r
 2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
 3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
-5. Provide a very brief final summary.
+5. **Cleanup:** Ensure all testing artifacts/flags generated during this pass are fully cleaned up (permanently hard-deleted if necessary) so they do not persist in the user's Briefing.
+6. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
@@ -259,7 +260,7 @@ const allIds = [
 const uniqueIds = [...new Set(allIds)]
 let deleted = 0
 for (const id of uniqueIds) {
-  const r = await mj.team.teamDeleteEntry({project_number: 5,  project_number: 5, entry_id: id })
+  const r = await mj.team.teamDeleteEntry({project_number: 5,  project_number: 5, entry_id: id, permanent: true })
   if (r.success) deleted++
 }
 
