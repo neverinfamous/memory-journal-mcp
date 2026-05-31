@@ -7,6 +7,7 @@
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
 - Seed data from `test-seed.md` must be present. MCP server instructions auto-injected. Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.
+- **IMPORTANT**: In multi-workspace environments, always pass `repo: "memory-journal-mcp"` to GitHub tools to avoid silent fallbacks to the wrong repository.
 
 **Workflow after testing:**
 
