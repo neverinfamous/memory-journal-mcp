@@ -112,6 +112,8 @@
 - **tests**: Mapped `MOCK_DIR` to a valid allowed IO root in Phase 28 Codemode Tests
 - **tests**: Systematically supplied `project_number: 1` to team-related tool calls in test scripts
 - **tests**: Updated Phase 28.14 `team_pass_flag` test script to include `project_number: 1`
+- **tests**: Fixed `readonly` expected instruction payload filtering in `test-filter-instructions.mjs`
+- **tests**: Updated `test-core-infra.md` to expect Markdown string instead of JSON for the briefing output
 
 ### Security
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse

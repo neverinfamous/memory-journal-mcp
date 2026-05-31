@@ -107,13 +107,13 @@ const TEST_CONFIGS = [
         },
     },
     {
-        label: 'readonly (core+search+analytics+relationships+export — no github, no codemode)',
+        label: 'readonly (core+search+analytics+relationships+io+codemode — no github)',
         filter: 'readonly',
         level: 'standard',
-        // META_GROUPS.readonly excludes github and codemode groups
+        // META_GROUPS.readonly excludes github but includes codemode
         expect: {
             CORE: true,
-            CODE_MODE: false,
+            CODE_MODE: true,
             HELP_POINTERS: true,
         },
     },

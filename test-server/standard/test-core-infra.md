@@ -36,12 +36,10 @@
 
 | Test                             | Command/Action                   | Expected Result                                                                                        |
 | -------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Read briefing                    | Read `memory://briefing`         | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`                              |
+| Read briefing                    | Read `memory://briefing`         | Returns Markdown table with context, journal stats, GitHub stats, etc.                                 |
 | Verify `lastModified` annotation | Check resource metadata          | ISO 8601 timestamp (client-dependent — AntiGravity doesn't expose MCP annotations)                     |
-| Confirm `userMessage`            | Inspect briefing.userMessage     | Formatted table with project/branch/CI/journal stats                                                   |
-| Milestone progress row           | Inspect briefing.userMessage     | Table includes milestone progress row (e.g., "🚩 Milestones: X open")                                  |
-| Team DB row                      | Inspect briefing.userMessage     | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)                           |
-| Template URIs                    | Check `templateResources` array  | 11 template URIs listed (includes `memory://milestones/{number}`)                                      |
+| Confirm output structure         | Inspect briefing text            | Formatted Markdown table with project/branch/CI/journal stats                                          |
+| Team DB row                      | Inspect briefing text            | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)                           |
 | Workflow summary                 | Inspect `github.workflowSummary` | Present when `BRIEFING_WORKFLOW_STATUS=true` — has `passing`, `failing`, `pending`, `cancelled` counts |
 | Workflow named runs              | Inspect `workflowSummary.runs`   | Array of `{name, conclusion}` when `BRIEFING_WORKFLOW_COUNT > 0`; CI row shows icons (✅/❌)           |
 | Rules metadata                   | Inspect `rulesFile` field        | Present when `RULES_FILE_PATH` set — has `name`, `sizeKB`, `lastModified`                              |
@@ -106,7 +104,7 @@ node test-server/scripts/test-team-db-fallback.mjs
 
 - `test_simple` returns echo message
 - `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
-- `memory://briefing` returns complete JSON with all expected fields
+- [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
 - 48 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (70 total, 0 missing)
 - `get_statistics` returns all 4 enhanced analytics metrics
