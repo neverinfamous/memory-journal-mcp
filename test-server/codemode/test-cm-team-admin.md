@@ -17,6 +17,7 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+   - **Clean up test artifacts:** Delete any files exported to the `cm_team_export` directory (or other mock output directories) created during testing.
 
 ---
 
