@@ -277,7 +277,7 @@ function loadCachedTestHealth(): TestHealth | null {
                 )
                 unitTests = unitMatch?.[1] ? parseInt(unitMatch[1], 10) : 0
                 e2eTests = e2eMatch?.[1] ? parseInt(e2eMatch[1], 10) : 0
-            } catch (e) {
+            } catch {
                 // Ignore error if README.md doesn't exist or is unreadable
             }
             cachedTestHealth = { unitTests, e2eTests, coverage }
