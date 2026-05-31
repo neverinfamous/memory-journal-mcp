@@ -24,7 +24,7 @@
 | Tool              | Domain Error Test                           | Zod Empty Param (`{}`)       | Zod Type Mismatch   |
 | ----------------- | ------------------------------------------- | ---------------------------- | ------------------- |
 | `restore_backup`  | `filename: "nonexistent.db"`                | ⚠️ Validation error required | N/A                 |
-| `backup_journal`  | `name: "../../etc/passwd"` (Path traversal) | ⚠️ Validation error required | N/A                 |
+| `backup_journal`  | `name: "../../etc/passwd"` (Path traversal) | Success (Timestamp default)  | N/A                 |
 | `export_entries`  | N/A                                         | N/A                          | `limit: "abc"`      |
 | `cleanup_backups` | N/A                                         | N/A                          | `keep_count: "abc"` |
 
