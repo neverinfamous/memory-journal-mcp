@@ -57,6 +57,7 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
+- **instructions**: Restored `gotchas.md` to resolve `Group "gotchas" not found` error during resource testing
 - **server**: Added JSON-RPC structured error handler to intercept and format Express PayloadTooLargeError
 - **io**: Increased `export_entries` maximum limit to 5000 to allow testing the 5MB payload truncation ceiling
 - **admin/core**: Resolved `strict-boolean-expressions` TypeScript errors when dynamically validating `auto_context`

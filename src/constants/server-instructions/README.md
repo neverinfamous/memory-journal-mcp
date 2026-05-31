@@ -23,7 +23,7 @@ If you need to update a tool group's instructions or the general gotchas, follow
 
 - `overview.md`: The init payload sent to all clients on initialization. Contains behaviors (session start, entry types, tags, significance, linking) and the core quick-access table. Larger than the DB connectors' overviews (~7.0KB vs ~0.7KB) because MJ requires behavioral guidance before agents start work.
 - `github.md`: GitHub Integration patterns returned for `memory://help/github`.
-- `hush-protocol.md`, `skills.md`: Static help content for non-tool-group keys.
+- `hush-protocol.md`, `skills.md`, `gotchas.md`: Static help content for non-tool-group keys.
 
 ## Guidelines
 
