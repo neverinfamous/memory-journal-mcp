@@ -35,13 +35,22 @@ const LinkEntriesSchema = z.object({
     description: z.string().optional(),
 })
 
-/** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
-const LinkEntriesSchemaMcp = z.object({
-    from_entry_id: relaxedNumber(),
-    to_entry_id: relaxedNumber(),
-    relationship_type: z.string().optional().default('references'),
-    description: z.string().optional(),
-})
+const LinkEntriesSchemaMcp = z
+    .object({
+        from_entry_id: relaxedNumber().optional(),
+        to_entry_id: relaxedNumber().optional(),
+        from: relaxedNumber().optional(),
+        to: relaxedNumber().optional(),
+        relationship_type: z.string().optional(),
+        type: z.string().optional(),
+        description: z.string().optional(),
+    })
+    .transform((data) => ({
+        from_entry_id: data.from_entry_id ?? data.from,
+        to_entry_id: data.to_entry_id ?? data.to,
+        relationship_type: data.type ?? data.relationship_type ?? 'references',
+        description: data.description,
+    }))
 
 const VisualizeInputSchema = z.object({
     entry_id: z

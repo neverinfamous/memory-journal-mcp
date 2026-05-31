@@ -96,6 +96,7 @@
 - **progress**: Added missing progress notifications to `backup_journal` and `team_backup`
 - **progress**: Fixed step numbering gaps in export and backup sequences to prevent skipped steps
 - **relationships**: Fixed `visualize_relationships` returning `null` when no relationships exist
+- **relationships**: Intercepted hallucinated `from`, `to`, and `type` parameters in `link_entries` schema
 - **repo**: Mapped `repo_name` fallback to `repo` within `mj_execute_code` sanitization to prevent context loss
 - **scripts**: Fixed `generate-server-instructions.ts` help pointer mapping logic for global vs group-specific resources
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
