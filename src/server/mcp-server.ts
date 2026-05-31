@@ -520,29 +520,29 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     // MCP 2025-11-25: If tool has outputSchema, return both:
                     // - structuredContent: validated JSON for clients that support it
                     // - content: compact text fallback (~15-20% payload reduction per §3.1)
+                    const textContent = typeof result === 'string'
+                        ? result
+                        : JSON.stringify(result, null, 2)
+
                     if (hasOutputSchema) {
-                        // Protocol Optimization: Return structured objects natively without redundant text stringification.
-                        // Emits a lightweight marker for clients that don't support structuredContent.
+                        // Include both structured data for the UI and raw text for the LLM context
                         return {
                             content: [
                                 {
                                     type: 'text' as const,
-                                    text: '[Structured output attached]',
+                                    text: textContent,
                                 },
                             ],
                             structuredContent: result as Record<string, unknown>,
                         }
                     }
 
-                    // Otherwise, return text content
+                    // Otherwise, return just text content
                     return {
                         content: [
                             {
                                 type: 'text' as const,
-                                text:
-                                    typeof result === 'string'
-                                        ? result
-                                        : JSON.stringify(result, null, 2),
+                                text: textContent,
                             },
                         ],
                     }

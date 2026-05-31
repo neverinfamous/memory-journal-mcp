@@ -112,6 +112,7 @@
 - **repo**: Added `repo_name` as an automatic fallback mapped to `repo` within `mj_execute_code` input sanitization to prevent context loss on common agent hallucinations
 - **tests**: Fixed Phase 28.14 `team_pass_flag` test script to include `project_number: 1`
 - **team**: Fixed `team_pass_flag` stripping `:` and `@` from tags in SQLite adapter
+- **server**: Removed UI truncation optimization (`[Structured output attached]`) from `mcp-server.ts` to ensure full JSON payloads are natively available to agent context windows in direct tool execution mode
 
 ### Security
 

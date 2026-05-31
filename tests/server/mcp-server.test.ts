@@ -641,7 +641,7 @@ describe('McpServer', function () {
             expect(result.content[0]!.type).toBe('text')
 
             const text = result.content[0]!.text
-            expect(text).toContain('[Structured output attached]')
+            expect(text).toContain('An internal error occurred')
 
             const struct = result as { structuredContent?: { success: boolean; error: string } }
             expect(struct.structuredContent).toBeDefined()
