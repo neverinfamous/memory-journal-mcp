@@ -18,7 +18,7 @@ import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js
 
 import type { McpServerFactory } from '../../../server/mcp-server.js'
 import express from 'express'
-import type { Express, Request, Response, RequestHandler } from 'express'
+import type { Express, Request, Response, RequestHandler, NextFunction } from 'express'
 import { logger } from '../../../utils/logger.js'
 import type { Scheduler } from '../../../server/scheduler.js'
 import type { HttpTransportConfig, RateLimitEntry } from '../types.js'
@@ -165,6 +165,39 @@ export class HttpTransport {
         // JSON body parser with size limit (DoS prevention)
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
         this.app.use(express.json({ limit: maxBody }) as RequestHandler)
+
+        // Structured error handler for payload parsing errors
+        this.app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+            if (err !== null && typeof err === 'object' && 'type' in err) {
+                const errRecord = err as Record<string, unknown>
+                if (typeof errRecord['type'] === 'string') {
+                    const errType = errRecord['type']
+                    if (errType === 'entity.too.large') {
+                        res.status(413).json({
+                            jsonrpc: '2.0',
+                            error: {
+                                code: -32000,
+                                message: 'Payload Too Large: Maximum request body size exceeded',
+                            },
+                            id: null,
+                        })
+                        return
+                    }
+                    if (errType === 'entity.parse.failed') {
+                        res.status(400).json({
+                            jsonrpc: '2.0',
+                            error: {
+                                code: -32700,
+                                message: 'Parse error: Invalid JSON',
+                            },
+                            id: null,
+                        })
+                        return
+                    }
+                }
+            }
+            next(err)
+        })
 
         // Built-in rate limiting (Moved before Auth for DoS prevention)
         if (this.config.enableRateLimit !== false) {

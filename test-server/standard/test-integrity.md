@@ -36,10 +36,13 @@ Create entries with specific data, then read them back to verify nothing is lost
 
 ### 12.2 Boundary Values
 
+> [!WARNING]
+> **Payload Limit Learnings:** The default Express JSON parser limit is **1MB**. Scripts testing the upper boundary for `413 Payload Too Large` MUST exceed 1MB (e.g., 1,050,000 characters). Smaller oversized payloads (e.g., 100KB) will parse successfully but then fail at the routing/initialization layer if the HTTP test script omits a valid `mcp-session-id`. Additionally, never use strict `err instanceof Error` checks to intercept payload parsing errors from `raw-body`, as prototype chains often decouple in bundled or production environments.
+
 | Test                   | Command/Action                                                           | Expected Result                                                   |
 | ---------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
 | Max content length     | Run `node test-server/scripts/test-long-mcp.mjs`                                          | Entry created successfully (50k chars)                            |
-| Content above max      | Run `node test-server/scripts/test-http.mjs` (verifies HTTP 413 protection on >100k body)   | Connection securely closed / Structured validation error          |
+| Content above max      | Run `node test-server/scripts/test-http.mjs` (verifies HTTP 413 protection on >1MB body)   | Connection securely closed / Structured validation error          |
 | Empty tags array       | `create_entry(project_number: 5, content: "test", tags: [])`                                | Entry created with empty tags                                     |
 | Single-char tag        | `create_entry(project_number: 5, content: "test", tags: ["a"])`                             | Entry created — verify tag stored and retrievable via `list_tags` |
 | Max limit on recent    | `get_recent_entries(project_number: 5, limit: 500)`                                         | Returns ≤ 500 entries                                             |
