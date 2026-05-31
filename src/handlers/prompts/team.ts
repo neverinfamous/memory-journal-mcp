@@ -184,6 +184,48 @@ export function getTeamPromptDefinitions(): InternalPromptDef[] {
                     formatFlagList(recentlyResolved, false)
                 )
 
+                // Compute analytics summary for the prompt
+                const allFlagEntries = teamDb.searchEntries('', {
+                    entryType: 'flag',
+                    limit: 500,
+                })
+                let totalFlags = 0
+                let totalResolved = 0
+                const resolutionTimes: number[] = []
+                for (const entry of allFlagEntries) {
+                    const ctx = parseFlagContext(entry.autoContext)
+                    if (!ctx) continue
+                    totalFlags++
+                    if (ctx.resolved) {
+                        totalResolved++
+                        if (ctx.resolved_at) {
+                            const created = new Date(entry.timestamp).getTime()
+                            const resolved = new Date(ctx.resolved_at).getTime()
+                            const hours =
+                                Math.round(((resolved - created) / 3_600_000) * 10) / 10
+                            if (hours >= 0) resolutionTimes.push(hours)
+                        }
+                    }
+                }
+                const avgResolution =
+                    resolutionTimes.length > 0
+                        ? Math.round(
+                              (resolutionTimes.reduce((a, b) => a + b, 0) /
+                                  resolutionTimes.length) *
+                                  10
+                          ) / 10
+                        : null
+                const analyticsSection = `## Flag Health Summary
+
+| Metric | Value |
+|--------|-------|
+| Total flags (all time) | ${String(totalFlags)} |
+| Active | ${String(active.length)} |
+| Resolved | ${String(totalResolved)} |
+| Avg resolution time | ${avgResolution !== null ? `${String(avgResolution)}h` : 'N/A'} |
+| Stale (>24h) | ${String(active.filter((f) => f.isStale).length)} |
+`
+
                 return {
                     messages: [
                         {
@@ -192,6 +234,7 @@ export function getTeamPromptDefinitions(): InternalPromptDef[] {
                                 type: 'text',
                                 text: `# Flag Dashboard — Triage Report
 ${filterNote}
+${analyticsSection}
 ## Active Flags (${String(active.length)})
 
 ${activeSummary}
@@ -211,8 +254,9 @@ Analyze the active flags above and provide:
    - \`help_requested\`: Summarize the ask and suggest pairing or pointing to relevant prior entries.
    - \`fyi\`: Acknowledge and recommend resolving if no action is needed.
 3. **Batch Resolutions**: If any flags are clearly resolved (work completed, no longer relevant), recommend resolving them with suggested resolution comments.
+4. **Flag Health**: Comment on the overall flag health metrics above — is resolution velocity acceptable? Are there bottlenecks?
 
-Use \`team_resolve_flag\` (or \`mj.team.resolveTeamFlag()\` in Code Mode) to resolve flags. Include a resolution comment describing what was done.`,
+Use \`team_resolve_flag\` (or \`mj.team.resolveTeamFlag()\` in Code Mode) to resolve flags. Use \`team_update_flag\` (or \`mj.team.teamUpdateFlag()\`) to escalate or reassign. Use \`team_get_flag_analytics\` for deeper analytics. Include a resolution comment describing what was done.`,
                             },
                         },
                     ],

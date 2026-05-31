@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Team Tool Group
 
-**Scope:** Deterministic verification of Team tools (`team_create_entry(project_number: 5)`, `team_search(project_number: 5)`, `team_pass_flag(project_number: 5)`, `team_resolve_flag(project_number: 5)`, etc.) against strict error handling constraints.
+**Scope:** Deterministic verification of Team tools (`team_create_entry(project_number: 5)`, `team_search(project_number: 5)`, `team_pass_flag(project_number: 5)`, `team_resolve_flag(project_number: 5)`, `team_list_flags(project_number: 5)`, `team_update_flag`, `team_get_flag_analytics(project_number: 5)`, etc.) against strict error handling constraints.
 
 **Prerequisites:**
 
@@ -30,6 +30,9 @@
 | `team_merge_tags(project_number: 5)`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
 | `team_pass_flag(project_number: 5)`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`  |
 | `team_resolve_flag(project_number: 5)`         | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
+| `team_list_flags(project_number: 5)`           | `status: "invalid"`                                  | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_update_flag`                             | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
+| `team_get_flag_analytics(project_number: 5)`   | N/A (read-only, all optional)                        | ⚠️ Should return valid response   | `period: 123`     |
 
 ### Specific Domain Checks
 
@@ -38,6 +41,13 @@
 - **Flag Vocabulary Validation**: Verify `team_pass_flag(project_number: 5)` returns `VALIDATION_ERROR` with `suggestion` listing valid vocabulary types.
 - **Resolve Non-Flag Entry**: Verify `team_resolve_flag(project_number: 5)` on a non-flag entry returns `VALIDATION_ERROR` (not crash).
 - **Resolve Idempotency**: Verify calling `team_resolve_flag(project_number: 5)` on an already-resolved flag returns `success: true` with original resolution.
+- **List Flags Default**: Verify `team_list_flags(project_number: 5)` with no filters returns only active flags (default `status: "active"`).
+- **List Flags Filtering**: Verify `team_list_flags(project_number: 5)` with `status: "resolved"` returns only resolved flags; `status: "all"` returns both.
+- **List Flags Sort**: Verify `team_list_flags(project_number: 5)` with `sort_by: "priority"` returns blockers before fyi.
+- **Update Non-Flag Entry**: Verify `team_update_flag({ flag_id: <non-flag-id> })` returns `VALIDATION_ERROR`.
+- **Update Invalid Vocabulary**: Verify `team_update_flag({ flag_id: <valid>, flag_type: "urgent" })` returns `VALIDATION_ERROR`.
+- **Update Reopen**: Verify `team_update_flag({ flag_id: <resolved-flag>, reopen: true })` transitions a resolved flag back to active.
+- **Analytics Empty**: Verify `team_get_flag_analytics(project_number: 5)` returns valid structure with zero counts when no flags exist.
 
 ## Success Criteria
 

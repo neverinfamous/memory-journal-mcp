@@ -136,6 +136,14 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         resolveTeamFlag: 'teamResolveFlag',
         passFlag: 'teamPassFlag',
         resolveFlag: 'teamResolveFlag',
+        listFlags: 'teamListFlags',
+        flags: 'teamListFlags',
+        updateFlag: 'teamUpdateFlag',
+        editFlag: 'teamUpdateFlag',
+        escalateFlag: 'teamUpdateFlag',
+        reassignFlag: 'teamUpdateFlag',
+        flagAnalytics: 'teamGetFlagAnalytics',
+        flagStats: 'teamGetFlagAnalytics',
         collaborationMatrix: 'teamGetCollaborationMatrix',
     },
 }
@@ -206,6 +214,9 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.team.teamGetCrossProjectInsights()',
         'mj.team.passTeamFlag({ flag_type: "blocker", message: "FK constraint issue" })',
         'mj.team.resolveTeamFlag({ flag_id: 42 })',
+        'mj.team.teamListFlags({ status: "active" })',
+        'mj.team.teamUpdateFlag({ flag_id: 42, flag_type: "blocker" })',
+        'mj.team.teamGetFlagAnalytics()',
     ],
 }
 
@@ -288,6 +299,10 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamResolveFlag: 'flag_id',
     passTeamFlag: 'flag_type',
     resolveTeamFlag: 'flag_id',
+    teamListFlags: 'status',
+    teamUpdateFlag: 'flag_id',
+    listFlags: 'status',
+    updateFlag: 'flag_id',
 }
 
 // =============================================================================

@@ -169,6 +169,7 @@ src/
     │   │   ├── io-tools.ts         # IO team tools (export_markdown, import_markdown)
     │   │   ├── backup-tools.ts     # Backup team tools (backup, list_backups)
     │   │   ├── flag-tools.ts       # Flag team tools (team_pass_flag, team_resolve_flag)
+    │   │   ├── flag-extension-tools.ts # Flag query/mutation/analytics tools (team_list_flags, team_update_flag, team_get_flag_analytics)
     │   │   └── vector-tools.ts     # Vector team tools (semantic_search, vector_index_stats, rebuild, add)
     │   ├── github.ts               # GitHub tools barrel (re-exports from github/ subdirectory)
     │   └── github/                 # GitHub tool handlers (split by domain)
@@ -250,6 +251,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 |                   | `team/io-tools.ts`           | 2     | `team_export_markdown`, `team_import_markdown`                                                                                                     |
 |                   | `team/backup-tools.ts`       | 2     | `team_backup`, `team_list_backups`                                                                                                                 |
 |                   | `team/flag-tools.ts`         | 2     | `team_pass_flag`, `team_resolve_flag`                                                                                                              |
+|                   | `team/flag-extension-tools.ts` | 3   | `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`                                                                                   |
 |                   | `team/vector-tools.ts`       | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                                     |
 
 ### Utility Files (no tools, shared helpers)
@@ -268,7 +270,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-46 resources total — 28 static + 18 template.
+47 resources total — 29 static + 18 template.
 
 ### Static Resources
 
@@ -280,7 +282,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `core/utilities.ts`        | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics`, `memory://rules`, `memory://workflows`, `memory://skills`                                  |
 | `github.ts`                | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                                                                                            |
 | `graph.ts`                 | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                  |
-| `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`                                                                             |
+| `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`, `memory://flags/history`                                                   |
 | `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)                                                                                          |
 | `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY) |
 | `audit/audit-resource.ts`  | `memory://audit` (ASSISTANT_FOCUSED) — last 50 write/admin audit entries from JSONL log; returns `audit: not configured` when `AUDIT_LOG_PATH` unset                          |

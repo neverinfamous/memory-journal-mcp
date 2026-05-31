@@ -770,3 +770,151 @@ export const ResolveFlagOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+
+// ============================================================================
+// New Flag Tool Schemas (List, Update, Analytics)
+// ============================================================================
+
+/** list_team_flags — strict */
+export const ListTeamFlagsSchema = z.object({
+    status: z.enum(['active', 'resolved', 'all']).optional().default('active'),
+    flag_type: z.string().optional().describe('Filter by flag type from vocabulary'),
+    target_user: z.string().optional().describe('Filter by target user'),
+    author: z.string().optional().describe('Filter by flag creator'),
+    limit: z.number().min(1).max(500).optional().default(20),
+    project_number: StrictProjectNumberSchema,
+    sort_by: z.enum(['timestamp', 'priority']).optional().default('priority'),
+})
+
+/** list_team_flags — relaxed for MCP SDK */
+export const ListTeamFlagsSchemaMcp = z.object({
+    status: z.string().optional().default('active'),
+    flag_type: z.string().optional(),
+    target_user: z.string().optional(),
+    author: z.string().optional(),
+    limit: relaxedNumber().optional().default(20),
+    project_number: relaxedNumber().optional(),
+    sort_by: z.string().optional().default('priority'),
+})
+
+/** update_team_flag — strict */
+export const UpdateTeamFlagSchema = z.object({
+    flag_id: z.number().describe('Entry ID of the flag to update'),
+    flag_type: z.string().optional().describe('New flag type'),
+    target_user: z.string().nullable().optional().describe('New target user (null to clear)'),
+    message: z.string().min(1).max(49_000).optional().describe('Updated flag message'),
+    link: z.string().nullable().optional().describe('Updated link (null to clear)'),
+    reopen: z.boolean().optional().describe('If true, reopen a resolved flag'),
+})
+
+/** update_team_flag — relaxed for MCP SDK */
+export const UpdateTeamFlagSchemaMcp = z.object({
+    flag_id: relaxedNumber().optional(),
+    flag_type: z.string().optional(),
+    target_user: z.string().nullable().optional(),
+    message: z.string().optional(),
+    link: z.string().nullable().optional(),
+    reopen: z.boolean().optional(),
+})
+
+/** flag_analytics — strict */
+export const FlagAnalyticsSchema = z.object({
+    period: z.enum(['day', 'week', 'month']).optional().default('week'),
+    project_number: StrictProjectNumberSchema,
+})
+
+/** flag_analytics — relaxed for MCP SDK */
+export const FlagAnalyticsSchemaMcp = z.object({
+    period: z.string().optional().default('week'),
+    project_number: relaxedNumber().optional(),
+})
+
+// ============================================================================
+// New Flag Output Schemas (List, Update, Analytics)
+// ============================================================================
+
+export const ListFlagsOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        flags: z
+            .array(
+                z.object({
+                    id: z.number(),
+                    flag_type: z.string(),
+                    target_user: z.string().nullable().optional(),
+                    author: z.string().nullable().optional(),
+                    message: z.string(),
+                    link: z.string().nullable().optional(),
+                    resolved: z.boolean(),
+                    resolved_at: z.string().nullable().optional(),
+                    resolution: z.string().nullable().optional(),
+                    timestamp: z.string(),
+                    age_hours: z.number(),
+                    is_stale: z.boolean(),
+                    tags: z.array(z.string()).optional(),
+                    project_number: z.number().nullable().optional(),
+                })
+            )
+            .optional(),
+        count: z.number().optional(),
+        active_count: z.number().optional(),
+        resolved_count: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const UpdateFlagOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: TeamEntryOutputSchema.optional(),
+        flag_type: z.string().optional(),
+        target_user: z.string().nullable().optional(),
+        resolved: z.boolean().optional(),
+        author: z.string().optional(),
+        changes: z.array(z.string()).optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const FlagAnalyticsOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        summary: z
+            .object({
+                total_flags: z.number(),
+                active_flags: z.number(),
+                resolved_flags: z.number(),
+                avg_resolution_hours: z.number().nullable(),
+                median_resolution_hours: z.number().nullable(),
+                stale_count: z.number(),
+            })
+            .optional(),
+        by_type: z
+            .record(
+                z.string(),
+                z.object({
+                    total: z.number(),
+                    active: z.number(),
+                    avg_resolution_hours: z.number().nullable(),
+                })
+            )
+            .optional(),
+        by_target: z
+            .array(
+                z.object({
+                    user: z.string(),
+                    received: z.number(),
+                    active: z.number(),
+                })
+            )
+            .optional(),
+        trend: z
+            .object({
+                current_period: z.number(),
+                previous_period: z.number(),
+                change_pct: z.number().nullable(),
+            })
+            .optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)

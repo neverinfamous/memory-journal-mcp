@@ -5,6 +5,10 @@
 ### Added
 
 - **github**: Re-added Dependabot configuration scoped to `github-actions` only (no npm, no auto-merge) for passive version update notifications
+- **team**: `team_list_flags` tool for querying flags with structured metadata, filtering by status (active/resolved/all), `flag_type`, `target_user`, and `author`, with priority-based or chronological sorting
+- **team**: `team_update_flag` tool for mutating flag metadata without resolving — escalate severity, reassign `target_user`, edit message, add/update link, and reopen resolved flags
+- **team**: `team_get_flag_analytics` tool for aggregate flag analytics — resolution velocity (avg/median), type distribution, per-user workload, staleness counts, and period-over-period trend comparison
+- **resources**: `memory://flags/history` resource showing recently resolved flags (last 7 days) with resolution details and average time-to-resolution metrics
 - **prompts**: `adversarial-plan-review` prompt bootstrapping multi-pass adversarial planning with structured review dimensions, scoring rubric, and prior plan context from the journal
 - **prompts**: `flag-dashboard` prompt for triaging active Hush Protocol flags with severity grouping, staleness detection, and resolution guidance
 - **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
@@ -63,6 +67,9 @@
 - **progress**: Added missing progress notifications to `backup_journal` and `team_backup` (0/2 → 2/2)
 - **team**: Fixed Zod schema validation errors by making `project_number` optional in MCP-facing (relaxed) input schemas, complying with SDK validation rules
 - **tests**: Updated Code Mode and Standard test scripts to systematically supply `project_number: 1` to all team-related tool calls
+- **prompts**: Enhanced `flag-dashboard` to include a Flag Health Summary analytics section with resolution velocity, staleness counts, and references to `team_update_flag` / `team_get_flag_analytics`
+- **instructions**: Updated `hush-protocol.md` with documentation for `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`, `memory://flags/history`, and Code Mode methods
+- **codemode**: Added `listFlags`, `updateFlag`, `editFlag`, `escalateFlag`, `reassignFlag`, `flagAnalytics`, `flagStats` method aliases to `api-constants.ts`
 - **tests**: Mapped `MOCK_DIR` to a valid allowed IO root in Phase 28 Codemode Tests
 - **team**: Made `project_number` optional in `team_get_recent` schema to correctly match actual implementation defaults
 - **core**: Enforced strict validation for `significance_type` by removing silent parameter dropping in `coerceSignificanceAlias`

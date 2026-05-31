@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Resources
 
-**Scope:** All 37 resources — 29 static resources, 8 template resources (happy path + error paths).
+**Scope:** All 38 resources — 30 static resources, 8 template resources (happy path + error paths).
 
 **Prerequisites:**
 
@@ -49,6 +49,7 @@
 | Skills            | `memory://skills`            | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                                                                         |
 | Active flags      | `memory://flags`             | JSON with `activeFlags` array (unresolved flags); empty array when no active flags                                                                                                     |
 | Flag vocabulary   | `memory://flags/vocabulary`  | JSON listing configured vocabulary: `blocker`, `needs_review`, `help_requested`, `fyi` (defaults)                                                                                      |
+| Flag history      | `memory://flags/history`     | JSON with `resolved_flags` array (last 7 days), `count`, `avg_resolution_hours`; empty array when no recently resolved flags                                                           |
 | Metrics summary   | `memory://metrics/summary`   | Session metrics: tool calls, token estimates, cache hits, uptime                                                                                                                       |
 | Metrics tokens    | `memory://metrics/tokens`    | Token breakdown: per-tool token usage and totals                                                                                                                                       |
 | Metrics system    | `memory://metrics/system`    | System metrics: memory usage, database stats, vector index health                                                                                                                      |
@@ -91,7 +92,7 @@
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- All 29 static resources return valid data
+- All 30 static resources return valid data
 - All 8 template resources work with valid parameters
 - All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
@@ -102,6 +103,7 @@
 - `memory://instructions` references all tools and key resources
 - `memory://flags` returns active flag dashboard (empty when no unresolved flags)
 - `memory://flags/vocabulary` returns configured vocabulary list
+- `memory://flags/history` returns resolved flags with resolution details or empty array when none recent
 - `memory://briefing` includes `localTime` field for chronological grounding
 - `memory://briefing/<repo>` returns repo-scoped briefing
 - `memory://metrics/summary` returns session-level metrics
