@@ -633,6 +633,70 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // Register prompts (reusing prompts from instruction generation)
         registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
 
+        // Intercept SDK-level Zod validation errors to return structured error responses
+        const serverObj = server.server as unknown as { _requestHandlers: Record<string, (req: unknown, ext: unknown) => Promise<unknown>> }
+        const requestHandlers = serverObj._requestHandlers
+        if (requestHandlers?.['tools/call']) {
+            const originalHandler = requestHandlers['tools/call']
+            requestHandlers['tools/call'] = async (request: unknown, extra: unknown) => {
+                try {
+                    return await originalHandler(request, extra)
+                } catch (error: unknown) {
+                    const err = error as { code?: number; message?: string }
+                    if (err?.code === -32602) {
+                        let errorMessage = err.message || 'Validation Error'
+                        
+                        if (typeof errorMessage === 'string' && errorMessage.includes('Invalid arguments for tool')) {
+                            try {
+                                const parts = errorMessage.split(': [')
+                                if (parts.length > 1) {
+                                    const zodErrors = JSON.parse('[' + parts[1]) as { path?: string[]; message?: string }[]
+                                    const formattedErrors = zodErrors.map((e) => {
+                                        const path = e.path && e.path.length > 0 ? e.path.join('.') : 'unknown'
+                                        return `${path}: ${e.message || 'invalid'}`
+                                    }).join('; ')
+                                    errorMessage = formattedErrors
+                                }
+                            } catch {
+                                // Fallback to raw message if parsing fails
+                            }
+                        }
+
+                        const errorResult = {
+                            success: false,
+                            error: errorMessage,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Check input parameters against the tool schema',
+                            recoverable: false
+                        }
+                        
+                        const enriched = JSON.stringify({
+                            ...errorResult,
+                            _meta: { tokenEstimate: 0 },
+                        })
+                        const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
+                        const finalText = enriched.replace(
+                            '"tokenEstimate":0',
+                            `"tokenEstimate":${tokenEstimate}`
+                        )
+
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: finalText
+                                }
+                            ],
+                            structuredContent: errorResult,
+                            isError: true
+                        }
+                    }
+                    throw error
+                }
+            }
+        }
+
         return server
     }
 
