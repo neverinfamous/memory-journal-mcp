@@ -31,6 +31,7 @@
 - **team**: `team_get_flag_analytics` tool for aggregate flag analytics
 
 ### Changed
+- **deps**: Updated npm dependencies
 - **briefing**: Filtered out stale milestones to ensure the briefing cycles automatically
 - **briefing**: Surfaced capability statuses directly in the Config row and renamed designations for clarity
 - **briefing**: Enhanced code-map indicator with exact file paths and prioritized gatekeeper CI workflows in github status
