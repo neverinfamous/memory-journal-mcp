@@ -105,7 +105,7 @@ contains // Substring match
 matches // Regex match (use carefully)
 starts_with // Prefix match
 ends_with in // Suffix match
-// Value in list
+  // Value in list
   // List operations
   not // Logical NOT
 and // Logical AND

@@ -170,7 +170,6 @@ npm install @marsidev/react-turnstile
 
 ```jsx
 import Turnstile from '@marsidev/react-turnstile'
-
 ;<Turnstile siteKey="YOUR_SITE_KEY" onSuccess={(token) => console.log(token)} />
 ```
 

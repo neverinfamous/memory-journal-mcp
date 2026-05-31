@@ -17,7 +17,8 @@ const escapeContent = (text: string): string =>
     text.replace(/<\/?untrusted_remote_content[^>]*>/gi, '').replace(/\r?\n/g, ' ')
 
 /** Escape pipe characters for use inside markdown table cells */
-const escapeCell = (text: string): string => escapeContent(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
+const escapeCell = (text: string): string =>
+    escapeContent(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 
 /**
  * Build the user-facing markdown output for the briefing.
