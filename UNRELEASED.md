@@ -57,7 +57,7 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
-- **server**: Intercepted SDK-level Zod validation errors to return structured `success: false` tool responses instead of raw `-32602` MCP exceptions
+- **server**: Fixed SDK-level Zod validation interceptor to parse returned `isError: true` payload strings instead of exceptions, ensuring `success: false` structured responses instead of raw `-32602` leakages
 - **instructions**: Fixed hallucinated instructions directing agents to parse JSON from `memory://briefing` when it already returns a pre-rendered Markdown string
 - **tests**: Fixed hallucinated test expectations in `test-resources.md` regarding the `memory://briefing` JSON payload
 - **team**: Fixed `team_export_markdown` and `team_import_markdown` failing due to path traversal checks when given hallucinated test runner paths

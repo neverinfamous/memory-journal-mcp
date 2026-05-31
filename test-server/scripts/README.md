@@ -22,6 +22,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-progress.mjs`            | Two-phase progress notification test: (1) native tool progress via `export_entries`, (2) Code Mode `mj.reportProgress()` sandbox binding. | stdio         | ~8s      |
 | `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests.    | stdio         | ~1s      |
 | `test-50k-boundary.mjs`        | Validates that `create_entry` gracefully handles large string payloads (50,000 characters) via standard Node pipeline.                | stdio         | ~1s      |
+| `test-team-zod.mjs`            | Validates that the Team Tool group properly intercepts SDK-level Zod validation errors and returns structured JSON-RPC responses.     | stdio         | ~2s      |
 
 ## Scheduler Notes
 

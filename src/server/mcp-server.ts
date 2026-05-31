@@ -640,7 +640,64 @@ export async function createServer(options: ServerOptions): Promise<void> {
         if (originalHandler) {
             requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
                 try {
-                    return await originalHandler(request, extra)
+                    const result = await originalHandler(request, extra)
+
+                    // Intercept JSON-RPC success responses that carry SDK Zod validation errors
+                    if (result !== null && result !== undefined && typeof result === 'object' && 'isError' in result && result.isError === true) {
+                        const resObj = result as { content?: { type?: string; text?: string }[] }
+                        if (Array.isArray(resObj.content) && resObj.content.length > 0) {
+                            const text = resObj.content[0]?.text
+                            if (typeof text === 'string' && text.includes('MCP error -32602')) {
+                                let errorMessage = text.replace('MCP error -32602: Input validation error: ', '')
+                                
+                                try {
+                                    const parts = text.split(': [')
+                                    if (parts.length > 1) {
+                                        const zodErrors = JSON.parse('[' + parts[1]) as { path?: string[]; message?: string }[]
+                                        const formattedErrors = zodErrors.map((e) => {
+                                            const path = e.path && e.path.length > 0 ? e.path.join('.') : 'unknown'
+                                            return `${path}: ${e.message || 'invalid'}`
+                                        }).join('; ')
+                                        errorMessage = formattedErrors
+                                    }
+                                } catch {
+                                    // Fallback to raw message if parsing fails
+                                }
+
+                                const errorResult = {
+                                    success: false,
+                                    error: errorMessage,
+                                    code: 'VALIDATION_ERROR',
+                                    category: 'validation',
+                                    suggestion: 'Check input parameters against the tool schema',
+                                    recoverable: false
+                                }
+                                
+                                const enriched = JSON.stringify({
+                                    ...errorResult,
+                                    _meta: { tokenEstimate: 0 },
+                                })
+                                const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
+                                const finalText = enriched.replace(
+                                    '"tokenEstimate":0',
+                                    `"tokenEstimate":${tokenEstimate}`
+                                )
+
+                                return {
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: finalText
+                                        }
+                                    ],
+                                    structuredContent: errorResult,
+                                    isError: true
+                                }
+                            }
+                        }
+                    }
+
+                    return result
                 } catch (error: unknown) {
                     const err = error as { code?: number; message?: string }
                     if (err?.code === -32602) {
