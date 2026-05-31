@@ -74,7 +74,7 @@ node test-server/scripts/test-progress.mjs
 node test-server/scripts/test-team-db-fallback.mjs
 
 # Test G — Scheduler (Requires background server)
-# Term 1: $env:ALLOWED_IO_ROOTS="./"; node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
+# Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
 # Term 2: npm run test:scheduler
 
 # Cleanup Test Artifacts
