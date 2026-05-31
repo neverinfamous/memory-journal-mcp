@@ -16,6 +16,7 @@
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+6. **Cleanup:** Delete any flags, test artifacts, or test entries created in the journal during this test pass to maintain a clean database state.
 
 ---
 
