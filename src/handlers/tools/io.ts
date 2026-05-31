@@ -182,7 +182,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     // When entry_types filter is active, fetch a larger batch so
                     // post-filtering doesn't silently return empty results.
                     const hasTypeFilter = input.entry_types && input.entry_types.length > 0
-                    const fetchLimit = hasTypeFilter ? 500 : limit
+                    const fetchLimit = hasTypeFilter ? Math.max(500, limit * 2) : limit
 
                     // Apply filters — use searchByDateRange when dates/tags/types present
                     let entries

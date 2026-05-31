@@ -59,6 +59,7 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
+- **io**: Fixed `export_entries` ignoring `limit` when `entry_types` filter is used with limits > 500
 - **github**: Allowed `resolveGitHubRepo` to gracefully fallback to matching just the repository name when an `owner/repo` string is provided but not found directly in the project registry
 - **server**: Fixed Zod type mismatch leakage where the `isError: true` flag caused the MCP client to throw raw cascade step errors instead of returning the expected structured `VALIDATION_ERROR` JSON payload
 - **team**: Fixed `team_list_flags` and `team_get_flag_analytics` ignoring the `project_number` filter parameter, ensuring queries are correctly scoped to the targeted project boundary
