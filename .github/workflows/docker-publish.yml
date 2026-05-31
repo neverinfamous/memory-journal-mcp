@@ -198,7 +198,7 @@ jobs:
           sbom: true
 
       - name: Attest Build Provenance
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -232,7 +232,7 @@ jobs:
       deployments: write
 
     environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
+      name: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && 'production' || '' }}
       url: https://hub.docker.com/r/writenotenow/memory-journal-mcp
 
     steps:
@@ -292,7 +292,7 @@ jobs:
       # If DOCKER_PASSWORD is a PAT, this step will fail silently (continue-on-error: true).
       # You must either use your actual Docker Hub password, or continue copy/pasting DOCKER_README.md manually.
       - name: Update Docker Hub Description
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5
         timeout-minutes: 5
         with:
@@ -303,7 +303,7 @@ jobs:
           short-description: 'MCP Server- AI Memory with Code Mode, GitHub Integration, Hush, Knowledge Graphs, Search, Audit Log.'
 
       - name: Deployment Summary
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         run: |
           echo "✅ Successfully published Docker images to production"
           echo "🐳 Registry: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
