@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
 # Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, etc.)
-RUN apk add --no-cache python3 make g++ && \
+RUN apk add --no-cache python3 make g++ gettext git sqlite-dev && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache
 
@@ -36,6 +36,10 @@ RUN npm run build
 # We use v0.1.7-alpha.2 to match the package.json version
 RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.7-alpha.2.tar.gz | tar -xz && \
     cd sqlite-vec-0.1.7-alpha.2 && \
+    sed -i 's/typedef u_int8_t uint8_t;//g' sqlite-vec.c && \
+    sed -i 's/typedef u_int16_t uint16_t;//g' sqlite-vec.c && \
+    sed -i 's/typedef u_int32_t uint32_t;//g' sqlite-vec.c && \
+    sed -i 's/typedef u_int64_t uint64_t;//g' sqlite-vec.c && \
     make loadable && \
     cp dist/vec0.so /app/vec0.so && \
     cd .. && \
