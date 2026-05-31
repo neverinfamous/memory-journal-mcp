@@ -276,4 +276,67 @@ describe('Team Resource Handlers', () => {
             expect(data.count).toBe(2)
         })
     })
+
+    // ========================================================================
+    // memory://flags/history
+    // ========================================================================
+
+    describe('memory://flags/history', () => {
+        it('should return resolved team flags history', async () => {
+            // First we need a resolved flag in the teamDb
+            const resolvedFlagContext = {
+                flag_type: 'fyi',
+                target_user: 'bob',
+                link: null,
+                resolved: true,
+                resolved_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour after creation
+                resolution: 'Noted',
+                author: 'Bob',
+            }
+            const entry4 = teamDb.createEntry({
+                content: 'flag:fyi @bob: Just FYI',
+                entryType: 'flag',
+                autoContext: JSON.stringify(resolvedFlagContext),
+            })
+            const rawDb = teamDb['connection'].getNativeDb() as any
+            rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Bob', entry4.id)
+
+            const result = await readResource(
+                'memory://flags/history',
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )
+
+            const data = result.data as any
+            expect(data.count).toBeGreaterThan(0)
+            expect(data.resolved_flags.length).toBeGreaterThan(0)
+
+            const flag = data.resolved_flags[0]
+            expect(flag.flag_type).toBe('fyi')
+            expect(flag.target_user).toBe('bob')
+            expect(flag.author).toBe('Bob')
+            expect(flag.resolution).toContain('Noted')
+            // It should be around 1 hour (0.9 to 1.1)
+            expect(flag.resolution_hours).toBeGreaterThanOrEqual(0.9)
+            expect(flag.resolution_hours).toBeLessThanOrEqual(1.1)
+            expect(data.avg_resolution_hours).toBeDefined()
+        })
+
+        it('should return error structure when team DB not configured for history', async () => {
+            const result = await readResource(
+                'memory://flags/history',
+                personalDb
+                // No teamDb
+            )
+
+            const data = result.data as any
+            expect(data.error).toContain('Team database not configured')
+            expect(data.count).toBe(0)
+            expect(data.resolved_flags).toEqual([])
+        })
+    })
 })
