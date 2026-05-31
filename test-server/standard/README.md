@@ -68,6 +68,7 @@ Certain boundary tests (e.g., massive payload execution) exceed typical token co
 |---|---|---|
 | `test-http.mjs` | Verifies HTTP transport 413 Payload Too Large limits | `test-integrity.md` |
 | `test-long-mcp.mjs` | Verifies the maximum `content` length capacity limits (50k/100k boundaries) | `test-integrity.md` |
+| `verify-schemas.mjs` | Programmatically verifies that all output schemas are strictly defined for `structuredContent` compatibility | `test-schemas.md` |
 
 ## Tool Group Requirements
 

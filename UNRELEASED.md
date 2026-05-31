@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
 
 ### Added
+- **tests**: `verify-schemas.mjs` script to programmatically validate outputSchema definitions and integrated it into standard testing documentation
 - **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: On-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
