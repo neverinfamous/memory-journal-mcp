@@ -83,6 +83,7 @@
 - **codemode**: Added `PARAM_ALIASES` map to silently remap hallucinated parameter names (`text` → `content`, etc.)
 - **codemode**: Added `shimMj` proxy fallback in worker sandbox to intercept and route common API hallucinations
 - **codemode**: Added `writeQuery` alias to gracefully handle cross-server database query hallucinations
+- **codemode**: Added interception for `mj.readResource` to gracefully inform agents that MCP resources cannot be read from within Code Mode
 - **codemode**: Added singular `tag` → `tags` array coercion in parameter normalization
 - **codemode**: Dynamically intercepted legacy `mj_create_entry` payloads missing `code` to prevent Zod errors
 - **codemode**: Excluded flat top-level method aliases from "Available groups" list in Proxy error boundary

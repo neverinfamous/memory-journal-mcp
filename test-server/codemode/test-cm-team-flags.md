@@ -565,20 +565,14 @@ return result
 ```javascript
 // Test code:
 
-// Read flag resources
-const flagDashboard = await mj.readResource('memory://flags')
-const flagVocab = await mj.readResource('memory://flags/vocabulary')
-const flagHistory = await mj.readResource('memory://flags/history')
-
-// Parse resource data
-const dashboardData = typeof flagDashboard === 'string' ? JSON.parse(flagDashboard) : flagDashboard
-const vocabData = typeof flagVocab === 'string' ? JSON.parse(flagVocab) : flagVocab
-const historyData = typeof flagHistory === 'string' ? JSON.parse(flagHistory) : flagHistory
+// Note: MCP Resources (memory://flags) cannot be read via Code Mode.
+// Agents should use the read_resource tool instead. This test now only
+// verifies cleanup of test artifacts.
 
 // Cleanup: delete all CM test flag entries using team_list_flags
 const allCmFlags = await mj.team.teamListFlags({ project_number: 5, status: 'all', limit: 100 })
 const cmFlagIds = (allCmFlags.flags || [])
-  .filter((f) => f.message?.includes('CM') || f.message?.includes('linting rule') || f.message?.includes('Authentication') || f.message?.includes('race condition') || f.message?.includes('FK constraint') || f.message?.includes('reopen lifecycle'))
+  .filter((f) => f.message?.includes('CM') || f.message?.includes('linting rule') || f.message?.includes('Authentication') || f.message?.includes('race condition') || f.message?.includes('FK constraint') || f.message?.includes('reopen lifecycle') || f.message?.includes('Escalated: linting rule now blocking CI pipeline'))
   .map((f) => f.id)
 
 const uniqueIds = [...new Set(cmFlagIds)]
@@ -589,14 +583,6 @@ for (const id of uniqueIds) {
 }
 
 const result = {
-  dashboardHasFlags: Array.isArray(dashboardData.activeFlags),
-  vocabHasTypes: Array.isArray(vocabData.vocabulary),
-  vocabCount: vocabData.count ?? 0,
-  vocabIsDefault: vocabData.isDefault,
-  historyHasResolved: Array.isArray(historyData.resolved_flags),
-  historyHasCount: typeof historyData.count === 'number',
-  historyHasAvg: 'avg_resolution_hours' in historyData,
-  historyHasWindow: historyData.window_days === 7,
   cleanedUp: deleted,
   cleanedAll: deleted === uniqueIds.length,
 }
@@ -605,14 +591,6 @@ return result
 
 | Check                | Expected                              |
 | -------------------- | ------------------------------------- |
-| `dashboardHasFlags`  | `true` (activeFlags array)            |
-| `vocabHasTypes`      | `true`                                |
-| `vocabCount`         | `4` (default vocabulary)              |
-| `vocabIsDefault`     | `true`                                |
-| `historyHasResolved` | `true` (resolved_flags array)         |
-| `historyHasCount`    | `true`                                |
-| `historyHasAvg`      | `true` (avg_resolution_hours)         |
-| `historyHasWindow`   | `true` (7-day window)                 |
 | `cleanedAll`         | `true` (all test entries deleted)     |
 
 ---

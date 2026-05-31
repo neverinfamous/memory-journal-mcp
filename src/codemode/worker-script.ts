@@ -209,6 +209,10 @@ async function executeCode(
                     }
                     return () => Promise.reject(new Error("You are already inside Code Mode execution. You do not need to call executeCode again. Just write your logic directly (e.g., return await mj.core.createEntry(...))."));
                 }
+                // Handle mj.readResource hallucination
+                if (prop === 'readResource') {
+                    return () => Promise.reject(new Error("Code Mode cannot directly read MCP resources using mj.readResource(). Please use the appropriate mj.* tools (e.g., mj.team.teamListFlags) to query data, or read the resource via standard MCP resource requests outside of Code Mode."));
+                }
                 // Handle `memory.journal.addEntry` natural hallucination
                 if (prop === 'addEntry' && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>;
