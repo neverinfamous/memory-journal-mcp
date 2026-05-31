@@ -37,7 +37,7 @@ const ExportEntriesSchema = z.object({
     tags: z.array(z.string()).optional(),
     limit: z
         .number()
-        .max(500)
+        .max(5000)
         .optional()
         .default(100)
         .describe('Maximum entries to export (default: 100)'),

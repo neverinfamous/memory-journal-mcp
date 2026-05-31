@@ -57,6 +57,7 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
+- **io**: Increased `export_entries` maximum limit to 5000 to allow testing the 5MB payload truncation ceiling
 - **admin/core**: Resolved `strict-boolean-expressions` TypeScript errors when dynamically validating `auto_context`
 - **annotations**: Added missing `destructiveHint: false` to 62 tools and `idempotentHint: false` to `delete_entry`
 - **briefing**: Corrected static `RESOURCE_COUNT` to lazy dynamic count, switched coverage source to vitest, and deduplicated entry previews
