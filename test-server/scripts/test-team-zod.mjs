@@ -61,7 +61,6 @@ mcp.stdout.on('data', (data) => {
         const responseLine = lines.find((line) => line.includes(`"id":${test.payload.id}`))
 
         if (responseLine) {
-            let pass = false
             try {
                 const parsed = JSON.parse(responseLine)
                 const resultText = parsed?.result?.content?.[0]?.text || ''
@@ -74,7 +73,6 @@ mcp.stdout.on('data', (data) => {
                         structuredContent?.code === 'VALIDATION_ERROR')
                 ) {
                     console.log(`✅ [PASS] ${test.name}`)
-                    pass = true
                 } else {
                     console.log(`❌ [FAIL] ${test.name}`)
                     console.log(`Expected structured VALIDATION_ERROR but received:`)

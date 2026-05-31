@@ -88,7 +88,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     test('team_create_entry returns { success, entry }', async () => {
         const payload = await callToolAndParse(client, 'team_create_entry', {
             project_number: 1,
-            project_number: 1,
             content: 'Team happy path test entry 1',
             entry_type: 'test_entry',
             tags: ['team-test', 'happy-path'],
@@ -102,7 +101,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     test('team_create_entry (second entry)', async () => {
         const payload = await callToolAndParse(client, 'team_create_entry', {
             project_number: 1,
-            project_number: 1,
             content: 'Team happy path test entry 2',
             entry_type: 'project_decision',
             tags: ['team-test', 'merge-source'],
@@ -114,7 +112,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     test('team_get_entry_by_id returns entry', async () => {
         const payload = await callToolAndParse(client, 'team_get_entry_by_id', {
             project_number: 1,
-            project_number: 1,
             entry_id: entryId1,
         })
         expectSuccess(payload)
@@ -123,7 +120,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
 
     test('team_get_recent returns entries', async () => {
         const payload = await callToolAndParse(client, 'team_get_recent', {
-            project_number: 1,
             project_number: 1,
             limit: 5,
         })
@@ -145,7 +141,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     test('team_search returns matches', async () => {
         const payload = await callToolAndParse(client, 'team_search', {
             project_number: 1,
-            project_number: 1,
             query: 'happy path',
         })
         expectSuccess(payload)
@@ -155,7 +150,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
 
     test('team_search_by_date_range returns entries', async () => {
         const payload = await callToolAndParse(client, 'team_search_by_date_range', {
-            project_number: 1,
             project_number: 1,
             start_date: '2020-01-01',
             end_date: '2030-12-31',
@@ -167,7 +161,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     // --- Admin ---
     test('team_update_entry succeeds', async () => {
         const payload = await callToolAndParse(client, 'team_update_entry', {
-            project_number: 1,
             project_number: 1,
             entry_id: entryId1,
             content: 'Updated team entry content',
@@ -196,7 +189,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     test('team_link_entries creates relationship', async () => {
         const payload = await callToolAndParse(client, 'team_link_entries', {
             project_number: 1,
-            project_number: 1,
             from_entry_id: entryId1,
             to_entry_id: entryId2,
             relationship_type: 'references',
@@ -207,7 +199,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
 
     test('team_visualize_relationships returns diagram', async () => {
         const payload = await callToolAndParse(client, 'team_visualize_relationships', {
-            project_number: 1,
             project_number: 1,
             entry_id: entryId1,
         })
@@ -256,7 +247,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     // --- Delete (last to avoid breaking other tests) ---
     test('team_delete_entry soft-deletes', async () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
-            project_number: 1,
             project_number: 1,
             entry_id: entryId2,
         })

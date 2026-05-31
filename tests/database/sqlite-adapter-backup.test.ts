@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { randomUUID } from 'node:crypto'
 
 describe('Backup Manager Edge Cases', () => {
     const testDir = './test-backup-edge-cases'

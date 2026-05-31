@@ -260,11 +260,10 @@ function loadCachedTestHealth(): TestHealth | null {
             }
             const coverage = summary.total?.lines?.pct ?? 0
 
-            // Badge parsing for test counts only (coverage-summary.json has no pass/fail counts)
             let unitTests = 0
             let e2eTests = 0
             const readmePath = path.join(root, 'README.md')
-            if (fs.existsSync(readmePath)) {
+            try {
                 const fd = fs.openSync(readmePath, 'r')
                 const buf = Buffer.alloc(2048)
                 const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
@@ -278,6 +277,8 @@ function loadCachedTestHealth(): TestHealth | null {
                 )
                 unitTests = unitMatch?.[1] ? parseInt(unitMatch[1], 10) : 0
                 e2eTests = e2eMatch?.[1] ? parseInt(e2eMatch[1], 10) : 0
+            } catch (e) {
+                // Ignore error if README.md doesn't exist or is unreadable
             }
             cachedTestHealth = { unitTests, e2eTests, coverage }
         } else {
