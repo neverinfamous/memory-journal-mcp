@@ -3,126 +3,117 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
 
 ### Added
-
-- **github**: Re-added Dependabot configuration scoped to `github-actions` only (no npm, no auto-merge) for passive version update notifications
-- **team**: `team_list_flags` tool for querying flags with structured metadata, filtering by status (active/resolved/all), `flag_type`, `target_user`, and `author`, with priority-based or chronological sorting
-- **team**: `team_update_flag` tool for mutating flag metadata without resolving — escalate severity, reassign `target_user`, edit message, add/update link, and reopen resolved flags
-- **team**: `team_get_flag_analytics` tool for aggregate flag analytics — resolution velocity (avg/median), type distribution, per-user workload, staleness counts, and period-over-period trend comparison
-- **resources**: `memory://flags/history` resource showing recently resolved flags (last 7 days) with resolution details and average time-to-resolution metrics
-- **prompts**: `adversarial-plan-review` prompt bootstrapping multi-pass adversarial planning with structured review dimensions, scoring rubric, and prior plan context from the journal
-- **prompts**: `flag-dashboard` prompt for triaging active Hush Protocol flags with severity grouping, staleness detection, and resolution guidance
 - **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
 - **analytics**: On-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
 - **auto-prune**: Importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
 - **briefing**: Server version, resource/tool counts, test health indicators, workspace paths, git working tree status, code-map availability, `📊 memory://metrics/summary` breadcrumb, and unreleased change summary to `memory://briefing` output
-- **codemode**: `context` parameter to `mj_execute_code` schema, injected into the VM worker thread to prevent string escaping syntax errors
-- **codemode**: `readonly` parameter to `mj_execute_code` schema to restrict execution to read-only API methods, returning structured errors on violation
+- **codemode**: `context` parameter to `mj_execute_code` schema, injected into VM worker thread to prevent string escaping syntax errors
+- **codemode**: `readonly` parameter to `mj_execute_code` schema to restrict execution to read-only API methods
 - **codemode**: Runtime schema introspection (`.schema()`) for proxy tools and dynamically injected TypeScript declarations for `mj_execute_code` payload
 - **codemode**: `copilotReviews`, `exportMarkdown`, and `importMarkdown` aliases to `api-constants.ts`
-- **codemode**: `mj.reportProgress(progress, total?, message?)` binding to Code Mode sandbox for agent-driven progress notifications (parity with db-mcp)
-- **docs**: Missing CLI flags, environment variables, and auto-prune documentation to the Wiki and configuration examples
+- **codemode**: `mj.reportProgress(progress, total?, message?)` binding to Code Mode sandbox for agent-driven progress notifications
+- **docs**: Missing CLI flags, environment variables, and auto-prune documentation to Wiki and configuration examples
+- **docs**: "Customizing the Session Briefing" sections to `README.md`, `DOCKER_README.md`, and wiki `Configuration.md` with customization guide, context injections, repo-scoped briefings, and preset recipes
 - **errors**: Valid enum value lists to Zod validation error messages
+- **github**: Dependabot configuration scoped to `github-actions` only for passive version update notifications
 - **instructions**: 14 new `EntryType` values, `architecture`/`security` significance types, missing tool parameters, and `HELP_CONTENT` export
 - **metrics**: Dynamic tracking for deprecation warnings (`MetricsAccumulator.recordDeprecationWarning`)
+- **prompts**: `adversarial-plan-review` prompt for multi-pass adversarial planning with structured review dimensions, scoring rubric, and prior plan context
+- **prompts**: `flag-dashboard` prompt for triaging active Hush Protocol flags with severity grouping, staleness detection, and resolution guidance
+- **resources**: `memory://flags/history` resource showing recently resolved flags with resolution details and average time-to-resolution metrics
 - **scripts**: `test:scheduler` npm script for HTTP scheduler E2E testing
-- **scripts**: `test-progress.mjs` progress notification integration test (ported from db-mcp, adapted for memory-journal-mcp IO pipeline)
-- **skills**: 4 adversarial auditing skills, the `journal-optimizer` skill, and migrated 14 skills from `adamic`
-- **skills**: Official vendor skills for AWS, GCP, Azure, and Render added to the inventory
+- **scripts**: `test-progress.mjs` progress notification integration test
+- **skills**: 4 adversarial auditing skills, `journal-optimizer` skill, and 14 migrated skills from `adamic`
+- **skills**: Official vendor skills for AWS, GCP, Azure, and Render
 - **skills**: `docs-marketer` skill for documentation marketability auditing with 10-category scoring, optional adversarial dual-agent mode, and Copilot validation
-- **docs**: Added "Customizing the Session Briefing" sections to `README.md`, `DOCKER_README.md`, and wiki `Configuration.md` with three-dimensional customization guide (depth, journal content, GitHub enrichment), context injections, repo-scoped briefings, and preset recipes
+- **team**: `team_list_flags` tool for querying flags with structured metadata, filtering, and priority/chronological sorting
+- **team**: `team_update_flag` tool for mutating flag metadata without resolving
+- **team**: `team_get_flag_analytics` tool for aggregate flag analytics
 
 ### Changed
-
-- **tests**: Updated `test-core-infra.md` to include comprehensive test scripts for progress, prompts, team DB fallback, filter instructions, and scheduler under Phase 1.3
-- **tests**: Updated team flag Code Mode test script (`test-cm-team-flags.md`) to ensure proper permanent hard deletion of testing flags/artifacts to prevent Briefing pollution
-- **schemas**: Enforced `project_number` strict validation across all relevant Core and Team journal tools, rejecting omissions with a formatted, actionable validation error instead of defaulting to silent configuration fallbacks
-- **tests**: Appended explicit hallucination interception directives to the standard "Workflow after testing" block across all 41 Code Mode and Standard test prompts
-- **tests**: Standardized 42+ testing prompt files across `standard/` and `codemode/` directories, fixing phase numbering collisions, tool name discrepancies (`team_pass_flag`), header templates, and resource coverage gaps
-- **tests**: Clarified standard test track prompts to explicitly forbid Code Mode usage and stripped contradictory boundaries instructions
-
-- **deps**: Bumped `commander` to `^15.0.0` and `eslint` to `10.4.1`
-- **docker**: Bumped Node.js base image from `26.1.0-alpine` to `26.2.0-alpine` (#563)
+- **briefing**: Filtered out stale milestones to ensure the briefing cycles automatically
 - **briefing**: Surfaced capability statuses directly in the Config row and renamed designations for clarity
-- **prompts**: `prepare-standup` and `prepare-retro` now surface active team flags as contextual signals alongside analytics digest
-- **briefing**: Enhanced the code-map indicator to include exact file paths and prioritized gatekeeper CI workflows in github status
-- **briefing**: Filtered out stale milestones (100% completed and updated > 24h ago) to ensure the briefing cycles automatically
-- **codemode**: Optimized dynamically generated TypeScript declarations and removed redundant strings to save tokens in `mj_execute_code` prompts
+- **briefing**: Enhanced code-map indicator with exact file paths and prioritized gatekeeper CI workflows in github status
+- **codemode**: Optimized dynamically generated TypeScript declarations and removed redundant strings to save tokens
+- **deps**: Bumped `commander` to `^15.0.0`, `eslint` to `10.4.1`, and other dev dependencies (`@types/node`, `tsx`, `typescript-eslint`, `vitest`) to latest minor/patch versions
+- **docker**: Bumped Node.js base image to `26.2.0-alpine` (#563)
 - **docs**: Highlighted auto-prune, standardized `README.md` layout, and simplified agent briefing instructions
-- **instructions**: Refactored monolithic `server-instructions.md` into a modular directory, reducing initial payload by ~700 tokens
 - **instructions**: Enhanced session summary formatting, updated help handlers, and renamed `technical_breakthrough` significance type to `breakthrough`
-- **resources**: `memory://briefing` and `memory://briefing/{repo}` now return `text/markdown` directly instead of JSON objects to improve token efficiency
-- **skills**: Restructured large skills, expanded `mcp-builder`, disambiguated terminology, and upgraded `adversarial-planner` to embed `gh copilot` performance/security scans directly in the planning document
-- **system**: Bumped npm dependencies (`@types/node`, `eslint`, `tsx`, `typescript-eslint`, `vitest`) to latest minor/patch versions
+- **instructions**: Refactored monolithic `server-instructions.md` into a modular directory, reducing initial payload by ~700 tokens
+- **instructions**: Updated `hush-protocol.md` with documentation for team flag and Code Mode methods
+- **prompts**: Enhanced `flag-dashboard` with a Flag Health Summary section and resolution references
+- **prompts**: Surfaced active team flags as contextual signals in `prepare-standup` and `prepare-retro`
+- **resources**: Changed `memory://briefing` and `memory://briefing/{repo}` to return `text/markdown` directly instead of JSON objects for token efficiency
+- **schemas**: Enforced strict `project_number` validation across Core and Team tools with formatted validation errors
+- **skills**: Restructured large skills, expanded `mcp-builder`, and upgraded `adversarial-planner` to embed `gh copilot` scans
+- **tests**: Appended hallucination interception directives to "Workflow after testing" across all 41 test prompts
+- **tests**: Clarified standard test track prompts to explicitly forbid Code Mode usage and strip contradictory boundary instructions
+- **tests**: Standardized 42+ testing prompt files, fixing phase numbering collisions, tool name discrepancies, and resource coverage gaps
+- **tests**: Updated `test-core-infra.md` with test scripts for progress, prompts, team DB fallback, filter instructions, and scheduler
+- **tests**: Updated team flag test script (`test-cm-team-flags.md`) to ensure hard deletion of testing artifacts
 
 ### Removed
-
 - **instructions**: `gotchas.md`, `codemode.md`, and `server-access.md` static help files to reduce agent distraction and token usage
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
-
-- **tests**: Fixed local environment resolution failures in 26 test scripts by updating hardcoded `project_number: 1` assignments to `project_number: 5` to align with the registry configuration
-- **tests**: Fixed Kanban Code Mode pipeline test (`test-cm-kanban-lifecycle.md`) crashing due to GitHub Projects V2 read-index eventual consistency by adding a non-blocking sandbox spin delay and graceful degradation for `verifyBoardStructure`
-- **progress**: Fixed step numbering gaps in `export_markdown`, `import_markdown`, `restore_backup`, `team_export_entries`, `team_export_markdown`, and `team_import_markdown` — all sequences now start at 0 with no skipped steps
-- **progress**: Added missing progress notifications to `backup_journal` and `team_backup` (0/2 → 2/2)
-- **team**: Fixed Zod schema validation errors by making `project_number` optional in MCP-facing (relaxed) input schemas, complying with SDK validation rules
-- **tests**: Updated Code Mode and Standard test scripts to systematically supply `project_number: 1` to all team-related tool calls
-- **prompts**: Enhanced `flag-dashboard` to include a Flag Health Summary analytics section with resolution velocity, staleness counts, and references to `team_update_flag` / `team_get_flag_analytics`
-- **instructions**: Updated `hush-protocol.md` with documentation for `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`, `memory://flags/history`, and Code Mode methods
-- **codemode**: Added `listFlags`, `updateFlag`, `editFlag`, `escalateFlag`, `reassignFlag`, `flagAnalytics`, `flagStats` method aliases to `api-constants.ts`
-- **tests**: Mapped `MOCK_DIR` to a valid allowed IO root in Phase 28 Codemode Tests
-- **team**: Made `project_number` optional in `team_get_recent` schema to correctly match actual implementation defaults
-- **core**: Enforced strict validation for `significance_type` by removing silent parameter dropping in `coerceSignificanceAlias`
-- **core**: Fixed `auto_context: false` persistence bug by properly mapping the field in `create_entry`
-- **scripts**: Fixed `generate-server-instructions.ts` help pointer mapping logic to handle global vs group-specific help resources, resolving `test-filter-instructions.mjs` test failures
-- **codemode**: Added `shimMj` proxy fallback in worker sandbox to seamlessly intercept and route common agent API hallucinations (e.g., `sqlite.mj.executeCode`, `memory.journal.addEntry`, `memory.append`) to valid tools
-- **codemode**: Refined static security blocked patterns (e.g., `http.`, `fs.`, `process.`) with negative lookbehinds (`(?<![.-])`) to eliminate false positives when these sequences appear within legitimate filenames or safe property chains (e.g., `streamable-http.spec.ts`)
-- **codemode**: Added `writeQuery` as an alias to `createEntry` in the core API group to gracefully handle cross-server agent hallucinations attempting to log database queries directly into the journal
-- **codemode**: Intercepted Code Mode `SyntaxError` exceptions (e.g., missing parenthesis) to append actionable tips advising the use of template literals (backticks) for long, multi-line markdown payloads to prevent escaping errors
-- **codemode**: Handled common agent parameter hallucinations by dynamically mapping `id` keys to `entry_id` within the `normalizeParams` pipeline, fixing `deleteEntry({ id: ... })` failures
-- **codemode**: Mapped `sqlite_journal_add_entry` as a global alias to `createEntry` to gracefully intercept flat global function hallucinations
-- **codemode**: Added fallback serialization in `normalizeParams` to format missing `content` fields into markdown strings when agents hallucinate arbitrary keys (e.g., `description`, `context`) during entry creation
-- **skills**: Addressed critical findings from the adversarial skill audit (removed `{{ORG_NAME}}` placeholder from `github-repo-setup`, removed duplicate description fragment from `adversarial-performance`, added missing `disable-model-invocation: true` to `mcp-builder`).
-- **admin/core**: Handled `strict-boolean-expressions` TypeScript errors when validating the `auto_context` parameter dynamically
-- **briefing**: Fixed dynamic context routing mismatch, `undefined` runtime property crash, and missing blank lines/tags causing IDE rendering cutoff
-- **briefing**: Corrected static `RESOURCE_COUNT` to lazy dynamic count, switched coverage % source to vitest structured output, and deduplicated entry previews
-- **codemode**: Mapped `mj.addEntry`, `mj.entries`, and `mj.core.searchEntries` as dynamic proxies to natively fulfill frequent agent hallucinations without erroring
-- **codemode**: Added root Proxy boundary to catch hallucinated top-level flat methods (e.g. `mj.addEntry`) and throw descriptive execution errors with available groups instead of generic TypeErrors
-- **codemode**: Excluded flat top-level method aliases (e.g., `createEntry`, `getStatistics`) from the "Available groups" list in the Code Mode Proxy error boundary
-- **codemode**: Excluded `memory` and `entries` aliases from the `groups` list returned by `mj.help()` to ensure accurate discoverability count
-- **codemode**: Dynamically intercepted legacy `mj_create_entry` hallucinated payloads sent directly to `mj_execute_code` (missing `code` field) to seamlessly wrap them in valid native sandbox execution scripts without throwing Zod errors
-- **codemode**: Refined hallucinated parameter smoothing in `mj_execute_code` to natively support aliases (`script`, `javascript`, `query`, `snippet`) and correctly delegate invalid structures to `createEntry` while preserving strict Zod failure behavior for purely empty objects
-- **core**: Silently dropped unrecognized `significance_type` string hallucinations (e.g., `"minor"`, `"maintenance"`) in parameter coercion to prevent Zod validation failures during entry creation
-- **codemode**: Mapped `sqlite`, `postgres`, `mysql`, and `db` as top-level globals in the VM sandbox to prevent `ReferenceError` during cross-server tool hallucinations
-- **codemode**: Mapped `memory` to `core` and aliased `appendInsight` to `createEntry` to seamlessly fulfill `sqlite.memory.appendInsight` cross-server tool hallucinations
+- **admin/core**: Resolved `strict-boolean-expressions` TypeScript errors when dynamically validating `auto_context`
+- **annotations**: Added missing `destructiveHint: false` to 62 tools and `idempotentHint: false` to `delete_entry`
+- **briefing**: Corrected static `RESOURCE_COUNT` to lazy dynamic count, switched coverage source to vitest, and deduplicated entry previews
+- **briefing**: Fixed dynamic context routing mismatch, undefined runtime property crash, and rendering cutoff issues
+- **codemode**: Added `DB_TO_JOURNAL` mapping in `shimMj` proxy to silently route 10 db-mcp-specific method hallucinations
+- **codemode**: Added `listFlags`, `updateFlag`, `editFlag`, `escalateFlag`, `reassignFlag`, `flagAnalytics`, `flagStats` method aliases
+- **codemode**: Added `PARAM_ALIASES` map to silently remap hallucinated parameter names (`text` → `content`, etc.)
+- **codemode**: Added `shimMj` proxy fallback in worker sandbox to intercept and route common API hallucinations
+- **codemode**: Added `writeQuery` alias to gracefully handle cross-server database query hallucinations
+- **codemode**: Added singular `tag` → `tags` array coercion in parameter normalization
+- **codemode**: Dynamically intercepted legacy `mj_create_entry` payloads missing `code` to prevent Zod errors
+- **codemode**: Excluded flat top-level method aliases from "Available groups" list in Proxy error boundary
+- **codemode**: Excluded `memory` and `entries` aliases from `groups` list returned by `mj.help()`
+- **codemode**: Expanded `JournalApi` constructor cross-group wiring to properly route admin and backup operations
+- **codemode**: Expanded `METHOD_ALIASES` with ~25 high-probability hallucination aliases covering CRUD and search variants
+- **codemode**: Extended top-level sandbox bindings with 7 additional flat-function aliases
+- **codemode**: Handled arbitrary key hallucinations during entry creation by formatting missing `content` fields into markdown strings
+- **codemode**: Handled `deleteEntry({ id: ... })` failures by mapping `id` to `entry_id`
+- **codemode**: Intercepted `SyntaxError` exceptions to append actionable tips about template literals
 - **codemode**: Mapped `add_kanban_item` and `delete_kanban_item` correctly in `inferGroupFromName`
-- **docs**: Synchronized `code-map.md`, `README.md` sizes, missing environment variables, and tool reference counts with recent architectural changes
-- **docs**: Synchronized prompt count (18 → 19) and `flag-dashboard` marketing across `README.md`, `DOCKER_README.md`, `CONTRIBUTING.md`, `copilot-instructions.md`, `test-errors.md`, and 6 wiki pages
-- **instructions**: Corrected tool schemas, removed deprecated `auto_context` field, and embedded behavior defaults directly into tool schemas
-- **relationships**: Fixed `visualize_relationships` returning `null` for the mermaid string when no relationships exist
+- **codemode**: Mapped `memory` to `core` and aliased `appendInsight` to `createEntry`
+- **codemode**: Mapped `mj.addEntry`, `mj.entries`, and `mj.core.searchEntries` as dynamic proxies
+- **codemode**: Mapped `sqlite_journal_add_entry` as global alias to intercept flat function hallucinations
+- **codemode**: Mapped database prefixes (`sqlite`, `postgres`, `mysql`, `db`) as top-level globals in sandbox
+- **codemode**: Prevented empty `createEntry` payloads from bypassing Zod validation
+- **codemode**: Promoted all callable top-level methods from `shimMj` as standalone VM sandbox globals
+- **codemode**: Refined hallucinated parameter smoothing to support script aliases (`javascript`, `query`, `snippet`)
+- **codemode**: Refined static security blocked patterns with negative lookbehinds to eliminate false positives in safe property chains
+- **codemode**: Threw descriptive execution errors with available groups for hallucinated top-level flat methods
+- **core**: Fixed `auto_context: false` persistence bug by mapping field in `create_entry`
+- **core**: Prevented Zod validation failures by silently dropping unrecognized `significance_type` hallucinations
+- **core**: Removed silent parameter dropping in `coerceSignificanceAlias` to enforce strict validation for `significance_type`
+- **docs**: Synchronized `code-map.md`, `README.md` sizes, missing environment variables, and tool counts
+- **docs**: Synchronized prompt count and `flag-dashboard` marketing across README, wiki, and help files
+- **instructions**: Corrected tool schemas, removed deprecated `auto_context` field, and embedded behavior defaults
+- **progress**: Added missing progress notifications to `backup_journal` and `team_backup`
+- **progress**: Fixed step numbering gaps in export and backup sequences to prevent skipped steps
+- **relationships**: Fixed `visualize_relationships` returning `null` when no relationships exist
+- **repo**: Mapped `repo_name` fallback to `repo` within `mj_execute_code` sanitization to prevent context loss
+- **scripts**: Fixed `generate-server-instructions.ts` help pointer mapping logic for global vs group-specific resources
 - **scripts**: Improved `test-scheduler.mjs` to print actionable setup instructions instead of bare fetch errors
+- **server**: Removed UI truncation optimization from `mcp-server.ts` to ensure full JSON payloads reach agents
+- **skills**: Elaborated 4 stub skills, delineated topologies, and verified database triggers
 - **skills**: Remediated frontmatter formatting, removed stale `gitlab` dependencies, and fixed sync propagation filtering
-- **skills**: Elaborated 4 stub skills, delineated Cloudflare and testing topologies, and verified database triggers per the adversarial skill audit
-- **tests**: Fixed Code Mode scripts to include `project_number` and updated Playwright specs to assert against markdown `memory://briefing` responses
-- **tests**: Fixed formatting assertions in briefing user message tests
-- **codemode**: Expanded `METHOD_ALIASES` with ~25 predicted high-probability hallucination aliases covering CRUD verb confusion (`newEntry`, `insert`, `write`, `log`, `record`, `note`, `save`, `getEntry`, `fetch`, `read`, `list`, `all`, `latest`), search verb variants (`query`, `lookup`, `findEntries`), admin verb variants (`editEntry`, `modifyEntry`, `modify`, `removeEntry`), and backup shortcuts (`create`, `backup`)
-- **codemode**: Added `PARAM_ALIASES` map to `convertKeysToSnakeCase` to silently remap hallucinated parameter names (`text`/`body`/`note` → `content`, `entry` → `entry_id`, `q` → `query`, `issue` → `issue_number`, `pr` → `pr_number`, `project` → `project_number`) with conflict-safe guards
-- **codemode**: Added singular `tag` → `tags` array coercion in parameter normalization to handle agents passing `{ tag: "foo" }` instead of `{ tags: ["foo"] }`
-- **codemode**: Expanded `JournalApi` constructor cross-group wiring to route admin operations (`deleteEntry`, `updateEntry`, `mergeTags`) and io/backup operations (`exportEntries`, `backupJournal`) through `core` group, and mapped db-mcp admin operations (`backup`, `restore`, `analyze`) to their journal equivalents
-- **codemode**: Added db-mcp bleedover cross-wiring: `readQuery` → `searchEntries`, `upsert` → `createEntry`, `count`/`listTables`/`describeTable` → `getStatistics`, `exists` → `getEntryById` for agents confused about which MCP server they're talking to
-- **codemode**: Added `DB_TO_JOURNAL` mapping in `shimMj` proxy to silently route 10 db-mcp-specific top-level method hallucinations (`listTables`, `describeTable`, `count`, `analyze`, `vacuum`, `integrityCheck`, `exists`, `upsert`, `batchInsert`, `readQuery`) to their closest journal equivalents
-- **codemode**: Extended top-level sandbox bindings with 7 additional flat-function aliases (`find`, `recent`, `listTags`, `semanticSearch`, `linkEntries`, `mergeTags`, `exportEntries`)
-- **resources**: Added `RESOURCE_URI_ALIASES` with `generateResourceAliases` to register 6 alias resource URIs (`memory://journal/recent`, `memory://journal/briefing`, `memory://entries/recent`, `memory://status`, `memory://server`, `memory://tools`) at the SDK level, delegating to canonical handlers to silently resolve common agent URI hallucinations
-- **codemode**: Promoted all callable top-level methods from `shimMj` (e.g., `createEntry`, `find`, `recent`, `searchEntries`, `deleteEntry`) as standalone VM sandbox globals, allowing agents to call `find({...})` without the `mj.` prefix
-- **annotations**: Added missing explicit `destructiveHint: false` annotations to 62 tools across all handlers and `idempotentHint: false` to `delete_entry` to achieve 100% rigor against the `db-mcp` audit standards
-- **codemode**: Prevented empty `createEntry` `{}` payloads from bypassing Zod validation by only injecting serialized fields if hallucinated properties are actually present
-- **repo**: Added `repo_name` as an automatic fallback mapped to `repo` within `mj_execute_code` input sanitization to prevent context loss on common agent hallucinations
-- **tests**: Fixed Phase 28.14 `team_pass_flag` test script to include `project_number: 1`
+- **skills**: Removed `{{ORG_NAME}}` placeholder, duplicate description fragments, and added `disable-model-invocation: true` to `mcp-builder`
 - **team**: Fixed `team_pass_flag` stripping `:` and `@` from tags in SQLite adapter
-- **server**: Removed UI truncation optimization (`[Structured output attached]`) from `mcp-server.ts` to ensure full JSON payloads are natively available to agent context windows in direct tool execution mode
+- **team**: Fixed Zod schema errors by making `project_number` optional in MCP-facing schemas
+- **team**: Made `project_number` optional in `team_get_recent` schema to match implementation defaults
+- **tests**: Fixed Code Mode scripts to include `project_number` and updated Playwright specs
+- **tests**: Fixed formatting assertions in briefing user message tests
+- **tests**: Fixed Kanban pipeline test crashing due to GitHub Projects V2 read-index eventual consistency
+- **tests**: Fixed local environment resolution failures in 26 test scripts by updating hardcoded `project_number`
+- **tests**: Mapped `MOCK_DIR` to a valid allowed IO root in Phase 28 Codemode Tests
+- **tests**: Systematically supplied `project_number: 1` to team-related tool calls in test scripts
+- **tests**: Updated Phase 28.14 `team_pass_flag` test script to include `project_number: 1`
 
 ### Security
-
 - **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
 - **docs**: Documented engine-level Code Mode sandbox restrictions and RPC allowlists in `SECURITY.md` and `README.md`
 - **skills**: Bumped `qs` dependency in `gitlab` skill to resolve a remotely triggerable DoS vulnerability
