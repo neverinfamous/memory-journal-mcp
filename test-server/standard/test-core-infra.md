@@ -74,8 +74,11 @@ node test-server/scripts/test-progress.mjs
 node test-server/scripts/test-team-db-fallback.mjs
 
 # Test G — Scheduler (Requires background server)
-# Term 1: node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
-# Term 2: node test-server/scripts/test-scheduler.mjs
+# Term 1: $env:ALLOWED_IO_ROOTS="./"; node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
+# Term 2: npm run test:scheduler
+
+# Cleanup Test Artifacts
+rm test-team-prompts.db*
 ```
 
 | Check              | Expected                                                             |
@@ -86,7 +89,7 @@ node test-server/scripts/test-team-db-fallback.mjs
 | Prompts API        | Successfully fetches and parses all 16 prompts                       |
 | Progress           | Both native and code-mode progress APIs successfully complete        |
 | Team DB Fallback   | Graceful rejection when TEAM_DB_PATH is missing                      |
-| Scheduler          | HTTP server executes backup, vacuum, and index jobs                  |
+| Scheduler          | HTTP server executes backup, vacuum, index, and digest jobs          |
 
 ### 1.4 GitHub Status Resource
 
