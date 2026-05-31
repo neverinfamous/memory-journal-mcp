@@ -5,7 +5,7 @@
 **Prerequisites:**
 
 - Confirm MCP server instructions were auto-received before starting.
-- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test (like limits testing or cleanup), do NOT write custom temporary scripts; instead, strictly use the existing verification scripts provided in `test-server/scripts/` (e.g., `test-long-mcp.mjs`, `test-http.mjs`).
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test (like limits testing), do NOT write custom temporary scripts; instead, strictly use the existing verification scripts provided in `test-server/scripts/` (e.g., `test-long-mcp.mjs`). **Important:** Always run these scripts from the project root (e.g., `node test-server/scripts/test-long-mcp.mjs`) so they can successfully spawn `dist/cli.js`.
 - Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
 
 **Workflow after testing:**
@@ -46,7 +46,7 @@ Create entries with specific data, then read them back to verify nothing is lost
 | Empty tags array       | `create_entry(project_number: 5, content: "test", tags: [])`                                | Entry created with empty tags                                     |
 | Single-char tag        | `create_entry(project_number: 5, content: "test", tags: ["a"])`                             | Entry created — verify tag stored and retrievable via `list_tags` |
 | Max limit on recent    | `get_recent_entries(project_number: 5, limit: 500)`                                         | Returns ≤ 500 entries                                             |
-| Over max limit         | `get_recent_entries(project_number: 5, limit: 501)`                                         | Structured validation error                                       |
+| Over max limit         | `get_recent_entries(project_number: 5, limit: 501)`                                         | Structured validation error (`limit: Too big`)                    |
 | Limit = 1              | `get_recent_entries(project_number: 5, limit: 1)`                                           | Returns exactly 1 entry                                           |
 | Search with max limit  | `search_entries(project_number: 5, query: "test", limit: 500)`                              | Returns ≤ 500 entries                                             |
 | Date at epoch boundary | `search_by_date_range(project_number: 5, start_date: "1970-01-01", end_date: "1970-01-02")` | Returns 0 entries (no crash)                                      |
@@ -60,7 +60,7 @@ Create entries with specific data, then read them back to verify nothing is lost
 | Source tag deleted after merge | `merge_tags(source_tag: "old", target_tag: "new")` then `list_tags`         | `"old"` no longer in tag list                                  |
 | Target tag has combined count  | After merge, `list_tags`                                                    | `"new"` count equals sum of old source + old target counts     |
 | Case normalization             | Create with tag `"CamelCase"`, verify with `get_entry_by_id`                | Tag is automatically normalized to lowercase `"camelcase"`     |
-| Tag with spaces                | `create_entry(project_number: 5, content: "test", tags: ["tag with spaces"])`                  | Entry created and tag retrievable                              |
+| Tag with spaces                | `create_entry(project_number: 5, content: "test", tags: ["tag with spaces"])`                  | Entry created and tag retrievable (spaces convert to hyphens: `"tag-with-spaces"`) |
 | Duplicate tags in array        | `create_entry(project_number: 5, content: "test", tags: ["dup", "dup"])`                       | Entry created — duplicates either deduplicated or stored as-is |
 
 ### 12.4 Relationship Integrity
@@ -92,20 +92,18 @@ Create entries with specific data, then read them back to verify nothing is lost
 | `get_statistics` date filter         | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")`          | ⚠️ Should return 0 entries. If returns all, handler ignores date filter |
 | `export_entries` tag filter          | `export_entries(format: "json", tags: ["nonexistent-tag-xyz"], limit: 100)` | Should return 0 entries. If returns all, filter is ignored              |
 | `export_entries` date filter         | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)`      | Should return 0 entries. If returns all, date filter is ignored         |
-| `search_by_date_range` with filters  | `search_by_date_range(project_number: 5, ..., entry_type: "nonexistent_type")`                 | Should return 0 entries — type filter respected                         |
+| `search_by_date_range` with filters  | `search_by_date_range(project_number: 5, ..., entry_type: "nonexistent_type")`                 | Structured validation error rejecting the invalid enum value            |
 | `get_recent_entries` personal filter | `get_recent_entries(project_number: 5, limit: 100, is_personal: true)` vs `is_personal: false` | Results should be mutually exclusive                                    |
 
 ---
 
 ## Cleanup
 
-After testing, permanently delete all entries created during Phase 12. Because boundary testing creates large entries and manual cleanup via `delete_entry` can be tedious, use the existing cleanup functionality provided by the scripts in `test-server/scripts/` (e.g., `test-long-mcp.mjs`). Do NOT write a custom one-off cleanup script.
+After testing, permanently delete all entries created during Phase 12. Since no automated cleanup script exists, you MUST manually call `delete_entry(permanent: true)` via direct MCP tool calls for every entry ID generated during this test phase.
 
 | Cleanup Step                 | Command/Action                                                        |
 | ---------------------------- | --------------------------------------------------------------------- |
-| Delete RT entries            | Run client script to find "RT1" and call `delete_entry(permanent: true)` |
-| Delete boundary test entries | Run client script to find oversized string entries and call `delete_entry` |
-| Delete merge test tags       | Clean up via `merge_tags` or delete associated entries                |
+| Purge test entries           | Call `delete_entry(entry_id: N, permanent: true)` for all test IDs    |
 
 ---
 
