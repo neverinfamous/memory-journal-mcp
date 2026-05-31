@@ -34,7 +34,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci || (echo "Retrying in 5s..." && sleep 5 && npm ci) || (echo "Retrying in 10s..." && sleep 10 && npm ci)
 
       - name: Check version consistency
         run: |
