@@ -71,31 +71,9 @@ export async function resolveOwner(
     }
 
     const repoInfo = await toolGithub.getRepoInfo()
-    let detectedOwner = repoInfo.owner
-    let detectedRepo = repoInfo.repo ?? undefined
-    let activeGithub = toolGithub
-
-    if (!detectedOwner) {
-        const hasRegistry = registry && Object.keys(registry).length > 0
-        if (!inputRepo && hasRegistry) {
-            for (const key of Object.keys(registry)) {
-                const project = registry[key]
-                if (project) {
-                    const fallbackGithub = getGitHubIntegration(project.path, context.config?.runtime)
-                    const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
-                    if (fallbackRepoInfo.owner) {
-                        detectedOwner = fallbackRepoInfo.owner
-                        detectedRepo = fallbackRepoInfo.repo ?? undefined
-                        activeGithub = fallbackGithub
-                        break
-                    }
-                }
-            }
-        }
-    }
-
+    const detectedOwner = repoInfo.owner
     const owner = inputOwner ?? detectedOwner ?? undefined
-    const repo = inputRepo ?? detectedRepo
+    const repo = repoInfo.repo ?? undefined
 
     if (!owner) {
         return {
@@ -115,7 +93,7 @@ export async function resolveOwner(
         }
     }
 
-    return { owner, detectedOwner, repo, github: activeGithub }
+    return { owner, detectedOwner, repo, github: toolGithub }
 }
 
 /**
@@ -165,28 +143,8 @@ export async function resolveOwnerRepo(
 
     const repoInfo = await toolGithub.getRepoInfo()
 
-    let detectedOwner = repoInfo.owner
-    let detectedRepo = repoInfo.repo
-    let activeGithub = toolGithub
-
-    if (!detectedOwner || !detectedRepo) {
-        const hasRegistry = registry && Object.keys(registry).length > 0
-        if (!input.repo && hasRegistry) {
-            for (const key of Object.keys(registry)) {
-                const project = registry[key]
-                if (project) {
-                    const fallbackGithub = getGitHubIntegration(project.path, context.config?.runtime)
-                    const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
-                    if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {
-                        detectedOwner = fallbackRepoInfo.owner
-                        detectedRepo = fallbackRepoInfo.repo
-                        activeGithub = fallbackGithub
-                        break
-                    }
-                }
-            }
-        }
-    }
+    const detectedOwner = repoInfo.owner
+    const detectedRepo = repoInfo.repo
 
     const owner = input.owner ?? detectedOwner ?? undefined
     const repo = input.repo ?? detectedRepo ?? undefined
@@ -212,5 +170,5 @@ export async function resolveOwnerRepo(
         }
     }
 
-    return { owner, repo, detectedOwner, detectedRepo, github: activeGithub }
+    return { owner, repo, detectedOwner, detectedRepo, github: toolGithub }
 }
