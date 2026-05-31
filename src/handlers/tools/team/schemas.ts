@@ -266,13 +266,26 @@ export const TeamLinkEntriesSchema = z.object({
 })
 
 /** team_link_entries — relaxed */
-export const TeamLinkEntriesSchemaMcp = z.object({
-    from_entry_id: relaxedNumber().optional(),
-    to_entry_id: relaxedNumber().optional(),
-    relationship_type: z.string().optional().default('references'),
-    description: z.string().optional(),
-    project_number: relaxedNumber().optional(),
-})
+export const TeamLinkEntriesSchemaMcp = z
+    .object({
+        from_entry_id: relaxedNumber().optional(),
+        to_entry_id: relaxedNumber().optional(),
+        from: relaxedNumber().optional(),
+        to: relaxedNumber().optional(),
+        from_id: relaxedNumber().optional(),
+        to_id: relaxedNumber().optional(),
+        relationship_type: z.string().optional().default('references'),
+        type: z.string().optional(),
+        description: z.string().optional(),
+        project_number: relaxedNumber().optional(),
+    })
+    .transform((data) => ({
+        from_entry_id: data.from_entry_id ?? data.from_id ?? data.from,
+        to_entry_id: data.to_entry_id ?? data.to_id ?? data.to,
+        relationship_type: data.type ?? data.relationship_type,
+        description: data.description,
+        project_number: data.project_number,
+    }))
 
 /** team_visualize_relationships — strict */
 export const TeamVisualizeRelationshipsSchema = z.object({

@@ -3,8 +3,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 async function main() {
   const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: ["dist/index.js"],
+    command: "node",
+    args: ["dist/cli.js"],
     stderr: "pipe"
   });
 

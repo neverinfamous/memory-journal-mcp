@@ -41,13 +41,15 @@ const LinkEntriesSchemaMcp = z
         to_entry_id: relaxedNumber().optional(),
         from: relaxedNumber().optional(),
         to: relaxedNumber().optional(),
+        from_id: relaxedNumber().optional(),
+        to_id: relaxedNumber().optional(),
         relationship_type: z.string().optional(),
         type: z.string().optional(),
         description: z.string().optional(),
     })
     .transform((data) => ({
-        from_entry_id: data.from_entry_id ?? data.from,
-        to_entry_id: data.to_entry_id ?? data.to,
+        from_entry_id: data.from_entry_id ?? data.from_id ?? data.from,
+        to_entry_id: data.to_entry_id ?? data.to_id ?? data.to,
         relationship_type: data.type ?? data.relationship_type ?? 'references',
         description: data.description,
     }))

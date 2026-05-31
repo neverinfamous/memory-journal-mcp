@@ -134,7 +134,7 @@ export const StrictProjectNumberSchema = z.number({
 export const EntryOutputSchema = z
     .object({
         id: z.number(),
-        content: z.string(),
+        content: z.string().max(MAX_CONTENT_LENGTH),
         entryType: z.string(),
         isPersonal: z.boolean(),
         timestamp: z.string(),

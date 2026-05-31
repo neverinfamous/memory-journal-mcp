@@ -37,12 +37,12 @@ Create entries with specific data, then read them back to verify nothing is lost
 ### 12.2 Boundary Values
 
 > [!WARNING]
-> **Payload Limit Learnings:** The default Express JSON parser limit is **1MB**. Scripts testing the upper boundary for `413 Payload Too Large` MUST exceed 1MB (e.g., 1,050,000 characters). Smaller oversized payloads (e.g., 100KB) will parse successfully but then fail at the routing/initialization layer if the HTTP test script omits a valid `mcp-session-id`. Additionally, never use strict `err instanceof Error` checks to intercept payload parsing errors from `raw-body`, as prototype chains often decouple in bundled or production environments.
+> **Payload Limit Learnings:** The default Express JSON parser limit is **1MB**. Scripts testing the upper boundary for `413 Payload Too Large` MUST exceed 1MB. Additionally, testing HTTP/SSE manually with raw `fetch()` or `curl` requires first initializing the session via `POST /mcp/session` to obtain an `x-mcp-session-id` header. Without this handshake, POSTing `tools/call` directly to `/mcp` will fail with a 500 or 400 validation error (e.g. `!isInitializeRequest(req.body)`). It is far more reliable to perform these tests directly over the standard Stdio MCP connection.
 
 | Test                   | Command/Action                                                           | Expected Result                                                   |
 | ---------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Max content length     | Run `node test-server/scripts/test-long-mcp.mjs`                                          | Entry created successfully (50k chars)                            |
-| Content above max      | Run `node test-server/scripts/test-http.mjs` (verifies HTTP 413 protection on >1MB body)   | Connection securely closed / Structured validation error          |
+| Max content length     | `create_entry(project_number: 5, content: <50,000 char string>)`                           | Entry created successfully (50k chars)                            |
+| Content above max      | `create_entry(project_number: 5, content: <100,000 char string>)`                          | Structured validation error (`<= 50000 characters`)               |
 | Empty tags array       | `create_entry(project_number: 5, content: "test", tags: [])`                                | Entry created with empty tags                                     |
 | Single-char tag        | `create_entry(project_number: 5, content: "test", tags: ["a"])`                             | Entry created — verify tag stored and retrievable via `list_tags` |
 | Max limit on recent    | `get_recent_entries(project_number: 5, limit: 500)`                                         | Returns ≤ 500 entries                                             |
@@ -99,12 +99,12 @@ Create entries with specific data, then read them back to verify nothing is lost
 
 ## Cleanup
 
-After testing, permanently delete all entries created during Phase 12:
+After testing, permanently delete all entries created during Phase 12. Because boundary testing creates large entries and manual cleanup via `delete_entry` can be tedious, the easiest way to perform a clean up is to run a small Node client script using `@modelcontextprotocol/sdk/client/stdio.js` to search and iterate over target IDs for deletion.
 
 | Cleanup Step                 | Command/Action                                                        |
 | ---------------------------- | --------------------------------------------------------------------- |
-| Delete RT entries            | `delete_entry(project_number: 5, entry_id: <RT_ids>, permanent: true)` for each RT entry |
-| Delete boundary test entries | `delete_entry(project_number: 5, entry_id: <boundary_ids>, permanent: true)`             |
+| Delete RT entries            | Run client script to find "RT1" and call `delete_entry(permanent: true)` |
+| Delete boundary test entries | Run client script to find oversized string entries and call `delete_entry` |
 | Delete merge test tags       | Clean up via `merge_tags` or delete associated entries                |
 
 ---
