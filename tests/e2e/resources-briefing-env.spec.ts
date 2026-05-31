@@ -101,7 +101,6 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                 project_number: 1,
                 content: 'Team insight',
                 entry_type: 'test_entry',
-                project_number: 1,
             },
         })
         expect(t_resp.isError).toBeUndefined()
