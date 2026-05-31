@@ -57,6 +57,7 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
+- **github**: Applied `ProjectRegistry` fallback mapping to tool-level `resolveOwnerRepo` and `resolveOwner` helpers to prevent `STOP: Could not auto-detect repository` errors when `owner`/`repo` parameters are omitted outside of git directories
 - **io**: Increased `export_entries` maximum limit to 5000 to allow testing the 5MB payload truncation ceiling
 - **admin/core**: Resolved `strict-boolean-expressions` TypeScript errors when dynamically validating `auto_context`
 - **annotations**: Added missing `destructiveHint: false` to 62 tools and `idempotentHint: false` to `delete_entry`
