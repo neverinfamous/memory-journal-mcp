@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-86.17%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-86.16%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**73 MCP Tools** · **19 Workflow Prompts** · **47 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**73 MCP Tools** · **19 Workflow Prompts** · **46 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -211,7 +211,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **47 Resources** (29 Static + 18 Template)
+### 📡 **46 Resources** (29 Static + 17 Template)
 
 **29 Static Resources** (appear in resource lists):
 
@@ -243,7 +243,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://flags/vocabulary` - Configured flag vocabulary terms
 - `memory://flags/history` - Recently resolved flags with resolution details and avg time-to-resolution (last 7 days)
 
-**18 Template Resources** (9 base templates + 9 dynamic `{repo}` variants):
+**17 Template Resources** (9 base templates + 8 dynamic `{repo}` variants):
 
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
@@ -747,7 +747,7 @@ flowchart TB
 
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 73 Tools"]
-        Resources["📡 47 Resources"]
+        Resources["📡 46 Resources"]
         Prompts["💬 19 Prompts"]
     end
 
