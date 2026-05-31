@@ -55,7 +55,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                            |
 | **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                  |
-| **Team Collaboration**        | 28 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution, Hush Protocol flags (list, update, reopen, analytics)                    |
+| **Team Collaboration**        | 28 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution, Hush Protocol flags (list, update, reopen, analytics)                     |
 | **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                                    |
 | **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                               |
 | **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                     |
@@ -70,17 +70,17 @@ _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 <details>
 <summary><strong>View Mandatory Session Start Routine</strong></summary>
 
-## 🛑 MANDATORY SESSION START ROUTINE
+🛑 MANDATORY SESSION START ROUTINE
 
-Before addressing user's first request in a session, complete these steps:
+Before addressing the user's first request in a session/thread, complete these steps:
 
-1. Read the briefing using memory-journal-mcp's `read_resource` tool (not `mj_execute_code`): `memory://briefing/{repo_name}`.
+1. Read the briefing using the `read_resource` tool: `memory://briefing/{repo_name}`.
    - Infer `repo_name` from context of user's prompt. Use `memory://briefing` as fallback only if necessary.
 2. Your first response MUST begin with the entire briefing content. Use this format:
 
    > **📋 Briefing loaded** — `{repo_name}`
    >
-   > _{paste ENTIRE briefing here}_ (The resource isn't easy for user to access in some IDEs)
+   > _{paste **ENTIRE** briefing here}_ (It isn't always easy for users to access in IDEs)
 
 3. Then address the user's request below the briefing.
 4. Do NOT autonomously resume work on issues mentioned in the briefing.
