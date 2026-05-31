@@ -81,8 +81,8 @@
 | Close milestone      | `update_github_milestone(milestone_number: <new>, state: "closed")`                              | Milestone state changed to `closed`                                                                               |
 | Delete milestone     | `delete_github_milestone(milestone_number: <new>, confirm: true)`                                | Returns `success: true`, milestone removed from GitHub                                                            |
 | Get nonexistent      | `get_github_milestone(milestone_number: 999999)`                                                 | Structured error: `{ error: "Milestone #999999 not found" }`                                                      |
-| Milestone resource   | Read `memory://github/milestones`                                                                | Static resource lists open milestones with completion %                                                           |
-| Milestone detail     | Read `memory://milestones/<N>`                                                                   | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
+| Milestone resource   | Read `memory://github/milestones/memory-journal-mcp`                                             | Static resource lists open milestones with completion %                                                           |
+| Milestone detail     | Read `memory://milestones/memory-journal-mcp/<N>`                                                | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
 
 ### 13.5 Repository Insights Tool
 
@@ -100,7 +100,7 @@
 | --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
 | Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body` |
 | Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                  |
-| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                        |
+| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Returns structured `CONFIGURATION_ERROR` in multi-workspace environments (or auto-detects in single-workspace) |
 | No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
 
 ### 13.7 GitHub Test Cleanup
@@ -127,7 +127,7 @@
 - `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
 - `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
 - Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
-- `memory://milestones/{number}` returns milestone with completion %, issue counts, and hint
+- `memory://milestones/{repo}/{number}` returns milestone with completion %, issue counts, and hint
 - `get_repo_insights` returns correct data based on `sections` parameter
 - `get_copilot_reviews` — referenced in test docs but not re-executed (verified in schema check only; see prior sessions)
 - All GitHub test artifacts cleaned up after testing
