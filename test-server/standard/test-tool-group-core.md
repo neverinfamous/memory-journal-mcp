@@ -44,7 +44,7 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 | Test                | Action                                                                                | Verification                                                     |
 | ------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Round-Trip          | `create_entry(project_number: 5, content: "RT test", entry_type: "planning")` then `get_entry_by_id(project_number: 5, id)` | All fields persist correctly.                                    |
-| Boundary Max Length | `create_entry(project_number: 5, content: <50k chars>)`                                                  | Entry created successfully.                                      |
+| Boundary Max Length | `node test-server/scripts/test-50k-boundary.mjs`                                         | Entry created successfully.                                      |
 | Boundary Empty      | `create_entry(project_number: 5, content: "")`                                                           | Structured validation error.                                     |
 | Maximum Limit       | `get_recent_entries(project_number: 5, limit: 500)`                                                      | Returns 500 or fewer entries.                                    |
 | Limit Exceeded      | `get_recent_entries(project_number: 5, limit: 501)`                                                      | Structured validation error.                                     |
