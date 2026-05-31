@@ -5,7 +5,7 @@
 **Prerequisites:**
 
 - Confirm MCP server instructions were auto-received before starting.
-- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test (like limits testing or cleanup), do NOT write custom temporary scripts; instead, strictly use the existing verification scripts provided in `test-server/scripts/` (e.g., `test-long-mcp.mjs`, `test-http.mjs`).
 - Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
 
 **Workflow after testing:**
@@ -99,7 +99,7 @@ Create entries with specific data, then read them back to verify nothing is lost
 
 ## Cleanup
 
-After testing, permanently delete all entries created during Phase 12. Because boundary testing creates large entries and manual cleanup via `delete_entry` can be tedious, the easiest way to perform a clean up is to run a small Node client script using `@modelcontextprotocol/sdk/client/stdio.js` to search and iterate over target IDs for deletion.
+After testing, permanently delete all entries created during Phase 12. Because boundary testing creates large entries and manual cleanup via `delete_entry` can be tedious, use the existing cleanup functionality provided by the scripts in `test-server/scripts/` (e.g., `test-long-mcp.mjs`). Do NOT write a custom one-off cleanup script.
 
 | Cleanup Step                 | Command/Action                                                        |
 | ---------------------------- | --------------------------------------------------------------------- |
