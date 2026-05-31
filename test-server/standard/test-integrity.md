@@ -38,8 +38,8 @@ Create entries with specific data, then read them back to verify nothing is lost
 
 | Test                   | Command/Action                                                           | Expected Result                                                   |
 | ---------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Max content length     | `create_entry(project_number: 5, content: <50,000 chars>)`                                  | Entry created successfully                                        |
-| Content above max      | `create_entry(project_number: 5, content: <100,001 chars>)`                                 | Structured validation error (exceeds `MAX_CONTENT_LENGTH`)        |
+| Max content length     | Run `node test-server/scripts/test-long-mcp.mjs`                                          | Entry created successfully (50k chars)                            |
+| Content above max      | Run `node test-server/scripts/test-http.mjs` (verifies HTTP 413 protection on >100k body)   | Connection securely closed / Structured validation error          |
 | Empty tags array       | `create_entry(project_number: 5, content: "test", tags: [])`                                | Entry created with empty tags                                     |
 | Single-char tag        | `create_entry(project_number: 5, content: "test", tags: ["a"])`                             | Entry created — verify tag stored and retrievable via `list_tags` |
 | Max limit on recent    | `get_recent_entries(project_number: 5, limit: 500)`                                         | Returns ≤ 500 entries                                             |

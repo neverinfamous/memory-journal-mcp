@@ -60,6 +60,15 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | ------------------------------ | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
 | `test-payload-optimization.md` |  16   | **Payload Optimization** — Kanban throttling, body truncation, pagination cap, Code Mode result cap | After seed  |
 
+## Node.js Helper Scripts
+
+Certain boundary tests (e.g., massive payload execution) exceed typical token context windows and cannot be efficiently run directly via MCP tool payloads. We provide raw Node.js scripts in `test-server/scripts/` to supplement the markdown test workflows:
+
+| Script | Purpose | Associated Workflow |
+|---|---|---|
+| `test-http.mjs` | Verifies HTTP transport 413 Payload Too Large limits | `test-integrity.md` |
+| `test-long-mcp.mjs` | Verifies the maximum `content` length capacity limits (50k/100k boundaries) | `test-integrity.md` |
+
 ## Tool Group Requirements
 
 The following table maps each standard testing prompt to the specific MCP tool groups that must be enabled (e.g., via `--tool-filter`) to execute the test successfully.
