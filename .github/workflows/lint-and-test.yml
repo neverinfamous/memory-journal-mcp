@@ -96,7 +96,7 @@ jobs:
           docker run -d --name pr-smoke -p 3000:3000 \
             -e ALLOWED_IO_ROOTS=/app/data \
             pr-smoke-test:latest \
-            --transport http --port 3000 --server-host 0.0.0.0
+            --transport http --port 3000 --server-host 0.0.0.0 --auth-token smoke-test-token
           sleep 5
           if ! docker ps --filter name=pr-smoke --format '{{.Status}}' | grep -q "Up"; then
             echo "❌ Docker smoke test failed — container crashed on startup"

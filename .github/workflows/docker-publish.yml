@@ -107,7 +107,7 @@ jobs:
           docker run -d --name smoke-http -p 3000:3000 \
             -e ALLOWED_IO_ROOTS=/app/data \
             smoke-test:latest \
-            --transport http --port 3000 --server-host 0.0.0.0
+            --transport http --port 3000 --server-host 0.0.0.0 --auth-token smoke-test-token
           sleep 5
           if ! docker ps --filter name=smoke-http --format '{{.Status}}' | grep -q "Up"; then
             echo "❌ HTTP smoke test failed — container crashed"
