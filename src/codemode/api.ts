@@ -123,10 +123,16 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
             const obj = convertKeysToSnakeCase(arg as Record<string, unknown>)
             
             // Handle common agent hallucination where they omit 'content' and pass arbitrary fields
-            if ((methodName === 'createEntry' || methodName === 'createEntryMinimal') && !('content' in obj)) {
+            if ((methodName === 'createEntry' || methodName === 'createEntryMinimal' || methodName === 'teamCreateEntry') && !('content' in obj)) {
                 let content = ''
+                const validFields = new Set([
+                    'type', 'tags', 'entry_type', 'is_personal', 'share_with_team',
+                    'significance_type', 'auto_context', 'project_number', 'project_owner',
+                    'issue_number', 'issue_url', 'pr_number', 'pr_url', 'pr_status',
+                    'workflow_run_id', 'workflow_name', 'workflow_status'
+                ])
                 for (const [key, value] of Object.entries(obj)) {
-                    if (key === 'type' || key === 'tags' || key === 'entry_type' || key === 'is_personal' || key === 'share_with_team') continue
+                    if (validFields.has(key)) continue
                     const strValue = typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)
                     content += `**${key}**\n${strValue}\n\n`
                 }

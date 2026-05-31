@@ -88,6 +88,7 @@
 - **codemode**: Expanded `JournalApi` constructor cross-group wiring to properly route admin and backup operations
 - **codemode**: Expanded `METHOD_ALIASES` with ~25 high-probability hallucination aliases covering CRUD and search variants
 - **codemode**: Extended top-level sandbox bindings with 7 additional flat-function aliases
+- **codemode**: Fixed hallucination shim coercing valid entry fields (like `project_number`) into the `content` body, enforcing strict missing content validation
 - **codemode**: Handled arbitrary key hallucinations during entry creation by formatting missing `content` fields into markdown strings
 - **codemode**: Handled `deleteEntry({ id: ... })` failures by mapping `id` to `entry_id`
 - **codemode**: Intercepted `SyntaxError` exceptions to append actionable tips about template literals
