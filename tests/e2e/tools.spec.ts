@@ -87,7 +87,8 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         const response = await client.callTool({
             name: 'create_entry',
             arguments: {
-                project_number: 1, content: 'test validation',
+                project_number: 1,
+                content: 'test validation',
                 entry_type: 'invalid_type',
             },
         })

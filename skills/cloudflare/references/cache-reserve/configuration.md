@@ -12,6 +12,7 @@ https://dash.cloudflare.com/caching/cache-reserve
 ```
 
 **Prerequisites:**
+
 - Paid Cache Reserve plan or Smart Shield Advanced required
 - Tiered Cache **required** for Cache Reserve to function optimally
 
@@ -37,23 +38,23 @@ npm install cloudflare
 ```
 
 ```typescript
-import Cloudflare from 'cloudflare';
+import Cloudflare from 'cloudflare'
 
 const client = new Cloudflare({
   apiToken: process.env.CLOUDFLARE_API_TOKEN,
-});
+})
 
 // Enable Cache Reserve
 await client.cache.cacheReserve.edit({
   zone_id: 'abc123',
   value: 'on',
-});
+})
 
 // Get Cache Reserve status
 const status = await client.cache.cacheReserve.get({
   zone_id: 'abc123',
-});
-console.log(status.value); // 'on' or 'off'
+})
+console.log(status.value) // 'on' or 'off'
 ```
 
 ### Python SDK
@@ -109,19 +110,19 @@ resource "cloudflare_tiered_cache" "example" {
 ### Pulumi
 
 ```typescript
-import * as cloudflare from "@pulumi/cloudflare";
+import * as cloudflare from '@pulumi/cloudflare'
 
 // Enable Cache Reserve
-const cacheReserve = new cloudflare.ZoneCacheReserve("example", {
+const cacheReserve = new cloudflare.ZoneCacheReserve('example', {
   zoneId: zoneId,
   enabled: true,
-});
+})
 
 // Enable Tiered Cache (required)
-const tieredCache = new cloudflare.TieredCache("example", {
+const tieredCache = new cloudflare.TieredCache('example', {
   zoneId: zoneId,
-  cacheType: "smart",
-});
+  cacheType: 'smart',
+})
 ```
 
 ### Required API Token Permissions

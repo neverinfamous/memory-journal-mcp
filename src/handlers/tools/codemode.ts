@@ -198,7 +198,7 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     const availableTools = collectNonCodeModeTools(context)
     const typeDeclarations = generateTypescriptDeclarations(availableTools)
-    
+
     return [
         {
             name: 'mj_execute_code',
@@ -212,7 +212,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 'Methods accept camelCase or snake_case parameters. ' +
                 'All mj.* methods return Promises (always await). ' +
                 'Result shape: { success: boolean, error?: string, ...data }.\n\n' +
-                '### TypeScript Declarations\n```typescript\n' + typeDeclarations + '\n```',
+                '### TypeScript Declarations\n```typescript\n' +
+                typeDeclarations +
+                '\n```',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,
             annotations: {
@@ -225,10 +227,16 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (typeof params === 'string') {
                         params = { code: params }
-                    } else if (params != null && typeof params === 'object' && !('code' in params)) {
+                    } else if (
+                        params != null &&
+                        typeof params === 'object' &&
+                        !('code' in params)
+                    ) {
                         const p = params as Record<string, unknown>
                         const keys = Object.keys(p)
-                        const hasCodeModeParamsOnly = keys.every((k) => ['timeout', 'readonly', 'repo', 'context'].includes(k))
+                        const hasCodeModeParamsOnly = keys.every((k) =>
+                            ['timeout', 'readonly', 'repo', 'context'].includes(k)
+                        )
 
                         if ('script' in p && typeof p['script'] === 'string') {
                             p['code'] = p['script']
@@ -240,7 +248,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             p['code'] = p['snippet']
                         } else if (!hasCodeModeParamsOnly) {
                             params = {
-                                code: `return await mj.core.createEntry(${JSON.stringify(params)});`
+                                code: `return await mj.core.createEntry(${JSON.stringify(params)});`,
                             }
                         }
                     }
@@ -416,7 +424,14 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
-                    const result = await pool.execute(code, bindings, schemas, timeout, contextObj, readonlyMode)
+                    const result = await pool.execute(
+                        code,
+                        bindings,
+                        schemas,
+                        timeout,
+                        contextObj,
+                        readonlyMode
+                    )
                     // Result size is validated internally by the worker pool
                     return result
                 } catch (err) {

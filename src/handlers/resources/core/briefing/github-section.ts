@@ -142,7 +142,9 @@ export async function buildGitHubSection(
                 ? localGitStatusResult.value
                 : { modified: 0, untracked: 0, isClean: true, degraded: true }
         if (localGitStatusResult.status === 'rejected')
-            degradedReasons.push(`Local Git Status fetch failed: ${String(localGitStatusResult.reason)}`)
+            degradedReasons.push(
+                `Local Git Status fetch failed: ${String(localGitStatusResult.reason)}`
+            )
 
         const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
@@ -367,16 +369,18 @@ async function fetchMilestones(
         const now = Date.now()
         const twentyFourHours = 24 * 60 * 60 * 1000
 
-        const activeMilestones = msList.filter(m => {
-            const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
-            if (pct === 100 && m.updatedAt) {
-                const updatedTime = new Date(m.updatedAt).getTime()
-                if (now - updatedTime > twentyFourHours) {
-                    return false
+        const activeMilestones = msList
+            .filter((m) => {
+                const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
+                if (pct === 100 && m.updatedAt) {
+                    const updatedTime = new Date(m.updatedAt).getTime()
+                    if (now - updatedTime > twentyFourHours) {
+                        return false
+                    }
                 }
-            }
-            return true
-        }).slice(0, limit)
+                return true
+            })
+            .slice(0, limit)
 
         return {
             items: activeMilestones.map((m) => {

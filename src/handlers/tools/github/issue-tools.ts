@@ -57,7 +57,12 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                 tags: z.array(z.string()).optional().describe('Journal entry tags'),
             }),
             outputSchema: CreateGitHubIssueWithEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -294,7 +299,12 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                 tags: z.array(z.string()).optional().describe('Journal entry tags'),
             }),
             outputSchema: CloseGitHubIssueWithEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z

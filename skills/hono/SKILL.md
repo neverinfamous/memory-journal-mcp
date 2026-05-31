@@ -38,6 +38,7 @@ app.get('/', (c) => {
 ## 3. Middleware Usage
 
 Always use the built-in middleware for common tasks.
+
 - `cors()` for CORS.
 - `secureHeaders()` for security headers.
 - `logger()` for request logging.
@@ -60,10 +61,13 @@ import { z } from 'zod'
 
 app.post(
   '/post',
-  zValidator('json', z.object({
-    title: z.string(),
-    body: z.string()
-  })),
+  zValidator(
+    'json',
+    z.object({
+      title: z.string(),
+      body: z.string(),
+    })
+  ),
   (c) => {
     const { title, body } = c.req.valid('json')
     return c.json({ title, body })

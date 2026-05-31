@@ -215,7 +215,11 @@ describe('Tool Handlers', () => {
 
     describe('callTool - search_entries', () => {
         it('should search by content', async () => {
-            await callTool('create_entry', { project_number: 1, content: 'Unique unicorn xyz99' }, db)
+            await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Unique unicorn xyz99' },
+                db
+            )
 
             const result = (await callTool('search_entries', { query: 'xyz99', limit: 5 }, db)) as {
                 entries: unknown[]
@@ -245,7 +249,11 @@ describe('Tool Handlers', () => {
             const tomorrowStr = tomorrow.toISOString().split('T')[0]!
 
             // Ensure an entry exists today
-            await callTool('create_entry', { project_number: 1, content: 'Date range test entry' }, db)
+            await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Date range test entry' },
+                db
+            )
 
             const result = (await callTool(
                 'search_by_date_range',
@@ -287,10 +295,18 @@ describe('Tool Handlers', () => {
 
     describe('callTool - link_entries', () => {
         it('should link two entries', async () => {
-            const e1 = (await callTool('create_entry', { project_number: 1, content: 'Link source' }, db)) as {
+            const e1 = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Link source' },
+                db
+            )) as {
                 entry: { id: number }
             }
-            const e2 = (await callTool('create_entry', { project_number: 1, content: 'Link target' }, db)) as {
+            const e2 = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Link target' },
+                db
+            )) as {
                 entry: { id: number }
             }
 
@@ -424,7 +440,11 @@ describe('Tool Handlers', () => {
 
     describe('callTool - delete_entry', () => {
         it('should soft delete an entry', async () => {
-            const created = (await callTool('create_entry', { project_number: 1, content: 'To be deleted' }, db)) as {
+            const created = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'To be deleted' },
+                db
+            )) as {
                 entry: { id: number }
             }
 
@@ -466,7 +486,11 @@ describe('Tool Handlers', () => {
 
     describe('callTool - merge_tags', () => {
         it('should merge tags', async () => {
-            await callTool('create_entry', { project_number: 1, content: 'Merge tag source', tags: ['merge-src'] }, db)
+            await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Merge tag source', tags: ['merge-src'] },
+                db
+            )
 
             const result = (await callTool(
                 'merge_tags',
@@ -567,10 +591,18 @@ describe('Tool Handlers', () => {
 
     describe('callTool - visualize_relationships', () => {
         it('should generate mermaid diagram', async () => {
-            const e1 = (await callTool('create_entry', { project_number: 1, content: 'Viz entry A' }, db)) as {
+            const e1 = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Viz entry A' },
+                db
+            )) as {
                 entry: { id: number }
             }
-            const e2 = (await callTool('create_entry', { project_number: 1, content: 'Viz entry B' }, db)) as {
+            const e2 = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Viz entry B' },
+                db
+            )) as {
                 entry: { id: number }
             }
             await callTool(
@@ -594,13 +626,25 @@ describe('Tool Handlers', () => {
         })
 
         it('should filter by relationship_type', async () => {
-            const e1 = (await callTool('create_entry', { project_number: 1, content: 'Node X' }, db)) as {
+            const e1 = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Node X' },
+                db
+            )) as {
                 entry: { id: number }
             }
-            const e2 = (await callTool('create_entry', { project_number: 1, content: 'Node Y' }, db)) as {
+            const e2 = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Node Y' },
+                db
+            )) as {
                 entry: { id: number }
             }
-            const e3 = (await callTool('create_entry', { project_number: 1, content: 'Node Z' }, db)) as {
+            const e3 = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Node Z' },
+                db
+            )) as {
                 entry: { id: number }
             }
 

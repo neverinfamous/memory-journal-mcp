@@ -37,15 +37,15 @@ src/transports/http/
 
 **7 Security Headers** (every response):
 
-| Header | Value | Purpose |
-|--------|-------|---------|
-| `X-Content-Type-Options` | `nosniff` | Prevent MIME sniffing |
-| `X-Frame-Options` | `DENY` | Prevent clickjacking |
-| `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'` | Strict CSP |
-| `Cache-Control` | `no-store, no-cache, must-revalidate` | Prevent data caching |
-| `Referrer-Policy` | `no-referrer` | Prevent referrer leakage |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Restrict browser APIs |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | HSTS (**opt-in** via config) |
+| Header                      | Value                                        | Purpose                      |
+| --------------------------- | -------------------------------------------- | ---------------------------- |
+| `X-Content-Type-Options`    | `nosniff`                                    | Prevent MIME sniffing        |
+| `X-Frame-Options`           | `DENY`                                       | Prevent clickjacking         |
+| `Content-Security-Policy`   | `default-src 'none'; frame-ancestors 'none'` | Strict CSP                   |
+| `Cache-Control`             | `no-store, no-cache, must-revalidate`        | Prevent data caching         |
+| `Referrer-Policy`           | `no-referrer`                                | Prevent referrer leakage     |
+| `Permissions-Policy`        | `camera=(), microphone=(), geolocation=()`   | Restrict browser APIs        |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains`        | HSTS (**opt-in** via config) |
 
 > [!IMPORTANT]
 > HSTS must be **opt-in** (e.g., `--enable-hsts`), not auto-detected from `X-Forwarded-Proto`.
@@ -57,6 +57,7 @@ src/transports/http/
 **CORS:** Default `[]` (deny-all), multi-origin via `--cors-origin`, wildcard subdomain support, `Access-Control-Max-Age: 86400`, `Vary: Origin`. Startup warning on wildcard `*`. Explicit configuration required for cross-origin access.
 
 **Additional Hardening:**
+
 - **Body size limit:** 1 MB default, `413` on excess
 - **Trust proxy:** Opt-in for `X-Forwarded-For` extraction
 - **Cross-protocol guard:** SSE IDs rejected on `/mcp` and vice versa
@@ -80,12 +81,12 @@ Tool poisoning is a form of indirect prompt injection where malicious instructio
 
 ### Attack Vectors
 
-| Vector | Description |
-|---|---|
-| **Description injection** | Malicious prompts embedded in tool `description` fields — agent follows them as instructions |
+| Vector                        | Description                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| **Description injection**     | Malicious prompts embedded in tool `description` fields — agent follows them as instructions |
 | **Schema metadata injection** | Hidden instructions in parameter `description` fields within `inputSchema` or `outputSchema` |
-| **Rug pull** | Tool definitions are legitimate initially, then silently modified after installation |
-| **Cross-tool poisoning** | One poisoned tool's output influences how the agent uses other tools |
+| **Rug pull**                  | Tool definitions are legitimate initially, then silently modified after installation         |
+| **Cross-tool poisoning**      | One poisoned tool's output influences how the agent uses other tools                         |
 
 ### Mitigation
 
@@ -107,34 +108,49 @@ Additional security requirements for servers implementing Code Mode (`{prefix}_e
 ```typescript
 // In sandbox.ts / worker-script.ts — before executing user code:
 const FROZEN_BUILTINS = [
-  Object, Function, Error, Array, Promise, String,
-  Number, Boolean, RegExp, Map, Set, WeakMap, WeakSet,
-  ArrayBuffer, SharedArrayBuffer, DataView,
-  Int8Array, Uint8Array, Float64Array, /* ... all typed arrays */
-];
+  Object,
+  Function,
+  Error,
+  Array,
+  Promise,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Map,
+  Set,
+  WeakMap,
+  WeakSet,
+  ArrayBuffer,
+  SharedArrayBuffer,
+  DataView,
+  Int8Array,
+  Uint8Array,
+  Float64Array /* ... all typed arrays */,
+]
 for (const builtin of FROZEN_BUILTINS) {
-  Object.freeze(builtin.prototype);
+  Object.freeze(builtin.prototype)
 }
 ```
 
 **Additional Blocked Patterns** (in `security.ts`):
 
-| Pattern | Why Blocked |
-|---------|-------------|
-| `Reflect.` | Reflection API enables prototype traversal |
-| `Symbol.` | Symbol access can bypass property enumeration guards |
-| `new Proxy` | Proxy traps can intercept and redirect any operation |
-| `(SELECT` | WHERE clause subquery injection (blind data exfiltration via `CASE WHEN (SELECT ...) THEN ... ELSE ...`) |
+| Pattern     | Why Blocked                                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| `Reflect.`  | Reflection API enables prototype traversal                                                               |
+| `Symbol.`   | Symbol access can bypass property enumeration guards                                                     |
+| `new Proxy` | Proxy traps can intercept and redirect any operation                                                     |
+| `(SELECT`   | WHERE clause subquery injection (blind data exfiltration via `CASE WHEN (SELECT ...) THEN ... ELSE ...`) |
 
 **Filesystem Boundary Enforcement:** For servers with file I/O tools (backup, restore, import, export), implement `ALLOWED_IO_ROOTS` — a fail-closed allowlist of directories. Validate every file path argument against these roots before execution:
 
 ```typescript
-const ALLOWED_IO_ROOTS = [config.dataDir, config.backupDir].filter(Boolean);
+const ALLOWED_IO_ROOTS = [config.dataDir, config.backupDir].filter(Boolean)
 
 function assertWithinBoundary(filePath: string): void {
-  const resolved = path.resolve(filePath);
-  if (!ALLOWED_IO_ROOTS.some(root => resolved.startsWith(root))) {
-    throw new SecurityError(`Path '${filePath}' is outside allowed directories`);
+  const resolved = path.resolve(filePath)
+  if (!ALLOWED_IO_ROOTS.some((root) => resolved.startsWith(root))) {
+    throw new SecurityError(`Path '${filePath}' is outside allowed directories`)
   }
 }
 ```

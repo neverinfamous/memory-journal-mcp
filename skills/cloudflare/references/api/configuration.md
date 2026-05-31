@@ -4,11 +4,11 @@
 
 ### Set Variables
 
-| Platform | Command |
-|----------|---------|
+| Platform    | Command                               |
+| ----------- | ------------------------------------- |
 | Linux/macOS | `export CLOUDFLARE_API_TOKEN='token'` |
-| PowerShell | `$env:CLOUDFLARE_API_TOKEN = 'token'` |
-| Windows CMD | `set CLOUDFLARE_API_TOKEN=token` |
+| PowerShell  | `$env:CLOUDFLARE_API_TOKEN = 'token'` |
+| Windows CMD | `set CLOUDFLARE_API_TOKEN=token`      |
 
 **Security:** Never commit tokens. Use `.env` files (gitignored) or secret managers.
 
@@ -22,11 +22,11 @@ CLOUDFLARE_ACCOUNT_ID=your-account-id
 
 ```typescript
 // TypeScript
-import 'dotenv/config';
+import 'dotenv/config'
 
 const client = new Cloudflare({
   apiToken: process.env.CLOUDFLARE_API_TOKEN,
-});
+})
 ```
 
 ```python
@@ -44,16 +44,13 @@ client = Cloudflare(api_token=os.environ["CLOUDFLARE_API_TOKEN"])
 ```typescript
 const client = new Cloudflare({
   apiToken: process.env.CLOUDFLARE_API_TOKEN,
-  timeout: 120000,        // 2 min (default 60s), in milliseconds
-  maxRetries: 5,          // default 2
+  timeout: 120000, // 2 min (default 60s), in milliseconds
+  maxRetries: 5, // default 2
   baseURL: 'https://...', // proxy (rare)
-});
+})
 
 // Per-request overrides
-await client.zones.get(
-  { zone_id: 'zone-id' },
-  { timeout: 5000, maxRetries: 0 }
-);
+await client.zones.get({ zone_id: 'zone-id' }, { timeout: 5000, maxRetries: 0 })
 ```
 
 ### Python
@@ -86,17 +83,18 @@ client.Zones.Get(ctx, "zone-id", option.WithMaxRetries(0))
 
 ## Configuration Options
 
-| Option | TypeScript | Python | Go | Default |
-|--------|-----------|--------|-----|---------|
-| Timeout | `timeout` (ms) | `timeout` (s) | `WithRequestTimeout` | 60s |
-| Retries | `maxRetries` | `max_retries` | `WithMaxRetries` | 2 (Go: 10) |
-| Base URL | `baseURL` | `base_url` | `WithBaseURL` | api.cloudflare.com |
+| Option   | TypeScript     | Python        | Go                   | Default            |
+| -------- | -------------- | ------------- | -------------------- | ------------------ |
+| Timeout  | `timeout` (ms) | `timeout` (s) | `WithRequestTimeout` | 60s                |
+| Retries  | `maxRetries`   | `max_retries` | `WithMaxRetries`     | 2 (Go: 10)         |
+| Base URL | `baseURL`      | `base_url`    | `WithBaseURL`        | api.cloudflare.com |
 
 **Note:** Go SDK has higher default retries (10) than TypeScript/Python (2).
 
 ## Timeout Configuration
 
 **When to increase:**
+
 - Large zone transfers
 - Bulk DNS operations
 - Worker script uploads
@@ -104,7 +102,7 @@ client.Zones.Get(ctx, "zone-id", option.WithMaxRetries(0))
 ```typescript
 const client = new Cloudflare({
   timeout: 300000, // 5 minutes
-});
+})
 ```
 
 ## Retry Configuration
@@ -115,10 +113,10 @@ const client = new Cloudflare({
 
 ```typescript
 // Increase retries for batch operations
-const client = new Cloudflare({ maxRetries: 10 });
+const client = new Cloudflare({ maxRetries: 10 })
 
 // Disable retries for fast-fail
-const fastClient = new Cloudflare({ maxRetries: 0 });
+const fastClient = new Cloudflare({ maxRetries: 0 })
 ```
 
 ## Wrangler CLI Integration

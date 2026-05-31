@@ -89,7 +89,8 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
             const response = await client.callTool({
                 name: 'create_entry',
                 arguments: {
-                    project_number: 1, content: 'Streamable HTTP transport test entry',
+                    project_number: 1,
+                    content: 'Streamable HTTP transport test entry',
                     entry_type: 'test_entry',
                 },
             })

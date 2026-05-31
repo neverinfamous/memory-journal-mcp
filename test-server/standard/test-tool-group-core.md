@@ -22,7 +22,7 @@
 
 ## 1. Zod Boundary & Type Mismatch Matrix
 
-> ⚠️ **IDE Validation Note**: The Antigravity IDE (Cortex) strictly validates `call_mcp_tool` arguments against the JSON schema *before* sending the request. You cannot test intentional Zod Type Mismatches (e.g., `content: 123`) using direct MCP calls, as the IDE will block it locally with a `-32602` error. For type mismatches, rely on the E2E test suite (`npm run test:e2e`) to verify the server's interceptor correctly handles malformed requests from raw clients.
+> ⚠️ **IDE Validation Note**: The Antigravity IDE (Cortex) strictly validates `call_mcp_tool` arguments against the JSON schema _before_ sending the request. You cannot test intentional Zod Type Mismatches (e.g., `content: 123`) using direct MCP calls, as the IDE will block it locally with a `-32602` error. For type mismatches, rely on the E2E test suite (`npm run test:e2e`) to verify the server's interceptor correctly handles malformed requests from raw clients.
 
 For every tool, you must explicitly confirm that Domain Errors return a structured `{success: false}` json object, and **NEVER** surface as raw MCP `-32602` error frames.
 
@@ -42,14 +42,14 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 
 ## 2. Integrity & Boundary Testing
 
-| Test                | Action                                                                                | Verification                                                     |
-| ------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Test                | Action                                                                                                                      | Verification                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Round-Trip          | `create_entry(project_number: 5, content: "RT test", entry_type: "planning")` then `get_entry_by_id(project_number: 5, id)` | All fields persist correctly.                                    |
-| Boundary Max Length | `node test-server/scripts/test-50k-boundary.mjs`                                         | Entry created successfully.                                      |
-| Boundary Empty      | `create_entry(project_number: 5, content: "")`                                                           | Structured validation error.                                     |
-| Maximum Limit       | `get_recent_entries(project_number: 5, limit: 500)`                                                      | Returns 500 or fewer entries.                                    |
-| Limit Exceeded      | `get_recent_entries(project_number: 5, limit: 501)`                                                      | Structured validation error.                                     |
-| Filter Ignored Bug  | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")`                    | ⚠️ SHOULD return 0. If returns all, handler is ignoring filters. |
+| Boundary Max Length | `node test-server/scripts/test-50k-boundary.mjs`                                                                            | Entry created successfully.                                      |
+| Boundary Empty      | `create_entry(project_number: 5, content: "")`                                                                              | Structured validation error.                                     |
+| Maximum Limit       | `get_recent_entries(project_number: 5, limit: 500)`                                                                         | Returns 500 or fewer entries.                                    |
+| Limit Exceeded      | `get_recent_entries(project_number: 5, limit: 501)`                                                                         | Structured validation error.                                     |
+| Filter Ignored Bug  | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")`                                                          | ⚠️ SHOULD return 0. If returns all, handler is ignoring filters. |
 
 ## Success Criteria
 

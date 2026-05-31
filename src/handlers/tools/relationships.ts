@@ -139,7 +139,12 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             group: 'relationships',
             inputSchema: LinkEntriesSchemaMcp,
             outputSchema: LinkEntriesOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const input = LinkEntriesSchema.parse(params)
@@ -241,7 +246,12 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             group: 'relationships',
             inputSchema: VisualizeInputSchemaMcp,
             outputSchema: VisualizationOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(params)
@@ -271,7 +281,8 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             relationship_count: 0,
                             root_entry: input.entry_id ?? null,
                             depth: input.depth,
-                            mermaid: '```mermaid\ngraph TD\n  NoData["No entries found with relationships matching your criteria"]\n```',
+                            mermaid:
+                                '```mermaid\ngraph TD\n  NoData["No entries found with relationships matching your criteria"]\n```',
                             message: 'No entries found with relationships matching your criteria',
                         }
                     }

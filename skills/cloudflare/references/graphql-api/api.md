@@ -60,14 +60,14 @@ Dimensions are fields you can group by via the `dimensions` sub-selection.
 
 ### Time Dimensions
 
-| Dimension | Granularity |
-|-----------|------------|
-| `date` | Day |
-| `datetime` | Exact timestamp |
-| `datetimeMinute` | 1 minute |
-| `datetimeFiveMinutes` | 5 minutes |
-| `datetimeFifteenMinutes` | 15 minutes |
-| `datetimeHour` | 1 hour |
+| Dimension                | Granularity     |
+| ------------------------ | --------------- |
+| `date`                   | Day             |
+| `datetime`               | Exact timestamp |
+| `datetimeMinute`         | 1 minute        |
+| `datetimeFiveMinutes`    | 5 minutes       |
+| `datetimeFifteenMinutes` | 15 minutes      |
+| `datetimeHour`           | 1 hour          |
 
 Workers datasets also support `datetimeSixHours`.
 
@@ -75,20 +75,20 @@ Workers datasets also support `datetimeSixHours`.
 
 83 dimensions available. Key ones:
 
-| Dimension | Description |
-|-----------|-------------|
-| `clientCountryName` | Country of origin |
-| `clientRequestHTTPHost` | Requested hostname |
-| `clientRequestHTTPMethodName` | HTTP method |
-| `clientRequestPath` | URI path |
-| `edgeResponseStatus` | Edge HTTP status code |
-| `cacheStatus` | Cache status (hit, miss, dynamic, etc.) |
-| `coloCode` | Cloudflare datacenter IATA code |
-| `clientIP` / `clientAsn` | Client IP address / ASN |
-| `botScore` / `botManagementDecision` | Bot management score (0-99) / verdict |
-| `wafAttackScore` / `securityAction` | WAF score / firewall action taken |
-| `ja3Hash` / `ja4` | TLS fingerprints |
-| `sampleInterval` | ABR sample interval |
+| Dimension                            | Description                             |
+| ------------------------------------ | --------------------------------------- |
+| `clientCountryName`                  | Country of origin                       |
+| `clientRequestHTTPHost`              | Requested hostname                      |
+| `clientRequestHTTPMethodName`        | HTTP method                             |
+| `clientRequestPath`                  | URI path                                |
+| `edgeResponseStatus`                 | Edge HTTP status code                   |
+| `cacheStatus`                        | Cache status (hit, miss, dynamic, etc.) |
+| `coloCode`                           | Cloudflare datacenter IATA code         |
+| `clientIP` / `clientAsn`             | Client IP address / ASN                 |
+| `botScore` / `botManagementDecision` | Bot management score (0-99) / verdict   |
+| `wafAttackScore` / `securityAction`  | WAF score / firewall action taken       |
+| `ja3Hash` / `ja4`                    | TLS fingerprints                        |
+| `sampleInterval`                     | ABR sample interval                     |
 
 ### Workers Dimensions (workersInvocationsAdaptive)
 
@@ -121,15 +121,15 @@ httpRequestsAdaptiveGroups(
 
 ### Filter Operators
 
-| Operator | Meaning | Example |
-|----------|---------|---------|
-| (none) | equals | `clientCountryName: "US"` |
-| `_gt` / `_lt` | greater / less than | `datetime_gt: "..."` |
-| `_geq` / `_leq` | greater/less or equal | `datetime_geq: "..."` |
-| `_neq` | not equal | `cacheStatus_neq: "hit"` |
-| `_in` / `_notin` | in / not in list | `clientCountryName_in: ["US", "GB"]` |
-| `_like` / `_notlike` | SQL LIKE with `%` | `clientRequestPath_like: "/api/%"` |
-| `_has` / `_hasall` / `_hasany` | array contains | `botDetectionIds_has: "abc"` |
+| Operator                       | Meaning               | Example                              |
+| ------------------------------ | --------------------- | ------------------------------------ |
+| (none)                         | equals                | `clientCountryName: "US"`            |
+| `_gt` / `_lt`                  | greater / less than   | `datetime_gt: "..."`                 |
+| `_geq` / `_leq`                | greater/less or equal | `datetime_geq: "..."`                |
+| `_neq`                         | not equal             | `cacheStatus_neq: "hit"`             |
+| `_in` / `_notin`               | in / not in list      | `clientCountryName_in: ["US", "GB"]` |
+| `_like` / `_notlike`           | SQL LIKE with `%`     | `clientRequestPath_like: "/api/%"`   |
+| `_has` / `_hasall` / `_hasany` | array contains        | `botDetectionIds_has: "abc"`         |
 
 > `_notin` and `_notlike` are in the schema but not in official docs. Confirmed via introspection.
 

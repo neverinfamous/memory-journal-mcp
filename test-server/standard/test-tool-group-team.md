@@ -23,9 +23,9 @@
 
 > **Note:** Type mismatch leakage (e.g., `-32602` raw MCP errors instead of structured `VALIDATION_ERROR`) is now automatically tested in CI via `test-server/scripts/test-team-zod.mjs`.
 
-| Tool                        | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
-| --------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
-| All Team Tools              | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
+| Tool                                           | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
+| ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
+| All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
 | `team_create_entry(project_number: 5)`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
 | `team_update_entry(project_number: 5)`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
 | `team_search_by_date_range(project_number: 5)` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |

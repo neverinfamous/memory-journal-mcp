@@ -133,11 +133,11 @@ export function parseUnreleasedSummary(content: string): UnreleasedSummary | nul
     type CountKey = 'added' | 'changed' | 'fixed' | 'security' | 'removed'
 
     const headerMap: Record<string, CountKey> = {
-        'added': 'added',
-        'changed': 'changed',
-        'fixed': 'fixed',
-        'security': 'security',
-        'removed': 'removed',
+        added: 'added',
+        changed: 'changed',
+        fixed: 'fixed',
+        security: 'security',
+        removed: 'removed',
     }
 
     let currentCategory: CountKey | null = null
@@ -270,8 +270,12 @@ function loadCachedTestHealth(): TestHealth | null {
                 const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
                 fs.closeSync(fd)
                 const badgeContent = buf.toString('utf-8', 0, bytesRead)
-                const unitMatch = /(?<!E2E[_ ]|E2E)Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(badgeContent)
-                const e2eMatch = /E2E(?:[_ ]|%20)*Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(badgeContent)
+                const unitMatch = /(?<!E2E[_ ]|E2E)Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(
+                    badgeContent
+                )
+                const e2eMatch = /E2E(?:[_ ]|%20)*Tests-(\d+)[_ %]*(passed|%20passed)/i.exec(
+                    badgeContent
+                )
                 unitTests = unitMatch?.[1] ? parseInt(unitMatch[1], 10) : 0
                 e2eTests = e2eMatch?.[1] ? parseInt(e2eMatch[1], 10) : 0
             }
@@ -373,8 +377,7 @@ export async function buildSystemContext(
             timeZoneName: 'short',
         })
         const parts = formatter.formatToParts(now)
-        const get = (type: string): string =>
-            parts.find((p) => p.type === type)?.value ?? ''
+        const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? ''
         localTime = `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${get('timeZoneName')}`
     } catch {
         localTime = now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
@@ -397,9 +400,7 @@ export async function buildSystemContext(
     }
 
     // Registry repos
-    const registryRepos = config?.projectRegistry
-        ? Object.keys(config.projectRegistry)
-        : null
+    const registryRepos = config?.projectRegistry ? Object.keys(config.projectRegistry) : null
 
     // IO roots count
     const ioRootCount = config?.allowedIoRoots?.length ?? 0

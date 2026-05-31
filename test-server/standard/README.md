@@ -31,7 +31,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | File                | Phase | Purpose                                                                                 | When to Run |
 | ------------------- | :---: | --------------------------------------------------------------------------------------- | ----------- |
 | `test-schemas.md`   |   9   | **Output Schemas** — Verify all 60 outputSchema tools return `structuredContent`        | After seed  |
-| `test-resources.md` |  10   | **Resources** — All 37 resources (29 static + 8 template, happy + error paths)  | After seed  |
+| `test-resources.md` |  10   | **Resources** — All 37 resources (29 static + 8 template, happy + error paths)          | After seed  |
 | `test-errors.md`    |  11   | **Error Handling** — Prompt handlers, structured error verification, numeric coercion   | After seed  |
 | `test-integrity.md` |  12   | **Data Integrity** — Boundary values, round-trip fidelity, implementation bug detection | After seed  |
 
@@ -64,40 +64,40 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 
 Certain boundary tests (e.g., massive payload execution) exceed typical token context windows and cannot be efficiently run directly via MCP tool payloads. We provide raw Node.js scripts in `test-server/scripts/` to supplement the markdown test workflows:
 
-| Script | Purpose | Associated Workflow |
-|---|---|---|
-| `test-http.mjs` | Verifies HTTP transport 413 Payload Too Large limits | `test-integrity.md` |
-| `test-long-mcp.mjs` | Verifies the maximum `content` length capacity limits (50k/100k boundaries) | `test-integrity.md` |
-| `verify-schemas.mjs` | Programmatically verifies that all output schemas are strictly defined for `structuredContent` compatibility | `test-schemas.md` |
+| Script               | Purpose                                                                                                      | Associated Workflow |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------- |
+| `test-http.mjs`      | Verifies HTTP transport 413 Payload Too Large limits                                                         | `test-integrity.md` |
+| `test-long-mcp.mjs`  | Verifies the maximum `content` length capacity limits (50k/100k boundaries)                                  | `test-integrity.md` |
+| `verify-schemas.mjs` | Programmatically verifies that all output schemas are strictly defined for `structuredContent` compatibility | `test-schemas.md`   |
 
 ## Tool Group Requirements
 
 The following table maps each standard testing prompt to the specific MCP tool groups that must be enabled (e.g., via `--tool-filter`) to execute the test successfully.
 
-| Test Prompt | Primary Focus | Required Tool Groups |
-| ----------- | ------------- | -------------------- |
-| `test-core-admin.md` | Admin / Tagging | `admin`, `backup`, `codemode`, `core`, `search` |
-| `test-core-crud.md` | CRUD Operations | `admin`, `codemode`, `core`, `github` |
-| `test-core-infra.md` | Sandbox / Codemode | `analytics`, `codemode`, `core` |
-| `test-core-io.md` | IO / Export | `codemode`, `io` |
-| `test-core-relationships.md` | Graph Links | `codemode`, `relationships` |
-| `test-core-search.md` | Search | `admin`, `analytics`, `codemode`, `core`, `search` |
-| `test-core-semantic.md` | Semantic Search | `admin`, `analytics`, `codemode`, `search` |
-| `test-errors.md` | General | `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team` |
-| `test-github.md` | GitHub Integrations | `codemode`, `github` |
-| `test-integrity.md` | Data Integrity | `admin`, `analytics`, `codemode`, `core`, `io`, `relationships`, `search` |
-| `test-kanban-lifecycle.md` | Kanban Lifecycles | `codemode`, `github` |
-| `test-payload-optimization.md` | Payload Limitations | `codemode`, `core`, `github`, `search` |
-| `test-resources.md` | General | `analytics`, `codemode`, `core`, `github` |
-| `test-schemas.md` | General | `admin`, `analytics`, `backup`, `codemode`, `core`, `github`, `io`, `relationships`, `search`, `team` |
-| `test-seed.md` | General | `full` |
-| `test-team.md` | Team Operations | `admin`, `codemode`, `team` |
-| `test-tool-group-admin.md` | Admin / Tagging | `admin`, `codemode`, `core` |
-| `test-tool-group-backup.md` | General | `backup`, `codemode`, `io` |
-| `test-tool-group-core.md` | General | `analytics`, `codemode`, `core` |
-| `test-tool-group-github.md` | GitHub Integrations | `codemode`, `github` |
-| `test-tool-group-search.md` | Search | `codemode`, `search` |
-| `test-tool-group-team.md` | Team Operations | `codemode`, `team` |
+| Test Prompt                    | Primary Focus       | Required Tool Groups                                                                                    |
+| ------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `test-core-admin.md`           | Admin / Tagging     | `admin`, `backup`, `codemode`, `core`, `search`                                                         |
+| `test-core-crud.md`            | CRUD Operations     | `admin`, `codemode`, `core`, `github`                                                                   |
+| `test-core-infra.md`           | Sandbox / Codemode  | `analytics`, `codemode`, `core`                                                                         |
+| `test-core-io.md`              | IO / Export         | `codemode`, `io`                                                                                        |
+| `test-core-relationships.md`   | Graph Links         | `codemode`, `relationships`                                                                             |
+| `test-core-search.md`          | Search              | `admin`, `analytics`, `codemode`, `core`, `search`                                                      |
+| `test-core-semantic.md`        | Semantic Search     | `admin`, `analytics`, `codemode`, `search`                                                              |
+| `test-errors.md`               | General             | `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team` |
+| `test-github.md`               | GitHub Integrations | `codemode`, `github`                                                                                    |
+| `test-integrity.md`            | Data Integrity      | `admin`, `analytics`, `codemode`, `core`, `io`, `relationships`, `search`                               |
+| `test-kanban-lifecycle.md`     | Kanban Lifecycles   | `codemode`, `github`                                                                                    |
+| `test-payload-optimization.md` | Payload Limitations | `codemode`, `core`, `github`, `search`                                                                  |
+| `test-resources.md`            | General             | `analytics`, `codemode`, `core`, `github`                                                               |
+| `test-schemas.md`              | General             | `admin`, `analytics`, `backup`, `codemode`, `core`, `github`, `io`, `relationships`, `search`, `team`   |
+| `test-seed.md`                 | General             | `full`                                                                                                  |
+| `test-team.md`                 | Team Operations     | `admin`, `codemode`, `team`                                                                             |
+| `test-tool-group-admin.md`     | Admin / Tagging     | `admin`, `codemode`, `core`                                                                             |
+| `test-tool-group-backup.md`    | General             | `backup`, `codemode`, `io`                                                                              |
+| `test-tool-group-core.md`      | General             | `analytics`, `codemode`, `core`                                                                         |
+| `test-tool-group-github.md`    | GitHub Integrations | `codemode`, `github`                                                                                    |
+| `test-tool-group-search.md`    | Search              | `codemode`, `search`                                                                                    |
+| `test-tool-group-team.md`      | Team Operations     | `codemode`, `team`                                                                                      |
 
 ## Dependency DAG
 

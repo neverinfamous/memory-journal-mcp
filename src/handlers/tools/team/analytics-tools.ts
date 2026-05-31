@@ -38,7 +38,12 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamGetStatisticsSchemaMcp,
             outputSchema: TeamStatisticsOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -73,7 +78,12 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamCrossProjectInsightsSchemaMcp,
             outputSchema: TeamCrossProjectInsightsOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -143,7 +153,12 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamCollaborationMatrixSchemaMcp,
             outputSchema: TeamCollaborationMatrixOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {

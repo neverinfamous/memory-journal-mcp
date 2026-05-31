@@ -182,27 +182,27 @@ src/
 - After splitting `foo.ts` → `foo/` directory: update imports from `./foo.js` → `./foo/index.js`
 - Output schemas: one file per tool group, never inline
 - **Error hierarchy (two valid patterns):**
-  - *Non-adapter servers* (db-mcp, memory-journal-mcp): Full `utils/errors/` decomposition (7 files) with `ErrorFieldsMixin` in `error-response-fields.ts`
-  - *Adapter servers* (postgres-mcp, mysql-mcp): Flat `types/errors.ts` with `ErrorFieldsMixin` in `schemas/error-response-fields.ts`
+  - _Non-adapter servers_ (db-mcp, memory-journal-mcp): Full `utils/errors/` decomposition (7 files) with `ErrorFieldsMixin` in `error-response-fields.ts`
+  - _Adapter servers_ (postgres-mcp, mysql-mcp): Flat `types/errors.ts` with `ErrorFieldsMixin` in `schemas/error-response-fields.ts`
   - Both patterns use the same auto-refinement mechanism and `formatHandlerError()` — the difference is organizational
 - **Logger (two valid patterns):**
-  - *Complex servers*: `utils/logger/` subdirectory (5 files: logger, module-logger, error-codes, types, index)
-  - *Simpler servers*: Flat `utils/logger.ts` + `utils/module-logger.ts` (2 files)
+  - _Complex servers_: `utils/logger/` subdirectory (5 files: logger, module-logger, error-codes, types, index)
+  - _Simpler servers_: Flat `utils/logger.ts` + `utils/module-logger.ts` (2 files)
 - Error classes: importable from both direct path and `types/` barrel (re-exported subset)
 - Shared helpers: `column-validation.ts`, `helpers.ts`, `schemas.ts` per group — no tools registered in these files
 - Connection pool: separate `pool/` directory when pool management has its own lifecycle (health checks, size tuning)
 - Engine error parser: `tools/core/error-parser.ts` maps DB-native error codes to structured errors
 - **Codemode API bridge (two valid patterns):**
-  - *Non-adapter servers*: Single `api.ts` + `api-constants.ts` (aliases, examples, positional maps co-located)
-  - *Adapter servers* (50+ tools): `api/` subdirectory with dedicated `maps.ts`, `group-api.ts`, `aliases.ts`, `normalize.ts`
+  - _Non-adapter servers_: Single `api.ts` + `api-constants.ts` (aliases, examples, positional maps co-located)
+  - _Adapter servers_ (50+ tools): `api/` subdirectory with dedicated `maps.ts`, `group-api.ts`, `aliases.ts`, `normalize.ts`
 - **Server file extraction (progressive decomposition):**
   - When `mcp-server.ts` exceeds ~400 lines, extract into `server/` with dedicated files:
   - `built-in-tools.ts` — server_info, server_health, list_adapters registration
   - `help-resources.ts` — help resource registration filtered by `--tool-filter`
   - `audit-tools.ts` — audit resource + snapshot resource (when audit enabled)
 - **Auth module (two valid patterns):**
-  - *Standard*: Flat 11-file `src/auth/` directory
-  - *Complex servers* (db-mcp): `middleware.ts` → `middleware/index.ts` and `scopes.ts` → `scopes/index.ts` when these files exceed ~500 lines
+  - _Standard_: Flat 11-file `src/auth/` directory
+  - _Complex servers_ (db-mcp): `middleware.ts` → `middleware/index.ts` and `scopes.ts` → `scopes/index.ts` when these files exceed ~500 lines
 - **Audit subsystem:** `src/audit/` directory (4 files + barrel) for servers with `--audit-log`. Separate from `utils/` because it has its own lifecycle (buffered writes, log rotation, graceful close)
 - **Path validation:** `utils/validate-path.ts` for tools that accept file paths. Resolves canonical path, rejects `..` traversal, enforces `ALLOWED_IO_ROOTS` boundary
 - **Insights manager:** `utils/insights-manager.ts` for servers with analysis/memo capabilities. In-memory bounded list exposed via `memo://insights` resource

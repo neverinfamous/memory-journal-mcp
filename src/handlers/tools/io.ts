@@ -171,7 +171,12 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             group: 'io',
             inputSchema: ExportEntriesSchemaMcp,
             outputSchema: ExportEntriesOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = ExportEntriesSchema.parse(params)

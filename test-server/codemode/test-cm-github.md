@@ -218,8 +218,8 @@ const all = await mj.github.getRepoInsights({ sections: 'all' })
 
 // Copilot reviews (use a dynamic PR number)
 const prs = await mj.github.getGithubPrs({ limit: 1 })
-const prNum = prs.pullRequests?.[0]?.number;
-let reviewed = null;
+const prNum = prs.pullRequests?.[0]?.number
+let reviewed = null
 if (prNum) {
   reviewed = await mj.github.getCopilotReviews({ pr_number: prNum })
 }
@@ -229,7 +229,7 @@ return {
   hasForks: typeof stars.forks === 'number',
   trafficHasClones: traffic.traffic?.clones !== undefined || traffic.error !== undefined,
   allSections: !!all,
-  reviewState: reviewed ? reviewed.state || (reviewed.success === false ? "none" : null) : "none",
+  reviewState: reviewed ? reviewed.state || (reviewed.success === false ? 'none' : null) : 'none',
   reviewComments: reviewed ? reviewed.commentCount : 0,
 }
 ```

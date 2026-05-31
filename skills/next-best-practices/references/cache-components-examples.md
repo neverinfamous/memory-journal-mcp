@@ -31,7 +31,7 @@ import { updateTag } from 'next/cache'
 
 export async function updateProduct(id: string, data: FormData) {
   await db.products.update({ where: { id }, data })
-  updateTag(`product-${id}`)  // Immediate - same request sees fresh data
+  updateTag(`product-${id}`) // Immediate - same request sees fresh data
 }
 ```
 
@@ -46,7 +46,7 @@ import { revalidateTag } from 'next/cache'
 
 export async function createPost(data: FormData) {
   await db.posts.create({ data })
-  revalidateTag('posts')  // Background - next request sees fresh data
+  revalidateTag('posts') // Background - next request sees fresh data
 }
 ```
 
@@ -62,7 +62,7 @@ export async function createPost(data: FormData) {
 // Wrong - runtime API inside use cache
 async function CachedProfile() {
   'use cache'
-  const session = (await cookies()).get('session')?.value  // Error!
+  const session = (await cookies()).get('session')?.value // Error!
   return <div>{session}</div>
 }
 
@@ -87,7 +87,7 @@ For compliance requirements when you can't refactor:
 ```tsx
 async function getData() {
   'use cache: private'
-  const session = (await cookies()).get('session')?.value  // Allowed
+  const session = (await cookies()).get('session')?.value // Allowed
   return fetchData(session)
 }
 ```
@@ -99,6 +99,7 @@ async function getData() {
 > **CRITICAL FAILURE MODE:** Caching user-specific or authorization-bound data globally will leak PII (Personally Identifiable Information) across different users' sessions.
 
 **Rules for Auth Boundaries:**
+
 1. **Never use standard `'use cache'` for PII:** Standard cache entries are shared globally. If a component fetches user profile data using an auth token, you MUST NOT use the standard global `'use cache'`.
 2. **Explicitly include user identities in cache keys:** If you must cache per-user data, extract the user ID in a dynamic context and pass it as an argument so it becomes part of the automatic cache key (e.g., `async function CachedProfile({ userId }) { 'use cache'; ... }`).
 3. **Use `'use cache: private'` cautiously:** This ensures data isn't shared across requests, but relies heavily on correct platform caching configuration.
@@ -109,6 +110,7 @@ async function getData() {
 ## Cache Key Generation
 
 Cache keys are automatic based on:
+
 - **Build ID** - invalidates all caches on deploy
 - **Function ID** - hash of function location
 - **Serializable arguments** - props become part of key
@@ -138,7 +140,9 @@ export default function DashboardPage() {
   return (
     <>
       {/* Static shell - instant from CDN */}
-      <header><h1>Dashboard</h1></header>
+      <header>
+        <h1>Dashboard</h1>
+      </header>
       <nav>...</nav>
 
       {/* Cached - fast, revalidates hourly */}
@@ -164,7 +168,7 @@ async function Stats() {
 async function Notifications() {
   const userId = (await cookies()).get('userId')?.value
   const notifications = await db.notifications.findMany({
-    where: { userId, read: false }
+    where: { userId, read: false },
   })
   return <NotificationList items={notifications} />
 }
@@ -174,13 +178,13 @@ async function Notifications() {
 
 ## Migration from Previous Versions
 
-| Old Config | Replacement |
-|-----------|-------------|
-| `experimental.ppr` | `cacheComponents: true` |
-| `dynamic = 'force-dynamic'` | Remove (default behavior) |
-| `dynamic = 'force-static'` | `'use cache'` + `cacheLife('max')` |
-| `revalidate = N` | `cacheLife({ revalidate: N })` |
-| `unstable_cache()` | `'use cache'` directive |
+| Old Config                  | Replacement                        |
+| --------------------------- | ---------------------------------- |
+| `experimental.ppr`          | `cacheComponents: true`            |
+| `dynamic = 'force-dynamic'` | Remove (default behavior)          |
+| `dynamic = 'force-static'`  | `'use cache'` + `cacheLife('max')` |
+| `revalidate = N`            | `cacheLife({ revalidate: N })`     |
+| `unstable_cache()`          | `'use cache'` directive            |
 
 ### Migrating `unstable_cache` to `use cache`
 
@@ -191,14 +195,10 @@ async function Notifications() {
 ```tsx
 import { unstable_cache } from 'next/cache'
 
-const getCachedUser = unstable_cache(
-  async (id) => getUser(id),
-  ['my-app-user'],
-  {
-    tags: ['users'],
-    revalidate: 60,
-  }
-)
+const getCachedUser = unstable_cache(async (id) => getUser(id), ['my-app-user'], {
+  tags: ['users'],
+  revalidate: 60,
+})
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -227,6 +227,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 ```
 
 Key differences:
+
 - **No manual cache keys** - `use cache` generates keys automatically from function arguments and closures. The `keyParts` array from `unstable_cache` is no longer needed.
 - **Tags** - Replace `options.tags` with `cacheTag()` calls inside the function.
 - **Revalidation** - Replace `options.revalidate` with `cacheLife({ revalidate: N })` or a built-in profile like `cacheLife('minutes')`.

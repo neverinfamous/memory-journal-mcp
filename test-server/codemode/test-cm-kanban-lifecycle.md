@@ -55,7 +55,7 @@ try {
     repo: REPO,
   })
   if (initBoard.success === false) throw new Error(initBoard.error || 'Failed to get Kanban board')
-  
+
   let initItemId = null
   for (const col of initBoard.columns) {
     for (const item of col.items) {
@@ -70,7 +70,9 @@ try {
       repo: REPO,
     })
     if (!deleteInitResult.success)
-      throw new Error(`Initial delete failed: ${deleteInitResult.error || JSON.stringify(deleteInitResult)}`)
+      throw new Error(
+        `Initial delete failed: ${deleteInitResult.error || JSON.stringify(deleteInitResult)}`
+      )
   }
 
   // Now add it back to test addKanbanItem
@@ -90,7 +92,8 @@ try {
     owner: OWNER,
     repo: REPO,
   })
-  if (projectInfo.success === false) throw new Error(projectInfo.error || 'Failed to get Kanban board')
+  if (projectInfo.success === false)
+    throw new Error(projectInfo.error || 'Failed to get Kanban board')
   const targetOption = projectInfo.statusOptions.find((o) => o.name === 'Ready')
 
   const moveResult = await mj.github.moveKanbanItem({
@@ -109,15 +112,18 @@ try {
   for (let i = 0; i < 3; i++) {
     // Spin loop for 1.5 seconds to allow GraphQL index to catch up
     const start = Date.now()
-    while (Date.now() - start < 1500) { /* spin */ }
+    while (Date.now() - start < 1500) {
+      /* spin */
+    }
 
     const verifyProject = await mj.github.getKanbanBoard({
       project_number: PROJECT_NUM,
       owner: OWNER,
       repo: REPO,
     })
-    if (verifyProject.success === false) throw new Error(verifyProject.error || 'Failed to get Kanban board')
-    
+    if (verifyProject.success === false)
+      throw new Error(verifyProject.error || 'Failed to get Kanban board')
+
     foundItem = null // Reset for this iteration
 
     for (const col of verifyProject.columns) {
@@ -133,7 +139,10 @@ try {
   }
 
   if (!foundItem) {
-    _stages.push({ step: 'verifyBoardStructure', warning: 'Topological verification skipped due to extended eventual consistency delay' })
+    _stages.push({
+      step: 'verifyBoardStructure',
+      warning: 'Topological verification skipped due to extended eventual consistency delay',
+    })
   } else if (foundItem.status !== 'Ready') {
     throw new Error(`Item status is ${foundItem.status}, expected Ready`)
   } else {

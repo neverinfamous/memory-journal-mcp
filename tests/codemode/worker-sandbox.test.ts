@@ -101,7 +101,9 @@ describe('WorkerSandbox', () => {
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
         // The worker proxy now traps unknown groups and rejects gracefully
-        expect(String(result.result)).toContain("Group or property 'nonexistent' is not found on 'mj'")
+        expect(String(result.result)).toContain(
+            "Group or property 'nonexistent' is not found on 'mj'"
+        )
     })
 
     it('should handle RPC calls to non-existent methods within a valid group', async () => {
@@ -217,11 +219,11 @@ describe('WorkerSandbox', () => {
         const sandbox = new WorkerSandbox()
         const result = await sandbox.execute('return 1', {})
         expect(result.success).toBe(true)
-        
+
         process.env['CODE_MODE_MAX_RESULT_SIZE'] = 'invalid'
         const result2 = await sandbox.execute('return 1', {})
         expect(result2.success).toBe(true)
-        
+
         process.env['CODE_MODE_MAX_RESULT_SIZE'] = oldEnv
     })
 
@@ -229,10 +231,15 @@ describe('WorkerSandbox', () => {
         const sandbox = new WorkerSandbox()
         const code = 'while(true) {}'
         // Pass timeout 50ms so it terminates naturally
-        const execPromise = sandbox.execute(code, { group: { allowed: async () => 1 }}, undefined, 50)
-        
-        await new Promise(resolve => setTimeout(resolve, 10))
-        
+        const execPromise = sandbox.execute(
+            code,
+            { group: { allowed: async () => 1 } },
+            undefined,
+            50
+        )
+
+        await new Promise((resolve) => setTimeout(resolve, 10))
+
         const hostPort = sandbox['currentExecution']!.hostPort
         let sentError = false
         hostPort.on('message', (msg) => {
@@ -246,16 +253,16 @@ describe('WorkerSandbox', () => {
             }
             originalPostMessage(msg)
         }
-        
+
         // Simulate a malicious worker sending a direct RPC message for a method it doesn't have access to
         hostPort.emit('message', {
             type: 'RPC',
             id: 999,
             group: 'group',
             method: 'unauthorized',
-            args: []
+            args: [],
         })
-        
+
         await execPromise
         expect(sentError).toBe(true)
     })
@@ -266,12 +273,12 @@ describe('WorkerSandbox', () => {
         // We bypass the worker entirely and simulate a hard crash (e.g., OOM or uncatchable timeout)
         // by emitting the 'exit' event directly on the worker instance.
         const execPromise = sandbox.execute(code, {}, undefined, 50000)
-        
-        await new Promise(resolve => setTimeout(resolve, 50))
-        
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
         // Simulate worker thread crashing with code 1
         sandbox['worker']?.emit('exit', 1)
-        
+
         const result = await execPromise
         expect(result.success).toBe(false)
         expect(result.error).toContain('Worker exited')

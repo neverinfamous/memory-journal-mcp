@@ -22,17 +22,17 @@ documentation? Are powerful features prominently surfaced or buried?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Every capability has a dedicated section or prominent mention. No hidden features. |
-| 4 | Major features well-covered, 1–2 minor capabilities only findable by digging. |
-| 3 | Core features documented, but 3+ capabilities buried in config tables or footnotes. |
-| 2 | Several important features only mentioned in env var tables or code comments. |
-| 1 | Documentation covers <50% of actual capabilities. |
+| Score | Criteria                                                                            |
+| ----- | ----------------------------------------------------------------------------------- |
+| 5     | Every capability has a dedicated section or prominent mention. No hidden features.  |
+| 4     | Major features well-covered, 1–2 minor capabilities only findable by digging.       |
+| 3     | Core features documented, but 3+ capabilities buried in config tables or footnotes. |
+| 2     | Several important features only mentioned in env var tables or code comments.       |
+| 1     | Documentation covers <50% of actual capabilities.                                   |
 
 ### Common Anti-Patterns
 
-- Listing features in a dense table without explanation of *why* they matter
+- Listing features in a dense table without explanation of _why_ they matter
 - Documenting env vars without describing the feature they enable
 - Mentioning a capability once in passing without a dedicated section
 
@@ -54,13 +54,13 @@ seconds of a visitor scanning the page?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Value prop clear in first 5 lines. Compelling tagline. Professional badges. |
-| 4 | Good opening, but takes 10+ lines to understand the value. |
-| 3 | Technical description leads, user benefit implied but not stated. |
-| 2 | Opens with installation instructions or config before explaining what it does. |
-| 1 | No clear value proposition in first screen. |
+| Score | Criteria                                                                       |
+| ----- | ------------------------------------------------------------------------------ |
+| 5     | Value prop clear in first 5 lines. Compelling tagline. Professional badges.    |
+| 4     | Good opening, but takes 10+ lines to understand the value.                     |
+| 3     | Technical description leads, user benefit implied but not stated.              |
+| 2     | Opens with installation instructions or config before explaining what it does. |
+| 1     | No clear value proposition in first screen.                                    |
 
 ### Common Anti-Patterns
 
@@ -86,13 +86,13 @@ find what they need quickly?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Clear hierarchy, scannable headings, progressive disclosure. |
-| 4 | Good structure, 1–2 sections could be better organized. |
-| 3 | Flat structure — everything at the same level of detail. |
-| 2 | Important sections buried below less important content. |
-| 1 | No discernible structure. Random ordering of sections. |
+| Score | Criteria                                                     |
+| ----- | ------------------------------------------------------------ |
+| 5     | Clear hierarchy, scannable headings, progressive disclosure. |
+| 4     | Good structure, 1–2 sections could be better organized.      |
+| 3     | Flat structure — everything at the same level of detail.     |
+| 2     | Important sections buried below less important content.      |
+| 1     | No discernible structure. Random ordering of sections.       |
 
 ### Common Anti-Patterns
 
@@ -119,13 +119,13 @@ to improve comprehension and engagement?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Rich visual elements. Diagrams, badges, callouts, tables. Polished. |
-| 4 | Good visual elements, 1–2 areas could benefit from a diagram or table. |
-| 3 | Badges and code blocks present, but no diagrams or screenshots. |
-| 2 | Minimal formatting. Mostly prose with few visual aids. |
-| 1 | Wall of text. No badges, no diagrams, no tables. |
+| Score | Criteria                                                               |
+| ----- | ---------------------------------------------------------------------- |
+| 5     | Rich visual elements. Diagrams, badges, callouts, tables. Polished.    |
+| 4     | Good visual elements, 1–2 areas could benefit from a diagram or table. |
+| 3     | Badges and code blocks present, but no diagrams or screenshots.        |
+| 2     | Minimal formatting. Mostly prose with few visual aids.                 |
+| 1     | Wall of text. No badges, no diagrams, no tables.                       |
 
 ### Common Anti-Patterns
 
@@ -151,17 +151,17 @@ this project unique compared to alternatives?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Clear, evidence-backed differentiation. Reader knows exactly why to choose this. |
-| 4 | Good positioning, but 1–2 differentiators could be stronger. |
-| 3 | Features listed but not positioned against alternatives. |
-| 2 | Generic descriptions that could apply to any similar project. |
-| 1 | No differentiation. Reader can't tell why this exists. |
+| Score | Criteria                                                                         |
+| ----- | -------------------------------------------------------------------------------- |
+| 5     | Clear, evidence-backed differentiation. Reader knows exactly why to choose this. |
+| 4     | Good positioning, but 1–2 differentiators could be stronger.                     |
+| 3     | Features listed but not positioned against alternatives.                         |
+| 2     | Generic descriptions that could apply to any similar project.                    |
+| 1     | No differentiation. Reader can't tell why this exists.                           |
 
 ### Common Anti-Patterns
 
-- "What Sets Us Apart" that lists features without explaining *why* they matter
+- "What Sets Us Apart" that lists features without explaining _why_ they matter
 - Using superlatives ("best", "fastest") without supporting evidence
 - Comparing against imaginary competitors instead of real alternatives
 
@@ -183,13 +183,13 @@ first successful use?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Copy-paste Quick Start, multiple paths, <5 minutes to first success. |
-| 4 | Clear Quick Start, but 1 path could be smoother. |
-| 3 | Quick Start exists but requires additional context or troubleshooting. |
-| 2 | No Quick Start. User must assemble config from scattered sections. |
-| 1 | Broken or misleading setup instructions. |
+| Score | Criteria                                                               |
+| ----- | ---------------------------------------------------------------------- |
+| 5     | Copy-paste Quick Start, multiple paths, <5 minutes to first success.   |
+| 4     | Clear Quick Start, but 1 path could be smoother.                       |
+| 3     | Quick Start exists but requires additional context or troubleshooting. |
+| 2     | No Quick Start. User must assemble config from scattered sections.     |
+| 1     | Broken or misleading setup instructions.                               |
 
 ### Common Anti-Patterns
 
@@ -216,13 +216,13 @@ distribution platforms.
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | All platforms have optimized, current, platform-appropriate content. |
-| 4 | Most platforms covered, 1 platform has stale or minimal content. |
-| 3 | Primary README good, but Docker/npm/registry descriptions are basic. |
-| 2 | Only README maintained. Other platforms have minimal or default content. |
-| 1 | No platform-specific optimization. Registry listing missing or broken. |
+| Score | Criteria                                                                 |
+| ----- | ------------------------------------------------------------------------ |
+| 5     | All platforms have optimized, current, platform-appropriate content.     |
+| 4     | Most platforms covered, 1 platform has stale or minimal content.         |
+| 3     | Primary README good, but Docker/npm/registry descriptions are basic.     |
+| 2     | Only README maintained. Other platforms have minimal or default content. |
+| 1     | No platform-specific optimization. Registry listing missing or broken.   |
 
 ### Common Anti-Patterns
 
@@ -248,13 +248,13 @@ with the same numbers?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Perfect alignment. All surfaces tell the same story. |
-| 4 | Minor inconsistencies (e.g., tool count off by 1 in one surface). |
-| 3 | Noticeable inconsistencies in 2–3 areas. |
-| 2 | Significant conflicts (different feature lists, contradictory claims). |
-| 1 | Surfaces actively contradict each other. |
+| Score | Criteria                                                               |
+| ----- | ---------------------------------------------------------------------- |
+| 5     | Perfect alignment. All surfaces tell the same story.                   |
+| 4     | Minor inconsistencies (e.g., tool count off by 1 in one surface).      |
+| 3     | Noticeable inconsistencies in 2–3 areas.                               |
+| 2     | Significant conflicts (different feature lists, contradictory claims). |
+| 1     | Surfaces actively contradict each other.                               |
 
 ### Common Anti-Patterns
 
@@ -280,13 +280,13 @@ confident, audience-appropriate voice?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Consistent, confident, professional. Reads like polished product docs. |
-| 4 | Good tone overall, minor inconsistencies between sections. |
-| 3 | Mix of formal and informal. Some sections feel like different authors. |
-| 2 | Overly technical or academic. Not inviting to new users. |
-| 1 | Inconsistent, uncertain, or defensive tone throughout. |
+| Score | Criteria                                                               |
+| ----- | ---------------------------------------------------------------------- |
+| 5     | Consistent, confident, professional. Reads like polished product docs. |
+| 4     | Good tone overall, minor inconsistencies between sections.             |
+| 3     | Mix of formal and informal. Some sections feel like different authors. |
+| 2     | Overly technical or academic. Not inviting to new users.               |
+| 1     | Inconsistent, uncertain, or defensive tone throughout.                 |
 
 ### Common Anti-Patterns
 
@@ -312,13 +312,13 @@ GitHub search, and registry discovery?
 
 ### Scoring Guide
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Optimized for discovery. Strong keywords, topics, and external links. |
-| 4 | Good keyword coverage, 1–2 discovery channels underutilized. |
-| 3 | Basic SEO. GitHub topics set but not optimized. |
-| 2 | Minimal SEO effort. Few topics, generic description. |
-| 1 | No SEO consideration. Project is effectively invisible to search. |
+| Score | Criteria                                                              |
+| ----- | --------------------------------------------------------------------- |
+| 5     | Optimized for discovery. Strong keywords, topics, and external links. |
+| 4     | Good keyword coverage, 1–2 discovery channels underutilized.          |
+| 3     | Basic SEO. GitHub topics set but not optimized.                       |
+| 2     | Minimal SEO effort. Few topics, generic description.                  |
+| 1     | No SEO consideration. Project is effectively invisible to search.     |
 
 ### Common Anti-Patterns
 

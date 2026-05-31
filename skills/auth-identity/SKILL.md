@@ -39,7 +39,7 @@ This skill outlines the strict security requirements and architectural patterns 
 
 - **Defense in Depth**: UI-level checks (e.g., hiding a button) are not security. You MUST enforce authorization at the API/Controller layer.
 - **Middleware**: Implement route-level middleware to protect endpoints.
-- **Ownership Validation**: Beyond checking if a user is an "admin" or "user", always verify that the user *owns* the specific resource they are trying to access (e.g., `WHERE user_id = ?`).
+- **Ownership Validation**: Beyond checking if a user is an "admin" or "user", always verify that the user _owns_ the specific resource they are trying to access (e.g., `WHERE user_id = ?`).
 
 ## 5. Common Providers (NextAuth, Clerk, Auth0)
 

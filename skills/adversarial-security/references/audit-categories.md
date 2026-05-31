@@ -25,10 +25,10 @@ defenses in Phase 2.
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
+| CWE      | Name                                           |
+| -------- | ---------------------------------------------- |
 | CWE-1395 | Dependency on Vulnerable Third-Party Component |
-| CWE-1104 | Use of Unmaintained Third-Party Components |
+| CWE-1104 | Use of Unmaintained Third-Party Components     |
 
 ### Vulnerable Patterns
 
@@ -77,12 +77,12 @@ defenses in Phase 2.
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
-| CWE-798 | Use of Hard-coded Credentials |
-| CWE-200 | Exposure of Sensitive Information |
-| CWE-532 | Insertion of Sensitive Information into Log File |
-| CWE-312 | Cleartext Storage of Sensitive Information |
+| CWE     | Name                                              |
+| ------- | ------------------------------------------------- |
+| CWE-798 | Use of Hard-coded Credentials                     |
+| CWE-200 | Exposure of Sensitive Information                 |
+| CWE-532 | Insertion of Sensitive Information into Log File  |
+| CWE-312 | Cleartext Storage of Sensitive Information        |
 | CWE-540 | Inclusion of Sensitive Information in Source Code |
 
 ### Vulnerable Patterns
@@ -146,55 +146,55 @@ DATABASE_URL=postgres://user:password@localhost:5432/dbname
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
-| CWE-89 | SQL Injection |
-| CWE-78 | OS Command Injection |
-| CWE-22 | Path Traversal |
+| CWE      | Name                                                   |
+| -------- | ------------------------------------------------------ |
+| CWE-89   | SQL Injection                                          |
+| CWE-78   | OS Command Injection                                   |
+| CWE-22   | Path Traversal                                         |
 | CWE-1321 | Improperly Controlled Modification of Object Prototype |
-| CWE-1333 | Inefficient Regular Expression Complexity (ReDoS) |
-| CWE-94 | Improper Control of Code Generation (Code Injection) |
-| CWE-20 | Improper Input Validation |
+| CWE-1333 | Inefficient Regular Expression Complexity (ReDoS)      |
+| CWE-94   | Improper Control of Code Generation (Code Injection)   |
+| CWE-20   | Improper Input Validation                              |
 
 ### Vulnerable Patterns
 
 ```typescript
 // SQL injection via string interpolation
-const query = `SELECT * FROM ${tableName} WHERE id = ${userId}`;
+const query = `SELECT * FROM ${tableName} WHERE id = ${userId}`
 
 // Command injection
-exec(`git log --oneline ${userInput}`);
+exec(`git log --oneline ${userInput}`)
 
 // Path traversal
-const filePath = path.join(baseDir, userInput);
-fs.readFileSync(filePath); // userInput could be "../../etc/passwd"
+const filePath = path.join(baseDir, userInput)
+fs.readFileSync(filePath) // userInput could be "../../etc/passwd"
 
 // Prototype pollution
-Object.assign(target, untrustedInput);
+Object.assign(target, untrustedInput)
 
 // ReDoS-vulnerable regex
-const pattern = /^(a+)+$/; // catastrophic backtracking
+const pattern = /^(a+)+$/ // catastrophic backtracking
 ```
 
 ### Secure Patterns
 
 ```typescript
 // Parameterized query
-db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+db.prepare('SELECT * FROM users WHERE id = ?').get(userId)
 
 // Identifier sanitization + parameterized values
-const safeName = sanitizeIdentifier(tableName);
-db.prepare(`SELECT * FROM ${safeName} WHERE id = ?`).get(userId);
+const safeName = sanitizeIdentifier(tableName)
+db.prepare(`SELECT * FROM ${safeName} WHERE id = ?`).get(userId)
 
 // Path traversal prevention
-const resolved = path.resolve(baseDir, userInput);
+const resolved = path.resolve(baseDir, userInput)
 if (!resolved.startsWith(path.resolve(baseDir))) {
-  throw new ValidationError("Path traversal detected");
+  throw new ValidationError('Path traversal detected')
 }
 
 // Prototype pollution guard
-const safe = Object.create(null);
-Object.assign(safe, untrustedInput);
+const safe = Object.create(null)
+Object.assign(safe, untrustedInput)
 ```
 
 ### Depth: Paranoid
@@ -227,49 +227,48 @@ Object.assign(safe, untrustedInput);
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
-| CWE-287 | Improper Authentication |
-| CWE-862 | Missing Authorization |
-| CWE-863 | Incorrect Authorization |
-| CWE-352 | Cross-Site Request Forgery (CSRF) |
-| CWE-346 | Origin Validation Error |
-| CWE-208 | Observable Timing Discrepancy |
+| CWE     | Name                                                      |
+| ------- | --------------------------------------------------------- |
+| CWE-287 | Improper Authentication                                   |
+| CWE-862 | Missing Authorization                                     |
+| CWE-863 | Incorrect Authorization                                   |
+| CWE-352 | Cross-Site Request Forgery (CSRF)                         |
+| CWE-346 | Origin Validation Error                                   |
+| CWE-208 | Observable Timing Discrepancy                             |
 | CWE-307 | Improper Restriction of Excessive Authentication Attempts |
 
 ### Vulnerable Patterns
 
 ```typescript
 // Missing auth check on endpoint
-app.post("/admin/delete-user", (req, res) => {
-  db.deleteUser(req.body.userId); // no auth!
-});
+app.post('/admin/delete-user', (req, res) => {
+  db.deleteUser(req.body.userId) // no auth!
+})
 
 // Non-constant-time comparison
-if (token === expectedToken) { /* vulnerable to timing */ }
+if (token === expectedToken) {
+  /* vulnerable to timing */
+}
 
 // Token in URL (visible in logs, referrer, history)
-fetch(`/api/data?token=${apiToken}`);
+fetch(`/api/data?token=${apiToken}`)
 ```
 
 ### Secure Patterns
 
 ```typescript
 // Auth middleware with scope check
-app.post("/admin/delete-user", authMiddleware, requireScope("admin"),
-  (req, res) => { /* ... */ }
-);
+app.post('/admin/delete-user', authMiddleware, requireScope('admin'), (req, res) => {
+  /* ... */
+})
 
 // Constant-time comparison
-crypto.timingSafeEqual(
-  Buffer.from(token),
-  Buffer.from(expectedToken)
-);
+crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expectedToken))
 
 // Token in header
-fetch("/api/data", {
-  headers: { "Authorization": `Bearer ${apiToken}` }
-});
+fetch('/api/data', {
+  headers: { Authorization: `Bearer ${apiToken}` },
+})
 ```
 
 ---
@@ -294,43 +293,43 @@ fetch("/api/data", {
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
-| CWE-319 | Cleartext Transmission of Sensitive Information |
-| CWE-693 | Protection Mechanism Failure |
-| CWE-16 | Configuration |
-| CWE-400 | Uncontrolled Resource Consumption |
+| CWE      | Name                                              |
+| -------- | ------------------------------------------------- |
+| CWE-319  | Cleartext Transmission of Sensitive Information   |
+| CWE-693  | Protection Mechanism Failure                      |
+| CWE-16   | Configuration                                     |
+| CWE-400  | Uncontrolled Resource Consumption                 |
 | CWE-1275 | Sensitive Cookie with Improper SameSite Attribute |
 
 ### Vulnerable Patterns
 
 ```typescript
 // Missing security headers
-app.listen(3000); // no helmet, no manual headers
+app.listen(3000) // no helmet, no manual headers
 
 // No body size limit
-app.use(express.json()); // default: no limit
+app.use(express.json()) // default: no limit
 
 // No timeout — vulnerable to slowloris
-http.createServer(handler).listen(3000);
+http.createServer(handler).listen(3000)
 ```
 
 ### Secure Patterns
 
 ```typescript
 // Comprehensive security headers
-res.setHeader("X-Content-Type-Options", "nosniff");
-res.setHeader("X-Frame-Options", "DENY");
-res.setHeader("Content-Security-Policy", "default-src 'none'");
-res.setHeader("Referrer-Policy", "no-referrer");
-res.setHeader("Cache-Control", "no-store");
+res.setHeader('X-Content-Type-Options', 'nosniff')
+res.setHeader('X-Frame-Options', 'DENY')
+res.setHeader('Content-Security-Policy', "default-src 'none'")
+res.setHeader('Referrer-Policy', 'no-referrer')
+res.setHeader('Cache-Control', 'no-store')
 
 // Body size limit
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: '1mb' }))
 
 // Request timeout
-server.requestTimeout = 30_000;
-server.headersTimeout = 10_000;
+server.requestTimeout = 30_000
+server.headersTimeout = 10_000
 ```
 
 ---
@@ -354,10 +353,10 @@ server.headersTimeout = 10_000;
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
-| CWE-250 | Execution with Unnecessary Privileges |
-| CWE-269 | Improper Privilege Management |
+| CWE     | Name                                             |
+| ------- | ------------------------------------------------ |
+| CWE-250 | Execution with Unnecessary Privileges            |
+| CWE-269 | Improper Privilege Management                    |
 | CWE-532 | Insertion of Sensitive Information into Log File |
 
 ### Vulnerable Patterns
@@ -425,11 +424,11 @@ check for `docker-compose.yml` or CI workflows that build Docker images.
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
+| CWE     | Name                                                     |
+| ------- | -------------------------------------------------------- |
 | CWE-829 | Inclusion of Functionality from Untrusted Control Sphere |
-| CWE-311 | Missing Encryption of Sensitive Data |
-| CWE-693 | Protection Mechanism Failure |
+| CWE-311 | Missing Encryption of Sensitive Data                     |
+| CWE-693 | Protection Mechanism Failure                             |
 
 ### Vulnerable Patterns
 
@@ -490,11 +489,11 @@ jobs:
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
+| CWE     | Name                                                         |
+| ------- | ------------------------------------------------------------ |
 | CWE-209 | Generation of Error Message Containing Sensitive Information |
-| CWE-497 | Exposure of Sensitive System Information |
-| CWE-215 | Insertion of Sensitive Information Into Debugging Code |
+| CWE-497 | Exposure of Sensitive System Information                     |
+| CWE-215 | Insertion of Sensitive Information Into Debugging Code       |
 
 ### Vulnerable Patterns
 
@@ -549,12 +548,12 @@ catch (error) {
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
-| CWE-829 | Inclusion of Functionality from Untrusted Control Sphere |
-| CWE-1395 | Dependency on Vulnerable Third-Party Component |
-| CWE-1104 | Use of Unmaintained Third-Party Components |
-| CWE-506 | Embedded Malicious Code |
+| CWE      | Name                                                     |
+| -------- | -------------------------------------------------------- |
+| CWE-829  | Inclusion of Functionality from Untrusted Control Sphere |
+| CWE-1395 | Dependency on Vulnerable Third-Party Component           |
+| CWE-1104 | Use of Unmaintained Third-Party Components               |
+| CWE-506  | Embedded Malicious Code                                  |
 
 ### Vulnerable Patterns
 
@@ -594,12 +593,12 @@ catch (error) {
 
 This category applies to **all project types** with graceful degradation:
 
-| Project Type | Depth | Rationale |
-| --- | --- | --- |
-| `mcp-server` | Full | Primary target — all checks apply |
-| `web-app` | Informational | Check for tool-like interfaces, schema descriptions |
-| `cli-tool` | Informational | Check for plugin/extension metadata that could be poisoned |
-| `library` | Informational | Check for exported type descriptions consumed by agents |
+| Project Type | Depth         | Rationale                                                  |
+| ------------ | ------------- | ---------------------------------------------------------- |
+| `mcp-server` | Full          | Primary target — all checks apply                          |
+| `web-app`    | Informational | Check for tool-like interfaces, schema descriptions        |
+| `cli-tool`   | Informational | Check for plugin/extension metadata that could be poisoned |
+| `library`    | Informational | Check for exported type descriptions consumed by agents    |
 
 ### What to Look For
 
@@ -624,11 +623,11 @@ This category applies to **all project types** with graceful degradation:
 
 ### Common CWEs
 
-| CWE | Name |
-| --- | --- |
-| CWE-77 | Improper Neutralization of Special Elements used in a Command |
-| CWE-862 | Missing Authorization |
-| CWE-863 | Incorrect Authorization |
+| CWE      | Name                                                          |
+| -------- | ------------------------------------------------------------- |
+| CWE-77   | Improper Neutralization of Special Elements used in a Command |
+| CWE-862  | Missing Authorization                                         |
+| CWE-863  | Incorrect Authorization                                       |
 | CWE-1059 | Insufficient Technical Documentation (misleading annotations) |
 
 ### Vulnerable Patterns
@@ -695,15 +694,15 @@ if (!context.hasScope("write")) {
 When the target is an MCP server, additionally verify:
 
 - [ ] Every tool has explicit `annotations` with `readOnlyHint` and
-  `destructiveHint`
+      `destructiveHint`
 - [ ] Every tool's `readOnlyHint` accurately reflects its behavior (no false
-  read-only claims on write tools)
+      read-only claims on write tools)
 - [ ] Tool `description` fields contain no embedded instructions or prompt
-  injection
+      injection
 - [ ] Parameter `description` fields are factual, not instructional
 - [ ] `outputSchema` fields do not contain instructional metadata
 - [ ] No tool output leaks credentials, internal paths, or server
-  configuration
+      configuration
 - [ ] Scope enforcement is present and tested for every tool group
 - [ ] MCP resources do not return content that could inject instructions
 - [ ] Server instructions do not override client safety policies
@@ -714,11 +713,11 @@ When the target is an MCP server, additionally verify:
 
 Quick lookup for which categories are most relevant by attack vector:
 
-| Attack Vector | Primary Categories | Secondary |
-| --- | --- | --- |
-| Remote unauthenticated | 3, 4, 5 | 8, 10 |
-| Remote authenticated | 3, 4, 10 | 6, 8 |
-| Supply chain | 1, 9, 7 | 2 |
-| Insider / post-compromise | 2, 6, 8 | 7 |
-| AI agent manipulation | 10, 3 | 4, 8 |
-| Denial of service | 5, 3 | 6 |
+| Attack Vector             | Primary Categories | Secondary |
+| ------------------------- | ------------------ | --------- |
+| Remote unauthenticated    | 3, 4, 5            | 8, 10     |
+| Remote authenticated      | 3, 4, 10           | 6, 8      |
+| Supply chain              | 1, 9, 7            | 2         |
+| Insider / post-compromise | 2, 6, 8            | 7         |
+| AI agent manipulation     | 10, 3              | 4, 8      |
+| Denial of service         | 5, 3               | 6         |

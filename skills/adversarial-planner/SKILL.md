@@ -26,7 +26,7 @@ Load this skill when any of these apply:
 - Designing multi-file refactors or system migrations
 - Planning project roadmaps, milestones, or sprint scopes
 - The user asks for an adversarial or multi-pass review of a plan
-- The user says "plan this", "review my plan", "critique this plan", 
+- The user says "plan this", "review my plan", "critique this plan",
   "multi-pass plan", "architect this", "design this system", or "how should I build"
 - You want to reduce confirmation bias in your own planning output
 
@@ -65,10 +65,10 @@ retrospective templates, read
 
 ## Configuration
 
-| Variable             | Default    | Description                                     |
-| -------------------- | ---------- | ----------------------------------------------- |
-| `MAX_PLAN_PASSES`    | `2`        | Maximum refinement cycles (phases 2–3 repeat)   |
-| `PLAN_REVIEW_DEPTH`  | `standard` | Review depth: `light`, `standard`, or `deep`    |
+| Variable             | Default    | Description                                           |
+| -------------------- | ---------- | ----------------------------------------------------- |
+| `MAX_PLAN_PASSES`    | `2`        | Maximum refinement cycles (phases 2–3 repeat)         |
+| `PLAN_REVIEW_DEPTH`  | `standard` | Review depth: `light`, `standard`, or `deep`          |
 | `COPILOT_VALIDATION` | `true`     | Enable/disable the Copilot extension validation phase |
 
 ### Review Depth Profiles

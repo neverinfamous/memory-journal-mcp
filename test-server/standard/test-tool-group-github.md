@@ -21,14 +21,14 @@
 
 ## 1. Zod Boundary & Type Mismatch Matrix
 
-| Tool                            | Domain Error Test                                    | Zod Empty Param (`{}`)            |
-| ------------------------------- | ---------------------------------------------------- | --------------------------------- |
-| `get_github_issue`              | `issue_number: 999999` -> Not found structural error | ⚠️ Should return validation error |
-| `get_github_pr`                 | `pr_number: 999999` -> Not found structural error    | ⚠️ Should return validation error |
-| `get_github_milestone`          | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error |
-| `close_github_issue_with_entry` | Close already closed issue                           | ⚠️ Should return validation error |
+| Tool                            | Domain Error Test                                    | Zod Empty Param (`{}`)                                  |
+| ------------------------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| `get_github_issue`              | `issue_number: 999999` -> Not found structural error | ⚠️ Should return validation error                       |
+| `get_github_pr`                 | `pr_number: 999999` -> Not found structural error    | ⚠️ Should return validation error                       |
+| `get_github_milestone`          | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
+| `close_github_issue_with_entry` | Close already closed issue                           | ⚠️ Should return validation error                       |
 | `get_kanban_board`              | `project_number: 999999` -> Not found                | ⚠️ Returns CONFIGURATION_ERROR (auto-detect precedence) |
-| `move_kanban_item`              | `target_status: "Nonexistent"`                       | ⚠️ Should return validation error |
+| `move_kanban_item`              | `target_status: "Nonexistent"`                       | ⚠️ Should return validation error                       |
 
 ### Specific Domain Checks
 

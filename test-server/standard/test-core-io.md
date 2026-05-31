@@ -25,13 +25,13 @@
 
 ### 1. Legacy Export (`export_entries`)
 
-| Test            | Command/Action                                                         | Expected Result                               |
-| --------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
-| Export JSON     | `export_entries(format: "json", limit: 5)`                             | JSON export with `entries` array              |
+| Test            | Command/Action                                                         | Expected Result                                                       |
+| --------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Export JSON     | `export_entries(format: "json", limit: 5)`                             | JSON export with `entries` array                                      |
 | Export JSON Lrg | `export_entries(format: "json", limit: 5000)`                          | JSON export with `truncated: true` flag set (if 5MB payload exceeded) |
-| Export markdown | `export_entries(format: "markdown", limit: 5)`                         | Markdown export with `content` string         |
-| Export with tag | `export_entries(format: "json", tags: ["architecture"], limit: 10)`    | Only entries with "architecture" tag returned |
-| Export future   | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)` | Returns 0 entries (date filter enforced)      |
+| Export markdown | `export_entries(format: "markdown", limit: 5)`                         | Markdown export with `content` string                                 |
+| Export with tag | `export_entries(format: "json", tags: ["architecture"], limit: 10)`    | Only entries with "architecture" tag returned                         |
+| Export future   | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)` | Returns 0 entries (date filter enforced)                              |
 
 ### 2. Markdown File Orchestration (`export_markdown` & `import_markdown`)
 

@@ -51,7 +51,7 @@ const mcp = spawn('node', [cliPath, '--team-db', ':memory:'], {
 
 mcp.stdout.on('data', (data) => {
     output += data.toString()
-    
+
     // Check if we received a response for the current test
     const test = tests[currentTestIdx]
     if (!test) return
@@ -59,16 +59,20 @@ mcp.stdout.on('data', (data) => {
     if (output.includes(`"id":${test.payload.id}`)) {
         const lines = output.split('\n')
         const responseLine = lines.find((line) => line.includes(`"id":${test.payload.id}`))
-        
+
         if (responseLine) {
             let pass = false
             try {
                 const parsed = JSON.parse(responseLine)
                 const resultText = parsed?.result?.content?.[0]?.text || ''
                 const structuredContent = parsed?.result?.structuredContent
-                
+
                 // Assert it's a validation error
-                if (!resultText.includes('-32602') && (resultText.includes('VALIDATION_ERROR') || structuredContent?.code === 'VALIDATION_ERROR')) {
+                if (
+                    !resultText.includes('-32602') &&
+                    (resultText.includes('VALIDATION_ERROR') ||
+                        structuredContent?.code === 'VALIDATION_ERROR')
+                ) {
                     console.log(`✅ [PASS] ${test.name}`)
                     pass = true
                 } else {
@@ -82,7 +86,7 @@ mcp.stdout.on('data', (data) => {
                 console.log('Raw Response:', responseLine)
                 process.exit(1)
             }
-            
+
             // Move to next test or finish
             currentTestIdx++
             output = '' // Reset buffer

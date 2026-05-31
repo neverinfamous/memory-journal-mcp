@@ -38,37 +38,29 @@ Requires OAuth app setup.
 Tools are functions MCP clients can call. Define them using `server.tool()`:
 
 ```typescript
-import { McpAgent } from "agents/mcp";
-import { z } from "zod";
+import { McpAgent } from 'agents/mcp'
+import { z } from 'zod'
 
 export class MyMCP extends McpAgent {
-  server = new Server({ name: "my-mcp", version: "1.0.0" });
+  server = new Server({ name: 'my-mcp', version: '1.0.0' })
 
   async init() {
     // Simple tool with parameters
-    this.server.tool(
-      "add",
-      { a: z.number(), b: z.number() },
-      async ({ a, b }) => ({
-        content: [{ type: "text", text: String(a + b) }],
-      })
-    );
+    this.server.tool('add', { a: z.number(), b: z.number() }, async ({ a, b }) => ({
+      content: [{ type: 'text', text: String(a + b) }],
+    }))
 
     // Tool that calls external API
-    this.server.tool(
-      "get_weather",
-      { city: z.string() },
-      async ({ city }) => {
-        // Prevent SSRF: Always construct URLs safely, never interpolate raw strings into the base URL path
-        const url = new URL("https://api.weather.com/v1/current");
-        url.searchParams.set("city", city);
-        const response = await fetch(url.toString());
-        const data = await response.json();
-        return {
-          content: [{ type: "text", text: JSON.stringify(data) }],
-        };
+    this.server.tool('get_weather', { city: z.string() }, async ({ city }) => {
+      // Prevent SSRF: Always construct URLs safely, never interpolate raw strings into the base URL path
+      const url = new URL('https://api.weather.com/v1/current')
+      url.searchParams.set('city', city)
+      const response = await fetch(url.toString())
+      const data = await response.json()
+      return {
+        content: [{ type: 'text', text: JSON.stringify(data) }],
       }
-    );
+    })
   }
 }
 ```
@@ -78,19 +70,19 @@ export class MyMCP extends McpAgent {
 **Public server** (`src/index.ts`):
 
 ```typescript
-import { MyMCP } from "./mcp";
+import { MyMCP } from './mcp'
 
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const url = new URL(request.url);
-    if (url.pathname === "/mcp") {
-      return MyMCP.serveSSE("/mcp").fetch(request, env, ctx);
+    const url = new URL(request.url)
+    if (url.pathname === '/mcp') {
+      return MyMCP.serveSSE('/mcp').fetch(request, env, ctx)
     }
-    return new Response("MCP Server", { status: 200 });
+    return new Response('MCP Server', { status: 200 })
   },
-};
+}
 
-export { MyMCP };
+export { MyMCP }
 ```
 
 ### Step 3: Test Locally
@@ -136,12 +128,12 @@ Restart Claude Desktop after updating config.
 ```typescript
 export class MyMCP extends McpAgent<Env> {
   async init() {
-    this.server.tool("get_user", { id: z.number() }, async ({ id }) => {
+    this.server.tool('get_user', { id: z.number() }, async ({ id }) => {
       // Access D1 binding safely with parameterized query
       // NOTE: Never pass raw SQL strings from tool arguments directly to prepare()
-      const result = await this.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).all();
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    });
+      const result = await this.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).all()
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+    })
   }
 }
 ```

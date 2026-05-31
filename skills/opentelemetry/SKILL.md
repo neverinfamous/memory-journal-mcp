@@ -27,18 +27,18 @@ Production standards for instrumenting applications to achieve high-fidelity obs
 // Example: Creating a Span in Node.js
 tracer.startActiveSpan('database.query', (span) => {
   try {
-    span.setAttribute('db.statement', queryText);
-    const result = db.execute(queryText);
-    span.setStatus({ code: SpanStatusCode.OK });
-    return result;
+    span.setAttribute('db.statement', queryText)
+    const result = db.execute(queryText)
+    span.setStatus({ code: SpanStatusCode.OK })
+    return result
   } catch (error) {
-    span.recordException(error);
-    span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
-    throw error;
+    span.recordException(error)
+    span.setStatus({ code: SpanStatusCode.ERROR, message: error.message })
+    throw error
   } finally {
-    span.end();
+    span.end()
   }
-});
+})
 ```
 
 ## 3. Metrics

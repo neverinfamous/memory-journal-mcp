@@ -2,12 +2,12 @@
 
 ## Rate Limits
 
-| Limit | Value |
-|-------|-------|
-| GraphQL queries per user | **Default 300 per 5 minutes** (max 320, at least 1/sec) |
-| General API rate limit | 1200 requests per 5 minutes (shared across all API calls) |
-| Zone scope per query | Up to **10 zones** |
-| Account scope per query | Exactly **1 account** |
+| Limit                    | Value                                                     |
+| ------------------------ | --------------------------------------------------------- |
+| GraphQL queries per user | **Default 300 per 5 minutes** (max 320, at least 1/sec)   |
+| General API rate limit   | 1200 requests per 5 minutes (shared across all API calls) |
+| Zone scope per query     | Up to **10 zones**                                        |
+| Account scope per query  | Exactly **1 account**                                     |
 
 The GraphQL rate limit is separate from the general API limit. Exceeding either results in `HTTP 429` and blocks all API calls for 5 minutes. Enterprise customers can contact support to raise limits.
 
@@ -22,6 +22,7 @@ The GraphQL rate limit is separate from the general API limit. Exceeding either 
 ### Adaptive Bit Rate (ABR) Sampling
 
 Datasets with `Adaptive` in the name use adaptive sampling:
+
 - Results are **statistically representative**, not exact
 - Same query may return **slightly different numbers** each run
 - Higher traffic = higher sampling rate = more accurate
@@ -31,12 +32,12 @@ For high-confidence numbers, use `confidence(level: 0.95)` to get estimate bound
 
 ### Rollup vs. Adaptive
 
-| Feature | Rollup (`*1hGroups`, `*1dGroups`) | Adaptive (`*AdaptiveGroups`) |
-|---------|-----------------------------------|-----------------------------|
-| Sampling | No (pre-aggregated) | Yes (ABR) |
-| Flexibility | Fixed time buckets | Any granularity |
-| Dimensions | Fewer | Many more |
-| Accuracy | Exact | Statistical estimate |
+| Feature     | Rollup (`*1hGroups`, `*1dGroups`) | Adaptive (`*AdaptiveGroups`) |
+| ----------- | --------------------------------- | ---------------------------- |
+| Sampling    | No (pre-aggregated)               | Yes (ABR)                    |
+| Flexibility | Fixed time buckets                | Any granularity              |
+| Dimensions  | Fewer                             | Many more                    |
+| Accuracy    | Exact                             | Statistical estimate         |
 
 ## Common Errors
 

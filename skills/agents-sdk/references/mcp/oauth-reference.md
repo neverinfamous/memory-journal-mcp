@@ -5,6 +5,7 @@
 ## When to Implement
 
 Add OAuth when the MCP server:
+
 - Exposes an **HTTP transport** accessible over a network
 - Needs **multi-tenant access control** (different clients get different permissions)
 - Requires **production-grade security** beyond simple shared token auth
@@ -43,42 +44,44 @@ OAuth is **opt-in** — servers always support a fallback chain: OAuth → simpl
 
 ## Module Structure (`src/auth/` — 11 files)
 
-| File | Purpose | Lines |
-|------|---------|-------|
-| `types.ts` | RFC 9728/8414/7591 type definitions, config interfaces | ~250 |
-| `errors.ts` | OAuth error hierarchy (`OAuthError` extends server base class + `httpStatus`, `wwwAuthenticate`, `AUTH_` prefixed codes) | ~200 |
-| `scopes.ts` | Scope definitions, hierarchy, tool group → scope mapping, utilities | ~200 |
-| `token-validator.ts` | JWT validation via `jose`, JWKS caching, claim extraction | ~275 |
-| `oauth-resource-server.ts` | RFC 9728 Protected Resource Metadata endpoint | ~170 |
-| `authorization-server-discovery.ts` | RFC 8414 metadata discovery with TTL caching | ~260 |
-| `scope-map.ts` | O(1) reverse lookup: tool name → required scope | ~50 |
-| `auth-context.ts` | `AsyncLocalStorage` per-request auth context | ~50 |
-| `middleware.ts` | Express middleware for token extraction & scope enforcement | ~520 |
-| `transport-agnostic.ts` | Transport-agnostic auth utilities (`createAuthenticatedContext`, `validateAuth`, `formatOAuthError`) | ~100 |
-| `index.ts` | Barrel re-exports | ~40 |
+| File                                | Purpose                                                                                                                  | Lines |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----- |
+| `types.ts`                          | RFC 9728/8414/7591 type definitions, config interfaces                                                                   | ~250  |
+| `errors.ts`                         | OAuth error hierarchy (`OAuthError` extends server base class + `httpStatus`, `wwwAuthenticate`, `AUTH_` prefixed codes) | ~200  |
+| `scopes.ts`                         | Scope definitions, hierarchy, tool group → scope mapping, utilities                                                      | ~200  |
+| `token-validator.ts`                | JWT validation via `jose`, JWKS caching, claim extraction                                                                | ~275  |
+| `oauth-resource-server.ts`          | RFC 9728 Protected Resource Metadata endpoint                                                                            | ~170  |
+| `authorization-server-discovery.ts` | RFC 8414 metadata discovery with TTL caching                                                                             | ~260  |
+| `scope-map.ts`                      | O(1) reverse lookup: tool name → required scope                                                                          | ~50   |
+| `auth-context.ts`                   | `AsyncLocalStorage` per-request auth context                                                                             | ~50   |
+| `middleware.ts`                     | Express middleware for token extraction & scope enforcement                                                              | ~520  |
+| `transport-agnostic.ts`             | Transport-agnostic auth utilities (`createAuthenticatedContext`, `validateAuth`, `formatOAuthError`)                     | ~100  |
+| `index.ts`                          | Barrel re-exports                                                                                                        | ~40   |
 
 > [!TIP]
 > **Auth module submodule variant:** For complex servers (db-mcp), `middleware.ts` → `middleware/index.ts` and `scopes.ts` → `scopes/index.ts` when these files exceed ~500 lines. All other files remain flat.
 
 ## RFC Compliance
 
-| RFC | Component | What It Does |
-|-----|-----------|--------------|
-| **RFC 9728** | `oauth-resource-server.ts` | Serves `GET /.well-known/oauth-protected-resource` — tells clients which auth servers to use and what scopes are supported |
-| **RFC 8414** | `authorization-server-discovery.ts` | Fetches `GET {issuer}/.well-known/oauth-authorization-server` — discovers token/JWKS endpoints |
-| **RFC 7591** | `types.ts` | Type definitions for dynamic client registration (optional) |
-| **RFC 8707** | Token validation | Resource Indicators — binds tokens to specific MCP server URIs |
+| RFC          | Component                           | What It Does                                                                                                               |
+| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **RFC 9728** | `oauth-resource-server.ts`          | Serves `GET /.well-known/oauth-protected-resource` — tells clients which auth servers to use and what scopes are supported |
+| **RFC 8414** | `authorization-server-discovery.ts` | Fetches `GET {issuer}/.well-known/oauth-authorization-server` — discovers token/JWKS endpoints                             |
+| **RFC 7591** | `types.ts`                          | Type definitions for dynamic client registration (optional)                                                                |
+| **RFC 8707** | Token validation                    | Resource Indicators — binds tokens to specific MCP server URIs                                                             |
 
 ### Client ID Metadata Documents (CIMDs) — MCP 2025-11-25
 
 The **preferred** client registration mechanism. Clients use HTTPS URLs as `client_id`, pointing to a JSON metadata document. This addresses the common MCP scenario where servers and clients have no pre-existing relationship.
 
 **Client requirements:**
+
 - Host metadata at an HTTPS URL with a path component (e.g., `https://app.example.com/client.json`)
 - Document MUST include: `client_id`, `client_name`, `redirect_uris`
 - `client_id` value must match the document URL exactly
 
 **Server requirements:**
+
 - Fetch metadata when encountering URL-formatted `client_id`
 - Validate `client_id` matches URL exactly
 - Cache metadata respecting HTTP cache headers
@@ -108,6 +111,7 @@ MCP clients MUST include the `resource` parameter in both authorization and toke
 Support step-up authorization for runtime scope escalation:
 
 **Server-side (403 response):**
+
 ```http
 HTTP/1.1 403 Forbidden
 WWW-Authenticate: Bearer error="insufficient_scope",
@@ -123,6 +127,7 @@ WWW-Authenticate: Bearer error="insufficient_scope",
 | Extended | Existing + new + commonly related scopes |
 
 **Client-side (step-up flow):**
+
 1. Parse error info from `WWW-Authenticate` header
 2. Determine required scopes from `scope` parameter or fallback to `scopes_supported`
 3. Re-authorize with expanded scope set
@@ -145,11 +150,11 @@ Each scope **inherits** all scopes below it: `admin` grants `write` + `read`.
 
 Map each tool group to a single scope. The mapping is server-specific but follows this pattern:
 
-| Scope | Typical Tool Groups | Rationale |
-|-------|--------------------|-----------|
-| `read` | core, search, analytics, relationships, export, introspection | Read-only operations |
-| `write` | github, team, migration | Mutations to external systems |
-| `admin` | admin, backup, codemode | Destructive, administrative, or elevated operations |
+| Scope   | Typical Tool Groups                                           | Rationale                                           |
+| ------- | ------------------------------------------------------------- | --------------------------------------------------- |
+| `read`  | core, search, analytics, relationships, export, introspection | Read-only operations                                |
+| `write` | github, team, migration                                       | Mutations to external systems                       |
+| `admin` | admin, backup, codemode                                       | Destructive, administrative, or elevated operations |
 
 **Implementation pattern** (`scopes.ts`):
 
@@ -162,7 +167,7 @@ export const TOOL_GROUP_SCOPES: Record<string, string> = {
   backup: 'admin',
   codemode: 'admin',
   // ... server-specific groups
-};
+}
 ```
 
 ### Reverse Lookup (`scope-map.ts`)
@@ -170,16 +175,16 @@ export const TOOL_GROUP_SCOPES: Record<string, string> = {
 Build an O(1) map from individual tool names → required scope at startup:
 
 ```typescript
-const toolScopeMap = new Map<string, string>();
+const toolScopeMap = new Map<string, string>()
 for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
-  const scope = TOOL_GROUP_SCOPES[group] ?? 'admin';
+  const scope = TOOL_GROUP_SCOPES[group] ?? 'admin'
   for (const toolName of tools) {
-    toolScopeMap.set(toolName, scope);
+    toolScopeMap.set(toolName, scope)
   }
 }
 
 export function getRequiredScope(toolName: string): string {
-  return toolScopeMap.get(toolName) ?? 'admin';  // Fail-closed: unknown tools require admin
+  return toolScopeMap.get(toolName) ?? 'admin' // Fail-closed: unknown tools require admin
 }
 ```
 
@@ -201,6 +206,7 @@ All OAuth errors extend the server's base error class (e.g., `OAuthError extends
 ```
 
 **Key changes from March 2026 harmonization:**
+
 - All error codes prefixed with `AUTH_` (e.g., `TOKEN_MISSING` → `AUTH_TOKEN_MISSING`)
 - Category auto-inferred: 401 → `AUTHENTICATION`, 403 → `AUTHORIZATION`, 5xx → `INTERNAL`
 - `toResponse()` inherited from base class returns full `ErrorResponse` with code, category, suggestion, recoverable
@@ -214,6 +220,7 @@ All OAuth errors extend the server's base error class (e.g., `OAuthError extends
 Uses `jose` (transitive dependency via `@modelcontextprotocol/sdk`) — no extra install needed.
 
 Key behaviors:
+
 - Creates `createRemoteJWKSet()` once with TTL-based caching
 - Validates with `jwtVerify(token, jwks, { issuer, audience, clockTolerance })`
 - Extracts scopes from `scope` claim (space-delimited string) or `scopes` claim (array)
@@ -255,20 +262,20 @@ formatOAuthError(error) → { status, body }
 
 ```typescript
 // Well-known paths are ALWAYS public (RFC requirement)
-if (path.startsWith('/.well-known/')) return true;
+if (path.startsWith('/.well-known/')) return true
 // Health endpoint is always public
-if (path === '/health') return true;
+if (path === '/health') return true
 ```
 
 ## CLI Flags & Environment Variables
 
-| CLI Flag | Env Variable | Default | Description |
-|----------|-------------|---------|-------------|
-| `--oauth-enabled` | `OAUTH_ENABLED` | `false` | Enable OAuth 2.1 |
-| `--oauth-issuer <url>` | `OAUTH_ISSUER` | — | Issuer URL |
-| `--oauth-audience <aud>` | `OAUTH_AUDIENCE` | — | Expected audience |
-| `--oauth-jwks-uri <url>` | `OAUTH_JWKS_URI` | — | JWKS endpoint |
-| `--oauth-clock-tolerance <s>` | `OAUTH_CLOCK_TOLERANCE` | `30` | Clock skew tolerance |
+| CLI Flag                      | Env Variable            | Default | Description          |
+| ----------------------------- | ----------------------- | ------- | -------------------- |
+| `--oauth-enabled`             | `OAUTH_ENABLED`         | `false` | Enable OAuth 2.1     |
+| `--oauth-issuer <url>`        | `OAUTH_ISSUER`          | —       | Issuer URL           |
+| `--oauth-audience <aud>`      | `OAUTH_AUDIENCE`        | —       | Expected audience    |
+| `--oauth-jwks-uri <url>`      | `OAUTH_JWKS_URI`        | —       | JWKS endpoint        |
+| `--oauth-clock-tolerance <s>` | `OAUTH_CLOCK_TOLERANCE` | `30`    | Clock skew tolerance |
 
 **Wiring in `cli.ts`:**
 
@@ -285,38 +292,40 @@ In `server.ts` (the HTTP transport), conditionally wire OAuth:
 
 ```typescript
 // 1. Always register the RFC 9728 metadata endpoint
-app.get('/.well-known/oauth-protected-resource', resourceServer.getMetadataHandler());
+app.get('/.well-known/oauth-protected-resource', resourceServer.getMetadataHandler())
 
 // 2. Conditionally apply OAuth middleware
 if (config.oauthEnabled) {
-  const tokenValidator = new TokenValidator({ issuer, audience, jwksUri, clockTolerance });
-  const authMiddleware = createAuthMiddleware({ tokenValidator, resourceServer });
-  app.use(authMiddleware);
+  const tokenValidator = new TokenValidator({ issuer, audience, jwksUri, clockTolerance })
+  const authMiddleware = createAuthMiddleware({ tokenValidator, resourceServer })
+  app.use(authMiddleware)
 } else if (config.authToken) {
   // Simple token auth fallback — uses crypto.timingSafeEqual, NOT raw ===
-  app.use(basicTokenMiddleware(config.authToken));
+  app.use(basicTokenMiddleware(config.authToken))
 }
 ```
 
 ## Testing Patterns (`src/auth/__tests__/` — 8 files)
 
-| Test File | What It Covers |
-|-----------|---------------|
-| `errors.test.ts` | Error hierarchy, HTTP status codes, WWW-Authenticate headers, type guards |
-| `scopes.test.ts` | Scope hierarchy, parsing, validation, tool group mapping, accessible tools |
-| `scope-map.test.ts` | O(1) reverse lookup, full coverage of all tool groups |
-| `token-validator.test.ts` | JWT validation (mocked `jose`), scope parsing, error mapping, JWKS cache |
-| `auth-context.test.ts` | AsyncLocalStorage context, isolation between requests |
-| `oauth-resource-server.test.ts` | RFC 9728 metadata, caching, scope support, accessors |
-| `authorization-server-discovery.test.ts` | RFC 8414 discovery (mocked `fetch`), caching, validation |
-| `middleware.test.ts` | Token extraction, scope enforcement, error handler, transport-agnostic utils |
+| Test File                                | What It Covers                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `errors.test.ts`                         | Error hierarchy, HTTP status codes, WWW-Authenticate headers, type guards    |
+| `scopes.test.ts`                         | Scope hierarchy, parsing, validation, tool group mapping, accessible tools   |
+| `scope-map.test.ts`                      | O(1) reverse lookup, full coverage of all tool groups                        |
+| `token-validator.test.ts`                | JWT validation (mocked `jose`), scope parsing, error mapping, JWKS cache     |
+| `auth-context.test.ts`                   | AsyncLocalStorage context, isolation between requests                        |
+| `oauth-resource-server.test.ts`          | RFC 9728 metadata, caching, scope support, accessors                         |
+| `authorization-server-discovery.test.ts` | RFC 8414 discovery (mocked `fetch`), caching, validation                     |
+| `middleware.test.ts`                     | Token extraction, scope enforcement, error handler, transport-agnostic utils |
 
 **Mocking strategy:**
+
 - Mock `jose` module for token validation tests (avoid real JWKS)
 - Mock `globalThis.fetch` for discovery tests (avoid real network)
 - Use `as never` casts for Express req/res in middleware tests
 
 **Token Validation Hardening:**
+
 - **JWT claims sanitization:** In `token-validator.ts`, filter prototype-polluting keys (`__proto__`, `constructor`, `prototype`) from JWT payload before spreading into `TokenClaims`. This prevents prototype pollution attacks via crafted JWT tokens.
 - **Constant-time token comparison:** In `basicTokenMiddleware`, use `crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))` with a length pre-check. Short-circuiting on different lengths is acceptable since length is not the secret.
 - **Bearer auth scope limitation:** Emit a startup warning when simple bearer auth (`--auth-token`) is configured: `"Simple token auth does not enforce per-tool scopes. Use OAuth 2.1 for granular access control."` This prevents operators from assuming bearer tokens provide scope-level access control.
@@ -341,10 +350,10 @@ When adding OAuth to a new MCP server:
 
 When adding OAuth, update these documentation sections:
 
-| Doc | Updates Needed |
-|-----|---------------|
-| **README.md** | Add OAuth well-known to endpoint table, OAuth to security features, OAuth env vars, dedicated OAuth 2.1 section (compliance table + scopes + quick start) |
-| **DOCKER_README.md** | Same endpoint table, security features, env vars, Docker run example with `-e OAUTH_*` |
-| **Wiki/Security.md** | Full OAuth section (enabling, how it works, fallback), update access control levels, add to self-audit checklist |
-| **Wiki/HTTP-Transport.md** | OAuth endpoint in table, 5 OAuth CLI flags in configuration reference |
-| **CHANGELOG.md** | OAuth 2.1 module entry under `[Unreleased]` |
+| Doc                        | Updates Needed                                                                                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **README.md**              | Add OAuth well-known to endpoint table, OAuth to security features, OAuth env vars, dedicated OAuth 2.1 section (compliance table + scopes + quick start) |
+| **DOCKER_README.md**       | Same endpoint table, security features, env vars, Docker run example with `-e OAUTH_*`                                                                    |
+| **Wiki/Security.md**       | Full OAuth section (enabling, how it works, fallback), update access control levels, add to self-audit checklist                                          |
+| **Wiki/HTTP-Transport.md** | OAuth endpoint in table, 5 OAuth CLI flags in configuration reference                                                                                     |
+| **CHANGELOG.md**           | OAuth 2.1 module entry under `[Unreleased]`                                                                                                               |

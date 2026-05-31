@@ -20,10 +20,7 @@ import {
     getAnalyticsSnapshots as getSnapshots,
     computeDigest,
 } from './entries/digest.js'
-import {
-    buildImportanceCte,
-    buildImportanceSqlExpression,
-} from './entries/importance.js'
+import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 
 import * as fs from 'node:fs'
 

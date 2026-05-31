@@ -132,24 +132,24 @@ create_entry({
 
 ## Tag Convention
 
-| Tag | Purpose |
-| --- | --- |
-| `adversarial-skill-audit` | All entries from this skill (primary filter) |
-| `profile` | Phase 1 output |
-| `stress-test` | Phase 2 output |
-| `remediation` | Phase 3 output |
-| `copilot` | Phase 4 output |
-| `audit-complete` | Final consolidated summary |
-| `retrospective` | Post-cycle review |
-| `session-summary` | Enables retrieval via session summary searches |
+| Tag                       | Purpose                                        |
+| ------------------------- | ---------------------------------------------- |
+| `adversarial-skill-audit` | All entries from this skill (primary filter)   |
+| `profile`                 | Phase 1 output                                 |
+| `stress-test`             | Phase 2 output                                 |
+| `remediation`             | Phase 3 output                                 |
+| `copilot`                 | Phase 4 output                                 |
+| `audit-complete`          | Final consolidated summary                     |
+| `retrospective`           | Post-cycle review                              |
+| `session-summary`         | Enables retrieval via session summary searches |
 
 ## Entry Type Reference
 
-| Entry Type | Phase | Description |
-| --- | --- | --- |
-| `skill_audit_profile` | 1 | Per-skill scorecards and directory overview |
-| `skill_audit_stress` | 2 | Trigger tests, collisions, instruction stress tests |
-| `skill_audit_remediation` | 3 | Improvement plan with dispositions |
-| `skill_audit_copilot` | 4 | Copilot validation findings |
-| `skill_audit_complete` | Final | Consolidated audit summary |
-| `retrospective` | Post | Session retrospective with metrics |
+| Entry Type                | Phase | Description                                         |
+| ------------------------- | ----- | --------------------------------------------------- |
+| `skill_audit_profile`     | 1     | Per-skill scorecards and directory overview         |
+| `skill_audit_stress`      | 2     | Trigger tests, collisions, instruction stress tests |
+| `skill_audit_remediation` | 3     | Improvement plan with dispositions                  |
+| `skill_audit_copilot`     | 4     | Copilot validation findings                         |
+| `skill_audit_complete`    | Final | Consolidated audit summary                          |
+| `retrospective`           | Post  | Session retrospective with metrics                  |

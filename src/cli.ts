@@ -618,7 +618,8 @@ program
                         0
                     ),
                     pruneImportanceThreshold: parseFloat(
-                        process.env['PRUNE_IMPORTANCE_THRESHOLD'] ?? options.pruneImportanceThreshold
+                        process.env['PRUNE_IMPORTANCE_THRESHOLD'] ??
+                            options.pruneImportanceThreshold
                     ),
                 })
             } catch (error) {

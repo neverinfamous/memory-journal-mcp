@@ -83,7 +83,7 @@ function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, un
     const result: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {
         let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-        
+
         // Handle common agent hallucination where they pass 'id' instead of 'entry_id'
         if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
             snakeKey = 'entry_id'
@@ -94,7 +94,7 @@ function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, un
         if (alias !== undefined && !(alias in obj) && !(alias in result)) {
             snakeKey = alias
         }
-        
+
         result[snakeKey] = value
     }
 
@@ -121,19 +121,40 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
         // Object arg — pass through and convert camelCase to snake_case
         if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
             const obj = convertKeysToSnakeCase(arg as Record<string, unknown>)
-            
+
             // Handle common agent hallucination where they omit 'content' and pass arbitrary fields
-            if ((methodName === 'createEntry' || methodName === 'createEntryMinimal' || methodName === 'teamCreateEntry') && !('content' in obj)) {
+            if (
+                (methodName === 'createEntry' ||
+                    methodName === 'createEntryMinimal' ||
+                    methodName === 'teamCreateEntry') &&
+                !('content' in obj)
+            ) {
                 let content = ''
                 const validFields = new Set([
-                    'type', 'tags', 'entry_type', 'is_personal', 'share_with_team',
-                    'significance_type', 'auto_context', 'project_number', 'project_owner',
-                    'issue_number', 'issue_url', 'pr_number', 'pr_url', 'pr_status',
-                    'workflow_run_id', 'workflow_name', 'workflow_status'
+                    'type',
+                    'tags',
+                    'entry_type',
+                    'is_personal',
+                    'share_with_team',
+                    'significance_type',
+                    'auto_context',
+                    'project_number',
+                    'project_owner',
+                    'issue_number',
+                    'issue_url',
+                    'pr_number',
+                    'pr_url',
+                    'pr_status',
+                    'workflow_run_id',
+                    'workflow_name',
+                    'workflow_status',
                 ])
                 for (const [key, value] of Object.entries(obj)) {
                     if (validFields.has(key)) continue
-                    const strValue = typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)
+                    const strValue =
+                        typeof value === 'object' && value !== null
+                            ? JSON.stringify(value, null, 2)
+                            : String(value)
                     content += `**${key}**\n${strValue}\n\n`
                 }
                 const trimmed = content.trim()
@@ -141,7 +162,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
                     obj['content'] = trimmed
                 }
             }
-            
+
             return obj
         }
 
@@ -480,7 +501,7 @@ export class JournalApi {
                 const methodName = toolNameToMethodName(tool.name, groupName)
                 groupSchemas[methodName] = getZodTypeString(tool.inputSchema)
             }
-            
+
             // Handle aliases
             const aliases = METHOD_ALIASES[groupName]
             if (aliases) {
@@ -490,10 +511,10 @@ export class JournalApi {
                     }
                 }
             }
-            
+
             schemas[groupName] = groupSchemas
         }
-        
+
         return schemas
     }
 }

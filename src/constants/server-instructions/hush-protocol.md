@@ -24,6 +24,7 @@ Flags are machine-actionable signals stored in the team database. They replace S
 **Triage prompt**: Use the `flag-dashboard` prompt to triage active flags with priority assessment, staleness detection, analytics summary, and resolution guidance.
 
 **Code Mode**:
+
 - `mj.team.passTeamFlag({ project_number: 1, flag_type, message, target_user })`
 - `mj.team.resolveTeamFlag({ flag_id })`
 - `mj.team.teamListFlags({ status: "active" })`

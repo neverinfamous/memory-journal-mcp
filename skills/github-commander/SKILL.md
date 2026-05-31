@@ -33,13 +33,13 @@ Load this skill when any of these apply:
 
 ## Quick Reference
 
-| Workflow                | File                              | Purpose                                     |
-| ----------------------- | --------------------------------- | ------------------------------------------- |
-| **Issue Triage**        | `workflows/issue-triage.md`       | Fix a single GitHub issue end-to-end        |
-| **PR Review**           | `workflows/pr-review.md`          | Review a PR with validation pipeline        |
-| **Milestone Sprint**    | `workflows/milestone-sprint.md`   | Work through milestone issues sequentially  |
-| **Roadmap Kickoff**     | `workflows/roadmap-kickoff.md`    | Translate planning epics into Kanban issues |
-| **Update Dependencies** | `workflows/update-deps.md`        | Dependency update with audit trail          |
+| Workflow                | File                            | Purpose                                     |
+| ----------------------- | ------------------------------- | ------------------------------------------- |
+| **Issue Triage**        | `workflows/issue-triage.md`     | Fix a single GitHub issue end-to-end        |
+| **PR Review**           | `workflows/pr-review.md`        | Review a PR with validation pipeline        |
+| **Milestone Sprint**    | `workflows/milestone-sprint.md` | Work through milestone issues sequentially  |
+| **Roadmap Kickoff**     | `workflows/roadmap-kickoff.md`  | Translate planning epics into Kanban issues |
+| **Update Dependencies** | `workflows/update-deps.md`      | Dependency update with audit trail          |
 
 ## Prerequisites
 

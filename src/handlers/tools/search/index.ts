@@ -257,7 +257,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: SearchEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = SearchEntriesSchema.parse(params)
@@ -441,7 +446,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: SearchByDateRangeSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
@@ -526,7 +536,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: SemanticSearchSchemaMcp,
             outputSchema: SemanticSearchOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = SemanticSearchSchema.parse(params)
@@ -670,7 +685,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: z.object({}).strict(),
             outputSchema: VectorStatsOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (_params: unknown) => {
                 try {
                     if (!vectorManager) {

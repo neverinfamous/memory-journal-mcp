@@ -194,13 +194,20 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     coerceSignificanceAlias(params)
 
                     if (params !== null && typeof params === 'object' && 'auto_context' in params) {
-                        context.config?.runtime?.metrics?.recordDeprecationWarning('Agent recently used deprecated auto_context field in create_entry. This field is ignored.')
+                        context.config?.runtime?.metrics?.recordDeprecationWarning(
+                            'Agent recently used deprecated auto_context field in create_entry. This field is ignored.'
+                        )
                     }
 
                     const input = CreateEntrySchema.parse(params)
@@ -214,7 +221,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         significanceType: input.significance_type ?? null,
-                        autoContext: !input.auto_context ? JSON.stringify({ disabled: true }) : undefined,
+                        autoContext: !input.auto_context
+                            ? JSON.stringify({ disabled: true })
+                            : undefined,
                         projectNumber: input.project_number ?? context.config?.defaultProjectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
@@ -339,7 +348,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetEntryByIdSchemaMcp,
             outputSchema: EntryByIdOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params)
@@ -378,7 +392,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { limit, is_personal, sort_by } = GetRecentEntriesSchema.parse(params)
@@ -396,7 +415,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
@@ -418,7 +442,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: TestSimpleSchema,
             outputSchema: TestSimpleOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { message } = TestSimpleSchema.parse(params)
@@ -431,11 +460,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'list_tags',
             title: 'List Tags',
-            description: 'List all available tags. Tags are auto-formatted to kebab-case. Returns only name and count. Does not return orphan tags with zero usage.',
+            description:
+                'List all available tags. Tags are auto-formatted to kebab-case. Returns only name and count. Does not return orphan tags with zero usage.',
             group: 'core',
             inputSchema: z.object({}).strict(),
             outputSchema: TagsListOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (_params: unknown) => {
                 try {
                     const rawTags = db.listTags()

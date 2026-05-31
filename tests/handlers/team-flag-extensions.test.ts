@@ -83,7 +83,16 @@ describe('Team Flag Extensions Tool Handlers', () => {
 
     const callTeamTool = async (name: string, args: Record<string, unknown>) => {
         const enhancedArgs = { project_number: 1, ...args }
-        return callTool(name, enhancedArgs, personalDb, undefined, undefined, undefined, undefined, teamDb)
+        return callTool(
+            name,
+            enhancedArgs,
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )
     }
 
     let flagId1: number
@@ -121,7 +130,7 @@ describe('Team Flag Extensions Tool Handlers', () => {
             resolution: 'all good',
             project_number: 2,
         })
-        
+
         const res4 = (await callTeamTool('team_pass_flag', {
             flag_type: 'fyi',
             message: 'Fourth flag',
@@ -181,14 +190,20 @@ describe('Team Flag Extensions Tool Handlers', () => {
         })
 
         it('should filter by project_number', async () => {
-            const result = (await callTeamTool('team_list_flags', { project_number: 2, status: 'all' })) as any
+            const result = (await callTeamTool('team_list_flags', {
+                project_number: 2,
+                status: 'all',
+            })) as any
             expect(result.success).toBe(true)
             expect(result.flags.some((f: any) => f.id === flagId3)).toBe(true)
             expect(result.flags.some((f: any) => f.id === flagId1)).toBe(false)
         })
 
         it('should sort by priority', async () => {
-            const result = (await callTeamTool('team_list_flags', { sort_by: 'priority', status: 'active' })) as any
+            const result = (await callTeamTool('team_list_flags', {
+                sort_by: 'priority',
+                status: 'active',
+            })) as any
             expect(result.success).toBe(true)
             // blocker is priority 0, fyi is 3
             expect(result.flags[0].flag_type).toBe('blocker')
@@ -203,7 +218,11 @@ describe('Team Flag Extensions Tool Handlers', () => {
 
     describe('team_update_flag', () => {
         it('should require teamDb', async () => {
-            const result = (await callTool('team_update_flag', { flag_id: flagId1 }, personalDb)) as any
+            const result = (await callTool(
+                'team_update_flag',
+                { flag_id: flagId1 },
+                personalDb
+            )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
@@ -216,15 +235,26 @@ describe('Team Flag Extensions Tool Handlers', () => {
 
         it('should fail if entry is not a flag', async () => {
             const rawDb = teamDb['connection'].getNativeDb() as any
-            rawDb.prepare(`INSERT INTO memory_journal (entry_type, content, timestamp) VALUES ('technical_note', 'test', '2026-01-01')`).run()
-            const lastInsert = rawDb.prepare('SELECT last_insert_rowid() as id').get() as { id: number }
-            const result = (await callTeamTool('team_update_flag', { flag_id: lastInsert.id })) as any
+            rawDb
+                .prepare(
+                    `INSERT INTO memory_journal (entry_type, content, timestamp) VALUES ('technical_note', 'test', '2026-01-01')`
+                )
+                .run()
+            const lastInsert = rawDb.prepare('SELECT last_insert_rowid() as id').get() as {
+                id: number
+            }
+            const result = (await callTeamTool('team_update_flag', {
+                flag_id: lastInsert.id,
+            })) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('not a flag')
         })
 
         it('should fail on invalid flag_type', async () => {
-            const result = (await callTeamTool('team_update_flag', { flag_id: flagId1, flag_type: 'invalid_type' })) as any
+            const result = (await callTeamTool('team_update_flag', {
+                flag_id: flagId1,
+                flag_type: 'invalid_type',
+            })) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Invalid flag type')
         })
@@ -235,7 +265,7 @@ describe('Team Flag Extensions Tool Handlers', () => {
                 flag_type: 'custom_type',
                 message: 'Updated message',
                 target_user: 'charlie',
-                link: 'https://example.com'
+                link: 'https://example.com',
             })) as any
 
             expect(result.success).toBe(true)
@@ -251,14 +281,14 @@ describe('Team Flag Extensions Tool Handlers', () => {
         it('should reopen a resolved flag', async () => {
             const result = (await callTeamTool('team_update_flag', {
                 flag_id: flagId3,
-                reopen: true
+                reopen: true,
             })) as any
 
             expect(result.success).toBe(true)
             expect(result.resolved).toBe(false)
             expect(result.changes).toContain('reopened')
             expect(result.entry.content).not.toContain('[RESOLVED]')
-            
+
             const ctx = parseFlagContext(result.entry.autoContext)
             expect(ctx?.resolved).toBe(false)
             expect(ctx?.resolution).toBeNull()
@@ -268,7 +298,7 @@ describe('Team Flag Extensions Tool Handlers', () => {
             const result = (await callTeamTool('team_update_flag', {
                 flag_id: flagId1,
                 target_user: null,
-                link: null
+                link: null,
             })) as any
 
             expect(result.success).toBe(true)
@@ -279,7 +309,7 @@ describe('Team Flag Extensions Tool Handlers', () => {
 
         it('should do nothing if no changes are detected', async () => {
             const result = (await callTeamTool('team_update_flag', {
-                flag_id: flagId1
+                flag_id: flagId1,
             })) as any
 
             expect(result.success).toBe(true)
@@ -289,13 +319,19 @@ describe('Team Flag Extensions Tool Handlers', () => {
 
     describe('team_get_flag_analytics', () => {
         it('should require teamDb', async () => {
-            const result = (await callTool('team_get_flag_analytics', { period: 'week' }, personalDb)) as any
+            const result = (await callTool(
+                'team_get_flag_analytics',
+                { period: 'week' },
+                personalDb
+            )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
 
         it('should return valid analytics for all flags', async () => {
-            const result = (await callTeamTool('team_get_flag_analytics', { period: 'month' })) as any
+            const result = (await callTeamTool('team_get_flag_analytics', {
+                period: 'month',
+            })) as any
             expect(result.success).toBe(true)
             expect(result.summary.total_flags).toBeGreaterThanOrEqual(3)
             expect(result.summary.active_flags).toBeGreaterThanOrEqual(2)
@@ -305,17 +341,22 @@ describe('Team Flag Extensions Tool Handlers', () => {
         })
 
         it('should filter analytics by project_number', async () => {
-            const result = (await callTeamTool('team_get_flag_analytics', { project_number: 2, period: 'week' })) as any
+            const result = (await callTeamTool('team_get_flag_analytics', {
+                project_number: 2,
+                period: 'week',
+            })) as any
             expect(result.success).toBe(true)
             // project 2 has flag id 3
             expect(result.summary.total_flags).toBe(1)
         })
-        
+
         it('should compute period Ms correctly for day, week, month', async () => {
-            const resDay = await callTeamTool('team_get_flag_analytics', { period: 'day' }) as any
+            const resDay = (await callTeamTool('team_get_flag_analytics', { period: 'day' })) as any
             expect(resDay.success).toBe(true)
-            
-            const resWeek = await callTeamTool('team_get_flag_analytics', { period: 'week' }) as any
+
+            const resWeek = (await callTeamTool('team_get_flag_analytics', {
+                period: 'week',
+            })) as any
             expect(resWeek.success).toBe(true)
         })
     })

@@ -84,8 +84,6 @@ describe('Help Resource Handlers', () => {
         expect(result.data.error).toContain('Invalid group')
     })
 
-
-
     it('should handle all tool groups including codemode and team', async () => {
         const defs = getHelpResourceDefinitions()
         const rootHelp = defs.find((d) => d.uri === 'memory://help')

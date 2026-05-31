@@ -321,7 +321,14 @@ export class WorkerSandboxPool {
             }
         }
 
-        return await availableSandbox.execute(code, apiBindings, schemas, timeoutMs, contextObj, readonlyMode)
+        return await availableSandbox.execute(
+            code,
+            apiBindings,
+            schemas,
+            timeoutMs,
+            contextObj,
+            readonlyMode
+        )
     }
 
     getActiveCount(): number {

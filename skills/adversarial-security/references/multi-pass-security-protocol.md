@@ -46,6 +46,7 @@ Produce a Markdown document with these sections:
 ## Trust Boundaries
 
 Diagram or list of trust boundaries:
+
 - External → Server (HTTP transport, MCP protocol)
 - Server → Database (SQL queries, file operations)
 - Server → Sandbox (Code Mode execution)
@@ -54,6 +55,7 @@ Diagram or list of trust boundaries:
 ## Attack Surface Map
 
 For each entry point, document:
+
 - Entry point name and location (file:line)
 - Input type (user query, HTTP request, MCP tool call, etc.)
 - Validation present (Zod schema, parameterized query, etc.)
@@ -62,17 +64,18 @@ For each entry point, document:
 ## Existing Defenses (per Category)
 
 For each of the 10 audit categories (see audit-categories.md):
+
 - What defenses are in place
 - Coverage assessment: full / partial / none
 - Evidence: file paths and code references
 
 ## Threat Model Summary
 
-| Threat | Entry Point | Existing Defense | Coverage |
-| --- | --- | --- | --- |
-| SQL injection | sqlite_read_query | Parameterized queries + identifier sanitization | Full |
-| Code execution | sqlite_execute_code | vm sandbox + blocked patterns + timeout | Partial |
-| [etc.] | | | |
+| Threat         | Entry Point         | Existing Defense                                | Coverage |
+| -------------- | ------------------- | ----------------------------------------------- | -------- |
+| SQL injection  | sqlite_read_query   | Parameterized queries + identifier sanitization | Full     |
+| Code execution | sqlite_execute_code | vm sandbox + blocked patterns + timeout         | Partial  |
+| [etc.]         |                     |                                                 |          |
 
 ## Gaps Identified
 
@@ -104,21 +107,21 @@ assessments — verify them by attempting to construct attack scenarios.
 Score each dimension on a 1–5 scale. Dimensions have different weights
 reflecting their relative importance for security:
 
-| Dimension | Weight | Focus Areas |
-| --- | --- | --- |
-| **Exploitability** | 4 | Attack complexity, privileges required, user interaction needed, remote vs. local, automation potential |
-| **Impact** | 3 | Confidentiality (data breach), integrity (data tampering), availability (DoS), privilege escalation, RCE |
-| **Existing Defenses** | 2 | Are mitigations effective? Can they be bypassed? Are there defense-in-depth layers? |
-| **Detection** | 1 | Would exploitation be caught by logging, monitoring, CI gates, or audit trails? |
+| Dimension             | Weight | Focus Areas                                                                                              |
+| --------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| **Exploitability**    | 4      | Attack complexity, privileges required, user interaction needed, remote vs. local, automation potential  |
+| **Impact**            | 3      | Confidentiality (data breach), integrity (data tampering), availability (DoS), privilege escalation, RCE |
+| **Existing Defenses** | 2      | Are mitigations effective? Can they be bypassed? Are there defense-in-depth layers?                      |
+| **Detection**         | 1      | Would exploitation be caught by logging, monitoring, CI gates, or audit trails?                          |
 
 ### Severity Mapping (CVSS-Inspired)
 
-| Weighted Score | Severity | Meaning |
-| --- | --- | --- |
-| 4.0–5.0 | Critical | Exploitable remotely with low complexity, high impact, no effective mitigation |
-| 3.0–3.9 | High | Exploitable with moderate complexity or auth, significant impact |
-| 2.0–2.9 | Medium | Requires specific preconditions or has limited blast radius |
-| 1.0–1.9 | Low | Theoretical risk, defense-in-depth improvement, hardening recommendation |
+| Weighted Score | Severity | Meaning                                                                        |
+| -------------- | -------- | ------------------------------------------------------------------------------ |
+| 4.0–5.0        | Critical | Exploitable remotely with low complexity, high impact, no effective mitigation |
+| 3.0–3.9        | High     | Exploitable with moderate complexity or auth, significant impact               |
+| 2.0–2.9        | Medium   | Requires specific preconditions or has limited blast radius                    |
+| 1.0–1.9        | Low      | Theoretical risk, defense-in-depth improvement, hardening recommendation       |
 
 ### Depth Profiles
 
@@ -146,41 +149,41 @@ receive full scrutiny:
 
 ### Grading Scale
 
-| Grade | Score Range | Meaning |
-| --- | --- | --- |
-| A | 4.5–5.0 | Excellent — minimal risk, defense-in-depth present |
-| B | 3.5–4.4 | Good — no critical issues, some hardening opportunities |
-| C | 2.5–3.4 | Acceptable — medium-risk issues present, remediations needed |
-| D | 1.5–2.4 | Poor — high-risk issues found, immediate action required |
-| F | 1.0–1.4 | Failing — critical vulnerabilities, deployment not recommended |
+| Grade | Score Range | Meaning                                                        |
+| ----- | ----------- | -------------------------------------------------------------- |
+| A     | 4.5–5.0     | Excellent — minimal risk, defense-in-depth present             |
+| B     | 3.5–4.4     | Good — no critical issues, some hardening opportunities        |
+| C     | 2.5–3.4     | Acceptable — medium-risk issues present, remediations needed   |
+| D     | 1.5–2.4     | Poor — high-risk issues found, immediate action required       |
+| F     | 1.0–1.4     | Failing — critical vulnerabilities, deployment not recommended |
 
 ### Findings
 
-| # | Category | Severity | CWE | Finding | File:Line | Exploitability | Remediation |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Input Validation | Critical | CWE-89 | SQL interpolation in dynamic query | src/foo.ts:42 | Remote, no auth | Use parameterized query |
-| 2 | Auth | High | CWE-862 | Endpoint accessible without scope check | src/bar.ts:88 | Remote, auth bypass | Add hasScope() guard |
-| 3 | Docker | Medium | CWE-250 | Container runs as root | Dockerfile:1 | Local, post-compromise | Add USER directive |
-| ... | | | | | | | |
+| #   | Category         | Severity | CWE     | Finding                                 | File:Line     | Exploitability         | Remediation             |
+| --- | ---------------- | -------- | ------- | --------------------------------------- | ------------- | ---------------------- | ----------------------- |
+| 1   | Input Validation | Critical | CWE-89  | SQL interpolation in dynamic query      | src/foo.ts:42 | Remote, no auth        | Use parameterized query |
+| 2   | Auth             | High     | CWE-862 | Endpoint accessible without scope check | src/bar.ts:88 | Remote, auth bypass    | Add hasScope() guard    |
+| 3   | Docker           | Medium   | CWE-250 | Container runs as root                  | Dockerfile:1  | Local, post-compromise | Add USER directive      |
+| ... |                  |          |         |                                         |               |                        |                         |
 
 ### Dimension Scores
 
-| Dimension | Score | Weight | Weighted |
-| --- | --- | --- | --- |
-| Exploitability | [1–5] | 4 | [score × 4] |
-| Impact | [1–5] | 3 | [score × 3] |
-| Existing Defenses | [1–5] | 2 | [score × 2] |
-| Detection | [1–5] | 1 | [score × 1] |
-| **Total** | | **10** | **[sum]/50 = [avg]** |
+| Dimension         | Score | Weight | Weighted             |
+| ----------------- | ----- | ------ | -------------------- |
+| Exploitability    | [1–5] | 4      | [score × 4]          |
+| Impact            | [1–5] | 3      | [score × 3]          |
+| Existing Defenses | [1–5] | 2      | [score × 2]          |
+| Detection         | [1–5] | 1      | [score × 1]          |
+| **Total**         |       | **10** | **[sum]/50 = [avg]** |
 
 ### Category Breakdown
 
-| Category | Findings | Worst Severity | Coverage |
-| --- | --- | --- | --- |
-| 1. Dependencies | 0 | — | ✅ Full |
-| 2. Secrets | 1 | Low | ✅ Full |
-| 3. Input Validation | 2 | Critical | ⚠️ Partial |
-| ... | | | |
+| Category            | Findings | Worst Severity | Coverage   |
+| ------------------- | -------- | -------------- | ---------- |
+| 1. Dependencies     | 0        | —              | ✅ Full    |
+| 2. Secrets          | 1        | Low            | ✅ Full    |
+| 3. Input Validation | 2        | Critical       | ⚠️ Partial |
+| ...                 |          |                |            |
 
 ### Blocking Issues
 
@@ -193,6 +196,7 @@ with high impact.
 For each critical/high finding, provide a concrete attack scenario:
 
 #### Scenario: [Finding Title]
+
 - **Attacker profile**: [External unauthenticated / Authenticated user / Admin]
 - **Attack vector**: [Step-by-step exploitation path]
 - **Preconditions**: [What must be true for the attack to work]
@@ -222,12 +226,12 @@ team review with an explicit disposition.
 
 For each finding, record one of:
 
-| Disposition | Meaning |
-| --- | --- |
-| **Accept** | Implement the suggested remediation |
-| **Reject** | Explain why the finding does not apply or is acceptable risk |
-| **Modify** | Accept the finding but implement a different remediation |
-| **Defer** | Acknowledge the risk but defer to a future milestone (must justify) |
+| Disposition | Meaning                                                             |
+| ----------- | ------------------------------------------------------------------- |
+| **Accept**  | Implement the suggested remediation                                 |
+| **Reject**  | Explain why the finding does not apply or is acceptable risk        |
+| **Modify**  | Accept the finding but implement a different remediation            |
+| **Defer**   | Acknowledge the risk but defer to a future milestone (must justify) |
 
 ### Remediation Plan Output
 
@@ -238,39 +242,40 @@ Produce the remediation plan prioritized by risk (exploitability × impact):
 
 ### Disposition Summary
 
-| # | Finding | Severity | Disposition | Rationale |
-| --- | --- | --- | --- | --- |
-| 1 | SQL interpolation | Critical | Accept | Will switch to parameterized query |
-| 2 | Auth bypass | High | Modify | Using middleware guard instead of inline check |
-| 3 | Root container | Medium | Defer | Tracked in issue #42, post-v2 milestone |
+| #   | Finding           | Severity | Disposition | Rationale                                      |
+| --- | ----------------- | -------- | ----------- | ---------------------------------------------- |
+| 1   | SQL interpolation | Critical | Accept      | Will switch to parameterized query             |
+| 2   | Auth bypass       | High     | Modify      | Using middleware guard instead of inline check |
+| 3   | Root container    | Medium   | Defer       | Tracked in issue #42, post-v2 milestone        |
 
 ### Quick Wins (< 1 hour each)
 
 Remediations that can be implemented immediately with minimal risk:
 
-| # | Finding | Fix | Effort |
-| --- | --- | --- | --- |
-| ... | ... | ... | ... |
+| #   | Finding | Fix | Effort |
+| --- | ------- | --- | ------ |
+| ... | ...     | ... | ...    |
 
 ### Architectural Changes
 
 Remediations requiring design work or multi-file changes:
 
-| # | Finding | Approach | Files Affected | Effort |
-| --- | --- | --- | --- | --- |
-| ... | ... | ... | ... | ... |
+| #   | Finding | Approach | Files Affected | Effort |
+| --- | ------- | -------- | -------------- | ------ |
+| ... | ...     | ...      | ...            | ...    |
 
 ### Accepted Risks
 
 Findings explicitly rejected or deferred with justification:
 
-| # | Finding | Disposition | Justification | Review Date |
-| --- | --- | --- | --- | --- |
-| ... | ... | ... | ... | ... |
+| #   | Finding | Disposition | Justification | Review Date |
+| --- | ------- | ----------- | ------------- | ----------- |
+| ... | ...     | ...         | ...           | ...         |
 
 ### Updated Security Score
 
 After applying proposed remediations:
+
 - **Before**: [score] / 5.0 (Grade [X])
 - **After (projected)**: [score] / 5.0 (Grade [Y])
 ```
@@ -366,12 +371,12 @@ recommended immediate actions]
 
 ## Findings Summary
 
-| Category | Critical | High | Medium | Low | Total |
-| --- | --- | --- | --- | --- | --- |
-| 1. Dependencies | 0 | 0 | 0 | 0 | 0 |
-| 2. Secrets | ... | | | | |
-| ... | | | | | |
-| **Total** | | | | | |
+| Category        | Critical | High | Medium | Low | Total |
+| --------------- | -------- | ---- | ------ | --- | ----- |
+| 1. Dependencies | 0        | 0    | 0      | 0   | 0     |
+| 2. Secrets      | ...      |      |        |     |       |
+| ...             |          |      |        |     |       |
+| **Total**       |          |      |        |     |       |
 
 ## Top 3 Urgent Remediations
 

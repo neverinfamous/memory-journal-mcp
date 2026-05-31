@@ -32,11 +32,17 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_update_entry',
             title: 'Update Team Entry',
-            description: 'Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field. Requires TEAM_DB_PATH.',
+            description:
+                'Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -55,8 +61,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                             error: `Team entry ${String(input.entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and try again',
+                            suggestion: 'Verify the team entry ID and try again',
                             recoverable: true,
                         }
                     }
@@ -176,7 +181,12 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamMergeTagsSchemaMcp,
             outputSchema: TeamMergeTagsOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {

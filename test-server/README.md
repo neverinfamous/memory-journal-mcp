@@ -4,10 +4,10 @@
 
 ## Files
 
-| File                              | Purpose                                                                                                                             | When to Read          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| File                              | Purpose                                                                                                                                               | When to Read          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | [`standard/`](standard/README.md) | **Standard Modular Tests** — Directory containing 22 modular test files across feature and stress-test tiers. See `standard/README.md` for full list. | **Always start here** |
-| [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 20 phase-aligned Code Mode test prompts. See `codemode/README.md` for full list.                  | After standard tests  |
+| [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 20 phase-aligned Code Mode test prompts. See `codemode/README.md` for full list.                   | After standard tests  |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
 | [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 70 tools across 10 groups + codemode | Reference |

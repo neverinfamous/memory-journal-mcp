@@ -21,9 +21,9 @@ Zod provides strict schema validation and static type inference. It is mandatory
 ```typescript
 const passwordSchema = z.string().superRefine((val, ctx) => {
   if (val.length < 8) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Too short" });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Too short' })
   }
-});
+})
 ```
 
 ## 3. Transformations
@@ -39,8 +39,8 @@ const passwordSchema = z.string().superRefine((val, ctx) => {
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   PORT: z.coerce.number().default(3000),
-});
-export const env = envSchema.parse(process.env);
+})
+export const env = envSchema.parse(process.env)
 ```
 
 ## 5. Inference

@@ -29,23 +29,23 @@ is worth nothing.
 
 **Anti-Patterns:**
 
-| Pattern | Problem |
-| --- | --- |
-| `description: Guide for X` | Passive — agent won't trigger |
-| 3-word description | Too vague — triggers on everything or nothing |
-| 200-word description | Token waste — loaded on every conversation |
-| Missing alternative phrasings | Agent only triggers on exact keywords |
-| `name: my_skill` | Not kebab-case |
+| Pattern                       | Problem                                       |
+| ----------------------------- | --------------------------------------------- |
+| `description: Guide for X`    | Passive — agent won't trigger                 |
+| 3-word description            | Too vague — triggers on everything or nothing |
+| 200-word description          | Token waste — loaded on every conversation    |
+| Missing alternative phrasings | Agent only triggers on exact keywords         |
+| `name: my_skill`              | Not kebab-case                                |
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Assertive description with 3+ trigger contexts, ~50–100 words, covers edge phrasings |
-| 4 | Good description, covers main triggers, minor phrasing gaps |
-| 3 | Present but passive or missing secondary triggers |
-| 2 | Too vague or too long, unreliable triggering |
-| 1 | Missing or broken frontmatter |
+| Score | Criteria                                                                             |
+| ----- | ------------------------------------------------------------------------------------ |
+| 5     | Assertive description with 3+ trigger contexts, ~50–100 words, covers edge phrasings |
+| 4     | Good description, covers main triggers, minor phrasing gaps                          |
+| 3     | Present but passive or missing secondary triggers                                    |
+| 2     | Too vague or too long, unreliable triggering                                         |
+| 1     | Missing or broken frontmatter                                                        |
 
 ---
 
@@ -63,23 +63,23 @@ is worth nothing.
 
 **Anti-Patterns:**
 
-| Pattern | Problem |
-| --- | --- |
-| "MUST ALWAYS NEVER use X" | All-caps overload — agent treats everything as equally critical |
-| "Consider using caching" | Too passive — agent may skip entirely |
-| "Set up the project" | No specifics — agent will hallucinate a setup process |
-| "Handle errors appropriately" | Vague — what does "appropriately" mean? |
-| Steps without ordering | Agent may execute in wrong sequence |
+| Pattern                       | Problem                                                         |
+| ----------------------------- | --------------------------------------------------------------- |
+| "MUST ALWAYS NEVER use X"     | All-caps overload — agent treats everything as equally critical |
+| "Consider using caching"      | Too passive — agent may skip entirely                           |
+| "Set up the project"          | No specifics — agent will hallucinate a setup process           |
+| "Handle errors appropriately" | Vague — what does "appropriately" mean?                         |
+| Steps without ordering        | Agent may execute in wrong sequence                             |
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Clear, imperative, explains reasoning, no ambiguity |
-| 4 | Mostly clear, minor vague spots |
-| 3 | Functional but has passive language or unclear sections |
-| 2 | Multiple ambiguous instructions, agent likely to deviate |
-| 1 | Confusing, contradictory, or unusable instructions |
+| Score | Criteria                                                 |
+| ----- | -------------------------------------------------------- |
+| 5     | Clear, imperative, explains reasoning, no ambiguity      |
+| 4     | Mostly clear, minor vague spots                          |
+| 3     | Functional but has passive language or unclear sections  |
+| 2     | Multiple ambiguous instructions, agent likely to deviate |
+| 1     | Confusing, contradictory, or unusable instructions       |
 
 ---
 
@@ -97,23 +97,23 @@ is worth nothing.
 
 **Anti-Patterns:**
 
-| Pattern | Problem |
-| --- | --- |
-| 800-line SKILL.md | Token overflow, agent may lose context |
-| No references for complex skill | Everything crammed into SKILL.md |
-| "Read references/setup.md" (no context) | Agent doesn't know when to read it |
-| SKILL → ref-A → ref-B → ref-C | Too many hops, agent gets lost |
-| Flat directory with 10 files | No organizational structure |
+| Pattern                                 | Problem                                |
+| --------------------------------------- | -------------------------------------- |
+| 800-line SKILL.md                       | Token overflow, agent may lose context |
+| No references for complex skill         | Everything crammed into SKILL.md       |
+| "Read references/setup.md" (no context) | Agent doesn't know when to read it     |
+| SKILL → ref-A → ref-B → ref-C           | Too many hops, agent gets lost         |
+| Flat directory with 10 files            | No organizational structure            |
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Clean 3-tier structure, SKILL.md < 500 lines, clear reference pointers |
-| 4 | Good structure, minor pointer gaps |
-| 3 | Functional but SKILL.md is heavy or references are disorganized |
-| 2 | Monolithic SKILL.md or confusing file layout |
-| 1 | No structure — single massive file or scattered fragments |
+| Score | Criteria                                                               |
+| ----- | ---------------------------------------------------------------------- |
+| 5     | Clean 3-tier structure, SKILL.md < 500 lines, clear reference pointers |
+| 4     | Good structure, minor pointer gaps                                     |
+| 3     | Functional but SKILL.md is heavy or references are disorganized        |
+| 2     | Monolithic SKILL.md or confusing file layout                           |
+| 1     | No structure — single massive file or scattered fragments              |
 
 ---
 
@@ -128,21 +128,21 @@ is worth nothing.
 
 **Anti-Patterns:**
 
-| Pattern | Problem |
-| --- | --- |
-| "Produce a report" | No format specified — agent invents one |
+| Pattern                                      | Problem                                  |
+| -------------------------------------------- | ---------------------------------------- |
+| "Produce a report"                           | No format specified — agent invents one  |
 | Template with only headings, no example rows | Agent may misunderstand column semantics |
-| No success criteria | Agent doesn't know when to stop |
+| No success criteria                          | Agent doesn't know when to stop          |
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Explicit templates with example content, clear completion criteria |
-| 4 | Templates present, minor gaps in examples |
-| 3 | Some format guidance but incomplete |
-| 2 | Vague output expectations |
-| 1 | No output format defined — agent guesses |
+| Score | Criteria                                                           |
+| ----- | ------------------------------------------------------------------ |
+| 5     | Explicit templates with example content, clear completion criteria |
+| 4     | Templates present, minor gaps in examples                          |
+| 3     | Some format guidance but incomplete                                |
+| 2     | Vague output expectations                                          |
+| 1     | No output format defined — agent guesses                           |
 
 ---
 
@@ -158,13 +158,13 @@ is worth nothing.
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | All prerequisites documented, graceful degradation, recovery paths |
-| 4 | Main failure cases handled, minor gaps |
-| 3 | Some error handling but missing common failure modes |
-| 2 | Only happy path documented |
-| 1 | No error handling — agent crashes on first edge case |
+| Score | Criteria                                                           |
+| ----- | ------------------------------------------------------------------ |
+| 5     | All prerequisites documented, graceful degradation, recovery paths |
+| 4     | Main failure cases handled, minor gaps                             |
+| 3     | Some error handling but missing common failure modes               |
+| 2     | Only happy path documented                                         |
+| 1     | No error handling — agent crashes on first edge case               |
 
 ---
 
@@ -181,13 +181,13 @@ is worth nothing.
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | All security checks pass, destructive actions gated, no secret access |
-| 4 | Mostly secure, minor documentation gaps |
-| 3 | Functional but missing safety gates on risky operations |
-| 2 | Potential for unsafe behavior without HITL |
-| 1 | Actively unsafe — reads secrets, destructive without gates |
+| Score | Criteria                                                              |
+| ----- | --------------------------------------------------------------------- |
+| 5     | All security checks pass, destructive actions gated, no secret access |
+| 4     | Mostly secure, minor documentation gaps                               |
+| 3     | Functional but missing safety gates on risky operations               |
+| 2     | Potential for unsafe behavior without HITL                            |
+| 1     | Actively unsafe — reads secrets, destructive without gates            |
 
 ---
 
@@ -204,13 +204,13 @@ is worth nothing.
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Lean description, compact SKILL.md, references loaded only when needed |
-| 4 | Mostly efficient, minor redundancy |
-| 3 | Noticeable token waste but functional |
-| 2 | Bloated description or SKILL.md, unnecessary content |
-| 1 | Massive token footprint with low value |
+| Score | Criteria                                                               |
+| ----- | ---------------------------------------------------------------------- |
+| 5     | Lean description, compact SKILL.md, references loaded only when needed |
+| 4     | Mostly efficient, minor redundancy                                     |
+| 3     | Noticeable token waste but functional                                  |
+| 2     | Bloated description or SKILL.md, unnecessary content                   |
+| 1     | Massive token footprint with low value                                 |
 
 ---
 
@@ -226,13 +226,13 @@ is worth nothing.
 
 **Scoring Guide:**
 
-| Score | Criteria |
-| --- | --- |
-| 5 | Current content, all links valid, version requirements explicit |
-| 4 | Mostly current, minor staleness |
-| 3 | Some outdated content but core instructions still work |
-| 2 | Significantly outdated, references to deprecated tools |
-| 1 | Stale — instructions reference non-existent APIs or tools |
+| Score | Criteria                                                        |
+| ----- | --------------------------------------------------------------- |
+| 5     | Current content, all links valid, version requirements explicit |
+| 4     | Mostly current, minor staleness                                 |
+| 3     | Some outdated content but core instructions still work          |
+| 2     | Significantly outdated, references to deprecated tools          |
+| 1     | Stale — instructions reference non-existent APIs or tools       |
 
 ---
 

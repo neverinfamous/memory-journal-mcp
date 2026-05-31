@@ -12,7 +12,7 @@ Upgrade the current project to a targeted Next.js version following official mig
 
 ## Instructions
 
-1. **Detect current environment**: 
+1. **Detect current environment**:
    - Read `package.json` to identify the current Next.js version, React version, and package manager (`npm`, `pnpm`, `yarn`).
    - Read the lockfile to ensure you use the correct package manager.
 
@@ -26,11 +26,11 @@ Upgrade the current project to a targeted Next.js version following official mig
 4. **Security Gate**:
    - You MUST request explicit user confirmation before running any codemod that modifies source files.
 
-5. **Run codemods FIRST (before installing new versions)**: 
-   - Next.js codemods should often be run against the *old* codebase before upgrading to automate breaking changes.
+5. **Run codemods FIRST (before installing new versions)**:
+   - Next.js codemods should often be run against the _old_ codebase before upgrading to automate breaking changes.
    - Example: `npx @next/codemod@<target-version> <transform> <path>`
 
-6. **Pin dependencies**: 
+6. **Pin dependencies**:
    - Upgrade Next.js and peer dependencies to the specific target version:
    - Example: `pnpm install next@15.0.0 react@19.0.0 react-dom@19.0.0`
 

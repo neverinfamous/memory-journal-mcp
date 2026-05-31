@@ -94,8 +94,7 @@ export async function runAutoPrune(
         } catch (cleanupError) {
             logger.warning('Auto-prune: failed to clean stale vectors (non-critical)', {
                 module: 'AutoPrune',
-                error:
-                    cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+                error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
             })
         }
     }

@@ -74,13 +74,13 @@
 > [!NOTE]
 > `MAX_QUERY_LIMIT` is 500 — enforced on `get_recent_entries`, `get_github_issues`, `get_github_prs`, `search_entries`, and `search_by_date_range`.
 
-| #   | Test                | Command                                     | Expected Result                 |
-| --- | ------------------- | ------------------------------------------- | ------------------------------- |
+| #   | Test                | Command                                                        | Expected Result                 |
+| --- | ------------------- | -------------------------------------------------------------- | ------------------------------- |
 | 14  | Under limit         | `get_recent_entries(project_number: 5, limit: 100)`            | Accepted, returns ≤ 100 entries |
 | 15  | At limit            | `get_recent_entries(project_number: 5, limit: 500)`            | Accepted, returns ≤ 500 entries |
 | 16  | Over limit (core)   | `get_recent_entries(project_number: 5, limit: 501)`            | Structured validation error     |
-| 17  | Over limit (issues) | `get_github_issues(limit: 501)`             | Structured validation error     |
-| 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                | Structured validation error     |
+| 17  | Over limit (issues) | `get_github_issues(limit: 501)`                                | Structured validation error     |
+| 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                                   | Structured validation error     |
 | 19  | Over limit (search) | `search_entries(project_number: 5, query: "test", limit: 501)` | Structured validation error     |
 
 ### Verification Checks

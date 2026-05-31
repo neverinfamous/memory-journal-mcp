@@ -5,7 +5,75 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.0...HEAD)
+
+## [8.0.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v8.0.0) - 2026-05-31
+
+### Added
+
+- **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
+- **analytics**: On-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
+- **auto-prune**: Importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
+- **briefing**: Server version, resource/tool counts, test health indicators, workspace paths, git working tree status, code-map availability, `📊 memory://metrics/summary` breadcrumb, and unreleased change summary to `memory://briefing` output
+- **codemode**: Enhanced sandbox with `context`/`readonly` parameters, runtime schema introspection, progress notification bindings, and additional aliases
+- **docs**: Missing CLI flags, environment variables, auto-prune documentation, and "Customizing the Session Briefing" sections
+- **errors**: Valid enum value lists to Zod validation error messages
+- **github**: Dependabot configuration scoped to `github-actions` only for passive version update notifications
+- **instructions**: 14 new `EntryType` values, `architecture`/`security` significance types, missing tool parameters, and `HELP_CONTENT` export
+- **metrics**: Dynamic tracking for deprecation warnings (`MetricsAccumulator.recordDeprecationWarning`)
+- **prompts**: `adversarial-plan-review` and `flag-dashboard` prompts for multi-pass planning and flag triage
+- **resources**: `memory://flags/history` resource showing recently resolved flags with resolution details and average time-to-resolution metrics
+- **scripts**: Added `test:scheduler` and `test-progress.mjs` for E2E and integration testing
+- **skills**: Added 20+ skills including official vendor integrations, adversarial auditing, and `docs-marketer`
+- **team**: Added `team_list_flags`, `team_update_flag`, and `team_get_flag_analytics` tools for flag management
+- **tests**: `verify-schemas.mjs` script to programmatically validate `outputSchema` definitions
+
+### Changed
+
+- **briefing**: Enhanced rendering with filtered milestones, capability statuses, and prioritized CI workflows
+- **codemode**: Optimized dynamically generated TypeScript declarations and removed redundant strings to save tokens
+- **deps**: Updated npm dependencies including `commander` to `^15.0.0` and `eslint` to `10.4.1`
+- **docker**: Bumped Node.js base image to `26.2.0-alpine` (#563)
+- **docs**: Highlighted auto-prune, standardized `README.md` layout, and simplified agent briefing instructions
+- **instructions**: Refactored `server-instructions.md` into modular directory, saving ~700 tokens, and updated help handlers
+- **prompts**: Enhanced `flag-dashboard` and surfaced team flags in standup/retro prompts
+- **resources**: Changed `memory://briefing` and `memory://briefing/{repo}` to return `text/markdown` directly instead of JSON objects for token efficiency
+- **schemas**: Enforced strict `project_number` validation across Core and Team tools with formatted validation errors
+- **skills**: Restructured large skills, expanded `mcp-builder`, and upgraded `adversarial-planner` to embed `gh copilot` scans
+- **tests**: Standardized 42+ prompt files, added artifact cleanup, and clarified Code Mode restrictions
+
+### Removed
+
+- **instructions**: `gotchas.md`, `codemode.md`, and `server-access.md` static help files to reduce agent distraction and token usage
+- **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
+
+### Fixed
+
+- **annotations**: Added missing `destructiveHint: false` to 62 tools and `idempotentHint: false` to `delete_entry`
+- **briefing**: Fixed dynamic context routing, deduplicated entry previews, and rendering cutoff issues
+- **codemode**: Comprehensive hallucination interception for API aliases, missing parameters, and unsupported cross-server database queries
+- **codemode**: Expanded global sandbox bindings, proxy mappings, and parameter coercions for robust agent interactions
+- **codemode**: Improved error handling and validation for legacy payloads, syntax errors, and missing fields
+- **core**: Enforced strict validation for significance types and fixed `auto_context` persistence mapping
+- **docs**: Synchronized `code-map.md`, `README.md`, environment variables, and tool counts across documentation
+- **github**: Fixed parameter hallucinations in repo insights, payload truncation flags, and repository resolution fallbacks
+- **instructions**: Fixed hallucinated JSON parsing instructions, corrected tool schemas, and restored missing `gotchas.md` help content
+- **io**: Fixed `export_entries` ignoring limits and increased ceiling to 5000
+- **progress**: Fixed step numbering gaps and missing notifications in export and backup sequences
+- **relationships**: Fixed `visualize_relationships` returning `null` when empty, and intercepted hallucinated schema parameters
+- **resources**: Fixed `memory://help` failing to extract parameters from ZodPipelines
+- **repo**: Mapped `repo_name` fallback to `repo` within `mj_execute_code` sanitization to prevent context loss
+- **scripts**: Improved E2E scheduler test scripts and help pointer mapping logic
+- **server**: Fixed structured error responses for Zod validations and payload limits, preventing raw JSON-RPC leakages
+- **skills**: Remediated frontmatter, database triggers, and stub implementations across migrated skills
+- **team**: Fixed parameter parsing, path traversal checks, schema errors, and `project_number` filtering across team tools
+- **tests**: Fixed environment resolution, hallucinated expectations, and missing parameters across 26 test scripts
+
+### Security
+
+- **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
+- **docs**: Documented engine-level Code Mode sandbox restrictions and RPC allowlists in `SECURITY.md` and `README.md`
+- **skills**: Bumped `qs` dependency in `gitlab` skill to resolve a remotely triggerable DoS vulnerability
 
 ## [7.7.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.7.1) - 2026-05-15
 

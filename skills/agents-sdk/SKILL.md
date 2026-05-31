@@ -11,21 +11,21 @@ description: Build AI agents on Cloudflare Workers using the Agents SDK or build
 
 Fetch current docs from `https://github.com/cloudflare/agents/tree/main/docs` before implementing.
 
-| Topic | Doc | Use for |
-|-------|-----|---------|
-| Getting started | `docs/getting-started.md` | First agent, project setup |
-| State | `docs/state.md` | `setState`, `validateStateChange`, persistence |
-| Routing | `docs/routing.md` | URL patterns, `routeAgentRequest`, `basePath` |
-| Callable methods | `docs/callable-methods.md` | `@callable`, RPC, streaming, timeouts |
-| Scheduling | `docs/scheduling.md` | `schedule()`, `scheduleEvery()`, cron |
-| Workflows | `docs/workflows.md` | `AgentWorkflow`, durable multi-step tasks |
-| HTTP/WebSockets | `docs/http-websockets.md` | Lifecycle hooks, hibernation |
-| Email | `docs/email.md` | Email routing, secure reply resolver |
-| MCP client | `docs/mcp-client.md` | Connecting to MCP servers |
-| MCP server | `docs/mcp-servers.md` | Building MCP servers with `McpAgent` |
-| Client SDK | `docs/client-sdk.md` | `useAgent`, `useAgentChat`, React hooks |
-| Human-in-the-loop | `docs/human-in-the-loop.md` | Approval flows, pausing workflows |
-| Resumable streaming | `docs/resumable-streaming.md` | Stream recovery on disconnect |
+| Topic               | Doc                           | Use for                                        |
+| ------------------- | ----------------------------- | ---------------------------------------------- |
+| Getting started     | `docs/getting-started.md`     | First agent, project setup                     |
+| State               | `docs/state.md`               | `setState`, `validateStateChange`, persistence |
+| Routing             | `docs/routing.md`             | URL patterns, `routeAgentRequest`, `basePath`  |
+| Callable methods    | `docs/callable-methods.md`    | `@callable`, RPC, streaming, timeouts          |
+| Scheduling          | `docs/scheduling.md`          | `schedule()`, `scheduleEvery()`, cron          |
+| Workflows           | `docs/workflows.md`           | `AgentWorkflow`, durable multi-step tasks      |
+| HTTP/WebSockets     | `docs/http-websockets.md`     | Lifecycle hooks, hibernation                   |
+| Email               | `docs/email.md`               | Email routing, secure reply resolver           |
+| MCP client          | `docs/mcp-client.md`          | Connecting to MCP servers                      |
+| MCP server          | `docs/mcp-servers.md`         | Building MCP servers with `McpAgent`           |
+| Client SDK          | `docs/client-sdk.md`          | `useAgent`, `useAgentChat`, React hooks        |
+| Human-in-the-loop   | `docs/human-in-the-loop.md`   | Approval flows, pausing workflows              |
+| Resumable streaming | `docs/resumable-streaming.md` | Stream recovery on disconnect                  |
 
 Cloudflare docs: https://developers.cloudflare.com/agents/
 
@@ -66,6 +66,7 @@ npm ls agents  # Should show agents package
 ```
 
 If not installed:
+
 ```bash
 npm install agents
 ```
@@ -75,89 +76,87 @@ npm install agents
 ```jsonc
 {
   "durable_objects": {
-    "bindings": [{ "name": "MyAgent", "class_name": "MyAgent" }]
+    "bindings": [{ "name": "MyAgent", "class_name": "MyAgent" }],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MyAgent"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MyAgent"] }],
 }
 ```
 
 ## Agent Class
 
 ```typescript
-import { Agent, routeAgentRequest, callable } from "agents";
+import { Agent, routeAgentRequest, callable } from 'agents'
 
-type State = { count: number };
+type State = { count: number }
 
 export class Counter extends Agent<Env, State> {
-  initialState = { count: 0 };
+  initialState = { count: 0 }
 
   // Validation hook - runs before state persists (sync, throwing rejects the update)
-  validateStateChange(nextState: State, source: Connection | "server") {
-    if (nextState.count < 0) throw new Error("Count cannot be negative");
+  validateStateChange(nextState: State, source: Connection | 'server') {
+    if (nextState.count < 0) throw new Error('Count cannot be negative')
   }
 
   // Notification hook - runs after state persists (async, non-blocking)
-  onStateUpdate(state: State, source: Connection | "server") {
-    console.log("State updated:", state);
+  onStateUpdate(state: State, source: Connection | 'server') {
+    console.log('State updated:', state)
   }
 
   @callable()
   increment() {
-    this.setState({ count: this.state.count + 1 });
-    return this.state.count;
+    this.setState({ count: this.state.count + 1 })
+    return this.state.count
   }
 }
 
 export default {
-  fetch: (req, env) => routeAgentRequest(req, env) ?? new Response("Not found", { status: 404 })
-};
+  fetch: (req, env) => routeAgentRequest(req, env) ?? new Response('Not found', { status: 404 }),
+}
 ```
 
 ## Routing
 
 Requests route to `/agents/{agent-name}/{instance-name}`:
 
-| Class | URL |
-|-------|-----|
-| `Counter` | `/agents/counter/user-123` |
-| `ChatRoom` | `/agents/chat-room/lobby` |
+| Class      | URL                        |
+| ---------- | -------------------------- |
+| `Counter`  | `/agents/counter/user-123` |
+| `ChatRoom` | `/agents/chat-room/lobby`  |
 
 Client: `useAgent({ agent: "Counter", name: "user-123" })`
 
 ## Core APIs
 
-| Task | API |
-|------|-----|
-| Read state | `this.state.count` |
-| Write state | `this.setState({ count: 1 })` |
-| SQL query | `` this.sql`SELECT * FROM users WHERE id = ${id}` `` |
-| Schedule (delay) | `await this.schedule(60, "task", payload)` |
-| Schedule (cron) | `await this.schedule("0 * * * *", "task", payload)` |
-| Schedule (interval) | `await this.scheduleEvery(30, "poll")` |
-| RPC method | `@callable() myMethod() { ... }` |
-| Streaming RPC | `@callable({ streaming: true }) stream(res) { ... }` |
-| Start workflow | `await this.runWorkflow("ProcessingWorkflow", params)` |
+| Task                | API                                                    |
+| ------------------- | ------------------------------------------------------ |
+| Read state          | `this.state.count`                                     |
+| Write state         | `this.setState({ count: 1 })`                          |
+| SQL query           | `` this.sql`SELECT * FROM users WHERE id = ${id}` ``   |
+| Schedule (delay)    | `await this.schedule(60, "task", payload)`             |
+| Schedule (cron)     | `await this.schedule("0 * * * *", "task", payload)`    |
+| Schedule (interval) | `await this.scheduleEvery(30, "poll")`                 |
+| RPC method          | `@callable() myMethod() { ... }`                       |
+| Streaming RPC       | `@callable({ streaming: true }) stream(res) { ... }`   |
+| Start workflow      | `await this.runWorkflow("ProcessingWorkflow", params)` |
 
 ## React Client
 
 ```tsx
-import { useAgent } from "agents/react";
+import { useAgent } from 'agents/react'
 
 function App() {
-  const [state, setLocalState] = useState({ count: 0 });
+  const [state, setLocalState] = useState({ count: 0 })
 
   const agent = useAgent({
-    agent: "Counter",
-    name: "my-instance",
+    agent: 'Counter',
+    name: 'my-instance',
     onStateUpdate: (newState) => setLocalState(newState),
-    onIdentity: (name, agentType) => console.log(`Connected to ${name}`)
-  });
+    onIdentity: (name, agentType) => console.log(`Connected to ${name}`),
+  })
 
   return (
-    <button onClick={() => agent.setState({ count: state.count + 1 })}>
-      Count: {state.count}
-    </button>
-  );
+    <button onClick={() => agent.setState({ count: state.count + 1 })}>Count: {state.count}</button>
+  )
 }
 ```
 
@@ -187,33 +186,35 @@ When building or modifying MCP servers, follow these prioritized rules:
 - **Optional**: Depending on the repository, implement integration testing via Playwright for dual HTTP/SSE verification.
 
 **Security (Defense-in-Depth):**
+
 - **Blocklists are Defense-in-Depth**: A blocklist is not a primary security boundary. Primary security is the sandbox, container, or strict schema validation.
 - **No Secrets in Config**: MCP servers must rely on the environment variables for API keys and secrets, never hardcoded files inside the server repository.
 - **Rate Limiting & Input Sanitization**: Aggressively sanitize path arguments to prevent directory traversal, and apply basic rate-limiting.
 
 **MCP Scaffold Reference:**
-```typescript
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
 
-const server = new McpServer({ name: "my-mcp", version: "1.0.0" });
+```typescript
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { z } from 'zod'
+
+const server = new McpServer({ name: 'my-mcp', version: '1.0.0' })
 
 server.tool(
-  "my_tool",
-  "Does something using an ID",
-  { id: z.string().describe("The user ID to process") },
+  'my_tool',
+  'Does something using an ID',
+  { id: z.string().describe('The user ID to process') },
   async ({ id }) => {
     try {
-      return { content: [{ type: "text", text: `Got ID: ${id}` }] };
+      return { content: [{ type: 'text', text: `Got ID: ${id}` }] }
     } catch (err) {
-      return { isError: true, content: [{ type: "text", text: `Error: ${err}` }] };
+      return { isError: true, content: [{ type: 'text', text: `Error: ${err}` }] }
     }
   }
-);
+)
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+const transport = new StdioServerTransport()
+await server.connect(transport)
 ```
 
 For advanced MCP references, consult `references/mcp/` (Code Mode, OAuth, Implementation Guides).

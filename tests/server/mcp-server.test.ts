@@ -604,7 +604,10 @@ describe('McpServer', function () {
                 extra: Record<string, unknown>
             ) => Promise<{ content: { type: string; text: string }[] }>
 
-            const result = await handler({ project_number: 1, content: 'Test from mock' }, { _meta: {} })
+            const result = await handler(
+                { project_number: 1, content: 'Test from mock' },
+                { _meta: {} }
+            )
 
             expect(result.content).toBeDefined()
             expect(result.content[0]!.type).toBe('text')

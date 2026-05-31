@@ -30,22 +30,46 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 const r = await mj.team.teamGetRecent({ project_number: 5, limit: 1, project_number: 5 })
 const id = r.entries[0].id
 
-const updated = await mj.team.teamUpdateEntry({project_number: 5,  project_number: 5, entry_id: id,
+const updated = await mj.team.teamUpdateEntry({
+  project_number: 5,
+  project_number: 5,
+  entry_id: id,
   content: 'CM4 updated team content',
-  tags: ['cm4-updated-team'], })
-const verify = await mj.team.teamGetEntryById({project_number: 5,  project_number: 5, entry_id: id })
+  tags: ['cm4-updated-team'],
+})
+const verify = await mj.team.teamGetEntryById({
+  project_number: 5,
+  project_number: 5,
+  entry_id: id,
+})
 
 // Merge tags
-await mj.team.teamCreateEntry({ project_number: 5, content: 'CM4 merge source', tags: ['cm4-team-old'], project_number: 5 })
-const merged = await mj.team.teamMergeTags({ project_number: 5, source_tag: 'cm4-team-old',
-  target_tag: 'cm4-team-new', })
+await mj.team.teamCreateEntry({
+  project_number: 5,
+  content: 'CM4 merge source',
+  tags: ['cm4-team-old'],
+  project_number: 5,
+})
+const merged = await mj.team.teamMergeTags({
+  project_number: 5,
+  source_tag: 'cm4-team-old',
+  target_tag: 'cm4-team-new',
+})
 const afterTags = await mj.team.teamListTags({})
 const oldGone = !afterTags.tags?.some((t) => t.name === 'cm4-team-old')
 const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
 
 // Soft delete
-const toDelete = await mj.team.teamCreateEntry({ project_number: 5, content: 'CM4 delete me', project_number: 5 })
-const deleted = await mj.team.teamDeleteEntry({project_number: 5,  project_number: 5, entry_id: toDelete.entry.id })
+const toDelete = await mj.team.teamCreateEntry({
+  project_number: 5,
+  content: 'CM4 delete me',
+  project_number: 5,
+})
+const deleted = await mj.team.teamDeleteEntry({
+  project_number: 5,
+  project_number: 5,
+  entry_id: toDelete.entry.id,
+})
 
 return {
   updateSuccess: updated.success,
@@ -95,20 +119,25 @@ const r = await mj.team.teamGetRecent({ project_number: 5, limit: 2, project_num
 const [a, b] = r.entries.map((e) => e.id)
 
 const linked = await mj.team.teamLinkEntries({
-  project_number: 5, from_entry_id: a,
+  project_number: 5,
+  from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
   description: 'CM4 team link test',
   project_number: 5,
 })
 const dup = await mj.team.teamLinkEntries({
-  project_number: 5, from_entry_id: a,
+  project_number: 5,
+  from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
   project_number: 5,
 })
 const viz = await mj.team.teamVisualizeRelationships({ project_number: 5, entry_id: a })
-const vizTag = await mj.team.teamVisualizeRelationships({ project_number: 5, tag: 'codemode4-team-test' })
+const vizTag = await mj.team.teamVisualizeRelationships({
+  project_number: 5,
+  tag: 'codemode4-team-test',
+})
 
 return {
   linkSuccess: linked.success,
@@ -132,7 +161,11 @@ return {
 ```javascript
 // Test code:
 const jsonExport = await mj.team.teamExportEntries({ project_number: 5, format: 'json', limit: 5 })
-const mdExport = await mj.team.teamExportEntries({ project_number: 5, format: 'markdown', limit: 5 })
+const mdExport = await mj.team.teamExportEntries({
+  project_number: 5,
+  format: 'markdown',
+  limit: 5,
+})
 
 const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_team_export'
 

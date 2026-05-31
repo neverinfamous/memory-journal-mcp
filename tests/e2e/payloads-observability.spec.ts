@@ -59,7 +59,8 @@ test.describe('Payload Contracts: Observability & Audit', () => {
 
     test('warm-up: create_entry to seed metrics accumulator', async () => {
         const payload = await callToolAndParse(client, 'create_entry', {
-            project_number: 1, content: 'Observability E2E warm-up entry',
+            project_number: 1,
+            content: 'Observability E2E warm-up entry',
             entry_type: 'test_entry',
             tags: ['observability', 'e2e'],
         })
@@ -257,7 +258,8 @@ test.describe('Payload Contracts: Observability & Audit', () => {
 
     test('_meta.tokenEstimate is present on create_entry response', async () => {
         const payload = await callToolAndParse(client, 'create_entry', {
-            project_number: 1, content: 'Token estimate injection test',
+            project_number: 1,
+            content: 'Token estimate injection test',
             entry_type: 'test_entry',
         })
         expectSuccess(payload)
@@ -270,7 +272,10 @@ test.describe('Payload Contracts: Observability & Audit', () => {
     })
 
     test('_meta.tokenEstimate is present on get_recent_entries response', async () => {
-        const payload = await callToolAndParse(client, 'get_recent_entries', { project_number: 1, limit: 5 })
+        const payload = await callToolAndParse(client, 'get_recent_entries', {
+            project_number: 1,
+            limit: 5,
+        })
         expectSuccess(payload)
 
         expect(payload._meta).toBeDefined()
@@ -281,7 +286,8 @@ test.describe('Payload Contracts: Observability & Audit', () => {
 
     test('_meta.tokenEstimate is present on search_entries response', async () => {
         const payload = await callToolAndParse(client, 'search_entries', {
-            project_number: 1, query: 'observability',
+            project_number: 1,
+            query: 'observability',
             limit: 5,
         })
         expectSuccess(payload)

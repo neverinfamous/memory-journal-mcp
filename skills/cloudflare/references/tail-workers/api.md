@@ -4,17 +4,14 @@
 
 ```typescript
 export default {
-  async tail(
-    events: TraceItem[],
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<void> {
+  async tail(events: TraceItem[], env: Env, ctx: ExecutionContext): Promise<void> {
     // Process events
-  }
-} satisfies ExportedHandler<Env>;
+  },
+} satisfies ExportedHandler<Env>
 ```
 
 **Parameters:**
+
 - `events`: Array of `TraceItem` objects (one per producer invocation)
 - `env`: Bindings (KV, D1, R2, env vars, etc.)
 - `ctx`: Context with `waitUntil()` for async work
@@ -25,41 +22,48 @@ export default {
 
 ```typescript
 interface TraceItem {
-  scriptName: string;           // Producer Worker name
-  eventTimestamp: number;        // Epoch milliseconds
-  outcome: 'ok' | 'exception' | 'exceededCpu' | 'exceededMemory' 
-         | 'canceled' | 'scriptNotFound' | 'responseStreamDisconnected' | 'unknown';
-  
+  scriptName: string // Producer Worker name
+  eventTimestamp: number // Epoch milliseconds
+  outcome:
+    | 'ok'
+    | 'exception'
+    | 'exceededCpu'
+    | 'exceededMemory'
+    | 'canceled'
+    | 'scriptNotFound'
+    | 'responseStreamDisconnected'
+    | 'unknown'
+
   event?: {
     request?: {
-      url: string;               // Redacted by default
-      method: string;
-      headers: Record<string, string>;  // Sensitive headers redacted
-      cf?: IncomingRequestCfProperties;
-      getUnredacted(): TraceRequest;    // Bypass redaction (use carefully)
-    };
+      url: string // Redacted by default
+      method: string
+      headers: Record<string, string> // Sensitive headers redacted
+      cf?: IncomingRequestCfProperties
+      getUnredacted(): TraceRequest // Bypass redaction (use carefully)
+    }
     response?: {
-      status: number;
-    };
-  };
-  
+      status: number
+    }
+  }
+
   logs: Array<{
-    timestamp: number;           // Epoch milliseconds
-    level: 'debug' | 'info' | 'log' | 'warn' | 'error';
-    message: unknown[];          // Args passed to console function
-  }>;
-  
+    timestamp: number // Epoch milliseconds
+    level: 'debug' | 'info' | 'log' | 'warn' | 'error'
+    message: unknown[] // Args passed to console function
+  }>
+
   exceptions: Array<{
-    timestamp: number;           // Epoch milliseconds
-    name: string;                // Error type (Error, TypeError, etc.)
-    message: string;             // Error description
-  }>;
-  
+    timestamp: number // Epoch milliseconds
+    name: string // Error type (Error, TypeError, etc.)
+    message: string // Error description
+  }>
+
   diagnosticsChannelEvents: Array<{
-    channel: string;
-    message: unknown;
-    timestamp: number;           // Epoch milliseconds
-  }>;
+    channel: string
+    message: unknown
+    timestamp: number // Epoch milliseconds
+  }>
 }
 ```
 
@@ -71,10 +75,10 @@ All timestamps are **epoch milliseconds**, not seconds:
 
 ```typescript
 // ✅ CORRECT - use directly with Date
-const date = new Date(event.eventTimestamp);
+const date = new Date(event.eventTimestamp)
 
 // ❌ WRONG - don't multiply by 1000
-const date = new Date(event.eventTimestamp * 1000);
+const date = new Date(event.eventTimestamp * 1000)
 ```
 
 ## Automatic Redaction
@@ -84,6 +88,7 @@ By default, sensitive data is redacted from `TraceRequest`:
 ### Header Redaction
 
 Headers containing these substrings (case-insensitive):
+
 - `auth`, `key`, `secret`, `token`, `jwt`
 - `cookie`, `set-cookie`
 
@@ -101,14 +106,15 @@ export default {
   async tail(events, env, ctx) {
     for (const event of events) {
       // ⚠️ Use with extreme caution
-      const unredacted = event.event?.request?.getUnredacted();
+      const unredacted = event.event?.request?.getUnredacted()
       // unredacted.url and unredacted.headers contain raw values
     }
-  }
-};
+  },
+}
 ```
 
 **Best practices:**
+
 - Only call `getUnredacted()` when absolutely necessary
 - Never log unredacted sensitive data
 - Implement additional filtering before external transmission
@@ -118,35 +124,31 @@ export default {
 
 ```typescript
 interface Env {
-  LOGS_KV: KVNamespace;
-  ANALYTICS: AnalyticsEngineDataset;
-  LOG_ENDPOINT: string;
-  API_TOKEN: string;
+  LOGS_KV: KVNamespace
+  ANALYTICS: AnalyticsEngineDataset
+  LOG_ENDPOINT: string
+  API_TOKEN: string
 }
 
 export default {
-  async tail(
-    events: TraceItem[],
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<void> {
-    const payload = events.map(event => ({
+  async tail(events: TraceItem[], env: Env, ctx: ExecutionContext): Promise<void> {
+    const payload = events.map((event) => ({
       script: event.scriptName,
       timestamp: event.eventTimestamp,
       outcome: event.outcome,
       url: event.event?.request?.url,
       status: event.event?.response?.status,
-    }));
-    
+    }))
+
     ctx.waitUntil(
       fetch(env.LOG_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-    );
-  }
-} satisfies ExportedHandler<Env>;
+    )
+  },
+} satisfies ExportedHandler<Env>
 ```
 
 ## Outcome vs HTTP Status
@@ -175,25 +177,26 @@ if (event.event?.response?.status === 500) {
 
 ```typescript
 // ❌ May fail with circular references or BigInt
-JSON.stringify(events);
+JSON.stringify(events)
 
 // ✅ Safe serialization
-const safePayload = events.map(event => ({
+const safePayload = events.map((event) => ({
   ...event,
-  logs: event.logs.map(log => ({
+  logs: event.logs.map((log) => ({
     ...log,
-    message: log.message.map(m => {
+    message: log.message.map((m) => {
       try {
-        return JSON.parse(JSON.stringify(m));
+        return JSON.parse(JSON.stringify(m))
       } catch {
-        return String(m);
+        return String(m)
       }
-    })
-  }))
-}));
+    }),
+  })),
+}))
 ```
 
 **Common serialization issues:**
+
 - Circular references in logged objects
 - `BigInt` values (not JSON-serializable)
 - Functions or symbols in console.log arguments

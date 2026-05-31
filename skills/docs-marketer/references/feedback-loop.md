@@ -132,24 +132,24 @@ create_entry({
 
 ## Tag Convention
 
-| Tag | Purpose |
-| --- | --- |
-| `docs-marketer` | All entries from this skill (primary filter) |
-| `profile` | Phase 1 output |
-| `critique` | Phase 2 output (adversarial mode only) |
-| `remediation` | Phase 3 output |
-| `copilot` | Phase 4 output |
-| `audit-complete` | Final consolidated summary |
-| `retrospective` | Post-cycle review |
+| Tag               | Purpose                                        |
+| ----------------- | ---------------------------------------------- |
+| `docs-marketer`   | All entries from this skill (primary filter)   |
+| `profile`         | Phase 1 output                                 |
+| `critique`        | Phase 2 output (adversarial mode only)         |
+| `remediation`     | Phase 3 output                                 |
+| `copilot`         | Phase 4 output                                 |
+| `audit-complete`  | Final consolidated summary                     |
+| `retrospective`   | Post-cycle review                              |
 | `session-summary` | Enables retrieval via session summary searches |
 
 ## Entry Type Reference
 
-| Entry Type | Phase | Description |
-| --- | --- | --- |
-| `docs_marketing_profile` | 1 | Per-surface scorecards and feature visibility gaps |
-| `docs_marketing_critique` | 2 | Skeptical reader review (adversarial mode only) |
-| `docs_marketing_remediation` | 3 | Improvement plan with dispositions |
-| `docs_marketing_copilot` | 4 | Copilot validation findings |
-| `docs_marketing_complete` | Final | Consolidated audit summary |
-| `retrospective` | Post | Session retrospective with metrics |
+| Entry Type                   | Phase | Description                                        |
+| ---------------------------- | ----- | -------------------------------------------------- |
+| `docs_marketing_profile`     | 1     | Per-surface scorecards and feature visibility gaps |
+| `docs_marketing_critique`    | 2     | Skeptical reader review (adversarial mode only)    |
+| `docs_marketing_remediation` | 3     | Improvement plan with dispositions                 |
+| `docs_marketing_copilot`     | 4     | Copilot validation findings                        |
+| `docs_marketing_complete`    | Final | Consolidated audit summary                         |
+| `retrospective`              | Post  | Session retrospective with metrics                 |

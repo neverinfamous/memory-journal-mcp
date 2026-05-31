@@ -201,8 +201,7 @@ export function getTeamPromptDefinitions(): InternalPromptDef[] {
                         if (ctx.resolved_at) {
                             const created = new Date(entry.timestamp).getTime()
                             const resolved = new Date(ctx.resolved_at).getTime()
-                            const hours =
-                                Math.round(((resolved - created) / 3_600_000) * 10) / 10
+                            const hours = Math.round(((resolved - created) / 3_600_000) * 10) / 10
                             if (hours >= 0) resolutionTimes.push(hours)
                         }
                     }

@@ -34,7 +34,8 @@ test.describe('Payload Contracts: Core', () => {
 
     test('create_entry returns { success, entry }', async () => {
         const payload = await callToolAndParse(client, 'create_entry', {
-            project_number: 1, content: 'Payload contract test entry',
+            project_number: 1,
+            content: 'Payload contract test entry',
             entry_type: 'test_entry',
             tags: ['test', 'payload'],
         })
@@ -57,7 +58,8 @@ test.describe('Payload Contracts: Core', () => {
 
     test('get_recent_entries returns { entries, count }', async () => {
         const payload = await callToolAndParse(client, 'get_recent_entries', {
-            project_number: 1, limit: 3,
+            project_number: 1,
+            limit: 3,
         })
         expectSuccess(payload)
         expect(Array.isArray(payload.entries)).toBe(true)
@@ -66,7 +68,8 @@ test.describe('Payload Contracts: Core', () => {
 
     test('get_entry_by_id returns { entry, importance }', async () => {
         const payload = await callToolAndParse(client, 'get_entry_by_id', {
-            project_number: 1, entry_id: createdEntryId,
+            project_number: 1,
+            entry_id: createdEntryId,
         })
         expectSuccess(payload)
         expect(payload.entry).toBeDefined()

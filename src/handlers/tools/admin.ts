@@ -8,7 +8,13 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber, coerceSignificanceAlias } from './schemas.js'
+import {
+    ENTRY_TYPES,
+    SIGNIFICANCE_TYPES,
+    EntryOutputSchema,
+    relaxedNumber,
+    coerceSignificanceAlias,
+} from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
@@ -129,17 +135,25 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'update_entry',
             title: 'Update Entry',
-            description: 'Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field.',
+            description:
+                'Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field.',
             group: 'admin',
             inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     coerceSignificanceAlias(params)
 
                     if (params !== null && typeof params === 'object' && 'auto_context' in params) {
-                        context.config?.runtime?.metrics?.recordDeprecationWarning('Agent recently used deprecated auto_context field in update_entry. This field is ignored.')
+                        context.config?.runtime?.metrics?.recordDeprecationWarning(
+                            'Agent recently used deprecated auto_context field in update_entry. This field is ignored.'
+                        )
                     }
 
                     const input = UpdateEntrySchema.parse(params)
@@ -186,11 +200,17 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'delete_entry',
             title: 'Delete Entry',
-            description: 'Delete a journal entry (soft delete with timestamp). Calling with permanent: true on a previously soft-deleted entry works. Returns success: false for nonexistent entries.',
+            description:
+                'Delete a journal entry (soft delete with timestamp). Calling with permanent: true on a previously soft-deleted entry works. Returns success: false for nonexistent entries.',
             group: 'admin',
             inputSchema: DeleteEntrySchemaMcp,
             outputSchema: DeleteEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent } = DeleteEntrySchema.parse(params)
@@ -248,7 +268,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     .describe('Tag to merge into (will be created if not exists)'),
             }),
             outputSchema: MergeTagsOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { source_tag, target_tag } = z
@@ -319,7 +344,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({}).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (_params: unknown) => {
                 try {
                     if (!vectorManager) {
@@ -358,7 +388,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({ entry_id: relaxedNumber().optional() }),
             outputSchema: AddToVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const { entry_id } = z.object({ entry_id: z.number() }).parse(params)

@@ -33,32 +33,40 @@ Test the Hush Protocol flag system (`team_pass_flag(project_number: 5)`, `team_r
 ```javascript
 // Test code:
 const blocker = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'blocker',
+  project_number: 5,
+  flag_type: 'blocker',
   message: 'FK constraint prevents migration from running',
   target_user: '@sarah',
   link: 'src/database/migrations/005.ts',
   project_number: 5,
 })
 const fyi = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'fyi',
+  project_number: 5,
+  flag_type: 'fyi',
   message: 'New linting rule added for strict-boolean-expressions',
   project_number: 5,
 })
 const review = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'needs_review',
+  project_number: 5,
+  flag_type: 'needs_review',
   message: 'Authentication refactor ready for review',
   target_user: 'chris',
   issue_number: 42,
   project_number: 5,
 })
 const help = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'help_requested',
+  project_number: 5,
+  flag_type: 'help_requested',
   message: 'Cannot reproduce the race condition on Windows',
   project_number: 5,
 })
 
 // Verify entry structure
-const detail = await mj.team.teamGetEntryById({project_number: 5,  project_number: 5, entry_id: blocker.entry?.id })
+const detail = await mj.team.teamGetEntryById({
+  project_number: 5,
+  project_number: 5,
+  entry_id: blocker.entry?.id,
+})
 const flagMeta = detail.entry?.flagMetadata || null
 
 const result = {
@@ -106,15 +114,24 @@ return result
 
 // Invalid vocabulary term
 const badType = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'urgent',
+  project_number: 5,
+  flag_type: 'urgent',
   message: 'This should fail vocabulary check',
   project_number: 5,
 })
 
 // Missing required fields
-const noType = await mj.team.passTeamFlag({ project_number: 5, message: 'no type', project_number: 5 })
-const noMessage = await mj.team.passTeamFlag({ project_number: 5, flag_type: 'blocker', project_number: 5 })
-const empty = await mj.team.passTeamFlag({project_number: 5,  project_number: 5 })
+const noType = await mj.team.passTeamFlag({
+  project_number: 5,
+  message: 'no type',
+  project_number: 5,
+})
+const noMessage = await mj.team.passTeamFlag({
+  project_number: 5,
+  flag_type: 'blocker',
+  project_number: 5,
+})
+const empty = await mj.team.passTeamFlag({ project_number: 5, project_number: 5 })
 
 // Resolve nonexistent flag
 const resolveGhost = await mj.team.resolveTeamFlag({ flag_id: 999999 })
@@ -123,7 +140,7 @@ const resolveGhost = await mj.team.resolveTeamFlag({ flag_id: 999999 })
 const resolveEmpty = await mj.team.resolveTeamFlag({})
 
 // Resolve a non-flag entry (get a recent non-flag entry first)
-const recent = await mj.team.teamGetRecent({project_number: 5,  project_number: 5, limit: 10 })
+const recent = await mj.team.teamGetRecent({ project_number: 5, project_number: 5, limit: 10 })
 const nonFlagEntry = recent.entries?.find((e) => e.entryType !== 'flag')
 let resolveWrongType = { skipped: true }
 if (nonFlagEntry) {
@@ -165,7 +182,8 @@ return result
 
 // Create a flag to resolve
 const flag = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'blocker',
+  project_number: 5,
+  flag_type: 'blocker',
   message: 'CM test flag for resolution',
   project_number: 5,
 })
@@ -178,7 +196,11 @@ const resolved = await mj.team.resolveTeamFlag({
 })
 
 // Verify resolved state
-const after = await mj.team.teamGetEntryById({project_number: 5,  project_number: 5, entry_id: flagId })
+const after = await mj.team.teamGetEntryById({
+  project_number: 5,
+  project_number: 5,
+  entry_id: flagId,
+})
 const afterCtx = after.entry?.flagMetadata || null
 
 // Idempotent re-resolve
@@ -189,7 +211,8 @@ const reResolved = await mj.team.resolveTeamFlag({
 
 // Resolve without comment
 const flag2 = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'fyi',
+  project_number: 5,
+  flag_type: 'fyi',
   message: 'CM bare resolve test',
   project_number: 5,
 })
@@ -235,7 +258,7 @@ return result
 // Test code:
 
 // Search flags by tag (legacy approach — still works)
-const tagSearch = await mj.team.teamSearch({project_number: 5, tags: ['flag:blocker'] })
+const tagSearch = await mj.team.teamSearch({ project_number: 5, tags: ['flag:blocker'] })
 
 // Search flags by entry_type (legacy)
 const typeSearch = await mj.team.teamSearchByDateRange({
@@ -255,16 +278,32 @@ const allFlags = await mj.team.teamListFlags({ project_number: 5, status: 'all' 
 const resolvedOnly = await mj.team.teamListFlags({ project_number: 5, status: 'resolved' })
 
 // New: team_list_flags — filter by flag_type
-const blockersOnly = await mj.team.teamListFlags({ project_number: 5, status: 'all', flag_type: 'blocker' })
+const blockersOnly = await mj.team.teamListFlags({
+  project_number: 5,
+  status: 'all',
+  flag_type: 'blocker',
+})
 
 // New: team_list_flags — filter by target_user (with @ prefix — should be stripped)
-const sarahFlags = await mj.team.teamListFlags({ project_number: 5, status: 'all', target_user: '@sarah' })
+const sarahFlags = await mj.team.teamListFlags({
+  project_number: 5,
+  status: 'all',
+  target_user: '@sarah',
+})
 
 // New: team_list_flags — sort by priority (blockers before fyi)
-const prioritySorted = await mj.team.teamListFlags({ project_number: 5, status: 'all', sort_by: 'priority' })
+const prioritySorted = await mj.team.teamListFlags({
+  project_number: 5,
+  status: 'all',
+  sort_by: 'priority',
+})
 
 // New: team_list_flags — sort by timestamp
-const timeSorted = await mj.team.teamListFlags({ project_number: 5, status: 'all', sort_by: 'timestamp' })
+const timeSorted = await mj.team.teamListFlags({
+  project_number: 5,
+  status: 'all',
+  sort_by: 'timestamp',
+})
 
 // Verify enriched flag object shape
 const firstFlag = activeOnly.flags?.[0] || allFlags.flags?.[0] || null
@@ -283,29 +322,34 @@ const result = {
   blockersOnlyAllBlocker: blockersOnly.flags?.every((f) => f.flag_type === 'blocker') ?? true,
   sarahFlagsAllSarah: sarahFlags.flags?.every((f) => f.target_user === 'sarah') ?? true,
   prioritySortFirstType: prioritySorted.flags?.[0]?.flag_type,
-  hasEnrichedShape: firstFlag !== null && 'age_hours' in firstFlag && 'is_stale' in firstFlag && 'flag_type' in firstFlag,
-  hasCountSummary: typeof allFlags.active_count === 'number' && typeof allFlags.resolved_count === 'number',
+  hasEnrichedShape:
+    firstFlag !== null &&
+    'age_hours' in firstFlag &&
+    'is_stale' in firstFlag &&
+    'flag_type' in firstFlag,
+  hasCountSummary:
+    typeof allFlags.active_count === 'number' && typeof allFlags.resolved_count === 'number',
 }
 return result
 ```
 
-| Check                       | Expected                                       |
-| --------------------------- | ---------------------------------------------- |
-| `tagSearchCount`            | ≥ 1                                            |
-| `typeSearchCount`           | ≥ 1                                            |
-| `typeSearchAllFlags`        | `true` (filter enforced)                       |
-| `activeOnlySuccess`         | `true`                                         |
-| `activeOnlyCount`           | ≥ 1 (flags from 28.12 still active)            |
-| `activeOnlyAllUnresolved`   | `true` (default status=active)                 |
-| `allFlagsCount`             | ≥ 4 (includes active + resolved)               |
-| `allFlagsHasActive`         | `true`                                         |
-| `allFlagsHasResolved`       | `true`                                         |
-| `resolvedOnlyAllResolved`   | `true` (only resolved flags)                   |
-| `blockersOnlyAllBlocker`    | `true` (type filter works)                     |
-| `sarahFlagsAllSarah`        | `true` (target filter works, @ stripped)        |
-| `prioritySortFirstType`     | `"blocker"` (highest priority)                 |
-| `hasEnrichedShape`          | `true` (parsed FlagContext inline)             |
-| `hasCountSummary`           | `true` (active_count and resolved_count)       |
+| Check                     | Expected                                 |
+| ------------------------- | ---------------------------------------- |
+| `tagSearchCount`          | ≥ 1                                      |
+| `typeSearchCount`         | ≥ 1                                      |
+| `typeSearchAllFlags`      | `true` (filter enforced)                 |
+| `activeOnlySuccess`       | `true`                                   |
+| `activeOnlyCount`         | ≥ 1 (flags from 28.12 still active)      |
+| `activeOnlyAllUnresolved` | `true` (default status=active)           |
+| `allFlagsCount`           | ≥ 4 (includes active + resolved)         |
+| `allFlagsHasActive`       | `true`                                   |
+| `allFlagsHasResolved`     | `true`                                   |
+| `resolvedOnlyAllResolved` | `true` (only resolved flags)             |
+| `blockersOnlyAllBlocker`  | `true` (type filter works)               |
+| `sarahFlagsAllSarah`      | `true` (target filter works, @ stripped) |
+| `prioritySortFirstType`   | `"blocker"` (highest priority)           |
+| `hasEnrichedShape`        | `true` (parsed FlagContext inline)       |
+| `hasCountSummary`         | `true` (active_count and resolved_count) |
 
 ### 28.16 Flag Update & Metadata Mutation (team_update_flag)
 
@@ -314,7 +358,9 @@ return result
 
 // Get an active flag to update (from 28.12 — the fyi flag)
 const activeFyi = await mj.team.teamListFlags({
-  project_number: 5, status: 'active', flag_type: 'fyi',
+  project_number: 5,
+  status: 'active',
+  flag_type: 'fyi',
 })
 const fyiId = activeFyi.flags?.[0]?.id
 if (!fyiId) return { error: 'No active fyi flag found for update tests' }
@@ -394,29 +440,29 @@ const result = {
 return result
 ```
 
-| Check                  | Expected                                        |
-| ---------------------- | ----------------------------------------------- |
-| `escalateSuccess`      | `true`                                          |
-| `escalateType`         | `"blocker"`                                     |
-| `escalateChanges`      | array containing `"flag_type: fyi → blocker"`   |
-| `reassignSuccess`      | `true`                                          |
-| `reassignChanges`      | array containing target_user change             |
-| `linkedSuccess`        | `true`                                          |
-| `linkedChanges`        | array containing `"link: updated"`              |
-| `editedSuccess`        | `true`                                          |
-| `editedChanges`        | array containing `"message: updated"`           |
-| `clearedSuccess`       | `true`                                          |
-| `clearedChanges`       | array containing target_user cleared            |
-| `noopSuccess`          | `true`                                          |
-| `noopChanges`          | `0` (no changes made)                           |
-| `finalFlagType`        | `"blocker"` (escalated)                         |
-| `finalTarget`          | `"cleared"` (null after clear)                  |
-| `finalLink`            | `"https://github.com/example/issue/99"`         |
-| `updateGhostError`     | `true` (not found)                              |
-| `updateGhostCode`      | `"RESOURCE_NOT_FOUND"`                          |
-| `updateBadVocabError`  | `true` (invalid vocabulary)                     |
-| `updateBadVocabCode`   | `"VALIDATION_ERROR"`                            |
-| `updateNonFlagError`   | `true` (not a flag entry)                       |
+| Check                 | Expected                                      |
+| --------------------- | --------------------------------------------- |
+| `escalateSuccess`     | `true`                                        |
+| `escalateType`        | `"blocker"`                                   |
+| `escalateChanges`     | array containing `"flag_type: fyi → blocker"` |
+| `reassignSuccess`     | `true`                                        |
+| `reassignChanges`     | array containing target_user change           |
+| `linkedSuccess`       | `true`                                        |
+| `linkedChanges`       | array containing `"link: updated"`            |
+| `editedSuccess`       | `true`                                        |
+| `editedChanges`       | array containing `"message: updated"`         |
+| `clearedSuccess`      | `true`                                        |
+| `clearedChanges`      | array containing target_user cleared          |
+| `noopSuccess`         | `true`                                        |
+| `noopChanges`         | `0` (no changes made)                         |
+| `finalFlagType`       | `"blocker"` (escalated)                       |
+| `finalTarget`         | `"cleared"` (null after clear)                |
+| `finalLink`           | `"https://github.com/example/issue/99"`       |
+| `updateGhostError`    | `true` (not found)                            |
+| `updateGhostCode`     | `"RESOURCE_NOT_FOUND"`                        |
+| `updateBadVocabError` | `true` (invalid vocabulary)                   |
+| `updateBadVocabCode`  | `"VALIDATION_ERROR"`                          |
+| `updateNonFlagError`  | `true` (not a flag entry)                     |
 
 ### 28.17 Flag Reopen Lifecycle (team_update_flag reopen)
 
@@ -425,7 +471,8 @@ return result
 
 // Create and resolve a flag
 const flag = await mj.team.passTeamFlag({
-  project_number: 5, flag_type: 'needs_review',
+  project_number: 5,
+  flag_type: 'needs_review',
   message: 'CM reopen lifecycle test flag',
 })
 const flagId = flag.entry?.id
@@ -437,7 +484,8 @@ await mj.team.resolveTeamFlag({
 
 // Verify it's resolved
 const afterResolve = await mj.team.teamListFlags({
-  project_number: 5, status: 'resolved',
+  project_number: 5,
+  status: 'resolved',
 })
 const isResolved = afterResolve.flags?.some((f) => f.id === flagId) ?? false
 
@@ -449,7 +497,8 @@ const reopened = await mj.team.teamUpdateFlag({
 
 // Verify it's active again
 const afterReopen = await mj.team.teamListFlags({
-  project_number: 5, status: 'active',
+  project_number: 5,
+  status: 'active',
 })
 const isActive = afterReopen.flags?.some((f) => f.id === flagId) ?? false
 
@@ -478,18 +527,18 @@ const result = {
 return result
 ```
 
-| Check                    | Expected                                |
-| ------------------------ | --------------------------------------- |
-| `isResolved`             | `true` (flag in resolved list)          |
-| `reopenSuccess`          | `true`                                  |
-| `reopenChanges`          | array containing `"reopened"`           |
-| `reopenResolved`         | `false` (now active)                    |
-| `isActive`               | `true` (flag in active list)            |
-| `ctxResolved`            | `false`                                 |
-| `ctxResolvedAt`          | `null` (cleared)                        |
-| `ctxResolution`          | `null` (cleared)                        |
-| `contentNoMarker`        | `true` ([RESOLVED] removed)            |
-| `reopenActiveNoChange`   | `true` (no-op when already active)     |
+| Check                  | Expected                           |
+| ---------------------- | ---------------------------------- |
+| `isResolved`           | `true` (flag in resolved list)     |
+| `reopenSuccess`        | `true`                             |
+| `reopenChanges`        | array containing `"reopened"`      |
+| `reopenResolved`       | `false` (now active)               |
+| `isActive`             | `true` (flag in active list)       |
+| `ctxResolved`          | `false`                            |
+| `ctxResolvedAt`        | `null` (cleared)                   |
+| `ctxResolution`        | `null` (cleared)                   |
+| `contentNoMarker`      | `true` ([RESOLVED] removed)        |
+| `reopenActiveNoChange` | `true` (no-op when already active) |
 
 ### 28.18 Flag Analytics (team_get_flag_analytics)
 
@@ -539,26 +588,26 @@ const result = {
 return result
 ```
 
-| Check                 | Expected                                         |
-| --------------------- | ------------------------------------------------ |
-| `analyticsSuccess`    | `true`                                           |
-| `hasSummary`          | `true`                                           |
-| `totalFlags`          | ≥ 4 (flags from prior phases)                    |
-| `activeFlags`         | ≥ 1                                              |
-| `resolvedFlags`       | ≥ 1                                              |
-| `hasAvgResolution`    | `true`                                           |
-| `hasMedianResolution` | `true`                                           |
-| `hasStaleCount`       | `true`                                           |
-| `hasByType`           | `true`                                           |
-| `byTypeHasBlocker`    | `true` (blocker flags exist)                     |
-| `byTypeBlockerShape`  | `true` (has total and active)                    |
-| `hasByTarget`         | `true`                                           |
-| `byTargetShape`       | `true` (user, received, active)                  |
-| `hasTrend`            | `true`                                           |
-| `trendShape`          | `true` (current_period, previous_period)         |
-| `dailySuccess`        | `true`                                           |
-| `monthlySuccess`      | `true`                                           |
-| `countsConsistent`    | `true` (total = active + resolved)               |
+| Check                 | Expected                                 |
+| --------------------- | ---------------------------------------- |
+| `analyticsSuccess`    | `true`                                   |
+| `hasSummary`          | `true`                                   |
+| `totalFlags`          | ≥ 4 (flags from prior phases)            |
+| `activeFlags`         | ≥ 1                                      |
+| `resolvedFlags`       | ≥ 1                                      |
+| `hasAvgResolution`    | `true`                                   |
+| `hasMedianResolution` | `true`                                   |
+| `hasStaleCount`       | `true`                                   |
+| `hasByType`           | `true`                                   |
+| `byTypeHasBlocker`    | `true` (blocker flags exist)             |
+| `byTypeBlockerShape`  | `true` (has total and active)            |
+| `hasByTarget`         | `true`                                   |
+| `byTargetShape`       | `true` (user, received, active)          |
+| `hasTrend`            | `true`                                   |
+| `trendShape`          | `true` (current_period, previous_period) |
+| `dailySuccess`        | `true`                                   |
+| `monthlySuccess`      | `true`                                   |
+| `countsConsistent`    | `true` (total = active + resolved)       |
 
 ### 28.19 Flag Resources & Cleanup
 
@@ -572,7 +621,16 @@ return result
 // Cleanup: delete all CM test flag entries using team_list_flags
 const allCmFlags = await mj.team.teamListFlags({ project_number: 5, status: 'all', limit: 100 })
 const cmFlagIds = (allCmFlags.flags || [])
-  .filter((f) => f.message?.includes('CM') || f.message?.includes('linting rule') || f.message?.includes('Authentication') || f.message?.includes('race condition') || f.message?.includes('FK constraint') || f.message?.includes('reopen lifecycle') || f.message?.includes('Escalated: linting rule now blocking CI pipeline'))
+  .filter(
+    (f) =>
+      f.message?.includes('CM') ||
+      f.message?.includes('linting rule') ||
+      f.message?.includes('Authentication') ||
+      f.message?.includes('race condition') ||
+      f.message?.includes('FK constraint') ||
+      f.message?.includes('reopen lifecycle') ||
+      f.message?.includes('Escalated: linting rule now blocking CI pipeline')
+  )
   .map((f) => f.id)
 
 const uniqueIds = [...new Set(cmFlagIds)]
@@ -589,9 +647,9 @@ const result = {
 return result
 ```
 
-| Check                | Expected                              |
-| -------------------- | ------------------------------------- |
-| `cleanedAll`         | `true` (all test entries deleted)     |
+| Check        | Expected                          |
+| ------------ | --------------------------------- |
+| `cleanedAll` | `true` (all test entries deleted) |
 
 ---
 
@@ -600,6 +658,7 @@ return result
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 ### Pass/Resolve (28.12–28.14)
+
 - `team_pass_flag(project_number: 5)` creates entries with `entry_type: 'flag'` and structured `auto_context`
 - Flag tags include `flag:{type}` and `@{target}` when target_user is provided
 - `@` prefix on `target_user` is stripped before storage
@@ -612,6 +671,7 @@ return result
 - Resolving a nonexistent entry returns `RESOURCE_NOT_FOUND`
 
 ### List/Query (28.15)
+
 - `team_list_flags(project_number: 5)` defaults to `status: "active"` (only unresolved flags)
 - Filtering by `status`, `flag_type`, `target_user` works correctly
 - `target_user` filter strips `@` prefix for matching
@@ -620,6 +680,7 @@ return result
 - Response includes `active_count` and `resolved_count` summary
 
 ### Update/Mutate (28.16–28.17)
+
 - `team_update_flag` escalates flag_type with vocabulary validation
 - `team_update_flag` reassigns target_user (with `@` stripping)
 - `team_update_flag` adds/updates link
@@ -633,6 +694,7 @@ return result
 - Update with invalid vocabulary returns `VALIDATION_ERROR`
 
 ### Analytics (28.18)
+
 - `team_get_flag_analytics(project_number: 5)` returns `summary` with total/active/resolved counts
 - `summary` includes `avg_resolution_hours`, `median_resolution_hours`, `stale_count`
 - `by_type` breaks down by flag type with `total`, `active`, `avg_resolution_hours`
@@ -641,6 +703,7 @@ return result
 - `total_flags === active_flags + resolved_flags`
 
 ### Resources (28.19)
+
 - `memory://flags` returns `activeFlags` array
 - `memory://flags/vocabulary` returns vocabulary with count and isDefault
 - `memory://flags/history` returns `resolved_flags` array with `count`, `avg_resolution_hours`, `window_days: 7`

@@ -43,8 +43,6 @@ test.describe('Help Resources', () => {
         }
     })
 
-
-
     test('memory://help returns non-empty JSON with groups', async () => {
         const client = await createClient()
         try {
@@ -81,8 +79,6 @@ test.describe('Help Resources', () => {
             await client.close()
         }
     })
-
-
 
     for (const group of HELP_GROUPS) {
         test(`memory://help/${group} returns non-empty JSON`, async () => {

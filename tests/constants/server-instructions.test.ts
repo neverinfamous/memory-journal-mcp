@@ -329,8 +329,6 @@ describe('HELP_CONTENT', () => {
         expect(HELP_CONTENT.size).toBeGreaterThan(0)
     })
 
-
-
     it('should include github help content', () => {
         const github = HELP_CONTENT.get('github')
         expect(github).toBeDefined()
@@ -349,7 +347,6 @@ describe('HELP_CONTENT', () => {
         expect(hush).toContain('team_pass_flag')
         expect(hush).toContain('team_resolve_flag')
     })
-
 
     it('should include skills help content', () => {
         const skills = HELP_CONTENT.get('skills')

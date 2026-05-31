@@ -14,14 +14,14 @@ This skill provides best practices for utilizing native Node.js APIs safely and 
 - **Pipeline Utility**: Always use `stream/promises.pipeline` to chain streams together. It properly handles error propagation and stream destruction to prevent memory leaks.
 
 ```typescript
-import { pipeline } from 'node:stream/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises'
+import { createReadStream, createWriteStream } from 'node:fs'
 
 await pipeline(
   createReadStream('large-file.csv'),
   processTransformStream,
   createWriteStream('output.csv')
-);
+)
 ```
 
 ## 2. Event Loop Blocking
@@ -34,10 +34,10 @@ await pipeline(
 - **exec vs spawn**: Avoid `child_process.exec()` for any dynamic input, as it executes in a shell and is vulnerable to command injection. Use `child_process.spawn()` or `execFile()` which bypass the shell and pass arguments directly.
 
 ```typescript
-import { spawn } from 'node:child_process';
+import { spawn } from 'node:child_process'
 
 // Safe: arguments are passed as an array
-const child = spawn('ls', ['-lh', '/usr']);
+const child = spawn('ls', ['-lh', '/usr'])
 ```
 
 ## 4. Modern APIs

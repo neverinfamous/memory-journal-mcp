@@ -3,21 +3,21 @@
 ## SDK Setup
 
 ```typescript
-import Cloudflare from 'cloudflare';
+import Cloudflare from 'cloudflare'
 
 const client = new Cloudflare({
   apiToken: process.env.CF_API_TOKEN,
-});
+})
 ```
 
 ## Core Methods
 
 ```typescript
 // List rulesets
-await client.rulesets.list({ zone_id: 'zone_id', phase: 'http_request_firewall_managed' });
+await client.rulesets.list({ zone_id: 'zone_id', phase: 'http_request_firewall_managed' })
 
 // Get ruleset
-await client.rulesets.get({ zone_id: 'zone_id', ruleset_id: 'ruleset_id' });
+await client.rulesets.get({ zone_id: 'zone_id', ruleset_id: 'ruleset_id' })
 
 // Create ruleset
 await client.rulesets.create({
@@ -26,7 +26,7 @@ await client.rulesets.create({
   phase: 'http_request_firewall_custom',
   name: 'Custom WAF Rules',
   rules: [{ action: 'block', expression: 'cf.waf.score gt 40', enabled: true }],
-});
+})
 
 // Update ruleset (include rule id to keep existing, omit id for new rules)
 await client.rulesets.update({
@@ -36,25 +36,25 @@ await client.rulesets.update({
     { id: 'rule_id', action: 'block', expression: 'cf.waf.score gt 40', enabled: true },
     { action: 'challenge', expression: 'http.request.uri.path contains "/admin"', enabled: true },
   ],
-});
+})
 
 // Delete ruleset
-await client.rulesets.delete({ zone_id: 'zone_id', ruleset_id: 'ruleset_id' });
+await client.rulesets.delete({ zone_id: 'zone_id', ruleset_id: 'ruleset_id' })
 ```
 
 ## Actions & Phases
 
 ### Actions by Phase
 
-| Action | Custom | Managed | Rate Limit | Description |
-|--------|--------|---------|------------|-------------|
-| `block` | ✅ | ❌ | ✅ | Block request with 403 |
-| `challenge` | ✅ | ❌ | ✅ | Show CAPTCHA challenge |
-| `js_challenge` | ✅ | ❌ | ✅ | JS-based challenge |
-| `managed_challenge` | ✅ | ❌ | ✅ | Smart challenge (recommended) |
-| `log` | ✅ | ❌ | ✅ | Log only, don't block |
-| `skip` | ✅ | ❌ | ❌ | Skip rule evaluation |
-| `execute` | ❌ | ✅ | ❌ | Deploy managed ruleset |
+| Action              | Custom | Managed | Rate Limit | Description                   |
+| ------------------- | ------ | ------- | ---------- | ----------------------------- |
+| `block`             | ✅     | ❌      | ✅         | Block request with 403        |
+| `challenge`         | ✅     | ❌      | ✅         | Show CAPTCHA challenge        |
+| `js_challenge`      | ✅     | ❌      | ✅         | JS-based challenge            |
+| `managed_challenge` | ✅     | ❌      | ✅         | Smart challenge (recommended) |
+| `log`               | ✅     | ❌      | ✅         | Log only, don't block         |
+| `skip`              | ✅     | ❌      | ❌         | Skip rule evaluation          |
+| `execute`           | ❌     | ✅      | ❌         | Deploy managed ruleset        |
 
 ### Phases (Execution Order)
 
@@ -69,48 +69,47 @@ await client.rulesets.delete({ zone_id: 'zone_id', ruleset_id: 'ruleset_id' });
 
 ```typescript
 // Request properties
-http.request.method          // GET, POST, etc.
-http.request.uri.path        // /api/users
-http.host                    // example.com
+http.request.method // GET, POST, etc.
+http.request.uri.path // /api/users
+http.host // example.com
 
 // IP and Geolocation
-ip.src                       // 192.0.2.1
-ip.geoip.country            // US, GB, etc.
-ip.geoip.continent          // NA, EU, etc.
+ip.src // 192.0.2.1
+ip.geoip.country // US, GB, etc.
+ip.geoip.continent // NA, EU, etc.
 
 // Attack detection
-cf.waf.score                 // 0-100 attack score
-cf.waf.score.sqli           // SQL injection score
-cf.waf.score.xss            // XSS score
+cf.waf.score // 0-100 attack score
+cf.waf.score.sqli // SQL injection score
+cf.waf.score.xss // XSS score
 
 // Headers & Cookies
-http.request.headers["authorization"][0]
-http.request.cookies["session"][0]
-lower(http.user_agent)      // Lowercase user agent
+http.request.headers['authorization'][0]
+http.request.cookies['session'][0]
+lower(http.user_agent) // Lowercase user agent
 ```
 
 ### Operators
 
 ```typescript
 // Comparison
-eq      // Equal
-ne      // Not equal
-lt      // Less than
-le      // Less than or equal
-gt      // Greater than
-ge      // Greater than or equal
+eq // Equal
+ne // Not equal
+lt // Less than
+le // Less than or equal
+gt // Greater than
+ge // Greater than or equal
 
 // String matching
-contains        // Substring match
-matches         // Regex match (use carefully)
-starts_with     // Prefix match
-ends_with       // Suffix match
-
-// List operations
-in              // Value in list
-not             // Logical NOT
-and             // Logical AND
-or              // Logical OR
+contains // Substring match
+matches // Regex match (use carefully)
+starts_with // Prefix match
+ends_with in // Suffix match
+// Value in list
+  // List operations
+  not // Logical NOT
+and // Logical AND
+or // Logical OR
 ```
 
 ### Expression Examples
@@ -133,7 +132,7 @@ or              // Logical OR
   expression: 'http.request.uri.path starts_with "/api"',
   action_parameters: {
     ratelimit: {
-      // Characteristics define uniqueness: 'ip.src', 'cf.colo.id', 
+      // Characteristics define uniqueness: 'ip.src', 'cf.colo.id',
       // 'http.request.headers["key"][0]', 'http.request.cookies["session"][0]'
       characteristics: ['cf.colo.id', 'ip.src'], // Recommended: per-IP per-datacenter
       period: 60,                      // Time window in seconds
@@ -176,6 +175,7 @@ or              // Logical OR
 Skip rules bypass subsequent rule evaluation. Two skip types:
 
 **Skip current ruleset**: Skip remaining rules in current phase only
+
 ```typescript
 {
   action: 'skip',
@@ -188,6 +188,7 @@ Skip rules bypass subsequent rule evaluation. Two skip types:
 ```
 
 **Skip entire phases**: Skip one or more phases completely
+
 ```typescript
 {
   action: 'skip',

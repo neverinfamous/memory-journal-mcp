@@ -17,6 +17,7 @@ Harmonized across db-mcp, postgres-mcp, mysql-mcp, memory-journal-mcp.
 **Error Code Auto-Refinement:** The base class constructor auto-refines generic codes to specific ones. When a `QueryError` (code: `DB_QUERY_FAILED`) has an error message matching a known pattern (like "no such table"), the constructor auto-refines the code to `TABLE_NOT_FOUND`. This ensures consistent, machine-readable codes across all tools without manual mapping in each handler.
 
 The auto-refinement mechanism:
+
 - `ERROR_SUGGESTIONS` entries include an optional `code` field
 - Constructor checks if the current code is generic (from a whitelist: `DB_QUERY_FAILED`, `DB_WRITE_FAILED`, `QUERY_ERROR`, `RESOURCE_ERROR`, `UNKNOWN_ERROR`)
 - If generic AND a matched suggestion has a specific `code`, the specific code replaces the generic one
@@ -24,19 +25,19 @@ The auto-refinement mechanism:
 
 **Standard Subclasses:**
 
-| Subclass | Code | Category | Recoverable |
-|----------|------|----------|-------------|
-| `ConnectionError` | `CONNECTION_FAILED` | connection | false |
-| `QueryError` | `QUERY_FAILED` | query | true |
-| `ValidationError` | `VALIDATION_FAILED` | validation | true |
-| `ResourceNotFoundError` | `RESOURCE_NOT_FOUND` | resource | true |
-| `ConfigurationError` | `CONFIGURATION_ERROR` | configuration | false |
-| `PermissionError` | `PERMISSION_DENIED` | permission | true |
-| `TransactionError` | `TRANSACTION_FAILED` | query | true |
-| `InternalError` | `INTERNAL_ERROR` | internal | false |
-| `AuthenticationError` | `AUTH_FAILED` | authentication | false |
-| `AuthorizationError` | `AUTH_SCOPE_DENIED` | authorization | true |
-| `ExtensionNotAvailableError` | `EXTENSION_MISSING` | configuration | false |
+| Subclass                     | Code                  | Category       | Recoverable |
+| ---------------------------- | --------------------- | -------------- | ----------- |
+| `ConnectionError`            | `CONNECTION_FAILED`   | connection     | false       |
+| `QueryError`                 | `QUERY_FAILED`        | query          | true        |
+| `ValidationError`            | `VALIDATION_FAILED`   | validation     | true        |
+| `ResourceNotFoundError`      | `RESOURCE_NOT_FOUND`  | resource       | true        |
+| `ConfigurationError`         | `CONFIGURATION_ERROR` | configuration  | false       |
+| `PermissionError`            | `PERMISSION_DENIED`   | permission     | true        |
+| `TransactionError`           | `TRANSACTION_FAILED`  | query          | true        |
+| `InternalError`              | `INTERNAL_ERROR`      | internal       | false       |
+| `AuthenticationError`        | `AUTH_FAILED`         | authentication | false       |
+| `AuthorizationError`         | `AUTH_SCOPE_DENIED`   | authorization  | true        |
+| `ExtensionNotAvailableError` | `EXTENSION_MISSING`   | configuration  | false       |
 
 `TransactionError` accepts optional `ErrorContext` (`tool`, `table`, `sql`) for diagnostic context. `ExtensionNotAvailableError` auto-generates a `suggestion` field containing the extension name (e.g., `"Install the SpatiaLite extension: --spatialite"`).
 
@@ -48,7 +49,7 @@ DB servers also add `PoolError` (code: `POOL_ERROR`, category: connection, recov
 
 ```typescript
 // Context-aware formatter:
-return formatHandlerError(error, { tool: 'pg_create_index', table: 'users' });
+return formatHandlerError(error, { tool: 'pg_create_index', table: 'users' })
 ```
 
 **Engine-Specific Error Parsers:** For DB servers, implement a dedicated `error-parser.ts` in the engine's `tools/core/` directory. This parser maps database-native error codes (e.g., PostgreSQL `42P01` → `TABLE_NOT_FOUND`, MySQL `1146` → `TABLE_NOT_FOUND`) to structured error subclasses. Complementary to `ERROR_SUGGESTIONS` auto-refinement — the parser handles raw database exceptions, while auto-refinement handles error message pattern matching in the base class constructor.
@@ -64,8 +65,8 @@ if (toolDef.outputSchema) {
   return {
     content: [{ type: 'text', text: JSON.stringify(errorResult) }],
     structuredContent: errorResult,
-    isError: true
-  };
+    isError: true,
+  }
 }
 ```
 
@@ -79,7 +80,7 @@ export const ErrorFieldsMixin = z.object({
   suggestion: z.string().optional(),
   recoverable: z.boolean().optional(),
   details: z.unknown().optional(),
-});
+})
 
 // Usage: z.object({ success: z.boolean(), result: z.string().optional() }).extend(ErrorFieldsMixin.shape);
 ```
@@ -100,21 +101,21 @@ The MCP SDK wraps `inputSchema` with `.partial()` before validation. This means 
 
 **Required patterns:**
 
-| Input Type | Registration Schema | Handler Validation |
-|------------|--------------------|--------------------|
-| Required enum | `z.string().describe("One of: a, b, c")` | Validate against exported `const VALID_VALUES = ['a', 'b', 'c'] as const` in handler |
-| Optional enum | `z.preprocess(coerceEnumValues(VALID_VALUES, 'default'), z.enum(VALID_VALUES))` | Or use `z.string().optional()` + handler validation |
-| Numeric param | `z.preprocess(coerceNumber, z.number().optional())` **or** `z.coerce.number().optional()` + NaN guard | See tradeoffs below |
-| Boolean param | `z.preprocess(coerceBoolean, z.boolean().optional())` | Handle `"true"`, `"false"` string inputs |
-| Array param | `z.preprocess(v => Array.isArray(v) ? v : [], z.array(...))` | Coerce non-arrays to empty arrays for `.partial()` compatibility |
-| Refinements | Move `.min()`, `.max()`, `.regex()` to handler-level validation | Never put these on the registration schema |
+| Input Type    | Registration Schema                                                                                   | Handler Validation                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Required enum | `z.string().describe("One of: a, b, c")`                                                              | Validate against exported `const VALID_VALUES = ['a', 'b', 'c'] as const` in handler |
+| Optional enum | `z.preprocess(coerceEnumValues(VALID_VALUES, 'default'), z.enum(VALID_VALUES))`                       | Or use `z.string().optional()` + handler validation                                  |
+| Numeric param | `z.preprocess(coerceNumber, z.number().optional())` **or** `z.coerce.number().optional()` + NaN guard | See tradeoffs below                                                                  |
+| Boolean param | `z.preprocess(coerceBoolean, z.boolean().optional())`                                                 | Handle `"true"`, `"false"` string inputs                                             |
+| Array param   | `z.preprocess(v => Array.isArray(v) ? v : [], z.array(...))`                                          | Coerce non-arrays to empty arrays for `.partial()` compatibility                     |
+| Refinements   | Move `.min()`, `.max()`, `.regex()` to handler-level validation                                       | Never put these on the registration schema                                           |
 
 **Numeric coercion — two acceptable approaches:**
 
-| Approach | Pros | Cons | Used By |
-|----------|------|------|---------|
-| `z.preprocess(coerceNumber, ...)` | Returns `undefined` on bad input (safe default) | More verbose, requires custom helper | db-mcp, mysql-mcp, postgres-mcp (migrating) |
-| `z.coerce.number().optional()` | Idiomatic Zod, less boilerplate | Produces `NaN` on `"abc"` — **must guard in handler** | postgres-mcp (legacy, being replaced) |
+| Approach                          | Pros                                            | Cons                                                  | Used By                                     |
+| --------------------------------- | ----------------------------------------------- | ----------------------------------------------------- | ------------------------------------------- |
+| `z.preprocess(coerceNumber, ...)` | Returns `undefined` on bad input (safe default) | More verbose, requires custom helper                  | db-mcp, mysql-mcp, postgres-mcp (migrating) |
+| `z.coerce.number().optional()`    | Idiomatic Zod, less boilerplate                 | Produces `NaN` on `"abc"` — **must guard in handler** | postgres-mcp (legacy, being replaced)       |
 
 When using `z.coerce.number()`, always guard against NaN in the handler — ideally via `coerceLimit()` (see below) or an explicit `isNaN()` check before using the value.
 
@@ -122,39 +123,39 @@ When using `z.coerce.number()`, always guard against NaN in the handler — idea
 
 ```typescript
 export function coerceNumber(val: unknown): unknown {
-  if (typeof val === 'number') return val;
+  if (typeof val === 'number') return val
   if (typeof val === 'string') {
-    const n = Number(val);
-    return Number.isNaN(n) ? undefined : n;
+    const n = Number(val)
+    return Number.isNaN(n) ? undefined : n
   }
-  return undefined;
+  return undefined
 }
 
 export function coerceBoolean(val: unknown): unknown {
-  if (typeof val === 'boolean') return val;
-  if (val === 'true') return true;
-  if (val === 'false') return false;
-  return undefined;
+  if (typeof val === 'boolean') return val
+  if (val === 'true') return true
+  if (val === 'false') return false
+  return undefined
 }
 ```
 
 **Limit Coercion (Standard):** For `limit` parameters (ubiquitous across DB tools), use shared helpers in `utils/query-helpers.ts`:
 
 ```typescript
-export const DEFAULT_QUERY_LIMIT = 100;
+export const DEFAULT_QUERY_LIMIT = 100
 
 /** Coerce raw limit → usable value. 0 = unlimited (null), NaN/undefined → default. */
 export function coerceLimit(raw: unknown, defaultLimit = DEFAULT_QUERY_LIMIT): number | null {
-  if (raw === undefined) return defaultLimit;
-  const num = Number(raw);
-  if (isNaN(num)) return defaultLimit;
-  if (num === 0) return null;
-  return num > 0 ? num : defaultLimit;
+  if (raw === undefined) return defaultLimit
+  const num = Number(raw)
+  if (isNaN(num)) return defaultLimit
+  if (num === 0) return null
+  return num > 0 ? num : defaultLimit
 }
 
 /** Build SQL LIMIT clause from coerced value. null = no limit. */
 export function buildLimitClause(limitVal: number | null): string {
-  return limitVal !== null ? ` LIMIT ${String(limitVal)}` : '';
+  return limitVal !== null ? ` LIMIT ${String(limitVal)}` : ''
 }
 ```
 
@@ -203,12 +204,12 @@ try {
 ```typescript
 /** Relaxed number that accepts string/number/undefined without crashing SDK */
 export function relaxedNumber() {
-  return z.preprocess(coerceNumber, z.number().optional());
+  return z.preprocess(coerceNumber, z.number().optional())
 }
 
 /** Relaxed array that accepts non-arrays gracefully */
 export function relaxedArray<T extends z.ZodTypeAny>(item: T) {
-  return z.preprocess(v => Array.isArray(v) ? v : [], z.array(item).optional());
+  return z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(item).optional())
 }
 ```
 
@@ -216,19 +217,20 @@ export function relaxedArray<T extends z.ZodTypeAny>(item: T) {
 
 ```typescript
 // In registerTool():
-const sdkSchema = toolDef.inputSchema.partial().passthrough();
+const sdkSchema = toolDef.inputSchema.partial().passthrough()
 
 // In handler:
 try {
-  const resolved = resolveAliases(params); // tableName → table, sql → query
-  const parsed = StrictSchema.parse(resolved);
+  const resolved = resolveAliases(params) // tableName → table, sql → query
+  const parsed = StrictSchema.parse(resolved)
   // ... business logic
 } catch (error) {
-  return formatHandlerError(error);
+  return formatHandlerError(error)
 }
 ```
 
 **Two boundaries (both approaches):**
+
 - **SDK boundary:** relaxed schema or `.partial().passthrough()` — accepts any parameter subset
 - **Handler boundary:** strict `Schema.parse(params)` inside try/catch → `formatHandlerError()`
 
@@ -243,8 +245,9 @@ All database tools must validate object existence before executing DML. This pre
 **Validation hierarchy:** TABLE_NOT_FOUND → COLUMN_NOT_FOUND → domain-specific validation.
 
 **Standard validators** (in shared `tools/column-validation.ts`):
+
 - `validateTableExists(adapter, table)` — checks system catalog before proceeding
-- `validateColumnExists(adapter, table, column)` — checks table existence *first*, then column via metadata query
+- `validateColumnExists(adapter, table, column)` — checks table existence _first_, then column via metadata query
 - `validateColumnsExist(adapter, table, columns)` — batch version, single metadata query + in-memory membership check (N+1 elimination)
 - All return structured `{success: false, code: "TABLE_NOT_FOUND" | "COLUMN_NOT_FOUND"}` errors
 
@@ -257,6 +260,7 @@ All database tools must validate object existence before executing DML. This pre
 Every tool that interpolates a user-provided `whereClause` into SQL must call `validateWhereClause()` before SQL construction. This is non-negotiable for multi-agent orchestration where WHERE clauses may originate from untrusted agent chains.
 
 **Blocked patterns:**
+
 - Semicolon-chained keywords: `; SELECT`, `; DROP`, `; INSERT`, `; UPDATE`, `; DELETE`, `; ALTER`, `; CREATE`
 - Comment injection: `--`, `/* */`
 - String-literal stripping: test blocked patterns against SQL with string literals removed (prevents false positives on quoted values)
@@ -273,6 +277,7 @@ Every tool that interpolates a user-provided `whereClause` into SQL must call `v
 Tools that create or drop objects must distinguish between "action taken" and "no-op" responses. This is critical for idempotent workflow design in agent orchestration.
 
 **Pattern:**
+
 - Pre-check existence before `CREATE ... IF NOT EXISTS` or `DROP ... IF EXISTS`
 - Return `alreadyExists: true` or `alreadyDropped: true` flag in response
 - Return descriptive message: `"Index 'idx_name' already exists (no changes made)"`
@@ -280,12 +285,16 @@ Tools that create or drop objects must distinguish between "action taken" and "n
 
 ```typescript
 // Before CREATE INDEX IF NOT EXISTS:
-const exists = await checkIndexExists(adapter, indexName);
+const exists = await checkIndexExists(adapter, indexName)
 if (exists) {
-  return { success: true, alreadyExists: true, message: `Index '${indexName}' already exists (no changes made)` };
+  return {
+    success: true,
+    alreadyExists: true,
+    message: `Index '${indexName}' already exists (no changes made)`,
+  }
 }
-await adapter.execute(`CREATE INDEX ${indexName} ...`);
-return { success: true, alreadyExists: false, message: `Index '${indexName}' created` };
+await adapter.execute(`CREATE INDEX ${indexName} ...`)
+return { success: true, alreadyExists: false, message: `Index '${indexName}' created` }
 ```
 
 ---
@@ -326,6 +335,7 @@ schemas/                         # (or output-schemas/)
 ```
 
 **Rules (both patterns):**
+
 - Zero inline output schema `z.object()` definitions in handler files — import from dedicated `schemas.ts` or `schemas/` directory
 - All output schemas extend `ErrorFieldsMixin.shape` — domain fields are `.optional()` so error responses pass validation
 - Every group gets its own file (no stuffing unrelated schemas into `common.ts`)

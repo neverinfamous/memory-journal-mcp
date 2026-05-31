@@ -14,7 +14,7 @@ description: |
 # Docs Marketer
 
 A documentation marketability audit system that evaluates whether accurate
-documentation is *effectively marketed*. While `/doc-audit` answers "are the
+documentation is _effectively marketed_. While `/doc-audit` answers "are the
 docs correct?", this skill answers "are the docs compelling?"
 
 Surfaces under-promoted features, evaluates first impressions, identifies
@@ -78,18 +78,18 @@ time and tokens.
 
 The 10 marketability categories evaluated per document surface:
 
-| # | Category | Focus |
-| --- | --- | --- |
-| 1 | Feature Visibility | Are all capabilities discoverable in docs? |
-| 2 | First Impression | Does the repo sell itself in the first 30 seconds? |
-| 3 | Information Architecture | Heading hierarchy, scannability, progressive disclosure |
-| 4 | Visual Assets | Mermaid diagrams, badges, screenshots, callouts |
-| 5 | Competitive Differentiation | Does the value proposition clearly stand out? |
-| 6 | Onboarding Friction | Quick Start clarity, copy-paste readiness |
-| 7 | Platform Presence | Docker Hub, npm, MCP Registry, GitHub description/topics |
-| 8 | Cross-Document Consistency | Feature counts, naming, version alignment across surfaces |
-| 9 | Tone & Voice | Confident, consistent, audience-appropriate |
-| 10 | SEO & Discoverability | Keywords, GitHub topics, heading keyword density |
+| #   | Category                    | Focus                                                     |
+| --- | --------------------------- | --------------------------------------------------------- |
+| 1   | Feature Visibility          | Are all capabilities discoverable in docs?                |
+| 2   | First Impression            | Does the repo sell itself in the first 30 seconds?        |
+| 3   | Information Architecture    | Heading hierarchy, scannability, progressive disclosure   |
+| 4   | Visual Assets               | Mermaid diagrams, badges, screenshots, callouts           |
+| 5   | Competitive Differentiation | Does the value proposition clearly stand out?             |
+| 6   | Onboarding Friction         | Quick Start clarity, copy-paste readiness                 |
+| 7   | Platform Presence           | Docker Hub, npm, MCP Registry, GitHub description/topics  |
+| 8   | Cross-Document Consistency  | Feature counts, naming, version alignment across surfaces |
+| 9   | Tone & Voice                | Confident, consistent, audience-appropriate               |
+| 10  | SEO & Discoverability       | Keywords, GitHub topics, heading keyword density          |
 
 For the full rubric with scoring guides, checklists, and anti-patterns, read
 [references/audit-categories.md](references/audit-categories.md).
@@ -150,12 +150,12 @@ refinement cycles via `skill-builder`.
 
 ## Configuration
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `AUDIT_DEPTH` | `standard` | Depth: `standard` (single-pass) or `adversarial` (dual-agent) |
-| `MAX_AUDIT_PASSES` | `2` | Maximum adversarial cycles (phases 2–3 repeat). Ignored in standard mode. |
-| `COPILOT_VALIDATION` | `true` | Enable/disable Copilot extension validation phase |
-| `TARGET_DOCS` | `auto` | Auto-detect surfaces or explicit list (e.g., `README.md,DOCKER_README.md`) |
+| Variable             | Default    | Description                                                                |
+| -------------------- | ---------- | -------------------------------------------------------------------------- |
+| `AUDIT_DEPTH`        | `standard` | Depth: `standard` (single-pass) or `adversarial` (dual-agent)              |
+| `MAX_AUDIT_PASSES`   | `2`        | Maximum adversarial cycles (phases 2–3 repeat). Ignored in standard mode.  |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable Copilot extension validation phase                          |
+| `TARGET_DOCS`        | `auto`     | Auto-detect surfaces or explicit list (e.g., `README.md,DOCKER_README.md`) |
 
 ### Audit Depth Profiles
 
@@ -169,10 +169,10 @@ refinement cycles via `skill-builder`.
 
 ## Synergies
 
-| Skill/Workflow | Relationship |
-| --- | --- |
-| `/doc-audit` | Structural compliance — run first, then `docs-marketer` for marketing |
-| `skill-builder` | Defines quality standards for skill docs; this skill applies marketing lens |
-| `adversarial-planner` | Parent adversarial pattern — plan-level review |
-| `adversarial-skill-audit` | Sibling — audits skill quality; this audits doc marketability |
-| MCP Documentation Standards (KI) | Badge standards, wiki structure, release notes patterns |
+| Skill/Workflow                   | Relationship                                                                |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `/doc-audit`                     | Structural compliance — run first, then `docs-marketer` for marketing       |
+| `skill-builder`                  | Defines quality standards for skill docs; this skill applies marketing lens |
+| `adversarial-planner`            | Parent adversarial pattern — plan-level review                              |
+| `adversarial-skill-audit`        | Sibling — audits skill quality; this audits doc marketability               |
+| MCP Documentation Standards (KI) | Badge standards, wiki structure, release notes patterns                     |

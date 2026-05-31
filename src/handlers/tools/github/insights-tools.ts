@@ -26,7 +26,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                 sections: z
                     .union([
                         z.enum(['stars', 'traffic', 'referrers', 'paths', 'all']),
-                        z.array(z.enum(['stars', 'traffic', 'referrers', 'paths', 'all']))
+                        z.array(z.enum(['stars', 'traffic', 'referrers', 'paths', 'all'])),
                     ])
                     .optional()
                     .describe(
@@ -42,7 +42,12 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: RepoInsightsOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -50,16 +55,18 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                             sections: z
                                 .union([
                                     z.enum(['stars', 'traffic', 'referrers', 'paths', 'all']),
-                                    z.array(z.enum(['stars', 'traffic', 'referrers', 'paths', 'all']))
+                                    z.array(
+                                        z.enum(['stars', 'traffic', 'referrers', 'paths', 'all'])
+                                    ),
                                 ])
                                 .optional()
                                 .default('stars')
-                                .transform(val => {
+                                .transform((val) => {
                                     if (Array.isArray(val)) {
-                                        if (val.length > 1) return 'all';
-                                        return val[0] || 'stars';
+                                        if (val.length > 1) return 'all'
+                                        return val[0] || 'stars'
                                     }
-                                    return val;
+                                    return val
                                 }),
                             owner: z.string().optional(),
                             repo: z.string().optional(),

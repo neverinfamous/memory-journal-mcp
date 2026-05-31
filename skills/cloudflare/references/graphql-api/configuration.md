@@ -4,11 +4,11 @@
 
 ### API Token (Recommended)
 
-| Permission | Scope | Use Case |
-|------------|-------|----------|
-| **Account Analytics: Read** | Account-wide | Workers, R2, KV, D1, DO, AI, Network Analytics |
-| **Zone Analytics: Read** | Per-zone | HTTP requests, Firewall, DNS, Load Balancing |
-| **All zones - Analytics: Read** | All zones | Multi-zone HTTP/Firewall/DNS queries |
+| Permission                      | Scope        | Use Case                                       |
+| ------------------------------- | ------------ | ---------------------------------------------- |
+| **Account Analytics: Read**     | Account-wide | Workers, R2, KV, D1, DO, AI, Network Analytics |
+| **Zone Analytics: Read**        | Per-zone     | HTTP requests, Firewall, DNS, Load Balancing   |
+| **All zones - Analytics: Read** | All zones    | Multi-zone HTTP/Firewall/DNS queries           |
 
 Create tokens at: [dash.cloudflare.com > Account API Tokens](https://dash.cloudflare.com/?to=/:account/api-tokens)
 
@@ -41,18 +41,21 @@ curl -s https://api.cloudflare.com/client/v4/graphql \
 ### TypeScript / JavaScript
 
 ```typescript
-const GRAPHQL_ENDPOINT = "https://api.cloudflare.com/client/v4/graphql";
+const GRAPHQL_ENDPOINT = 'https://api.cloudflare.com/client/v4/graphql'
 
 async function queryGraphQL<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.CF_API_TOKEN}`, "Content-Type": "application/json" },
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.CF_API_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ query, variables }),
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  const json = await response.json() as { data: T | null; errors?: { message: string }[] };
-  if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join("; "));
-  return json.data!;
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  const json = (await response.json()) as { data: T | null; errors?: { message: string }[] }
+  if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join('; '))
+  return json.data!
 }
 ```
 
@@ -84,20 +87,50 @@ Interactive explorer at [graphql.cloudflare.com](https://graphql.cloudflare.com/
 
 ```graphql
 # List zone-scoped datasets
-{ __type(name: "zone") { fields { name description } } }
+{
+  __type(name: "zone") {
+    fields {
+      name
+      description
+    }
+  }
+}
 
 # List account-scoped datasets
-{ __type(name: "account") { fields { name description } } }
+{
+  __type(name: "account") {
+    fields {
+      name
+      description
+    }
+  }
+}
 
 # Discover dimensions for a dataset
-{ __type(name: "ZoneHttpRequestsAdaptiveGroupsDimensions") {
-  fields { name type { name kind } }
-} }
+{
+  __type(name: "ZoneHttpRequestsAdaptiveGroupsDimensions") {
+    fields {
+      name
+      type {
+        name
+        kind
+      }
+    }
+  }
+}
 
 # Discover filter operators for a dataset
-{ __type(name: "ZoneHttpRequestsAdaptiveGroupsFilter_InputObject") {
-  inputFields { name type { name kind } }
-} }
+{
+  __type(name: "ZoneHttpRequestsAdaptiveGroupsFilter_InputObject") {
+    inputFields {
+      name
+      type {
+        name
+        kind
+      }
+    }
+  }
+}
 ```
 
 ## Finding Your Zone and Account IDs

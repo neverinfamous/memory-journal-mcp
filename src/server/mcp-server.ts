@@ -520,9 +520,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     // MCP 2025-11-25: If tool has outputSchema, return both:
                     // - structuredContent: validated JSON for clients that support it
                     // - content: compact text fallback (~15-20% payload reduction per §3.1)
-                    const textContent = typeof result === 'string'
-                        ? result
-                        : JSON.stringify(result, null, 2)
+                    const textContent =
+                        typeof result === 'string' ? result : JSON.stringify(result, null, 2)
 
                     if (hasOutputSchema) {
                         // Include both structured data for the UI and raw text for the LLM context
@@ -634,7 +633,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
         registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
 
         // Intercept SDK-level Zod validation errors to return structured error responses
-        const serverObj = server.server as unknown as { _requestHandlers: Map<string, (req: unknown, ext: unknown) => Promise<unknown>> }
+        const serverObj = server.server as unknown as {
+            _requestHandlers: Map<string, (req: unknown, ext: unknown) => Promise<unknown>>
+        }
         const requestHandlers = serverObj._requestHandlers
         const originalHandler = requestHandlers?.get('tools/call')
         if (originalHandler) {
@@ -643,21 +644,38 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     const result = await originalHandler(request, extra)
 
                     // Intercept JSON-RPC success responses that carry SDK Zod validation errors
-                    if (result !== null && result !== undefined && typeof result === 'object' && 'isError' in result && result.isError === true) {
+                    if (
+                        result !== null &&
+                        result !== undefined &&
+                        typeof result === 'object' &&
+                        'isError' in result &&
+                        result.isError === true
+                    ) {
                         const resObj = result as { content?: { type?: string; text?: string }[] }
                         if (Array.isArray(resObj.content) && resObj.content.length > 0) {
                             const text = resObj.content[0]?.text
                             if (typeof text === 'string' && text.includes('MCP error -32602')) {
-                                let errorMessage = text.replace('MCP error -32602: Input validation error: ', '')
-                                
+                                let errorMessage = text.replace(
+                                    'MCP error -32602: Input validation error: ',
+                                    ''
+                                )
+
                                 try {
                                     const parts = text.split(': [')
                                     if (parts.length > 1) {
-                                        const zodErrors = JSON.parse('[' + parts[1]) as { path?: string[]; message?: string }[]
-                                        const formattedErrors = zodErrors.map((e) => {
-                                            const path = e.path && e.path.length > 0 ? e.path.join('.') : 'unknown'
-                                            return `${path}: ${e.message || 'invalid'}`
-                                        }).join('; ')
+                                        const zodErrors = JSON.parse('[' + parts[1]) as {
+                                            path?: string[]
+                                            message?: string
+                                        }[]
+                                        const formattedErrors = zodErrors
+                                            .map((e) => {
+                                                const path =
+                                                    e.path && e.path.length > 0
+                                                        ? e.path.join('.')
+                                                        : 'unknown'
+                                                return `${path}: ${e.message || 'invalid'}`
+                                            })
+                                            .join('; ')
                                         errorMessage = formattedErrors
                                     }
                                 } catch {
@@ -670,14 +688,16 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                     code: 'VALIDATION_ERROR',
                                     category: 'validation',
                                     suggestion: 'Check input parameters against the tool schema',
-                                    recoverable: false
+                                    recoverable: false,
                                 }
-                                
+
                                 const enriched = JSON.stringify({
                                     ...errorResult,
                                     _meta: { tokenEstimate: 0 },
                                 })
-                                const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
+                                const tokenEstimate = Math.ceil(
+                                    Buffer.byteLength(enriched, 'utf8') / 4
+                                )
                                 const finalText = enriched.replace(
                                     '"tokenEstimate":0',
                                     `"tokenEstimate":${tokenEstimate}`
@@ -687,10 +707,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                     content: [
                                         {
                                             type: 'text',
-                                            text: finalText
-                                        }
+                                            text: finalText,
+                                        },
                                     ],
-                                    structuredContent: errorResult
+                                    structuredContent: errorResult,
                                 }
                             }
                         }
@@ -701,16 +721,27 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     const err = error as { code?: number; message?: string }
                     if (err?.code === -32602) {
                         let errorMessage = err.message || 'Validation Error'
-                        
-                        if (typeof errorMessage === 'string' && errorMessage.includes('Invalid arguments for tool')) {
+
+                        if (
+                            typeof errorMessage === 'string' &&
+                            errorMessage.includes('Invalid arguments for tool')
+                        ) {
                             try {
                                 const parts = errorMessage.split(': [')
                                 if (parts.length > 1) {
-                                    const zodErrors = JSON.parse('[' + parts[1]) as { path?: string[]; message?: string }[]
-                                    const formattedErrors = zodErrors.map((e) => {
-                                        const path = e.path && e.path.length > 0 ? e.path.join('.') : 'unknown'
-                                        return `${path}: ${e.message || 'invalid'}`
-                                    }).join('; ')
+                                    const zodErrors = JSON.parse('[' + parts[1]) as {
+                                        path?: string[]
+                                        message?: string
+                                    }[]
+                                    const formattedErrors = zodErrors
+                                        .map((e) => {
+                                            const path =
+                                                e.path && e.path.length > 0
+                                                    ? e.path.join('.')
+                                                    : 'unknown'
+                                            return `${path}: ${e.message || 'invalid'}`
+                                        })
+                                        .join('; ')
                                     errorMessage = formattedErrors
                                 }
                             } catch {
@@ -724,9 +755,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'Check input parameters against the tool schema',
-                            recoverable: false
+                            recoverable: false,
                         }
-                        
+
                         const enriched = JSON.stringify({
                             ...errorResult,
                             _meta: { tokenEstimate: 0 },
@@ -741,10 +772,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
                             content: [
                                 {
                                     type: 'text',
-                                    text: finalText
-                                }
+                                    text: finalText,
+                                },
                             ],
-                            structuredContent: errorResult
+                            structuredContent: errorResult,
                         }
                     }
                     throw error

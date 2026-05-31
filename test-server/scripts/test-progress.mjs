@@ -27,14 +27,10 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = resolve(__dirname, '../..')
 
-const proc = spawn(
-    'node',
-    ['dist/cli.js', '--log-level', 'error'],
-    {
-        cwd: projectDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
-    }
-)
+const proc = spawn('node', ['dist/cli.js', '--log-level', 'error'], {
+    cwd: projectDir,
+    stdio: ['pipe', 'pipe', 'pipe'],
+})
 
 let buffer = ''
 const pending = new Map() // id -> resolve
@@ -84,16 +80,12 @@ function rpc(method, params = {}) {
             clearTimeout(timer)
             resolve(msg)
         })
-        proc.stdin.write(
-            JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'
-        )
+        proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
     })
 }
 
 function notify(method, params = {}) {
-    proc.stdin.write(
-        JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n'
-    )
+    proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n')
 }
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -147,9 +139,7 @@ async function main() {
                 `PASS: Received ${progressEvents.length} progress notifications (expected ≥ 2)`
             )
         } else {
-            console.error(
-                `FAIL: Expected ≥ 2 progress notifications, got ${progressEvents.length}`
-            )
+            console.error(`FAIL: Expected ≥ 2 progress notifications, got ${progressEvents.length}`)
             failures++
         }
     }
@@ -222,4 +212,3 @@ main().catch((err) => {
     proc.kill()
     process.exitCode = 1
 })
-

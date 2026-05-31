@@ -154,24 +154,24 @@ create_entry({
 
 ## Tag Convention
 
-| Tag | Purpose |
-| --- | --- |
-| `adversarial-performance` | All entries from this skill (primary filter) |
-| `profile` | Phase 1 output |
-| `stress-test` | Phase 2 output |
-| `optimization` | Phase 3 output |
-| `copilot` | Phase 4 output |
-| `audit-complete` | Final consolidated summary |
-| `retrospective` | Post-cycle review |
-| `session-summary` | Enables retrieval via session summary searches |
+| Tag                       | Purpose                                        |
+| ------------------------- | ---------------------------------------------- |
+| `adversarial-performance` | All entries from this skill (primary filter)   |
+| `profile`                 | Phase 1 output                                 |
+| `stress-test`             | Phase 2 output                                 |
+| `optimization`            | Phase 3 output                                 |
+| `copilot`                 | Phase 4 output                                 |
+| `audit-complete`          | Final consolidated summary                     |
+| `retrospective`           | Post-cycle review                              |
+| `session-summary`         | Enables retrieval via session summary searches |
 
 ## Entry Type Reference
 
-| Entry Type | Phase | Description |
-| --- | --- | --- |
-| `perf_profile` | 1 | Baselines and existing optimizations |
-| `perf_stress_test` | 2 | Stress test findings with scores |
-| `perf_optimization` | 3 | Optimization plan with dispositions |
-| `perf_copilot` | 4 | Copilot validation findings |
-| `perf_audit_complete` | Final | Consolidated audit summary |
-| `retrospective` | Post | Session retrospective with metrics |
+| Entry Type            | Phase | Description                          |
+| --------------------- | ----- | ------------------------------------ |
+| `perf_profile`        | 1     | Baselines and existing optimizations |
+| `perf_stress_test`    | 2     | Stress test findings with scores     |
+| `perf_optimization`   | 3     | Optimization plan with dispositions  |
+| `perf_copilot`        | 4     | Copilot validation findings          |
+| `perf_audit_complete` | Final | Consolidated audit summary           |
+| `retrospective`       | Post  | Session retrospective with metrics   |

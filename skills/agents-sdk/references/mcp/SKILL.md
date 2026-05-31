@@ -36,30 +36,30 @@ For the complete MCP implementation guide, architecture diagrams, and detailed t
 When you need a minimal, fully compliant MCP server scaffold, use this structure:
 
 ```typescript
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { z } from 'zod'
 
 // Initialize the modern McpServer pattern
-const server = new McpServer({ name: "my-mcp", version: "1.0.0" });
+const server = new McpServer({ name: 'my-mcp', version: '1.0.0' })
 
 // Define tools using server.tool() which auto-registers schemas and handlers
 server.tool(
-  "my_tool",
-  "Does something using an ID",
-  { id: z.string().describe("The user ID to process") },
+  'my_tool',
+  'Does something using an ID',
+  { id: z.string().describe('The user ID to process') },
   async ({ id }) => {
     try {
       // Logic here (input is already validated by Zod)
-      return { content: [{ type: "text", text: `Got ID: ${id}` }] };
+      return { content: [{ type: 'text', text: `Got ID: ${id}` }] }
     } catch (err) {
       // Graceful error return
-      return { isError: true, content: [{ type: "text", text: `Error: ${err}` }] };
+      return { isError: true, content: [{ type: 'text', text: `Error: ${err}` }] }
     }
   }
-);
+)
 
 // Connect via standard I/O
-const transport = new StdioServerTransport();
-await server.connect(transport);
+const transport = new StdioServerTransport()
+await server.connect(transport)
 ```

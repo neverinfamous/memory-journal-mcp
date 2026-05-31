@@ -22,6 +22,7 @@ Enterprise-grade rules for writing resilient, type-safe TypeScript in 2026. Foll
 ## 2. Project Configuration (`tsconfig.json`)
 
 Unless explicitly directed otherwise by the user or existing ecosystem:
+
 - **Module System**: Assume an `ESM-first` setup. Ensure `"type": "module"` is in `package.json`.
 - **Strict Mode**: Ensure `"strict": true` is enabled.
 - **Module Resolution**: Use `"moduleResolution": "Bundler"` or `"Node16"` for modern ESM.
@@ -45,4 +46,5 @@ Unless explicitly directed otherwise by the user or existing ecosystem:
 ## 6. Deep References
 
 For comprehensive tutorials or ecosystem-specific patterns, consult:
+
 - **[TypeScript Tutorial & Deep Dive](references/tutorial.md)**

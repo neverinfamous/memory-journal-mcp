@@ -43,7 +43,7 @@ for (const item of items) {
             filter: (src) => {
                 const base = path.basename(src)
                 return base !== 'node_modules' && base !== 'package-lock.json'
-            }
+            },
         })
         console.log(`  \x1b[32m\u2714\x1b[0m ${item}`)
         count++

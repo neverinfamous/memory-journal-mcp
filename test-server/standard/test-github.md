@@ -96,12 +96,12 @@
 
 ### 13.6 Copilot Review Tool
 
-| Test                  | Command/Action                                        | Expected Result                                                               |
-| --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body` |
-| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                  |
+| Test                  | Command/Action                                        | Expected Result                                                                                                |
+| --------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body`                                  |
+| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                                                   |
 | Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Returns structured `CONFIGURATION_ERROR` in multi-workspace environments (or auto-detects in single-workspace) |
-| No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
+| No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`                                        |
 
 ### 13.7 GitHub Test Cleanup
 

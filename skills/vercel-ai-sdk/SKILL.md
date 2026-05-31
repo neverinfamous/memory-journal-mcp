@@ -12,11 +12,11 @@ The Vercel AI SDK is the de facto standard for building streaming AI application
 
 - **Text Generation**: Use `streamText` for any user-facing chat or text response to minimize perceived latency. Only use `generateText` for background tasks where the user is not waiting for a real-time response.
 - **Structured Outputs**: Use `streamObject` or `generateObject` paired with Zod schemas to guarantee type-safe JSON outputs. Never prompt the model manually to "return JSON".
-- **Tool Calling**: Define tools using the `tool()` helper with strict Zod schemas. 
+- **Tool Calling**: Define tools using the `tool()` helper with strict Zod schemas.
 
 ```typescript
-import { streamText, tool } from 'ai';
-import { z } from 'zod';
+import { streamText, tool } from 'ai'
+import { z } from 'zod'
 
 const result = streamText({
   model: myModel,
@@ -28,7 +28,7 @@ const result = streamText({
       execute: async ({ location }) => fetchWeather(location),
     }),
   },
-});
+})
 ```
 
 ## 2. UI Hooks (`@ai-sdk/react`)

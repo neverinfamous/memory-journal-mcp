@@ -61,19 +61,19 @@ against all 10 audit categories.
 **Last Modified**: [date if available]
 **Platform Constraints**: [e.g., Docker Hub 25K char limit]
 
-| Category | Score (1–5) | Notes |
-| --- | --- | --- |
-| 1. Feature Visibility | | |
-| 2. First Impression | | |
-| 3. Information Architecture | | |
-| 4. Visual Assets | | |
-| 5. Competitive Differentiation | | |
-| 6. Onboarding Friction | | |
-| 7. Platform Presence | | |
-| 8. Cross-Document Consistency | | |
-| 9. Tone & Voice | | |
-| 10. SEO & Discoverability | | |
-| **Average** | **X.X** | |
+| Category                       | Score (1–5) | Notes |
+| ------------------------------ | ----------- | ----- |
+| 1. Feature Visibility          |             |       |
+| 2. First Impression            |             |       |
+| 3. Information Architecture    |             |       |
+| 4. Visual Assets               |             |       |
+| 5. Competitive Differentiation |             |       |
+| 6. Onboarding Friction         |             |       |
+| 7. Platform Presence           |             |       |
+| 8. Cross-Document Consistency  |             |       |
+| 9. Tone & Voice                |             |       |
+| 10. SEO & Discoverability      |             |       |
+| **Average**                    | **X.X**     |       |
 
 **Top Opportunity**: [Single highest-impact marketing improvement]
 **Grade**: [A–F]
@@ -86,22 +86,22 @@ Cross-reference discovered capabilities against documentation mentions:
 ```markdown
 ### Feature Visibility Gaps
 
-| Capability | In Source? | In README? | In Wiki? | In Docker? | Marketing Status |
-| --- | --- | --- | --- | --- | --- |
-| Code Mode (90% token savings) | ✅ | ✅ | ✅ | ❌ | Under-marketed in Docker |
-| Hush Protocol flags | ✅ | ✅ | ⚠️ Brief | ❌ | Under-marketed |
-| OAuth 2.1 (RFC 9728) | ✅ | ✅ | ❌ | ❌ | Missing from Wiki/Docker |
+| Capability                    | In Source? | In README? | In Wiki? | In Docker? | Marketing Status         |
+| ----------------------------- | ---------- | ---------- | -------- | ---------- | ------------------------ |
+| Code Mode (90% token savings) | ✅         | ✅         | ✅       | ❌         | Under-marketed in Docker |
+| Hush Protocol flags           | ✅         | ✅         | ⚠️ Brief | ❌         | Under-marketed           |
+| OAuth 2.1 (RFC 9728)          | ✅         | ✅         | ❌       | ❌         | Missing from Wiki/Docker |
 ```
 
 ### Scoring Guide
 
-| Score | Meaning |
-| --- | --- |
-| 5 | Excellent — compelling, well-structured, clearly differentiating |
-| 4 | Good — solid coverage, minor marketing opportunities missed |
-| 3 | Acceptable — features documented but not effectively marketed |
-| 2 | Poor — significant capabilities buried or poorly presented |
-| 1 | Failing — misleading, empty, or actively harmful to adoption |
+| Score | Meaning                                                          |
+| ----- | ---------------------------------------------------------------- |
+| 5     | Excellent — compelling, well-structured, clearly differentiating |
+| 4     | Good — solid coverage, minor marketing opportunities missed      |
+| 3     | Acceptable — features documented but not effectively marketed    |
+| 2     | Poor — significant capabilities buried or poorly presented       |
+| 1     | Failing — misleading, empty, or actively harmful to adoption     |
 
 ### Portfolio Overview
 
@@ -116,13 +116,13 @@ After scoring all surfaces individually, produce a portfolio-level overview:
 
 ### Score Distribution
 
-| Grade | Surfaces |
-| --- | --- |
-| A (4.5–5.0) | README.md |
-| B (3.5–4.4) | Wiki Home |
+| Grade       | Surfaces         |
+| ----------- | ---------------- |
+| A (4.5–5.0) | README.md        |
+| B (3.5–4.4) | Wiki Home        |
 | C (2.5–3.4) | DOCKER_README.md |
-| D (1.5–2.4) | — |
-| F (1.0–1.4) | — |
+| D (1.5–2.4) | —                |
+| F (1.0–1.4) | —                |
 
 ### Cross-Surface Properties
 
@@ -163,13 +163,13 @@ is to find where the documentation fails to sell the project.
 
 Score each dimension on a 1–5 scale:
 
-| Dimension | Weight | Focus Areas |
-| --- | --- | --- |
-| **30-Second Test** | 4 | Can someone understand the value proposition in 30 seconds of scanning? Is the tagline clear? Does the badge row convey trust? |
-| **Competitive Survival** | 3 | If choosing between this and an alternative, what would make you leave? What claims feel weak? |
-| **Onboarding Friction** | 3 | Follow the Quick Start literally — where do you get stuck, confused, or need to context-switch? |
-| **Feature Discovery** | 2 | What powerful capabilities are buried? What would surprise a user who only read the first 3 sections? |
-| **Trust Signals** | 2 | Test coverage badges, security claims, maintenance signals — do they feel authentic? |
+| Dimension                | Weight | Focus Areas                                                                                                                    |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| **30-Second Test**       | 4      | Can someone understand the value proposition in 30 seconds of scanning? Is the tagline clear? Does the badge row convey trust? |
+| **Competitive Survival** | 3      | If choosing between this and an alternative, what would make you leave? What claims feel weak?                                 |
+| **Onboarding Friction**  | 3      | Follow the Quick Start literally — where do you get stuck, confused, or need to context-switch?                                |
+| **Feature Discovery**    | 2      | What powerful capabilities are buried? What would surprise a user who only read the first 3 sections?                          |
+| **Trust Signals**        | 2      | Test coverage badges, security claims, maintenance signals — do they feel authentic?                                           |
 
 ### The 30-Second Test
 
@@ -186,13 +186,13 @@ If any answer is unclear, that's a finding.
 ```markdown
 ### Competitive Survival Test
 
-| Question | Answer | Score (1–5) |
-| --- | --- | --- |
-| Is the value prop clear in the tagline? | | |
-| Does the feature table differentiate or just list? | | |
-| Are comparisons to alternatives explicit or implied? | | |
-| Would a skeptic find the claims credible? | | |
-| Is there social proof (stars, downloads, testimonials)? | | |
+| Question                                                | Answer | Score (1–5) |
+| ------------------------------------------------------- | ------ | ----------- |
+| Is the value prop clear in the tagline?                 |        |             |
+| Does the feature table differentiate or just list?      |        |             |
+| Are comparisons to alternatives explicit or implied?    |        |             |
+| Would a skeptic find the claims credible?               |        |             |
+| Is there social proof (stars, downloads, testimonials)? |        |             |
 ```
 
 ### Under-Marketed Features Audit
@@ -223,22 +223,22 @@ Identify claims that:
 
 ### Findings
 
-| # | Surface | Category | Severity | Finding | Recommendation |
-| --- | --- | --- | --- | --- | --- |
-| 1 | README | First Impression | High | Value prop unclear in tagline | Rewrite tagline to lead with user benefit |
-| 2 | Docker | Feature Visibility | Critical | Missing Code Mode section entirely | Add condensed Code Mode section |
-| 3 | Wiki | Onboarding | Medium | Quick Start assumes GitHub token | Add minimal non-GitHub path |
+| #   | Surface | Category           | Severity | Finding                            | Recommendation                            |
+| --- | ------- | ------------------ | -------- | ---------------------------------- | ----------------------------------------- |
+| 1   | README  | First Impression   | High     | Value prop unclear in tagline      | Rewrite tagline to lead with user benefit |
+| 2   | Docker  | Feature Visibility | Critical | Missing Code Mode section entirely | Add condensed Code Mode section           |
+| 3   | Wiki    | Onboarding         | Medium   | Quick Start assumes GitHub token   | Add minimal non-GitHub path               |
 
 ### Dimension Scores
 
-| Dimension | Score | Weight | Weighted |
-| --- | --- | --- | --- |
-| 30-Second Test | [1–5] | 4 | [score × 4] |
-| Competitive Survival | [1–5] | 3 | [score × 3] |
-| Onboarding Friction | [1–5] | 3 | [score × 3] |
-| Feature Discovery | [1–5] | 2 | [score × 2] |
-| Trust Signals | [1–5] | 2 | [score × 2] |
-| **Total** | | **14** | **[sum]/70 = [avg]** |
+| Dimension            | Score | Weight | Weighted             |
+| -------------------- | ----- | ------ | -------------------- |
+| 30-Second Test       | [1–5] | 4      | [score × 4]          |
+| Competitive Survival | [1–5] | 3      | [score × 3]          |
+| Onboarding Friction  | [1–5] | 3      | [score × 3]          |
+| Feature Discovery    | [1–5] | 2      | [score × 2]          |
+| Trust Signals        | [1–5] | 2      | [score × 2]          |
+| **Total**            |       | **14** | **[sum]/70 = [avg]** |
 
 ### Blocking Issues
 
@@ -264,12 +264,12 @@ Switch back to the Marketer. Address every finding with a disposition.
 
 ### Disposition Table
 
-| Disposition | Meaning |
-| --- | --- |
-| **Accept** | Implement the improvement |
-| **Reject** | Finding doesn't apply or trade-off isn't worth it |
-| **Modify** | Accept the spirit but implement differently |
-| **Defer** | Acknowledge but defer (document why) |
+| Disposition | Meaning                                           |
+| ----------- | ------------------------------------------------- |
+| **Accept**  | Implement the improvement                         |
+| **Reject**  | Finding doesn't apply or trade-off isn't worth it |
+| **Modify**  | Accept the spirit but implement differently       |
+| **Defer**   | Acknowledge but defer (document why)              |
 
 ### Improvement Plan Output
 
@@ -278,44 +278,44 @@ Switch back to the Marketer. Address every finding with a disposition.
 
 ### Disposition Summary
 
-| # | Surface | Finding | Disposition | Rationale |
-| --- | --- | --- | --- | --- |
-| 1 | README | Tagline unclear | Accept | Rewrite to lead with user benefit |
-| 2 | Docker | Missing Code Mode | Accept | Add condensed section |
-| 3 | Wiki | Assumes GitHub | Modify | Add note instead of full rewrite |
+| #   | Surface | Finding           | Disposition | Rationale                         |
+| --- | ------- | ----------------- | ----------- | --------------------------------- |
+| 1   | README  | Tagline unclear   | Accept      | Rewrite to lead with user benefit |
+| 2   | Docker  | Missing Code Mode | Accept      | Add condensed section             |
+| 3   | Wiki    | Assumes GitHub    | Modify      | Add note instead of full rewrite  |
 
 ### Priority 1 — Quick Wins (<15 minutes per fix)
 
-| Surface | Fix | Impact |
-| --- | --- | --- |
-| README | Update stale badge URLs | Trust |
-| GitHub | Add missing topics | SEO |
-| README | Strengthen tagline | First Impression |
+| Surface | Fix                     | Impact           |
+| ------- | ----------------------- | ---------------- |
+| README  | Update stale badge URLs | Trust            |
+| GitHub  | Add missing topics      | SEO              |
+| README  | Strengthen tagline      | First Impression |
 
 ### Priority 2 — Structural Improvements (30–60 minutes)
 
-| Surface | Fix | Impact |
-| --- | --- | --- |
-| README | Reorder sections for progressive disclosure | IA |
-| Docker | Add Code Mode summary section | Feature Visibility |
-| Wiki | Create comparison table vs. alternatives | Differentiation |
+| Surface | Fix                                         | Impact             |
+| ------- | ------------------------------------------- | ------------------ |
+| README  | Reorder sections for progressive disclosure | IA                 |
+| Docker  | Add Code Mode summary section               | Feature Visibility |
+| Wiki    | Create comparison table vs. alternatives    | Differentiation    |
 
 ### Priority 3 — Strategic Improvements (1–2 hours)
 
-| Surface | Fix | Impact |
-| --- | --- | --- |
-| README | Rewrite "What Sets Us Apart" with concrete metrics | Differentiation |
-| Wiki | Create onboarding guide for non-GitHub users | Onboarding |
-| All | Unify tone and voice across all surfaces | Consistency |
+| Surface | Fix                                                | Impact          |
+| ------- | -------------------------------------------------- | --------------- |
+| README  | Rewrite "What Sets Us Apart" with concrete metrics | Differentiation |
+| Wiki    | Create onboarding guide for non-GitHub users       | Onboarding      |
+| All     | Unify tone and voice across all surfaces           | Consistency     |
 
 ### Projected Marketing Improvement
 
-| Metric | Before | After |
-| --- | --- | --- |
-| Average marketing score | X.X | X.X |
-| Surfaces graded A/B | N/M | N/M |
-| Feature visibility gaps | N | N |
-| Cross-surface inconsistencies | N | N |
+| Metric                        | Before | After |
+| ----------------------------- | ------ | ----- |
+| Average marketing score       | X.X    | X.X   |
+| Surfaces graded A/B           | N/M    | N/M   |
+| Feature visibility gaps       | N      | N     |
+| Cross-surface inconsistencies | N      | N     |
 ```
 
 ### Iteration Control
@@ -377,11 +377,11 @@ create_entry({
 
 ## Surface Scoreboard
 
-| Surface | Score | Grade | Top Opportunity |
-| --- | --- | --- | --- |
-| README.md | 4.2 | B | Strengthen competitive positioning |
-| DOCKER_README.md | 3.0 | C | Missing Code Mode and Hush Protocol |
-| Wiki Home | 3.8 | B | Improve onboarding flow |
+| Surface          | Score | Grade | Top Opportunity                     |
+| ---------------- | ----- | ----- | ----------------------------------- |
+| README.md        | 4.2   | B     | Strengthen competitive positioning  |
+| DOCKER_README.md | 3.0   | C     | Missing Code Mode and Hush Protocol |
+| Wiki Home        | 3.8   | B     | Improve onboarding flow             |
 
 ## Feature Visibility Gap Map
 

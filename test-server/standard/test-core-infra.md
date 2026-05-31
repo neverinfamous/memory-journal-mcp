@@ -81,23 +81,23 @@ node test-server/scripts/test-team-db-fallback.mjs
 rm test-team-prompts.db*
 ```
 
-| Check              | Expected                                                             |
-| ------------------ | -------------------------------------------------------------------- |
-| Instruction levels | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations   | 70 tools, all with `annotations`, 48 `false` + 22 `true` = 0 missing |
-| Filter instructions| Output confirms correct filtering of config sections                 |
-| Prompts API        | Successfully fetches and parses all 16 prompts                       |
-| Progress           | Both native and code-mode progress APIs successfully complete        |
-| Team DB Fallback   | Graceful rejection when TEAM_DB_PATH is missing                      |
-| Scheduler          | HTTP server executes backup, vacuum, index, and digest jobs          |
+| Check               | Expected                                                             |
+| ------------------- | -------------------------------------------------------------------- |
+| Instruction levels  | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
+| Tool annotations    | 70 tools, all with `annotations`, 48 `false` + 22 `true` = 0 missing |
+| Filter instructions | Output confirms correct filtering of config sections                 |
+| Prompts API         | Successfully fetches and parses all 16 prompts                       |
+| Progress            | Both native and code-mode progress APIs successfully complete        |
+| Team DB Fallback    | Graceful rejection when TEAM_DB_PATH is missing                      |
+| Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
 
 ### 1.4 GitHub Status Resource
 
-| Test              | Command/Action                                                                               | Expected Result                                                  |
-| ----------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Test              | Command/Action                                                                                                   | Expected Result                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Read status       | Read `memory://github/status` (use `memory://github/status/{repo}` or `{owner}/{repo}` for multi-project setups) | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
-| CI status mapping | Verify CI status value                                                                       | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
-| Milestone data    | Inspect status data                                                                          | Includes milestones summary (open count, completion percentages) |
+| CI status mapping | Verify CI status value                                                                                           | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
+| Milestone data    | Inspect status data                                                                                              | Includes milestones summary (open count, completion percentages) |
 
 ---
 

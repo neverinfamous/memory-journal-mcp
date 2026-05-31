@@ -12,28 +12,28 @@
 // ❌ WRONG - fire and forget
 export default {
   async tail(events) {
-    fetch(endpoint, { body: JSON.stringify(events) });
-  }
-};
+    fetch(endpoint, { body: JSON.stringify(events) })
+  },
+}
 
 // ❌ WRONG - blocking await
 export default {
   async tail(events, env, ctx) {
-    await fetch(endpoint, { body: JSON.stringify(events) });
-  }
-};
+    await fetch(endpoint, { body: JSON.stringify(events) })
+  },
+}
 
 // ✅ CORRECT
 export default {
   async tail(events, env, ctx) {
     ctx.waitUntil(
       (async () => {
-        await fetch(endpoint, { body: JSON.stringify(events) });
-        await processMore();
+        await fetch(endpoint, { body: JSON.stringify(events) })
+        await processMore()
       })()
-    );
-  }
-};
+    )
+  },
+}
 ```
 
 ### 2. Missing `tail()` Handler
@@ -49,11 +49,17 @@ export default {
 
 ```typescript
 // ❌ WRONG
-if (event.outcome === 500) { /* never matches */ }
+if (event.outcome === 500) {
+  /* never matches */
+}
 
 // ✅ CORRECT
-if (event.outcome === 'exception') { /* script threw */ }
-if (event.event?.response?.status === 500) { /* HTTP 500 */ }
+if (event.outcome === 'exception') {
+  /* script threw */
+}
+if (event.event?.response?.status === 500) {
+  /* HTTP 500 */
+}
 ```
 
 ### 4. Timestamp Units
@@ -72,10 +78,12 @@ if (event.event?.response?.status === 500) { /* HTTP 500 */ }
 **Cause:** Old docs used `TailItem`, SDK uses `TraceItem`
 
 ```typescript
-import type { TraceItem } from '@cloudflare/workers-types';
+import type { TraceItem } from '@cloudflare/workers-types'
 export default {
-  async tail(events: TraceItem[], env, ctx) { /* ... */ }
-};
+  async tail(events: TraceItem[], env, ctx) {
+    /* ... */
+  },
+}
 ```
 
 ### 6. Excessive Logging Volume
@@ -87,10 +95,10 @@ export default {
 ```typescript
 export default {
   async tail(events, env, ctx) {
-    if (Math.random() > 0.1) return;  // 10% sample
-    ctx.waitUntil(sendToEndpoint(events));
-  }
-};
+    if (Math.random() > 0.1) return // 10% sample
+    ctx.waitUntil(sendToEndpoint(events))
+  },
+}
 ```
 
 ### 7. Serialization Issues
@@ -100,16 +108,19 @@ export default {
 **Solution:**
 
 ```typescript
-const safePayload = events.map(e => ({
+const safePayload = events.map((e) => ({
   ...e,
-  logs: e.logs.map(log => ({
+  logs: e.logs.map((log) => ({
     ...log,
-    message: log.message.map(m => {
-      try { return JSON.parse(JSON.stringify(m)); }
-      catch { return String(m); }
-    })
-  }))
-}));
+    message: log.message.map((m) => {
+      try {
+        return JSON.parse(JSON.stringify(m))
+      } catch {
+        return String(m)
+      }
+    }),
+  })),
+}))
 ```
 
 ### 8. Missing Error Handling
@@ -119,14 +130,16 @@ const safePayload = events.map(e => ({
 **Solution:**
 
 ```typescript
-ctx.waitUntil((async () => {
-  try {
-    await fetch(env.ENDPOINT, { body: JSON.stringify(events) });
-  } catch (error) {
-    console.error("Tail error:", error);
-    await env.FALLBACK_KV.put(`failed:${Date.now()}`, JSON.stringify(events));
-  }
-})());
+ctx.waitUntil(
+  (async () => {
+    try {
+      await fetch(env.ENDPOINT, { body: JSON.stringify(events) })
+    } catch (error) {
+      console.error('Tail error:', error)
+      await env.FALLBACK_KV.put(`failed:${Date.now()}`, JSON.stringify(events))
+    }
+  })()
+)
 ```
 
 ### 9. Deployment Order
@@ -151,6 +164,7 @@ cd ../producer && wrangler deploy
 **View logs:** `wrangler tail my-tail-worker`
 
 **Incremental testing:**
+
 1. Verify receipt: `console.log('Events:', events.length)`
 2. Inspect structure: `console.log(JSON.stringify(events[0], null, 2))`
 3. Add external call with `ctx.waitUntil()`
@@ -165,24 +179,24 @@ Add test endpoint to producer:
 export default {
   async fetch(request) {
     if (request.url.includes('/test')) {
-      console.log('Test log');
-      throw new Error('Test error');
+      console.log('Test log')
+      throw new Error('Test error')
     }
-    return new Response('OK');
-  }
-};
+    return new Response('OK')
+  },
+}
 ```
 
 Trigger: `curl https://producer.example.workers.dev/test`
 
 ## Common Errors
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| "Tail consumer not found" | Not deployed | Deploy tail Worker first |
-| "No tail handler" | Missing `tail()` | Add to default export |
-| "waitUntil is not a function" | Missing `ctx` | Add `ctx` parameter |
-| Timeout | Blocking await | Use `ctx.waitUntil()` |
+| Error                         | Cause            | Solution                 |
+| ----------------------------- | ---------------- | ------------------------ |
+| "Tail consumer not found"     | Not deployed     | Deploy tail Worker first |
+| "No tail handler"             | Missing `tail()` | Add to default export    |
+| "waitUntil is not a function" | Missing `ctx`    | Add `ctx` parameter      |
+| Timeout                       | Blocking await   | Use `ctx.waitUntil()`    |
 
 ## Performance Notes
 

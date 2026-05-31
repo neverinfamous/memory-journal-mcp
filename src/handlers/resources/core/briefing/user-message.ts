@@ -144,7 +144,9 @@ export function formatUserMessage(opts: {
             if (s.closed > 0) parts.push(`${String(s.closed)} closed`)
             trackingParts.push(`PRs: ${parts.join(', ') || '0'}`)
         } else if (github.openPrList && github.openPrList.length > 0) {
-            const titles = github.openPrList.map((p) => `#${String(p.number)} ${p.title}`).join(' · ')
+            const titles = github.openPrList
+                .map((p) => `#${String(p.number)} ${p.title}`)
+                .join(' · ')
             trackingParts.push(`PRs: ${String(github.openPRs)} open: ${escapeCell(titles)}`)
         } else {
             trackingParts.push(`PRs: ${String(github.openPRs)} open`)
@@ -172,9 +174,9 @@ export function formatUserMessage(opts: {
     if (opts.teamTotalEntries !== undefined) {
         journalLine1.push(`Team: ${String(opts.teamTotalEntries)}`)
     }
-    
+
     const journalParts = [journalLine1.join(' · ')]
-    
+
     if (latestPreviews.length > 0) {
         journalParts.push(`Latest: ${escapeCell(latestPreviews[0] ?? '')}`)
         for (let i = 1; i < latestPreviews.length; i++) {
@@ -204,7 +206,9 @@ export function formatUserMessage(opts: {
         if (opts.filterSummary) {
             const isCodeMode = opts.filterSummary.includes('codemode')
             const codeModeNote = isCodeMode ? ' (100KB cap) — use mj.* API' : ''
-            sysLines.push(`${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`)
+            sysLines.push(
+                `${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`
+            )
         } else {
             sysLines.push(`${String(opts.toolCount)} tools`)
         }
@@ -224,12 +228,16 @@ export function formatUserMessage(opts: {
     if (testLines.length) sysLines.push(testLines.join(' · '))
 
     const sysLine3 = []
-    if (rulesFile) sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
-    if (skillsDir) sysLine3.push(`🧠 ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
+    if (rulesFile)
+        sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
+    if (skillsDir)
+        sysLine3.push(`🧠 ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
     if (sysLine3.length) sysLines.push(sysLine3.join(' · '))
 
     if (opts.hasCodeMap) {
-        sysLines.push('📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)')
+        sysLines.push(
+            '📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)'
+        )
     }
 
     if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
@@ -238,24 +246,25 @@ export function formatUserMessage(opts: {
     // TABLE ROW 5: Config (only when non-default values present)
     // ========================================================================
     const configLines: string[] = []
-    
+
     const configLine1: string[] = []
     if (opts.isReadonly) configLine1.push('mode: readonly')
     if (opts.instructionLevel) configLine1.push(`level: ${opts.instructionLevel}`)
     if (configLine1.length) configLines.push(configLine1.join(' · '))
-    
+
     const configLine2: string[] = []
     configLine2.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
     configLine2.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
     if (configLine2.length) configLines.push(configLine2.join(' · '))
-    
+
     const configLine3: string[] = []
     if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
         configLine3.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
     }
     if (opts.registryRepos && opts.registryRepos.length > 0) {
         const repoNames = opts.registryRepos.slice(0, 3).join(', ')
-        const suffix = opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
+        const suffix =
+            opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
         configLine3.push(`registry: ${escapeCell(repoNames)}${suffix}`)
     }
     if (configLine3.length) configLines.push(configLine3.join(' · '))
@@ -291,10 +300,14 @@ export function formatUserMessage(opts: {
         if (analyticsInsights.significanceSpike !== null)
             metricParts.push(`🔥 ${escapeCell(analyticsInsights.significanceSpike)}`)
         if (analyticsInsights.relationshipDensity !== undefined)
-            metricParts.push(`🔗 Density: ${escapeCell(String(analyticsInsights.relationshipDensity))}`)
+            metricParts.push(
+                `🔗 Density: ${escapeCell(String(analyticsInsights.relationshipDensity))}`
+            )
         if (metricParts.length > 0) insightsLines.push(metricParts.join(' · '))
         if (analyticsInsights.staleProjects.length > 0)
-            insightsLines.push(`💤 ${String(analyticsInsights.staleProjects.length)} stale projects`)
+            insightsLines.push(
+                `💤 ${String(analyticsInsights.staleProjects.length)} stale projects`
+            )
     }
 
     // ========================================================================
@@ -302,10 +315,11 @@ export function formatUserMessage(opts: {
     // ========================================================================
     const graphLines: string[] = []
     if (graphSummary && graphSummary.totalRelationships > 0) {
-        const topTypes = Object.entries(graphSummary.causalMetrics)
-            .filter(([_, count]) => count > 0)
-            .map(([type, count]) => `${type}: ${String(count)}`)
-            .join(', ') || 'none'
+        const topTypes =
+            Object.entries(graphSummary.causalMetrics)
+                .filter(([_, count]) => count > 0)
+                .map(([type, count]) => `${type}: ${String(count)}`)
+                .join(', ') || 'none'
         graphLines.push(
             `${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
         )
@@ -324,9 +338,10 @@ export function formatUserMessage(opts: {
         if (u.security > 0) parts.push(`${String(u.security)} security`)
         if (u.removed > 0) parts.push(`${String(u.removed)} removed`)
         if (parts.length > 0) {
-            const ageStr = opts.lastReleaseDaysAgo !== undefined
-                ? `(${String(opts.lastReleaseDaysAgo)}d) `
-                : ''
+            const ageStr =
+                opts.lastReleaseDaysAgo !== undefined
+                    ? `(${String(opts.lastReleaseDaysAgo)}d) `
+                    : ''
             let line = `${ageStr}${parts.join(' · ')}`
             if ((u.keyItems?.length ?? 0) > 0) {
                 line += `<br>Recent focus: ${escapeCell(u.keyItems.join(', '))}`

@@ -85,7 +85,6 @@ Replace `child_process` and `zx` with the native Bun shell (`$`).
 > [!CAUTION]
 > **Command Injection Risk**: Never interpolate untrusted user input directly into a `Bun.$` template literal (`Bun.$`echo ${userInput}``) as it operates like `exec()`. Always use array arguments `Bun.$`echo ${["arg1", "arg2"]}` for untrusted data.
 
-
 ```typescript
 import { $ } from 'bun'
 

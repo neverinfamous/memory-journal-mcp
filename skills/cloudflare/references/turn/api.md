@@ -34,6 +34,7 @@ Content-Type: application/json
 ```
 
 **Response includes**:
+
 - `uid`: Key identifier
 - `key`: The actual secret key (only returned on creation—save immediately)
 - `name`: Human-readable name
@@ -71,9 +72,9 @@ Content-Type: application/json
 
 ### Credential Constraints
 
-| Parameter | Min | Max | Default | Notes |
-|-----------|-----|-----|---------|-------|
-| ttl | 1 | 172800 (48hrs) | varies | API rejects values >172800 |
+| Parameter | Min | Max            | Default | Notes                      |
+| --------- | --- | -------------- | ------- | -------------------------- |
+| ttl       | 1   | 172800 (48hrs) | varies  | API rejects values >172800 |
 
 **CRITICAL**: Maximum TTL is 48 hours (172800 seconds). API will reject requests exceeding this limit.
 
@@ -119,36 +120,36 @@ Billing stops immediately. Active connection drops after short delay (~seconds).
 
 ```typescript
 interface CloudflareTURNConfig {
-  keyId: string;
-  keySecret: string;
-  ttl?: number; // Max 172800 (48 hours)
+  keyId: string
+  keySecret: string
+  ttl?: number // Max 172800 (48 hours)
 }
 
 interface TURNCredentialsRequest {
-  ttl?: number; // Max 172800 seconds
+  ttl?: number // Max 172800 seconds
 }
 
 interface TURNCredentialsResponse {
   iceServers: {
-    urls: string[];
-    username: string;
-    credential: string;
-  };
+    urls: string[]
+    username: string
+    credential: string
+  }
 }
 
 interface RTCIceServer {
-  urls: string | string[];
-  username?: string;
-  credential?: string;
-  credentialType?: "password";
+  urls: string | string[]
+  username?: string
+  credential?: string
+  credentialType?: 'password'
 }
 
 interface TURNKeyResponse {
-  uid: string;
-  key: string; // Only present on creation
-  name: string;
-  created: string;
-  modified: string;
+  uid: string
+  key: string // Only present on creation
+  name: string
+  created: string
+  modified: string
 }
 ```
 
@@ -157,37 +158,35 @@ interface TURNKeyResponse {
 ```typescript
 function validateRTCIceServer(obj: unknown): obj is RTCIceServer {
   if (!obj || typeof obj !== 'object') {
-    return false;
+    return false
   }
 
-  const server = obj as Record<string, unknown>;
+  const server = obj as Record<string, unknown>
 
   if (typeof server.urls !== 'string' && !Array.isArray(server.urls)) {
-    return false;
+    return false
   }
 
   if (server.username && typeof server.username !== 'string') {
-    return false;
+    return false
   }
 
   if (server.credential && typeof server.credential !== 'string') {
-    return false;
+    return false
   }
 
-  return true;
+  return true
 }
 ```
 
 ## Type-Safe Credential Generation
 
 ```typescript
-async function fetchTURNServers(
-  config: CloudflareTURNConfig
-): Promise<RTCIceServer[]> {
+async function fetchTURNServers(config: CloudflareTURNConfig): Promise<RTCIceServer[]> {
   // Validate TTL constraint
-  const ttl = config.ttl ?? 3600;
+  const ttl = config.ttl ?? 3600
   if (ttl > 172800) {
-    throw new Error('TTL cannot exceed 172800 seconds (48 hours)');
+    throw new Error('TTL cannot exceed 172800 seconds (48 hours)')
   }
 
   const response = await fetch(
@@ -195,23 +194,21 @@ async function fetchTURNServers(
     {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.keySecret}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${config.keySecret}`,
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ ttl })
+      body: JSON.stringify({ ttl }),
     }
-  );
+  )
 
   if (!response.ok) {
-    throw new Error(`TURN credential generation failed: ${response.status}`);
+    throw new Error(`TURN credential generation failed: ${response.status}`)
   }
 
-  const data = await response.json();
-  
+  const data = await response.json()
+
   // Filter port 53 for browser clients
-  const filteredUrls = data.iceServers.urls.filter(
-    (url: string) => !url.includes(':53')
-  );
+  const filteredUrls = data.iceServers.urls.filter((url: string) => !url.includes(':53'))
 
   const iceServers = [
     { urls: 'stun:stun.cloudflare.com:3478' },
@@ -219,16 +216,16 @@ async function fetchTURNServers(
       urls: filteredUrls,
       username: data.iceServers.username,
       credential: data.iceServers.credential,
-      credentialType: 'password' as const
-    }
-  ];
+      credentialType: 'password' as const,
+    },
+  ]
 
   // Validate before returning
   if (!iceServers.every(validateRTCIceServer)) {
-    throw new Error('Invalid ICE server configuration received');
+    throw new Error('Invalid ICE server configuration received')
   }
 
-  return iceServers;
+  return iceServers
 }
 ```
 

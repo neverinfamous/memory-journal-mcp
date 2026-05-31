@@ -11,12 +11,13 @@ description: |
 # Adversarial Workflow Audit
 
 A multi-pass quality auditing system adapted specifically for manual markdown workflows.
-Unlike agent skills (which trigger automatically), workflows are manually invoked by users 
+Unlike agent skills (which trigger automatically), workflows are manually invoked by users
 and execute sequentially. This audit ensures they are deterministic, safe, and robust.
 
 ## When to Load
 
 Load this skill when any of these apply:
+
 - Auditing an entire workflows directory for quality and safety.
 - Reviewing a new workflow before finalizing it.
 - The user asks for a workflow quality check or playbook review.
@@ -31,6 +32,7 @@ For the core pipeline rules, phase definitions, and agent switching protocols, r
 ## Deep References
 
 For the specific audit categories and rubric, read:
+
 - **[Audit Categories Reference](references/audit-categories.md)**
 
 ## External Validation (Phase 4)
@@ -60,19 +62,21 @@ See `../adversarial-security/references/journal-opt-out.md` for instructions on 
 
 ## Configuration
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
-| `AUDIT_DEPTH` | `standard` | Depth: `surface`, `standard`, or `thorough` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable Copilot extension validation phase |
+| Variable             | Default    | Description                                       |
+| -------------------- | ---------- | ------------------------------------------------- |
+| `MAX_AUDIT_PASSES`   | `2`        | Maximum stress-test cycles (phases 2–3 repeat)    |
+| `AUDIT_DEPTH`        | `standard` | Depth: `surface`, `standard`, or `thorough`       |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable Copilot extension validation phase |
 
 ### Audit Depth Profiles
+
 - **Surface**: Review structure, linear step numbering, and obvious prerequisites. Quick scan for workflow injection vectors.
 - **Standard**: Full audit with all review dimensions and Phase 2 stress testing. Default for most workflows.
 - **Thorough**: Full audit plus cross-workflow impact analysis, ecosystem comparisons, and rigorous infinite loop boundary testing.
 
 ## Synergies
-| Skill/Workflow | Relationship |
-| --- | --- |
-| `adversarial-planner` | Parent pattern; this skill adapts it for manual execution workflows. |
-| `/doc-audit` | Audits documentation repositories, but not specifically executable workflow steps. |
+
+| Skill/Workflow        | Relationship                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `adversarial-planner` | Parent pattern; this skill adapts it for manual execution workflows.               |
+| `/doc-audit`          | Audits documentation repositories, but not specifically executable workflow steps. |

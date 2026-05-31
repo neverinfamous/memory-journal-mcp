@@ -35,12 +35,12 @@ Load this skill when any of these apply:
 
 Before starting, auto-detect the project type by scanning the repository:
 
-| Signal | Project Type | Extra Categories |
-| --- | --- | --- |
+| Signal                                                                                         | Project Type | Extra Categories                                 |
+| ---------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------ |
 | MCP SDK imports (`@modelcontextprotocol/sdk`), `tools/list` handler, tool `description` fields | `mcp-server` | MCP-Specific Security (Category 10) — full depth |
-| Express/Hono/Fastify imports, HTTP route handlers, `listen()` calls | `web-app` | Transport & Network (Category 5) — full depth |
-| `bin` field in `package.json`, CLI arg parsing (`yargs`, `commander`, `meow`) | `cli-tool` | Input Validation (Category 3) — extra CLI focus |
-| No server/CLI signals, only exports | `library` | Supply Chain (Category 9) — extra consumer focus |
+| Express/Hono/Fastify imports, HTTP route handlers, `listen()` calls                            | `web-app`    | Transport & Network (Category 5) — full depth    |
+| `bin` field in `package.json`, CLI arg parsing (`yargs`, `commander`, `meow`)                  | `cli-tool`   | Input Validation (Category 3) — extra CLI focus  |
+| No server/CLI signals, only exports                                                            | `library`    | Supply Chain (Category 9) — extra consumer focus |
 
 The MCP-Specific Security category (Category 10) is **always evaluated with
 graceful degradation**. If the target is not an MCP server, findings in this
@@ -119,12 +119,12 @@ validation results. Before sharing output outside the audit context, redact or g
 
 ## Configuration
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MAX_AUDIT_PASSES` | `2` | Maximum red-team cycles (phases 2–3 repeat) |
-| `AUDIT_DEPTH` | `standard` | Depth: `recon`, `standard`, or `paranoid` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable the external validation phase (Phase 4, `gh copilot`) |
-| `PROJECT_TYPE` | `auto` | Auto-detect or explicit: `mcp-server`, `web-app`, `cli-tool`, `library` |
+| Variable             | Default    | Description                                                             |
+| -------------------- | ---------- | ----------------------------------------------------------------------- |
+| `MAX_AUDIT_PASSES`   | `2`        | Maximum red-team cycles (phases 2–3 repeat)                             |
+| `AUDIT_DEPTH`        | `standard` | Depth: `recon`, `standard`, or `paranoid`                               |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable the external validation phase (Phase 4, `gh copilot`)    |
+| `PROJECT_TYPE`       | `auto`     | Auto-detect or explicit: `mcp-server`, `web-app`, `cli-tool`, `library` |
 
 ### Audit Depth Profiles
 
@@ -140,10 +140,10 @@ validation results. Before sharing output outside the audit context, redact or g
 
 ## Synergies
 
-| Skill/Workflow | Relationship |
-| --- | --- |
-| `adversarial-planner` | Applies adversarial pattern to plans; this skill applies it to security posture |
-| `autonomous-dev` | Generator/Evaluator pipeline at code level; use after this skill to implement fixes |
-| GitHub CLI (`gh`) | Built-in `copilot` subcommand used for Phase 4 external validation |
-| `/security-audit` workflow | Provides the category checklist; this skill adds adversarial methodology on top |
-| `skill-builder` | Use to refine this skill's instructions based on observed agent behavior |
+| Skill/Workflow             | Relationship                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `adversarial-planner`      | Applies adversarial pattern to plans; this skill applies it to security posture     |
+| `autonomous-dev`           | Generator/Evaluator pipeline at code level; use after this skill to implement fixes |
+| GitHub CLI (`gh`)          | Built-in `copilot` subcommand used for Phase 4 external validation                  |
+| `/security-audit` workflow | Provides the category checklist; this skill adds adversarial methodology on top     |
+| `skill-builder`            | Use to refine this skill's instructions based on observed agent behavior            |

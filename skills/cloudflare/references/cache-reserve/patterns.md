@@ -7,16 +7,16 @@
 ```typescript
 // Cache Reserve is designed for use WITH Tiered Cache
 const configuration = {
-  tieredCache: 'enabled',    // Required for optimal performance
-  cacheReserve: 'enabled',   // Works best with Tiered Cache
-  
+  tieredCache: 'enabled', // Required for optimal performance
+  cacheReserve: 'enabled', // Works best with Tiered Cache
+
   hierarchy: [
     'Lower-Tier Cache (visitor)',
     'Upper-Tier Cache (origin region)',
     'Cache Reserve (persistent)',
-    'Origin'
-  ]
-};
+    'Origin',
+  ],
+}
 ```
 
 ### 2. Set Appropriate Cache-Control Headers
@@ -27,9 +27,9 @@ const originHeaders = {
   'Cache-Control': 'public, max-age=86400', // 24hr (minimum 10hr)
   'Content-Length': '1024000', // Required
   'Cache-Tag': 'images,product-123', // Optional: purging
-  'ETag': '"abc123"', // Optional: revalidation
+  ETag: '"abc123"', // Optional: revalidation
   // Avoid: 'Set-Cookie' and 'Vary: *' prevent caching
-};
+}
 ```
 
 ### 3. Use Cache Rules for Fine-Grained Control
@@ -43,8 +43,8 @@ const cacheRules = [
     action_parameters: {
       cache_reserve: { eligible: true },
       edge_ttl: { mode: 'override_origin', default: 2592000 }, // 30 days
-      cache: true
-    }
+      cache: true,
+    },
   },
   {
     description: 'Moderate cache for regular images',
@@ -52,15 +52,15 @@ const cacheRules = [
     action_parameters: {
       cache_reserve: { eligible: true },
       edge_ttl: { mode: 'override_origin', default: 86400 }, // 24 hours
-      cache: true
-    }
+      cache: true,
+    },
   },
   {
     description: 'Exclude API from Cache Reserve',
     expression: '(http.request.uri.path matches "^/api/")',
-    action_parameters: { cache_reserve: { eligible: false }, cache: false }
-  }
-];
+    action_parameters: { cache_reserve: { eligible: false }, cache: false },
+  },
+]
 ```
 
 ### 4. Making Assets Cache Reserve Eligible from Workers
@@ -70,23 +70,23 @@ const cacheRules = [
 ```typescript
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const response = await fetch(request);
-    if (!response.ok) return response;
-    
-    const headers = new Headers(response.headers);
-    headers.set('Cache-Control', 'public, max-age=36000'); // 10hr minimum
-    headers.delete('Set-Cookie'); // Blocks caching
-    
+    const response = await fetch(request)
+    if (!response.ok) return response
+
+    const headers = new Headers(response.headers)
+    headers.set('Cache-Control', 'public, max-age=36000') // 10hr minimum
+    headers.delete('Set-Cookie') // Blocks caching
+
     // Ensure Content-Length present
     if (!headers.has('Content-Length')) {
-      const blob = await response.blob();
-      headers.set('Content-Length', blob.size.toString());
-      return new Response(blob, { status: response.status, headers });
+      const blob = await response.blob()
+      headers.set('Content-Length', blob.size.toString())
+      return new Response(blob, { status: response.status, headers })
     }
-    
-    return new Response(response.body, { status: response.status, headers });
-  }
-};
+
+    return new Response(response.body, { status: response.status, headers })
+  },
+}
 ```
 
 ### 5. Hostname Best Practices
@@ -101,18 +101,18 @@ Use Worker's hostname for efficient caching - avoid overriding hostname unnecess
 // Optimal: L1 (visitor) → L2 (region) → L3 (Cache Reserve) → Origin
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const isImmutable = /\.[a-f0-9]{8,}\.(js|css|jpg|png|woff2)$/.test(url.pathname);
-    const response = await fetch(request);
-    
+    const url = new URL(request.url)
+    const isImmutable = /\.[a-f0-9]{8,}\.(js|css|jpg|png|woff2)$/.test(url.pathname)
+    const response = await fetch(request)
+
     if (isImmutable) {
-      const headers = new Headers(response.headers);
-      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-      return new Response(response.body, { status: response.status, headers });
+      const headers = new Headers(response.headers)
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+      return new Response(response.body, { status: response.status, headers })
     }
-    return response;
-  }
-};
+    return response
+  },
+}
 ```
 
 ## Cost Optimization
@@ -121,35 +121,35 @@ export default {
 
 ```typescript
 interface CacheReserveEstimate {
-  avgAssetSizeGB: number;
-  uniqueAssets: number;
-  monthlyReads: number;
-  monthlyWrites: number;
-  originEgressCostPerGB: number; // e.g., AWS: $0.09/GB
+  avgAssetSizeGB: number
+  uniqueAssets: number
+  monthlyReads: number
+  monthlyWrites: number
+  originEgressCostPerGB: number // e.g., AWS: $0.09/GB
 }
 
 function estimateMonthlyCost(input: CacheReserveEstimate) {
   // Cache Reserve pricing
-  const storageCostPerGBMonth = 0.015;
-  const classAPerMillion = 4.50; // writes
-  const classBPerMillion = 0.36; // reads
-  
+  const storageCostPerGBMonth = 0.015
+  const classAPerMillion = 4.5 // writes
+  const classBPerMillion = 0.36 // reads
+
   // Calculate Cache Reserve costs
-  const totalStorageGB = input.avgAssetSizeGB * input.uniqueAssets;
-  const storageCost = totalStorageGB * storageCostPerGBMonth;
-  const writeCost = (input.monthlyWrites / 1_000_000) * classAPerMillion;
-  const readCost = (input.monthlyReads / 1_000_000) * classBPerMillion;
-  
-  const cacheReserveCost = storageCost + writeCost + readCost;
-  
+  const totalStorageGB = input.avgAssetSizeGB * input.uniqueAssets
+  const storageCost = totalStorageGB * storageCostPerGBMonth
+  const writeCost = (input.monthlyWrites / 1_000_000) * classAPerMillion
+  const readCost = (input.monthlyReads / 1_000_000) * classBPerMillion
+
+  const cacheReserveCost = storageCost + writeCost + readCost
+
   // Calculate origin egress cost (what you'd pay without Cache Reserve)
-  const totalTrafficGB = (input.monthlyReads * input.avgAssetSizeGB);
-  const originEgressCost = totalTrafficGB * input.originEgressCostPerGB;
-  
+  const totalTrafficGB = input.monthlyReads * input.avgAssetSizeGB
+  const originEgressCost = totalTrafficGB * input.originEgressCostPerGB
+
   // Savings calculation
-  const savings = originEgressCost - cacheReserveCost;
-  const savingsPercent = ((savings / originEgressCost) * 100).toFixed(1);
-  
+  const savings = originEgressCost - cacheReserveCost
+  const savingsPercent = ((savings / originEgressCost) * 100).toFixed(1)
+
   return {
     cacheReserveCost: `$${cacheReserveCost.toFixed(2)}`,
     originEgressCost: `$${originEgressCost.toFixed(2)}`,
@@ -159,8 +159,8 @@ function estimateMonthlyCost(input: CacheReserveEstimate) {
       storage: `$${storageCost.toFixed(2)}`,
       writes: `$${writeCost.toFixed(2)}`,
       reads: `$${readCost.toFixed(2)}`,
-    }
-  };
+    },
+  }
 }
 
 // Example: Media library
@@ -170,9 +170,9 @@ const mediaLibrary = estimateMonthlyCost({
   monthlyReads: 5_000_000,
   monthlyWrites: 50_000,
   originEgressCostPerGB: 0.09, // AWS S3
-});
+})
 
-console.log(mediaLibrary);
+console.log(mediaLibrary)
 // {
 //   cacheReserveCost: "$9.98",
 //   originEgressCost: "$25.00",

@@ -28,20 +28,20 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ### 18.1 Read Operations Succeed
 
-| Test               | Code (readonly: true)                                              | Expected Result               |
-| ------------------ | ------------------------------------------------------------------ | ----------------------------- |
+| Test               | Code (readonly: true)                                                                 | Expected Result               |
+| ------------------ | ------------------------------------------------------------------------------------- | ----------------------------- |
 | Get recent entries | `return await mj.core.getRecentEntries({project_number: 5, limit: 2});`               | `{ count, entries }` returned |
 | Search entries     | `return await mj.search.searchEntries({project_number: 5, query: "test", limit: 2});` | `{ count, entries }` returned |
-| Get statistics     | `return await mj.analytics.getStatistics({});`                     | data returned                 |
-| Help still works   | `return await mj.help();`                                          | Groups and methods listed     |
+| Get statistics     | `return await mj.analytics.getStatistics({});`                                        | data returned                 |
+| Help still works   | `return await mj.help();`                                                             | Groups and methods listed     |
 
 ### 18.2 Write Operations Blocked
 
-| Test                 | Code (readonly: true)                                                | Expected Result                                                     |
-| -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Create entry blocked | `return await mj.core.createEntry({project_number: 5, content: "should fail"});`        | ⚠️ Verify: either method doesn't exist (TypeError) or returns error |
-| Update entry blocked | `return await mj.admin.updateEntry({entry_id: 1, content: "fail"});` | ⚠️ Verify: blocked or error                                         |
-| Delete entry blocked | `return await mj.admin.deleteEntry({entry_id: 999999});`             | ⚠️ Verify: blocked or error                                         |
+| Test                 | Code (readonly: true)                                                            | Expected Result                                                     |
+| -------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Create entry blocked | `return await mj.core.createEntry({project_number: 5, content: "should fail"});` | ⚠️ Verify: either method doesn't exist (TypeError) or returns error |
+| Update entry blocked | `return await mj.admin.updateEntry({entry_id: 1, content: "fail"});`             | ⚠️ Verify: blocked or error                                         |
+| Delete entry blocked | `return await mj.admin.deleteEntry({entry_id: 999999});`                         | ⚠️ Verify: blocked or error                                         |
 
 ### 18.3 Default Mode Allows Writes
 
@@ -51,9 +51,9 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ### 18.4 Cleanup
 
-| Test                    | Code                                                                                                 | Expected Result                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Clean up test artifact  | `return await mj.admin.deleteEntry({entry_id: <ID_FROM_PREVIOUS_STEP>});`                                                       | `success: true`                |
+| Test                   | Code                                                                      | Expected Result |
+| ---------------------- | ------------------------------------------------------------------------- | --------------- |
+| Clean up test artifact | `return await mj.admin.deleteEntry({entry_id: <ID_FROM_PREVIOUS_STEP>});` | `success: true` |
 
 ---
 

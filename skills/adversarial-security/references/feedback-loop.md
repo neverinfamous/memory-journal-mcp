@@ -183,24 +183,24 @@ create_entry({
 
 ## Tag Convention
 
-| Tag | Purpose |
-| --- | --- |
-| `adversarial-security` | All entries from this skill (primary filter) |
-| `recon` | Phase 1 output |
-| `redteam` | Phase 2 output |
-| `remediation` | Phase 3 output |
-| `external-validation` | Phase 4 output |
-| `audit-complete` | Final consolidated summary |
-| `retrospective` | Post-cycle review |
-| `session-summary` | Enables retrieval via session summary searches |
+| Tag                    | Purpose                                        |
+| ---------------------- | ---------------------------------------------- |
+| `adversarial-security` | All entries from this skill (primary filter)   |
+| `recon`                | Phase 1 output                                 |
+| `redteam`              | Phase 2 output                                 |
+| `remediation`          | Phase 3 output                                 |
+| `external-validation`  | Phase 4 output                                 |
+| `audit-complete`       | Final consolidated summary                     |
+| `retrospective`        | Post-cycle review                              |
+| `session-summary`      | Enables retrieval via session summary searches |
 
 ## Entry Type Reference
 
-| Entry Type | Phase | Description |
-| --- | --- | --- |
-| `security_recon` | 1 | Reconnaissance and threat model |
-| `security_redteam` | 2 | Red team findings with scores |
-| `security_remediation` | 3 | Remediation plan with dispositions |
-| `copilot_validation` | 4 | External validation findings (via `gh copilot`) |
-| `security_audit_complete` | Final | Consolidated audit summary |
-| `retrospective` | Post | Session retrospective with metrics |
+| Entry Type                | Phase | Description                                     |
+| ------------------------- | ----- | ----------------------------------------------- |
+| `security_recon`          | 1     | Reconnaissance and threat model                 |
+| `security_redteam`        | 2     | Red team findings with scores                   |
+| `security_remediation`    | 3     | Remediation plan with dispositions              |
+| `copilot_validation`      | 4     | External validation findings (via `gh copilot`) |
+| `security_audit_complete` | Final | Consolidated audit summary                      |
+| `retrospective`           | Post  | Session retrospective with metrics              |

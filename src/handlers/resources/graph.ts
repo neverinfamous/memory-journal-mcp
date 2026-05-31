@@ -13,7 +13,15 @@ import { resolveGitHubRepo, isResourceError } from './shared.js'
 /**
  * Utility to generate a Mermaid diagram from relationship data
  */
-export function buildMermaidGraph(relationships: { from_entry_id: number; to_entry_id: number; relationship_type: string; from_content: string; to_content: string }[]): string {
+export function buildMermaidGraph(
+    relationships: {
+        from_entry_id: number
+        to_entry_id: number
+        relationship_type: string
+        from_content: string
+        to_content: string
+    }[]
+): string {
     if (relationships.length === 0) {
         return 'graph TD\n  NoData["No relationships found — use link_entries to create relationships"]'
     }
@@ -54,9 +62,7 @@ export function buildMermaidGraph(relationships: { from_entry_id: number; to_ent
                 .slice(0, 30)
                 .replace(/[\]"'`[]]/g, ' ')
                 .trim()
-            lines.push(
-                `  E${String(rel.to_entry_id)}["#${String(rel.to_entry_id)}: ${label}..."]`
-            )
+            lines.push(`  E${String(rel.to_entry_id)}["#${String(rel.to_entry_id)}: ${label}..."]`)
             seenNodes.add(rel.to_entry_id)
         }
 

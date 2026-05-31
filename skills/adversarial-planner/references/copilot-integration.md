@@ -24,15 +24,19 @@ the journal entry.
 > **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
 > non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
 > will hang indefinitely in an automated agent context. Use:
+>
 > ```
 > gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
 > ```
+>
 > The `--allow-tool` flag grants Copilot read access to the repository files.
 
 - Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts (like Antigravity's 10s `WaitMsBeforeAsync` limit), allow the command to naturally fall into the background. Use the `schedule` tool or wait for the system notification to retrieve the results. Do not skip execution due to timeout constraints.
 
 ### Architecture Review
+
 "You are a senior systems architect. Review this implementation plan for a software project. Focus on:
+
 1. Architectural soundness — are the proposed abstractions appropriate?
 2. Security gaps — are there missing auth checks, injection vectors, or data boundary issues?
 3. Performance risks — will this scale? Are there N+1 queries or hot-path allocations?
@@ -40,7 +44,9 @@ the journal entry.
 5. Task ordering — are dependencies correctly sequenced?"
 
 ### Roadmap/Milestone Review
+
 "You are a technical program manager reviewing a project roadmap. Evaluate:
+
 1. Scope creep — are the milestones focused and achievable?
 2. Risk distribution — are high-risk items front-loaded for early feedback?
 3. Dependency chains — are there single points of failure in the timeline?
@@ -48,7 +54,9 @@ the journal entry.
 5. Missing milestones — what validation checkpoints are missing?"
 
 ### Targeted Security Review
+
 "You are a security engineer. This implementation plan proposes changes to a system. Review it exclusively for security implications:
+
 1. New attack surfaces introduced
 2. Auth/authz gaps
 3. Data validation boundaries

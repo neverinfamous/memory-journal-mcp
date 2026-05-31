@@ -157,7 +157,11 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                         if (!ctx) continue
 
                         // Project boundary filter
-                        if (input.project_number !== undefined && entry.projectNumber !== input.project_number) continue
+                        if (
+                            input.project_number !== undefined &&
+                            entry.projectNumber !== input.project_number
+                        )
+                            continue
 
                         // Status filter
                         if (input.status === 'active' && ctx.resolved) continue
@@ -241,7 +245,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
             name: 'team_update_flag',
             title: 'Update Team Flag',
             description:
-                'Update a flag\'s metadata without resolving it. Escalate severity (fyi → blocker), reassign target_user, edit message, add/update link, or reopen a resolved flag. Returns the updated flag with a list of changes made.',
+                "Update a flag's metadata without resolving it. Escalate severity (fyi → blocker), reassign target_user, edit message, add/update link, or reopen a resolved flag. Returns the updated flag with a list of changes made.",
             group: 'team',
             inputSchema: UpdateTeamFlagSchemaMcp,
             outputSchema: UpdateFlagOutputSchema,
@@ -329,15 +333,11 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                     // Update target_user
                     if (input.target_user !== undefined) {
                         const newTarget =
-                            input.target_user === null
-                                ? null
-                                : input.target_user.replace(/^@/, '')
+                            input.target_user === null ? null : input.target_user.replace(/^@/, '')
                         if (newTarget !== (flagCtx.target_user ?? null)) {
                             const old = flagCtx.target_user ?? 'none'
                             updatedContext.target_user = newTarget
-                            changes.push(
-                                `target_user: ${old} → ${newTarget ?? 'cleared'}`
-                            )
+                            changes.push(`target_user: ${old} → ${newTarget ?? 'cleared'}`)
                         }
                     }
 
@@ -345,9 +345,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                     if (input.link !== undefined) {
                         if (input.link !== (flagCtx.link ?? null)) {
                             updatedContext.link = input.link
-                            changes.push(
-                                input.link === null ? 'link: cleared' : `link: updated`
-                            )
+                            changes.push(input.link === null ? 'link: cleared' : `link: updated`)
                         }
                     }
 
@@ -469,10 +467,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                         string,
                         { total: number; active: number; resolutionTimes: number[] }
                     > = {}
-                    const targetStats: Record<
-                        string,
-                        { received: number; active: number }
-                    > = {}
+                    const targetStats: Record<string, { received: number; active: number }> = {}
 
                     let currentPeriodCount = 0
                     let previousPeriodCount = 0
@@ -482,7 +477,11 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                         if (!ctx) continue
 
                         // Project boundary filter
-                        if (input.project_number !== undefined && entry.projectNumber !== input.project_number) continue
+                        if (
+                            input.project_number !== undefined &&
+                            entry.projectNumber !== input.project_number
+                        )
+                            continue
 
                         totalFlags++
                         const entryTime = new Date(entry.timestamp).getTime()
@@ -518,9 +517,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                             if (ctx.resolved_at) {
                                 const resolvedTime = new Date(ctx.resolved_at).getTime()
                                 const hours =
-                                    Math.round(
-                                        ((resolvedTime - entryTime) / 3_600_000) * 10
-                                    ) / 10
+                                    Math.round(((resolvedTime - entryTime) / 3_600_000) * 10) / 10
                                 if (hours >= 0) {
                                     resolutionTimes.push(hours)
                                     const typeEntryRes = typeStats[ctx.flag_type]

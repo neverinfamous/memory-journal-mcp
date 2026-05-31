@@ -9,7 +9,7 @@
 ```typescript
 // TypeScript
 for await (const zone of client.zones.list()) {
-  console.log(zone.name);
+  console.log(zone.name)
 }
 ```
 
@@ -35,15 +35,17 @@ for iter.Next() {
 
 ```typescript
 // Increase retries for rate-limit-heavy operations
-const client = new Cloudflare({ maxRetries: 5 });
+const client = new Cloudflare({ maxRetries: 5 })
 
 try {
-  const zone = await client.zones.create({ /* ... */ });
+  const zone = await client.zones.create({
+    /* ... */
+  })
 } catch (err) {
   if (err instanceof Cloudflare.RateLimitError) {
     // Already retried 5 times with backoff
-    const retryAfter = err.headers['retry-after'];
-    console.log(`Rate limited. Retry after ${retryAfter}s`);
+    const retryAfter = err.headers['retry-after']
+    console.log(`Rate limited. Retry after ${retryAfter}s`)
   }
 }
 ```
@@ -56,33 +58,35 @@ try {
 
 ```typescript
 // Create multiple DNS records in parallel
-const records = ['www', 'api', 'cdn'].map(subdomain =>
+const records = ['www', 'api', 'cdn'].map((subdomain) =>
   client.dns.records.create({
     zone_id: 'zone-id',
     type: 'A',
     name: `${subdomain}.example.com`,
     content: '192.0.2.1',
   })
-);
-await Promise.all(records);
+)
+await Promise.all(records)
 ```
 
 **Controlled concurrency** (avoid rate limits):
 
 ```typescript
-import pLimit from 'p-limit';
-const limit = pLimit(10); // Max 10 concurrent
+import pLimit from 'p-limit'
+const limit = pLimit(10) // Max 10 concurrent
 
-const subdomains = ['www', 'api', 'cdn', /* many more */];
-const records = subdomains.map(subdomain =>
-  limit(() => client.dns.records.create({
-    zone_id: 'zone-id',
-    type: 'A',
-    name: `${subdomain}.example.com`,
-    content: '192.0.2.1',
-  }))
-);
-await Promise.all(records);
+const subdomains = ['www', 'api', 'cdn' /* many more */]
+const records = subdomains.map((subdomain) =>
+  limit(() =>
+    client.dns.records.create({
+      zone_id: 'zone-id',
+      type: 'A',
+      name: `${subdomain}.example.com`,
+      content: '192.0.2.1',
+    })
+  )
+)
+await Promise.all(records)
 ```
 
 ## Zone CRUD Workflow
@@ -93,55 +97,57 @@ const zone = await client.zones.create({
   account: { id: 'account-id' },
   name: 'example.com',
   type: 'full',
-});
+})
 
 // Read
-const fetched = await client.zones.get({ zone_id: zone.id });
+const fetched = await client.zones.get({ zone_id: zone.id })
 
 // Update
-await client.zones.edit(zone.id, { paused: false });
+await client.zones.edit(zone.id, { paused: false })
 
 // Delete
-await client.zones.delete(zone.id);
+await client.zones.delete(zone.id)
 ```
 
 ## DNS Bulk Update
 
 ```typescript
 // Fetch all A records
-const records = [];
+const records = []
 for await (const record of client.dns.records.list({
   zone_id: 'zone-id',
   type: 'A',
 })) {
-  records.push(record);
+  records.push(record)
 }
 
 // Update all to new IP
-await Promise.all(records.map(record =>
-  client.dns.records.update({
-    zone_id: 'zone-id',
-    dns_record_id: record.id,
-    type: 'A',
-    name: record.name,
-    content: '203.0.113.1', // New IP
-    proxied: record.proxied,
-    ttl: record.ttl,
-  })
-));
+await Promise.all(
+  records.map((record) =>
+    client.dns.records.update({
+      zone_id: 'zone-id',
+      dns_record_id: record.id,
+      type: 'A',
+      name: record.name,
+      content: '203.0.113.1', // New IP
+      proxied: record.proxied,
+      ttl: record.ttl,
+    })
+  )
+)
 ```
 
 ## Filter and Collect Results
 
 ```typescript
 // Find all proxied A records
-const proxiedRecords = [];
+const proxiedRecords = []
 for await (const record of client.dns.records.list({
   zone_id: 'zone-id',
   type: 'A',
 })) {
   if (record.proxied) {
-    proxiedRecords.push(record);
+    proxiedRecords.push(record)
   }
 }
 ```
@@ -156,14 +162,14 @@ async function createZoneWithRetry(name: string, maxAttempts = 3) {
         account: { id: 'account-id' },
         name,
         type: 'full',
-      });
+      })
     } catch (err) {
       if (err instanceof Cloudflare.RateLimitError && attempt < maxAttempts) {
-        const retryAfter = parseInt(err.headers['retry-after'] || '5');
-        console.log(`Rate limited, waiting ${retryAfter}s (retry ${attempt}/${maxAttempts})`);
-        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        const retryAfter = parseInt(err.headers['retry-after'] || '5')
+        console.log(`Rate limited, waiting ${retryAfter}s (retry ${attempt}/${maxAttempts})`)
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000))
       } else {
-        throw err;
+        throw err
       }
     }
   }
@@ -174,9 +180,9 @@ async function createZoneWithRetry(name: string, maxAttempts = 3) {
 
 ```typescript
 // Only update if zone is active
-const zone = await client.zones.get({ zone_id: 'zone-id' });
+const zone = await client.zones.get({ zone_id: 'zone-id' })
 if (zone.status === 'active') {
-  await client.zones.edit(zone.id, { paused: false });
+  await client.zones.edit(zone.id, { paused: false })
 }
 ```
 
@@ -184,17 +190,15 @@ if (zone.status === 'active') {
 
 ```typescript
 // Process multiple zones, continue on errors
-const results = await Promise.allSettled(
-  zoneIds.map(id => client.zones.get({ zone_id: id }))
-);
+const results = await Promise.allSettled(zoneIds.map((id) => client.zones.get({ zone_id: id })))
 
 results.forEach((result, i) => {
   if (result.status === 'fulfilled') {
-    console.log(`Zone ${i}: ${result.value.name}`);
+    console.log(`Zone ${i}: ${result.value.name}`)
   } else {
-    console.error(`Zone ${i} failed:`, result.reason.message);
+    console.error(`Zone ${i} failed:`, result.reason.message)
   }
-});
+})
 ```
 
 ## See Also

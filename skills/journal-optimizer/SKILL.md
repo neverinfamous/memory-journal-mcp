@@ -20,14 +20,14 @@ until explicitly purged.
 
 The following tool groups must be enabled:
 
-| Group | Required Tools | Purpose |
-|-------|---------------|---------|
-| `admin` | `delete_entry`, `update_entry` | Soft-delete entries |
-| `analytics` | `get_statistics` | Importance scores, graph stats |
-| `search` | `search_entries`, `search_by_date_range`, `semantic_search` | Find candidates |
-| `backup` | `backup_journal`, `list_backups`, `restore_backup` | Safety net |
-| `codemode` | `mj_execute_code` | Batch operations |
-| `relationships` | `visualize_relationships` | Orphan detection |
+| Group           | Required Tools                                              | Purpose                        |
+| --------------- | ----------------------------------------------------------- | ------------------------------ |
+| `admin`         | `delete_entry`, `update_entry`                              | Soft-delete entries            |
+| `analytics`     | `get_statistics`                                            | Importance scores, graph stats |
+| `search`        | `search_entries`, `search_by_date_range`, `semantic_search` | Find candidates                |
+| `backup`        | `backup_journal`, `list_backups`, `restore_backup`          | Safety net                     |
+| `codemode`      | `mj_execute_code`                                           | Batch operations               |
+| `relationships` | `visualize_relationships`                                   | Orphan detection               |
 
 If any required group is missing, inform the user and suggest adding it
 via `--tool-filter` or `MEMORY_JOURNAL_MCP_TOOL_FILTER`.
@@ -40,22 +40,22 @@ intelligent pruning decisions.
 
 ### Formula
 
-| Component | Weight | Max Score | How It's Earned |
-|-----------|--------|-----------|-----------------|
-| **Significance** | 0.30 | 0.30 | Entry has a `significance_type` (milestone, decision, release, etc.) |
-| **Relationships** | 0.35 | 0.35 | Entry has ≥5 relationships (linear scale: 1 rel = 0.07) |
-| **Causal** | 0.20 | 0.20 | Entry has ≥3 causal relationships (`blocked_by`, `resolved`, `caused`) |
-| **Recency** | 0.15 | 0.15 | Created within the last 90 days (linear decay to 0 at day 90) |
+| Component         | Weight | Max Score | How It's Earned                                                        |
+| ----------------- | ------ | --------- | ---------------------------------------------------------------------- |
+| **Significance**  | 0.30   | 0.30      | Entry has a `significance_type` (milestone, decision, release, etc.)   |
+| **Relationships** | 0.35   | 0.35      | Entry has ≥5 relationships (linear scale: 1 rel = 0.07)                |
+| **Causal**        | 0.20   | 0.20      | Entry has ≥3 causal relationships (`blocked_by`, `resolved`, `caused`) |
+| **Recency**       | 0.15   | 0.15      | Created within the last 90 days (linear decay to 0 at day 90)          |
 
 ### Threshold Guide
 
-| Score | Label | Meaning |
-|-------|-------|---------|
-| `0.00` | Expendable | No significance, no relationships, older than 90 days |
-| `0.01–0.14` | Low | Minimal context — weak tags or a single old relationship |
-| `0.15–0.29` | Moderate | Has some context but not structurally important |
-| `0.30–0.49` | High | Well-connected or has significance markers |
-| `0.50+` | Critical | Major decisions, densely linked entries, milestones |
+| Score       | Label      | Meaning                                                  |
+| ----------- | ---------- | -------------------------------------------------------- |
+| `0.00`      | Expendable | No significance, no relationships, older than 90 days    |
+| `0.01–0.14` | Low        | Minimal context — weak tags or a single old relationship |
+| `0.15–0.29` | Moderate   | Has some context but not structurally important          |
+| `0.30–0.49` | High       | Well-connected or has significance markers               |
+| `0.50+`     | Critical   | Major decisions, densely linked entries, milestones      |
 
 > **Key insight**: Entries scoring `0.00` have zero structural value to the
 > knowledge graph. They are safe to soft-delete in virtually all cases.
@@ -95,19 +95,19 @@ Analyze the database to surface low-importance entries without modifying anythin
 ### Steps
 
 **Step 1 & 2 — Gather stats and score entries:**
-*Read and execute the Workflow 1 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
+_Read and execute the Workflow 1 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md)._
 
 **Step 3 — Present results:**
 
 Render the distribution as a table:
 
-| Tier | Count | Action |
-|------|-------|--------|
-| Critical (≥0.50) | N | Keep — these are structural anchors |
-| High (0.30–0.49) | N | Keep — well-connected entries |
-| Moderate (0.15–0.29) | N | Review individually if space is needed |
-| Low (0.01–0.14) | N | Candidates for cleanup with user review |
-| Expendable (0.00) | N | Safe to soft-delete |
+| Tier                 | Count | Action                                  |
+| -------------------- | ----- | --------------------------------------- |
+| Critical (≥0.50)     | N     | Keep — these are structural anchors     |
+| High (0.30–0.49)     | N     | Keep — well-connected entries           |
+| Moderate (0.15–0.29) | N     | Review individually if space is needed  |
+| Low (0.01–0.14)      | N     | Candidates for cleanup with user review |
+| Expendable (0.00)    | N     | Safe to soft-delete                     |
 
 Show the expendable sample with IDs, types, ages, and snippets.
 Ask the user which tier(s) they want to target for cleanup.
@@ -133,7 +133,7 @@ Find and soft-delete entries with zero relationships.
 ### Steps
 
 1. Retrieve orphaned statistics and entries:
-   *Read and execute the Workflow 3 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
+   _Read and execute the Workflow 3 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md)._
 2. Present the orphan list. Flag any with `significance_type` set — these should NOT be deleted without explicit approval.
 3. Execute the **Safe Deletion Protocol**.
 
@@ -150,7 +150,7 @@ Find entries with semantically similar content that may be redundant.
 ### Steps
 
 1. Identify candidate duplicates using semantic search:
-   *Read and execute the Workflow 4 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
+   _Read and execute the Workflow 4 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md)._
 2. Present duplicate pairs side-by-side with recommendations.
 3. Execute the **Safe Deletion Protocol** (targeting the lower-scoring entry of each pair).
 
@@ -168,7 +168,7 @@ Clean up entries by `entry_type` — useful for removing bulk categories that we
 2. Present the type breakdown. Flag commonly low-value types (`personal_reflection`, `retrospective`, `note`).
 3. User selects which types to target and an age threshold.
 4. Preview matching entries:
-   *Read and execute the Workflow 5 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
+   _Read and execute the Workflow 5 code block in [references/optimizer-scripts.md](references/optimizer-scripts.md)._
 5. Execute the **Safe Deletion Protocol**.
 
 ---
@@ -176,7 +176,7 @@ Clean up entries by `entry_type` — useful for removing bulk categories that we
 ## Revert Guide
 
 Every workflow creates a backup before mutations. To revert:
-*Follow the restoration commands in [references/optimizer-scripts.md](references/optimizer-scripts.md).*
+_Follow the restoration commands in [references/optimizer-scripts.md](references/optimizer-scripts.md)._
 
 > **Important**: Soft-deleted entries are physically present but excluded from queries. They are only permanently removed via `permanent: true`, restoring an old backup, or rebuilding from an export.
 
@@ -196,11 +196,11 @@ After completing any workflow, recommend these follow-up actions:
 
 ## Synergies
 
-| Tool/Workflow | Relationship |
-|---------------|-------------|
-| Auto-Prune (startup) | Automated version of Workflow 2 with fixed thresholds |
-| `get_statistics` | Primary data source for importance scores and graph metrics |
-| `backup_journal` | Safety gate for all destructive operations |
-| `restore_backup` | Revert mechanism for soft-deleted entries |
-| `rebuild_vector_index` | Post-cleanup maintenance to clean stale embeddings |
-| `link_entries` | Alternative to deletion — connect orphans instead of removing them |
+| Tool/Workflow          | Relationship                                                       |
+| ---------------------- | ------------------------------------------------------------------ |
+| Auto-Prune (startup)   | Automated version of Workflow 2 with fixed thresholds              |
+| `get_statistics`       | Primary data source for importance scores and graph metrics        |
+| `backup_journal`       | Safety gate for all destructive operations                         |
+| `restore_backup`       | Revert mechanism for soft-deleted entries                          |
+| `rebuild_vector_index` | Post-cleanup maintenance to clean stale embeddings                 |
+| `link_entries`         | Alternative to deletion — connect orphans instead of removing them |

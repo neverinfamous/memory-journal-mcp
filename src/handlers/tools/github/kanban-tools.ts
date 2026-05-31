@@ -49,7 +49,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     ),
             }),
             outputSchema: KanbanBoardOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -181,7 +186,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: MoveKanbanItemOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -292,7 +302,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: AddKanbanItemOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -395,7 +410,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: DeleteKanbanItemOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z

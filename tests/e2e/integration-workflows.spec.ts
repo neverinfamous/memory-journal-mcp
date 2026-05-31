@@ -33,7 +33,8 @@ test.describe('Integration: Core → Search → Analytics Pipeline', () => {
             // Step 1: Create entries
             for (let i = 0; i < 3; i++) {
                 const p = await callToolAndParse(client, 'create_entry', {
-                    project_number: 1, content: `Integration test entry ${i + 1}: _e2e_integration_pipeline_`,
+                    project_number: 1,
+                    content: `Integration test entry ${i + 1}: _e2e_integration_pipeline_`,
                     entry_type: 'test_entry',
                     tags: ['_e2e_integration_test'],
                 })
@@ -45,7 +46,8 @@ test.describe('Integration: Core → Search → Analytics Pipeline', () => {
 
             // Step 2: Cross-group — Search for our entries
             const search = await callToolAndParse(client, 'search_entries', {
-                project_number: 1, query: '_e2e_integration_pipeline_',
+                project_number: 1,
+                query: '_e2e_integration_pipeline_',
             })
             expectSuccess(search)
             expect((search.entries as unknown[]).length).toBeGreaterThanOrEqual(3)
@@ -86,14 +88,16 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
         try {
             // Step 1: Create two entries
             const a = await callToolAndParse(client, 'create_entry', {
-                project_number: 1, content: 'Integration entry A _e2e_integration_links_',
+                project_number: 1,
+                content: 'Integration entry A _e2e_integration_links_',
                 entry_type: 'test_entry',
             })
             expectSuccess(a)
             entryIdA = (a.entry as Record<string, unknown>).id as number
 
             const b = await callToolAndParse(client, 'create_entry', {
-                project_number: 1, content: 'Integration entry B _e2e_integration_links_',
+                project_number: 1,
+                content: 'Integration entry B _e2e_integration_links_',
                 entry_type: 'test_entry',
             })
             expectSuccess(b)
@@ -120,8 +124,16 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
     test('cleanup: delete linked entries', async () => {
         const client = await createClient()
         try {
-            if (entryIdA) await callToolAndParse(client, 'delete_entry', { project_number: 1, entry_id: entryIdA })
-            if (entryIdB) await callToolAndParse(client, 'delete_entry', { project_number: 1, entry_id: entryIdB })
+            if (entryIdA)
+                await callToolAndParse(client, 'delete_entry', {
+                    project_number: 1,
+                    entry_id: entryIdA,
+                })
+            if (entryIdB)
+                await callToolAndParse(client, 'delete_entry', {
+                    project_number: 1,
+                    entry_id: entryIdB,
+                })
         } finally {
             await client.close()
         }
@@ -140,7 +152,8 @@ test.describe('Integration: Core → Export Pipeline', () => {
         try {
             // Step 1: Create entry with unique tag
             const p = await callToolAndParse(client, 'create_entry', {
-                project_number: 1, content: 'Integration export test _e2e_integration_export_',
+                project_number: 1,
+                content: 'Integration export test _e2e_integration_export_',
                 entry_type: 'test_entry',
                 tags: ['_e2e_export_tag'],
             })
@@ -149,7 +162,8 @@ test.describe('Integration: Core → Export Pipeline', () => {
 
             // Step 2: Export all as JSON
             const exportResult = await callToolAndParse(client, 'export_entries', {
-                project_number: 1, format: 'json',
+                project_number: 1,
+                format: 'json',
             })
             expectSuccess(exportResult)
         } finally {
@@ -161,7 +175,10 @@ test.describe('Integration: Core → Export Pipeline', () => {
         const client = await createClient()
         try {
             if (exportEntryId) {
-                await callToolAndParse(client, 'delete_entry', { project_number: 1, entry_id: exportEntryId })
+                await callToolAndParse(client, 'delete_entry', {
+                    project_number: 1,
+                    entry_id: exportEntryId,
+                })
             }
         } finally {
             await client.close()
@@ -206,7 +223,10 @@ test.describe('Integration: Stats Cross-Validation', () => {
             // get_statistics returns flat object: { totalEntries, entriesByType, ... }
             const totalEntries = stats.totalEntries as number
 
-            const recent = await callToolAndParse(client, 'get_recent_entries', { project_number: 1, limit: 100 })
+            const recent = await callToolAndParse(client, 'get_recent_entries', {
+                project_number: 1,
+                limit: 100,
+            })
             expectSuccess(recent)
             const recentCount = (recent.entries as unknown[]).length
 

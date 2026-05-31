@@ -31,7 +31,12 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamExportEntriesSchemaMcp,
             outputSchema: TeamExportOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {

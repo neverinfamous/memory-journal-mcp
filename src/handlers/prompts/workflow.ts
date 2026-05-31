@@ -516,7 +516,12 @@ function buildFlagSignalForPrompt(teamDb?: IDatabaseAdapter): string {
         })
 
         const now = Date.now()
-        const activeFlags: { flag_type: string; preview: string; target_user: string | null; age: string }[] = []
+        const activeFlags: {
+            flag_type: string
+            preview: string
+            target_user: string | null
+            age: string
+        }[] = []
 
         for (const entry of flagEntries) {
             const ctx = parseFlagContext(entry.autoContext)
@@ -525,9 +530,11 @@ function buildFlagSignalForPrompt(teamDb?: IDatabaseAdapter): string {
             const ageMs = now - new Date(entry.timestamp).getTime()
             const hours = Math.floor(ageMs / 3_600_000)
             const days = Math.floor(ageMs / 86_400_000)
-            const age = days > 0 ? `${String(days)}d ago` : hours > 0 ? `${String(hours)}h ago` : 'just now'
+            const age =
+                days > 0 ? `${String(days)}d ago` : hours > 0 ? `${String(hours)}h ago` : 'just now'
 
-            const preview = entry.content.length > 80 ? entry.content.slice(0, 80) + '…' : entry.content
+            const preview =
+                entry.content.length > 80 ? entry.content.slice(0, 80) + '…' : entry.content
 
             activeFlags.push({
                 flag_type: ctx.flag_type,

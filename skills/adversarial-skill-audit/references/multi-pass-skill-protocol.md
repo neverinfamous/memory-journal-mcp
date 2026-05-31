@@ -33,17 +33,17 @@ For each skill, produce a scorecard:
 **Files**: SKILL.md (X lines, Y KB) + N reference files
 **Description**: [first 100 chars of description]
 
-| Category | Score (1–5) | Notes |
-| --- | --- | --- |
-| 1. Frontmatter & Triggering | | |
-| 2. Instruction Clarity | | |
-| 3. Structure & Progressive Disclosure | | |
-| 4. Output Formats | | |
-| 5. Edge Cases & Errors | | |
-| 6. Security & Safety | | |
-| 7. Token Efficiency | | |
-| 8. Maintenance | | |
-| **Average** | **X.X** | |
+| Category                              | Score (1–5) | Notes |
+| ------------------------------------- | ----------- | ----- |
+| 1. Frontmatter & Triggering           |             |       |
+| 2. Instruction Clarity                |             |       |
+| 3. Structure & Progressive Disclosure |             |       |
+| 4. Output Formats                     |             |       |
+| 5. Edge Cases & Errors                |             |       |
+| 6. Security & Safety                  |             |       |
+| 7. Token Efficiency                   |             |       |
+| 8. Maintenance                        |             |       |
+| **Average**                           | **X.X**     |       |
 
 **Top Issue**: [Single most impactful improvement]
 **Grade**: [A–F]
@@ -51,13 +51,13 @@ For each skill, produce a scorecard:
 
 ### Scoring Guide
 
-| Score | Meaning |
-| --- | --- |
-| 5 | Excellent — meets or exceeds all skill-builder standards |
-| 4 | Good — minor gaps, functional as-is |
-| 3 | Acceptable — noticeable issues but usable |
-| 2 | Poor — significant gaps affecting agent behavior |
-| 1 | Failing — broken, misleading, or unusable |
+| Score | Meaning                                                  |
+| ----- | -------------------------------------------------------- |
+| 5     | Excellent — meets or exceeds all skill-builder standards |
+| 4     | Good — minor gaps, functional as-is                      |
+| 3     | Acceptable — noticeable issues but usable                |
+| 2     | Poor — significant gaps affecting agent behavior         |
+| 1     | Failing — broken, misleading, or unusable                |
 
 ### Directory-Level Assessment
 
@@ -72,13 +72,13 @@ After scoring all skills individually, produce a directory-level overview:
 
 ### Score Distribution
 
-| Grade | Skills |
-| --- | --- |
+| Grade       | Skills           |
+| ----------- | ---------------- |
 | A (4.5–5.0) | skill-a, skill-b |
 | B (3.5–4.4) | skill-c, skill-d |
-| C (2.5–3.4) | skill-e |
-| D (1.5–2.4) | skill-f |
-| F (1.0–1.4) | — |
+| C (2.5–3.4) | skill-e          |
+| D (1.5–2.4) | skill-f          |
+| F (1.0–1.4) | —                |
 
 ### Cross-Skill Properties
 
@@ -111,12 +111,12 @@ no skill triggers, confusing output, or dangerous behavior.
 
 Score each dimension on a 1–5 scale:
 
-| Dimension | Weight | Focus Areas |
-| --- | --- | --- |
-| **Trigger Reliability** | 4 | Does the skill load when it should? Does it avoid loading when it shouldn't? Are trigger keywords comprehensive? |
-| **Instruction Fidelity** | 3 | Will an agent actually follow these instructions correctly? Are there ambiguous steps that invite hallucination? |
-| **Failure Graceful** | 2 | What happens when prerequisites are missing, inputs are weird, or the project doesn't match assumptions? |
-| **Token ROI** | 1 | Is the token cost justified by the value provided? Could the same effect be achieved with fewer tokens? |
+| Dimension                | Weight | Focus Areas                                                                                                      |
+| ------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| **Trigger Reliability**  | 4      | Does the skill load when it should? Does it avoid loading when it shouldn't? Are trigger keywords comprehensive? |
+| **Instruction Fidelity** | 3      | Will an agent actually follow these instructions correctly? Are there ambiguous steps that invite hallucination? |
+| **Failure Graceful**     | 2      | What happens when prerequisites are missing, inputs are weird, or the project doesn't match assumptions?         |
+| **Token ROI**            | 1      | Is the token cost justified by the value provided? Could the same effect be achieved with fewer tokens?          |
 
 ### Trigger Testing
 
@@ -133,11 +133,11 @@ Evaluate each:
 ```markdown
 ### Trigger Test: [skill-name]
 
-| # | Prompt | Should Trigger? | Would It? | Confidence |
-| --- | --- | --- | --- | --- |
-| 1 | "Build an MCP server" | Yes | Yes | High |
-| 2 | "Connect my API to Claude" | Yes | Maybe | Medium |
-| 3 | "Write a REST API" | No | Maybe | Low — description too broad |
+| #   | Prompt                     | Should Trigger? | Would It? | Confidence                  |
+| --- | -------------------------- | --------------- | --------- | --------------------------- |
+| 1   | "Build an MCP server"      | Yes             | Yes       | High                        |
+| 2   | "Connect my API to Claude" | Yes             | Maybe     | Medium                      |
+| 3   | "Write a REST API"         | No              | Maybe     | Low — description too broad |
 ```
 
 ### Trigger Collision Map
@@ -147,10 +147,10 @@ Identify prompts where multiple skills would compete to load:
 ```markdown
 ### Trigger Collisions
 
-| Prompt | Competing Skills | Winner | Issue |
-| --- | --- | --- | --- |
-| "Set up CI/CD" | github-actions, docker, cloudflare | Unclear | All three claim CI/CD |
-| "Deploy to production" | cloudflare, docker, workers-best-practices | Unclear | Ambiguous platform |
+| Prompt                 | Competing Skills                           | Winner  | Issue                 |
+| ---------------------- | ------------------------------------------ | ------- | --------------------- |
+| "Set up CI/CD"         | github-actions, docker, cloudflare         | Unclear | All three claim CI/CD |
+| "Deploy to production" | cloudflare, docker, workers-best-practices | Unclear | Ambiguous platform    |
 ```
 
 ### Instruction Stress Tests
@@ -165,10 +165,10 @@ For each skill, identify instructions that an agent might:
 ```markdown
 ### Instruction Issues: [skill-name]
 
-| Line/Section | Issue | Type | Example Failure |
-| --- | --- | --- | --- |
-| "Consider using caching" | Vague — agent may skip | Skip risk | Agent ignores caching entirely |
-| "Set up the project" | No specifics | Hallucination | Agent invents project structure |
+| Line/Section             | Issue                  | Type          | Example Failure                 |
+| ------------------------ | ---------------------- | ------------- | ------------------------------- |
+| "Consider using caching" | Vague — agent may skip | Skip risk     | Agent ignores caching entirely  |
+| "Set up the project"     | No specifics           | Hallucination | Agent invents project structure |
 ```
 
 ### Critique Output Format
@@ -181,21 +181,21 @@ For each skill, identify instructions that an agent might:
 
 ### Findings
 
-| # | Skill | Category | Severity | Finding | Remediation |
-| --- | --- | --- | --- | --- | --- |
-| 1 | mcp-builder | Triggering | High | "Connect AI to API" won't trigger | Add to description keywords |
-| 2 | docker | Clarity | Medium | "Set up multi-stage" is ambiguous | Add concrete Dockerfile template |
-| 3 | — (directory) | Collision | High | 3 skills fight over "deploy" | Add disambiguation in descriptions |
+| #   | Skill         | Category   | Severity | Finding                           | Remediation                        |
+| --- | ------------- | ---------- | -------- | --------------------------------- | ---------------------------------- |
+| 1   | mcp-builder   | Triggering | High     | "Connect AI to API" won't trigger | Add to description keywords        |
+| 2   | docker        | Clarity    | Medium   | "Set up multi-stage" is ambiguous | Add concrete Dockerfile template   |
+| 3   | — (directory) | Collision  | High     | 3 skills fight over "deploy"      | Add disambiguation in descriptions |
 
 ### Dimension Scores
 
-| Dimension | Score | Weight | Weighted |
-| --- | --- | --- | --- |
-| Trigger Reliability | [1–5] | 4 | [score × 4] |
-| Instruction Fidelity | [1–5] | 3 | [score × 3] |
-| Failure Graceful | [1–5] | 2 | [score × 2] |
-| Token ROI | [1–5] | 1 | [score × 1] |
-| **Total** | | **10** | **[sum]/50 = [avg]** |
+| Dimension            | Score | Weight | Weighted             |
+| -------------------- | ----- | ------ | -------------------- |
+| Trigger Reliability  | [1–5] | 4      | [score × 4]          |
+| Instruction Fidelity | [1–5] | 3      | [score × 3]          |
+| Failure Graceful     | [1–5] | 2      | [score × 2]          |
+| Token ROI            | [1–5] | 1      | [score × 1]          |
+| **Total**            |       | **10** | **[sum]/50 = [avg]** |
 
 ### Blocking Issues
 
@@ -221,12 +221,12 @@ Switch back to the Evaluator. Address every finding with a disposition.
 
 ### Disposition Table
 
-| Disposition | Meaning |
-| --- | --- |
-| **Accept** | Implement the improvement |
-| **Reject** | Finding doesn't apply or trade-off isn't worth it |
-| **Modify** | Accept the spirit but implement differently |
-| **Defer** | Acknowledge but defer (document why) |
+| Disposition | Meaning                                           |
+| ----------- | ------------------------------------------------- |
+| **Accept**  | Implement the improvement                         |
+| **Reject**  | Finding doesn't apply or trade-off isn't worth it |
+| **Modify**  | Accept the spirit but implement differently       |
+| **Defer**   | Acknowledge but defer (document why)              |
 
 ### Improvement Plan Output
 
@@ -235,44 +235,44 @@ Switch back to the Evaluator. Address every finding with a disposition.
 
 ### Disposition Summary
 
-| # | Skill | Finding | Disposition | Rationale |
-| --- | --- | --- | --- | --- |
-| 1 | mcp-builder | Missing trigger keywords | Accept | Add 5 alternative phrasings |
-| 2 | docker | Ambiguous instruction | Modify | Add example instead of rewriting |
-| 3 | — (directory) | Trigger collision on "deploy" | Accept | Add "NOT for..." clauses |
+| #   | Skill         | Finding                       | Disposition | Rationale                        |
+| --- | ------------- | ----------------------------- | ----------- | -------------------------------- |
+| 1   | mcp-builder   | Missing trigger keywords      | Accept      | Add 5 alternative phrasings      |
+| 2   | docker        | Ambiguous instruction         | Modify      | Add example instead of rewriting |
+| 3   | — (directory) | Trigger collision on "deploy" | Accept      | Add "NOT for..." clauses         |
 
 ### Priority 1 — Quick Wins (per skill)
 
-| Skill | Fix | Effort |
-| --- | --- | --- |
-| ... | ... | <15 min |
+| Skill | Fix | Effort  |
+| ----- | --- | ------- |
+| ...   | ... | <15 min |
 
 ### Priority 2 — Structural Improvements
 
-| Skill | Fix | Effort |
-| --- | --- | --- |
-| ... | ... | 30–60 min |
+| Skill | Fix | Effort    |
+| ----- | --- | --------- |
+| ...   | ... | 30–60 min |
 
 ### Priority 3 — New Skills Needed
 
 | Gap | Suggested Skill | Rationale |
-| --- | --- | --- |
-| ... | ... | ... |
+| --- | --------------- | --------- |
+| ... | ...             | ...       |
 
 ### Skills to Deprecate or Merge
 
-| Skill | Action | Rationale |
-| --- | --- | --- |
-| ... | Merge into X | 90% overlap with X |
+| Skill | Action       | Rationale          |
+| ----- | ------------ | ------------------ |
+| ...   | Merge into X | 90% overlap with X |
 
 ### Projected Quality Improvement
 
-| Metric | Before | After |
-| --- | --- | --- |
-| Average score | X.X | X.X |
-| Skills graded A/B | N/M | N/M |
-| Trigger collisions | N | N |
-| Coverage gaps | N | N |
+| Metric             | Before | After |
+| ------------------ | ------ | ----- |
+| Average score      | X.X    | X.X   |
+| Skills graded A/B  | N/M    | N/M   |
+| Trigger collisions | N      | N     |
+| Coverage gaps      | N      | N     |
 ```
 
 ### Iteration Control
@@ -334,11 +334,11 @@ create_entry({
 
 ## Skill Scoreboard
 
-| Skill | Score | Grade | Top Issue |
-| --- | --- | --- | --- |
-| adversarial-planner | 4.5 | A | — |
-| docker | 3.2 | C | Ambiguous multi-stage instructions |
-| ... | | | |
+| Skill               | Score | Grade | Top Issue                          |
+| ------------------- | ----- | ----- | ---------------------------------- |
+| adversarial-planner | 4.5   | A     | —                                  |
+| docker              | 3.2   | C     | Ambiguous multi-stage instructions |
+| ...                 |       |       |                                    |
 
 ## Top 5 Improvements (by impact)
 

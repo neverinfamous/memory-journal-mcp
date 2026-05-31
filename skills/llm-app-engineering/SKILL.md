@@ -9,6 +9,7 @@ description: |
 Core principles for building robust LLM applications.
 
 ## Key Patterns
+
 - **Prompt Engineering**: Use few-shot, chain-of-thought, and clear system instructions.
 - **Context Window Management**: Do not blindly append history to prompts. Implement sliding windows, summarization hooks, or token-based pruning to keep inputs within context limits and ensure high recall for recent instructions.
 - **Token Management**: Track usage, handle limits gracefully, and summarize context dynamically.

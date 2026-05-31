@@ -53,9 +53,9 @@ These entries ensure filter tests (`issue_number`, `pr_status`, `workflow_run_id
 
 These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) returns results from both databases.
 
-| #   | Tool                | Params                                                                                                                                                                                     | Enables Tests                                                                    |
-| --- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| S11 | `create_entry`      | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
+| #   | Tool                                   | Params                                                                                                                                                                                     | Enables Tests                                                                    |
+| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| S11 | `create_entry`                         | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
 | S12 | `team_create_entry(project_number: 5)` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]`, `author: "alice"`                | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB           |
 
 ### 0.4 Cross-Project Insights Seed
@@ -72,8 +72,8 @@ These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) ret
 
 **Team DB — seed 3 project-linked entries:**
 
-| #   | Tool                | Params                                                                                                                                                                                                                 | Enables Tests                                                                         |
-| --- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| #   | Tool                                   | Params                                                                                                                                                                                                                 | Enables Tests                                                                         |
+| --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | S15 | `team_create_entry(project_number: 5)` | `content: "Team kickoff for project #5: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["kickoff", "project"]`, `author: "alice"`                                      | `team_get_cross_project_insights` non-zero `project_count`                            |
 | S16 | `team_create_entry(project_number: 5)` | `content: "Project #5 mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["standup", "project"]`, `author: "bob"`                     | `team_get_cross_project_insights` — 2nd team entry for project 5                      |
 | S17 | `team_create_entry(project_number: 5)` | `content: "Project #5 release review: all acceptance criteria met, feature flags enabled for rollout"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["release", "project", "team-shared"]`, `author: "alice"` | `team_get_cross_project_insights` — 3rd team entry to meet `min_entries: 3` threshold |
@@ -82,15 +82,15 @@ These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) ret
 
 After creating all 17 entries, verify the seed data is searchable:
 
-| Check                       | Command                                           | Expected                                                                                                            |
-| --------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| FTS5 indexed                | `search_entries(project_number: 5, query: "architecture")`           | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
-| Filters work                | `search_entries(project_number: 5, issue_number: 44)`                | ≥ 1 result (S7)                                                                                                     |
-| Cross-DB merged             | `search_entries(project_number: 5, query: "architecture")`           | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs               |
-| Rebuild vector index        | `rebuild_vector_index`                            | `entriesIndexed` > 0                                                                                                |
-| Semantic search             | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar)                                                                 |
-| Cross-project insights      | `get_cross_project_insights({})`                  | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
-| Team cross-project insights | `team_get_cross_project_insights({})`             | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
+| Check                       | Command                                                    | Expected                                                                                                            |
+| --------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| FTS5 indexed                | `search_entries(project_number: 5, query: "architecture")` | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
+| Filters work                | `search_entries(project_number: 5, issue_number: 44)`      | ≥ 1 result (S7)                                                                                                     |
+| Cross-DB merged             | `search_entries(project_number: 5, query: "architecture")` | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs               |
+| Rebuild vector index        | `rebuild_vector_index`                                     | `entriesIndexed` > 0                                                                                                |
+| Semantic search             | `semantic_search(query: "improving performance")`          | ≥ 1 result (S7, S10 should be semantically similar)                                                                 |
+| Cross-project insights      | `get_cross_project_insights({})`                           | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
+| Team cross-project insights | `team_get_cross_project_insights({})`                      | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
 
 ---
 

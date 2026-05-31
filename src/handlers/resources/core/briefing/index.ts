@@ -77,7 +77,7 @@ async function buildBriefingData(
         if (!config.projectRegistry?.[resolvedRepo]) {
             resolvedRepo = targetRepo.split('/').pop() || targetRepo
         }
-        
+
         const registryEntry = config.projectRegistry?.[resolvedRepo]
         if (registryEntry) {
             const repoPath = registryEntry.path
@@ -96,9 +96,7 @@ async function buildBriefingData(
     const flags = buildFlagsContext(context)
     const graphStats = buildGraphContext(context)
 
-    const latestPreviews = journal.latestEntries.map(
-        (e) => `#${e.id} (${e.type}): ${e.preview}`
-    )
+    const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
 
     const summaryPreviews = journal.sessionSummaries
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
@@ -153,4 +151,3 @@ async function buildBriefingData(
         annotations: { lastModified: journal.lastModified },
     }
 }
-

@@ -29,8 +29,8 @@
 
 ### 14.1 Team Entry Creation
 
-| Test               | Command/Action                                                      | Expected Result                                             |
-| ------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Test               | Command/Action                                                                         | Expected Result                                             |
+| ------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Basic create       | `team_create_entry(project_number: 5, content: "Team test entry")`                     | `success: true`, `entry` with `author` field auto-populated |
 | Explicit author    | `team_create_entry(project_number: 5, content: "...", author: "TestBot")`              | `author: "TestBot"` in response                             |
 | With tags          | `team_create_entry(project_number: 5, content: "...", tags: ["team-test"])`            | Entry created with tags                                     |
@@ -40,8 +40,8 @@
 
 ### 14.2 Team Read Tools
 
-| Test            | Command/Action                                     | Expected Result                                  |
-| --------------- | -------------------------------------------------- | ------------------------------------------------ |
+| Test            | Command/Action                                                        | Expected Result                                  |
+| --------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
 | Get recent      | `team_get_recent(project_number: 5, limit: 5)`                        | `entries` array (each with `author`), `count`    |
 | Default limit   | `team_get_recent(project_number: 5)`                                  | Returns up to 10 entries (default)               |
 | Search by text  | `team_search(project_number: 5, query: "team test", mode: "fts")`     | Matching entries with `author` field             |
@@ -52,10 +52,10 @@
 
 ### 14.3 Team Entry Detail
 
-| Test             | Command/Action                                                       | Expected Result                                                  |
-| ---------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Test             | Command/Action                                                                          | Expected Result                                                  |
+| ---------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Get by ID        | `team_get_entry_by_id(project_number: 5, entry_id: <team_entry_id>)`                    | `success: true`, `entry` with `author`, optional `relationships` |
-| With importance  | Inspect response                                                     | `importance` object with `score` (0.0-1.0) and `breakdown`       |
+| With importance  | Inspect response                                                                        | `importance` object with `score` (0.0-1.0) and `breakdown`       |
 | No relationships | `team_get_entry_by_id(project_number: 5, entry_id: <id>, include_relationships: false)` | Response omits `relationships` array                             |
 | Nonexistent ID   | `team_get_entry_by_id(project_number: 5, entry_id: 999999)`                             | Structured error: `{ success: false, error: "..." }`             |
 
@@ -68,8 +68,8 @@
 
 ### 14.5 Team Date Range Search
 
-| Test             | Command/Action                                                                                       | Expected Result                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Test             | Command/Action                                                                                                          | Expected Result                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Basic date range | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31")`                        | Returns `entries` array with `author` field, `count` |
 | With entry_type  | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "standup")` | Only `standup` entries returned                      |
 | With tags filter | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
@@ -77,8 +77,8 @@
 
 ### 14.6 Team Admin
 
-| Test                     | Command/Action                                                       | Expected Result                                      |
-| ------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------- |
+| Test                     | Command/Action                                                                          | Expected Result                                      |
+| ------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Update content           | `team_update_entry(project_number: 5, entry_id: <id>, content: "Updated team content")` | `success: true`, `entry` with updated content        |
 | Update tags              | `team_update_entry(project_number: 5, entry_id: <id>, tags: ["updated-team"])`          | Tags changed on team entry                           |
 | Update entry_type        | `team_update_entry(project_number: 5, entry_id: <id>, entry_type: "technical_note")`    | Entry type changed                                   |
@@ -100,10 +100,10 @@
 
 ### 14.8 Team Vector Search
 
-| Test                    | Command/Action                                                   | Expected Result                                     |
-| ----------------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
-| Rebuild team index      | `team_rebuild_vector_index`                                      | `success: true`, `entriesIndexed` > 0               |
-| Team vector stats       | `team_get_vector_index_stats`                                    | `available`, `itemCount`, `modelName`, `dimensions` |
+| Test                    | Command/Action                                                                      | Expected Result                                     |
+| ----------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Rebuild team index      | `team_rebuild_vector_index`                                                         | `success: true`, `entriesIndexed` > 0               |
+| Team vector stats       | `team_get_vector_index_stats`                                                       | `available`, `itemCount`, `modelName`, `dimensions` |
 | Team semantic query     | `team_semantic_search(project_number: 5, query: "team standup")`                    | ≥ 1 result with `similarity` score                  |
 | Team related by ID      | `team_semantic_search(project_number: 5, entry_id: <team_entry_id>)`                | Semantically similar team entries bypassing strings |
 | Team semantic threshold | `team_semantic_search(project_number: 5, query: "test", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)         |
@@ -121,8 +121,8 @@
 
 ### 14.10 Team Relationships
 
-| Test                  | Command/Action                                                                                                 | Expected Result                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Test                  | Command/Action                                                                                                                    | Expected Result                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Link entries          | `team_link_entries(project_number: 5, from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                     | `success: true`, `relationship` object               |
 | Link with description | `team_link_entries(project_number: 5, from_entry_id: <A>, to_entry_id: <B>, relationship_type: "implements", description: "...")` | Relationship created with `description`              |
 | Duplicate link        | Call `team_link_entries(project_number: 5)` again with same params                                                                | `duplicate: true`, `message`                         |
@@ -133,8 +133,8 @@
 
 ### 14.11 Team IO & Export
 
-| Test               | Command/Action                                                   | Expected Result                           |
-| ------------------ | ---------------------------------------------------------------- | ----------------------------------------- |
+| Test               | Command/Action                                                                      | Expected Result                           |
+| ------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------- |
 | Export JSON        | `team_export_entries(project_number: 5, format: "json", limit: 5)`                  | `format: "json"`, `data` string, `count`  |
 | Export markdown    | `team_export_entries(project_number: 5, format: "markdown", limit: 5)`              | `format: "markdown"`, `data` string       |
 | IO Export markdown | `team_export_markdown(project_number: 5, output_dir: "tmp_team_md", limit: 5)`      | Generates local `.md` files in target dir |
@@ -167,22 +167,22 @@
 
 ### 14.15 Cleanup
 
-| Test        | Command/Action                                     | Expected Result                 |
-| ----------- | -------------------------------------------------- | ------------------------------- |
+| Test        | Command/Action                                                        | Expected Result                 |
+| ----------- | --------------------------------------------------------------------- | ------------------------------- |
 | Delete test | `delete_entry(project_number: 5, entry_id: <team_test_id>)` on teamDb | Test entries removed (optional) |
 
 ### 14.16 Hush Protocol — Flag Creation
 
-| Test                | Command/Action                                                                                                       | Expected Result                                                   |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Test                | Command/Action                                                                                                                          | Expected Result                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Blocker flag        | `team_pass_flag(project_number: 5, flag_type: "blocker", message: "FK constraint blocks migration", target_user: "@sarah")`             | `success: true`, `flag_type: "blocker"`, `target_user: "sarah"`   |
 | FYI flag            | `team_pass_flag(project_number: 5, flag_type: "fyi", message: "New lint rule added")`                                                   | `success: true`, no `target_user`                                 |
 | Needs review        | `team_pass_flag(project_number: 5, flag_type: "needs_review", message: "Auth refactor ready", target_user: "chris", issue_number: <N>)` | Entry has `issueNumber` set                                       |
 | Help requested      | `team_pass_flag(project_number: 5, flag_type: "help_requested", message: "Race condition on Windows")`                                  | `success: true`, all 4 vocabulary types accepted                  |
 | With link           | `team_pass_flag(project_number: 5, flag_type: "blocker", message: "Migration file", link: "src/db/migrations/005.ts")`                  | `auto_context.link` populated                                     |
-| With project_number | `team_pass_flag(flag_type: "fyi", message: "Scoped flag", project_number: 5)`                                        | Entry has `projectNumber: 5`                                      |
+| With project_number | `team_pass_flag(flag_type: "fyi", message: "Scoped flag", project_number: 5)`                                                           | Entry has `projectNumber: 5`                                      |
 | Entry structure     | `team_get_entry_by_id(project_number: 5, entry_id: <flag_id>)`                                                                          | `entryType: "flag"`, tags include `flag:blocker` and `@sarah`     |
-| Auto_context shape  | Inspect `autoContext` JSON from entry detail                                                                         | Contains `flag_type`, `target_user`, `link`, `resolved: false`    |
+| Auto_context shape  | Inspect `autoContext` JSON from entry detail                                                                                            | Contains `flag_type`, `target_user`, `link`, `resolved: false`    |
 | Invalid vocab       | `team_pass_flag(project_number: 5, flag_type: "urgent", message: "test")`                                                               | `{ success: false, code: "VALIDATION_ERROR" }`, lists valid types |
 | Missing message     | `team_pass_flag(project_number: 5, flag_type: "blocker")`                                                                               | Structured error: message required                                |
 | Missing flag_type   | `team_pass_flag(project_number: 5, message: "test")`                                                                                    | Structured error: flag_type required                              |
@@ -190,11 +190,11 @@
 
 ### 14.17 Hush Protocol — Flag Resolution
 
-| Test                  | Command/Action                                                        | Expected Result                                                 |
-| --------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Test                  | Command/Action                                                                           | Expected Result                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Resolve with comment  | `team_resolve_flag(project_number: 5, flag_id: <id>, resolution: "Fixed by migration")`  | `success: true`, `resolved: true`, `resolution` set             |
 | Content marker        | `team_get_entry_by_id(project_number: 5, entry_id: <id>)` after resolve                  | Content contains `[RESOLVED: Fixed by migration]`               |
-| Auto_context resolved | Inspect `autoContext` JSON after resolve                              | `resolved: true`, `resolved_at` ISO timestamp, `resolution` set |
+| Auto_context resolved | Inspect `autoContext` JSON after resolve                                                 | `resolved: true`, `resolved_at` ISO timestamp, `resolution` set |
 | Idempotent re-resolve | `team_resolve_flag(project_number: 5, flag_id: <id>, resolution: "Should not override")` | `success: true`, original resolution retained                   |
 | Bare resolve          | `team_resolve_flag(project_number: 5, flag_id: <new_flag>)` without resolution           | `success: true`, content contains `[RESOLVED]` (no comment)     |
 | Nonexistent flag ID   | `team_resolve_flag(project_number: 5, flag_id: 999999)`                                  | `{ success: false, code: "RESOURCE_NOT_FOUND" }`                |
@@ -213,8 +213,8 @@
 
 ### 14.19 Hush Protocol — Cleanup
 
-| Test         | Command/Action                                         | Expected Result               |
-| ------------ | ------------------------------------------------------ | ----------------------------- |
+| Test         | Command/Action                                                            | Expected Result               |
+| ------------ | ------------------------------------------------------------------------- | ----------------------------- |
 | Delete flags | `team_delete_entry(project_number: 5, entry_id: <flag_id>)` for each flag | All test flag entries removed |
 
 ---

@@ -82,17 +82,18 @@ tag conventions, read
 ## Scripts
 
 This skill includes automated helper scripts located in the `scripts/` directory:
+
 - `scripts/check-skills.ps1`: Automated Phase 1 metric gathering (token count, trigger detection).
 - `scripts/run-copilot.ps1`: Automated Phase 4 Copilot validation pipeline.
 
 ## Configuration
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
-| `AUDIT_DEPTH` | `standard` | Depth: `surface`, `standard`, or `thorough` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable Copilot extension validation phase |
-| `INCLUDE_REFERENCES` | `true` | Whether to read and evaluate reference files too |
+| Variable             | Default    | Description                                       |
+| -------------------- | ---------- | ------------------------------------------------- |
+| `MAX_AUDIT_PASSES`   | `2`        | Maximum stress-test cycles (phases 2–3 repeat)    |
+| `AUDIT_DEPTH`        | `standard` | Depth: `surface`, `standard`, or `thorough`       |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable Copilot extension validation phase |
+| `INCLUDE_REFERENCES` | `true`     | Whether to read and evaluate reference files too  |
 
 ### Audit Depth Profiles
 
@@ -109,9 +110,9 @@ This skill includes automated helper scripts located in the `scripts/` directory
 
 ## Synergies
 
-| Skill/Workflow | Relationship |
-| --- | --- |
-| `skill-builder` | Defines the quality standards this skill audits against |
-| `adversarial-planner` | Parent pattern — plan-level adversarial review |
-| `adversarial-security` | Sibling — audits security posture; this audits skill quality |
-| `adversarial-performance` | Sibling — audits performance; this audits skill quality |
+| Skill/Workflow            | Relationship                                                 |
+| ------------------------- | ------------------------------------------------------------ |
+| `skill-builder`           | Defines the quality standards this skill audits against      |
+| `adversarial-planner`     | Parent pattern — plan-level adversarial review               |
+| `adversarial-security`    | Sibling — audits security posture; this audits skill quality |
+| `adversarial-performance` | Sibling — audits performance; this audits skill quality      |

@@ -196,7 +196,9 @@ describe('Team Analytics Tool Handlers', () => {
         it('should fallback gracefully if getAuthorStatistics throws', async () => {
             const originalGetStats = teamDb.getAuthorStatistics
             try {
-                teamDb.getAuthorStatistics = () => { throw new Error('Column not found') }
+                teamDb.getAuthorStatistics = () => {
+                    throw new Error('Column not found')
+                }
                 const result = (await callTool(
                     'team_get_statistics',
                     {},

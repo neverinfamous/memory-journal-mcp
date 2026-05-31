@@ -39,56 +39,56 @@ The markdown body contains the full instructions the agent follows once the skil
 
 ## Inventory
 
-| Skill                                | Description                                                                                                           |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `adversarial-performance`            | Multi-pass adversarial performance audit — iterative profiling, stress-testing critique, and Copilot validation       |
-| `adversarial-planner`                | Multi-pass adversarial planning — iterative plan drafting, structured critique, and Copilot validation                |
-| `adversarial-security`               | Multi-pass adversarial security audit — iterative threat modeling, attack surface analysis, and Copilot validation    |
-| `adversarial-skill-audit`            | Multi-pass adversarial skill audit — iterative quality evaluation, trigger stress-testing, and Copilot validation     |
-| `adversarial-workflow-audit`         | Multi-pass adversarial workflow audit — sequential clarity, HITL safety gates, loop prevention, and Copilot validation |
-| `agents-sdk`                         | Build AI agents on Cloudflare Workers using the Agents SDK                                                            |
-| `auth-identity`                      | Standards for Authentication and Identity management (OAuth, JWTs, RBAC)                                              |
-| `autonomous-dev`                     | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
-| `aws`                                | Comprehensive AWS best practices — IAM, Serverless, S3, RDS, networking, and IaC                      |
-| `azure`                              | Microsoft Azure best practices — Entra ID, App Service, AKS, Cosmos DB, networking, and Bicep         |
-| `bun`                                | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                |
-| `cloudflare`                         | Comprehensive Cloudflare platform skill — decision trees, product index, retrieval sources                            |
-| `docker`                             | Production-grade Docker — multi-stage builds, security hardening, Compose v2, BuildKit, and CI/CD integration         |
-| `docs-marketer`                      | Documentation marketability audit — feature visibility, first impressions, competitive differentiation, and cross-surface consistency |
-| `drizzle-orm`                        | Drizzle ORM best practices — database configuration, schemas, relational queries, migrations                          |
-| `durable-objects`                    | Create and review Durable Objects — RPC, SQLite storage, alarms, WebSockets                                           |
-| `gcp`                                | Google Cloud Platform best practices — IAM, Cloud Run, BigQuery, VPC SC, and Terraform                |
-| `github-actions`                     | GitHub Actions CI/CD — SHA pinning, reusable workflows, caching, matrix strategies, and artifacts v4                  |
-| `github-commander`                   | GitHub pipeline workflows for orchestrating issues, regressions, and deployments                                      |
-| `github-copilot-cli`                 | Adversarial pre-push validation and full repository code audits driven natively by the `gh copilot` CLI               |
-| `github-repo-setup`                  | Scaffold public TypeScript/Node.js repos under `{{ORG_NAME}}`                                                         |
-| `gitlab`                             | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
-| `golang`                             | Master Go development with production-grade best practices from Google and Uber style guides                          |
-| `graphql`                            | GraphQL best practices — schema design, resolvers, DataLoader for N+1 issues, and mutations                           |
-| `hono`                               | Hono framework best practices — edge runtimes, RPC, middleware, validation                                            |
-| `journal-optimizer`                  | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete |
-| `llm-app-engineering`                | Master modern LLM application engineering patterns — prompt chains, token management, streaming                       |
-| `multi-agent-orchestration`          | Patterns for multi-agent systems and agentic workflows (e.g. Plan-and-Execute, Supervisor)                            |
-| `mysql`                              | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                    |
-| `next-best-practices`               | Next.js file conventions, RSC boundaries, data patterns, metadata, error handling                                     |
-| `opentelemetry`                      | Observability standards using OpenTelemetry — tracing, spans, metrics, exporters                                      |
-| `playwright-standard`               | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience                           |
-| `postgres`                           | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS                    |
-| `python`                             | Modern Python engineering — uv, ruff, type hints, pytest, Pydantic v2, and src/ layout project structure              |
-| `rag-pipelines`                      | Best practices for Retrieval-Augmented Generation (RAG) pipelines — embeddings, chunking, retrieval                   |
-| `redis`                              | Redis best practices — caching strategies, connection pooling, TTLs, and data structures                              |
-| `render`                             | Render deployment best practices — Blueprints, Web Services, databases, and persistent disks            |
-| `rust`                               | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture     |
-| `sandbox-sdk`                        | Sandboxed code execution — interpreters, CI/CD, untrusted code                                                        |
-| `shadcn-ui`                          | Deep knowledge of shadcn/ui components, patterns, forms, and best practices                                           |
-| `skill-builder`                      | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing             |
-| `sqlite`                             | Production configurations for concurrency (WAL), typing (STRICT), and data integrity                                  |
-| `tailwind-css`                       | Tailwind CSS v4 — CSS-first configuration, @theme directive, dark mode, responsive design, and v3 migration           |
-| `typescript`                         | Enterprise-grade TypeScript development with type-safe patterns, Zod validation, and modern tooling                   |
-| `vitest-standard`                    | Comprehensive unit testing expertise covering Vitest, TDD, mocking strategies, and test architecture                  |
-| `web-perf`                           | Chrome DevTools MCP performance auditing — Core Web Vitals, network, accessibility                                    |
-| `workers-best-practices`            | Cloudflare Workers production patterns — streaming, bindings, secrets, observability                                  |
-| `wrangler`                           | Cloudflare Workers CLI for deploying and managing Workers and bindings                                                |
+| Skill                        | Description                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `adversarial-performance`    | Multi-pass adversarial performance audit — iterative profiling, stress-testing critique, and Copilot validation                       |
+| `adversarial-planner`        | Multi-pass adversarial planning — iterative plan drafting, structured critique, and Copilot validation                                |
+| `adversarial-security`       | Multi-pass adversarial security audit — iterative threat modeling, attack surface analysis, and Copilot validation                    |
+| `adversarial-skill-audit`    | Multi-pass adversarial skill audit — iterative quality evaluation, trigger stress-testing, and Copilot validation                     |
+| `adversarial-workflow-audit` | Multi-pass adversarial workflow audit — sequential clarity, HITL safety gates, loop prevention, and Copilot validation                |
+| `agents-sdk`                 | Build AI agents on Cloudflare Workers using the Agents SDK                                                                            |
+| `auth-identity`              | Standards for Authentication and Identity management (OAuth, JWTs, RBAC)                                                              |
+| `autonomous-dev`             | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines                 |
+| `aws`                        | Comprehensive AWS best practices — IAM, Serverless, S3, RDS, networking, and IaC                                                      |
+| `azure`                      | Microsoft Azure best practices — Entra ID, App Service, AKS, Cosmos DB, networking, and Bicep                                         |
+| `bun`                        | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                                |
+| `cloudflare`                 | Comprehensive Cloudflare platform skill — decision trees, product index, retrieval sources                                            |
+| `docker`                     | Production-grade Docker — multi-stage builds, security hardening, Compose v2, BuildKit, and CI/CD integration                         |
+| `docs-marketer`              | Documentation marketability audit — feature visibility, first impressions, competitive differentiation, and cross-surface consistency |
+| `drizzle-orm`                | Drizzle ORM best practices — database configuration, schemas, relational queries, migrations                                          |
+| `durable-objects`            | Create and review Durable Objects — RPC, SQLite storage, alarms, WebSockets                                                           |
+| `gcp`                        | Google Cloud Platform best practices — IAM, Cloud Run, BigQuery, VPC SC, and Terraform                                                |
+| `github-actions`             | GitHub Actions CI/CD — SHA pinning, reusable workflows, caching, matrix strategies, and artifacts v4                                  |
+| `github-commander`           | GitHub pipeline workflows for orchestrating issues, regressions, and deployments                                                      |
+| `github-copilot-cli`         | Adversarial pre-push validation and full repository code audits driven natively by the `gh copilot` CLI                               |
+| `github-repo-setup`          | Scaffold public TypeScript/Node.js repos under `{{ORG_NAME}}`                                                                         |
+| `gitlab`                     | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                                               |
+| `golang`                     | Master Go development with production-grade best practices from Google and Uber style guides                                          |
+| `graphql`                    | GraphQL best practices — schema design, resolvers, DataLoader for N+1 issues, and mutations                                           |
+| `hono`                       | Hono framework best practices — edge runtimes, RPC, middleware, validation                                                            |
+| `journal-optimizer`          | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete               |
+| `llm-app-engineering`        | Master modern LLM application engineering patterns — prompt chains, token management, streaming                                       |
+| `multi-agent-orchestration`  | Patterns for multi-agent systems and agentic workflows (e.g. Plan-and-Execute, Supervisor)                                            |
+| `mysql`                      | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                                    |
+| `next-best-practices`        | Next.js file conventions, RSC boundaries, data patterns, metadata, error handling                                                     |
+| `opentelemetry`              | Observability standards using OpenTelemetry — tracing, spans, metrics, exporters                                                      |
+| `playwright-standard`        | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience                                           |
+| `postgres`                   | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS                                    |
+| `python`                     | Modern Python engineering — uv, ruff, type hints, pytest, Pydantic v2, and src/ layout project structure                              |
+| `rag-pipelines`              | Best practices for Retrieval-Augmented Generation (RAG) pipelines — embeddings, chunking, retrieval                                   |
+| `redis`                      | Redis best practices — caching strategies, connection pooling, TTLs, and data structures                                              |
+| `render`                     | Render deployment best practices — Blueprints, Web Services, databases, and persistent disks                                          |
+| `rust`                       | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture                     |
+| `sandbox-sdk`                | Sandboxed code execution — interpreters, CI/CD, untrusted code                                                                        |
+| `shadcn-ui`                  | Deep knowledge of shadcn/ui components, patterns, forms, and best practices                                                           |
+| `skill-builder`              | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing                             |
+| `sqlite`                     | Production configurations for concurrency (WAL), typing (STRICT), and data integrity                                                  |
+| `tailwind-css`               | Tailwind CSS v4 — CSS-first configuration, @theme directive, dark mode, responsive design, and v3 migration                           |
+| `typescript`                 | Enterprise-grade TypeScript development with type-safe patterns, Zod validation, and modern tooling                                   |
+| `vitest-standard`            | Comprehensive unit testing expertise covering Vitest, TDD, mocking strategies, and test architecture                                  |
+| `web-perf`                   | Chrome DevTools MCP performance auditing — Core Web Vitals, network, accessibility                                                    |
+| `workers-best-practices`     | Cloudflare Workers production patterns — streaming, bindings, secrets, observability                                                  |
+| `wrangler`                   | Cloudflare Workers CLI for deploying and managing Workers and bindings                                                                |
 
 ## GitHub Commander Workflows
 
@@ -107,6 +107,7 @@ This package natively bundles the `github-commander` skill, which equips your AI
 ## Automated Auditing
 
 The `adversarial-skill-audit` skill includes automated scripts for evaluating the skills directory:
+
 - `skills/adversarial-skill-audit/scripts/check-skills.ps1`: Generates an inventory of all skills, checking line counts, trigger lengths, and frontmatter compliance.
 - `skills/adversarial-skill-audit/scripts/run-copilot.ps1`: Runs independent validation against the Copilot CLI.
 

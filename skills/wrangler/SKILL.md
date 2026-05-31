@@ -23,18 +23,18 @@ Before executing a Wrangler command, read the corresponding reference file to en
 
 ## Quick Reference (Top Commands)
 
-| Command | Description |
-|---------|-------------|
-| `npx wrangler dev` | Start local development server |
-| `npx wrangler deploy` | Deploy to production |
-| `npx wrangler tail` | Tail production logs |
-| `npx wrangler secret put <name>` | Create/update a secret |
-| `npx wrangler d1 execute <db> --local --file=...` | Execute SQL locally |
-| `npx wrangler kv:key put --binding=<name> <key> <value>` | Put KV pair |
-| `npx wrangler r2 object put <bucket>/<key> --file=...` | Upload R2 object |
-| `npx wrangler types` | Generate TS types from config |
-| `npx wrangler login` | Authenticate CLI |
-| `npx wrangler whoami` | Check auth status |
+| Command                                                  | Description                    |
+| -------------------------------------------------------- | ------------------------------ |
+| `npx wrangler dev`                                       | Start local development server |
+| `npx wrangler deploy`                                    | Deploy to production           |
+| `npx wrangler tail`                                      | Tail production logs           |
+| `npx wrangler secret put <name>`                         | Create/update a secret         |
+| `npx wrangler d1 execute <db> --local --file=...`        | Execute SQL locally            |
+| `npx wrangler kv:key put --binding=<name> <key> <value>` | Put KV pair                    |
+| `npx wrangler r2 object put <bucket>/<key> --file=...`   | Upload R2 object               |
+| `npx wrangler types`                                     | Generate TS types from config  |
+| `npx wrangler login`                                     | Authenticate CLI               |
+| `npx wrangler whoami`                                    | Check auth status              |
 
 ## Local Development Workflow
 

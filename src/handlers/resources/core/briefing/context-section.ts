@@ -168,7 +168,9 @@ export function buildTeamContext(
                     id: e.id,
                     timestamp: e.timestamp,
                     type: e.entryType,
-                    preview: markUntrustedContentInline(cleanPreview(e.content, TEAM_PREVIEW_LENGTH)),
+                    preview: markUntrustedContentInline(
+                        cleanPreview(e.content, TEAM_PREVIEW_LENGTH)
+                    ),
                 }
             })
         }
@@ -338,12 +340,12 @@ export interface GraphSummary {
     causalMetrics: Record<string, number>
 }
 
-export function buildGraphContext(
-    context: ResourceContext
-): GraphSummary | undefined {
+export function buildGraphContext(context: ResourceContext): GraphSummary | undefined {
     try {
         const stats = context.db.getStatistics('week')
-        const comp = stats['relationshipComplexity'] as { totalRelationships: number; avgPerEntry: number } | undefined
+        const comp = stats['relationshipComplexity'] as
+            | { totalRelationships: number; avgPerEntry: number }
+            | undefined
         const causal = stats['causalMetrics'] as Record<string, number> | undefined
 
         if (!comp || !causal) return undefined

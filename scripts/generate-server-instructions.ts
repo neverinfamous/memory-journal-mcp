@@ -34,12 +34,7 @@ const overviewEscaped = escapeForTemplateLiteral(overviewMd)
 
 // Read all help files (everything except overview.md and README.md)
 const helpFiles = readdirSync(helpDir)
-    .filter(
-        (f) =>
-            f.endsWith('.md') &&
-            f !== 'overview.md' &&
-            f.toLowerCase() !== 'readme.md'
-    )
+    .filter((f) => f.endsWith('.md') && f !== 'overview.md' && f.toLowerCase() !== 'readme.md')
     .sort()
 
 const helpEntries: { key: string; content: string }[] = []
@@ -50,9 +45,7 @@ for (const file of helpFiles) {
 }
 
 // Identify group-specific help entries (everything except gotchas)
-const helpGroupKeys = helpEntries
-    .filter((e) => e.key !== 'gotchas')
-    .map((e) => e.key)
+const helpGroupKeys = helpEntries.filter((e) => e.key !== 'gotchas').map((e) => e.key)
 
 // Use backtick char for building string to avoid nesting issues
 const BT = '`'
@@ -105,7 +98,9 @@ lines.push('}')
 lines.push('')
 lines.push('/**')
 lines.push(' * Instruction detail level for token efficiency')
-lines.push(' * - essential: ~300 tokens - Core behaviors + quick access (for token-constrained clients)')
+lines.push(
+    ' * - essential: ~300 tokens - Core behaviors + quick access (for token-constrained clients)'
+)
 lines.push(' * - standard: ~350 tokens - + help pointers for enabled groups')
 lines.push(' * - full: ~500 tokens - + active tools/prompts summary')
 lines.push(' */')
@@ -130,21 +125,28 @@ lines.push('/**')
 lines.push(' * Code Mode summary — only included when codemode group is enabled.')
 lines.push(' * Points to memory://help/codemode for full API reference.')
 lines.push(' */')
-lines.push('const CODE_MODE_INSTRUCTIONS = ' + BT + escapeForTemplateLiteral([
-    '',
-    '',
-    '## Code Mode',
-    '',
-    'API: `tool_name` → `mj.group.action()` (e.g., `search_entries` → `mj.search.searchEntries()`)',
-    'Globals: `createEntry()`, `find()`, `recent()`, `searchEntries()`, `deleteEntry()`, `help()` work without the `mj.` prefix.',
-    'Positional: `create("note")`, `searchEntries("performance")`',
-    'Aliases: Common parameter names are auto-corrected (`text`→`content`, `entry`→`entry_id`, `q`→`query`, `tag`→`tags[]`).',
-    'Discovery: `mj.help()` → `{groups, totalMethods}`. `mj.core.help()` for group-specific.',
-    'Sandbox: No `setTimeout`, `setInterval`, `fetch`, or network access.',
-    'Readonly: Pass `readonly: true` to `mj_execute_code` to restrict execution to read-only operations.',
-    'Read `memory://help/codemode` for full namespace table, examples, and patterns.',
-    '**Codemode-only**: When `mj_execute_code` is the only registered tool, all tool names referenced in these instructions (e.g., `create_entry`, `search_entries`) must be called via `mj_execute_code` using `mj.*` namespaces or bare globals. Do NOT call them as direct MCP tools.',
-].join('\n')) + BT)
+lines.push(
+    'const CODE_MODE_INSTRUCTIONS = ' +
+        BT +
+        escapeForTemplateLiteral(
+            [
+                '',
+                '',
+                '## Code Mode',
+                '',
+                'API: `tool_name` → `mj.group.action()` (e.g., `search_entries` → `mj.search.searchEntries()`)',
+                'Globals: `createEntry()`, `find()`, `recent()`, `searchEntries()`, `deleteEntry()`, `help()` work without the `mj.` prefix.',
+                'Positional: `create("note")`, `searchEntries("performance")`',
+                'Aliases: Common parameter names are auto-corrected (`text`→`content`, `entry`→`entry_id`, `q`→`query`, `tag`→`tags[]`).',
+                'Discovery: `mj.help()` → `{groups, totalMethods}`. `mj.core.help()` for group-specific.',
+                'Sandbox: No `setTimeout`, `setInterval`, `fetch`, or network access.',
+                'Readonly: Pass `readonly: true` to `mj_execute_code` to restrict execution to read-only operations.',
+                'Read `memory://help/codemode` for full namespace table, examples, and patterns.',
+                '**Codemode-only**: When `mj_execute_code` is the only registered tool, all tool names referenced in these instructions (e.g., `create_entry`, `search_entries`) must be called via `mj_execute_code` using `mj.*` namespaces or bare globals. Do NOT call them as direct MCP tools.',
+            ].join('\n')
+        ) +
+        BT
+)
 lines.push('')
 
 lines.push('/**')
@@ -177,18 +179,20 @@ lines.push(' */')
 lines.push('function buildActiveGroupsSummary(enabledTools: Set<string>): string {')
 lines.push('    const activeGroups: { group: ToolGroup; tools: string[] }[] = []')
 lines.push('')
-lines.push('    for (const [group, allTools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {')
+lines.push(
+    '    for (const [group, allTools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {'
+)
 lines.push('        const enabledInGroup = allTools.filter((tool) => enabledTools.has(tool))')
 lines.push('        if (enabledInGroup.length > 0) {')
 lines.push('            activeGroups.push({ group, tools: enabledInGroup })')
 lines.push('        }')
 lines.push('    }')
 lines.push('')
-lines.push('    if (activeGroups.length === 0) return \'\'')
+lines.push("    if (activeGroups.length === 0) return ''")
 lines.push('')
 lines.push('    let summary = `\\n\\n## Active Tools (${String(enabledTools.size)})\\n`')
 lines.push('    for (const { group, tools } of activeGroups) {')
-lines.push('        summary += `**${group}**: ${tools.map((t) => `\\`${t}\\``).join(\', \')}\\n`')
+lines.push("        summary += `**${group}**: ${tools.map((t) => `\\`${t}\\``).join(', ')}\\n`")
 lines.push('    }')
 lines.push('    return summary')
 lines.push('}')
@@ -214,8 +218,10 @@ lines.push(' *')
 lines.push(' * @param enabledTools - Set of enabled tool names')
 lines.push(' * @param prompts - Available prompt definitions')
 lines.push(' * @param latestEntry - Optional latest entry for context snapshot')
-lines.push(' * @param level - Instruction detail level (default: \'standard\')')
-lines.push(' * @param enabledGroups - Optional pre-computed enabled groups; derived from enabledTools if omitted')
+lines.push(" * @param level - Instruction detail level (default: 'standard')")
+lines.push(
+    ' * @param enabledGroups - Optional pre-computed enabled groups; derived from enabledTools if omitted'
+)
 lines.push(' */')
 lines.push('export function generateInstructions(')
 lines.push('    enabledTools: Set<string>,')
@@ -238,13 +244,17 @@ lines.push('')
 lines.push('    // Add latest entry snapshot for immediate context (compact format)')
 lines.push('    if (latestEntry) {')
 lines.push('        const preview = latestEntry.content.slice(0, 120)')
-lines.push("        instructions += `\\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\\n`")
+lines.push(
+    "        instructions += `\\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\\n`"
+)
 lines.push('    }')
 lines.push('')
 lines.push('    // Essential: minimal help pointer (no group listing)')
 lines.push('    // Standard+: dynamic help pointers listing enabled groups')
 lines.push("    if (level === 'essential') {")
-lines.push("        instructions += '\\n\\nRead `memory://help` for gotchas and critical usage patterns.'")
+lines.push(
+    "        instructions += '\\n\\nRead `memory://help` for gotchas and critical usage patterns.'"
+)
 lines.push('    } else {')
 lines.push('        instructions += buildHelpPointers(groups)')
 lines.push('    }')
@@ -255,10 +265,12 @@ lines.push('        instructions += buildActiveGroupsSummary(enabledTools)')
 lines.push('')
 lines.push('        // Add prompts section')
 lines.push('        if (prompts.length > 0) {')
-lines.push("            instructions += `\\n## Prompts (${String(prompts.length)})\\n`")
+lines.push('            instructions += `\\n## Prompts (${String(prompts.length)})\\n`')
 lines.push("            instructions += 'Pre-built templates and guided workflows:\\n'")
 lines.push('            for (const prompt of prompts) {')
-lines.push("                instructions += `- \\`${prompt.name}\\` - ${prompt.description ?? ''}\\n`")
+lines.push(
+    "                instructions += `- \\`${prompt.name}\\` - ${prompt.description ?? ''}\\n`"
+)
 lines.push('            }')
 lines.push('        }')
 lines.push('    }')
@@ -280,9 +292,9 @@ lines.push('')
 // ==========================================================================
 
 lines.push('/**')
-lines.push(" * Help content keyed by group name.")
+lines.push(' * Help content keyed by group name.')
 lines.push(" * 'gotchas' is the always-available help (memory://help).")
-lines.push(" * Other keys are feature-specific help (memory://help/{key}).")
+lines.push(' * Other keys are feature-specific help (memory://help/{key}).')
 lines.push(' */')
 lines.push('export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([')
 for (const { key, content } of helpEntries) {

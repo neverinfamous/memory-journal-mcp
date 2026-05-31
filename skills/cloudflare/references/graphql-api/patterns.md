@@ -11,12 +11,19 @@ query TrafficTimeSeries($zoneTag: string!, $start: Time!, $end: Time!) {
       httpRequestsAdaptiveGroups(
         filter: { datetime_gt: $start, datetime_lt: $end }
         limit: 1000
-        orderBy: [datetimeFiveMinutes_ASC]  # or datetimeHour_ASC for longer ranges
+        orderBy: [datetimeFiveMinutes_ASC] # or datetimeHour_ASC for longer ranges
       ) {
         count
-        dimensions { datetimeFiveMinutes }
-        sum { edgeResponseBytes }
-        ratio { status4xx status5xx }
+        dimensions {
+          datetimeFiveMinutes
+        }
+        sum {
+          edgeResponseBytes
+        }
+        ratio {
+          status4xx
+          status5xx
+        }
       }
     }
   }
@@ -37,7 +44,9 @@ query TopCountries($zoneTag: string!, $start: Time!, $end: Time!) {
         orderBy: [count_DESC]
       ) {
         count
-        dimensions { clientCountryName }
+        dimensions {
+          clientCountryName
+        }
       }
     }
   }
@@ -57,9 +66,21 @@ query WorkersOverview($accountTag: string!, $start: Time!, $end: Time!) {
         limit: 100
         orderBy: [sum_requests_DESC]
       ) {
-        sum { requests errors subrequests wallTime }
-        quantiles { cpuTimeP50 cpuTimeP99 wallTimeP50 wallTimeP99 }
-        dimensions { scriptName }
+        sum {
+          requests
+          errors
+          subrequests
+          wallTime
+        }
+        quantiles {
+          cpuTimeP50
+          cpuTimeP99
+          wallTimeP50
+          wallTimeP99
+        }
+        dimensions {
+          scriptName
+        }
       }
     }
   }
@@ -74,13 +95,16 @@ Filter by `scriptName` for a specific Worker. Add `datetimeFiveMinutes` dimensio
 query RecentFirewallEvents($zoneTag: string!, $start: Time!) {
   viewer {
     zones(filter: { zoneTag: $zoneTag }) {
-      firewallEventsAdaptive(
-        filter: { datetime_gt: $start }
-        limit: 50
-        orderBy: [datetime_DESC]
-      ) {
-        action source clientIP clientCountryName userAgent
-        clientRequestHTTPHost clientRequestPath ruleId datetime
+      firewallEventsAdaptive(filter: { datetime_gt: $start }, limit: 50, orderBy: [datetime_DESC]) {
+        action
+        source
+        clientIP
+        clientCountryName
+        userAgent
+        clientRequestHTTPHost
+        clientRequestPath
+        ruleId
+        datetime
       }
     }
   }
@@ -101,7 +125,9 @@ query DNSQueryVolume($zoneTag: string!, $start: Time!, $end: Time!) {
         orderBy: [datetimeFiveMinutes_ASC]
       ) {
         count
-        dimensions { datetimeFiveMinutes }
+        dimensions {
+          datetimeFiveMinutes
+        }
       }
     }
   }
@@ -144,8 +170,12 @@ query CacheStatusBreakdown($zoneTag: string!, $start: Time!, $end: Time!) {
         orderBy: [count_DESC]
       ) {
         count
-        dimensions { cacheStatus }
-        sum { edgeResponseBytes }
+        dimensions {
+          cacheStatus
+        }
+        sum {
+          edgeResponseBytes
+        }
       }
     }
   }
@@ -163,14 +193,35 @@ query DashboardOverview($zoneTag: string!, $start: Time!, $end: Time!) {
   viewer {
     zones(filter: { zoneTag: $zoneTag }) {
       httpTraffic: httpRequestsAdaptiveGroups(
-        filter: { datetime_gt: $start, datetime_lt: $end }, limit: 1
-      ) { count  sum { edgeResponseBytes }  ratio { status4xx status5xx } }
+        filter: { datetime_gt: $start, datetime_lt: $end }
+        limit: 1
+      ) {
+        count
+        sum {
+          edgeResponseBytes
+        }
+        ratio {
+          status4xx
+          status5xx
+        }
+      }
       firewallEvents: firewallEventsAdaptiveGroups(
-        filter: { datetime_gt: $start, datetime_lt: $end }, limit: 5, orderBy: [count_DESC]
-      ) { count  dimensions { action source } }
+        filter: { datetime_gt: $start, datetime_lt: $end }
+        limit: 5
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          action
+          source
+        }
+      }
       dnsQueries: dnsAnalyticsAdaptiveGroups(
-        filter: { datetime_gt: $start, datetime_lt: $end }, limit: 1
-      ) { count }
+        filter: { datetime_gt: $start, datetime_lt: $end }
+        limit: 1
+      ) {
+        count
+      }
     }
   }
 }
@@ -206,12 +257,12 @@ Both are account-scoped — nest under `accounts(filter: { accountTag: $accountT
 
 **Match time granularity to range:**
 
-| Time Range | Recommended Dimension |
-|------------|----------------------|
-| < 6 hours | `datetimeMinute` or `datetimeFiveMinutes` |
+| Time Range | Recommended Dimension                             |
+| ---------- | ------------------------------------------------- |
+| < 6 hours  | `datetimeMinute` or `datetimeFiveMinutes`         |
 | 6-48 hours | `datetimeFiveMinutes` or `datetimeFifteenMinutes` |
-| 2-14 days | `datetimeHour` |
-| 14+ days | `date` |
+| 2-14 days  | `datetimeHour`                                    |
+| 14+ days   | `date`                                            |
 
 **Use aliases** for querying the same dataset with different filters in one request.
 

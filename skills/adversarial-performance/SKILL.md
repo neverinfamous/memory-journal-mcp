@@ -24,7 +24,7 @@ Load this skill when any of these apply:
 - Profiling build times, runtime hot paths, or bundle size
 - The user asks for an adversarial performance review or stress-test analysis
 - The user says "perf audit", "performance review", "find bottlenecks",
-  "adversarial performance", "optimize this repo", "make this faster", 
+  "adversarial performance", "optimize this repo", "make this faster",
   "why is this slow", or "speed up my code"
 - Preparing a performance baseline report before a major release
 - You want to reduce blind spots in your own performance assessment
@@ -33,14 +33,14 @@ Load this skill when any of these apply:
 
 Before starting, auto-detect the project profile by scanning the repository:
 
-| Signal | Project Profile | Extra Categories |
-| --- | --- | --- |
-| MCP SDK imports, tool handlers, `tools/list` | `mcp-server` | Token & Context Efficiency (Category 7) — full depth |
-| Express/Hono/Fastify, HTTP handlers, `listen()` | `web-app` | Runtime Performance (Category 4) — extra API latency focus |
-| `bin` field, CLI arg parsing | `cli-tool` | Startup Cost analysis in Category 4 |
-| Vitest/Jest/Playwright config | `tested` | Test Suite Performance (Category 5) — full depth |
-| Dockerfile present | `containerized` | Build Performance (Category 1) — Docker layer analysis |
-| Database imports (better-sqlite3, pg, mysql2) | `data-layer` | Database & I/O (Category 6) — full depth |
+| Signal                                          | Project Profile | Extra Categories                                           |
+| ----------------------------------------------- | --------------- | ---------------------------------------------------------- |
+| MCP SDK imports, tool handlers, `tools/list`    | `mcp-server`    | Token & Context Efficiency (Category 7) — full depth       |
+| Express/Hono/Fastify, HTTP handlers, `listen()` | `web-app`       | Runtime Performance (Category 4) — extra API latency focus |
+| `bin` field, CLI arg parsing                    | `cli-tool`      | Startup Cost analysis in Category 4                        |
+| Vitest/Jest/Playwright config                   | `tested`        | Test Suite Performance (Category 5) — full depth           |
+| Dockerfile present                              | `containerized` | Build Performance (Category 1) — Docker layer analysis     |
+| Database imports (better-sqlite3, pg, mysql2)   | `data-layer`    | Database & I/O (Category 6) — full depth                   |
 
 Profiles stack. A typical MCP server might be `mcp-server + cli-tool +
 tested + containerized + data-layer`.
@@ -107,13 +107,13 @@ validation results. Before sharing output outside the audit context, redact or g
 
 ## Configuration
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MAX_AUDIT_PASSES` | `2` | Maximum stress-test cycles (phases 2–3 repeat) |
-| `AUDIT_DEPTH` | `standard` | Depth: `scan`, `standard`, or `intensive` |
-| `COPILOT_VALIDATION` | `true` | Enable/disable the Copilot extension validation phase |
-| `PROJECT_PROFILE` | `auto` | Auto-detect or explicit profile list |
-| `RUN_COMMANDS` | `false` | Whether to execute measurement commands (`tsc --diagnostics`, `npm test`, etc.) or perform static analysis only |
+| Variable             | Default    | Description                                                                                                     |
+| -------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `MAX_AUDIT_PASSES`   | `2`        | Maximum stress-test cycles (phases 2–3 repeat)                                                                  |
+| `AUDIT_DEPTH`        | `standard` | Depth: `scan`, `standard`, or `intensive`                                                                       |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable the Copilot extension validation phase                                                           |
+| `PROJECT_PROFILE`    | `auto`     | Auto-detect or explicit profile list                                                                            |
+| `RUN_COMMANDS`       | `false`    | Whether to execute measurement commands (`tsc --diagnostics`, `npm test`, etc.) or perform static analysis only |
 
 ### Audit Depth Profiles
 
@@ -130,10 +130,10 @@ validation results. Before sharing output outside the audit context, redact or g
 
 ## Synergies
 
-| Skill/Workflow | Relationship |
-| --- | --- |
-| `adversarial-security` | Sibling skill — applies adversarial pattern to security; this applies it to performance |
-| `adversarial-planner` | Parent pattern — plan-level adversarial review; this and security extend it to audits |
-| `autonomous-dev` | Generator/Evaluator pipeline at code level; use after this skill to implement optimizations |
-| `/perf-audit` workflow | Provides the category checklist; this skill adds adversarial methodology on top |
-| `web-perf` | Web-specific performance skill; use alongside for frontend-heavy projects |
+| Skill/Workflow         | Relationship                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `adversarial-security` | Sibling skill — applies adversarial pattern to security; this applies it to performance     |
+| `adversarial-planner`  | Parent pattern — plan-level adversarial review; this and security extend it to audits       |
+| `autonomous-dev`       | Generator/Evaluator pipeline at code level; use after this skill to implement optimizations |
+| `/perf-audit` workflow | Provides the category checklist; this skill adds adversarial methodology on top             |
+| `web-perf`             | Web-specific performance skill; use alongside for frontend-heavy projects                   |

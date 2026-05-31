@@ -11,15 +11,15 @@ Full templates for GitHub workflows, Dependabot, issue templates, and PR templat
 All actions are SHA-pinned per security standards.
 
 ```yaml
-name: "CodeQL Analysis"
+name: 'CodeQL Analysis'
 
 on:
   push:
-    branches: ["main"]
+    branches: ['main']
   pull_request:
-    branches: ["main"]
+    branches: ['main']
   schedule:
-    - cron: "0 0 * * 1"
+    - cron: '0 0 * * 1'
   workflow_dispatch:
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ["javascript-typescript"]
+        language: ['javascript-typescript']
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Check for JS/TS files
@@ -54,7 +54,7 @@ jobs:
       - uses: github/codeql-action/analyze@0d579ffd059c29b07949a3cce3983f0780820c98 # v4
         if: steps.check-files.outputs.has_code == 'true'
         with:
-          category: "/language:${{matrix.language}}"
+          category: '/language:${{matrix.language}}'
       - name: Skip notification
         if: steps.check-files.outputs.has_code == 'false'
         run: echo "No JavaScript/TypeScript files found. Skipping CodeQL analysis."
@@ -91,7 +91,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
+          cache: 'npm'
 
       - name: Cache node_modules
         id: cache-node-modules
@@ -125,8 +125,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: "24.x"
-          cache: "npm"
+          node-version: '24.x'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -184,8 +184,8 @@ name: Dependabot auto-merge
 on:
   pull_request:
     paths:
-      - "package*.json"
-      - ".github/workflows/dependabot-auto-merge.yml"
+      - 'package*.json'
+      - '.github/workflows/dependabot-auto-merge.yml'
 
 permissions:
   pull-requests: write
@@ -200,7 +200,7 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
 
       - name: Enable auto-merge for Dependabot PRs
         if: ${{ steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor' }}
@@ -246,7 +246,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: lts/*
-          cache: "npm"
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -280,61 +280,61 @@ Adapt the `groups` section to match the project's actual dependencies.
 ```yaml
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/New_York"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'America/New_York'
     open-pull-requests-limit: 10
     reviewers:
-      - "neverinfamous"
+      - 'neverinfamous'
     labels:
-      - "dependencies"
-      - "npm"
+      - 'dependencies'
+      - 'npm'
     groups:
       build-tools:
         patterns:
-          - "typescript*"
-          - "tsup*"
-          - "@types/*"
+          - 'typescript*'
+          - 'tsup*'
+          - '@types/*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
       linting:
         patterns:
-          - "eslint*"
-          - "@eslint/*"
-          - "typescript-eslint*"
+          - 'eslint*'
+          - '@eslint/*'
+          - 'typescript-eslint*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
     commit-message:
-      prefix: "chore"
+      prefix: 'chore'
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "10:00"
-      timezone: "America/New_York"
+      interval: 'weekly'
+      day: 'monday'
+      time: '10:00'
+      timezone: 'America/New_York'
     open-pull-requests-limit: 5
     reviewers:
-      - "neverinfamous"
+      - 'neverinfamous'
     labels:
-      - "dependencies"
-      - "github-actions"
+      - 'dependencies'
+      - 'github-actions'
     groups:
       actions:
         patterns:
-          - "actions/*"
+          - 'actions/*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
     commit-message:
-      prefix: "chore"
+      prefix: 'chore'
 ```
 
 ---
@@ -347,9 +347,9 @@ updates:
 ---
 name: Bug Report
 about: Create a report to help us improve
-title: "[BUG] "
-labels: ["bug"]
-assignees: ""
+title: '[BUG] '
+labels: ['bug']
+assignees: ''
 ---
 
 ## 🐛 Bug Description
@@ -378,9 +378,10 @@ A clear and concise description of what actually happened.
 - **Installation:** [npm, Docker, local build]
 
 ## 🔍 Error Logs
-
 ```
+
 Paste any error messages or stack traces here
+
 ```
 
 ## 🔧 Additional Context
@@ -392,13 +393,13 @@ Add any other context about the problem here.
 
 ### .github/ISSUE_TEMPLATE/feature_request.md
 
-```markdown
+````markdown
 ---
 name: Feature Request
 about: Suggest a feature
-title: "[FEATURE] "
-labels: ["enhancement"]
-assignees: ""
+title: '[FEATURE] '
+labels: ['enhancement']
+assignees: ''
 ---
 
 ## 🚀 Feature Summary
@@ -418,6 +419,7 @@ How could this work?
 ```javascript
 // Example of how this would be used
 ```
+````
 
 ## 🔀 Alternatives Considered
 
@@ -426,7 +428,8 @@ Any alternative solutions or features you've considered.
 ## 📝 Additional Context
 
 Any other context, mockups, or screenshots.
-```
+
+````
 
 ---
 
@@ -441,7 +444,7 @@ contact_links:
   - name: 💬 Discussions
     url: https://github.com/neverinfamous/{{REPO_NAME}}/discussions
     about: Ask questions and share ideas
-```
+````
 
 ---
 

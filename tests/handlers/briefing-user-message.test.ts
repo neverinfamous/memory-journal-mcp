@@ -427,10 +427,10 @@ describe('formatUserMessage', () => {
     it('should include version in System row', () => {
         const result = formatUserMessage({
             ...baseOpts(),
-            version: '7.7.1',
+            version: '8.0.0',
         })
 
-        expect(result).toContain('v7.7.1')
+        expect(result).toContain('v8.0.0')
     })
 
     it('should include surface area counts', () => {
@@ -449,14 +449,14 @@ describe('formatUserMessage', () => {
     it('should combine version and surface area on one line', () => {
         const result = formatUserMessage({
             ...baseOpts(),
-            version: '7.7.1',
+            version: '8.0.0',
             toolCount: 70,
             resourceCount: 36,
             promptCount: 17,
         })
 
         // Version, resources, and prompts on one line. Tools on a separate line.
-        expect(result).toContain('v7.7.1 · 36 resources · 17 prompts')
+        expect(result).toContain('v8.0.0 · 36 resources · 17 prompts')
         expect(result).toContain('70 tools')
     })
 
@@ -560,4 +560,3 @@ describe('formatUserMessage', () => {
         expect(result).toContain('evolves_from: 8')
     })
 })
-

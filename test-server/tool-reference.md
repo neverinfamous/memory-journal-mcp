@@ -12,8 +12,8 @@ Complete reference of all **73 tools** organized by 10 tool groups + codemode. E
 
 Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*` API.
 
-| Tool              | Description                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool              | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mj_execute_code` | Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. Enables multi-step workflows in a single call, reducing token usage by 70-90%. API groups: `mj.core.*` (or `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.export.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`. Use `mj.help()` for method listing. Returns the last expression value. |
 
 ---
@@ -84,13 +84,13 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 Entry mutations, vector index management, and tag maintenance.
 
-| Tool                   | Description                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Tool                   | Description                                                                                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `update_entry`         | Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
-| `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                 |
-| `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge. |
-| `rebuild_vector_index` | Rebuild the semantic search vector index from all existing entries.                                                                  |
-| `add_to_vector_index`  | Add a specific entry to the semantic search vector index.                                                                            |
+| `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                                                   |
+| `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.                                   |
+| `rebuild_vector_index` | Rebuild the semantic search vector index from all existing entries.                                                                                                    |
+| `add_to_vector_index`  | Add a specific entry to the semantic search vector index.                                                                                                              |
 
 ---
 
@@ -156,11 +156,11 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 ### Admin
 
-| Tool                | Description                                                |
-| ------------------- | ---------------------------------------------------------- |
+| Tool                | Description                                                                                                                                               |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `team_update_entry` | Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
-| `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).  |
-| `team_merge_tags`   | Merge a source tag into a target tag in the team database. |
+| `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).                                                                                                 |
+| `team_merge_tags`   | Merge a source tag into a target tag in the team database.                                                                                                |
 
 ### Analytics
 
@@ -203,13 +203,13 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 ### Flags
 
-| Tool                        | Description                                                                                                                                                            |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `team_pass_flag`            | Create a machine-actionable flag in the team database. Flags replace communication noise with structured, searchable signals.                                         |
-| `team_resolve_flag`         | Mark a team flag as resolved with an optional resolution comment. Idempotent — safe to call on already-resolved flags.                                                |
-| `team_list_flags`           | List and filter flags with structured metadata. Filter by status (active/resolved/all), flag_type, target_user, or author. Sort by priority or timestamp.             |
-| `team_update_flag`          | Update a flag's metadata without resolving it. Escalate severity, reassign target_user, edit message, add link, or reopen a resolved flag.                            |
-| `team_get_flag_analytics`   | Aggregate flag analytics: resolution velocity, type distribution, per-user workload, staleness counts, and period-over-period trend comparison.                       |
+| Tool                      | Description                                                                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team_pass_flag`          | Create a machine-actionable flag in the team database. Flags replace communication noise with structured, searchable signals.                             |
+| `team_resolve_flag`       | Mark a team flag as resolved with an optional resolution comment. Idempotent — safe to call on already-resolved flags.                                    |
+| `team_list_flags`         | List and filter flags with structured metadata. Filter by status (active/resolved/all), flag_type, target_user, or author. Sort by priority or timestamp. |
+| `team_update_flag`        | Update a flag's metadata without resolving it. Escalate severity, reassign target_user, edit message, add link, or reopen a resolved flag.                |
+| `team_get_flag_analytics` | Aggregate flag analytics: resolution velocity, type distribution, per-user workload, staleness counts, and period-over-period trend comparison.           |
 
 ---
 

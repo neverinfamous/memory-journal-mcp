@@ -12,12 +12,12 @@ export default {
     // Process events from producer Worker
     ctx.waitUntil(
       fetch(env.LOG_ENDPOINT, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify(events),
       })
-    );
-  }
-};
+    )
+  },
+}
 ```
 
 ### 2. Configure Producer Worker
@@ -29,9 +29,9 @@ In producer's `wrangler.jsonc`:
   "name": "my-producer-worker",
   "tail_consumers": [
     {
-      "service": "my-tail-worker"
-    }
-  ]
+      "service": "my-tail-worker",
+    },
+  ],
 }
 ```
 
@@ -56,9 +56,9 @@ wrangler deploy
   "name": "producer-worker",
   "tail_consumers": [
     {
-      "service": "logging-tail-worker"
-    }
-  ]
+      "service": "logging-tail-worker",
+    },
+  ],
 }
 ```
 
@@ -69,12 +69,12 @@ wrangler deploy
   "name": "producer-worker",
   "tail_consumers": [
     {
-      "service": "logging-tail-worker"
+      "service": "logging-tail-worker",
     },
     {
-      "service": "metrics-tail-worker"
-    }
-  ]
+      "service": "metrics-tail-worker",
+    },
+  ],
 }
 ```
 
@@ -84,7 +84,7 @@ wrangler deploy
 
 ```jsonc
 {
-  "tail_consumers": []
+  "tail_consumers": [],
 }
 ```
 
@@ -98,14 +98,14 @@ Tail Workers use same binding syntax as regular Workers:
 {
   "name": "my-tail-worker",
   "vars": {
-    "LOG_ENDPOINT": "https://logs.example.com/ingest"
+    "LOG_ENDPOINT": "https://logs.example.com/ingest",
   },
   "kv_namespaces": [
     {
       "binding": "LOGS_KV",
-      "id": "abc123..."
-    }
-  ]
+      "id": "abc123...",
+    },
+  ],
 }
 ```
 
@@ -131,6 +131,7 @@ wrangler tail my-producer-worker
 ```
 
 **This is different from Tail Workers:**
+
 - `wrangler tail` streams logs to your terminal
 - Tail Workers are Workers that process events programmatically
 
@@ -145,14 +146,14 @@ wrangler tail my-producer-worker
 
 ## Limits
 
-| Limit | Value | Notes |
-|-------|-------|-------|
-| Max tail consumers per producer | 10 | Each receives all events independently |
-| Events batch size | Up to 100 events per invocation | Larger batches split across invocations |
-| Tail Worker CPU time | Same as regular Workers | 10ms (free), 30ms (paid), 50ms (paid bundle) |
-| Pricing tier | Workers Paid or Enterprise | Not available on free plan |
-| Request body size | 100 MB max | When sending to external endpoints |
-| Event retention | None | Events not retried if tail handler fails |
+| Limit                           | Value                           | Notes                                        |
+| ------------------------------- | ------------------------------- | -------------------------------------------- |
+| Max tail consumers per producer | 10                              | Each receives all events independently       |
+| Events batch size               | Up to 100 events per invocation | Larger batches split across invocations      |
+| Tail Worker CPU time            | Same as regular Workers         | 10ms (free), 30ms (paid), 50ms (paid bundle) |
+| Pricing tier                    | Workers Paid or Enterprise      | Not available on free plan                   |
+| Request body size               | 100 MB max                      | When sending to external endpoints           |
+| Event retention                 | None                            | Events not retried if tail handler fails     |
 
 ## Workers for Platforms
 
@@ -163,13 +164,14 @@ For dynamic dispatch Workers, both dispatch and user Worker events sent to tail 
   "name": "dispatch-worker",
   "tail_consumers": [
     {
-      "service": "platform-tail-worker"
-    }
-  ]
+      "service": "platform-tail-worker",
+    },
+  ],
 }
 ```
 
 Tail Worker receives TWO `TraceItem` elements per request:
+
 1. Dynamic dispatch Worker event
 2. User Worker event
 

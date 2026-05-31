@@ -190,8 +190,7 @@ function generateResourceAliases(resources: InternalResourceDef[]): InternalReso
                 uri: aliasUri,
                 name: `${canonical.name} (alias)`,
                 // Delegate to canonical handler with the canonical URI
-                handler: (_uri, context) =>
-                    canonical.handler(canonicalUri, context),
+                handler: (_uri, context) => canonical.handler(canonicalUri, context),
             })
         }
     }

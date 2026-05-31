@@ -12,6 +12,7 @@ Auth: Authorization: Bearer <token>
 ## SDK Namespaces
 
 **Primary (recommended):**
+
 ```typescript
 client.networkInterconnects.interconnects.*
 client.networkInterconnects.cnis.*
@@ -19,6 +20,7 @@ client.networkInterconnects.slots.*
 ```
 
 **Alternate (deprecated):**
+
 ```typescript
 client.magicTransit.cfInterconnects.*
 ```
@@ -40,8 +42,20 @@ DELETE /accounts/{account_id}/cni/interconnects/{icon}
 **Status Values:** `active` | `healthy` | `unhealthy` | `pending` | `down`
 
 **Response Example:**
+
 ```json
-{"result": [{"id": "icon_abc", "name": "prod", "type": "direct", "facility": "EWR1", "speed": "10G", "status": "active"}]}
+{
+  "result": [
+    {
+      "id": "icon_abc",
+      "name": "prod",
+      "type": "direct",
+      "facility": "EWR1",
+      "speed": "10G",
+      "status": "active"
+    }
+  ]
+}
 ```
 
 ## CNI Objects (BGP config)
@@ -72,7 +86,7 @@ Configure via Magic Transit/WAN tunnel endpoints (CNI v2).
 ```typescript
 await client.magicTransit.tunnels.update(accountId, tunnelId, {
   health_check: { enabled: true, target: '192.0.2.1', rate: 'high', type: 'request' },
-});
+})
 ```
 
 Rates: `high` | `medium` | `low`. Types: `request` | `reply`. See [Magic Transit docs](https://developers.cloudflare.com/magic-transit/how-to/configure-tunnel-endpoints/#add-tunnels).
@@ -89,25 +103,28 @@ Body: `default_asn`
 ## TypeScript SDK
 
 ```typescript
-import Cloudflare from 'cloudflare';
+import Cloudflare from 'cloudflare'
 
-const client = new Cloudflare({ apiToken: process.env.CF_TOKEN });
+const client = new Cloudflare({ apiToken: process.env.CF_TOKEN })
 
 // List
-await client.networkInterconnects.interconnects.list({ account_id: id });
+await client.networkInterconnects.interconnects.list({ account_id: id })
 
 // Create with validation
-await client.networkInterconnects.interconnects.create({
-  account_id: id,
-  account: id,
-  slot_id: 'slot_abc',
-  type: 'direct',
-  facility: 'EWR1',
-  speed: '10G',
-  name: 'prod-interconnect',
-}, {
-  query: { validate_only: true }, // Dry-run validation
-});
+await client.networkInterconnects.interconnects.create(
+  {
+    account_id: id,
+    account: id,
+    slot_id: 'slot_abc',
+    type: 'direct',
+    facility: 'EWR1',
+    speed: '10G',
+    name: 'prod-interconnect',
+  },
+  {
+    query: { validate_only: true }, // Dry-run validation
+  }
+)
 
 // Create without validation
 await client.networkInterconnects.interconnects.create({
@@ -118,16 +135,19 @@ await client.networkInterconnects.interconnects.create({
   facility: 'EWR1',
   speed: '10G',
   name: 'prod-interconnect',
-});
+})
 
 // Status
-await client.networkInterconnects.interconnects.get(accountId, iconId);
+await client.networkInterconnects.interconnects.get(accountId, iconId)
 
 // LOA (use fetch)
-const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${id}/cni/interconnects/${iconId}/loa`, {
-  headers: { Authorization: `Bearer ${token}` },
-});
-await fs.writeFile('loa.pdf', Buffer.from(await res.arrayBuffer()));
+const res = await fetch(
+  `https://api.cloudflare.com/client/v4/accounts/${id}/cni/interconnects/${iconId}/loa`,
+  {
+    headers: { Authorization: `Bearer ${token}` },
+  }
+)
+await fs.writeFile('loa.pdf', Buffer.from(await res.arrayBuffer()))
 
 // CNI object
 await client.networkInterconnects.cnis.create({
@@ -137,7 +157,7 @@ await client.networkInterconnects.cnis.create({
   cf_ip: '192.0.2.0/31',
   bgp_asn: 65000,
   vlan: 100,
-});
+})
 
 // Slots (filter by facility and speed)
 await client.networkInterconnects.slots.list({
@@ -145,7 +165,7 @@ await client.networkInterconnects.slots.list({
   occupied: false,
   facility: 'EWR1',
   speed: '10G',
-});
+})
 ```
 
 ## Python SDK
@@ -185,6 +205,7 @@ curl "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/cni/interconne
 ## Not Available via API
 
 **Missing Capabilities:**
+
 - BGP session state query (use Dashboard or BGP logs)
 - Bandwidth utilization metrics (use external monitoring)
 - Traffic statistics per interconnect

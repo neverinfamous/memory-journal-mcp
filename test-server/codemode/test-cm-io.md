@@ -39,7 +39,8 @@ const tagExport = await mj.io.exportEntries({
 return {
   jsonHasEntries: Array.isArray(jsonExport.entries),
   jsonCount: jsonExport.entries?.length ?? 0,
-  jsonTruncatedFlag: typeof jsonExport.truncated === 'boolean' || jsonExport.truncated === undefined,
+  jsonTruncatedFlag:
+    typeof jsonExport.truncated === 'boolean' || jsonExport.truncated === undefined,
   mdHasContent: typeof mdExport.content === 'string',
   tagFiltered:
     tagExport.entries?.every(
@@ -48,12 +49,12 @@ return {
 }
 ```
 
-| Check            | Expected                                      |
-| ---------------- | --------------------------------------------- |
-| `jsonHasEntries` | `true`                                        |
-| `jsonTruncatedFlag`| `true`                                        |
-| `mdHasContent`   | `true`                                        |
-| `tagFiltered`    | `true` (only entries with "architecture" tag) |
+| Check               | Expected                                      |
+| ------------------- | --------------------------------------------- |
+| `jsonHasEntries`    | `true`                                        |
+| `jsonTruncatedFlag` | `true`                                        |
+| `mdHasContent`      | `true`                                        |
+| `tagFiltered`       | `true` (only entries with "architecture" tag) |
 
 ### 26.2 Markdown File Orchestration
 

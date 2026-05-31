@@ -9,14 +9,15 @@
 **Cause:** `message.raw` is `ReadableStream` - consume once only
 
 **Solution:**
+
 ```typescript
 // ❌ WRONG
-const email1 = await parser.parse(await message.raw.arrayBuffer());
-const email2 = await parser.parse(await message.raw.arrayBuffer()); // FAILS
+const email1 = await parser.parse(await message.raw.arrayBuffer())
+const email2 = await parser.parse(await message.raw.arrayBuffer()) // FAILS
 
 // ✅ CORRECT
-const raw = await message.raw.arrayBuffer();
-const email = await parser.parse(raw);
+const raw = await message.raw.arrayBuffer()
+const email = await parser.parse(raw)
 ```
 
 Consume `message.raw` immediately before any async operations.
@@ -36,6 +37,7 @@ Consume `message.raw` immediately before any async operations.
 **Cause:** Missing SPF/DKIM/DMARC on sender domain
 
 **Solution:** Configure sender DNS:
+
 ```dns
 example.com. IN TXT "v=spf1 include:_spf.example.com ~all"
 selector._domainkey.example.com. IN TXT "v=DKIM1; k=rsa; p=..."
@@ -47,22 +49,24 @@ _dmarc.example.com. IN TXT "v=DMARC1; p=quarantine"
 **Problem:** Filtering on wrong address
 
 **Solution:**
+
 ```typescript
 // Routing/auth: envelope
-if (message.from === "trusted@example.com") { }
+if (message.from === 'trusted@example.com') {
+}
 
 // Display: headers
-const display = message.headers.get("from");
+const display = message.headers.get('from')
 ```
 
 ### SendEmail Limits
 
-| Issue | Limit | Solution |
-|-------|-------|----------|
-| From domain | Must own | Use Email Routing domain |
-| Volume | ~100/min Free | Upgrade or throttle |
-| Attachments | Not supported | Link to R2 |
-| Type | Transactional | No bulk |
+| Issue       | Limit         | Solution                 |
+| ----------- | ------------- | ------------------------ |
+| From domain | Must own      | Use Email Routing domain |
+| Volume      | ~100/min Free | Upgrade or throttle      |
+| Attachments | Not supported | Link to R2               |
+| Type        | Transactional | No bulk                  |
 
 ## Common Errors
 
@@ -71,15 +75,16 @@ const display = message.headers.get("from");
 **Cause:** Heavy parsing, large emails
 
 **Solution:**
+
 ```typescript
-const size = parseInt(message.headers.get("content-length") || "0") / 1024 / 1024;
+const size = parseInt(message.headers.get('content-length') || '0') / 1024 / 1024
 if (size > 20) {
-  message.setReject("Too large");
-  return;
+  message.setReject('Too large')
+  return
 }
 
-ctx.waitUntil(expensiveWork());
-await message.forward("dest@example.com");
+ctx.waitUntil(expensiveWork())
+await message.forward('dest@example.com')
 ```
 
 ### Rule Not Triggering
@@ -93,23 +98,24 @@ await message.forward("dest@example.com");
 **Cause:** Missing header
 
 **Solution:**
+
 ```typescript
 // ❌ WRONG
-const subj = message.headers.get("subject").toLowerCase();
+const subj = message.headers.get('subject').toLowerCase()
 
 // ✅ CORRECT
-const subj = message.headers.get("subject")?.toLowerCase() || "";
+const subj = message.headers.get('subject')?.toLowerCase() || ''
 ```
 
 ## Limits
 
-| Resource | Free | Paid |
-|----------|------|------|
-| Email size | 25 MB | 25 MB |
-| Rules | 200 | 200 |
-| Destinations | 200 | 200 |
-| CPU time | 10ms | 50ms |
-| SendEmail | ~100/min | Higher |
+| Resource     | Free     | Paid   |
+| ------------ | -------- | ------ |
+| Email size   | 25 MB    | 25 MB  |
+| Rules        | 200      | 200    |
+| Destinations | 200      | 200    |
+| CPU time     | 10ms     | 50ms   |
+| SendEmail    | ~100/min | Higher |
 
 ## Debugging
 
@@ -139,14 +145,14 @@ npx wrangler tail
 export default {
   async email(message, env, ctx) {
     try {
-      console.log("From:", message.from);
-      await process(message, env);
+      console.log('From:', message.from)
+      await process(message, env)
     } catch (err) {
-      console.error(err);
-      message.setReject(err.message);
+      console.error(err)
+      message.setReject(err.message)
     }
-  }
-} satisfies ExportedHandler;
+  },
+} satisfies ExportedHandler
 ```
 
 ## Auth Troubleshooting
@@ -154,16 +160,16 @@ export default {
 ### Check Status
 
 ```typescript
-const auth = message.headers.get("authentication-results") || "";
+const auth = message.headers.get('authentication-results') || ''
 console.log({
-  spf: auth.includes("spf=pass"),
-  dkim: auth.includes("dkim=pass"),
-  dmarc: auth.includes("dmarc=pass")
-});
+  spf: auth.includes('spf=pass'),
+  dkim: auth.includes('dkim=pass'),
+  dmarc: auth.includes('dmarc=pass'),
+})
 
-if (!auth.includes("pass")) {
-  message.setReject("Failed auth");
-  return;
+if (!auth.includes('pass')) {
+  message.setReject('Failed auth')
+  return
 }
 ```
 
@@ -172,6 +178,7 @@ if (!auth.includes("pass")) {
 **Causes:** Forwarding breaks SPF, too many lookups (>10), missing includes
 
 **Solution:**
+
 ```dns
 ; ✅ Good
 example.com. IN TXT "v=spf1 include:_spf.google.com ~all"

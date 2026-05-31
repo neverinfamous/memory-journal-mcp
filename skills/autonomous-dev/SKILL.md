@@ -47,18 +47,23 @@ As the context window fills up, context anxiety can degrade performance.
 ## 6. Output Templates
 
 **Generator Plan Output:**
+
 ```markdown
 ### Feature Plan: [Feature Name]
+
 **Scope:** [In-Scope/Out-of-Scope based on PROJECT.md]
 **Constraints:** [Key constraints to respect]
 **Acceptance Criteria:**
+
 - [ ] Criterion 1
 - [ ] Criterion 2
 ```
 
 **Evaluator Review Output:**
+
 ```markdown
 ### Adversarial Review: [Feature Name]
+
 **Pass/Fail:** [Result]
 **Security Risks:** [Identified risks or "None"]
 **Edge Cases Missed:** [Edge cases]
@@ -67,8 +72,8 @@ As the context window fills up, context anxiety can degrade performance.
 
 ## Synergies
 
-| Skill/Workflow | Relationship |
-| --- | --- |
-| `github-commander` | Complementary — handles issue orchestration while this handles the dev lifecycle |
-| `adversarial-planner` | Can be used during the Planning phase of the Generator pipeline |
-| `adversarial-security` | Can be used during the Evaluator phase |
+| Skill/Workflow         | Relationship                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `github-commander`     | Complementary — handles issue orchestration while this handles the dev lifecycle |
+| `adversarial-planner`  | Can be used during the Planning phase of the Generator pipeline                  |
+| `adversarial-security` | Can be used during the Evaluator phase                                           |

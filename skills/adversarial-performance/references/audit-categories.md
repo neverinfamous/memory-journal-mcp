@@ -25,18 +25,16 @@ Agent B (Stress Tester) uses it to construct worst-case scenarios in Phase 2.
 ```typescript
 // Deep generic nesting — exponential type resolution
 type DeepPartial<T> = {
-  [K in keyof T]?: T[K] extends object
-    ? DeepPartial<T[K]>
-    : T[K];
-}; // Deeply nested usage causes slow compilation
+  [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K]
+} // Deeply nested usage causes slow compilation
 
 // Circular type references
-type A = { b: B };
-type B = { a: A }; // Compiler struggles with these
+type A = { b: B }
+type B = { a: A } // Compiler struggles with these
 
 // Barrel re-exports pulling in entire dependency graph
-export * from "./module-a";
-export * from "./module-b";
+export * from './module-a'
+export * from './module-b'
 // Forces tsc to resolve everything even if only one export is used
 ```
 
@@ -79,29 +77,35 @@ export { SpecificFunction } from "./module-b";
 
 ```typescript
 // Importing entire library when only one function is needed
-import _ from "lodash"; // Pulls in ~600KB
-_.get(obj, "path");
+import _ from 'lodash' // Pulls in ~600KB
+_.get(obj, 'path')
 
 // Dev dependency accidentally in production bundle
-import { faker } from "@faker-js/faker"; // 3MB+ test utility
+import { faker } from '@faker-js/faker' // 3MB+ test utility
 
 // Source maps shipped to production
 // tsup.config.ts
-{ sourcemap: true } // Fine for dev, costly for production
+{
+  sourcemap: true
+} // Fine for dev, costly for production
 ```
 
 ### Optimization Patterns
 
 ```typescript
 // Targeted imports
-import get from "lodash/get"; // ~1KB vs 600KB
+import get from 'lodash/get' // ~1KB vs 600KB
 
 // External dependencies (not bundled)
 // tsup.config.ts
-{ external: ["better-sqlite3", "sql.js"] }
+{
+  external: ['better-sqlite3', 'sql.js']
+}
 
 // Source maps only in dev
-{ sourcemap: process.env.NODE_ENV !== "production" }
+{
+  sourcemap: process.env.NODE_ENV !== 'production'
+}
 ```
 
 ### Depth: Intensive
@@ -185,32 +189,32 @@ cause runtime performance issues without running a profiler.
 ```typescript
 // Object allocation in hot loop
 for (const row of rows) {
-  const result = { ...defaults, ...row }; // New object every iteration
-  results.push(result);
+  const result = { ...defaults, ...row } // New object every iteration
+  results.push(result)
 }
 
 // Serial await where parallel is safe
-const a = await fetchA();
-const b = await fetchB(); // b doesn't depend on a — should be parallel
+const a = await fetchA()
+const b = await fetchB() // b doesn't depend on a — should be parallel
 
 // Sync file I/O in request handler
-app.get("/config", (req, res) => {
-  const config = fs.readFileSync("config.json"); // Blocks event loop
-  res.json(JSON.parse(config));
-});
+app.get('/config', (req, res) => {
+  const config = fs.readFileSync('config.json') // Blocks event loop
+  res.json(JSON.parse(config))
+})
 
 // Missing early return
 function processItem(item) {
-  const expensive = computeExpensiveThing(item); // Done before validation
-  if (!item.isValid) return null; // Wasted computation
-  return expensive;
+  const expensive = computeExpensiveThing(item) // Done before validation
+  if (!item.isValid) return null // Wasted computation
+  return expensive
 }
 
 // Memory leak — growing Map without eviction
-const cache = new Map();
+const cache = new Map()
 function getUser(id) {
-  if (!cache.has(id)) cache.set(id, fetchUser(id)); // Never evicts
-  return cache.get(id);
+  if (!cache.has(id)) cache.set(id, fetchUser(id)) // Never evicts
+  return cache.get(id)
 }
 ```
 
@@ -218,31 +222,31 @@ function getUser(id) {
 
 ```typescript
 // Reuse object shape
-const result = Object.create(null);
+const result = Object.create(null)
 for (const row of rows) {
-  Object.assign(result, defaults, row);
-  results.push({ ...result });
+  Object.assign(result, defaults, row)
+  results.push({ ...result })
 }
 
 // Parallel await
-const [a, b] = await Promise.all([fetchA(), fetchB()]);
+const [a, b] = await Promise.all([fetchA(), fetchB()])
 
 // Async file I/O with caching
-let configCache;
-app.get("/config", async (req, res) => {
-  configCache ??= await fs.readFile("config.json", "utf8");
-  res.json(JSON.parse(configCache));
-});
+let configCache
+app.get('/config', async (req, res) => {
+  configCache ??= await fs.readFile('config.json', 'utf8')
+  res.json(JSON.parse(configCache))
+})
 
 // Early return before expensive work
 function processItem(item) {
-  if (!item.isValid) return null;
-  return computeExpensiveThing(item);
+  if (!item.isValid) return null
+  return computeExpensiveThing(item)
 }
 
 // LRU cache with eviction
-import { LRUCache } from "lru-cache";
-const cache = new LRUCache({ max: 1000, ttl: 60_000 });
+import { LRUCache } from 'lru-cache'
+const cache = new LRUCache({ max: 1000, ttl: 60_000 })
 ```
 
 ### Depth: Intensive
@@ -287,16 +291,20 @@ beforeEach(async () => {
 
 ```typescript
 // Mock external I/O
-vi.mock("node:fetch", () => ({ default: vi.fn() }));
+vi.mock('node:fetch', () => ({ default: vi.fn() }))
 
 // Minimal setup — seed only what the test needs
 beforeEach(async () => {
-  await seedSingleTable("users", [testUser]);
-});
+  await seedSingleTable('users', [testUser])
+})
 
 // Parallel execution
 // vitest.config.ts
-{ test: { pool: "threads" } }
+{
+  test: {
+    pool: 'threads'
+  }
+}
 ```
 
 ### Applicability
@@ -323,35 +331,35 @@ If the project has no test suite, report this category as N/A.
 
 ```typescript
 // N+1 query
-const users = await db.query("SELECT * FROM users");
+const users = await db.query('SELECT * FROM users')
 for (const user of users) {
-  const orders = await db.query(`SELECT * FROM orders WHERE user_id = ?`, [user.id]);
+  const orders = await db.query(`SELECT * FROM orders WHERE user_id = ?`, [user.id])
   // Each iteration is a new query
 }
 
 // Unbounded query
-const allRows = await db.query("SELECT * FROM large_table"); // No LIMIT
+const allRows = await db.query('SELECT * FROM large_table') // No LIMIT
 
 // Unnecessary deep clone
-const copy = JSON.parse(JSON.stringify(largeObject)); // Expensive!
+const copy = JSON.parse(JSON.stringify(largeObject)) // Expensive!
 ```
 
 ### Optimization Patterns
 
 ```typescript
 // Batch query
-const users = await db.query("SELECT * FROM users");
-const userIds = users.map(u => u.id);
+const users = await db.query('SELECT * FROM users')
+const userIds = users.map((u) => u.id)
 const orders = await db.query(
-  `SELECT * FROM orders WHERE user_id IN (${userIds.map(() => "?").join(",")})`,
+  `SELECT * FROM orders WHERE user_id IN (${userIds.map(() => '?').join(',')})`,
   userIds
-);
+)
 
 // Bounded query with pagination
-const rows = await db.query("SELECT * FROM large_table LIMIT ? OFFSET ?", [100, offset]);
+const rows = await db.query('SELECT * FROM large_table LIMIT ? OFFSET ?', [100, offset])
 
 // Structured clone (faster than JSON roundtrip)
-const copy = structuredClone(largeObject);
+const copy = structuredClone(largeObject)
 ```
 
 ### Applicability
@@ -368,12 +376,12 @@ network calls.
 
 This category applies to **all project types** with graceful degradation:
 
-| Project Profile | Depth | Rationale |
-| --- | --- | --- |
-| `mcp-server` | Full | Primary target — all checks apply |
-| `web-app` | Informational | Check API response verbosity |
-| `cli-tool` | Informational | Check output verbosity, help text size |
-| `library` | Informational | Check type export complexity |
+| Project Profile | Depth         | Rationale                              |
+| --------------- | ------------- | -------------------------------------- |
+| `mcp-server`    | Full          | Primary target — all checks apply      |
+| `web-app`       | Informational | Check API response verbosity           |
+| `cli-tool`      | Informational | Check output verbosity, help text size |
+| `library`       | Informational | Check type export complexity           |
 
 ### What to Look For
 
@@ -398,13 +406,13 @@ return {
   data: entireTable, // Could be thousands of rows
   metadata: fullSchemaInfo, // Not requested
   stats: computedStats, // Not requested
-};
+}
 
 // Huge instructions field — pushed on every connection
-const INSTRUCTIONS = `Full 10-page documentation here...`; // 5KB+
+const INSTRUCTIONS = `Full 10-page documentation here...` // 5KB+
 
 // 170 tools, no filtering
-server.registerAllTools(); // Client receives all 170 tool schemas
+server.registerAllTools() // Client receives all 170 tool schemas
 ```
 
 ### Optimization Patterns
@@ -416,10 +424,10 @@ return {
   rows: data.slice(0, limit),
   totalCount: data.length,
   truncated: data.length > limit,
-};
+}
 
 // Slim instructions + pull-based help resources
-const INSTRUCTIONS = "Use sqlite://help for documentation."; // ~50 chars
+const INSTRUCTIONS = 'Use sqlite://help for documentation.' // ~50 chars
 
 // Tool filtering
 // --tool-filter "core,json,codemode"  → 47 tools instead of 170
@@ -445,10 +453,10 @@ When the target is an MCP server, specifically verify:
 Quick lookup for which categories matter most by project profile:
 
 | Project Profile | Primary Categories | Secondary |
-| --- | --- | --- |
-| MCP Server | 4, 6, 7 | 1, 3 |
-| Web App | 1, 2, 4 | 3, 5 |
-| CLI Tool | 1, 3, 4 | 5 |
-| Library | 1, 2, 3 | 4 |
-| Data-heavy | 4, 6 | 1, 3, 5 |
-| Test-heavy | 5, 4 | 1 |
+| --------------- | ------------------ | --------- |
+| MCP Server      | 4, 6, 7            | 1, 3      |
+| Web App         | 1, 2, 4            | 3, 5      |
+| CLI Tool        | 1, 3, 4            | 5         |
+| Library         | 1, 2, 3            | 4         |
+| Data-heavy      | 4, 6               | 1, 3, 5   |
+| Test-heavy      | 5, 4               | 1         |

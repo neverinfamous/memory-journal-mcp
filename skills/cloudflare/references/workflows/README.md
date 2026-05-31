@@ -22,23 +22,24 @@ Durable multi-step applications with automatic retries, state persistence, and l
 ## Quick Start
 
 ```typescript
-import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers';
+import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers'
 
-type Env = { MY_WORKFLOW: Workflow; DB: D1Database };
-type Params = { userId: string };
+type Env = { MY_WORKFLOW: Workflow; DB: D1Database }
+type Params = { userId: string }
 
 export class MyWorkflow extends WorkflowEntrypoint<Env, Params> {
   async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
     const user = await step.do('fetch user', async () => {
       return await this.env.DB.prepare('SELECT * FROM users WHERE id = ?')
-        .bind(event.payload.userId).first();
-    });
-    
-    await step.sleep('wait 7 days', '7 days');
-    
+        .bind(event.payload.userId)
+        .first()
+    })
+
+    await step.sleep('wait 7 days', '7 days')
+
     await step.do('send reminder', async () => {
-      await sendEmail(user.email, 'Reminder!');
-    });
+      await sendEmail(user.email, 'Reminder!')
+    })
   }
 }
 ```
@@ -58,12 +59,14 @@ export class MyWorkflow extends WorkflowEntrypoint<Env, Params> {
 **Troubleshooting:** gotchas.md
 
 ## In This Reference
+
 - [configuration.md](./configuration.md) - wrangler.jsonc setup, step config, bindings
 - [api.md](./api.md) - Step APIs, instance management, sleep/parameters
 - [patterns.md](./patterns.md) - Common workflows, testing, orchestration
 - [gotchas.md](./gotchas.md) - Timeouts, limits, debugging strategies
 
 ## See Also
+
 - [durable-objects](../durable-objects/) - Alternative stateful approach
 - [queues](../queues/) - Message-driven workflows
 - [workers](../workers/) - Entry point for workflow instances

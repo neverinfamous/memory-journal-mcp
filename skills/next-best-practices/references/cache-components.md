@@ -40,7 +40,7 @@ Synchronous code, imports, pure computations - prerendered at build time:
 export default function Page() {
   return (
     <header>
-      <h1>Our Blog</h1>  {/* Static - instant */}
+      <h1>Our Blog</h1> {/* Static - instant */}
       <nav>...</nav>
     </header>
   )
@@ -71,10 +71,9 @@ import { Suspense } from 'react'
 export default function Page() {
   return (
     <>
-      <BlogPosts />  {/* Cached */}
-
+      <BlogPosts /> {/* Cached */}
       <Suspense fallback={<p>Loading...</p>}>
-        <UserPreferences />  {/* Dynamic - streams in */}
+        <UserPreferences /> {/* Dynamic - streams in */}
       </Suspense>
     </>
   )
@@ -92,12 +91,12 @@ async function UserPreferences() {
 
 When designing a component, use this matrix to determine the correct caching strategy:
 
-| Data Type | Frequency of Change | Strategy | Implementation |
-|---|---|---|---|
-| Marketing copy, Layouts, Nav | Build-time or rarely | **Static** | Default Server Component |
-| Blog posts, Product catalog | Periodic / CMS-driven | **Cached** | `'use cache'` + `cacheLife` |
-| User profile, Shopping cart | Per-user / Real-time | **Dynamic** | Suspense + `await cookies()` |
-| Admin dashboard, Analytics | High-frequency / Secure | **Dynamic** | Suspense + `await headers()` |
+| Data Type                    | Frequency of Change     | Strategy    | Implementation               |
+| ---------------------------- | ----------------------- | ----------- | ---------------------------- |
+| Marketing copy, Layouts, Nav | Build-time or rarely    | **Static**  | Default Server Component     |
+| Blog posts, Product catalog  | Periodic / CMS-driven   | **Cached**  | `'use cache'` + `cacheLife`  |
+| User profile, Shopping cart  | Per-user / Real-time    | **Dynamic** | Suspense + `await cookies()` |
+| Admin dashboard, Analytics   | High-frequency / Secure | **Dynamic** | Suspense + `await headers()` |
 
 ---
 
@@ -141,15 +140,15 @@ export async function getData() {
 ### Built-in Profiles
 
 ```tsx
-'use cache'                    // Default: 5m stale, 15m revalidate
+'use cache' // Default: 5m stale, 15m revalidate
 ```
 
 ```tsx
-'use cache: remote'           // Platform-provided cache (Redis, KV)
+'use cache: remote' // Platform-provided cache (Redis, KV)
 ```
 
 ```tsx
-'use cache: private'          // For compliance, allows runtime APIs
+'use cache: private' // For compliance, allows runtime APIs
 ```
 
 ### `cacheLife()` - Custom Lifetime
@@ -159,7 +158,7 @@ import { cacheLife } from 'next/cache'
 
 async function getData() {
   'use cache'
-  cacheLife('hours')  // Built-in profile
+  cacheLife('hours') // Built-in profile
   return fetch('/api/data')
 }
 ```
@@ -172,9 +171,9 @@ Built-in profiles: `'default'`, `'minutes'`, `'hours'`, `'days'`, `'weeks'`, `'m
 async function getData() {
   'use cache'
   cacheLife({
-    stale: 3600,      // 1 hour - serve stale while revalidating
+    stale: 3600, // 1 hour - serve stale while revalidating
     revalidate: 7200, // 2 hours - background revalidation interval
-    expire: 86400,    // 1 day - hard expiration
+    expire: 86400, // 1 day - hard expiration
   })
   return fetch('/api/data')
 }
@@ -198,13 +197,14 @@ For request-time randomness outside cache:
 import { connection } from 'next/server'
 
 async function DynamicContent() {
-  await connection()  // Defer to request time
-  const id = crypto.randomUUID()  // Different per request
+  await connection() // Defer to request time
+  const id = crypto.randomUUID() // Different per request
   return <div>{id}</div>
 }
 ```
 
 Sources:
+
 - [Cache Components Guide](https://nextjs.org/docs/app/getting-started/cache-components)
 - [use cache Directive](https://nextjs.org/docs/app/api-reference/directives/use-cache)
 - [unstable_cache (legacy)](https://nextjs.org/docs/app/api-reference/functions/unstable_cache)

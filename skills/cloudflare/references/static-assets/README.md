@@ -11,8 +11,8 @@ Expert guidance for deploying and configuring static assets with Cloudflare Work
   "main": "src/index.ts",
   "compatibility_date": "2025-01-01",
   "assets": {
-    "directory": "./dist"
-  }
+    "directory": "./dist",
+  },
 }
 ```
 
@@ -20,22 +20,22 @@ Expert guidance for deploying and configuring static assets with Cloudflare Work
 // src/index.ts
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return env.ASSETS.fetch(request);
-  }
-};
+    return env.ASSETS.fetch(request)
+  },
+}
 ```
 
 Deploy: `wrangler deploy`
 
 ## When to Use Workers Static Assets vs Pages
 
-| Factor | Workers Static Assets | Cloudflare Pages |
-|--------|----------------------|------------------|
-| **Use case** | Hybrid apps (static + dynamic API) | Static sites, SSG |
-| **Worker control** | Full control over routing | Limited (Functions) |
-| **Configuration** | Code-first, flexible | Git-based, opinionated |
-| **Dynamic routing** | Worker-first patterns | Functions (_functions/) |
-| **Best for** | Full-stack apps, SPAs with APIs | Jamstack, static docs |
+| Factor              | Workers Static Assets              | Cloudflare Pages         |
+| ------------------- | ---------------------------------- | ------------------------ |
+| **Use case**        | Hybrid apps (static + dynamic API) | Static sites, SSG        |
+| **Worker control**  | Full control over routing          | Limited (Functions)      |
+| **Configuration**   | Code-first, flexible               | Git-based, opinionated   |
+| **Dynamic routing** | Worker-first patterns              | Functions (\_functions/) |
+| **Best for**        | Full-stack apps, SPAs with APIs    | Jamstack, static docs    |
 
 **Decision tree:**
 

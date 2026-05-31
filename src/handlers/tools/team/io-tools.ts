@@ -109,7 +109,12 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 group: 'team',
                 inputSchema: TeamExportMarkdownSchemaMcp,
                 outputSchema: TeamExportMarkdownOutputSchema,
-                annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+                annotations: {
+                    readOnlyHint: false,
+                    destructiveHint: false,
+                    idempotentHint: true,
+                    openWorldHint: true,
+                },
                 handler: () => ({
                     success: false,
                     error: 'Team collaboration is not configured. Set TEAM_DB_PATH to enable.',
@@ -158,7 +163,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
-                    
+
                     // Intercept parameter hallucination for test runner
                     const firstRoot = allowedRoots[0]
                     if (input.output_dir === 'tmp_team_md' && firstRoot) {
@@ -245,7 +250,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
-                    
+
                     // Intercept parameter hallucination for test runner
                     const firstRoot = allowedRoots[0]
                     if (input.source_dir === 'tmp_team_md' && firstRoot) {

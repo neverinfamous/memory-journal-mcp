@@ -94,7 +94,8 @@ function buildApiProxy(
                     return wrapResult(result)
                 }
                 Object.assign(proxyFn, {
-                    schema: (): Promise<string> => Promise.resolve(schemas?.['_topLevel']?.[methodName] ?? 'any')
+                    schema: (): Promise<string> =>
+                        Promise.resolve(schemas?.['_topLevel']?.[methodName] ?? 'any'),
                 })
                 api[methodName] = proxyFn
             }
@@ -109,7 +110,8 @@ function buildApiProxy(
                 return wrapResult(result)
             }
             Object.assign(proxyFn, {
-                schema: (): Promise<string> => Promise.resolve(schemas?.[group]?.[methodName] ?? 'any')
+                schema: (): Promise<string> =>
+                    Promise.resolve(schemas?.[group]?.[methodName] ?? 'any'),
             })
             groupProxy[methodName] = proxyFn
         }
@@ -130,9 +132,11 @@ function buildApiProxy(
                 const reason = readonlyMode
                     ? `Operation '${key}' is blocked in readonly mode. Read operations only.`
                     : methodNames.length === 0
-                        ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
-                        : `Operation '${key}' is not found in group. Available: ${available}.`
-                return (..._args: unknown[]) => { throw new Error(reason) }
+                      ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
+                      : `Operation '${key}' is not found in group. Available: ${available}.`
+                return (..._args: unknown[]) => {
+                    throw new Error(reason)
+                }
             },
         })
 
@@ -140,7 +144,9 @@ function buildApiProxy(
     }
 
     api['help'] = () => {
-        const groups = Object.keys(methods).filter((g) => g !== '_topLevel' && g !== 'memory' && g !== 'entries')
+        const groups = Object.keys(methods).filter(
+            (g) => g !== '_topLevel' && g !== 'memory' && g !== 'entries'
+        )
         let totalMethods = 0
         for (const group of groups) {
             totalMethods += methods[group]?.length ?? 0
@@ -158,23 +164,32 @@ function buildApiProxy(
             if (prop in target) return target[prop]
             if (prop === 'then') return undefined
 
-            const available = Object.keys(methods).filter(k => k !== '_topLevel').join(', ')
+            const available = Object.keys(methods)
+                .filter((k) => k !== '_topLevel')
+                .join(', ')
             const reason = `Group or property '${prop}' is not found on 'mj'. Available groups: ${available}. Use mj.help() for more info.`
 
             // Return a proxy that rejects any method call
-            return new Proxy(() => {
-                // no-op function target for the proxy
-            }, {
-                apply() {
-                    throw new Error(reason)
+            return new Proxy(
+                () => {
+                    // no-op function target for the proxy
                 },
-                get(_t, subProp) {
-                    if (typeof subProp === 'symbol') return undefined
-                    if (subProp === 'then') return undefined
-                    return (..._args: unknown[]) => { throw new Error(`${reason} (Attempted to access 'mj.${prop}.${subProp}')`) }
+                {
+                    apply() {
+                        throw new Error(reason)
+                    },
+                    get(_t, subProp) {
+                        if (typeof subProp === 'symbol') return undefined
+                        if (subProp === 'then') return undefined
+                        return (..._args: unknown[]) => {
+                            throw new Error(
+                                `${reason} (Attempted to access 'mj.${prop}.${subProp}')`
+                            )
+                        }
+                    },
                 }
-            })
-        }
+            )
+        },
     })
 }
 
@@ -200,39 +215,60 @@ async function executeCode(
         const shimMj: Record<string, unknown> = new Proxy(mjApi, {
             get(target: Record<string, unknown>, prop: string | symbol): unknown {
                 // Handle infinite chaining
-                if (prop === 'mj' || prop === 'journal' || prop === 'memory') return shimMj;
+                if (prop === 'mj' || prop === 'journal' || prop === 'memory') return shimMj
                 // Handle `sqlite.mj.executeCode` (from db-mcp parity)
                 if (prop === 'executeCode') {
                     if ('codemode' in target) {
-                        const codemodeGroup = target['codemode'] as Record<string, unknown>;
-                        return codemodeGroup['mjExecuteCode'] ?? codemodeGroup['executeCode'];
+                        const codemodeGroup = target['codemode'] as Record<string, unknown>
+                        return codemodeGroup['mjExecuteCode'] ?? codemodeGroup['executeCode']
                     }
-                    return () => Promise.reject(new Error("You are already inside Code Mode execution. You do not need to call executeCode again. Just write your logic directly (e.g., return await mj.core.createEntry(...))."));
+                    return () =>
+                        Promise.reject(
+                            new Error(
+                                'You are already inside Code Mode execution. You do not need to call executeCode again. Just write your logic directly (e.g., return await mj.core.createEntry(...)).'
+                            )
+                        )
                 }
                 // Handle mj.readResource hallucination
                 if (prop === 'readResource') {
-                    return () => Promise.reject(new Error("Code Mode cannot directly read MCP resources using mj.readResource(). Please use the appropriate mj.* tools (e.g., mj.team.teamListFlags) to query data, or read the resource via standard MCP resource requests outside of Code Mode."));
+                    return () =>
+                        Promise.reject(
+                            new Error(
+                                'Code Mode cannot directly read MCP resources using mj.readResource(). Please use the appropriate mj.* tools (e.g., mj.team.teamListFlags) to query data, or read the resource via standard MCP resource requests outside of Code Mode.'
+                            )
+                        )
                 }
                 // Handle `memory.journal.addEntry` natural hallucination
                 if (prop === 'addEntry' && 'core' in target) {
-                    const coreGroup = target['core'] as Record<string, unknown>;
-                    return coreGroup['createEntry'];
+                    const coreGroup = target['core'] as Record<string, unknown>
+                    return coreGroup['createEntry']
                 }
                 // Handle `memory.append(tags, content, metadata)` natural hallucination
                 if (prop === 'append' && 'core' in target) {
-                    const coreGroup = target['core'] as Record<string, unknown>;
-                    const createEntry = coreGroup['createEntry'] as (args: unknown) => unknown;
+                    const coreGroup = target['core'] as Record<string, unknown>
+                    const createEntry = coreGroup['createEntry'] as (args: unknown) => unknown
                     return (arg1: unknown, arg2: unknown, arg3: unknown) => {
-                        const tags = Array.isArray(arg1) ? arg1 : [typeof arg1 === 'string' ? arg1 : 'test'];
-                        const content = typeof arg2 === 'string' ? arg2 : (arg2 != null ? JSON.stringify(arg2) : '');
-                        const metadata = typeof arg3 === 'object' && arg3 !== null ? { ...(arg3 as Record<string, unknown>) } : undefined;
-                        
-                        const typeVal = metadata?.['type'];
-                        const type = typeof typeVal === 'string' && typeVal !== '' ? typeVal : 'test_entry';
-                        if (metadata && 'type' in metadata) delete metadata['type'];
+                        const tags = Array.isArray(arg1)
+                            ? arg1
+                            : [typeof arg1 === 'string' ? arg1 : 'test']
+                        const content =
+                            typeof arg2 === 'string'
+                                ? arg2
+                                : arg2 != null
+                                  ? JSON.stringify(arg2)
+                                  : ''
+                        const metadata =
+                            typeof arg3 === 'object' && arg3 !== null
+                                ? { ...(arg3 as Record<string, unknown>) }
+                                : undefined
 
-                        return createEntry({ type, tags, content, metadata });
-                    };
+                        const typeVal = metadata?.['type']
+                        const type =
+                            typeof typeVal === 'string' && typeVal !== '' ? typeVal : 'test_entry'
+                        if (metadata && 'type' in metadata) delete metadata['type']
+
+                        return createEntry({ type, tags, content, metadata })
+                    }
                 }
                 // db-mcp bleedover: silently route database-specific methods to closest journal equivalents
                 if (typeof prop === 'string') {
@@ -247,19 +283,19 @@ async function executeCode(
                         upsert: ['core', 'createEntry'],
                         batchInsert: ['core', 'createEntry'],
                         readQuery: ['search', 'searchEntries'],
-                    };
-                    const mapping = DB_TO_JOURNAL[prop];
+                    }
+                    const mapping = DB_TO_JOURNAL[prop]
                     if (mapping !== undefined) {
-                        const [group, method] = mapping;
+                        const [group, method] = mapping
                         if (group in target) {
-                            return (target[group] as Record<string, unknown>)[method];
+                            return (target[group] as Record<string, unknown>)[method]
                         }
                     }
                 }
                 // Fall back to the strict `mjApi` proxy which provides exact error messages
-                return Reflect.get(target, prop) as unknown;
-            }
-        });
+                return Reflect.get(target, prop) as unknown
+            },
+        })
 
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
@@ -338,7 +374,7 @@ async function executeCode(
                 try { Object.freeze(Object.prototype); } catch(e) {}
                 try { Object.freeze(Function.prototype); } catch(e) {}
             })()`,
-            context,
+            context
         )
 
         const wrappedCode = `(async () => { ${transformAutoReturn(code)} })()`
@@ -365,12 +401,16 @@ async function executeCode(
         const endTime = performance.now()
         const endCpu = process.cpuUsage(startCpu)
         const error = err instanceof Error ? err : new Error(String(err))
-        
+
         // Add tip for syntax errors
-        if (error instanceof SyntaxError && error.message.includes('missing ) after argument list')) {
-            error.message += '\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes, use template literals (backticks `) instead of single/double quotes to avoid escaping SyntaxErrors.'
+        if (
+            error instanceof SyntaxError &&
+            error.message.includes('missing ) after argument list')
+        ) {
+            error.message +=
+                '\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes, use template literals (backticks `) instead of single/double quotes to avoid escaping SyntaxErrors.'
         }
-        
+
         return {
             success: false,
             error: error.message,
@@ -436,7 +476,14 @@ parentPort?.on('message', (msg: unknown) => {
                 }
             })
 
-            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode)
+            const result = await executeCode(
+                code,
+                methodList,
+                schemaList,
+                timeoutMs ?? 30000,
+                contextObj,
+                readonlyMode
+            )
 
             if (result.success) {
                 try {

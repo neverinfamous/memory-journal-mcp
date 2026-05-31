@@ -5,6 +5,7 @@
 Durable Objects use **input/output gates** to prevent race conditions:
 
 ### Input Gates
+
 Block new requests during storage reads from CURRENT request:
 
 ```typescript
@@ -17,6 +18,7 @@ async increment() {
 ```
 
 ### Output Gates
+
 Hold response until ALL writes from current request confirm:
 
 ```typescript
@@ -29,13 +31,14 @@ async increment() {
 ```
 
 ### Write Coalescing
+
 Multiple writes to same key = atomic (last write wins):
 
 ```typescript
 // SAFE: All three writes coalesce atomically
-this.ctx.storage.put("key", 1);
-this.ctx.storage.put("key", 2);
-this.ctx.storage.put("key", 3); // Final value: 3
+this.ctx.storage.put('key', 1)
+this.ctx.storage.put('key', 2)
+this.ctx.storage.put('key', 3) // Final value: 3
 ```
 
 ### Breaking Gates (DANGER)
@@ -71,7 +74,7 @@ Opt out of input gate for reads that don't need protection:
 
 ```typescript
 // Allow concurrent reads (no consistency guarantee)
-const val = await this.ctx.storage.get("metrics", { allowConcurrency: true });
+const val = await this.ctx.storage.get('metrics', { allowConcurrency: true })
 ```
 
 ## Common Errors
@@ -104,12 +107,12 @@ const val = await this.ctx.storage.get("metrics", { allowConcurrency: true });
 
 ```typescript
 // BAD: Snowflake/Twitter IDs will corrupt
-this.sql.exec("CREATE TABLE events(id INTEGER PRIMARY KEY)");
-this.sql.exec("INSERT INTO events VALUES (?)", 1234567890123456789n); // Corrupts!
+this.sql.exec('CREATE TABLE events(id INTEGER PRIMARY KEY)')
+this.sql.exec('INSERT INTO events VALUES (?)', 1234567890123456789n) // Corrupts!
 
 // GOOD: Store as TEXT
-this.sql.exec("CREATE TABLE events(id TEXT PRIMARY KEY)");
-this.sql.exec("INSERT INTO events VALUES (?)", "1234567890123456789");
+this.sql.exec('CREATE TABLE events(id TEXT PRIMARY KEY)')
+this.sql.exec('INSERT INTO events VALUES (?)', '1234567890123456789')
 ```
 
 ### "Alarm Not Deleted with deleteAll()"
@@ -134,17 +137,17 @@ this.sql.exec("INSERT INTO events VALUES (?)", "1234567890123456789");
 
 ## Limits
 
-| Limit | Value | Notes |
-|-------|-------|-------|
-| Max columns per table | 100 | SQL limitation |
-| Max string/BLOB per row | 2 MB | SQL limitation |
-| Max row size | 2 MB | SQL limitation |
-| Max SQL statement size | 100 KB | SQL limitation |
-| Max SQL parameters | 100 | SQL limitation |
-| Max LIKE/GLOB pattern | 50 B | SQL limitation |
-| SQLite storage per object | 10 GB | SQLite-backed storage |
-| SQLite key+value size | 2 MB | SQLite-backed storage |
-| KV storage per object | Unlimited | KV-style storage |
-| KV key size | 2 KiB | KV-style storage |
-| KV value size | 128 KiB | KV-style storage |
-| Request throughput | ~1K req/sec | Soft limit per DO |
+| Limit                     | Value       | Notes                 |
+| ------------------------- | ----------- | --------------------- |
+| Max columns per table     | 100         | SQL limitation        |
+| Max string/BLOB per row   | 2 MB        | SQL limitation        |
+| Max row size              | 2 MB        | SQL limitation        |
+| Max SQL statement size    | 100 KB      | SQL limitation        |
+| Max SQL parameters        | 100         | SQL limitation        |
+| Max LIKE/GLOB pattern     | 50 B        | SQL limitation        |
+| SQLite storage per object | 10 GB       | SQLite-backed storage |
+| SQLite key+value size     | 2 MB        | SQLite-backed storage |
+| KV storage per object     | Unlimited   | KV-style storage      |
+| KV key size               | 2 KiB       | KV-style storage      |
+| KV value size             | 128 KiB     | KV-style storage      |
+| Request throughput        | ~1K req/sec | Soft limit per DO     |

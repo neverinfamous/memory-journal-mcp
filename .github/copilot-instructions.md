@@ -112,12 +112,12 @@ src/
 
 ## Key Reference Files
 
-| File                                       | Purpose                                               |
-| ------------------------------------------ | ----------------------------------------------------- |
-| `src/constants/server-instructions/*.md`   | Modular instruction sources (overview, github, etc.) |
-| `test-server/code-map.md`                  | File → tool/handler mapping                           |
-| `test-server/tool-reference.md`            | Categorized 73-tool inventory                         |
-| `CONTRIBUTING.md`                          | Development setup and PR guidelines                   |
+| File                                     | Purpose                                              |
+| ---------------------------------------- | ---------------------------------------------------- |
+| `src/constants/server-instructions/*.md` | Modular instruction sources (overview, github, etc.) |
+| `test-server/code-map.md`                | File → tool/handler mapping                          |
+| `test-server/tool-reference.md`          | Categorized 73-tool inventory                        |
+| `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
 
 ## Review Checklist
 

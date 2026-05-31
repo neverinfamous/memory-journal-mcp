@@ -32,7 +32,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamSearchSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -124,7 +129,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamSearchByDateRangeSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {

@@ -61,9 +61,9 @@ Full templates for project configuration files. Read on demand when setting up a
 ESLint 10 with strict type-checking for source + relaxed config for test files. The `no-console` rule is critical for MCP servers — `console.log()` writes to stdout and corrupts stdio transport.
 
 ```javascript
-import js from '@eslint/js';
-import globals from 'globals';
-import tseslint from 'typescript-eslint';
+import js from '@eslint/js'
+import globals from 'globals'
+import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'coverage'] },
@@ -99,10 +99,7 @@ export default tseslint.config(
           allowConciseArrowFunctionExpressionsStartingWithVoid: true,
         },
       ],
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/strict-boolean-expressions': [
         'error',
@@ -187,10 +184,7 @@ export default tseslint.config(
     },
     rules: {
       // Core quality rules that should apply to tests
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       // Relax type-safety rules for test patterns (mocks, any casts, assertions)
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -199,8 +193,8 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
     },
-  },
-);
+  }
+)
 ```
 
 ---
@@ -208,7 +202,7 @@ export default tseslint.config(
 ## tsup.config.ts
 
 ```typescript
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: ['src/index.ts'],
@@ -218,7 +212,7 @@ export default defineConfig({
   sourcemap: true,
   target: 'node24',
   outDir: 'dist',
-});
+})
 ```
 
 > **Note**: Add additional entry points as needed (e.g., `src/cli.ts` for CLI binaries).
@@ -228,7 +222,7 @@ export default defineConfig({
 ## vitest.config.ts
 
 ```typescript
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
@@ -238,7 +232,7 @@ export default defineConfig({
     testTimeout: 10000,
     hookTimeout: 10000,
   },
-});
+})
 ```
 
 ---

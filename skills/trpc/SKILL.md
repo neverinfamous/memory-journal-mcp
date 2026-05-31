@@ -15,21 +15,19 @@ tRPC enables end-to-end typesafe APIs without code generation or GraphQL schemas
 - **Modularity**: Break large routers into sub-routers (e.g., `userRouter`, `postRouter`) and merge them into an `appRouter`.
 
 ```typescript
-import { z } from 'zod';
-import { publicProcedure, router } from './trpc';
+import { z } from 'zod'
+import { publicProcedure, router } from './trpc'
 
 export const userRouter = router({
-  getUser: publicProcedure
-    .input(z.string())
-    .query(async ({ input, ctx }) => {
-      return ctx.db.user.findById(input);
-    }),
+  getUser: publicProcedure.input(z.string()).query(async ({ input, ctx }) => {
+    return ctx.db.user.findById(input)
+  }),
   createUser: publicProcedure
     .input(z.object({ name: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.db.user.create(input);
+      return ctx.db.user.create(input)
     }),
-});
+})
 ```
 
 ## 2. Context and Middleware
@@ -40,16 +38,16 @@ export const userRouter = router({
 ```typescript
 const isAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.session?.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new TRPCError({ code: 'UNAUTHORIZED' })
   }
   return next({
     ctx: {
       session: { ...ctx.session, user: ctx.session.user },
     },
-  });
-});
+  })
+})
 
-export const protectedProcedure = t.procedure.use(isAuthed);
+export const protectedProcedure = t.procedure.use(isAuthed)
 ```
 
 ## 3. Client Integration

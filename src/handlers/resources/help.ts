@@ -125,7 +125,7 @@ export function extractParameters(inputSchema: unknown): ParameterInfo[] {
     }
 
     let schema = inputSchema as Record<string, unknown>
-    
+
     // Unwrap ZodEffects (.transform, .refine) or ZodPipe (Zod 4 .transform)
     if (typeof schema['innerType'] === 'function') {
         const innerTypeFn = schema['innerType'] as () => unknown
@@ -263,30 +263,34 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
 
                 // If the group has dynamic tools, always return JSON (with optional helpContent)
                 if (groupTools.length > 0) {
-                    const isCodemodeOnly = context.filterConfig &&
+                    const isCodemodeOnly =
+                        context.filterConfig &&
                         context.filterConfig.enabledTools.has('mj_execute_code') &&
                         !context.filterConfig.enabledTools.has('create_entry')
 
                     const toolDetails = groupTools.map((tool) => {
                         let displayName = tool.name
                         if (isCodemodeOnly) {
-                            const camelCase = tool.name.replace(/_([a-z])/g, (_: string, letter: string) => letter.toUpperCase())
+                            const camelCase = tool.name.replace(
+                                /_([a-z])/g,
+                                (_: string, letter: string) => letter.toUpperCase()
+                            )
                             displayName = `mj.${tool.group}.${camelCase}`
                         }
-                        
+
                         return {
                             name: displayName,
                             title: tool.title,
-                        description: tool.description,
-                        parameters: extractParameters(tool.inputSchema),
-                        annotations: {
-                            readOnly: tool.annotations?.readOnlyHint ?? false,
-                            destructive: tool.annotations?.destructiveHint ?? false,
-                            idempotent: tool.annotations?.idempotentHint ?? false,
-                            openWorld: tool.annotations?.openWorldHint ?? false,
-                        },
-                        hasOutputSchema: tool.outputSchema !== undefined,
-                    }
+                            description: tool.description,
+                            parameters: extractParameters(tool.inputSchema),
+                            annotations: {
+                                readOnly: tool.annotations?.readOnlyHint ?? false,
+                                destructive: tool.annotations?.destructiveHint ?? false,
+                                idempotent: tool.annotations?.idempotentHint ?? false,
+                                openWorld: tool.annotations?.openWorldHint ?? false,
+                            },
+                            hasOutputSchema: tool.outputSchema !== undefined,
+                        }
                     })
 
                     const result: Record<string, unknown> = {
@@ -322,7 +326,6 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 }
             },
         },
-
     ]
 }
 

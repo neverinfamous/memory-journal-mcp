@@ -27,7 +27,12 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamBackupSchema,
             outputSchema: TeamBackupOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -75,7 +80,12 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: z.object({}).strict(),
             outputSchema: TeamBackupsListOutputSchema,
-            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (_params: unknown) => {
                 try {
                     if (!teamDb) {

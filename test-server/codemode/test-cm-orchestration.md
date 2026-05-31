@@ -56,7 +56,8 @@ const issues = await mj.github.getGithubIssues({ limit: 3 })
 const results = []
 for (const issue of (issues.issues || []).slice(0, 2)) {
   const entries = await mj.search.searchEntries({
-    project_number: 5, query: `#${issue.number}`,
+    project_number: 5,
+    query: `#${issue.number}`,
     limit: 3,
   })
   results.push({
@@ -120,7 +121,8 @@ return { checked: Math.min(recent.entries.length, 3), withRelationships }
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const entry = await mj.core.createEntry({
-  project_number: 5, content: 'Code Mode pipeline test: semantic indexing verification ZQJKM',
+  project_number: 5,
+  content: 'Code Mode pipeline test: semantic indexing verification ZQJKM',
   tags: ['codemode-pipeline-test'],
   entry_type: 'technical_note',
 })

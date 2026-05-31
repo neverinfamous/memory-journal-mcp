@@ -35,10 +35,10 @@ describe('Backup Manager Edge Cases', () => {
     it('should throw on symlink restore', async () => {
         const backupsDir = path.join(testDir, 'backups')
         if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true })
-        
+
         const realFile = path.join(backupsDir, 'real.db')
         const symlink = path.join(backupsDir, 'sym.db')
-        
+
         fs.writeFileSync(realFile, 'dummy')
         try {
             fs.symlinkSync('real.db', symlink)
@@ -54,10 +54,13 @@ describe('Backup Manager Edge Cases', () => {
         const backup = await db.exportToFile('stale-test')
         const lockDir = `${testDbPath}.lock.d`
         const lockFile = path.join(lockDir, 'lock.json')
-        
+
         fs.mkdirSync(lockDir, { recursive: true })
         // Create an expired lock (40 seconds old)
-        fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, timestamp: Date.now() - 40000, nonce: '123' }))
+        fs.writeFileSync(
+            lockFile,
+            JSON.stringify({ pid: 999999, timestamp: Date.now() - 40000, nonce: '123' })
+        )
 
         // Should succeed because lock is stale and gets overridden
         const result = await db.restoreFromFile(backup.filename)
@@ -66,7 +69,7 @@ describe('Backup Manager Edge Cases', () => {
 
     it('should rollback on restore failure', async () => {
         const backup = await db.exportToFile('rollback-test')
-        
+
         // Let's force an error during restore by mocking fs.promises.rename
         const originalRename = fs.promises.rename
         const originalCopy = fs.promises.copyFile
@@ -88,9 +91,11 @@ describe('Backup Manager Edge Cases', () => {
         }
 
         try {
-            await expect(db.restoreFromFile(backup.filename)).rejects.toThrow('Simulated rename fallback error')
+            await expect(db.restoreFromFile(backup.filename)).rejects.toThrow(
+                'Simulated rename fallback error'
+            )
             expect(triggered).toBe(true)
-            
+
             // Check that database still works (rollback was successful)
             expect(() => db.getActiveEntryCount()).not.toThrow()
         } finally {

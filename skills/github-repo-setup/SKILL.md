@@ -22,55 +22,55 @@ Scaffold a new public TypeScript/Node.js repo with community standards, CI, and 
 
 Replace these placeholders throughout:
 
-| Placeholder          | Example                  |
-| -------------------- | ------------------------ |
-| `{{ORG_NAME}}`       | `neverinfamous`          |
-| `{{REPO_NAME}}`      | `my-mcp-server`          |
-| `{{DESCRIPTION}}`    | `MCP server for X`       |
-| `{{YEAR}}`           | `2026`                   |
-| `{{SECRETS_ENV_PATH}}`| `C:\path\to\secrets.env` |
+| Placeholder            | Example                  |
+| ---------------------- | ------------------------ |
+| `{{ORG_NAME}}`         | `neverinfamous`          |
+| `{{REPO_NAME}}`        | `my-mcp-server`          |
+| `{{DESCRIPTION}}`      | `MCP server for X`       |
+| `{{YEAR}}`             | `2026`                   |
+| `{{SECRETS_ENV_PATH}}` | `C:\path\to\secrets.env` |
 
 ---
 
 ## 1. Create Files (~28 total)
 
-Read the reference file listed in the **Template Source** column for exact file contents. Files marked *inline* are defined directly below the table.
+Read the reference file listed in the **Template Source** column for exact file contents. Files marked _inline_ are defined directly below the table.
 
 ### File Manifest
 
-| File | Purpose | Template Source |
-|------|---------|----------------|
-| **Community Standards** | | |
-| `LICENSE` | MIT license | *inline* |
-| `README.md` | Badges, quick start, TOC, examples | Adapt from reference repos |
-| `CONTRIBUTING.md` | Fork → Clone → Branch → PR workflow | [community-standards.md](references/community-standards.md) |
-| `CODE_OF_CONDUCT.md` | Contributor Covenant 2.1 | [community-standards.md](references/community-standards.md) |
-| `SECURITY.md` | Vulnerability reporting process | [community-standards.md](references/community-standards.md) |
-| `CHANGELOG.md` | Keep a Changelog format (empty) | *inline* |
-| `UNRELEASED.md` | SSoT for unreleased changes | *inline* |
-| **GitHub Automation** | | |
-| `.github/workflows/codeql.yml` | CodeQL static analysis | [github-automation.md](references/github-automation.md) |
-| `.github/workflows/lint-and-test.yml` | CI: lint, typecheck, build, test | [github-automation.md](references/github-automation.md) |
-| `.github/workflows/secrets-scanning.yml` | TruffleHog + Gitleaks | [github-automation.md](references/github-automation.md) |
-| `.github/workflows/dependabot-auto-merge.yml` | Auto-squash patch/minor PRs | [github-automation.md](references/github-automation.md) |
-| `.github/workflows/e2e.yml` | Playwright E2E tests | [github-automation.md](references/github-automation.md) |
-| `.github/dependabot.yml` | Grouped dependency updates | [github-automation.md](references/github-automation.md) |
-| `.github/ISSUE_TEMPLATE/bug_report.md` | Rich bug report template | [github-automation.md](references/github-automation.md) |
-| `.github/ISSUE_TEMPLATE/feature_request.md` | Feature request template | [github-automation.md](references/github-automation.md) |
-| `.github/ISSUE_TEMPLATE/config.yml` | Blank issue redirect | [github-automation.md](references/github-automation.md) |
-| `.github/pull_request_template.md` | Comprehensive PR checklist | [github-automation.md](references/github-automation.md) |
-| **Project Config** | | |
-| `.gitignore` | Comprehensive ignores | *inline* |
-| `.gitattributes` | Line ending normalization | *inline* |
-| `.prettierrc` | Code formatting config | [project-config.md](references/project-config.md) |
-| `.prettierignore` | Prettier exclusions | [project-config.md](references/project-config.md) |
-| `.gitleaks.toml` | Secret scanning config | [project-config.md](references/project-config.md) |
-| `package.json` | Project manifest | *inline* |
-| `tsconfig.json` | TypeScript strict config | [project-config.md](references/project-config.md) |
-| `eslint.config.js` | ESLint 10 strict + test config | [project-config.md](references/project-config.md) |
-| `tsup.config.ts` | Build configuration | [project-config.md](references/project-config.md) |
-| `vitest.config.ts` | Test configuration | [project-config.md](references/project-config.md) |
-| `src/index.ts` | Entry point placeholder | Empty file |
+| File                                          | Purpose                             | Template Source                                             |
+| --------------------------------------------- | ----------------------------------- | ----------------------------------------------------------- |
+| **Community Standards**                       |                                     |                                                             |
+| `LICENSE`                                     | MIT license                         | _inline_                                                    |
+| `README.md`                                   | Badges, quick start, TOC, examples  | Adapt from reference repos                                  |
+| `CONTRIBUTING.md`                             | Fork → Clone → Branch → PR workflow | [community-standards.md](references/community-standards.md) |
+| `CODE_OF_CONDUCT.md`                          | Contributor Covenant 2.1            | [community-standards.md](references/community-standards.md) |
+| `SECURITY.md`                                 | Vulnerability reporting process     | [community-standards.md](references/community-standards.md) |
+| `CHANGELOG.md`                                | Keep a Changelog format (empty)     | _inline_                                                    |
+| `UNRELEASED.md`                               | SSoT for unreleased changes         | _inline_                                                    |
+| **GitHub Automation**                         |                                     |                                                             |
+| `.github/workflows/codeql.yml`                | CodeQL static analysis              | [github-automation.md](references/github-automation.md)     |
+| `.github/workflows/lint-and-test.yml`         | CI: lint, typecheck, build, test    | [github-automation.md](references/github-automation.md)     |
+| `.github/workflows/secrets-scanning.yml`      | TruffleHog + Gitleaks               | [github-automation.md](references/github-automation.md)     |
+| `.github/workflows/dependabot-auto-merge.yml` | Auto-squash patch/minor PRs         | [github-automation.md](references/github-automation.md)     |
+| `.github/workflows/e2e.yml`                   | Playwright E2E tests                | [github-automation.md](references/github-automation.md)     |
+| `.github/dependabot.yml`                      | Grouped dependency updates          | [github-automation.md](references/github-automation.md)     |
+| `.github/ISSUE_TEMPLATE/bug_report.md`        | Rich bug report template            | [github-automation.md](references/github-automation.md)     |
+| `.github/ISSUE_TEMPLATE/feature_request.md`   | Feature request template            | [github-automation.md](references/github-automation.md)     |
+| `.github/ISSUE_TEMPLATE/config.yml`           | Blank issue redirect                | [github-automation.md](references/github-automation.md)     |
+| `.github/pull_request_template.md`            | Comprehensive PR checklist          | [github-automation.md](references/github-automation.md)     |
+| **Project Config**                            |                                     |                                                             |
+| `.gitignore`                                  | Comprehensive ignores               | _inline_                                                    |
+| `.gitattributes`                              | Line ending normalization           | _inline_                                                    |
+| `.prettierrc`                                 | Code formatting config              | [project-config.md](references/project-config.md)           |
+| `.prettierignore`                             | Prettier exclusions                 | [project-config.md](references/project-config.md)           |
+| `.gitleaks.toml`                              | Secret scanning config              | [project-config.md](references/project-config.md)           |
+| `package.json`                                | Project manifest                    | _inline_                                                    |
+| `tsconfig.json`                               | TypeScript strict config            | [project-config.md](references/project-config.md)           |
+| `eslint.config.js`                            | ESLint 10 strict + test config      | [project-config.md](references/project-config.md)           |
+| `tsup.config.ts`                              | Build configuration                 | [project-config.md](references/project-config.md)           |
+| `vitest.config.ts`                            | Test configuration                  | [project-config.md](references/project-config.md)           |
+| `src/index.ts`                                | Entry point placeholder             | Empty file                                                  |
 
 ---
 

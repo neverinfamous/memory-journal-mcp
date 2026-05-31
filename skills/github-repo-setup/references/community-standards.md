@@ -32,16 +32,16 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run build` | Build the project |
-| `npm run dev` | Start development mode |
-| `npm run lint` | Run ESLint |
-| `npm run lint:fix` | Auto-fix lint issues |
-| `npm run typecheck` | TypeScript type checking |
-| `npm run test` | Run unit tests |
-| `npm run test:e2e` | Run E2E tests |
-| `npm run check` | Lint + typecheck combined |
+| Command             | Description               |
+| ------------------- | ------------------------- |
+| `npm run build`     | Build the project         |
+| `npm run dev`       | Start development mode    |
+| `npm run lint`      | Run ESLint                |
+| `npm run lint:fix`  | Auto-fix lint issues      |
+| `npm run typecheck` | TypeScript type checking  |
+| `npm run test`      | Run unit tests            |
+| `npm run test:e2e`  | Run E2E tests             |
+| `npm run check`     | Lint + typecheck combined |
 
 ## Code Style
 
@@ -93,10 +93,10 @@ Download the full text from the link above and replace the contact placeholder. 
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| Latest  | ✅        |
-| < Latest | ❌       |
+| Version  | Supported |
+| -------- | --------- |
+| Latest   | ✅        |
+| < Latest | ❌        |
 
 ## Reporting a Vulnerability
 

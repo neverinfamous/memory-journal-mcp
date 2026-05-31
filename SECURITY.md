@@ -105,15 +105,15 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 | Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
 | Token Validation            | ✅     | JWT validation with JWKS support (via `jose`)    |
 | Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
-| HTTP Middleware              | ✅     | Bearer token extraction and validation           |
+| HTTP Middleware             | ✅     | Bearer token extraction and validation           |
 
 ### **Supported Scopes**
 
-| Scope   | Tool Groups                                        | Description              |
-| ------- | -------------------------------------------------- | ------------------------ |
-| `read`  | core, search, analytics, relationships, export     | Read-only operations     |
-| `write` | github, team (+ all read groups)                   | Read + write operations  |
-| `admin` | admin, backup, codemode (+ all write/read groups)  | Full administrative access|
+| Scope   | Tool Groups                                       | Description                |
+| ------- | ------------------------------------------------- | -------------------------- |
+| `read`  | core, search, analytics, relationships, export    | Read-only operations       |
+| `write` | github, team (+ all read groups)                  | Read + write operations    |
+| `admin` | admin, backup, codemode (+ all write/read groups) | Full administrative access |
 
 ### **Enabling OAuth**
 
@@ -280,11 +280,11 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 ```javascript
 // Soft delete (default)
-delete_entry({ entry_id: 42, permanent: false });
+delete_entry({ entry_id: 42, permanent: false })
 // Sets deleted_at timestamp, entry remains in DB
 
 // Permanent delete (explicit)
-delete_entry({ entry_id: 42, permanent: true });
+delete_entry({ entry_id: 42, permanent: true })
 // Removes from database completely
 ```
 
@@ -469,11 +469,11 @@ chmod 700 /shared/team-data
 
 ## 📦 **Supported Versions**
 
-| Component | Supported Versions | Notes |
-| --- | --- | --- |
-| Node.js | 26.x (LTS) | Minimum required version for `worker_threads` and isolation features. |
-| MCP Protocol | 2024-11-05 | Full compatibility with the official Model Context Protocol. |
-| Docker Base | `node:26-alpine` | Alpine-based images receive regular vulnerability patches. |
+| Component    | Supported Versions | Notes                                                                 |
+| ------------ | ------------------ | --------------------------------------------------------------------- |
+| Node.js      | 26.x (LTS)         | Minimum required version for `worker_threads` and isolation features. |
+| MCP Protocol | 2024-11-05         | Full compatibility with the official Model Context Protocol.          |
+| Docker Base  | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
 
 ## 🚨 **Reporting Security Issues**
 

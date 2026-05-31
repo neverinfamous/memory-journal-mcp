@@ -868,4 +868,3 @@ MIT License - See [LICENSE](LICENSE) file for details.
 ## 🤝 Contributing
 
 Built by developers, for developers. PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-

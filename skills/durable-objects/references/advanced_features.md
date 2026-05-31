@@ -4,12 +4,12 @@
 
 ```typescript
 // SQL (synchronous, recommended)
-this.ctx.storage.sql.exec("INSERT INTO t (c) VALUES (?)", value);
-const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM t").toArray();
+this.ctx.storage.sql.exec('INSERT INTO t (c) VALUES (?)', value)
+const rows = this.ctx.storage.sql.exec<Row>('SELECT * FROM t').toArray()
 
 // KV (async)
-await this.ctx.storage.put("key", value);
-const val = await this.ctx.storage.get<Type>("key");
+await this.ctx.storage.put('key', value)
+const val = await this.ctx.storage.get<Type>('key')
 ```
 
 ## Alarms

@@ -30,7 +30,11 @@ const tags = await mj.core.listTags({})
 const hasEntries = tags.tags?.length > 0
 
 // Create source tag for merge
-await mj.core.createEntry({ project_number: 5, content: 'CM4 merge test entry', tags: ['cm4-old-tag'] })
+await mj.core.createEntry({
+  project_number: 5,
+  content: 'CM4 merge test entry',
+  tags: ['cm4-old-tag'],
+})
 const merged = await mj.admin.mergeTags({
   source_tag: 'cm4-old-tag',
   target_tag: 'cm4-new-tag',

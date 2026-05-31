@@ -520,7 +520,11 @@ describe('Tool Handler Coverage', () => {
         })
 
         it('should return error for empty content', async () => {
-            const result = (await callTool('create_entry', { project_number: 1, content: '' }, db)) as {
+            const result = (await callTool(
+                'create_entry',
+                { project_number: 1, content: '' },
+                db
+            )) as {
                 error: string
             }
 

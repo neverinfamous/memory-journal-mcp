@@ -24,14 +24,16 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
         client = await createClient()
         // Seed two entries for relationship error tests
         const e1 = await callToolAndParse(client, 'create_entry', {
-            project_number: 1, content: 'Error contract test entry A',
+            project_number: 1,
+            content: 'Error contract test entry A',
             entry_type: 'test_entry',
         })
         expectSuccess(e1)
         entryId1 = (e1.entry as Record<string, unknown>).id as number
 
         const e2 = await callToolAndParse(client, 'create_entry', {
-            project_number: 1, content: 'Error contract test entry B',
+            project_number: 1,
+            content: 'Error contract test entry B',
             entry_type: 'test_entry',
         })
         expectSuccess(e2)
@@ -71,7 +73,8 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
 
     test('search_by_date_range (inverted range) returns VALIDATION_ERROR with all fields', async () => {
         const payload = await callToolAndParse(client, 'search_by_date_range', {
-            project_number: 1, start_date: '2030-12-31',
+            project_number: 1,
+            start_date: '2030-12-31',
             end_date: '2020-01-01',
         })
 
@@ -83,7 +86,8 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
 
     test('get_entry_by_id (nonexistent ID) returns structured error with code+category', async () => {
         const payload = await callToolAndParse(client, 'get_entry_by_id', {
-            project_number: 1, entry_id: 999999999,
+            project_number: 1,
+            entry_id: 999999999,
         })
 
         expectMinimumError(payload)
@@ -95,7 +99,8 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
 
     test('update_entry (nonexistent ID) returns structured error with code+category', async () => {
         const payload = await callToolAndParse(client, 'update_entry', {
-            project_number: 1, entry_id: 999999999,
+            project_number: 1,
+            entry_id: 999999999,
             content: 'should not update',
         })
 
@@ -147,7 +152,8 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
     test('delete_entry (already-deleted or nonexistent) returns structured error with code+category', async () => {
         // Try to delete a very high ID that doesn't exist
         const payload = await callToolAndParse(client, 'delete_entry', {
-            project_number: 1, entry_id: 999999998,
+            project_number: 1,
+            entry_id: 999999998,
         })
 
         // Should be a structured error with minimum fields

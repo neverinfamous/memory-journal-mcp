@@ -33,13 +33,13 @@ If `RUN_COMMANDS` is `true`, execute these measurement commands. Otherwise,
 perform static analysis only and note measurements as "estimated" rather than
 "measured."
 
-| Category | Command | What It Measures |
-| --- | --- | --- |
-| Build | `npx tsc --noEmit --diagnostics` | Compile time, file count, memory |
-| Build | `npm run build` | Bundle time, output size, warnings |
-| Bundle | `du -sh dist/` (or PowerShell equivalent) | Total output size |
-| Dependencies | `npm ls --all --prod 2>$null` | Dependency tree depth |
-| Tests | `npm test -- --reporter=verbose` | Suite duration, slow tests |
+| Category     | Command                                   | What It Measures                   |
+| ------------ | ----------------------------------------- | ---------------------------------- |
+| Build        | `npx tsc --noEmit --diagnostics`          | Compile time, file count, memory   |
+| Build        | `npm run build`                           | Bundle time, output size, warnings |
+| Bundle       | `du -sh dist/` (or PowerShell equivalent) | Total output size                  |
+| Dependencies | `npm ls --all --prod 2>$null`             | Dependency tree depth              |
+| Tests        | `npm test -- --reporter=verbose`          | Suite duration, slow tests         |
 
 ### Profiling Structure
 
@@ -60,18 +60,19 @@ Produce a Markdown document with these sections:
 
 ## Baseline Measurements
 
-| Metric | Value | Method |
-| --- | --- | --- |
-| TypeScript compile time | Xs | tsc --diagnostics |
-| Bundle build time | Xs | npm run build |
-| Output size (dist/) | X KB/MB | file system |
-| Production dependencies | N direct / M transitive | npm ls |
-| Test suite duration | Xs | npm test |
-| [etc.] | | |
+| Metric                  | Value                   | Method            |
+| ----------------------- | ----------------------- | ----------------- |
+| TypeScript compile time | Xs                      | tsc --diagnostics |
+| Bundle build time       | Xs                      | npm run build     |
+| Output size (dist/)     | X KB/MB                 | file system       |
+| Production dependencies | N direct / M transitive | npm ls            |
+| Test suite duration     | Xs                      | npm test          |
+| [etc.]                  |                         |                   |
 
 ## Category Assessment (per Category)
 
 For each of the 7 audit categories (see audit-categories.md):
+
 - Current state and measurements
 - Existing optimizations in place
 - Initial efficiency rating: excellent / good / acceptable / poor
@@ -79,6 +80,7 @@ For each of the 7 audit categories (see audit-categories.md):
 ## Hot Path Map
 
 Identify the performance-critical code paths:
+
 - Request handling pipeline (for servers)
 - Database query paths (for data-layer projects)
 - Build/compile pipeline
@@ -115,21 +117,21 @@ baselines — probe their limits.
 Score each dimension on a 1–5 scale. Dimensions have different weights
 reflecting their relative importance for performance:
 
-| Dimension | Weight | Focus Areas |
-| --- | --- | --- |
-| **Impact** | 4 | User-facing latency, throughput degradation, memory pressure, token waste. How much does this actually matter? |
-| **Frequency** | 3 | How often does this hot path execute? Every request? Once at startup? Rare edge case? |
-| **Effort** | 2 | How hard is the fix? Quick config change vs. architectural refactor? |
-| **Regression Risk** | 1 | Could the optimization break existing behavior or introduce bugs? |
+| Dimension           | Weight | Focus Areas                                                                                                    |
+| ------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| **Impact**          | 4      | User-facing latency, throughput degradation, memory pressure, token waste. How much does this actually matter? |
+| **Frequency**       | 3      | How often does this hot path execute? Every request? Once at startup? Rare edge case?                          |
+| **Effort**          | 2      | How hard is the fix? Quick config change vs. architectural refactor?                                           |
+| **Regression Risk** | 1      | Could the optimization break existing behavior or introduce bugs?                                              |
 
 ### Severity Mapping
 
-| Weighted Score | Severity | Meaning |
-| --- | --- | --- |
-| 4.0–5.0 | Critical | High-frequency bottleneck with major user-facing impact |
-| 3.0–3.9 | High | Significant performance cost, noticeable in production |
-| 2.0–2.9 | Moderate | Measurable inefficiency but limited blast radius |
-| 1.0–1.9 | Low | Optimization opportunity, defense-in-depth improvement |
+| Weighted Score | Severity | Meaning                                                 |
+| -------------- | -------- | ------------------------------------------------------- |
+| 4.0–5.0        | Critical | High-frequency bottleneck with major user-facing impact |
+| 3.0–3.9        | High     | Significant performance cost, noticeable in production  |
+| 2.0–2.9        | Moderate | Measurable inefficiency but limited blast radius        |
+| 1.0–1.9        | Low      | Optimization opportunity, defense-in-depth improvement  |
 
 ### Depth Profiles
 
@@ -156,47 +158,48 @@ The `AUDIT_DEPTH` configuration controls scrutiny level:
 
 ### Grading Scale
 
-| Grade | Score Range | Meaning |
-| --- | --- | --- |
-| A | 4.5–5.0 | Excellent — well-optimized, minimal waste |
-| B | 3.5–4.4 | Good — no critical bottlenecks, room for tuning |
-| C | 2.5–3.4 | Acceptable — measurable inefficiencies, worth addressing |
-| D | 1.5–2.4 | Poor — significant bottlenecks impacting UX or cost |
-| F | 1.0–1.4 | Failing — severe performance issues, unusable at scale |
+| Grade | Score Range | Meaning                                                  |
+| ----- | ----------- | -------------------------------------------------------- |
+| A     | 4.5–5.0     | Excellent — well-optimized, minimal waste                |
+| B     | 3.5–4.4     | Good — no critical bottlenecks, room for tuning          |
+| C     | 2.5–3.4     | Acceptable — measurable inefficiencies, worth addressing |
+| D     | 1.5–2.4     | Poor — significant bottlenecks impacting UX or cost      |
+| F     | 1.0–1.4     | Failing — severe performance issues, unusable at scale   |
 
 ### Findings
 
-| # | Category | Severity | Finding | File:Line | Impact | Optimization |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | Runtime | Critical | N+1 query in list handler | src/foo.ts:42 | +200ms per request | Batch query with single SELECT |
-| 2 | Build | High | Dev deps in prod bundle | tsup.config.ts:8 | +2MB output | Add external[] config |
-| 3 | Dependencies | Moderate | Duplicate lodash versions | package-lock.json | +400KB install | npm dedupe |
-| ... | | | | | | |
+| #   | Category     | Severity | Finding                   | File:Line         | Impact             | Optimization                   |
+| --- | ------------ | -------- | ------------------------- | ----------------- | ------------------ | ------------------------------ |
+| 1   | Runtime      | Critical | N+1 query in list handler | src/foo.ts:42     | +200ms per request | Batch query with single SELECT |
+| 2   | Build        | High     | Dev deps in prod bundle   | tsup.config.ts:8  | +2MB output        | Add external[] config          |
+| 3   | Dependencies | Moderate | Duplicate lodash versions | package-lock.json | +400KB install     | npm dedupe                     |
+| ... |              |          |                           |                   |                    |                                |
 
 ### Dimension Scores
 
-| Dimension | Score | Weight | Weighted |
-| --- | --- | --- | --- |
-| Impact | [1–5] | 4 | [score × 4] |
-| Frequency | [1–5] | 3 | [score × 3] |
-| Effort | [1–5] | 2 | [score × 2] |
-| Regression Risk | [1–5] | 1 | [score × 1] |
-| **Total** | | **10** | **[sum]/50 = [avg]** |
+| Dimension       | Score | Weight | Weighted             |
+| --------------- | ----- | ------ | -------------------- |
+| Impact          | [1–5] | 4      | [score × 4]          |
+| Frequency       | [1–5] | 3      | [score × 3]          |
+| Effort          | [1–5] | 2      | [score × 2]          |
+| Regression Risk | [1–5] | 1      | [score × 1]          |
+| **Total**       |       | **10** | **[sum]/50 = [avg]** |
 
 ### Category Breakdown
 
-| Category | Findings | Worst Severity | Rating |
-| --- | --- | --- | --- |
-| 1. Build Performance | 1 | High | ⚠️ Needs work |
-| 2. Bundle & Output | 0 | — | ✅ Good |
-| 3. Dependency Weight | 2 | Moderate | ⚠️ Needs work |
-| ... | | | |
+| Category             | Findings | Worst Severity | Rating        |
+| -------------------- | -------- | -------------- | ------------- |
+| 1. Build Performance | 1        | High           | ⚠️ Needs work |
+| 2. Bundle & Output   | 0        | —              | ✅ Good       |
+| 3. Dependency Weight | 2        | Moderate       | ⚠️ Needs work |
+| ...                  |          |                |               |
 
 ### Stress Scenarios
 
 For each critical/high finding, describe the stress scenario that reveals it:
 
 #### Scenario: [Finding Title]
+
 - **Trigger condition**: [What causes worst-case behavior]
 - **Scale factor**: [How performance degrades as N grows]
 - **Measured/estimated impact**: [Quantified: +Xms, +XMB, +X tokens]
@@ -225,12 +228,12 @@ review with an explicit disposition.
 
 For each finding, record one of:
 
-| Disposition | Meaning |
-| --- | --- |
-| **Accept** | Implement the suggested optimization |
-| **Reject** | Explain why the finding doesn't warrant optimization (acceptable cost, premature optimization, trade-off) |
-| **Modify** | Accept the finding but implement a different optimization |
-| **Defer** | Acknowledge the inefficiency but defer to a future milestone |
+| Disposition | Meaning                                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| **Accept**  | Implement the suggested optimization                                                                      |
+| **Reject**  | Explain why the finding doesn't warrant optimization (acceptable cost, premature optimization, trade-off) |
+| **Modify**  | Accept the finding but implement a different optimization                                                 |
+| **Defer**   | Acknowledge the inefficiency but defer to a future milestone                                              |
 
 ### Optimization Plan Output
 
@@ -241,46 +244,46 @@ Produce the plan prioritized by impact × frequency (highest ROI first):
 
 ### Disposition Summary
 
-| # | Finding | Severity | Disposition | Rationale |
-| --- | --- | --- | --- | --- |
-| 1 | N+1 query | Critical | Accept | Will batch into single SELECT |
-| 2 | Dev deps in bundle | High | Modify | Using externals instead of tree-shaking |
-| 3 | Duplicate lodash | Moderate | Defer | Awaiting lodash-es migration in Q3 |
+| #   | Finding            | Severity | Disposition | Rationale                               |
+| --- | ------------------ | -------- | ----------- | --------------------------------------- |
+| 1   | N+1 query          | Critical | Accept      | Will batch into single SELECT           |
+| 2   | Dev deps in bundle | High     | Modify      | Using externals instead of tree-shaking |
+| 3   | Duplicate lodash   | Moderate | Defer       | Awaiting lodash-es migration in Q3      |
 
 ### Quick Wins (< 1 hour, high impact)
 
-| # | Finding | Optimization | Expected Improvement |
-| --- | --- | --- | --- |
-| ... | ... | ... | -Xms latency / -XMB bundle |
+| #   | Finding | Optimization | Expected Improvement       |
+| --- | ------- | ------------ | -------------------------- |
+| ... | ...     | ...          | -Xms latency / -XMB bundle |
 
 ### Targeted Improvements (1–4 hours)
 
-| # | Finding | Optimization | Files Affected | Expected Improvement |
-| --- | --- | --- | --- | --- |
-| ... | ... | ... | ... | ... |
+| #   | Finding | Optimization | Files Affected | Expected Improvement |
+| --- | ------- | ------------ | -------------- | -------------------- |
+| ... | ...     | ...          | ...            | ...                  |
 
 ### Architectural Changes (requires design work)
 
-| # | Finding | Approach | Effort | Expected Improvement |
-| --- | --- | --- | --- | --- |
-| ... | ... | ... | ... | ... |
+| #   | Finding | Approach | Effort | Expected Improvement |
+| --- | ------- | -------- | ------ | -------------------- |
+| ... | ...     | ...      | ...    | ...                  |
 
 ### Accepted Trade-offs
 
 Findings explicitly rejected or deferred with justification:
 
-| # | Finding | Disposition | Justification |
-| --- | --- | --- | --- |
-| ... | ... | ... | ... |
+| #   | Finding | Disposition | Justification |
+| --- | ------- | ----------- | ------------- |
+| ... | ...     | ...         | ...           |
 
 ### Projected Improvement
 
-| Metric | Before | After (projected) | Improvement |
-| --- | --- | --- | --- |
-| Build time | Xs | Xs | -X% |
-| Bundle size | XMB | XMB | -X% |
-| Request latency (p95) | Xms | Xms | -X% |
-| Test suite duration | Xs | Xs | -X% |
+| Metric                | Before | After (projected) | Improvement |
+| --------------------- | ------ | ----------------- | ----------- |
+| Build time            | Xs     | Xs                | -X%         |
+| Bundle size           | XMB    | XMB               | -X%         |
+| Request latency (p95) | Xms    | Xms               | -X%         |
+| Test suite duration   | Xs     | Xs                | -X%         |
 
 **Score**: Before [X]/5.0 (Grade [Y]) → After (projected) [X]/5.0 (Grade [Y])
 ```
@@ -365,11 +368,11 @@ count, and top recommended optimization]
 
 ## Findings Summary
 
-| Category | Critical | High | Moderate | Low | Total |
-| --- | --- | --- | --- | --- | --- |
-| 1. Build Performance | ... | | | | |
-| ... | | | | | |
-| **Total** | | | | | |
+| Category             | Critical | High | Moderate | Low | Total |
+| -------------------- | -------- | ---- | -------- | --- | ----- |
+| 1. Build Performance | ...      |      |          |     |       |
+| ...                  |          |      |          |     |       |
+| **Total**            |          |      |          |     |       |
 
 ## Top 3 Highest-Impact Optimizations
 

@@ -36,18 +36,21 @@ in the journal entry. The audit is still valid with Phases 1–3 alone.
 > `gh copilot explain` syntax is interactive and will hang in agent contexts.
 
 **Correct invocation pattern:**
+
 ```
 Set-Location <target-repo>
 gh copilot -p "<prompt text>" --allow-tool "shell(find,cat,head,grep)"
 ```
 
 **Key flags:**
+
 - `-p` / `--prompt`: Non-interactive mode (REQUIRED for agents)
 - `--allow-tool "shell(find,cat,head,grep)"`: Grants Copilot read-only
   shell access to browse the repository. Without this, Copilot cannot
   inspect source files and findings will be shallow.
 
 **Operational notes:**
+
 - Always `Set-Location` (or `cd`) to the target repository BEFORE invoking.
   Copilot uses the cwd as its workspace root.
 - Each prompt invocation runs independently — there is no conversation state
@@ -71,6 +74,7 @@ focus on concrete code patterns rather than architectural decisions.
 
 **General Security Review:**
 "You are a senior security engineer performing a code audit. Review this repository for security vulnerabilities. Focus on:
+
 1. **Injection vectors** — SQL injection, command injection, path traversal, prototype pollution.
 2. **Authentication & authorization gaps**
 3. **Secret exposure**
@@ -79,6 +83,7 @@ focus on concrete code patterns rather than architectural decisions.
 
 **MCP-Specific Security Review:**
 "You are a security researcher specializing in AI agent tool ecosystems. Review this MCP server for security risks:
+
 1. **Tool poisoning** — Do any tool `description` fields contain hidden instructions?
 2. **Annotation accuracy** — Do annotations accurately reflect tool behavior?
 3. **Credential echo** — Do any tool responses include sensitive data?
@@ -87,6 +92,7 @@ focus on concrete code patterns rather than architectural decisions.
 
 **Supply Chain & Dependency Review:**
 "You are a supply chain security analyst. Review this project's dependency configuration for risks:
+
 1. **Lock file integrity**
 2. **Typosquatting**
 3. **Install scripts**
@@ -96,6 +102,7 @@ focus on concrete code patterns rather than architectural decisions.
 
 **CI/CD Pipeline Security Review:**
 "You are a DevSecOps engineer. Review these GitHub Actions workflow files for security issues:
+
 1. **Action pinning**
 2. **Secret handling**
 3. **Permissions**
@@ -121,12 +128,12 @@ the protocol:
 
 ## Prompt Selection Guide
 
-| Audit Depth | Project Type | Prompts to Use |
-| --- | --- | --- |
-| Recon | Any | Full Repository only |
-| Standard | Non-MCP | Full Repository + CI/CD |
-| Standard | MCP Server | Full Repository + MCP-Specific + CI/CD |
-| Paranoid | Any | All 4 prompts |
+| Audit Depth | Project Type | Prompts to Use                         |
+| ----------- | ------------ | -------------------------------------- |
+| Recon       | Any          | Full Repository only                   |
+| Standard    | Non-MCP      | Full Repository + CI/CD                |
+| Standard    | MCP Server   | Full Repository + MCP-Specific + CI/CD |
+| Paranoid    | Any          | All 4 prompts                          |
 
 ## Cross-References
 

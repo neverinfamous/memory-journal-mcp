@@ -29,7 +29,7 @@ Run the validation script to ensure all exported tools (except `mj_execute_code`
 node test-server/scripts/verify-schemas.mjs
 ```
 
-*The script will output `SUCCESS: All X tools have outputSchema defined.` if all schemas are correctly wired, which guarantees that `mcp-server.ts` will append `structuredContent` to all responses.*
+_The script will output `SUCCESS: All X tools have outputSchema defined.` if all schemas are correctly wired, which guarantees that `mcp-server.ts` will append `structuredContent` to all responses._
 
 ---
 

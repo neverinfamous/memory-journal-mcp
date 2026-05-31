@@ -20,19 +20,19 @@ This skill provides opinionated standards for using Drizzle ORM, optimized for T
 Always define schemas with precise types and constraints.
 
 ```typescript
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
 
-export const users = sqliteTable("users", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  email: text("email").notNull().unique(),
-  name: text("name").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
+export const users = sqliteTable('users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
-});
+})
 
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
+export type User = typeof users.$inferSelect
+export type NewUser = typeof users.$inferInsert
 ```
 
 ## 3. Querying Patterns
@@ -40,28 +40,31 @@ export type NewUser = typeof users.$inferInsert;
 ### Inserts and Returning
 
 ```typescript
-const result = await db.insert(users)
-  .values({ email: "test@example.com", name: "Test" })
-  .returning(); // Supported in D1
+const result = await db
+  .insert(users)
+  .values({ email: 'test@example.com', name: 'Test' })
+  .returning() // Supported in D1
 ```
 
 ### Relational Queries (Read-Heavy)
 
 Ensure you define relations in your schema file:
+
 ```typescript
 export const usersRelations = relations(users, ({ many }) => ({
-	posts: many(posts),
-}));
+  posts: many(posts),
+}))
 ```
 
 Fetch deeply nested data easily:
+
 ```typescript
 const userWithPosts = await db.query.users.findFirst({
   where: eq(users.id, 1),
   with: {
     posts: true,
   },
-});
+})
 ```
 
 ## 4. Migrations (Cloudflare D1)
