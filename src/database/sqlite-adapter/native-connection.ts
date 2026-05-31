@@ -70,18 +70,32 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
             // Load sqlite-vec extension for vector search
             // Use local `db` ref to avoid race with concurrent close() during await
-            const sqliteVec = await import('sqlite-vec')
+            try {
+                // Try the npm package first (for local development on macOS/Windows/glibc)
+                const sqliteVec = await import('sqlite-vec')
 
-            // Guard: if close() was called during the await, abort initialization
-            if (this.db === null) {
-                logger.info('Database closed during initialization, aborting', {
+                // Guard: if close() was called during the await, abort initialization
+                if (this.db === null) {
+                    logger.info('Database closed during initialization, aborting', {
+                        module: 'NativeConnectionManager',
+                    })
+                    return
+                }
+
+                sqliteVec.load(db)
+                logger.info('sqlite-vec extension loaded via npm package', {
                     module: 'NativeConnectionManager',
                 })
-                return
+            } catch {
+                // Fallback: try loading the compiled .so directly (for Alpine Docker)
+                // In production, the .so is placed in /app/vec0.so, so we resolve relative to the process root or a known path.
+                const fallbackPath = path.resolve(process.cwd(), 'vec0')
+                db.loadExtension(fallbackPath)
+                logger.info('sqlite-vec extension loaded via compiled fallback', {
+                    module: 'NativeConnectionManager',
+                    path: fallbackPath,
+                })
             }
-
-            sqliteVec.load(db)
-            logger.info('sqlite-vec extension loaded', { module: 'NativeConnectionManager' })
 
             // Create base schema
             db.exec(SCHEMA_SQL)
