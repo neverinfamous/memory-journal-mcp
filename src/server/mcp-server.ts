@@ -634,11 +634,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
         registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
 
         // Intercept SDK-level Zod validation errors to return structured error responses
-        const serverObj = server.server as unknown as { _requestHandlers: Record<string, (req: unknown, ext: unknown) => Promise<unknown>> }
+        const serverObj = server.server as unknown as { _requestHandlers: Map<string, (req: unknown, ext: unknown) => Promise<unknown>> }
         const requestHandlers = serverObj._requestHandlers
-        if (requestHandlers?.['tools/call']) {
-            const originalHandler = requestHandlers['tools/call']
-            requestHandlers['tools/call'] = async (request: unknown, extra: unknown) => {
+        const originalHandler = requestHandlers?.get('tools/call')
+        if (originalHandler) {
+            requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
                 try {
                     return await originalHandler(request, extra)
                 } catch (error: unknown) {
@@ -694,7 +694,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     }
                     throw error
                 }
-            }
+            })
         }
 
         return server

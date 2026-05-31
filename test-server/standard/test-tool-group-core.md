@@ -21,7 +21,9 @@
 
 ## 1. Zod Boundary & Type Mismatch Matrix
 
-For every tool, you must explicitly confirm that Zod validation errors and Domain Errors return a structured `{success: false}` json object, and **NEVER** surface as raw MCP `-32602` error frames.
+> ⚠️ **IDE Validation Note**: The Antigravity IDE (Cortex) strictly validates `call_mcp_tool` arguments against the JSON schema *before* sending the request. You cannot test intentional Zod Type Mismatches (e.g., `content: 123`) using direct MCP calls, as the IDE will block it locally with a `-32602` error. For type mismatches, rely on the E2E test suite (`npm run test:e2e`) to verify the server's interceptor correctly handles malformed requests from raw clients.
+
+For every tool, you must explicitly confirm that Domain Errors return a structured `{success: false}` json object, and **NEVER** surface as raw MCP `-32602` error frames.
 
 | Tool                   | Happy Path          | Domain Error Test              | Zod Empty Param (`{}`)            | Zod Type Mismatch             |
 | ---------------------- | ------------------- | ------------------------------ | --------------------------------- | ----------------------------- |
