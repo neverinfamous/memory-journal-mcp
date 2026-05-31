@@ -25,7 +25,6 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-core-relationships.md` |   5   | **Relationships** — Entry linking, causal types, visualization (Mermaid), graph resources           | After seed  |
 | `test-core-io.md`            |   6   | **IO & Interoperability** — Export/Import Markdown roundtrips, slugification, JSON legacy exports   | After seed  |
 | `test-core-admin.md`         |   7   | **Admin & Backup** — Tag management, backup/restore operations                                      | After seed  |
-| `test-core-scheduler.md`     |   8   | **Scheduler** — HTTP/SSE transport scheduler jobs (terminal script)                                 | After seed  |
 
 ### Cross-Cutting Validation
 
@@ -72,7 +71,6 @@ The following table maps each standard testing prompt to the specific MCP tool g
 | `test-core-infra.md` | Sandbox / Codemode | `analytics`, `codemode`, `core` |
 | `test-core-io.md` | IO / Export | `codemode`, `io` |
 | `test-core-relationships.md` | Graph Links | `codemode`, `relationships` |
-| `test-core-scheduler.md` | Scheduler Automation | `codemode` |
 | `test-core-search.md` | Search | `admin`, `analytics`, `codemode`, `core`, `search` |
 | `test-core-semantic.md` | Semantic Search | `admin`, `analytics`, `codemode`, `search` |
 | `test-errors.md` | General | `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team` |
@@ -103,7 +101,6 @@ Phase 0 (Seed Data) ─── MUST PASS FIRST
     ├── Phase 5 (Relationships) ─────── independent
     ├── Phase 6 (IO) ────────────────── independent
     ├── Phase 7 (Admin) ─────────────── independent
-    ├── Phase 8 (Scheduler) ─────────── independent (terminal script)
     ├── Phase 9 (Schemas) ───────────── independent
     ├── Phase 10 (Resources) ────────── independent
     ├── Phase 11 (Errors) ───────────── independent
