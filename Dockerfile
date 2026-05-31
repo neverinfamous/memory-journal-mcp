@@ -57,7 +57,7 @@ WORKDIR /app
 # Use Alpine edge for curl with CVE fixes (and nghttp2-libs for CVE-2026-27135)
 # Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
-RUN apk add --no-cache git ca-certificates && \
+RUN apk add --no-cache git ca-certificates gcompat && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
