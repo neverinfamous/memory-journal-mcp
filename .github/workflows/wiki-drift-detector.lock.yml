@@ -555,6 +555,7 @@ jobs:
         id: agentic_execution
         # Copilot CLI tool arguments (sorted):
         timeout-minutes: 15
+        continue-on-error: true
         run: |
           set -o pipefail
           touch /tmp/gh-aw/agent-step-summary.md
@@ -803,6 +804,7 @@ jobs:
       - name: Handle Agent Failure
         id: handle_agent_failure
         if: always()
+        continue-on-error: true
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
@@ -931,6 +933,7 @@ jobs:
         id: detection_agentic_execution
         # Copilot CLI tool arguments (sorted):
         timeout-minutes: 20
+        continue-on-error: true
         run: |
           set -o pipefail
           touch /tmp/gh-aw/agent-step-summary.md

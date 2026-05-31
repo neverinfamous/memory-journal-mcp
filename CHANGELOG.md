@@ -5,7 +5,20 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.0...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
+
+## [8.0.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v8.0.1) - 2026-05-31
+
+### Fixed
+
+- Reverted Docker base image from Debian Slim to Alpine Linux (`node:26.2.0-alpine`) to eliminate 50+ vulnerabilities.
+- Implemented native `sqlite-vec` compilation from C source on Alpine (musl) to fix missing GLIBC extension load errors.
+
+### Dependencies
+
+- Bumped `docker/metadata-action` from `6.0.0` to `6.1.0`
+- Bumped `docker/scout-action` from `1.20.4` to `1.21.0`
+- Bumped `actions/upload-artifact` from `7.0.0` to `7.0.1`
 
 ## [8.0.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v8.0.0) - 2026-05-31
 
