@@ -28,7 +28,7 @@
 | Test            | Command/Action                                                         | Expected Result                               |
 | --------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
 | Export JSON     | `export_entries(format: "json", limit: 5)`                             | JSON export with `entries` array              |
-| Export JSON Lrg | `export_entries(format: "json", limit: 5000)`                          | JSON export with `truncated: true` flag set   |
+| Export JSON Lrg | `export_entries(format: "json", limit: 5000)`                          | JSON export with `truncated: true` flag set (if 5MB payload exceeded) |
 | Export markdown | `export_entries(format: "markdown", limit: 5)`                         | Markdown export with `content` string         |
 | Export with tag | `export_entries(format: "json", tags: ["architecture"], limit: 10)`    | Only entries with "architecture" tag returned |
 | Export future   | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)` | Returns 0 entries (date filter enforced)      |
@@ -52,4 +52,4 @@
 - `export_markdown` reliably targets OS local directories and generates correctly named files.
 - `import_markdown` gracefully executes dry run detection parsing.
 - IO tooling throws structured path traversal errors `..` on local directory injections or when missing `ALLOWED_IO_ROOTS`.
-- Large JSON exports return `truncated: true` to prevent memory exhaustion.
+- Large JSON exports return `truncated: true` to prevent memory exhaustion when the payload exceeds 5MB.
