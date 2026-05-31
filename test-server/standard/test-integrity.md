@@ -56,7 +56,7 @@ Create entries with specific data, then read them back to verify nothing is lost
 | Merge consolidation count      | Create entries with `tag-a`, merge `tag-a → tag-b`, verify `entriesUpdated` | `entriesUpdated` equals the number of entries that had `tag-a` |
 | Source tag deleted after merge | `merge_tags(source_tag: "old", target_tag: "new")` then `list_tags`         | `"old"` no longer in tag list                                  |
 | Target tag has combined count  | After merge, `list_tags`                                                    | `"new"` count equals sum of old source + old target counts     |
-| Case sensitivity               | Create with tag `"CamelCase"`, search with `tags: ["CamelCase"]`            | Returns the entry — tags are case-sensitive                    |
+| Case normalization             | Create with tag `"CamelCase"`, verify with `get_entry_by_id`                | Tag is automatically normalized to lowercase `"camelcase"`     |
 | Tag with spaces                | `create_entry(project_number: 5, content: "test", tags: ["tag with spaces"])`                  | Entry created and tag retrievable                              |
 | Duplicate tags in array        | `create_entry(project_number: 5, content: "test", tags: ["dup", "dup"])`                       | Entry created — duplicates either deduplicated or stored as-is |
 
