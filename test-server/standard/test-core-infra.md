@@ -95,7 +95,7 @@ rm test-team-prompts.db*
 
 | Test              | Command/Action                                                                               | Expected Result                                                  |
 | ----------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Read status       | Read `memory://github/status` (use `memory://github/status/{repo}` for multi-project setups) | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
+| Read status       | Read `memory://github/status` (use `memory://github/status/{repo}` or `{owner}/{repo}` for multi-project setups) | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
 | CI status mapping | Verify CI status value                                                                       | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
 | Milestone data    | Inspect status data                                                                          | Includes milestones summary (open count, completion percentages) |
 
