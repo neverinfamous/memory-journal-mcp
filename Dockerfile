@@ -1,14 +1,15 @@
 # Memory Journal MCP Server - TypeScript Version
 # Multi-stage build for optimized production image
-FROM node:26.2.0-alpine AS builder
+FROM node:26.2.0-bookworm-slim AS builder
 
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
-# Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, etc.)
-RUN apk add --no-cache python3 make g++ && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 nghttp2-libs && \
-    apk upgrade --no-cache
+# Debian bookworm-slim receives regular security updates. Upgrade them all to patch CVEs.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 make g++ curl libssl-dev && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Upgrade npm globally to a pinned version to ensure reproducible builds
 # Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
@@ -49,17 +50,16 @@ RUN rm -rf /app/prod_modules/node_modules/onnxruntime-web \
            /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/win32
 
 # Production stage
-FROM node:26.2.0-alpine
+FROM node:26.2.0-bookworm-slim
 
 WORKDIR /app
 
 # Install runtime dependencies with security fixes
-# Use Alpine edge for curl with CVE fixes (and nghttp2-libs for CVE-2026-27135)
-# Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
-# Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
-RUN apk add --no-cache git ca-certificates gcompat && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib libcrypto3 libssl3 nghttp2-libs && \
-    apk upgrade --no-cache && \
+# Debian bookworm-slim receives regular security updates. Upgrade them all to patch CVEs.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git ca-certificates curl && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/* && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy built artifacts and production dependencies from builder
@@ -72,8 +72,8 @@ COPY LICENSE ./
 RUN mkdir -p /app/data && chmod 700 /app/data
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup && \
+RUN groupadd -g 1001 appgroup && \
+    useradd -u 1001 -g appgroup -s /bin/sh -m appuser && \
     chown -R appuser:appgroup /app
 
 # Set environment variables
