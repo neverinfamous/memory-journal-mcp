@@ -104,7 +104,7 @@ jobs:
 
       - name: Smoke test — HTTP transport starts and responds
         run: |
-          docker run --rm -d --name smoke-http -p 3000:3000 smoke-test:latest \
+          docker run -d --name smoke-http -p 3000:3000 smoke-test:latest \
             --transport http --port 3000 --server-host 0.0.0.0
           sleep 5
           if ! docker ps --filter name=smoke-http --format '{{.Status}}' | grep -q "Up"; then

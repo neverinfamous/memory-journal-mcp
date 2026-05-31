@@ -93,7 +93,7 @@ jobs:
 
       - name: Smoke test — server starts without crash
         run: |
-          docker run --rm -d --name pr-smoke -p 3000:3000 pr-smoke-test:latest \
+          docker run -d --name pr-smoke -p 3000:3000 pr-smoke-test:latest \
             --transport http --port 3000 --server-host 0.0.0.0
           sleep 5
           if ! docker ps --filter name=pr-smoke --format '{{.Status}}' | grep -q "Up"; then
