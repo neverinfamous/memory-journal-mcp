@@ -709,6 +709,7 @@ describe('HttpTransport', () => {
             // It's registered via app.use() after security, CORS, json, rate-limit.
             // Find it by testing: sends 401 for bad token on /mcp path.
             const authMw = mockMiddlewares.find((mw) => {
+                if (mw.length === 4) return false // Skip error middlewares
                 const req = mockReq({
                     path: '/mcp',
                     headers: { authorization: 'Bearer wrong-token' },

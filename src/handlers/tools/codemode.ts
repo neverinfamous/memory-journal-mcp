@@ -27,6 +27,7 @@ import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
+import { generateTypescriptDeclarations } from '../../codemode/type-generator.js'
 
 // =============================================================================
 // Input / Output Schemas
@@ -37,6 +38,7 @@ const ExecuteCodeSchema = z.object({
     timeout: z.number().max(30000).optional().default(30000),
     readonly: z.boolean().optional().default(false),
     repo: z.string().optional(),
+    context: z.record(z.string(), z.unknown()).optional(),
 })
 
 /** Relaxed schema for MCP registration */
@@ -52,6 +54,12 @@ const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .describe(
             'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
+        ),
+    context: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe(
+            'Optional JSON object injected into the sandbox as a global `context` variable. Use this to pass strings or data without string-escaping issues.'
         ),
 })
 
@@ -188,6 +196,9 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 // =============================================================================
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
+    const availableTools = collectNonCodeModeTools(context)
+    const typeDeclarations = generateTypescriptDeclarations(availableTools)
+
     return [
         {
             name: 'mj_execute_code',
@@ -197,21 +208,64 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 'Enables multi-step workflows in a single call, reducing token usage by 70-90%. ' +
                 'API groups: mj.core.*, mj.search.*, mj.analytics.*, mj.relationships.*, ' +
                 'mj.io.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +
-                'Use mj.help() for method listing. Returns the last expression value.',
+                'Returns the last expression value. ' +
+                'Methods accept camelCase or snake_case parameters. ' +
+                'All mj.* methods return Promises (always await). ' +
+                'Result shape: { success: boolean, error?: string, ...data }.\n\n' +
+                '### TypeScript Declarations\n```typescript\n' +
+                typeDeclarations +
+                '\n```',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,
             annotations: {
                 readOnlyHint: false,
+                destructiveHint: false,
                 idempotentHint: false,
                 openWorldHint: false,
             },
             handler: async (params: unknown) => {
                 try {
+                    if (typeof params === 'string') {
+                        params = { code: params }
+                    } else if (
+                        params != null &&
+                        typeof params === 'object' &&
+                        !('code' in params)
+                    ) {
+                        const p = params as Record<string, unknown>
+                        const keys = Object.keys(p)
+                        const hasCodeModeParamsOnly = keys.every((k) =>
+                            ['timeout', 'readonly', 'repo', 'context'].includes(k)
+                        )
+
+                        if ('script' in p && typeof p['script'] === 'string') {
+                            p['code'] = p['script']
+                        } else if ('javascript' in p && typeof p['javascript'] === 'string') {
+                            p['code'] = p['javascript']
+                        } else if ('query' in p && typeof p['query'] === 'string') {
+                            p['code'] = p['query']
+                        } else if ('snippet' in p && typeof p['snippet'] === 'string') {
+                            p['code'] = p['snippet']
+                        } else if (!hasCodeModeParamsOnly) {
+                            params = {
+                                code: `return await mj.core.createEntry(${JSON.stringify(params)});`,
+                            }
+                        }
+                    }
+
+                    if (params != null && typeof params === 'object') {
+                        const p = params as Record<string, unknown>
+                        if ('repo_name' in p && !('repo' in p)) {
+                            p['repo'] = p['repo_name']
+                        }
+                    }
+
                     const {
                         code,
                         timeout,
                         readonly: readonlyMode,
                         repo,
+                        context: contextObj,
                     } = ExecuteCodeSchema.parse(params)
 
                     // Context extraction for rate limiting and tenant isolation
@@ -362,14 +416,22 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const api = createJournalApi(tools, secureDispatcher)
-                    const bindings = api.createSandboxBindings()
+                    const bindings = api.createSandboxBindings(context.progress)
+                    const schemas = api.createSandboxSchemas()
 
                     // Execute in sandbox (override timeout if specified)
                     const pool = getSandboxPool()
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
-                    const result = await pool.execute(code, bindings, timeout)
+                    const result = await pool.execute(
+                        code,
+                        bindings,
+                        schemas,
+                        timeout,
+                        contextObj,
+                        readonlyMode
+                    )
                     // Result size is validated internally by the worker pool
                     return result
                 } catch (err) {

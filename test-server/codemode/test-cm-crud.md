@@ -6,15 +6,15 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 
 **Prerequisites:**
 
-- Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -28,6 +28,7 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 ```javascript
 // Test code:
 const entry = await mj.core.createEntry({
+  project_number: 5,
   content: 'CM3 full-params test entry',
   entry_type: 'technical_note',
   tags: ['codemode3-test', 'full-params'],
@@ -70,6 +71,7 @@ return {
 ```javascript
 // Test code:
 const entry = await mj.core.createEntry({
+  project_number: 5,
   content: 'CM3 shared entry for team verification',
   share_with_team: true,
   tags: ['codemode3-team'],
@@ -90,17 +92,17 @@ return {
 
 ### 20.3 Create Entry — Error Paths
 
-| Test                 | Code                                                                                   | Expected Result                                        |
-| -------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Invalid entry_type   | `return await mj.core.createEntry({ content: "test", entry_type: "invalid" });`        | `{ success: false, error: "..." }` listing valid types |
-| Invalid significance | `return await mj.core.createEntry({ content: "test", significance_type: "invalid" });` | `{ success: false, error: "..." }` listing valid types |
-| Empty content        | `return await mj.core.createEntry({ content: "" });`                                   | `{ success: false, error: "..." }` min length error    |
+| Test                 | Code                                                                                                      | Expected Result                                        |
+| -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Invalid entry_type   | `return await mj.core.createEntry({ project_number: 5, content: "test", entry_type: "invalid" });`        | `{ success: false, error: "..." }` listing valid types |
+| Invalid significance | `return await mj.core.createEntry({ project_number: 5, content: "test", significance_type: "invalid" });` | `{ success: false, error: "..." }` listing valid types |
+| Empty content        | `return await mj.core.createEntry({ project_number: 5, content: "" });`                                   | `{ success: false, error: "..." }` min length error    |
 
 ### 20.4 Get Entry By ID — Details
 
 ```javascript
 // Test code:
-const recent = await mj.core.getRecentEntries({ limit: 1 })
+const recent = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
 const id = recent.entries[0].id
 const full = await mj.core.getEntryById({ entry_id: id })
 const noRels = await mj.core.getEntryById({ entry_id: id, include_relationships: false })
@@ -166,7 +168,11 @@ return {
 const created = await mj.core.createEntryMinimal({ content: 'CM3 delete test' })
 const id = created.entry.id
 const soft = await mj.admin.deleteEntry({ entry_id: id, permanent: false })
-const searchAfterSoft = await mj.search.searchEntries({ query: 'CM3 delete test', limit: 5 })
+const searchAfterSoft = await mj.search.searchEntries({
+  project_number: 5,
+  query: 'CM3 delete test',
+  limit: 5,
+})
 const hiddenFromSearch = !searchAfterSoft.entries.some((e) => e.id === id)
 const perm = await mj.admin.deleteEntry({ entry_id: id, permanent: true })
 const notFound = await mj.admin.deleteEntry({ entry_id: 999999 })
@@ -187,10 +193,10 @@ return {
 
 ### 20.8 Get Recent Entries — Filters
 
-| Test               | Code                                                                                                                                                                          | Expected Result      |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| is_personal: true  | `const r = await mj.core.getRecentEntries({ limit: 5, is_personal: true }); return { count: r.entries.length, allPersonal: r.entries.every(e => e.isPersonal === true) };`    | `allPersonal: true`  |
-| is_personal: false | `const r = await mj.core.getRecentEntries({ limit: 5, is_personal: false }); return { count: r.entries.length, nonePersonal: r.entries.every(e => e.isPersonal === false) };` | `nonePersonal: true` |
+| Test               | Code                                                                                                                                                                                             | Expected Result      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
+| is_personal: true  | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 5, is_personal: true }); return { count: r.entries.length, allPersonal: r.entries.every(e => e.isPersonal === true) };`    | `allPersonal: true`  |
+| is_personal: false | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 5, is_personal: false }); return { count: r.entries.length, nonePersonal: r.entries.every(e => e.isPersonal === false) };` | `nonePersonal: true` |
 
 ### 20.9 test_simple via Code Mode
 
@@ -200,10 +206,10 @@ return {
 
 ### 20.10 Create Entry — project_owner & auto_context
 
-| Test               | Code                                                                                                                                                                                  | Expected Result                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| With project_owner | `const r = await mj.core.createEntry({ content: "CM3 owner test", project_number: 5, project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
-| auto_context off   | `const r = await mj.core.createEntry({ content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
+| Test               | Code                                                                                                                                                                                                     | Expected Result                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| With project_owner | `const r = await mj.core.createEntry({ project_number: 5, content: "CM3 owner test", project_number: 5, project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
+| auto_context off   | `const r = await mj.core.createEntry({ project_number: 5, content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
 
 ### 20.11 Update Entry — is_personal Toggle
 
@@ -237,9 +243,9 @@ return {
 
 ### 20.12 Create Entry — issueUrl Auto-Population
 
-| Test                    | Code                                                                                                                                                                                                 | Expected Result                                                      |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ content: "CM3 issue link", issue_number: 1 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
+| Test                    | Code                                                                                                                                                                                                                                       | Expected Result                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ project_number: 5, content: "CM3 issue link", issue_number: 1, project_number: 5 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
 
 ---
 
@@ -260,19 +266,21 @@ After testing, remove test entries created during Phase 20:
 
 ## Success Criteria
 
-- [ ] `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
-- [ ] `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
-- [ ] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
-- [ ] `create_entry` rejects empty content with structured error
-- [ ] `create_entry` with `project_owner` persists the field
-- [ ] `create_entry` with `auto_context: false` creates entry without auto-generated context
-- [ ] `create_entry` with `issue_number` auto-populates `issueUrl`
-- [ ] `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
-- [ ] `get_entry_by_id` with `include_relationships: false` omits relationship data
-- [ ] `update_entry` updates content, tags, and entry_type — verified via read-back
-- [ ] `update_entry` `is_personal` toggle correctly changes personal status
-- [ ] `update_entry` returns structured error for nonexistent IDs
-- [ ] `delete_entry` soft delete hides entry from search
-- [ ] `delete_entry` permanent delete and nonexistent ID both return structured responses
-- [ ] `get_recent_entries` with `is_personal` filter returns correctly filtered entries
-- [ ] `test_simple` callable via Code Mode
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
+- `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
+- `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
+- `create_entry` rejects empty content with structured error
+- `create_entry` with `project_owner` persists the field
+- `create_entry` with `auto_context: false` creates entry without auto-generated context
+- `create_entry` with `issue_number` auto-populates `issueUrl`
+- `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
+- `get_entry_by_id` with `include_relationships: false` omits relationship data
+- `update_entry` updates content, tags, and entry_type — verified via read-back
+- `update_entry` `is_personal` toggle correctly changes personal status
+- `update_entry` returns structured error for nonexistent IDs
+- `delete_entry` soft delete hides entry from search
+- `delete_entry` permanent delete and nonexistent ID both return structured responses
+- `get_recent_entries` with `is_personal` filter returns correctly filtered entries
+- `test_simple` callable via Code Mode

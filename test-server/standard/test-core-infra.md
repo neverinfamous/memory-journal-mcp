@@ -2,17 +2,19 @@
 
 **Scope:** Server health, briefing resource, protocol validation scripts, and GitHub status resource.
 
-**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
+**Prerequisites:**
 
-**Prerequisites:** Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
 
 **Workflow after testing:**
 
-1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. Implement, update `UNRELEASED.md`, commit without push.
-3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
@@ -34,12 +36,10 @@
 
 | Test                             | Command/Action                   | Expected Result                                                                                        |
 | -------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Read briefing                    | Read `memory://briefing`         | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`                              |
+| Read briefing                    | Read `memory://briefing`         | Returns Markdown table with context, journal stats, GitHub stats, etc.                                 |
 | Verify `lastModified` annotation | Check resource metadata          | ISO 8601 timestamp (client-dependent — AntiGravity doesn't expose MCP annotations)                     |
-| Confirm `userMessage`            | Inspect briefing.userMessage     | Formatted table with project/branch/CI/journal stats                                                   |
-| Milestone progress row           | Inspect briefing.userMessage     | Table includes milestone progress row (e.g., "🚩 Milestones: X open")                                  |
-| Team DB row                      | Inspect briefing.userMessage     | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)                           |
-| Template URIs                    | Check `templateResources` array  | 11 template URIs listed (includes `memory://milestones/{number}`)                                      |
+| Confirm output structure         | Inspect briefing text            | Formatted Markdown table with project/branch/CI/journal stats                                          |
+| Team DB row                      | Inspect briefing text            | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)                           |
 | Workflow summary                 | Inspect `github.workflowSummary` | Present when `BRIEFING_WORKFLOW_STATUS=true` — has `passing`, `failing`, `pending`, `cancelled` counts |
 | Workflow named runs              | Inspect `workflowSummary.runs`   | Array of `{name, conclusion}` when `BRIEFING_WORKFLOW_COUNT > 0`; CI row shows icons (✅/❌)           |
 | Rules metadata                   | Inspect `rulesFile` field        | Present when `RULES_FILE_PATH` set — has `name`, `sizeKB`, `lastModified`                              |
@@ -49,7 +49,7 @@
 ### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
 
 > [!IMPORTANT]
-> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. Ensure the project is built first. See `test-server/README.md` for full details.
+> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. Ensure the project is built first. See `test-server/scripts/README.md` for full details.
 
 ```powershell
 # Ensure latest build
@@ -58,31 +58,57 @@ npm run build
 # Test A — Instruction levels (essential < standard < full)
 node test-server/scripts/test-instruction-levels.mjs
 
-# Test B — Tool annotations (67 tools, 45 openWorldHint=false, 22 openWorldHint=true, 0 missing)
+# Test B — Tool annotations
 node test-server/scripts/test-tool-annotations.mjs
+
+# Test C — Filter instructions token ordering
+node test-server/scripts/test-filter-instructions.mjs
+
+# Test D — Prompts API
+node test-server/scripts/test-prompts.mjs
+
+# Test E — Progress notifications
+node test-server/scripts/test-progress.mjs
+
+# Test F — Team DB Fallback
+node test-server/scripts/test-team-db-fallback.mjs
+
+# Test G — Scheduler (Requires background server)
+# Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
+# Term 2: npm run test:scheduler
+
+# Cleanup Test Artifacts
+rm test-team-prompts.db*
 ```
 
-| Check              | Expected                                                             |
-| ------------------ | -------------------------------------------------------------------- |
-| Instruction levels | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations   | 67 tools, all with `annotations`, 45 `false` + 22 `true` = 0 missing |
+| Check               | Expected                                                             |
+| ------------------- | -------------------------------------------------------------------- |
+| Instruction levels  | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
+| Tool annotations    | 70 tools, all with `annotations`, 48 `false` + 22 `true` = 0 missing |
+| Filter instructions | Output confirms correct filtering of config sections                 |
+| Prompts API         | Successfully fetches and parses all 16 prompts                       |
+| Progress            | Both native and code-mode progress APIs successfully complete        |
+| Team DB Fallback    | Graceful rejection when TEAM_DB_PATH is missing                      |
+| Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
 
 ### 1.4 GitHub Status Resource
 
-| Test              | Command/Action                                                                               | Expected Result                                                  |
-| ----------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Read status       | Read `memory://github/status` (use `memory://github/status/{repo}` for multi-project setups) | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
-| CI status mapping | Verify CI status value                                                                       | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
-| Milestone data    | Inspect status data                                                                          | Includes milestones summary (open count, completion percentages) |
+| Test              | Command/Action                                                                                                   | Expected Result                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Read status       | Read `memory://github/status` (use `memory://github/status/{repo}` or `{owner}/{repo}` for multi-project setups) | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
+| CI status mapping | Verify CI status value                                                                                           | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
+| Milestone data    | Inspect status data                                                                                              | Includes milestones summary (open count, completion percentages) |
 
 ---
 
 ## Success Criteria
 
-- [ ] `test_simple` returns echo message
-- [ ] `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
-- [ ] `memory://briefing` returns complete JSON with all expected fields
-- [ ] Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
-- [ ] 45 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (67 total, 0 missing)
-- [ ] `get_statistics` returns all 4 enhanced analytics metrics
-- [ ] `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `test_simple` returns echo message
+- `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
+- [ ] `memory://briefing` returns complete Markdown string with all expected context
+- Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
+- 48 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (70 total, 0 missing)
+- `get_statistics` returns all 4 enhanced analytics metrics
+- `memory://github/status` returns compact JSON with CI, issues, PRs, milestones

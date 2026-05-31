@@ -19,6 +19,7 @@ test.describe('Payload Contracts: Admin', () => {
         client = await createClient()
         // Create an entry for admin operations
         const e = await callToolAndParse(client, 'create_entry', {
+            project_number: 1,
             content: 'Admin test entry',
             entry_type: 'test_entry',
             tags: ['admin-test', 'merge-source'],
@@ -32,6 +33,7 @@ test.describe('Payload Contracts: Admin', () => {
 
     test('update_entry returns { success, entry }', async () => {
         const payload = await callToolAndParse(client, 'update_entry', {
+            project_number: 1,
             entry_id: entryId,
             content: 'Updated admin test entry',
         })
@@ -68,6 +70,7 @@ test.describe('Payload Contracts: Admin', () => {
 
     test('delete_entry returns { success, entryId }', async () => {
         const payload = await callToolAndParse(client, 'delete_entry', {
+            project_number: 1,
             entry_id: entryId,
         })
         expectSuccess(payload)

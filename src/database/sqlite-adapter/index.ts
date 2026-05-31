@@ -20,6 +20,7 @@ import {
     getAnalyticsSnapshots as getSnapshots,
     computeDigest,
 } from './entries/digest.js'
+import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 
 import * as fs from 'node:fs'
 
@@ -106,18 +107,18 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             entryType?: EntryType
             tags?: string[]
             isPersonal?: boolean
-            significanceType?: string
+            significanceType?: string | null
             autoContext?: string | null
-            projectNumber?: number
-            projectOwner?: string
-            issueNumber?: number
-            issueUrl?: string
-            prNumber?: number
-            prUrl?: string
-            prStatus?: string
-            workflowRunId?: number
-            workflowName?: string
-            workflowStatus?: string
+            projectNumber?: number | null
+            projectOwner?: string | null
+            issueNumber?: number | null
+            issueUrl?: string | null
+            prNumber?: number | null
+            prUrl?: string | null
+            prStatus?: string | null
+            workflowRunId?: number | null
+            workflowName?: string | null
+            workflowStatus?: string | null
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
@@ -388,6 +389,30 @@ export class DatabaseAdapter implements IDatabaseAdapter {
                 'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
             )
             .run()
+    }
+
+    pruneByImportance(olderThanDays: number, importanceThreshold: number): number {
+        const db = this.connection.getNativeDb()
+        const cte = buildImportanceCte()
+        const importanceExpr = buildImportanceSqlExpression()
+        const deletedAt = new Date().toISOString()
+
+        const sql = `
+            WITH ${cte}
+            UPDATE memory_journal
+            SET deleted_at = ?
+            WHERE id IN (
+                SELECT e.id
+                FROM memory_journal e
+                LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+                WHERE e.deleted_at IS NULL
+                  AND julianday('now') - julianday(e.timestamp) > ${String(olderThanDays)}
+                  AND ${importanceExpr} < ${String(importanceThreshold)}
+            )
+        `
+
+        const result = db.prepare(sql).run(deletedAt)
+        return result.changes
     }
 
     executeInTransaction<T>(cb: () => T): T {

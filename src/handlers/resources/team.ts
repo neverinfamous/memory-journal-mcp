@@ -216,6 +216,97 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
             },
         },
+        {
+            uri: 'memory://flags/history',
+            name: 'Resolved Flags History',
+            title: 'Recently Resolved Team Flags',
+            description:
+                'Recently resolved flags from the Hush Protocol (last 7 days). Shows resolution details and time-to-resolution metrics. Requires TEAM_DB_PATH.',
+            mimeType: 'application/json',
+            icons: [ICON_FLAG],
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: (_uri: string, context: ResourceContext): ResourceResult => {
+                if (!context.teamDb) {
+                    return {
+                        data: {
+                            error: 'Team database not configured. Set TEAM_DB_PATH to enable.',
+                            resolved_flags: [],
+                            count: 0,
+                        },
+                    }
+                }
+
+                const now = Date.now()
+                const HISTORY_WINDOW_MS = 604_800_000 // 7 days
+
+                const flagEntries = context.teamDb.searchEntries('', {
+                    entryType: 'flag',
+                    limit: 100,
+                })
+
+                const enriched = enrichWithAuthor(flagEntries, context)
+
+                const resolutionTimes: number[] = []
+                const resolvedFlags = enriched
+                    .map((entry) => {
+                        const flagCtx = parseFlagContext(entry.autoContext)
+                        if (!flagCtx?.resolved) return null
+
+                        const entryTime = new Date(entry.timestamp).getTime()
+                        const ageMs = now - entryTime
+                        if (ageMs > HISTORY_WINDOW_MS) return null
+
+                        // Calculate resolution time if resolved_at is available
+                        let resolutionHours: number | null = null
+                        if (flagCtx.resolved_at) {
+                            const resolvedTime = new Date(flagCtx.resolved_at).getTime()
+                            resolutionHours =
+                                Math.round(((resolvedTime - entryTime) / 3_600_000) * 10) / 10
+                            if (resolutionHours >= 0) {
+                                resolutionTimes.push(resolutionHours)
+                            }
+                        }
+
+                        return {
+                            id: entry.id,
+                            flag_type: flagCtx.flag_type,
+                            target_user: flagCtx.target_user ?? null,
+                            author: entry.author ? sanitizeAuthor(entry.author) : null,
+                            timestamp: entry.timestamp,
+                            resolved_at: flagCtx.resolved_at ?? null,
+                            resolution: flagCtx.resolution
+                                ? markUntrustedContent(flagCtx.resolution)
+                                : null,
+                            resolution_hours: resolutionHours,
+                            preview: markUntrustedContent(
+                                entry.content.slice(0, 120) +
+                                    (entry.content.length > 120 ? '...' : '')
+                            ),
+                            tags: entry.tags,
+                        }
+                    })
+                    .filter((f): f is NonNullable<typeof f> => f !== null)
+
+                // Calculate average resolution time
+                const avgResolutionHours =
+                    resolutionTimes.length > 0
+                        ? Math.round(
+                              (resolutionTimes.reduce((a, b) => a + b, 0) /
+                                  resolutionTimes.length) *
+                                  10
+                          ) / 10
+                        : null
+
+                return {
+                    data: {
+                        resolved_flags: resolvedFlags,
+                        count: resolvedFlags.length,
+                        window_days: 7,
+                        avg_resolution_hours: avgResolutionHours,
+                    },
+                }
+            },
+        },
     ]
 
     return resources.map((resource) => ({

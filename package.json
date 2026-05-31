@@ -1,6 +1,6 @@
 {
     "name": "memory-journal-mcp",
-    "version": "7.7.1",
+    "version": "8.0.0",
     "description": "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads",
     "type": "module",
     "main": "dist/index.js",
@@ -20,14 +20,16 @@
         "lint": "eslint src/ tests/",
         "lint:fix": "eslint src/ tests/ --fix",
         "typecheck": "tsc --noEmit",
-        "check": "npm run lint && npm run typecheck",
+        "check": "tsx scripts/run-checks.ts",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage && npx tsx scripts/update-badges.ts",
         "bench": "vitest bench --run",
         "pretest:e2e": "node -e \"fs.rmSync('.test-output/e2e', { recursive: true, force: true })\"",
         "test:e2e": "playwright test",
+        "test:scheduler": "node test-server/scripts/test-scheduler.mjs",
         "generate:instructions": "node scripts/generate-server-instructions.ts",
+        "backfill:metadata": "tsx scripts/backfill-metadata.ts",
         "prepublishOnly": "npm run check && npm run test && npm run build"
     },
     "keywords": [
@@ -65,7 +67,7 @@
         "@octokit/graphql": "^9.0.3",
         "@octokit/rest": "^22.0.1",
         "better-sqlite3": "^12.8.0",
-        "commander": "^14.0.3",
+        "commander": "^15.0.0",
         "express": "^5.2.1",
         "jose": "^6.2.1",
         "simple-git": "^3.35.2",
@@ -83,7 +85,7 @@
         "eslint": "^10.2.0",
         "globals": "^17.4.0",
         "tsup": "^8.5.1",
-        "tsx": "4.22.3",
+        "tsx": "4.22.4",
         "typescript": "^6.0.2",
         "typescript-eslint": "^8.58.1",
         "vitest": "^4.1.3"

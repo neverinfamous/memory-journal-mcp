@@ -8,7 +8,13 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
-import { ENTRY_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import {
+    ENTRY_TYPES,
+    SIGNIFICANCE_TYPES,
+    EntryOutputSchema,
+    relaxedNumber,
+    coerceSignificanceAlias,
+} from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
@@ -22,6 +28,17 @@ const UpdateEntrySchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),
+    significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
+    project_number: z.number().nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: z.number().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: z.number().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
+    workflow_run_id: z.number().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -31,6 +48,17 @@ const UpdateEntrySchemaMcp = z.object({
     entry_type: z.string().optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),
+    significance_type: z.string().nullable().optional(),
+    project_number: relaxedNumber().nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: relaxedNumber().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: relaxedNumber().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.string().nullable().optional(),
+    workflow_run_id: relaxedNumber().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.string().nullable().optional(),
 })
 
 const DeleteEntrySchema = z.object({
@@ -107,19 +135,44 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'update_entry',
             title: 'Update Entry',
-            description: 'Update an existing journal entry',
+            description:
+                'Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field.',
             group: 'admin',
             inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
+                    coerceSignificanceAlias(params)
+
+                    if (params !== null && typeof params === 'object' && 'auto_context' in params) {
+                        context.config?.runtime?.metrics?.recordDeprecationWarning(
+                            'Agent recently used deprecated auto_context field in update_entry. This field is ignored.'
+                        )
+                    }
+
                     const input = UpdateEntrySchema.parse(params)
                     const entry = db.updateEntry(input.entry_id, {
                         content: input.content,
                         entryType: input.entry_type,
                         isPersonal: input.is_personal,
                         tags: input.tags,
+                        significanceType: input.significance_type,
+                        projectNumber: input.project_number,
+                        projectOwner: input.project_owner,
+                        issueNumber: input.issue_number,
+                        issueUrl: input.issue_url,
+                        prNumber: input.pr_number,
+                        prUrl: input.pr_url,
+                        prStatus: input.pr_status,
+                        workflowRunId: input.workflow_run_id,
+                        workflowName: input.workflow_name,
+                        workflowStatus: input.workflow_status,
                     })
                     if (!entry) {
                         return {
@@ -147,11 +200,17 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'delete_entry',
             title: 'Delete Entry',
-            description: 'Delete a journal entry (soft delete with timestamp)',
+            description:
+                'Delete a journal entry (soft delete with timestamp). Calling with permanent: true on a previously soft-deleted entry works. Returns success: false for nonexistent entries.',
             group: 'admin',
             inputSchema: DeleteEntrySchemaMcp,
             outputSchema: DeleteEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent } = DeleteEntrySchema.parse(params)
@@ -196,7 +255,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             name: 'merge_tags',
             title: 'Merge Tags',
             description:
-                'Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.',
+                'Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge. Only updates non-deleted entries.',
             group: 'admin',
             inputSchema: z.object({
                 source_tag: z
@@ -209,7 +268,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     .describe('Tag to merge into (will be created if not exists)'),
             }),
             outputSchema: MergeTagsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { source_tag, target_tag } = z
@@ -280,7 +344,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({}).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (_params: unknown) => {
                 try {
                     if (!vectorManager) {
@@ -319,7 +388,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({ entry_id: relaxedNumber().optional() }),
             outputSchema: AddToVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const { entry_id } = z.object({ entry_id: z.number() }).parse(params)

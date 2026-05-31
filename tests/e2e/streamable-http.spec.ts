@@ -72,7 +72,7 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
         try {
             const response = await client.callTool({
                 name: 'get_recent_entries',
-                arguments: { limit: 5 },
+                arguments: { project_number: 1, limit: 5 },
             })
 
             expect(response.isError).toBeUndefined()
@@ -89,6 +89,7 @@ test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
             const response = await client.callTool({
                 name: 'create_entry',
                 arguments: {
+                    project_number: 1,
                     content: 'Streamable HTTP transport test entry',
                     entry_type: 'test_entry',
                 },

@@ -1,34 +1,34 @@
 # GitHub Copilot CLI Pre-Push Audit Workflow
 
-This workflow orchestrates an AI-driven adversarial review using the GitHub Copilot CLI (`@github/copilot`). It acts as a strict secondary validation layer (a "second opinion") across both localized logic changes (PR reviews) and full repository inspections.
+This workflow orchestrates an AI-driven adversarial review using the GitHub Copilot CLI (`gh copilot`). It acts as a strict secondary validation layer (a "second opinion") across both localized logic changes (PR reviews) and full repository inspections.
 
 ## Phase 1: Environment Readiness & Authentication
 
 1. **Verify Copilot CLI Presence**:
-   Run `npm list -g @github/copilot`.
-   If missing, install it automatically: `npm i -g @github/copilot`.
+   Run `gh extension list | grep copilot`.
+   If missing, install it via: `gh extension install github/gh-copilot`.
 
 2. **Verify Authentication**:
-   Ensure the CLI is authenticated via `copilot auth`. If the user has not authenticated, pause the agentic execution and prompt them to authorize via the browser endpoint.
+   Ensure the CLI is authenticated via `gh auth status` and test with `gh copilot --version`. If the user has not authenticated, pause the agentic execution and prompt them to authorize (`gh auth login`).
 
 ## Phase 2: Execution Targeting (The Audit Context)
 
 Determine whether this is a localized Feature Branch (Pre-Push PR) review or a whole Codebase Audit.
 
+> **Note**: The `gh copilot` extension does not natively support non-interactive file stream piping. The agent must use `gh copilot explain` or instruct the user to use the Copilot Chat window with the generated prompts.
+
 ### Path A: Pre-Push PR Review
 
 1. Diff the current working branch against the primary target (e.g., `main` or `master`).
-2. **Execute Single-Shot Evaluation Buffer**:
-   ```bash
-   git diff main | copilot "Act as an extremely strict, senior PR reviewer. Review this submitted git diff. Analyze edge cases, logic gaps, unhandled bounds, typescript compliance, and security flaws. Produce a Markdown-formatted table of defects."
-   ```
+2. **Execute Evaluation**:
+   Prompt the user to review the diff in their IDE's Copilot Chat using this prompt:
+   "Act as an extremely strict, senior PR reviewer. Review this submitted git diff. Analyze edge cases, logic gaps, unhandled bounds, typescript compliance, and security flaws. Produce a Markdown-formatted table of defects."
 
 ### Path B: Comprehensive Codebase Review
 
-1. **Execute Single-Shot Codebase Buffer**:
-   ```bash
-   echo "Act as an adversarial security and performance auditor. Perform a comprehensive analysis of all files in this repository. Point out bad architectural couplings, injection vectors, unhandled error flows, and data boundaries that are not explicit. Output as a detailed Markdown report." | copilot
-   ```
+1. **Execute Codebase Evaluation**:
+   Prompt the user to perform the review in their IDE using the Workspace chat context (`@workspace`):
+   "Act as an adversarial security and performance auditor. Perform a comprehensive analysis of all files in this repository. Point out bad architectural couplings, injection vectors, unhandled error flows, and data boundaries that are not explicit. Output as a detailed Markdown report."
 
 ## Phase 3: Journal Archival (Verification Sync)
 

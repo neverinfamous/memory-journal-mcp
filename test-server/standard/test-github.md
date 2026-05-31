@@ -2,24 +2,27 @@
 
 **Scope:** 16 GitHub tools — read-only tools, issue lifecycle, Kanban, milestones, repository insights, Copilot reviews, and test cleanup.
 
-**Execution Strategy:** Use direct MCP tools, not Code Mode or scripts! Code Mode is preferred to scripts if absolutely necesasary to supplement direct MCP tool calls.
+**Prerequisites:**
 
-**Prerequisites:** Seed data from `test-seed.md` must be present. MCP server instructions auto-injected. Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Seed data from `test-seed.md` must be present. MCP server instructions auto-injected. Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.
+- **IMPORTANT**: In multi-workspace environments, always pass `repo: "memory-journal-mcp"` to GitHub tools to avoid silent fallbacks to the wrong repository.
 
 **Workflow after testing:**
 
-1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. Implement, update `UNRELEASED.md`, commit without push.
-3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
-## Phase 2: GitHub Integration (16 tools)
+## Phase 13: GitHub Integration (16 tools)
 
-### 2.1 Read-Only Tools
+### 13.1 Read-Only Tools
 
 | Test                  | Command/Action                                 | Expected Result                                          |
 | --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
@@ -36,7 +39,7 @@
 | Get nonexistent issue | `get_github_issue(issue_number: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
 | Get nonexistent PR    | `get_github_pr(pr_number: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
 
-### 2.2 Issue Lifecycle Tools
+### 13.2 Issue Lifecycle Tools
 
 > [!CAUTION]
 > These tools **create and close real GitHub issues**. Use with awareness.
@@ -52,7 +55,7 @@
 | Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                   |
 | Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }` |
 
-### 2.3 Kanban Tools
+### 13.3 Kanban Tools
 
 | Test                | Command/Action                                                                     | Expected Result                                                       |
 | ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -63,7 +66,7 @@
 | Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
 | Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
 
-### 2.4 Milestone Tools
+### 13.4 Milestone Tools
 
 > [!CAUTION]
 > These tools **create, modify, and delete real GitHub milestones**. Clean up test milestones after testing.
@@ -78,10 +81,10 @@
 | Close milestone      | `update_github_milestone(milestone_number: <new>, state: "closed")`                              | Milestone state changed to `closed`                                                                               |
 | Delete milestone     | `delete_github_milestone(milestone_number: <new>, confirm: true)`                                | Returns `success: true`, milestone removed from GitHub                                                            |
 | Get nonexistent      | `get_github_milestone(milestone_number: 999999)`                                                 | Structured error: `{ error: "Milestone #999999 not found" }`                                                      |
-| Milestone resource   | Read `memory://github/milestones`                                                                | Static resource lists open milestones with completion %                                                           |
-| Milestone detail     | Read `memory://milestones/<N>`                                                                   | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
+| Milestone resource   | Read `memory://github/milestones/memory-journal-mcp`                                             | Static resource lists open milestones with completion %                                                           |
+| Milestone detail     | Read `memory://milestones/memory-journal-mcp/<N>`                                                | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
 
-### 2.5 Repository Insights Tool
+### 13.5 Repository Insights Tool
 
 | Test              | Command/Action                             | Expected Result                                    |
 | ----------------- | ------------------------------------------ | -------------------------------------------------- |
@@ -91,16 +94,16 @@
 | Paths section     | `get_repo_insights(sections: "paths")`     | Returns top 5 popular content paths                |
 | All sections      | `get_repo_insights(sections: "all")`       | Returns full payload with all sections above       |
 
-### 2.6 Copilot Review Tool
+### 13.6 Copilot Review Tool
 
-| Test                  | Command/Action                                        | Expected Result                                                               |
-| --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body` |
-| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                  |
-| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                        |
-| No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
+| Test                  | Command/Action                                        | Expected Result                                                                                                |
+| --------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body`                                  |
+| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                                                   |
+| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Returns structured `CONFIGURATION_ERROR` in multi-workspace environments (or auto-detects in single-workspace) |
+| No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`                                        |
 
-### 2.7 GitHub Test Cleanup
+### 13.7 GitHub Test Cleanup
 
 > [!IMPORTANT]
 > After GitHub testing, ensure all test artifacts are removed. Use the checklist below.
@@ -115,14 +118,16 @@
 
 ## Success Criteria
 
-- [ ] GitHub issue lifecycle tools create/close issues correctly
-- [ ] `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
-- [ ] `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
-- [ ] `close_github_issue_with_entry` returns structured error for already-closed issues
-- [ ] `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
-- [ ] `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
-- [ ] Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
-- [ ] `memory://milestones/{number}` returns milestone with completion %, issue counts, and hint
-- [ ] `get_repo_insights` returns correct data based on `sections` parameter
-- [ ] `get_copilot_reviews` — referenced in test docs but not re-executed (verified in schema check only; see prior sessions)
-- [ ] All GitHub test artifacts cleaned up after testing
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- GitHub issue lifecycle tools create/close issues correctly
+- `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
+- `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
+- `close_github_issue_with_entry` returns structured error for already-closed issues
+- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
+- `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
+- Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
+- `memory://milestones/{repo}/{number}` returns milestone with completion %, issue counts, and hint
+- `get_repo_insights` returns correct data based on `sections` parameter
+- `get_copilot_reviews` — referenced in test docs but not re-executed (verified in schema check only; see prior sessions)
+- All GitHub test artifacts cleaned up after testing

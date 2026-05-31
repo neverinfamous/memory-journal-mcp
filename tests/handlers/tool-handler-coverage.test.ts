@@ -457,6 +457,7 @@ describe('Tool Handler Coverage', () => {
             const result = (await callTool(
                 'create_entry',
                 {
+                    project_number: 1,
                     content: 'Team shared entry test',
                     share_with_team: true,
                     is_personal: false,
@@ -479,6 +480,7 @@ describe('Tool Handler Coverage', () => {
             const result = (await callTool(
                 'create_entry',
                 {
+                    project_number: 1,
                     content: 'No team entry test',
                     share_with_team: true,
                 },
@@ -499,25 +501,30 @@ describe('Tool Handler Coverage', () => {
         it('should return error for invalid entry_type', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Test', entry_type: 'invalid_type_xyz' },
+                { project_number: 1, content: 'Test', entry_type: 'invalid_type_xyz' },
                 db
             )) as { error: string }
 
             expect(result.error).toBeDefined()
         })
 
-        it('should return error for invalid significance_type', async () => {
+        it('should reject invalid significance_type with validation error', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Test', significance_type: 'invalid_sig' },
+                { project_number: 1, content: 'Test', significance_type: 'invalid_sig' },
                 db
-            )) as { error: string }
+            )) as { success: boolean; error: string; code?: string }
 
-            expect(result.error).toBeDefined()
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('significance_type')
         })
 
         it('should return error for empty content', async () => {
-            const result = (await callTool('create_entry', { content: '' }, db)) as {
+            const result = (await callTool(
+                'create_entry',
+                { project_number: 1, content: '' },
+                db
+            )) as {
                 error: string
             }
 

@@ -29,7 +29,12 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
             }),
             outputSchema: CopilotReviewsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z

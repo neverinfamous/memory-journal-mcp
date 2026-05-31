@@ -1,11 +1,9 @@
 ---
 name: docker
 description: |
-  Production-grade Docker and container best practices. Use when writing
-  Dockerfiles, configuring Docker Compose, optimizing image size and build
-  speed, implementing security hardening, or debugging container issues.
-  Triggers on "Docker", "Dockerfile", "container", "Compose", "BuildKit",
-  "multi-stage build", "image size", "docker-compose".
+  Production-grade Docker and container best practices. Use when containerizing apps with Docker, 
+  writing Dockerfiles, or managing Docker Compose environments.
+  "multi-stage build", "image size", "docker-compose". Use ONLY when a Dockerfile or container registry is the explicit target for deployment. NOT for serverless or Cloudflare Workers. NOT for generic app deployment without containers. NOT for orchestrating CI/CD pipelines natively (use github-actions instead). Do NOT trigger for generic "deploy my app" requests without clarifying the target platform.
 ---
 
 # Docker & Container Engineering Standards
@@ -43,35 +41,7 @@ Place this as the **first line** of every Dockerfile. It enables:
 ## 2. Multi-Stage Builds (Required for Production)
 
 Multi-stage builds are **mandatory** for any production image. They separate build-time dependencies from runtime.
-
-```dockerfile
-# syntax=docker/dockerfile:1
-
-# ── Stage 1: Build ─────────────────────────────
-FROM node:22-slim AS builder
-WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
-COPY . .
-RUN pnpm run build
-
-# ── Stage 2: Runtime ───────────────────────────
-FROM node:22-slim AS runtime
-WORKDIR /app
-ENV NODE_ENV=production
-
-# Create non-root user
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-
-# Copy ONLY production artifacts
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-
-USER appuser
-EXPOSE 3000
-CMD ["node", "dist/index.js"]
-```
+See **[templates.md](references/templates.md)** for the full annotated Multi-Stage Build template.
 
 ### Key Rules
 
@@ -178,75 +148,11 @@ coverage/
 - **ALWAYS** exclude `node_modules` — reinstall inside the container
 - **ALWAYS** exclude `.env*` — prevents secret leaks
 
-## 5. Docker Compose v2
+## 5. Advanced Examples & CI/CD
 
-### Structure
+For advanced Docker Compose configurations and GitHub Actions CI/CD workflows, see the reference file:
 
-```yaml
-# docker-compose.yml
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime # Target a specific stage
-    ports:
-      - '3000:3000'
-    environment:
-      NODE_ENV: production
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  db:
-    image: postgres:17-alpine
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    environment:
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-    secrets:
-      - db_password
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  pgdata:
-
-secrets:
-  db_password:
-    file: ./secrets/db_password.txt
-```
-
-### Best Practices
-
-- **Use `depends_on` with health checks** — not just service start order
-- **Use named volumes** for persistent data — never bind-mount the entire project in production
-- **Use environment files** (`env_file:`) for non-secret config
-- **Use `secrets:`** for credentials — they are mounted as files, not env vars
-- **Pin image versions** — `postgres:17-alpine`, not `postgres:latest`
-
-## 6. CI/CD Integration
-
-### GitHub Actions Pattern
-
-```yaml
-- name: Build and push
-  uses: docker/build-push-action@<sha>
-  with:
-    context: .
-    push: true
-    tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
-    cache-from: type=gha
-    cache-to: type=gha,mode=max
-```
-
-- **Use GitHub Actions cache** (`type=gha`) for CI builds
-- **Tag with commit SHA** — never `:latest` for production
-- **Scan before push** — run vulnerability scanning as a build step
+**[Read: references/advanced-examples.md](references/advanced-examples.md)**
 
 ## 7. Anti-Patterns (Never Do These)
 

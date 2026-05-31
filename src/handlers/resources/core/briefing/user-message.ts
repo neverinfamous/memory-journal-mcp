@@ -1,25 +1,34 @@
 /**
  * Briefing — User Message Formatter
  *
- * Formats the briefing summary table displayed to the user.
+ * Formats the briefing as a hybrid markdown layout:
+ * - Table rows for dense groups (GitHub, Journal, System) — compresses
+ *   data points using `<br>` and `·` separators for human readability.
+ * - Flat lines for metrics/analytics — emoji-heavy content reads better
+ *   as standalone lines.
  */
 
 import type { BriefingGitHub } from './github-section.js'
-import type { RulesFile, SkillsDir, FlagSummary } from './context-section.js'
+import type { RulesFile, SkillsDir, FlagSummary, GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
+import type { UnreleasedSummary, TestHealth } from './system-section.js'
 
-const escapeTableCell = (text: string): string =>
-    text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
+const escapeContent = (text: string): string =>
+    text.replace(/<\/?untrusted_remote_content[^>]*>/gi, '').replace(/\r?\n/g, ' ')
+
+/** Escape pipe characters for use inside markdown table cells */
+const escapeCell = (text: string): string =>
+    escapeContent(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 
 /**
- * Build the user-facing markdown table for the briefing.
+ * Build the user-facing markdown output for the briefing.
  */
 export function formatUserMessage(opts: {
     repoName: string
     branchName: string
     ciStatus: string
     totalEntries: number
-    latestPreview: string
+    latestPreviews: string[]
     summaryPreviews?: string[] | null
     github: BriefingGitHub | null
     teamTotalEntries?: number
@@ -27,17 +36,39 @@ export function formatUserMessage(opts: {
     skillsDir?: SkillsDir
     analyticsInsights?: BriefingInsights
     flagSummary?: FlagSummary
+    graphSummary?: GraphSummary
+    version?: string
+    toolCount?: number
+    resourceCount?: number
+    promptCount?: number
+    localTime?: string
+    unreleasedSummary?: UnreleasedSummary
+    testHealth?: TestHealth
+    filterSummary?: string | null
+    isReadonly?: boolean
+    teamConfigured?: boolean
+    githubConfigured?: boolean
+    instructionLevel?: string
+    registryRepos?: string[] | null
+    ioRootCount?: number
+    hasCodeMap?: boolean
+    lastReleaseDaysAgo?: number
+    localCheck?: boolean
+    deprecationWarnings?: string[]
+    /** Registered workspace paths for non-IDE agents: { repoName: diskPath } */
+    registryPaths?: Record<string, string>
 }): string {
     const {
         repoName,
         branchName,
         totalEntries,
-        latestPreview,
+        latestPreviews,
         summaryPreviews,
         github,
         rulesFile,
         skillsDir,
         analyticsInsights,
+        graphSummary,
     } = opts
 
     // Build enhanced CI display
@@ -61,100 +92,323 @@ export function formatUserMessage(opts: {
             if (ws.cancelled > 0) parts.push(`${String(ws.cancelled)} cancelled`)
             ciDisplay = parts.join(' · ') || opts.ciStatus
         }
+    } else if (opts.ciStatus === 'failing' && github?.ciName) {
+        ciDisplay = `❌ ${github.ciName} (build failed)`
+    } else if (opts.ciStatus === 'passing' && github?.ciName) {
+        ciDisplay = `✅ ${github.ciName} (passing)`
     }
 
-    // Issue/PR rows
-    let issuesRow = ''
-    let prsRow = ''
+    // ========================================================================
+    // TABLE ROW 1: GitHub
+    // ========================================================================
+    let gitStatus = ''
+    if (github?.localGitStatus) {
+        const { modified, untracked, isClean } = github.localGitStatus
+        if (isClean) {
+            gitStatus = ' · Git: Clean'
+        } else {
+            const parts: string[] = []
+            if (modified > 0) parts.push(`${String(modified)} modified`)
+            if (untracked > 0) parts.push(`${String(untracked)} untracked`)
+            gitStatus = ` · Git: ${parts.join(', ')}`
+        }
+    }
+
+    const githubParts = [
+        `**${escapeCell(repoName)}**`,
+        `${escapeCell(branchName)}${escapeCell(gitStatus)}`,
+        escapeCell(ciDisplay),
+    ]
+
+    // ========================================================================
+    // TABLE ROW 2: Tracking (Issues · PRs · Milestones)
+    // ========================================================================
+    const trackingParts: string[] = []
+
     if (github) {
+        // Issues
         if (github.openIssueList && github.openIssueList.length > 0) {
             const titles = github.openIssueList
                 .map((i) => `#${String(i.number)} ${i.title}`)
                 .join(' · ')
-            issuesRow = `\n| **Issues** | ${String(github.openIssues)} open: ${escapeTableCell(titles)} |`
+            trackingParts.push(`Issues: ${String(github.openIssues)} open: ${escapeCell(titles)}`)
         } else {
-            issuesRow = `\n| **Issues** | ${String(github.openIssues)} open |`
+            trackingParts.push(`Issues: ${String(github.openIssues)} open`)
         }
 
+        // PRs
         if (github.prStatusSummary) {
             const s = github.prStatusSummary
             const parts: string[] = []
             if (s.open > 0) parts.push(`${String(s.open)} open`)
             if (s.merged > 0) parts.push(`${String(s.merged)} merged`)
             if (s.closed > 0) parts.push(`${String(s.closed)} closed`)
-            prsRow = `\n| **PRs** | ${parts.join(' · ') || '0'} |`
+            trackingParts.push(`PRs: ${parts.join(', ') || '0'}`)
         } else if (github.openPrList && github.openPrList.length > 0) {
             const titles = github.openPrList
                 .map((p) => `#${String(p.number)} ${p.title}`)
                 .join(' · ')
-            prsRow = `\n| **PRs** | ${String(github.openPRs)} open: ${escapeTableCell(titles)} |`
+            trackingParts.push(`PRs: ${String(github.openPRs)} open: ${escapeCell(titles)}`)
         } else {
-            prsRow = `\n| **PRs** | ${String(github.openPRs)} open |`
+            trackingParts.push(`PRs: ${String(github.openPRs)} open`)
+        }
+
+        // Milestones
+        if (github.milestones.length > 0) {
+            trackingParts.push(
+                `MS: ${escapeCell(
+                    github.milestones
+                        .map(
+                            (m) =>
+                                `${m.title} (${m.progress}${m.progress === '100%' ? ' ✅' : ''}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`
+                        )
+                        .join(', ')
+                )}`
+            )
         }
     }
 
-    // Milestone row
-    const milestoneRow =
-        github?.milestones && github.milestones.length > 0
-            ? `\n| **Milestones** | ${escapeTableCell(github.milestones.map((m) => `${m.title} (${m.progress}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`).join(', '))} |`
-            : ''
+    // ========================================================================
+    // TABLE ROW 3: Journal
+    // ========================================================================
+    const journalLine1 = [`${String(totalEntries)} entries`]
+    if (opts.teamTotalEntries !== undefined) {
+        journalLine1.push(`Team: ${String(opts.teamTotalEntries)}`)
+    }
 
-    // Insights row
-    let insightsRow = ''
+    const journalParts = [journalLine1.join(' · ')]
+
+    if (latestPreviews.length > 0) {
+        journalParts.push(`Latest: ${escapeCell(latestPreviews[0] ?? '')}`)
+        for (let i = 1; i < latestPreviews.length; i++) {
+            journalParts.push(`Entry: ${escapeCell(latestPreviews[i] ?? '')}`)
+        }
+    } else {
+        journalParts.push('Latest: No entries yet')
+    }
+    if (summaryPreviews && summaryPreviews.length > 0) {
+        for (const s of summaryPreviews) {
+            journalParts.push(`Summary: ${escapeCell(s)}`)
+        }
+    }
+
+    // ========================================================================
+    // TABLE ROW 4: System
+    // ========================================================================
+    const sysLines: string[] = []
+
+    const sysLine1 = []
+    if (opts.version) sysLine1.push(`v${opts.version}`)
+    if (opts.resourceCount !== undefined) sysLine1.push(`${String(opts.resourceCount)} resources`)
+    if (opts.promptCount !== undefined) sysLine1.push(`${String(opts.promptCount)} prompts`)
+    if (sysLine1.length) sysLines.push(sysLine1.join(' · '))
+
+    if (opts.toolCount !== undefined) {
+        if (opts.filterSummary) {
+            const isCodeMode = opts.filterSummary.includes('codemode')
+            const codeModeNote = isCodeMode ? ' (100KB cap) — use mj.* API' : ''
+            sysLines.push(
+                `${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`
+            )
+        } else {
+            sysLines.push(`${String(opts.toolCount)} tools`)
+        }
+    }
+
+    sysLines.push('📊 memory://metrics/summary')
+
+    const testLines: string[] = []
+    if (opts.testHealth) {
+        const th = opts.testHealth
+        const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}%)` : ''
+        testLines.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
+    }
+    if (opts.localCheck !== undefined) {
+        testLines.push(`Lint & Typecheck: ${opts.localCheck ? '✅' : '❌'}`)
+    }
+    if (testLines.length) sysLines.push(testLines.join(' · '))
+
+    const sysLine3 = []
+    if (rulesFile)
+        sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
+    if (skillsDir)
+        sysLine3.push(`🧠 ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
+    if (sysLine3.length) sysLines.push(sysLine3.join(' · '))
+
+    if (opts.hasCodeMap) {
+        sysLines.push(
+            '📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)'
+        )
+    }
+
+    if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
+
+    // ========================================================================
+    // TABLE ROW 5: Config (only when non-default values present)
+    // ========================================================================
+    const configLines: string[] = []
+
+    const configLine1: string[] = []
+    if (opts.isReadonly) configLine1.push('mode: readonly')
+    if (opts.instructionLevel) configLine1.push(`level: ${opts.instructionLevel}`)
+    if (configLine1.length) configLines.push(configLine1.join(' · '))
+
+    const configLine2: string[] = []
+    configLine2.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
+    configLine2.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
+    if (configLine2.length) configLines.push(configLine2.join(' · '))
+
+    const configLine3: string[] = []
+    if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
+        configLine3.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
+    }
+    if (opts.registryRepos && opts.registryRepos.length > 0) {
+        const repoNames = opts.registryRepos.slice(0, 3).join(', ')
+        const suffix =
+            opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
+        configLine3.push(`registry: ${escapeCell(repoNames)}${suffix}`)
+    }
+    if (configLine3.length) configLines.push(configLine3.join(' · '))
+
+    // ========================================================================
+    // TABLE ROW 6: Insights + Analytics
+    // ========================================================================
+    const insightsLines: string[] = []
+
     if (github?.insights) {
         const parts: string[] = []
-        if (github.insights.stars !== null) parts.push(`⭐ ${String(github.insights.stars)} stars`)
-        if (github.insights.forks !== null) parts.push(`🍴 ${String(github.insights.forks)} forks`)
+        if (github.insights.stars !== null) parts.push(`⭐ ${String(github.insights.stars)}`)
+        if (github.insights.forks !== null) parts.push(`🍴 ${String(github.insights.forks)}`)
         if (github.insights.clones14d !== undefined)
-            parts.push(`📦 ${String(github.insights.clones14d)} clones`)
+            parts.push(`📦 ${String(github.insights.clones14d)}`)
         if (github.insights.views14d !== undefined)
-            parts.push(`👁️ ${String(github.insights.views14d)} views`)
+            parts.push(`👁️ ${String(github.insights.views14d)}`)
         if (parts.length > 0) {
             const trafficNote = github.insights.clones14d !== undefined ? ' (14d)' : ''
-            insightsRow = `\n| **Insights** | ${parts.join(' · ')}${trafficNote} |`
+            insightsLines.push(`${parts.join(' · ')}${trafficNote}`)
+        }
+    }
+    if (github?.copilotReviews) {
+        const cr = github.copilotReviews
+        insightsLines.push(
+            `Copilot: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
+        )
+    }
+
+    if (analyticsInsights) {
+        insightsLines.push(`📈 ${escapeCell(analyticsInsights.activityTrend)}`)
+        const metricParts: string[] = []
+        if (analyticsInsights.significanceSpike !== null)
+            metricParts.push(`🔥 ${escapeCell(analyticsInsights.significanceSpike)}`)
+        if (analyticsInsights.relationshipDensity !== undefined)
+            metricParts.push(
+                `🔗 Density: ${escapeCell(String(analyticsInsights.relationshipDensity))}`
+            )
+        if (metricParts.length > 0) insightsLines.push(metricParts.join(' · '))
+        if (analyticsInsights.staleProjects.length > 0)
+            insightsLines.push(
+                `💤 ${String(analyticsInsights.staleProjects.length)} stale projects`
+            )
+    }
+
+    // ========================================================================
+    // TABLE ROW 7: Graph
+    // ========================================================================
+    const graphLines: string[] = []
+    if (graphSummary && graphSummary.totalRelationships > 0) {
+        const topTypes =
+            Object.entries(graphSummary.causalMetrics)
+                .filter(([_, count]) => count > 0)
+                .map(([type, count]) => `${type}: ${String(count)}`)
+                .join(', ') || 'none'
+        graphLines.push(
+            `${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
+        )
+    }
+
+    // ========================================================================
+    // TABLE ROW 8: Unreleased
+    // ========================================================================
+    const unreleasedLines: string[] = []
+    if (opts.unreleasedSummary) {
+        const u = opts.unreleasedSummary
+        const parts: string[] = []
+        if (u.added > 0) parts.push(`${String(u.added)} added`)
+        if (u.changed > 0) parts.push(`${String(u.changed)} changed`)
+        if (u.fixed > 0) parts.push(`${String(u.fixed)} fixed`)
+        if (u.security > 0) parts.push(`${String(u.security)} security`)
+        if (u.removed > 0) parts.push(`${String(u.removed)} removed`)
+        if (parts.length > 0) {
+            const ageStr =
+                opts.lastReleaseDaysAgo !== undefined
+                    ? `(${String(opts.lastReleaseDaysAgo)}d) `
+                    : ''
+            let line = `${ageStr}${parts.join(' · ')}`
+            if ((u.keyItems?.length ?? 0) > 0) {
+                line += `<br>Recent focus: ${escapeCell(u.keyItems.join(', '))}`
+            }
+            unreleasedLines.push(line)
         }
     }
 
-    // Copilot row
-    const copilotRow = github?.copilotReviews
-        ? `\n| **Copilot** | ${String(github.copilotReviews.reviewed)} reviewed · ${String(github.copilotReviews.approved)} approved${github.copilotReviews.changesRequested > 0 ? ` · ${String(github.copilotReviews.changesRequested)} changes requested` : ''}${github.copilotReviews.totalComments > 0 ? ` (${String(github.copilotReviews.totalComments)} comments)` : ''} |`
-        : ''
-
-    // Proactive Analytics row
-    let analyticsRow = ''
-    if (analyticsInsights) {
-        const parts: string[] = []
-        parts.push(`📈 ${analyticsInsights.activityTrend}`)
-        if (analyticsInsights.significanceSpike !== null)
-            parts.push(`🔥 ${analyticsInsights.significanceSpike}`)
-        if (analyticsInsights.relationshipDensity !== undefined)
-            parts.push(`🔗 Relationship density: ${analyticsInsights.relationshipDensity}`)
-        if (analyticsInsights.staleProjects.length > 0)
-            parts.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
-        analyticsRow = `\n| **Analytics** | ${escapeTableCell(parts.join(' · '))} |`
+    // ========================================================================
+    // TABLE ROW 9: Workspaces
+    // ========================================================================
+    const workspacesLines: string[] = []
+    if (opts.registryPaths) {
+        const entries = Object.entries(opts.registryPaths)
+        if (entries.length > 0) {
+            const pathList = entries
+                .map(([name, diskPath]) => {
+                    const isActive = name === repoName || name === repoName.split('/').pop()
+                    const formatted = `${escapeCell(name)}: ${escapeCell(diskPath)}`
+                    return isActive ? `**${formatted}** (active)` : formatted
+                })
+                .join('<br>')
+            workspacesLines.push(pathList)
+        }
     }
 
-    const summariesOutput =
-        summaryPreviews && summaryPreviews.length > 0
-            ? summaryPreviews.map((s) => `\n| **Summary** | ${escapeTableCell(s)} |`).join('')
-            : ''
-
-    // Flags row (Hush Protocol)
-    let flagsRow = ''
+    // ========================================================================
+    // Assembly
+    // ========================================================================
+    let flagsAlert = ''
     if (opts.flagSummary && opts.flagSummary.count > 0) {
-        const flagParts = opts.flagSummary.flags.slice(0, 5).map((f) => {
-            const target = f.target_user ? ` → @${f.target_user}` : ''
-            return `🚩 ${f.flag_type}${target}: ${f.preview.slice(0, 50)}`
-        })
-        flagsRow = `\n| **Flags** | ${escapeTableCell(flagParts.join(' · '))}${opts.flagSummary.count > 5 ? ` (+${String(opts.flagSummary.count - 5)} more)` : ''} |`
+        flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
     }
 
-    return `📋 **Session Context Loaded**
-| Context | Value |
-|---------|-------|
-| **Project** | ${escapeTableCell(repoName)} |
-| **Branch** | ${escapeTableCell(branchName)} |
-| **CI** | ${escapeTableCell(ciDisplay)} |
-| **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${analyticsRow}${flagsRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+    if (opts.deprecationWarnings && opts.deprecationWarnings.length > 0) {
+        flagsAlert += `⚠️ **Deprecation Warning(s):**\n${opts.deprecationWarnings.map((w) => `🚩 ${w}`).join('\n')}\n\n`
+    }
+
+    // Build table
+    const tableRows = [
+        '| Context | Details |',
+        '|---------|---------|',
+        `| **GitHub** | ${githubParts.join('<br>')} |`,
+    ]
+    if (trackingParts.length > 0) {
+        tableRows.push(`| **Tracking** | ${trackingParts.join('<br>')} |`)
+    }
+    tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
+    if (sysLines.length > 0) {
+        tableRows.push(`| **System** | ${sysLines.join('<br>')} |`)
+    }
+    if (configLines.length > 0) {
+        tableRows.push(`| **Config** | ${configLines.join('<br>')} |`)
+    }
+    if (insightsLines.length > 0) {
+        tableRows.push(`| **Insights** | ${insightsLines.join('<br>')} |`)
+    }
+    if (graphLines.length > 0) {
+        tableRows.push(`| **Graph** | ${graphLines.join('<br>')} |`)
+    }
+    if (unreleasedLines.length > 0) {
+        tableRows.push(`| **Unreleased** | ${unreleasedLines.join('<br>')} |`)
+    }
+    if (workspacesLines.length > 0) {
+        tableRows.push(`| **Workspaces** | ${workspacesLines.join('<br>')} |`)
+    }
+
+    return `${flagsAlert}${tableRows.join('\n')}`
 }

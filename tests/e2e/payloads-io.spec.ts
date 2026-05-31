@@ -34,6 +34,7 @@ test.describe('Payload Contracts: IO', () => {
 
     test('export_entries (json) returns { format, entries, count }', async () => {
         const payload = await callToolAndParse(client, 'export_entries', {
+            project_number: 1,
             format: 'json',
             limit: 5,
         })
@@ -46,6 +47,7 @@ test.describe('Payload Contracts: IO', () => {
 
     test('export_entries (markdown) returns { format, content }', async () => {
         const payload = await callToolAndParse(client, 'export_entries', {
+            project_number: 1,
             format: 'markdown',
             limit: 5,
         })
@@ -57,11 +59,13 @@ test.describe('Payload Contracts: IO', () => {
     test('export_markdown returns success payload and outputs files', async () => {
         // First ensure we have an entry to export
         const createPayload = await callToolAndParse(client, 'create_entry', {
+            project_number: 1,
             content: 'Test IO Export',
         })
         expectSuccess(createPayload)
 
         const payload = await callToolAndParse(client, 'export_markdown', {
+            project_number: 1,
             output_dir: testExportDir,
             limit: 3,
         })

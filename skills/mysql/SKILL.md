@@ -1,6 +1,10 @@
 ---
 name: mysql
-description: Enterprise MySQL & MariaDB production rules — query safety, connection pooling, and strict schema configurations.
+description: |
+  Use when designing, querying, or managing a MySQL or MariaDB database.
+  Enforces enterprise production rules for query safety (strict parameterization), 
+  connection pooling, and strict schema configurations (STRICT_TRANS_TABLES).
+  MUST-ASK: Require explicit database engine name before triggering. Never guess. Do NOT trigger for generic "set up a database" requests. NOT for Postgres or SQLite. NOT for ORM-managed migrations.
 ---
 
 # MySQL / MariaDB Production Standards
@@ -27,4 +31,4 @@ MySQL and MariaDB are powerful relationship-driven databases, but AI agents MUST
 ## 4. Ecosystem & Diagnostics
 
 - **Error Handling**: When intercepting connection drops or authentication failures (e.g., ER_ACCESS_DENIED_ERROR), instruct the user to verify their `.env` configurations (`MYSQL_URL`, `MYSQL_HOST`, etc.). Do not hallucinate database names.
-- **Using MCP**: If the `mysql-mcp` server is attached, prefer utilizing its formal 227+ structured tools over executing raw Bash CLI scripts (`mysql -h ...`) to guarantee payload optimizations and schema intelligence.
+- **Using MCP**: If the `mysql-mcp` server is attached, prefer utilizing its formal structured tools over executing raw Bash CLI scripts (`mysql -h ...`) to guarantee payload optimizations and schema intelligence.

@@ -50,6 +50,7 @@ test.describe('Payload Contracts: Backup Restore', () => {
     test('full backup → restore cycle succeeds', async () => {
         // Step 1: Create an entry so the DB is non-empty
         const entry = await callToolAndParse(client, 'create_entry', {
+            project_number: 1,
             content: 'Backup restore cycle test entry',
             entry_type: 'test_entry',
             tags: ['backup-restore-test'],

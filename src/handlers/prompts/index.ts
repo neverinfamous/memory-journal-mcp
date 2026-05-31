@@ -9,6 +9,8 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getGitHubPromptDefinitions } from './github.js'
+import { getAdversarialPromptDefinitions } from './adversarial.js'
+import { getTeamPromptDefinitions } from './team.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 
 /**
@@ -77,5 +79,10 @@ export function getPrompt(
  * Get all prompt definitions by composing sub-module definitions
  */
 function getAllPromptDefinitions(): InternalPromptDef[] {
-    return [...getWorkflowPromptDefinitions(), ...getGitHubPromptDefinitions()]
+    return [
+        ...getWorkflowPromptDefinitions(),
+        ...getGitHubPromptDefinitions(),
+        ...getAdversarialPromptDefinitions(),
+        ...getTeamPromptDefinitions(),
+    ]
 }

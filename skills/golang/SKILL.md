@@ -1,7 +1,8 @@
 ---
 name: golang
 description: |
-  Master Go development using production-grade best practices merged from the Google and Uber style guides. Use whenever writing Go code, designing APIs, handling errors, managing goroutines, or configuring linters.
+  Master Go development using production-grade best practices merged from the Google and Uber style guides. Use whenever writing backend Go microservices, designing APIs, handling errors, managing goroutines, or configuring linters.
+  Keywords: channels, context propagation, go.mod, Go generics. Do NOT trigger for generic 'build a server' requests unless the platform/language is explicitly specified as Go/Golang.
 ---
 
 # Golang Engineering Standards
@@ -52,3 +53,9 @@ This skill synthesizes the absolute best practices from the ecosystem (Uber Guid
 ## 7. Tooling & Enforcement
 
 - The agent should prioritize running `go fmt ./...` and `golangci-lint run` (if available) before confirming code completion.
+
+## 8. Security
+
+- **Command Injection**: Sanitize all inputs to `exec.Command`. Never pass unsanitized user input to the shell.
+- **SQL Injection**: Always use parameterized queries (e.g. `db.QueryRow("SELECT * FROM users WHERE id = ?", id)`).
+- **Path Traversal**: Validate and clean paths using `filepath.Clean` before `filepath.Join` to prevent directory escape vulnerabilities.

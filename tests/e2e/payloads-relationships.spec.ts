@@ -20,10 +20,12 @@ test.describe('Payload Contracts: Relationships', () => {
         client = await createClient()
         // Create two entries for relationship tests
         const e1 = await callToolAndParse(client, 'create_entry', {
+            project_number: 1,
             content: 'Relationship source entry',
             entry_type: 'test_entry',
         })
         const e2 = await callToolAndParse(client, 'create_entry', {
+            project_number: 1,
             content: 'Relationship target entry',
             entry_type: 'project_decision',
         })

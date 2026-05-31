@@ -33,7 +33,7 @@ test.describe('Payload Contracts: Code Mode API Bridge Depth', () => {
     test('mj.search.searchEntries() returns { entries, count }', async () => {
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: `
-                const result = await mj.search.searchEntries({ query: 'test' });
+                const result = await mj.search.searchEntries({ project_number: 1, query: 'test' });
                 return result;
             `,
         })
@@ -48,7 +48,7 @@ test.describe('Payload Contracts: Code Mode API Bridge Depth', () => {
     test('mj.analytics.getStatistics() returns stats object with expected fields', async () => {
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: `
-                const result = await mj.analytics.getStatistics({});
+                const result = await mj.analytics.getStatistics({ project_number: 1 });
                 return result;
             `,
         })
@@ -68,13 +68,14 @@ test.describe('Payload Contracts: Code Mode API Bridge Depth', () => {
             code: `
                 // Step 1: create entry with a unique tag
                 const created = await mj.core.createEntry({
+                    project_number: 1,
                     content: 'Code mode API bridge depth test',
                     entry_type: 'test_entry',
                     tags: ['${uniqueTag}'],
                 });
 
                 // Step 2: search using the tag
-                const results = await mj.search.searchEntries({ query: '${uniqueTag}' });
+                const results = await mj.search.searchEntries({ project_number: 1, query: '${uniqueTag}' });
 
                 return {
                     createdId: created.entry?.id,

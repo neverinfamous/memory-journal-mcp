@@ -37,11 +37,12 @@ export type EntryType =
 export type SignificanceType =
     | 'milestone'
     | 'breakthrough'
-    | 'technical_breakthrough'
     | 'decision'
+    | 'architecture'
     | 'lesson_learned'
     | 'blocker_resolved'
     | 'release'
+    | 'security'
     | null
 
 /**

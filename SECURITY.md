@@ -95,6 +95,58 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 
 - ✅ **1MB body limit** on JSON requests (prevents memory exhaustion DoS)
 
+## 🔐 **OAuth 2.1 Authentication**
+
+For production HTTP deployments, Memory Journal supports **OAuth 2.1 authentication** (opt-in):
+
+| Component                   | Status | Description                                      |
+| --------------------------- | ------ | ------------------------------------------------ |
+| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
+| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
+| Token Validation            | ✅     | JWT validation with JWKS support (via `jose`)    |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+| HTTP Middleware             | ✅     | Bearer token extraction and validation           |
+
+### **Supported Scopes**
+
+| Scope   | Tool Groups                                       | Description                |
+| ------- | ------------------------------------------------- | -------------------------- |
+| `read`  | core, search, analytics, relationships, export    | Read-only operations       |
+| `write` | github, team (+ all read groups)                  | Read + write operations    |
+| `admin` | admin, backup, codemode (+ all write/read groups) | Full administrative access |
+
+### **Enabling OAuth**
+
+```bash
+# CLI flags
+memory-journal-mcp --transport http --port 3000 \
+  --oauth-enabled \
+  --oauth-issuer https://auth.example.com/realms/mcp \
+  --oauth-audience memory-journal-mcp \
+  --oauth-jwks-uri https://auth.example.com/realms/mcp/protocol/openid-connect/certs
+
+# Or via environment variables
+export OAUTH_ENABLED=true
+export OAUTH_ISSUER=https://auth.example.com/realms/mcp
+export OAUTH_AUDIENCE=memory-journal-mcp
+export OAUTH_JWKS_URI=https://auth.example.com/realms/mcp/protocol/openid-connect/certs
+```
+
+### **How It Works**
+
+1. Client sends `Authorization: Bearer <token>` header
+2. Server validates JWT signature against JWKS endpoint
+3. Server checks issuer, audience, and expiration claims
+4. Server extracts scopes from token and enforces tool-level access
+5. Invalid/missing tokens receive `401` with `WWW-Authenticate` header
+
+### **Fallback Behavior**
+
+When OAuth is **not enabled**, authentication falls back to:
+
+1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var is set, requests must include `Authorization: Bearer <token>` matching the configured value
+2. **No auth** — if no auth mechanism is configured, all requests are accepted (suitable for local/development use)
+
 ## 🐙 **GitHub Token Security**
 
 ### **Token Handling**
@@ -135,7 +187,7 @@ AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 
 ### **Container Hardening**
 
-- ✅ **Minimal base image**: `node:24-alpine`
+- ✅ **Minimal base image**: `node:26-alpine`
 - ✅ **Multi-stage build**: Build dependencies not in production image
 - ✅ **Process isolation** from host system
 - ✅ **No shell access needed** for production
@@ -154,6 +206,59 @@ docker run -v ./data:/app/data:rw,noexec,nosuid,nodev memory-journal-mcp
 docker run --memory=1g --cpus=1 memory-journal-mcp
 ```
 
+## ⛓️ **Supply Chain Security**
+
+### **SHA-Pinned Images**
+
+**Recommended (highest security):**
+
+```bash
+# Use SHA-256 digest for immutable reference
+docker pull writenotenow/memory-journal-mcp@sha256:abc123...
+
+# Find SHA digests at:
+# https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags
+```
+
+**Benefits:**
+
+- Immutable image reference
+- Protection against tag hijacking
+- Reproducible deployments
+- Supply chain verification
+
+**Tag-based (convenience):**
+
+```bash
+docker pull writenotenow/memory-journal-mcp:latest
+```
+
+## 🔒 **Code Mode Sandbox Security**
+
+Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `worker_threads` + `vm.createContext` sandbox:
+
+### **Engine-Level Restrictions**
+
+- ✅ **V8 code generation disabled** — `codeGeneration: { strings: false, wasm: false }` prevents `eval()` and `Function()` construction from strings at the V8 engine level
+- ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
+- ✅ **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
+- ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
+
+### **Static Code Validation**
+
+- ✅ **18 blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **50KB code size limit** — prevents payload-based resource exhaustion
+
+### **Runtime Protection**
+
+- ✅ **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
+- ✅ **Rate limiting** — 60 executions per minute per client
+- ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
+- ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) to prevent OOM via oversized payloads
+- ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
+- ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
+- ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
+
 ## 🔍 **Data Privacy**
 
 ### **Architecture Characteristics**
@@ -169,20 +274,110 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 - ✅ **No sensitive data**: Doesn't access private keys or credentials
 - ✅ **Optional GitHub integration**: Only if explicitly configured with token
 
+## 🗑️ **Soft Delete Security**
+
+### **Recoverable Deletes**
+
+```javascript
+// Soft delete (default)
+delete_entry({ entry_id: 42, permanent: false })
+// Sets deleted_at timestamp, entry remains in DB
+
+// Permanent delete (explicit)
+delete_entry({ entry_id: 42, permanent: true })
+// Removes from database completely
+```
+
+**Benefits:**
+
+- Accidental deletion recovery
+- Audit trail
+- No data loss
+
+**Soft-deleted entries:**
+
+- Excluded from searches
+- Not visible in lists
+- Still in database (for recovery)
+
+## 🔑 **Access Control**
+
+### **MCP Client Authentication**
+
+Security handled at multiple levels:
+
+- **OAuth 2.1** (HTTP transport, opt-in) - RFC-compliant JWT validation with scope enforcement
+- **Simple token auth** (HTTP transport, via `MCP_AUTH_TOKEN`) - Basic Bearer token verification
+- **MCP client** (stdio transport) - Desktop app security (Cursor IDE, Claude Desktop)
+- User controls which servers run
+
+### **File System Permissions**
+
+**npm installation:**
+
+```bash
+# Database created with user permissions
+chmod 600 ~/.memory-journal/memory_journal.db
+```
+
+**Docker installation:**
+
+```bash
+# Volume mount with appropriate permissions
+mkdir -m 755 data
+```
+
+### **Team Database Security**
+
+If using team collaboration, the `TEAM_DB_PATH` dictates where the shared database is located.
+
+**Security Warning:** Because `TEAM_DB_PATH` is accessed by multiple users or processes, it must be placed on a secure shared volume with strict access controls to prevent unauthorized data access or modification.
+
+```bash
+# Set secure permissions on the team database directory
+chmod 700 /shared/team-data
+```
+
+## ⚙️ **Secure Configuration**
+
+### **Environment Variables**
+
+**Docker environment variables:**
+
+```json
+{
+  "args": [
+    "-e",
+    "DB_PATH=/app/data/custom.db"
+    // NO sensitive data in env vars
+    // NO API keys
+    // NO credentials
+  ]
+}
+```
+
+### **Secrets Management**
+
+**No secrets required:**
+
+- No API keys
+- No passwords
+- No tokens
+- Optional: GitHub CLI (user manages `gh auth`)
+
 ## 🔄 **CI/CD Security**
 
 - ✅ **CodeQL analysis** - automated static analysis on push/PR
 - ✅ **Trivy container scanning** - Docker image vulnerability detection
 - ✅ **TruffleHog** - secret scanning on push/PR
 - ✅ **npm audit** - dependency vulnerability checking
-- ✅ **Dependabot** - automated dependency update PRs
 
 ## 🚨 **Security Best Practices**
 
 ### **For Users**
 
 1. **Set a CORS origin** when exposing the HTTP transport on a network
-2. **Keep Node.js updated**: Use Node.js 24+ (LTS)
+2. **Keep Node.js updated**: Use Node.js 26+ (LTS)
 3. **Secure host system**: Ensure your host machine is secure
 4. **Regular backups**: Use the `backup_journal` tool or back up your `.db` file
 5. **Limit network access**: Don't expose the HTTP transport to untrusted networks
@@ -216,8 +411,69 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture
 - [x] GitHub token error scrubbing
+- [x] Code Mode sandbox isolation (worker_threads V8 isolate + vm.createContext)
+- [x] Code Mode V8 codeGeneration restrictions (eval/Function disabled at engine level)
+- [x] Code Mode frozen built-in prototypes (constructor chain escape prevention)
+- [x] Code Mode blocked patterns (18 static regex rules)
+- [x] Code Mode Proxy constructor nullified in sandbox context
+- [x] Code Mode RPC allowlist validation (host-side method authorization)
+- [x] Code Mode readonly Proxy traps (structured errors for stripped methods)
 - [x] CI/CD security pipeline (CodeQL, Trivy, secret scanning)
 - [x] Comprehensive security documentation
+
+## 🎯 **Threat Model**
+
+### **In Scope**
+
+**Protected against:**
+
+- SQL injection
+- Resource exhaustion (size limits)
+- Accidental data loss (soft delete)
+- Database integrity (transactions)
+- Container escape (non-root, no privileges)
+
+### **Out of Scope**
+
+**Not protected against:**
+
+- Malicious MCP client
+- Compromised host system
+- Physical access to database file
+- User deleting database file
+
+**Why:**
+
+- Local-first design trusts the host
+- User has full control
+- Desktop application security model
+
+## 📜 **Compliance**
+
+### **Data Protection**
+
+**GDPR-friendly:**
+
+- No data collection
+- No data transmission
+- Local storage only
+- User controls all data
+- Easy data export/deletion
+
+**No PII collection:**
+
+- No names
+- No email addresses
+- No tracking
+- No analytics
+
+## 📦 **Supported Versions**
+
+| Component    | Supported Versions | Notes                                                                 |
+| ------------ | ------------------ | --------------------------------------------------------------------- |
+| Node.js      | 26.x (LTS)         | Minimum required version for `worker_threads` and isolation features. |
+| MCP Protocol | 2024-11-05         | Full compatibility with the official Model Context Protocol.          |
+| Docker Base  | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
 
 ## 🚨 **Reporting Security Issues**
 
@@ -231,7 +487,7 @@ If you discover a security vulnerability, please:
 ## 🔄 **Security Updates**
 
 - **Container updates**: Rebuild Docker images when base images are updated
-- **Dependency updates**: Keep npm packages updated via `npm audit` and Dependabot
+- **Dependency updates**: Keep npm packages updated via manual update workflows
 - **Database maintenance**: Run `ANALYZE` and `PRAGMA optimize` regularly
 - **Security patches**: Apply host system security updates
 

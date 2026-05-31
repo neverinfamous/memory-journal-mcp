@@ -31,7 +31,12 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamExportEntriesSchemaMcp,
             outputSchema: TeamExportOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -41,6 +46,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     const { format, start_date, end_date, entry_type, tags, limit } =
                         TeamExportEntriesSchema.parse(params)
 
+                    await sendProgress(progress, 0, 3, 'Preparing team export...')
                     await sendProgress(progress, 1, 3, 'Fetching team entries...')
 
                     // When entry_type or tags filters are active, fetch a larger

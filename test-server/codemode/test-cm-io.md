@@ -8,14 +8,16 @@ Test the unified IO namespace, testing both legacy `exportEntries` formats and t
 
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Ensure `ALLOWED_IO_ROOTS` is configured in the environment to permit access to the mock directory.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
-5. Provide a very brief final summary.
+5. Clean up any leftover test artifacts created during the run (e.g., exported `.md` files in `cm_test_export` folder) using the `run_command` tool.
+6. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
@@ -37,6 +39,8 @@ const tagExport = await mj.io.exportEntries({
 return {
   jsonHasEntries: Array.isArray(jsonExport.entries),
   jsonCount: jsonExport.entries?.length ?? 0,
+  jsonTruncatedFlag:
+    typeof jsonExport.truncated === 'boolean' || jsonExport.truncated === undefined,
   mdHasContent: typeof mdExport.content === 'string',
   tagFiltered:
     tagExport.entries?.every(
@@ -45,11 +49,12 @@ return {
 }
 ```
 
-| Check            | Expected                                      |
-| ---------------- | --------------------------------------------- |
-| `jsonHasEntries` | `true`                                        |
-| `mdHasContent`   | `true`                                        |
-| `tagFiltered`    | `true` (only entries with "architecture" tag) |
+| Check               | Expected                                      |
+| ------------------- | --------------------------------------------- |
+| `jsonHasEntries`    | `true`                                        |
+| `jsonTruncatedFlag` | `true`                                        |
+| `mdHasContent`      | `true`                                        |
+| `tagFiltered`       | `true` (only entries with "architecture" tag) |
 
 ### 26.2 Markdown File Orchestration
 
@@ -100,7 +105,10 @@ return {
 
 ## Success Criteria
 
-- [ ] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
-- [ ] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
-- [ ] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
-- [ ] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `mj.io.exportEntries` provides JSON lists and raw markdown contents.
+- JSON exports that exceed size limits return `truncated: true`.
+- `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
+- `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
+- `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal or lacking `ALLOWED_IO_ROOTS` permission.

@@ -5,7 +5,7 @@ description: |
   writing utility classes, configuring design tokens via @theme, implementing
   dark mode, migrating from v3, or integrating with React/Vue/Svelte. Triggers
   on "Tailwind", "utility CSS", "Tailwind v4", "@theme", "dark mode classes",
-  "responsive design", "Tailwind migration".
+  "responsive design", "Tailwind migration". CAUTION: Emitting extensive Tailwind utility classes consumes significant token space; prioritize semantic component extraction.
 ---
 
 # Tailwind CSS v4 Engineering Standards
@@ -124,56 +124,7 @@ Tailwind uses a **mobile-first** approach — unprefixed utilities apply to all 
 
 ## 4. Component Patterns
 
-### Buttons
-
-```html
-<button
-  class="
-  inline-flex items-center justify-center
-  rounded-lg px-4 py-2
-  bg-primary-500 text-white font-medium
-  hover:bg-primary-600
-  focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500
-  active:scale-[0.98]
-  disabled:opacity-50 disabled:cursor-not-allowed
-  transition-all duration-150
-"
->
-  Click me
-</button>
-```
-
-### Cards
-
-```html
-<article
-  class="
-  rounded-xl border border-gray-200 dark:border-gray-700
-  bg-white dark:bg-gray-800
-  p-6 shadow-sm
-  hover:shadow-md transition-shadow
-"
->
-  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Title</h3>
-  <p class="mt-2 text-gray-600 dark:text-gray-400">Description text.</p>
-</article>
-```
-
-### Custom Component Classes
-
-```css
-@layer components {
-  .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2
-           bg-primary-500 text-white font-medium
-           hover:bg-primary-600 transition-colors;
-  }
-}
-```
-
-- **Use `@layer components`** for reusable component styles
-- **Prefer utility classes inline** for one-off styling
-- **Use `@apply` sparingly** — only for highly-repeated patterns
+See **[component-patterns.md](references/component-patterns.md)** for examples of Buttons, Cards, and Custom Component Classes.
 
 ## 5. Animations & Transitions
 
@@ -243,15 +194,15 @@ Usage: `class="animate-fade-in"` or `class="animate-slide-up"`
 
 ## 7. Anti-Patterns (Never Do These)
 
-| Anti-Pattern                                 | Why It's Wrong                                    | Do This Instead                                                  |
-| -------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
-| `@apply` everywhere                          | Defeats utility-first purpose, harder to maintain | Use inline utilities; `@apply` only for highly-repeated patterns |
-| `!important` classes                         | Specificity wars, unpredictable cascade           | Use proper specificity layers                                    |
-| Arbitrary values excessively (`text-[17px]`) | Breaks design system consistency                  | Define tokens in `@theme`                                        |
-| Inline `style=` alongside utilities          | Mixed paradigms, inconsistent                     | All styling via Tailwind utilities                               |
-| Using v3 `tailwind.config.js` in v4          | Unnecessary JS dependency                         | Migrate to `@theme` in CSS                                       |
-| Not using `dark:` variants                   | Inaccessible for dark-mode users                  | Always implement dark mode                                       |
-| Ignoring mobile-first                        | Desktop-only layouts break on phones              | Design mobile-first, add breakpoints up                          |
+| Anti-Pattern                                             | Why It's Wrong                                    | Do This Instead                                                  |
+| -------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
+| `@apply` everywhere                                      | Defeats utility-first purpose, harder to maintain | Use inline utilities; `@apply` only for highly-repeated patterns |
+| `!important` classes                                     | Specificity wars, unpredictable cascade           | Use proper specificity layers                                    |
+| Arbitrary values excessively (`text-[17px]`, `w-[13px]`) | Breaks design system consistency in production    | Define tokens in `@theme`                                        |
+| Inline `style=` alongside utilities                      | Mixed paradigms, inconsistent                     | All styling via Tailwind utilities                               |
+| Using v3 `tailwind.config.js` in v4                      | Unnecessary JS dependency                         | Migrate to `@theme` in CSS                                       |
+| Not using `dark:` variants                               | Inaccessible for dark-mode users                  | Always implement dark mode                                       |
+| Ignoring mobile-first                                    | Desktop-only layouts break on phones              | Design mobile-first, add breakpoints up                          |
 
 ## 8. Accessibility Essentials
 

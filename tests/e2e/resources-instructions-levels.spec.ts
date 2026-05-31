@@ -29,7 +29,7 @@ async function readInstructions(client: Client): Promise<string> {
     const response = await client.readResource({ uri: 'memory://instructions' })
     expect(response.contents).toBeDefined()
     expect(response.contents.length).toBeGreaterThan(0)
-    return response.contents[0]!.text as string
+    return (response.contents[0] as { text: string }).text
 }
 
 // ============================================================================
@@ -56,9 +56,9 @@ test.describe('memory://instructions: core-only filter gating', () => {
         stopServer(CORE_ONLY_PORT)
     })
 
-    test('core-only: core section (Rule & Skill Suggestions) is always present', async () => {
+    test('core-only: core section (Essential Session Start) is always present', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('Rule & Skill Suggestions')
+        expect(text).toContain('Essential Session Start')
     })
 
     test('core-only: Active Tools section lists only core group', async () => {
@@ -70,7 +70,7 @@ test.describe('memory://instructions: core-only filter gating', () => {
 
     test('core-only: Code Mode section is absent (codemode group disabled)', async () => {
         const text = await readInstructions(client)
-        expect(text).not.toContain('Code Mode (Token-Efficient')
+        expect(text).not.toContain('## Code Mode')
     })
 
     test('core-only: GitHub Integration section is absent (github group disabled)', async () => {
@@ -85,7 +85,7 @@ test.describe('memory://instructions: core-only filter gating', () => {
 
     test('core-only: semantic_search Quick Access row is absent (search group disabled)', async () => {
         const text = await readInstructions(client)
-        expect(text).not.toContain('| Semantic search |')
+        expect(text).not.toContain('semantic_search')
     })
 })
 
@@ -115,12 +115,12 @@ test.describe('memory://instructions: -github filter gating', () => {
 
     test('-github: core section is present', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('Rule & Skill Suggestions')
+        expect(text).toContain('Essential Session Start')
     })
 
     test('-github: Code Mode section is present (codemode group enabled)', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('Code Mode (Token-Efficient')
+        expect(text).toContain('## Code Mode')
     })
 
     test('-github: GitHub Integration section is absent (github group removed)', async () => {
@@ -133,9 +133,9 @@ test.describe('memory://instructions: -github filter gating', () => {
         expect(text).not.toContain('Copilot Review Patterns')
     })
 
-    test('-github: semantic_search Quick Access row is present (search group enabled)', async () => {
+    test('-github: semantic_search is present in Active Tools (search group enabled)', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('| Semantic search |')
+        expect(text).toContain('semantic_search')
     })
 
     test('-github: Active Tools section does not list github tools', async () => {

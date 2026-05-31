@@ -12,9 +12,9 @@ Test all 4 payload optimization features via Code Mode: Kanban throttling (`summ
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -166,11 +166,11 @@ return {
 const failures = []
 
 // At limit — should accept
-const atLimit = await mj.core.getRecentEntries({ limit: 500 })
+const atLimit = await mj.core.getRecentEntries({ project_number: 5, limit: 500 })
 if (atLimit.success === false) failures.push('limit 500 rejected: ' + atLimit.error)
 
 // Over limit — should reject
-const overLimit = await mj.core.getRecentEntries({ limit: 501 })
+const overLimit = await mj.core.getRecentEntries({ project_number: 5, limit: 501 })
 if (overLimit.success !== false) failures.push('limit 501 should be rejected')
 
 // GitHub issues over limit
@@ -182,7 +182,7 @@ const prsOver = await mj.github.getGithubPrs({ limit: 501 })
 if (prsOver.success !== false) failures.push('github PRs limit 501 should be rejected')
 
 // Search over limit
-const searchOver = await mj.search.searchEntries({ query: 'test', limit: 501 })
+const searchOver = await mj.search.searchEntries({ project_number: 5, query: 'test', limit: 501 })
 if (searchOver.success !== false) failures.push('search limit 501 should be rejected')
 
 return {
@@ -241,13 +241,15 @@ return 'z'.repeat(50 * 1024)
 
 ## Success Criteria
 
-- [ ] Kanban `summary_only` returns zero items per column with `itemCount` metadata
-- [ ] Kanban `item_limit` truncates columns and sets `truncated: true`
-- [ ] Zero `item_limit` behaves identically to `summary_only: true`
-- [ ] Body truncation defaults to 800 chars with `bodyTruncated`/`bodyFullLength` metadata
-- [ ] `include_comments: true` returns `comments` array and `commentCount`
-- [ ] `MAX_QUERY_LIMIT` (500) enforced — `limit: 501` produces structured errors on core, github, and search tools
-- [ ] Code Mode 100KB cap produces structured error with "aggregate" guidance and KB sizes
-- [ ] Results under 100KB pass through without error
-- [ ] All test scripts return `{ success: true, failures: [] }`
-- [ ] Agent reports the Total Token Estimate in the final summary
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Kanban `summary_only` returns zero items per column with `itemCount` metadata
+- Kanban `item_limit` truncates columns and sets `truncated: true`
+- Zero `item_limit` behaves identically to `summary_only: true`
+- Body truncation defaults to 800 chars with `bodyTruncated`/`bodyFullLength` metadata
+- `include_comments: true` returns `comments` array and `commentCount`
+- `MAX_QUERY_LIMIT` (500) enforced — `limit: 501` produces structured errors on core, github, and search tools
+- Code Mode 100KB cap produces structured error with "aggregate" guidance and KB sizes
+- Results under 100KB pass through without error
+- All test scripts return `{ success: true, failures: [] }`
+- Agent reports the Total Token Estimate in the final summary

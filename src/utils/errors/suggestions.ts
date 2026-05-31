@@ -100,6 +100,19 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
         suggestion: 'Internal sandbox error. Retry the operation.',
         code: 'INTERNAL_ERROR',
     },
+    // Zod enum validation patterns — return valid values for self-correction
+    {
+        pattern: /invalid enum value.*significance/i,
+        suggestion:
+            'Valid significance_type values: milestone, breakthrough, decision, architecture, lesson_learned, blocker_resolved, release, security',
+        code: 'VALIDATION_ERROR',
+    },
+    {
+        pattern: /invalid enum value.*entry.?type/i,
+        suggestion:
+            'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, copilot_validation, other, personal_reflection',
+        code: 'VALIDATION_ERROR',
+    },
 ]
 
 // =============================================================================

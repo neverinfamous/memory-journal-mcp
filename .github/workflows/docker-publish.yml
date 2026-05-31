@@ -68,10 +68,66 @@ jobs:
           only-severities: critical,high
           exit-code: true
 
+  # Smoke test: verify the Docker image actually starts before pushing
+  # Prevents shipping images that pass CVE scans but crash at runtime (neverinfamous/db-mcp#149)
+  smoke-test:
+    needs: [security-scan]
+    if: ${{ needs.security-scan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Build image for smoke test
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: smoke-test:latest
+          cache-from: type=gha,scope=smoke-test
+          cache-to: type=gha,scope=smoke-test,mode=max
+
+      - name: Smoke test — binary loads without crash
+        run: |
+          docker run --rm smoke-test:latest --help
+          echo "✅ Binary load smoke test passed"
+
+      - name: Smoke test — HTTP transport starts and responds
+        run: |
+          docker run -d --name smoke-http -p 3000:3000 \
+            -e ALLOWED_IO_ROOTS=/app/data \
+            smoke-test:latest \
+            --transport http --port 3000 --server-host 0.0.0.0 --auth-token smoke-test-token
+          sleep 5
+          if ! docker ps --filter name=smoke-http --format '{{.Status}}' | grep -q "Up"; then
+            echo "❌ HTTP smoke test failed — container crashed"
+            docker logs smoke-http 2>&1 || true
+            exit 1
+          fi
+          HTTP_STATUS=$(curl -sf -o /dev/null -w '%{http_code}' http://localhost:3000/health || echo "000")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Health endpoint returned $HTTP_STATUS"
+            docker logs smoke-http 2>&1 || true
+            docker stop smoke-http || true
+            exit 1
+          fi
+          docker stop smoke-http
+          echo "✅ HTTP transport smoke test passed"
+
   # Build each platform on native architecture (only runs if security scan passes)
   build-platform:
-    needs: [security-scan]
-    if: always() && needs.security-scan.result == 'success' && github.event_name != 'pull_request'
+    needs: [security-scan, smoke-test]
+    if: always() && needs.security-scan.result == 'success' && needs.smoke-test.result == 'success' && github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:

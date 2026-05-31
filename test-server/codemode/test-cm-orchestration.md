@@ -6,15 +6,15 @@ Test cross-group orchestration: journal health dashboards, GitHub-journal covera
 
 **Prerequisites:**
 
-- Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -31,7 +31,7 @@ Test cross-group orchestration: journal health dashboards, GitHub-journal covera
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const stats = await mj.analytics.getStatistics({})
-const recent = await mj.core.getRecentEntries({ limit: 5 })
+const recent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
 const tags = await mj.core.listTags({})
 return {
   totalEntries: stats.totalEntries,
@@ -56,6 +56,7 @@ const issues = await mj.github.getGithubIssues({ limit: 3 })
 const results = []
 for (const issue of (issues.issues || []).slice(0, 2)) {
   const entries = await mj.search.searchEntries({
+    project_number: 5,
     query: `#${issue.number}`,
     limit: 3,
   })
@@ -80,7 +81,7 @@ const tagList = await mj.core.listTags({})
 const topTags = (tagList.tags || []).sort((a, b) => b.count - a.count).slice(0, 3)
 const report = []
 for (const tag of topTags) {
-  const entries = await mj.search.searchEntries({ query: tag.name, limit: 2 })
+  const entries = await mj.search.searchEntries({ project_number: 5, query: tag.name, limit: 2 })
   report.push({ tag: tag.name, count: tag.count, sampleEntries: entries.entries.length })
 }
 return { analyzedTags: report.length, report }
@@ -95,7 +96,7 @@ return { analyzedTags: report.length, report }
 
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
-const recent = await mj.core.getRecentEntries({ limit: 5 })
+const recent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
 const withRelationships = []
 for (const entry of recent.entries.slice(0, 3)) {
   const detail = await mj.core.getEntryById({ entry_id: entry.id })
@@ -120,6 +121,7 @@ return { checked: Math.min(recent.entries.length, 3), withRelationships }
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const entry = await mj.core.createEntry({
+  project_number: 5,
   content: 'Code Mode pipeline test: semantic indexing verification ZQJKM',
   tags: ['codemode-pipeline-test'],
   entry_type: 'technical_note',
@@ -148,8 +150,10 @@ return {
 
 ## Success Criteria
 
-- [ ] Journal health dashboard aggregates stats + recent + tags correctly
-- [ ] GitHub-journal coverage report iterates issues and searches entries
-- [ ] Tag analysis pipeline processes multiple tags with search per tag
-- [ ] Relationship graph summary checks entries for relationship counts
-- [ ] Full pipeline (create → index → semantic search) completes end-to-end
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Journal health dashboard aggregates stats + recent + tags correctly
+- GitHub-journal coverage report iterates issues and searches entries
+- Tag analysis pipeline processes multiple tags with search per tag
+- Relationship graph summary checks entries for relationship counts
+- Full pipeline (create → index → semantic search) completes end-to-end

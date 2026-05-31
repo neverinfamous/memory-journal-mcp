@@ -38,7 +38,13 @@ for (const item of items) {
     const targetPath = path.join(targetDir, item)
 
     if (fs.statSync(sourcePath).isDirectory()) {
-        fs.cpSync(sourcePath, targetPath, { recursive: true })
+        fs.cpSync(sourcePath, targetPath, {
+            recursive: true,
+            filter: (src) => {
+                const base = path.basename(src)
+                return base !== 'node_modules' && base !== 'package-lock.json'
+            },
+        })
         console.log(`  \x1b[32m\u2714\x1b[0m ${item}`)
         count++
     }

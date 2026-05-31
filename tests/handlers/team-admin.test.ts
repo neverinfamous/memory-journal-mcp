@@ -165,6 +165,50 @@ describe('Team Admin Tool Handlers', () => {
             expect(result.error).toContain('Team entry 9999 not found')
             expect(result.code).toBe('RESOURCE_NOT_FOUND')
         })
+
+        it('should update metadata fields on team entry', async () => {
+            const createResult = (await callTool(
+                'team_create_entry',
+                {
+                    project_number: 1,
+                    content: 'Team metadata test',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(createResult.success).toBe(true)
+            const entryId = createResult.entry.id
+
+            const updateResult = (await callTool(
+                'team_update_entry',
+                {
+                    entry_id: entryId,
+                    project_number: 99,
+                    significance_type: 'decision',
+                    issue_number: 42,
+                    pr_number: 7,
+                    pr_status: 'merged',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(updateResult.success).toBe(true)
+            expect(updateResult.entry.projectNumber).toBe(99)
+            expect(updateResult.entry.significanceType).toBe('decision')
+            expect(updateResult.entry.issueNumber).toBe(42)
+            expect(updateResult.entry.prNumber).toBe(7)
+            expect(updateResult.entry.prStatus).toBe('merged')
+        })
     })
 
     describe('team_delete_entry', () => {

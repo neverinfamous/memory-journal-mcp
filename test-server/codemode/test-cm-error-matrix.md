@@ -11,9 +11,9 @@ Systematic verification of structured error handling across all `mj.*` API group
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -29,18 +29,18 @@ Systematic verification of structured error handling across all `mj.*` API group
 
 ```javascript
 // Test code:
-const createEmpty = await mj.core.createEntry({})
+const createEmpty = await mj.core.createEntry({ project_number: 5 })
 const createMinEmpty = await mj.core.createEntryMinimal({})
 const getByIdEmpty = await mj.core.getEntryById({})
-const recentEmpty = await mj.core.getRecentEntries({})
+const recentEmpty = await mj.core.getRecentEntries({ project_number: 5 })
 const statsEmpty = await mj.analytics.getStatistics({})
 const tagsEmpty = await mj.core.listTags({})
 
 // Type mismatches
-const contentNum = await mj.core.createEntry({ content: 123 })
-const limitStr = await mj.core.getRecentEntries({ limit: 'abc' })
+const contentNum = await mj.core.createEntry({ project_number: 5, content: 123 })
+const limitStr = await mj.core.getRecentEntries({ project_number: 5, limit: 'abc' })
 const idStr = await mj.core.getEntryById({ entry_id: 'abc' })
-const limitNeg = await mj.core.getRecentEntries({ limit: -1 })
+const limitNeg = await mj.core.getRecentEntries({ project_number: 5, limit: -1 })
 
 return {
   createEmpty: createEmpty.success === false,
@@ -73,16 +73,21 @@ return {
 
 ```javascript
 // Test code:
-const searchEmpty = await mj.search.searchEntries({})
-const dateRangeEmpty = await mj.search.searchByDateRange({})
+const searchEmpty = await mj.search.searchEntries({ project_number: 5 })
+const dateRangeEmpty = await mj.search.searchByDateRange({ project_number: 5 })
 const semanticEmpty = await mj.search.semanticSearch({})
 const vectorStatsEmpty = await mj.search.getVectorIndexStats({})
 
 // Boundary tests
-const limitOver = await mj.search.searchEntries({ query: 'test', limit: 501 })
+const limitOver = await mj.search.searchEntries({ project_number: 5, query: 'test', limit: 501 })
 const thresholdStr = await mj.search.semanticSearch({ query: 'test', similarity_threshold: 'abc' })
-const dateInvalid = await mj.search.searchByDateRange({ start_date: 'Jan 1', end_date: 'Jan 31' })
+const dateInvalid = await mj.search.searchByDateRange({
+  project_number: 5,
+  start_date: 'Jan 1',
+  end_date: 'Jan 31',
+})
 const dateInverted = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-12-31',
   end_date: '2026-01-01',
 })
@@ -270,30 +275,39 @@ return {
 
 ```javascript
 // Test code:
-const createEmpty = await mj.team.teamCreateEntry({})
-const getByIdEmpty = await mj.team.teamGetEntryById({})
-const recentEmpty = await mj.team.teamGetRecent({})
-const searchEmpty = await mj.team.teamSearch({})
+const createEmpty = await mj.team.teamCreateEntry({ project_number: 5, project_number: 5 })
+const getByIdEmpty = await mj.team.teamGetEntryById({ project_number: 5, project_number: 5 })
+const recentEmpty = await mj.team.teamGetRecent({ project_number: 5, project_number: 5 })
+const searchEmpty = await mj.team.teamSearch({ project_number: 5, project_number: 5 })
 const tagsEmpty = await mj.team.teamListTags({})
-const dateRangeEmpty = await mj.team.teamSearchByDateRange({})
-const updateEmpty = await mj.team.teamUpdateEntry({})
-const deleteEmpty = await mj.team.teamDeleteEntry({})
-const mergeEmpty = await mj.team.teamMergeTags({})
-const linkEmpty = await mj.team.teamLinkEntries({})
-const vizEmpty = await mj.team.teamVisualizeRelationships({})
-const exportEmpty = await mj.team.teamExportEntries({})
+const dateRangeEmpty = await mj.team.teamSearchByDateRange({ project_number: 5, project_number: 5 })
+const updateEmpty = await mj.team.teamUpdateEntry({ project_number: 5, project_number: 5 })
+const deleteEmpty = await mj.team.teamDeleteEntry({ project_number: 5, project_number: 5 })
+const mergeEmpty = await mj.team.teamMergeTags({ project_number: 5 })
+const linkEmpty = await mj.team.teamLinkEntries({ project_number: 5, project_number: 5 })
+const vizEmpty = await mj.team.teamVisualizeRelationships({ project_number: 5 })
+const exportEmpty = await mj.team.teamExportEntries({ project_number: 5 })
 const backupEmpty = await mj.team.teamBackup({})
 const listBackupsEmpty = await mj.team.teamListBackups({})
-const semanticEmpty = await mj.team.teamSemanticSearch({})
+const semanticEmpty = await mj.team.teamSemanticSearch({ project_number: 5, project_number: 5 })
 const vecStatsEmpty = await mj.team.teamGetVectorIndexStats({})
 const statsEmpty = await mj.team.teamGetStatistics({})
 const insightsEmpty = await mj.team.teamGetCrossProjectInsights({})
-const passFlagEmpty = await mj.team.passTeamFlag({})
+const passFlagEmpty = await mj.team.passTeamFlag({ project_number: 5 })
 const resolveFlagEmpty = await mj.team.resolveTeamFlag({})
 
 // Type mismatches
-const createNumContent = await mj.team.teamCreateEntry({ content: 123 })
-const updateStrId = await mj.team.teamUpdateEntry({ entry_id: 'abc', content: 'test' })
+const createNumContent = await mj.team.teamCreateEntry({
+  project_number: 5,
+  project_number: 5,
+  content: 123,
+})
+const updateStrId = await mj.team.teamUpdateEntry({
+  project_number: 5,
+  project_number: 5,
+  entry_id: 'abc',
+  content: 'test',
+})
 const resolveFlagStrId = await mj.team.resolveTeamFlag({ flag_id: 'abc' })
 
 return {
@@ -369,9 +383,11 @@ return {
 
 ## Success Criteria
 
-- [ ] All 10 `mj.*` API groups tested with `{}` empty params
-- [ ] Type mismatches (string where number, number where string) return structured errors
-- [ ] Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
-- [ ] Security boundaries (path traversal, limit overflow) enforced
-- [ ] No sandbox crashes, no raw MCP exceptions leaked through Code Mode
-- [ ] All results map to compact summaries (no large payload inflation)
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- All 10 `mj.*` API groups tested with `{}` empty params
+- Type mismatches (string where number, number where string) return structured errors
+- Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
+- Security boundaries (path traversal, limit overflow) enforced
+- No sandbox crashes, no raw MCP exceptions leaked through Code Mode
+- All results map to compact summaries (no large payload inflation)

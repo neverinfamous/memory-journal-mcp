@@ -1,23 +1,25 @@
 # Re-Test memory-journal-mcp — Admin Tool Group
 
-**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
-
 **Scope:** Deterministic verification of Admin operations (`update_entry`, `delete_entry`, `merge_tags`, `list_tags`, `add_to_vector_index`, `rebuild_vector_index`) against strict error handling constraints.
 
-**Prerequisites:** Seed data from `test-seed.md` must be present (S11, S12 for cross-DB; S15–S17 for team cross-project insights). `TEAM_DB_PATH` configured. MCP server instructions auto-injected.
+**Prerequisites:**
+
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Seed data from `test-seed.md` must be present (S11, S12 for cross-DB; S15–S17 for team cross-project insights). `TEAM_DB_PATH` configured. MCP server instructions auto-injected.
 
 **Workflow after testing:**
 
-1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. Implement, update `UNRELEASED.md`, commit without push.
-3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
-## 1. Structured Error Matrix
+## 1. Zod Boundary & Type Mismatch Matrix
 
 | Tool                  | Happy Path       | Domain Error Test                              | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | --------------------- | ---------------- | ---------------------------------------------- | --------------------------------- | ----------------- |
@@ -40,6 +42,8 @@
 
 ## Success Criteria
 
-- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
-- [ ] Administrative mutations correctly block non-existent targets.
-- [ ] Vector integrations fallback safely without MCP crashes.
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
+- Administrative mutations correctly block non-existent targets.
+- Vector integrations fallback safely without MCP crashes.

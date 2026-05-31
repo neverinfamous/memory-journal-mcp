@@ -3,8 +3,9 @@ name: vitest-standard
 description: |
   Comprehensive unit testing expertise covering Vitest, test-driven 
   development (TDD), mocking strategies, and production-grade best practices. 
-  Activates for unit testing, Vitest, TDD, Red-Green-Refactor, mocking, 
-  stubbing, spying, test coverage, and test architecture in TypeScript/Node projects.
+  Activates ONLY for unit testing scope (unit tests, integration tests, Vitest, TDD, Red-Green-Refactor, mocking, 
+  stubbing, spying, test coverage, and test architecture in TypeScript/Node projects). NOT for E2E testing (use Playwright).
+  If the user asks to "write tests" without specifying the type, you MUST ask "Unit, E2E, or both?" before proceeding.
 ---
 
 # Vitest Standard
@@ -23,6 +24,7 @@ This skill provides opinionated, production-tested guidance for high-integrity u
 8.  **Meaningful Names** — Use `it('should [action] when [condition]')` or Given-When-Then.
 9.  **Mock at Boundaries** — Mock external APIs, databases, and third-party SDKs; test your own logic.
 10. **Red-Green-Refactor** — Prefer writing tests before code to drive API design.
+11. **Security** — Use fake/mock credentials in all tests — never real API keys, tokens, or passwords. Load sensitive test config from `.env.test.local` (gitignored).
 
 ## Core Patterns
 
@@ -56,15 +58,7 @@ it('mocks dependencies', () => {
 
 ## Quick Reference: Assertions
 
-| Assertion                | Purpose                        |
-| :----------------------- | :----------------------------- |
-| `toBe(val)`              | Strict equality (`===`)        |
-| `toEqual(val)`           | Deep equality (objects/arrays) |
-| `toMatchObject(obj)`     | Partial match on an object     |
-| `toThrow(error?)`        | Validates a thrown error       |
-| `toHaveBeenCalledWith()` | Verifies mock call arguments   |
-| `resolves.toEqual()`     | Validates a fulfilled promise  |
-| `rejects.toThrow()`      | Validates a rejected promise   |
+See **[assertions.md](references/assertions.md)** for a full list of Vitest assertions (`toBe`, `toEqual`, `toThrow`, etc.). This reference is auto-loaded only when writing test assertions.
 
 ---
 

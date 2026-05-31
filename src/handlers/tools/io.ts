@@ -37,7 +37,7 @@ const ExportEntriesSchema = z.object({
     tags: z.array(z.string()).optional(),
     limit: z
         .number()
-        .max(500)
+        .max(5000)
         .optional()
         .default(100)
         .describe('Maximum entries to export (default: 100)'),
@@ -171,7 +171,12 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             group: 'io',
             inputSchema: ExportEntriesSchemaMcp,
             outputSchema: ExportEntriesOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = ExportEntriesSchema.parse(params)
@@ -182,7 +187,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     // When entry_types filter is active, fetch a larger batch so
                     // post-filtering doesn't silently return empty results.
                     const hasTypeFilter = input.entry_types && input.entry_types.length > 0
-                    const fetchLimit = hasTypeFilter ? 500 : limit
+                    const fetchLimit = hasTypeFilter ? Math.max(500, limit * 2) : limit
 
                     // Apply filters — use searchByDateRange when dates/tags/types present
                     let entries
@@ -333,6 +338,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         significance: e.significanceType ?? undefined,
                     }))
 
+                    await sendProgress(progress, 2, 3, 'Writing markdown files...')
+
                     const result = await exportEntriesToMarkdown(
                         exportable,
                         input.output_dir,
@@ -377,6 +384,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const allowedRoots = context.config?.allowedIoRoots ?? []
 
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
+
+                    await sendProgress(progress, 1, 2, 'Importing entries...')
 
                     const result = await importMarkdownEntries(
                         input.source_dir,

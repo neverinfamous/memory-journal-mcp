@@ -10,7 +10,7 @@
  */
 
 import { ICON_BRIEFING } from '../../constants/icons.js'
-import { GOTCHAS_CONTENT } from '../../constants/server-instructions.js'
+import { HELP_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
@@ -124,7 +124,27 @@ export function extractParameters(inputSchema: unknown): ParameterInfo[] {
         return []
     }
 
-    const schema = inputSchema as Record<string, unknown>
+    let schema = inputSchema as Record<string, unknown>
+
+    // Unwrap ZodEffects (.transform, .refine) or ZodPipe (Zod 4 .transform)
+    if (typeof schema['innerType'] === 'function') {
+        const innerTypeFn = schema['innerType'] as () => unknown
+        schema = innerTypeFn() as Record<string, unknown>
+    } else if (
+        schema['_def'] !== undefined &&
+        schema['_def'] !== null &&
+        typeof schema['_def'] === 'object' &&
+        'schema' in schema['_def']
+    ) {
+        schema = (schema['_def'] as Record<string, unknown>)['schema'] as Record<string, unknown>
+    } else if (
+        schema['in'] !== undefined &&
+        schema['in'] !== null &&
+        typeof schema['in'] === 'object'
+    ) {
+        schema = schema['in'] as Record<string, unknown>
+    }
+
     const rawShape: unknown = schema['shape']
     if (rawShape === undefined || rawShape === null || typeof rawShape !== 'object') {
         return []
@@ -207,8 +227,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         totalTools: tools.length,
                         totalGroups: groupList.length,
                         groups: groupList,
-                        gotchas: 'memory://help/gotchas',
-                        hint: 'Read memory://help/{group} for detailed parameter info on each tool. Read memory://help/gotchas for field notes and critical usage patterns.',
+                        hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
                     },
                 }
             },
@@ -223,7 +242,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/help\/([a-z]+)/.exec(uri)
+                const match = /memory:\/\/help\/([a-z][a-z0-9-]*)/.exec(uri)
                 const groupName = match?.[1]
 
                 if (!groupName) {
@@ -235,56 +254,75 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
+                // Resolve dynamic tool data for this group
                 const tools = await getAllToolDefinitionsAsync(context)
                 const groupTools = tools.filter((t) => t.group === groupName)
 
-                if (groupTools.length === 0) {
-                    const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
-                    return {
-                        data: {
-                            error: `Group "${groupName}" not found`,
-                            availableGroups,
-                            hint: 'Read memory://help for a list of available groups.',
-                        },
-                    }
-                }
+                // Check for static help content (codemode, github, hush-protocol, etc.)
+                const staticContent = HELP_CONTENT.get(groupName)
 
-                const toolDetails = groupTools.map((tool) => ({
-                    name: tool.name,
-                    title: tool.title,
-                    description: tool.description,
-                    parameters: extractParameters(tool.inputSchema),
-                    annotations: {
-                        readOnly: tool.annotations?.readOnlyHint ?? false,
-                        destructive: tool.annotations?.destructiveHint ?? false,
-                        idempotent: tool.annotations?.idempotentHint ?? false,
-                        openWorld: tool.annotations?.openWorldHint ?? false,
-                    },
-                    hasOutputSchema: tool.outputSchema !== undefined,
-                }))
+                // If the group has dynamic tools, always return JSON (with optional helpContent)
+                if (groupTools.length > 0) {
+                    const isCodemodeOnly =
+                        context.filterConfig &&
+                        context.filterConfig.enabledTools.has('mj_execute_code') &&
+                        !context.filterConfig.enabledTools.has('create_entry')
 
-                return {
-                    data: {
+                    const toolDetails = groupTools.map((tool) => {
+                        let displayName = tool.name
+                        if (isCodemodeOnly) {
+                            const camelCase = tool.name.replace(
+                                /_([a-z])/g,
+                                (_: string, letter: string) => letter.toUpperCase()
+                            )
+                            displayName = `mj.${tool.group}.${camelCase}`
+                        }
+
+                        return {
+                            name: displayName,
+                            title: tool.title,
+                            description: tool.description,
+                            parameters: extractParameters(tool.inputSchema),
+                            annotations: {
+                                readOnly: tool.annotations?.readOnlyHint ?? false,
+                                destructive: tool.annotations?.destructiveHint ?? false,
+                                idempotent: tool.annotations?.idempotentHint ?? false,
+                                openWorld: tool.annotations?.openWorldHint ?? false,
+                            },
+                            hasOutputSchema: tool.outputSchema !== undefined,
+                        }
+                    })
+
+                    const result: Record<string, unknown> = {
                         group: groupName,
                         description: GROUP_DESCRIPTIONS[groupName] ?? groupName,
                         toolCount: toolDetails.length,
                         tools: toolDetails,
-                    },
+                    }
+
+                    // Merge static help content alongside dynamic tool data
+                    if (staticContent) {
+                        result['helpContent'] = staticContent
+                    }
+
+                    return { data: result }
                 }
-            },
-        },
-        {
-            uri: 'memory://help/gotchas',
-            name: 'Help — Field Notes & Gotchas',
-            title: 'Critical Usage Patterns',
-            description:
-                'Field notes, edge cases, and critical usage patterns for memory-journal-mcp tools.',
-            mimeType: 'text/markdown',
-            icons: [ICON_BRIEFING],
-            annotations: ASSISTANT_FOCUSED,
-            handler: (): ResourceResult => {
+
+                // Group has static content only (no dynamic tools) — return markdown
+                if (staticContent) {
+                    return { data: staticContent }
+                }
+
+                // Not found
+                const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
+                const staticKeys = [...HELP_CONTENT.keys()]
                 return {
-                    data: GOTCHAS_CONTENT,
+                    data: {
+                        error: `Group "${groupName}" not found`,
+                        availableGroups,
+                        staticHelpKeys: staticKeys,
+                        hint: 'Read memory://help for a list of available groups.',
+                    },
                 }
             },
         },
@@ -389,7 +427,7 @@ function inferGroupFromName(name: string): string {
         list_backups: 'backup',
         restore_backup: 'backup',
         cleanup_backups: 'backup',
-        // github (16)
+        // github (18)
         get_github_issues: 'github',
         get_github_prs: 'github',
         get_github_issue: 'github',
@@ -402,6 +440,8 @@ function inferGroupFromName(name: string): string {
         delete_github_milestone: 'github',
         get_kanban_board: 'github',
         move_kanban_item: 'github',
+        add_kanban_item: 'github',
+        delete_kanban_item: 'github',
         create_github_issue_with_entry: 'github',
         close_github_issue_with_entry: 'github',
         get_repo_insights: 'github',

@@ -12,9 +12,9 @@ Test all 16 GitHub tools via Code Mode: read-only lookups, error paths, Kanban o
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -216,16 +216,21 @@ const stars = await mj.github.getRepoInsights({})
 const traffic = await mj.github.getRepoInsights({ sections: 'traffic' })
 const all = await mj.github.getRepoInsights({ sections: 'all' })
 
-// Copilot reviews (use a known PR number)
-const reviewed = await mj.github.getCopilotReviews({ pr_number: 1 })
+// Copilot reviews (use a dynamic PR number)
+const prs = await mj.github.getGithubPrs({ limit: 1 })
+const prNum = prs.pullRequests?.[0]?.number
+let reviewed = null
+if (prNum) {
+  reviewed = await mj.github.getCopilotReviews({ pr_number: prNum })
+}
 
 return {
   hasStars: typeof stars.stars === 'number',
   hasForks: typeof stars.forks === 'number',
   trafficHasClones: traffic.traffic?.clones !== undefined || traffic.error !== undefined,
   allSections: !!all,
-  reviewState: reviewed.state,
-  reviewComments: reviewed.commentCount,
+  reviewState: reviewed ? reviewed.state || (reviewed.success === false ? 'none' : null) : 'none',
+  reviewComments: reviewed ? reviewed.commentCount : 0,
 }
 ```
 
@@ -248,16 +253,18 @@ return {
 
 ## Success Criteria
 
-- [ ] All 16 GitHub tools callable via `mj.github.*`
-- [ ] `get_github_context` returns repo and branch info
-- [ ] `get_github_issues` and `get_github_prs` support `state` filter (open/closed/all)
-- [ ] Single issue/PR lookups return expected fields
-- [ ] Nonexistent issue/PR/milestone return structured errors
-- [ ] Kanban board returns columns with statusOptions
-- [ ] `move_kanban_item` with invalid status returns error with `availableStatuses`
-- [ ] Issue lifecycle (create → close) works end-to-end via Code Mode
-- [ ] `close_github_issue_with_entry` returns error for already-closed issues
-- [ ] Milestone CRUD lifecycle (create → update → close → delete) works via Code Mode
-- [ ] `get_repo_insights` returns star/fork data
-- [ ] `get_copilot_reviews` returns review state
-- [ ] All test artifacts cleaned up
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- All 16 GitHub tools callable via `mj.github.*`
+- `get_github_context` returns repo and branch info
+- `get_github_issues` and `get_github_prs` support `state` filter (open/closed/all)
+- Single issue/PR lookups return expected fields
+- Nonexistent issue/PR/milestone return structured errors
+- Kanban board returns columns with statusOptions
+- `move_kanban_item` with invalid status returns error with `availableStatuses`
+- Issue lifecycle (create → close) works end-to-end via Code Mode
+- `close_github_issue_with_entry` returns error for already-closed issues
+- Milestone CRUD lifecycle (create → update → close → delete) works via Code Mode
+- `get_repo_insights` returns star/fork data
+- `get_copilot_reviews` returns review state
+- All test artifacts cleaned up

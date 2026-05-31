@@ -6,15 +6,15 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 **Prerequisites:**
 
+- Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
-- Confirm MCP server instructions were auto-received before starting.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -28,7 +28,7 @@ Test search, semantic search, date range, analytics, and vector index operations
 >
 > ```javascript
 > await mj.core.createEntry({
->   content: "This is a test's string with 100% coverage",
+> project_number: 5, >   content: "This is a test's string with 100% coverage",
 >   issue_number: 44,
 >   pr_status: 'merged',
 >   workflow_run_id: 12345,
@@ -39,30 +39,38 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 ### 21.1 FTS5 Search Patterns
 
-| Test            | Code                                                                                          | Expected Result                 |
-| --------------- | --------------------------------------------------------------------------------------------- | ------------------------------- |
-| Basic query     | `return await mj.search.searchEntries({ query: "architecture" });`                            | ≥ 2 results (S1, S11)           |
-| Phrase          | `return await mj.search.searchEntries({ query: '"error handling"' });`                        | ≥ 1 result (S2)                 |
-| Prefix          | `return await mj.search.searchEntries({ query: "auth*" });`                                   | ≥ 2 results (S1, S8)            |
-| FTS5 NOT        | `return await mj.search.searchEntries({ query: "deploy NOT staging", mode: "fts" });`         | Returns S3 but NOT S5           |
-| FTS5 OR         | `return await mj.search.searchEntries({ query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
-| LIKE fallback   | `return await mj.search.searchEntries({ query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
-| Special chars   | `return await mj.search.searchEntries({ query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
-| Hybrid auto     | `return await mj.search.searchEntries({ query: "how did we fix performance" });`              | Heuristic RRF triggering S7     |
-| Forced semantic | `return await mj.search.searchEntries({ query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
+| Test            | Code                                                                                                             | Expected Result                 |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Basic query     | `return await mj.search.searchEntries({ project_number: 5, query: "architecture" });`                            | ≥ 2 results (S1, S11)           |
+| Phrase          | `return await mj.search.searchEntries({ project_number: 5, query: '"error handling"' });`                        | ≥ 1 result (S2)                 |
+| Prefix          | `return await mj.search.searchEntries({ project_number: 5, query: "auth*" });`                                   | ≥ 2 results (S1, S8)            |
+| FTS5 NOT        | `return await mj.search.searchEntries({ project_number: 5, query: "deploy NOT staging", mode: "fts" });`         | Returns S3 but NOT S5           |
+| FTS5 OR         | `return await mj.search.searchEntries({ project_number: 5, query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
+| LIKE fallback   | `return await mj.search.searchEntries({ project_number: 5, query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
+| Special chars   | `return await mj.search.searchEntries({ project_number: 5, query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
+| Hybrid auto     | `return await mj.search.searchEntries({ project_number: 5, query: "how did we fix performance" });`              | Heuristic RRF triggering S7     |
+| Forced semantic | `return await mj.search.searchEntries({ project_number: 5, query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
 
 ### 21.2 Search Filters
 
 ```javascript
 // Test code:
-const byIssue = await mj.search.searchEntries({ issue_number: 44 })
-const byPr = await mj.search.searchEntries({ pr_status: 'merged' })
-const byWorkflow = await mj.search.searchEntries({ workflow_run_id: 12345 })
-const byProject = await mj.search.searchEntries({ project_number: 5 })
-const personal = await mj.search.searchEntries({ query: 'test', is_personal: true })
-const tagged = await mj.search.searchEntries({ tags: ['testing'] })
-const typed = await mj.search.searchEntries({ entry_type: 'planning' })
-const dated = await mj.search.searchEntries({ start_date: '2026-01-01', end_date: '2026-12-31' })
+const byIssue = await mj.search.searchEntries({ project_number: 5, issue_number: 44 })
+const byPr = await mj.search.searchEntries({ project_number: 5, pr_status: 'merged' })
+const byWorkflow = await mj.search.searchEntries({ project_number: 5, workflow_run_id: 12345 })
+const byProject = await mj.search.searchEntries({ project_number: 5, project_number: 5 })
+const personal = await mj.search.searchEntries({
+  project_number: 5,
+  query: 'test',
+  is_personal: true,
+})
+const tagged = await mj.search.searchEntries({ project_number: 5, tags: ['testing'] })
+const typed = await mj.search.searchEntries({ project_number: 5, entry_type: 'planning' })
+const dated = await mj.search.searchEntries({
+  project_number: 5,
+  start_date: '2026-01-01',
+  end_date: '2026-12-31',
+})
 return {
   issueResults: byIssue.entries.length,
   prResults: byPr.entries.length,
@@ -91,7 +99,11 @@ return {
 
 ```javascript
 // Test code:
-const results = await mj.search.searchEntries({ query: 'architecture', limit: 20 })
+const results = await mj.search.searchEntries({
+  project_number: 5,
+  query: 'architecture',
+  limit: 20,
+})
 const sources = results.entries.map((e) => e.source)
 return {
   totalResults: results.entries.length,
@@ -111,25 +123,30 @@ return {
 ```javascript
 // Test code:
 const basic = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
 })
 const withType = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'planning',
 })
 const withTags = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   tags: ['deploy'],
 })
 const withPersonal = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   is_personal: true,
 })
 const withProject = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   project_number: 5,
@@ -152,18 +169,19 @@ return {
 | `personalCount`   | ≥ 0                                    |
 | `projectCount`    | ≥ 0 (entries linked to project #5)     |
 
-### 21.5 Search by Date Range — Error Paths
+### 21.5 Search by Date Range & Input — Error Paths
 
-| Test                | Code                                                                                              | Expected Result                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Invalid date format | `return await mj.search.searchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
-| Inverted date range | `return await mj.search.searchByDateRange({ start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
+| Test                | Code                                                                                                                 | Expected Result                                             |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Invalid date format | `return await mj.search.searchByDateRange({ project_number: 5, start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
+| Inverted date range | `return await mj.search.searchByDateRange({ project_number: 5, start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
+| Query too long      | `return await mj.search.searchEntries({ project_number: 5, query: "a".repeat(300) });`                               | `{ success: false, error: "..." }` with Zod validation hint |
 
 ### 21.6 Semantic Search
 
 ```javascript
 // Test code:
-const related = await mj.core.getRecentEntries({ limit: 1 })
+const related = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
 const basic = await mj.search.semanticSearch({ query: 'improving performance' })
 const byId = await mj.search.semanticSearch({ entry_id: related.entries[0].id })
 const strict = await mj.search.semanticSearch({
@@ -245,11 +263,11 @@ return {
 
 ### 21.8 Vector Index Management
 
-| Test                  | Code                                                                                                                             | Expected Result                                    |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Rebuild index         | `return await mj.admin.rebuildVectorIndex({});`                                                                                  | `{ success: true, entriesIndexed: N }` where N > 0 |
-| Add existing to index | `const r = await mj.core.getRecentEntries({ limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
-| Add nonexistent       | `return await mj.admin.addToVectorIndex({ entry_id: 999999 });`                                                                  | `{ success: false, error: "..." }`                 |
+| Test                  | Code                                                                                                                                                | Expected Result                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Rebuild index         | `return await mj.admin.rebuildVectorIndex({});`                                                                                                     | `{ success: true, entriesIndexed: N }` where N > 0 |
+| Add existing to index | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
+| Add nonexistent       | `return await mj.admin.addToVectorIndex({ entry_id: 999999 });`                                                                                     | `{ success: false, error: "..." }`                 |
 
 ---
 
@@ -261,17 +279,20 @@ return {
 ```javascript
 // Setup: create test entries with different importance profiles
 const e1 = await mj.core.createEntry({
+  project_number: 5,
   content: 'IMPSORT_TEST_LOW: no significance, no relationships',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
 })
 const e2 = await mj.core.createEntry({
+  project_number: 5,
   content: 'IMPSORT_TEST_HIGH: milestone with relationships',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
   significance_type: 'milestone',
 })
 const e3 = await mj.core.createEntry({
+  project_number: 5,
   content: 'IMPSORT_TEST_MED: decision with causal link',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
@@ -296,6 +317,7 @@ await mj.relationships.linkEntries({
 
 // T1: search_entries with sort_by: 'importance'
 const impSearch = await mj.search.searchEntries({
+  project_number: 5,
   query: 'IMPSORT_TEST',
   sort_by: 'importance',
   mode: 'fts',
@@ -304,19 +326,25 @@ const impSearch = await mj.search.searchEntries({
 
 // T2: search_entries with default sort_by (timestamp)
 const tsSearch = await mj.search.searchEntries({
+  project_number: 5,
   query: 'IMPSORT_TEST',
   limit: 10,
 })
 
 // T3: get_recent_entries with sort_by: 'importance'
-const impRecent = await mj.core.getRecentEntries({ limit: 5, sort_by: 'importance' })
+const impRecent = await mj.core.getRecentEntries({
+  project_number: 5,
+  limit: 5,
+  sort_by: 'importance',
+})
 
 // T4: get_recent_entries with default sort_by (timestamp)
-const tsRecent = await mj.core.getRecentEntries({ limit: 5 })
+const tsRecent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
 
 // T5: search_by_date_range with sort_by: 'importance'
 const today = new Date().toISOString().split('T')[0]
 const impDateRange = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-01-01',
   end_date: today,
   sort_by: 'importance',
@@ -325,6 +353,7 @@ const impDateRange = await mj.search.searchByDateRange({
 
 // T6: search_by_date_range with default sort_by (timestamp)
 const tsDateRange = await mj.search.searchByDateRange({
+  project_number: 5,
   start_date: '2026-01-01',
   end_date: today,
   limit: 5,
@@ -383,25 +412,28 @@ return {
 
 ## Success Criteria
 
-- [ ] `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
-- [ ] `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
-- [ ] FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
-- [ ] FTS5 LIKE fallback works for special characters (`test's`, `100%`)
-- [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
-- [ ] Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
-- [ ] `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
-- [ ] `search_by_date_range` rejects invalid date format with structured error
-- [ ] `search_by_date_range` rejects inverted date range (start > end) with structured error
-- [ ] `search_by_date_range` filters by `project_number`
-- [ ] `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
-- [ ] `semantic_search` correctly filters results downstream using `tags` and `is_personal`
-- [ ] `semantic_search` with custom threshold returns fewer results
-- [ ] `semantic_search` quality gate hint shown even with `hint_on_empty: false`
-- [ ] `get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
-- [ ] `rebuild_vector_index` and `add_to_vector_index` work via Code Mode
-- [ ] `get_statistics` returns all 4 enhanced analytics metrics via Code Mode
-- [ ] `get_cross_project_insights` returns schema-compliant response
-- [ ] `search_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- [ ] `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- [ ] `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- [ ] Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
+- `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
+- FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
+- FTS5 LIKE fallback works for special characters (`test's`, `100%`)
+- `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
+- Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
+- `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
+- `search_by_date_range` rejects invalid date format with structured error
+- `search_by_date_range` rejects inverted date range (start > end) with structured error
+- `search_entries` rejects queries exceeding 250 characters with structured Zod error
+- `search_by_date_range` filters by `project_number`
+- `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
+- `semantic_search` correctly filters results downstream using `tags` and `is_personal`
+- `semantic_search` with custom threshold returns fewer results
+- `semantic_search` quality gate hint shown even with `hint_on_empty: false`
+- `get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
+- `rebuild_vector_index` and `add_to_vector_index` work via Code Mode
+- `get_statistics` returns all 4 enhanced analytics metrics via Code Mode
+- `get_cross_project_insights` returns schema-compliant response
+- `search_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present

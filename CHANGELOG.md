@@ -5,7 +5,78 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.0...HEAD)
+
+## [8.0.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v8.0.0) - 2026-05-31
+
+### Added
+
+- **admin**: `project_number`, `significance_type`, and GitHub metadata fields to `update_entry` and `team_update_entry`
+- **analytics**: On-read computation with 60s TTL cache, startup snapshot seeding, and live fallback for `memory://insights/digest`
+- **auto-prune**: Importance-based garbage collection for old, low-importance entries via CLI flags and environment variables
+- **briefing**: Server version, resource/tool counts, test health indicators, workspace paths, git working tree status, code-map availability, `📊 memory://metrics/summary` breadcrumb, and unreleased change summary to `memory://briefing` output
+- **codemode**: Enhanced sandbox with `context`/`readonly` parameters, runtime schema introspection, progress notification bindings, and additional aliases
+- **docs**: Missing CLI flags, environment variables, auto-prune documentation, and "Customizing the Session Briefing" sections
+- **errors**: Valid enum value lists to Zod validation error messages
+- **github**: Dependabot configuration scoped to `github-actions` only for passive version update notifications
+- **instructions**: 14 new `EntryType` values, `architecture`/`security` significance types, missing tool parameters, and `HELP_CONTENT` export
+- **metrics**: Dynamic tracking for deprecation warnings (`MetricsAccumulator.recordDeprecationWarning`)
+- **prompts**: `adversarial-plan-review` and `flag-dashboard` prompts for multi-pass planning and flag triage
+- **resources**: `memory://flags/history` resource showing recently resolved flags with resolution details and average time-to-resolution metrics
+- **scripts**: Added `test:scheduler` and `test-progress.mjs` for E2E and integration testing
+- **skills**: Added 20+ skills including official vendor integrations, adversarial auditing, and `docs-marketer`
+- **team**: Added `team_list_flags`, `team_update_flag`, and `team_get_flag_analytics` tools for flag management
+- **tests**: `verify-schemas.mjs` script to programmatically validate `outputSchema` definitions
+- **ci/cd**: Added Docker smoke test job to `docker-publish.yml` that verifies binary loading and HTTP transport starts successfully before images are pushed to the registry
+- **ci/cd**: Added Docker smoke test job to `lint-and-test.yml` for PR-level validation, catching dependency resolution failures before merge
+- **tests**: Added `build-externals.test.ts` invariant test ensuring every `tsup.config.ts` external entry has a corresponding production dependency
+
+### Changed
+
+- **briefing**: Enhanced rendering with filtered milestones, capability statuses, and prioritized CI workflows
+- **codemode**: Optimized dynamically generated TypeScript declarations and removed redundant strings to save tokens
+- **deps**: Updated npm dependencies including `commander` to `^15.0.0` and `eslint` to `10.4.1`
+- **docker**: Bumped Node.js base image to `26.2.0-alpine` (#563)
+- **docs**: Highlighted auto-prune, standardized `README.md` layout, and simplified agent briefing instructions
+- **instructions**: Refactored `server-instructions.md` into modular directory, saving ~700 tokens, and updated help handlers
+- **prompts**: Enhanced `flag-dashboard` and surfaced team flags in standup/retro prompts
+- **resources**: Changed `memory://briefing` and `memory://briefing/{repo}` to return `text/markdown` directly instead of JSON objects for token efficiency
+- **schemas**: Enforced strict `project_number` validation across Core and Team tools with formatted validation errors
+- **skills**: Restructured large skills, expanded `mcp-builder`, and upgraded `adversarial-planner` to embed `gh copilot` scans
+- **tests**: Standardized 42+ prompt files, added artifact cleanup, and clarified Code Mode restrictions
+
+### Removed
+
+- **instructions**: `gotchas.md`, `codemode.md`, and `server-access.md` static help files to reduce agent distraction and token usage
+- **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
+
+### Fixed
+
+- **annotations**: Added missing `destructiveHint: false` to 62 tools and `idempotentHint: false` to `delete_entry`
+- **briefing**: Fixed dynamic context routing, deduplicated entry previews, and rendering cutoff issues
+- **codemode**: Comprehensive hallucination interception for API aliases, missing parameters, and unsupported cross-server database queries
+- **codemode**: Expanded global sandbox bindings, proxy mappings, and parameter coercions for robust agent interactions
+- **codemode**: Improved error handling and validation for legacy payloads, syntax errors, and missing fields
+- **core**: Enforced strict validation for significance types and fixed `auto_context` persistence mapping
+- **docs**: Synchronized `code-map.md`, `README.md`, environment variables, and tool counts across documentation
+- **github**: Fixed parameter hallucinations in repo insights, payload truncation flags, and repository resolution fallbacks
+- **instructions**: Fixed hallucinated JSON parsing instructions, corrected tool schemas, and restored missing `gotchas.md` help content
+- **io**: Fixed `export_entries` ignoring limits and increased ceiling to 5000
+- **progress**: Fixed step numbering gaps and missing notifications in export and backup sequences
+- **relationships**: Fixed `visualize_relationships` returning `null` when empty, and intercepted hallucinated schema parameters
+- **resources**: Fixed `memory://help` failing to extract parameters from ZodPipelines
+- **repo**: Mapped `repo_name` fallback to `repo` within `mj_execute_code` sanitization to prevent context loss
+- **scripts**: Improved E2E scheduler test scripts and help pointer mapping logic
+- **server**: Fixed structured error responses for Zod validations and payload limits, preventing raw JSON-RPC leakages
+- **skills**: Remediated frontmatter, database triggers, and stub implementations across migrated skills
+- **team**: Fixed parameter parsing, path traversal checks, schema errors, and `project_number` filtering across team tools
+- **tests**: Fixed environment resolution, hallucinated expectations, and missing parameters across 26 test scripts
+
+### Security
+
+- **codemode**: Nullified `Proxy`/`Reflect`/`Symbol` constructors and added frozen built-in prototypes to VM sandbox to prevent meta-object protocol abuse
+- **docs**: Documented engine-level Code Mode sandbox restrictions and RPC allowlists in `SECURITY.md` and `README.md`
+- **skills**: Bumped `qs` dependency in `gitlab` skill to resolve a remotely triggerable DoS vulnerability
 
 ## [7.7.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.7.1) - 2026-05-15
 
@@ -18,23 +89,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [7.7.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.7.0) - 2026-05-06
 
-### Security
-
-- Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
-- Fixed HIGH severity Trivy code scanning alert (CVE-2026-27135) by explicitly upgrading `nghttp2-libs` from Alpine edge repository in Dockerfile
-
-### Changed
-
-- **Dependency Updates**
-  - Updated lockfile-resolved npm package versions within the existing `package.json` ranges: `@huggingface/transformers` resolved to `^4.2.0`, `eslint` resolved to `^10.3.0`, `globals` resolved to `^17.6.0`, `jose` resolved to `^6.2.3`, `typescript-eslint` resolved to `^8.59.2`, and `zod` resolved to `^4.4.3`
-  - Bumped `github/gh-aw-actions` to `v0.71.4` in GitHub Actions workflows
-  - Bumped `aquasecurity/trivy-action` to `ed142fd0673e97e23eac54620cfb913e5ce36c25`
-  - Bumped `github/codeql-action` to `95e58e9a2cdfd71adc6e0353d5c52f41a045d225`
-
 ### Added
 
 - `adversarial-planner` skill: multi-pass adversarial planning and review with structured critique stages and Copilot CLI validation
 - New entry types: `plan_draft`, `adversarial_review`, `plan_refinement`, `copilot_validation`
+
+### Changed
+
+- **Dependency Updates**:
+  - Bumped npm packages (`@huggingface/transformers`, `eslint`, `globals`, `jose`, `typescript-eslint`, `zod`)
+  - Bumped GitHub Actions (`github/gh-aw-actions`, `aquasecurity/trivy-action`, `github/codeql-action`)
 
 ### Fixed
 
@@ -46,6 +110,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `search_by_date_range` omitting the `source: 'personal'` metadata field when skipping cross-database merging.
 - Fixed `restore_backup` returning a raw MCP JSON-RPC exception when called with missing required parameters by relaxing the outer schema.
 
+### Security
+
+- Fixed XSS vulnerability in `ip-address` by overriding version to `10.2.0`
+- Fixed HIGH severity Trivy code scanning alert (CVE-2026-27135) by explicitly upgrading `nghttp2-libs` from Alpine edge repository in Dockerfile
+
 ## [7.6.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.6.1) - 2026-04-22
 
 ### Fixed
@@ -53,12 +122,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code Mode and standard test failures when creating, resolving, or searching global team flags by resolving strict `project_number` nullish schema validation errors.
 - Internal crash in `team_search` and `team_search_by_date_range` when filtering global flags by conditionally bypassing the strict multi-tenant `project_number` requirements when explicitly searching for `flag:` tags or `entry_type === 'flag'`.
 
-### Dependencies
+### Changed
 
-- Bumped `aquasecurity/trivy-action` from `v0.35.0` to `v0.36.0`.
-- Bumped `github/codeql-action` from `v4.35.1` to `v4.35.2`.
-- Bumped `trufflesecurity/trufflehog` from `v3.94.3` to `v3.95.2`.
-- Bumped `actions/attest-build-provenance` from `v2` to `v4.1.0` (SHA-pinned).
+- **Dependency Updates**:
+  - Bumped `aquasecurity/trivy-action` from `v0.35.0` to `v0.36.0`.
+  - Bumped `github/codeql-action` from `v4.35.1` to `v4.35.2`.
+  - Bumped `trufflesecurity/trufflehog` from `v3.94.3` to `v3.95.2`.
+  - Bumped `actions/attest-build-provenance` from `v2` to `v4.1.0` (SHA-pinned).
 
 ## [7.6.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.6.0) - 2026-04-21
 
@@ -341,9 +411,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deprecated `ICON_EXPORT` constant in favor of `ICON_IO` utilizing a bidirectional SVG visual design to signal interoperable data flow.
 - Lowercased group mappings for API Code Mode proxies.
 
-### Dependencies
-
-- `typescript-eslint` from 8.57.0 to 8.58.1
+- Bumped `typescript-eslint` from 8.57.0 to 8.58.1
 
 ## [7.0.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.0.1) - 2026-04-07
 

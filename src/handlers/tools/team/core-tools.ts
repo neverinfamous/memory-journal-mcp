@@ -23,6 +23,7 @@ import {
     TeamEntryDetailOutputSchema,
     TeamTagsListOutputSchema,
 } from './schemas.js'
+import { coerceSignificanceAlias } from '../schemas.js'
 import { parseFlagContext } from '../../../types/auto-context.js'
 
 // ============================================================================
@@ -37,16 +38,23 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             name: 'team_create_entry',
             title: 'Create Team Entry',
             description:
-                'Create an entry in the team database for sharing with collaborators. Requires TEAM_DB_PATH.',
+                'Create an entry in the team database for sharing with collaborators. ONLY use when explicitly requested by the user. Default to personal create_entry instead. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamCreateEntrySchemaMcp,
             outputSchema: TeamCreateOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
+
+                    coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
 
@@ -145,7 +153,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamGetEntryByIdSchemaMcp,
             outputSchema: TeamEntryDetailOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -202,7 +215,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamGetRecentSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -241,7 +259,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: z.object({}).strict(),
             outputSchema: TeamTagsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (_params: unknown) => {
                 try {
                     if (!teamDb) {

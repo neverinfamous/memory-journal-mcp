@@ -6,15 +6,15 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 **Prerequisites:**
 
-- Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
-2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -25,14 +25,15 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 ### 16.1 Simple Expressions
 
-| Test            | Code                             | Expected Result                                             |
-| --------------- | -------------------------------- | ----------------------------------------------------------- |
-| Integer return  | `return 42;`                     | `{ success: true, result: 42 }`                             |
-| String return   | `return "hello from code mode";` | `{ success: true, result: "hello from code mode" }`         |
-| Object return   | `return { a: 1, b: [2, 3] };`    | `{ success: true, result: { a: 1, b: [2, 3] } }`            |
-| Null return     | `return null;`                   | `{ success: true, result: null }`                           |
-| No return value | `const x = 1;`                   | `{ success: true, result: undefined }` (implicit undefined) |
-| Boolean return  | `return true;`                   | `{ success: true, result: true }`                           |
+| Test            | Code                               | Expected Result                                             |
+| --------------- | ---------------------------------- | ----------------------------------------------------------- |
+| Integer return  | `return 42;`                       | `{ success: true, result: 42 }`                             |
+| String return   | `return "hello from code mode";`   | `{ success: true, result: "hello from code mode" }`         |
+| Object return   | `return { a: 1, b: [2, 3] };`      | `{ success: true, result: { a: 1, b: [2, 3] } }`            |
+| Circular return | `const a = {}; a.b = a; return a;` | `{ success: true, result: { b: "[Circular]" } }`            |
+| Null return     | `return null;`                     | `{ success: true, result: null }`                           |
+| No return value | `const x = 1;`                     | `{ success: true, result: undefined }` (implicit undefined) |
+| Boolean return  | `return true;`                     | `{ success: true, result: true }`                           |
 
 ### 16.2 Async & Built-ins
 
@@ -66,9 +67,12 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 ## Success Criteria
 
-- [ ] Simple expressions return correct types: integer, string, object, null, boolean
-- [ ] Async/await resolves correctly inside sandbox
-- [ ] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
-- [ ] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
-- [ ] Custom `timeout` parameter accepted and enforced
-- [ ] Infinite loop terminated with structured error (not hang or crash)
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Simple expressions return correct types: integer, string, object, null, boolean
+- Circular object references are safely serialized as "[Circular]" without crashing
+- Async/await resolves correctly inside sandbox
+- Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
+- `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
+- Custom `timeout` parameter accepted and enforced
+- Infinite loop terminated with structured error (not hang or crash)

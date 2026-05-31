@@ -43,6 +43,13 @@ export interface BriefingGitHub {
         changesRequested: number
         totalComments: number
     }
+    localGitStatus?: {
+        modified: number
+        untracked: number
+        isClean: boolean
+        degraded?: boolean
+    }
+    ciName?: string
     degraded?: boolean
     degradedReasons?: string[]
 }
@@ -69,16 +76,17 @@ export async function buildGitHubSection(
             fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
         ])
 
-        // Batch 2: insights and copilot reviews
+        // Batch 2: insights, copilot reviews, and local git status
         const batch2 = await Promise.allSettled([
             fetchInsights(github, owner, repo),
             config.copilotReviews
                 ? fetchCopilotReviews(github, owner, repo)
                 : Promise.resolve(undefined),
+            github.getLocalGitStatus(),
         ])
 
         const [ciStatusResult, issuesAndPrsResult, milestonesResult] = batch1
-        const [insightsResult, copilotReviewsResult] = batch2
+        const [insightsResult, copilotReviewsResult, localGitStatusResult] = batch2
 
         const degradedReasons: string[] = []
 
@@ -129,8 +137,18 @@ export async function buildGitHubSection(
         else if (copilotReviewsData.degraded)
             degradedReasons.push('Copilot Reviews partially degraded')
 
+        const localGitStatus =
+            localGitStatusResult.status === 'fulfilled'
+                ? localGitStatusResult.value
+                : { modified: 0, untracked: 0, isClean: true, degraded: true }
+        if (localGitStatusResult.status === 'rejected')
+            degradedReasons.push(
+                `Local Git Status fetch failed: ${String(localGitStatusResult.reason)}`
+            )
+
         const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
+        const ciName = ciStatus.ciName
         const milestones = milestonesData.items ?? []
         const insights = insightsData.insights
         const copilotReviews = copilotReviewsData.reviews
@@ -140,6 +158,8 @@ export async function buildGitHubSection(
             repo: `${owner}/${repo}`,
             branch: resolved.branch,
             ci: ciStatus.status,
+            ciName,
+            localGitStatus,
             openIssues,
             openPRs,
             milestones,
@@ -178,6 +198,7 @@ export async function buildGitHubSection(
 
 interface CiResult {
     status: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
+    ciName?: string
     workflowSummary?: BriefingGitHub['workflowSummary']
     degraded?: boolean
 }
@@ -189,11 +210,16 @@ async function fetchCiStatus(
     config: BriefingConfig
 ): Promise<CiResult> {
     try {
-        const runLimit = Math.max(1, config.workflowCount, config.workflowStatusBreakdown ? 10 : 1)
+        const runLimit = Math.max(5, config.workflowCount, config.workflowStatusBreakdown ? 10 : 1)
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
         if (runs.length === 0) return { status: 'unknown' }
 
-        const primaryRun =
+        let primaryRun = runs.find((r) => {
+            const name = r.name.toLowerCase()
+            return name.includes('ci') || name.includes('test') || name.includes('gatekeeper')
+        })
+
+        primaryRun ??=
             runs.find(
                 (r) =>
                     r.status !== 'completed' ||
@@ -260,7 +286,7 @@ async function fetchCiStatus(
             }
         }
 
-        return { status, workflowSummary }
+        return { status, ciName: latestRun?.name, workflowSummary }
     } catch (error) {
         logger.debug('Failed to fetch CI status', {
             module: 'BRIEFING',
@@ -339,9 +365,25 @@ async function fetchMilestones(
     if (limit <= 0) return { items: [] }
 
     try {
-        const msList = await github.getMilestones(owner, repo, 'open', limit)
+        const msList = await github.getMilestones(owner, repo, 'open', limit * 3)
+        const now = Date.now()
+        const twentyFourHours = 24 * 60 * 60 * 1000
+
+        const activeMilestones = msList
+            .filter((m) => {
+                const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
+                if (pct === 100 && m.updatedAt) {
+                    const updatedTime = new Date(m.updatedAt).getTime()
+                    if (now - updatedTime > twentyFourHours) {
+                        return false
+                    }
+                }
+                return true
+            })
+            .slice(0, limit)
+
         return {
-            items: msList.map((m) => {
+            items: activeMilestones.map((m) => {
                 const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
                 return {
                     title: m.title,

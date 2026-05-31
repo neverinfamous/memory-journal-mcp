@@ -37,6 +37,23 @@ export const digestInsightsResource: InternalResourceDef = {
             }
         }
 
+        // Live compute fallback (stdio transport, fresh databases)
+        try {
+            const liveDigest = context.db?.computeDigest?.()
+            if (liveDigest !== undefined) {
+                return {
+                    data: {
+                        success: true,
+                        snapshot: liveDigest,
+                        source: 'computed',
+                    },
+                    annotations: { lastModified },
+                }
+            }
+        } catch {
+            // Non-critical — fall through to "no digest available" message or persisted snapshot
+        }
+
         const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
         if (dbSnapshot) {
             return {

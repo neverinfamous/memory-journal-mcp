@@ -162,10 +162,46 @@ export async function readResource(
 }
 
 /**
+ * Common hallucinated resource URIs mapped to their canonical equivalents.
+ * Agents frequently prefix paths with 'journal/' or 'entries/' when the
+ * actual URIs are flat (e.g., 'memory://recent', not 'memory://journal/recent').
+ */
+const RESOURCE_URI_ALIASES: Record<string, string> = {
+    'memory://journal/recent': 'memory://recent',
+    'memory://journal/briefing': 'memory://briefing',
+    'memory://entries/recent': 'memory://recent',
+    'memory://status': 'memory://health',
+    'memory://server': 'memory://health',
+    'memory://tools': 'memory://help',
+}
+
+/**
+ * Generate alias resource definitions for common hallucinated URIs.
+ * Each alias clones the canonical resource but with the alias URI,
+ * delegating to the canonical handler with the canonical URI.
+ */
+function generateResourceAliases(resources: InternalResourceDef[]): InternalResourceDef[] {
+    const aliases: InternalResourceDef[] = []
+    for (const [aliasUri, canonicalUri] of Object.entries(RESOURCE_URI_ALIASES)) {
+        const canonical = resources.find((r) => r.uri === canonicalUri)
+        if (canonical) {
+            aliases.push({
+                ...canonical,
+                uri: aliasUri,
+                name: `${canonical.name} (alias)`,
+                // Delegate to canonical handler with the canonical URI
+                handler: (_uri, context) => canonical.handler(canonicalUri, context),
+            })
+        }
+    }
+    return aliases
+}
+
+/**
  * Get all resource definitions by composing sub-module definitions
  */
 function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef[] {
-    return [
+    const coreResources = [
         ...getCoreResourceDefinitions(),
         ...getDynamicGraphResourceDefinitions(),
         ...getGitHubResourceDefinitions(),
@@ -176,4 +212,5 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         // Audit resource — bound to the runtime's instance audit logger
         getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]
+    return [...coreResources, ...generateResourceAliases(coreResources)]
 }

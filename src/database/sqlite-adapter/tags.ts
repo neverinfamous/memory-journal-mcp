@@ -154,7 +154,6 @@ export class TagsManager {
 
             // Filter to only entries that need linking
             const newEntryIds = entryIds.filter((id) => !existingEntryIds.has(id))
-            const entriesUpdated = newEntryIds.length
 
             if (newEntryIds.length > 0) {
                 const placeholders = newEntryIds.map(() => '(?, ?)').join(', ')
@@ -164,9 +163,9 @@ export class TagsManager {
                 ).run(...params)
             }
 
-            if (entriesUpdated > 0) {
+            if (newEntryIds.length > 0) {
                 db.prepare('UPDATE tags SET usage_count = usage_count + ? WHERE id = ?').run(
-                    entriesUpdated,
+                    newEntryIds.length,
                     targetTagId
                 )
             }
@@ -174,7 +173,7 @@ export class TagsManager {
             db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
             db.prepare('DELETE FROM tags WHERE id = ?').run(sourceTagId)
 
-            return { entriesUpdated, sourceDeleted: true }
+            return { entriesUpdated: newEntryIds.length, sourceDeleted: true }
         })
 
         const result = mergeOp()

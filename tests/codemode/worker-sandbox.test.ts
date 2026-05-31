@@ -100,8 +100,10 @@ describe('WorkerSandbox', () => {
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
-        // TypeError because mj.nonexistent is undefined
-        expect(String(result.result)).toContain('Cannot read properties of undefined')
+        // The worker proxy now traps unknown groups and rejects gracefully
+        expect(String(result.result)).toContain(
+            "Group or property 'nonexistent' is not found on 'mj'"
+        )
     })
 
     it('should handle RPC calls to non-existent methods within a valid group', async () => {
@@ -146,7 +148,7 @@ describe('WorkerSandbox', () => {
 
     it('should handle custom timeout parameter', async () => {
         const sandbox = new WorkerSandbox({ timeoutMs: 30000 })
-        const result = await sandbox.execute('return "ok"', {}, 5000)
+        const result = await sandbox.execute('return "ok"', {}, undefined, 5000)
         expect(result.success).toBe(true)
         expect(result.result).toBe('ok')
     })
@@ -210,6 +212,77 @@ describe('WorkerSandbox', () => {
         expect(result.success).toBe(true)
         expect(String(result.result)).toContain('Unknown method: _topLevel.topFunc')
     })
+
+    it('should clamp maxResultSize', async () => {
+        const oldEnv = process.env['CODE_MODE_MAX_RESULT_SIZE']
+        process.env['CODE_MODE_MAX_RESULT_SIZE'] = '9999999999' // Way above 50MB
+        const sandbox = new WorkerSandbox()
+        const result = await sandbox.execute('return 1', {})
+        expect(result.success).toBe(true)
+
+        process.env['CODE_MODE_MAX_RESULT_SIZE'] = 'invalid'
+        const result2 = await sandbox.execute('return 1', {})
+        expect(result2.success).toBe(true)
+
+        process.env['CODE_MODE_MAX_RESULT_SIZE'] = oldEnv
+    })
+
+    it('should reject unauthorized method invocation', async () => {
+        const sandbox = new WorkerSandbox()
+        const code = 'while(true) {}'
+        // Pass timeout 50ms so it terminates naturally
+        const execPromise = sandbox.execute(
+            code,
+            { group: { allowed: async () => 1 } },
+            undefined,
+            50
+        )
+
+        await new Promise((resolve) => setTimeout(resolve, 10))
+
+        const hostPort = sandbox['currentExecution']!.hostPort
+        let sentError = false
+        hostPort.on('message', (msg) => {
+            // Because postMessage sends TO the worker, we can't easily listen to the worker's receive end if it's spinning.
+            // But we CAN intercept the hostPort's outgoing message by spying on it.
+        })
+        const originalPostMessage = hostPort.postMessage.bind(hostPort)
+        hostPort.postMessage = (msg: any) => {
+            if (msg?.error?.includes('Unauthorized method invocation')) {
+                sentError = true
+            }
+            originalPostMessage(msg)
+        }
+
+        // Simulate a malicious worker sending a direct RPC message for a method it doesn't have access to
+        hostPort.emit('message', {
+            type: 'RPC',
+            id: 999,
+            group: 'group',
+            method: 'unauthorized',
+            args: [],
+        })
+
+        await execPromise
+        expect(sentError).toBe(true)
+    })
+
+    it('should handle timeout fallback if worker script fails to timeout', async () => {
+        const sandbox = new WorkerSandbox()
+        const code = 'while(true) {}'
+        // We bypass the worker entirely and simulate a hard crash (e.g., OOM or uncatchable timeout)
+        // by emitting the 'exit' event directly on the worker instance.
+        const execPromise = sandbox.execute(code, {}, undefined, 50000)
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        // Simulate worker thread crashing with code 1
+        sandbox['worker']?.emit('exit', 1)
+
+        const result = await execPromise
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('Worker exited')
+    })
 })
 describe('WorkerSandboxPool', () => {
     it('should create and execute using pool', async () => {
@@ -235,5 +308,13 @@ describe('WorkerSandboxPool', () => {
 
         await exec1 // wait for the first to finish
         expect(pool.getActiveCount()).toBe(0)
+    })
+
+    it('should dispose pool correctly', async () => {
+        const pool = new WorkerSandboxPool({}, { maxInstances: 1 })
+        await pool.execute('return 1', {})
+        expect(pool['pool'].length).toBe(1)
+        pool.dispose()
+        expect(pool['pool'].length).toBe(0)
     })
 })

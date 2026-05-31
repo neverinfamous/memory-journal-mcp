@@ -192,6 +192,30 @@ describe('Team Analytics Tool Handlers', () => {
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
+
+        it('should fallback gracefully if getAuthorStatistics throws', async () => {
+            const originalGetStats = teamDb.getAuthorStatistics
+            try {
+                teamDb.getAuthorStatistics = () => {
+                    throw new Error('Column not found')
+                }
+                const result = (await callTool(
+                    'team_get_statistics',
+                    {},
+                    personalDb,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    teamDb
+                )) as any
+
+                expect(result.success).toBe(true)
+                expect(result.authors).toEqual([])
+            } finally {
+                teamDb.getAuthorStatistics = originalGetStats
+            }
+        })
     })
 
     describe('team_get_cross_project_insights', () => {
@@ -259,6 +283,36 @@ describe('Team Analytics Tool Handlers', () => {
                 personalDb
             )) as any
 
+            expect(result.error).toContain('Team database not configured')
+        })
+    })
+
+    describe('team_get_collaboration_matrix', () => {
+        it('should return collaboration matrix', async () => {
+            const result = (await callTool(
+                'team_get_collaboration_matrix',
+                { period: 'month' },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.authorActivity).toBeDefined()
+            expect(result.crossAuthorLinks).toBeDefined()
+        })
+
+        it('should return error if team DB is not configured', async () => {
+            const result = (await callTool(
+                'team_get_collaboration_matrix',
+                { period: 'month' },
+                personalDb
+            )) as any
+
+            expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
     })

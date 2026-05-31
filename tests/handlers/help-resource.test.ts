@@ -84,16 +84,6 @@ describe('Help Resource Handlers', () => {
         expect(result.data.error).toContain('Invalid group')
     })
 
-    it('should generate memory://help/gotchas', async () => {
-        const defs = getHelpResourceDefinitions()
-        const gotchasHelp = defs.find((d) => d.uri === 'memory://help/gotchas')
-        expect(gotchasHelp).toBeDefined()
-
-        const result = (await gotchasHelp!.handler('memory://help/gotchas', getContext())) as any
-        expect(result.data).toContain('# memory-journal-mcp — Field Notes &')
-        expect(gotchasHelp!.mimeType).toBe('text/markdown')
-    })
-
     it('should handle all tool groups including codemode and team', async () => {
         const defs = getHelpResourceDefinitions()
         const rootHelp = defs.find((d) => d.uri === 'memory://help')
@@ -182,12 +172,18 @@ describe('Help Resource Handlers', () => {
         expect(result.data.tools.length).toBeGreaterThan(0)
     })
 
-    it('should handle github group', async () => {
+    it('should handle github group (merged static + dynamic)', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
         const result = (await groupHelp!.handler('memory://help/github', getContext())) as any
+        // github returns JSON with both dynamic tool schema and static helpContent
         expect(result.data.group).toBe('github')
+        expect(result.data.tools.length).toBeGreaterThanOrEqual(16)
+        // Static help content merged in
+        expect(typeof result.data.helpContent).toBe('string')
+        expect(result.data.helpContent).toContain('GitHub Integration')
+        expect(result.data.helpContent).toContain('get_kanban_board')
     })
 
     describe('Schema parsing edge cases', () => {

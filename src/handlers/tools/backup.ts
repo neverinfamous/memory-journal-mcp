@@ -95,7 +95,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Custom backup name (optional, defaults to timestamp)'),
             }),
             outputSchema: BackupResultOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -103,7 +108,9 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                             name: z.string().optional(),
                         })
                         .parse(params)
+                    await sendProgress(progress, 0, 2, 'Creating backup...')
                     const result = await db.exportToFile(input.name)
+                    await sendProgress(progress, 2, 2, 'Backup complete')
                     return {
                         success: true,
                         message: `Backup created successfully`,
@@ -123,7 +130,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             group: 'backup',
             inputSchema: z.object({}).strict(),
             outputSchema: BackupsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (_params: unknown) => {
                 try {
                     const backups = db.listBackups()
@@ -192,6 +204,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     const progressServer = progress?.server
                     const progressTokenValue = progress?.progressToken
 
+                    await sendProgress(progress, 0, 3, 'Validating backup...')
                     await sendProgress(progress, 1, 3, 'Preparing restore...')
                     await sendProgress(progress, 2, 3, 'Restoring database from backup...')
 
@@ -262,7 +275,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Number of most recent backups to keep (default: 5)'),
             }),
             outputSchema: CleanupBackupsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { keep_count } = z

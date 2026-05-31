@@ -100,6 +100,10 @@ async function main() {
         { name: 'pr-retrospective', args: { pr_number: '67' }, expect: '67' },
         { name: 'project-milestone-tracker', args: { project_number: '5' }, expect: '5' },
         { name: 'actions-failure-digest', args: {}, expect: '' },
+        // 8.3 Adversarial and flag prompts
+        { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: 'migration' },
+        { name: 'flag-dashboard', args: {}, expect: '' },
+        { name: 'flag-dashboard', args: { flag_type: 'blocker' }, expect: 'blocker' },
     ]
 
     console.log(`\n=== TESTING ${testCases.length} PROMPT CALLS ===\n`)

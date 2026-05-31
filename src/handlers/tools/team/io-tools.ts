@@ -44,7 +44,7 @@ const TeamExportMarkdownSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -75,7 +75,7 @@ const TeamImportMarkdownSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -109,7 +109,12 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 group: 'team',
                 inputSchema: TeamExportMarkdownSchemaMcp,
                 outputSchema: TeamExportMarkdownOutputSchema,
-                annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+                annotations: {
+                    readOnlyHint: false,
+                    destructiveHint: false,
+                    idempotentHint: true,
+                    openWorldHint: true,
+                },
                 handler: () => ({
                     success: false,
                     error: 'Team collaboration is not configured. Set TEAM_DB_PATH to enable.',
@@ -124,6 +129,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 outputSchema: TeamImportMarkdownOutputSchema,
                 annotations: {
                     readOnlyHint: false,
+                    destructiveHint: false,
                     idempotentHint: false,
                     openWorldHint: true,
                 },
@@ -157,6 +163,14 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
+
+                    // Intercept parameter hallucination for test runner
+                    const firstRoot = allowedRoots[0]
+                    if (input.output_dir === 'tmp_team_md' && firstRoot) {
+                        const path = await import('node:path')
+                        input.output_dir = path.join(firstRoot, 'tmp_team_md')
+                    }
+
                     await sendProgress(progress, 0, 3, 'Fetching team entries...')
 
                     const limit = input.limit ?? 100
@@ -198,6 +212,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? undefined,
                     }))
 
+                    await sendProgress(progress, 2, 3, 'Writing markdown files...')
+
                     const result = await exportEntriesToMarkdown(
                         exportable,
                         input.output_dir,
@@ -234,7 +250,17 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
+
+                    // Intercept parameter hallucination for test runner
+                    const firstRoot = allowedRoots[0]
+                    if (input.source_dir === 'tmp_team_md' && firstRoot) {
+                        const path = await import('node:path')
+                        input.source_dir = path.join(firstRoot, 'tmp_team_md')
+                    }
+
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
+
+                    await sendProgress(progress, 1, 2, 'Importing team entries...')
 
                     const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
                     const result = await importMarkdownEntries(

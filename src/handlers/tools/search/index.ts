@@ -252,11 +252,17 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'search_entries',
             title: 'Search Entries',
             description:
-                'Search journal entries with auto-selecting strategy. Supports modes: auto (default — heuristic selects best strategy), fts (FTS5 keyword with phrases "exact match", prefix auth*, boolean NOT/OR/AND), semantic (vector similarity), hybrid (RRF fusion of FTS5+vector). Optional filters for GitHub Projects, Issues, PRs, and Actions.',
+                'Search journal entries. Use sort_by: "importance" to surface structurally significant entries before major decisions. Supports modes: auto (default), fts, semantic, hybrid. Optional filters for GitHub Projects, Issues, PRs, and Actions. ' +
+                'FTS5 syntax: "exact phrase", prefix*, OR/NOT/AND. Word-boundary matched. Automatically merges team DB results when TEAM_DB_PATH is configured.',
             group: 'search',
             inputSchema: SearchEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = SearchEntriesSchema.parse(params)
@@ -440,7 +446,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: SearchByDateRangeSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
@@ -519,11 +530,18 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'semantic_search',
             title: 'Semantic Search',
             description:
-                'Perform semantic/vector search on journal entries using AI embeddings. Supports find-related-by-ID (entry_id) and metadata filters (tags, entry_type, date range).',
+                'Perform semantic/vector search on journal entries using AI embeddings. Supports find-related-by-ID (entry_id) and metadata filters (tags, entry_type, date range). ' +
+                'Threshold default is 0.25 (try 0.15-0.2 for broader matches, 0.4+ for strict matches). ' +
+                'Entries are auto-indexed on creation. If index drifts, use rebuild_vector_index.',
             group: 'search',
             inputSchema: SemanticSearchSchemaMcp,
             outputSchema: SemanticSearchOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = SemanticSearchSchema.parse(params)
@@ -667,7 +685,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: z.object({}).strict(),
             outputSchema: VectorStatsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (_params: unknown) => {
                 try {
                     if (!vectorManager) {

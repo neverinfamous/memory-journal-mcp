@@ -24,9 +24,11 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
             group: 'github',
             inputSchema: z.object({
                 sections: z
-                    .enum(['stars', 'traffic', 'referrers', 'paths', 'all'])
+                    .union([
+                        z.enum(['stars', 'traffic', 'referrers', 'paths', 'all']),
+                        z.array(z.enum(['stars', 'traffic', 'referrers', 'paths', 'all'])),
+                    ])
                     .optional()
-                    .default('stars')
                     .describe(
                         'Data section to return (default: stars). Use "all" for full payload.'
                     ),
@@ -40,15 +42,32 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: RepoInsightsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
                         .object({
                             sections: z
-                                .enum(['stars', 'traffic', 'referrers', 'paths', 'all'])
+                                .union([
+                                    z.enum(['stars', 'traffic', 'referrers', 'paths', 'all']),
+                                    z.array(
+                                        z.enum(['stars', 'traffic', 'referrers', 'paths', 'all'])
+                                    ),
+                                ])
                                 .optional()
-                                .default('stars'),
+                                .default('stars')
+                                .transform((val) => {
+                                    if (Array.isArray(val)) {
+                                        if (val.length > 1) return 'all'
+                                        return val[0] || 'stars'
+                                    }
+                                    return val
+                                }),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                         })

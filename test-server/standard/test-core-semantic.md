@@ -2,22 +2,24 @@
 
 **Scope:** Semantic/vector search, vector index management, statistics analytics, and cross-project insights.
 
-**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
+**Prerequisites:**
 
-**Prerequisites:** Seed data from `test-seed.md` must be present (vector index rebuilt). MCP server instructions auto-injected.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Seed data from `test-seed.md` must be present (vector index rebuilt). MCP server instructions auto-injected.
 
 **Workflow after testing:**
 
-1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. Implement, update `UNRELEASED.md`, commit without push.
-3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
-## Phase 3.2: Semantic Search
+## Phase 4: Semantic Search
 
 | Test                   | Command/Action                                                     | Expected Result                                                                     |
 | ---------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
@@ -32,7 +34,7 @@
 | Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Noise results with quality gate `hint` still shown (only advisory hints suppressed) |
 | Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Noise results with quality gate `hint` (all hints shown)                            |
 
-## Phase 3.3: Analytics & Index Management
+## Phase 4.2: Analytics & Index Management
 
 | Test                     | Command/Action                                                                 | Expected Result                                                                          |
 | ------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
@@ -50,10 +52,12 @@
 
 ## Success Criteria
 
-- [ ] `semantic_search` accepts `entry_id` (Related by ID) in lieu of `query` string
-- [ ] `semantic_search` incorporates metadata filtering (`tags`, `entry_type`, dates) into similarity results
-- [ ] `semantic_search` with custom `similarity_threshold` affects result count
-- [ ] `get_statistics` returns all 4 enhanced analytics metrics with correct groupings
-- [ ] `get_cross_project_insights` returns `project_count ≥ 1` with seed entries S7, S13, S14 present (project 5 has 3 entries, meeting `min_entries: 3`)
-- [ ] `get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
-- [ ] `get_cross_project_insights` returns all required schema fields (including `projects: []`) when empty (tested with `min_entries: 9999`)
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `semantic_search` accepts `entry_id` (Related by ID) in lieu of `query` string
+- `semantic_search` incorporates metadata filtering (`tags`, `entry_type`, dates) into similarity results
+- `semantic_search` with custom `similarity_threshold` affects result count
+- `get_statistics` returns all 4 enhanced analytics metrics with correct groupings
+- `get_cross_project_insights` returns `project_count ≥ 1` with seed entries S7, S13, S14 present (project 5 has 3 entries, meeting `min_entries: 3`)
+- `get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
+- `get_cross_project_insights` returns all required schema fields (including `projects: []`) when empty (tested with `min_entries: 9999`)

@@ -2,22 +2,27 @@
 
 ## Project Overview
 
-Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **70 tools** across **10 groups** (core, search, analytics, relationships, export, admin, github, backup, team, codemode), **22 resources**, and **15 prompts**.
+Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **73 tools** across **10 groups** (core, search, analytics, relationships, io, admin, github, backup, team, codemode), **47 resources**, and **19 prompts**.
 
 **Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
 ## Session Context
 
-Before starting work on this project, read `memory://briefing` from the `memory-journal-mcp` server for real-time context:
+Before starting work on this project, read `memory://briefing/memory-journal-mcp` from the `memory-journal-mcp` server for real-time context:
 
 - **Recent journal entries** — what was just worked on by the development agent
-- **GitHub status** — open issues, PRs, CI status, milestones
+- **GitHub status** — open issues, PRs, explicit CI workflow outcomes, milestones
+- **Local Git status** — clean, modified, or untracked file counts
 - **Workflow runs** — recent CI/CD results
 - **Copilot review summaries** — your own recent review findings
 
 For detailed session handoff context, search for entries tagged `session-summary` — these contain end-of-session notes from the development agent.
 
 If you find issues during code review, use `create_entry` with tag `copilot-finding` to record them for the development agent to see in their next session briefing.
+
+## Tooling Standards
+
+- **Copilot CLI**: Always reference and use `gh copilot`, NOT the deprecated `github-copilot-cli`.
 
 ## Coding Standards
 
@@ -36,6 +41,9 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 
 - **Strict TypeScript** — `tsconfig.json` enforces strict mode
 - **Never use `eslint-disable`** to evade standards
+- **Never use `any`** — use `unknown` and narrow with type guards
+- **Never use `as` type assertions** — use `satisfies` operator or strict type guards
+- **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
 - **Zod schemas** for all tool input validation
 - **Output schemas** — All tools have Zod output schemas; error responses must pass validation
 - **Dual-schema pattern** — Relaxed schemas for SDK registration (to handle MCP client coercion), strict schemas inside handlers
@@ -71,11 +79,12 @@ All tool handlers return structured error responses — never raw exceptions:
 src/
 ├── cli.ts                      # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
+├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
-│   ├── server-instructions.md  # Source for server instructions
-│   └── server-instructions.ts  # Auto-generated (npm run generate:instructions)
+│   ├── server-instructions/    # Modular instruction markdown sources
+│   └── server-instructions.ts  # Auto-generated (npx tsx scripts/generate-server-instructions.ts)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
@@ -85,9 +94,11 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
-│   ├── tools/                  # 70 tool handlers (10 groups)
-│   ├── resources/              # 22 resource handlers
-│   └── prompts/                # 15 prompt handlers
+│   ├── tools/                  # 73 tool handlers (10 groups)
+│   ├── resources/              # 47 resource handlers
+│   └── prompts/                # 19 prompt handlers
+├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
+├── observability/              # Metrics interceptor, token estimator
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration
@@ -101,12 +112,12 @@ src/
 
 ## Key Reference Files
 
-| File                                   | Purpose                                               |
-| -------------------------------------- | ----------------------------------------------------- |
-| `src/constants/server-instructions.md` | Full tool parameter reference and behavioral guidance |
-| `docs/code-map.md`                     | File → tool/handler mapping                           |
-| `docs/tool-reference.md`               | Categorized 44-tool inventory                         |
-| `CONTRIBUTING.md`                      | Development setup and PR guidelines                   |
+| File                                     | Purpose                                              |
+| ---------------------------------------- | ---------------------------------------------------- |
+| `src/constants/server-instructions/*.md` | Modular instruction sources (overview, github, etc.) |
+| `test-server/code-map.md`                | File → tool/handler mapping                          |
+| `test-server/tool-reference.md`          | Categorized 73-tool inventory                        |
+| `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
 
 ## Review Checklist
 
@@ -115,8 +126,10 @@ When reviewing PRs, check for:
 - [ ] Hardcoded tool/group counts — should be dynamic or use `getAllToolNames().length`
 - [ ] Missing barrel exports in `src/types/index.ts` when new types are added
 - [ ] `eslint-disable` usage — always forbidden
+- [ ] `@ts-ignore` or `as any` — always forbidden
 - [ ] Raw exceptions from tool handlers — must use `formatHandlerErrorResponse()`
 - [ ] Files approaching 500 lines — flag for splitting
 - [ ] New tools missing from `src/filtering/ToolFilter.ts` TOOL_GROUPS
 - [ ] Missing Zod output schemas on new tools
 - [ ] Kebab-case violations in new filenames
+- [ ] `continue-on-error: true` in workflow files — forbidden per project standards

@@ -5,7 +5,7 @@ description: |
   Use when writing Python code, configuring project structure, managing
   dependencies with uv, linting with ruff, adding type hints, writing pytest
   tests, or building FastAPI/Django/Flask applications. Triggers on "Python",
-  "FastAPI", "Django", "Flask", "pytest", "uv", "ruff", "pyproject.toml".
+  "FastAPI", "Django", "Flask", "pytest", "uv", "ruff", "pyproject.toml". Do NOT trigger for generic 'build a server' requests unless the platform/language is explicitly specified as Python (e.g. FastAPI, Django, Flask).
 ---
 
 # Python Engineering Standards
@@ -55,30 +55,7 @@ my-project/
 
 ### `pyproject.toml` Configuration (PEP 621)
 
-```toml
-[project]
-name = "my-package"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = [
-    "httpx>=0.27",
-    "pydantic>=2.0",
-]
-
-[project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13"]
-
-[tool.ruff]
-target-version = "py312"
-line-length = 88
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
-```
+See `references/config-templates.md` for the standard `pyproject.toml` template.
 
 ## 2. Type Hints (Mandatory)
 
@@ -124,23 +101,7 @@ ruff format .         # Format (replaces Black)
 
 ### Configuration in `pyproject.toml`
 
-```toml
-[tool.ruff]
-target-version = "py312"
-line-length = 88
-src = ["src", "tests"]
-
-[tool.ruff.lint]
-select = [
-    "E",    # pycodestyle errors
-    "F",    # pyflakes
-    "I",    # isort
-    "UP",   # pyupgrade
-    "B",    # bugbear
-    "SIM",  # simplify
-    "RUF",  # ruff-specific
-]
-```
+See `references/config-templates.md` for the standard Ruff configuration.
 
 - **NEVER** use `# noqa` to suppress linter errors unless the suppression is explicitly justified by a comment explaining _why_.
 - **NEVER** use `# type: ignore` — fix the type error or use a proper type guard.
@@ -208,36 +169,13 @@ uv run pytest -k "test_user"            # Run by pattern
 uv run pytest --cov=src --cov-report=term-missing  # Coverage
 ```
 
-## 6. Async & Concurrency
+## 6. Advanced Patterns & Security
 
-- **Use `asyncio`** for I/O-bound concurrency (HTTP calls, DB queries)
-- **Use `async def` / `await`** — never mix sync and async code paths
-- **Use `asyncio.TaskGroup`** (Python 3.11+) for structured concurrency
-- **Use `httpx`** (async-native) instead of `requests` for HTTP clients
+For advanced guidance on `asyncio` concurrency, Pydantic v2 data validation, and Python security best practices, see the reference file:
 
-```python
-async with asyncio.TaskGroup() as tg:
-    task1 = tg.create_task(fetch_user(user_id))
-    task2 = tg.create_task(fetch_orders(user_id))
-# Both tasks complete here — exceptions propagate cleanly
-```
+**[Read: references/advanced-patterns.md](references/advanced-patterns.md)**
 
-## 7. Data Validation: Pydantic v2
-
-- **Use Pydantic models** at system boundaries (API requests, config files, DB results)
-- **Never trust external input** — validate with `model_validate()`, not dict access
-- **Use `Field()` validators** for constraints, not manual `if` checks
-
-```python
-from pydantic import BaseModel, Field
-
-class CreateUserRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    email: str = Field(pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
-    age: int = Field(ge=0, le=150)
-```
-
-## 8. Anti-Patterns (Never Do These)
+## 9. Anti-Patterns (Never Do These)
 
 | Anti-Pattern                         | Why It's Wrong                     | Do This Instead              |
 | ------------------------------------ | ---------------------------------- | ---------------------------- |
@@ -248,7 +186,7 @@ class CreateUserRequest(BaseModel):
 | `print()` for logging                | No levels, no rotation             | Use `logging` or `structlog` |
 | `== None` / `== True`                | Wrong semantics                    | `is None` / `is True`        |
 
-## 9. Web Frameworks Quick Reference
+## 10. Web Frameworks Quick Reference
 
 | Framework   | Best For                     | Key Pattern                                               |
 | ----------- | ---------------------------- | --------------------------------------------------------- |

@@ -14,6 +14,7 @@
 
 import type { ToolDefinition } from '../types/index.js'
 import type { ToolGroup } from '../types/filtering.js'
+import { sendProgress, type ProgressContext } from '../utils/progress-utils.js'
 import {
     METHOD_ALIASES,
     GROUP_EXAMPLES,
@@ -21,6 +22,7 @@ import {
     GROUP_PREFIX_MAP,
     KEEP_PREFIX_GROUPS,
 } from './api-constants.js'
+import { getZodTypeString } from './type-generator.js'
 
 /**
  * Dispatcher function signature for SEC-1.1 Code Mode dispatch gate.
@@ -59,6 +61,54 @@ export function toolNameToMethodName(toolName: string, groupName: string): strin
 // =============================================================================
 
 /**
+ * Known parameter alias map for common agent hallucinations.
+ * Maps hallucinated parameter names to their canonical equivalents.
+ * Only applied when the canonical name is not already present.
+ */
+const PARAM_ALIASES: Record<string, string> = {
+    text: 'content',
+    body: 'content',
+    note: 'content',
+    entry: 'entry_id',
+    q: 'query',
+    issue: 'issue_number',
+    pr: 'pr_number',
+    project: 'project_number',
+}
+
+/**
+ * Convert camelCase object keys to snake_case
+ */
+function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+        let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+
+        // Handle common agent hallucination where they pass 'id' instead of 'entry_id'
+        if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
+            snakeKey = 'entry_id'
+        }
+
+        // Remap known parameter aliases (only when canonical name is absent)
+        const alias = PARAM_ALIASES[snakeKey]
+        if (alias !== undefined && !(alias in obj) && !(alias in result)) {
+            snakeKey = alias
+        }
+
+        result[snakeKey] = value
+    }
+
+    // Coerce singular 'tag' to 'tags' array
+    if ('tag' in result && !('tags' in result)) {
+        const tagVal = result['tag']
+        result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
+        delete result['tag']
+    }
+
+    return result
+}
+
+/**
  * Normalize parameters to support positional arguments.
  * Handles both single positional args and multiple positional args.
  */
@@ -68,9 +118,52 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
     if (args.length === 1) {
         const arg = args[0]
 
-        // Object arg — pass through
+        // Object arg — pass through and convert camelCase to snake_case
         if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-            return arg
+            const obj = convertKeysToSnakeCase(arg as Record<string, unknown>)
+
+            // Handle common agent hallucination where they omit 'content' and pass arbitrary fields
+            if (
+                (methodName === 'createEntry' ||
+                    methodName === 'createEntryMinimal' ||
+                    methodName === 'teamCreateEntry') &&
+                !('content' in obj)
+            ) {
+                let content = ''
+                const validFields = new Set([
+                    'type',
+                    'tags',
+                    'entry_type',
+                    'is_personal',
+                    'share_with_team',
+                    'significance_type',
+                    'auto_context',
+                    'project_number',
+                    'project_owner',
+                    'issue_number',
+                    'issue_url',
+                    'pr_number',
+                    'pr_url',
+                    'pr_status',
+                    'workflow_run_id',
+                    'workflow_name',
+                    'workflow_status',
+                ])
+                for (const [key, value] of Object.entries(obj)) {
+                    if (validFields.has(key)) continue
+                    const strValue =
+                        typeof value === 'object' && value !== null
+                            ? JSON.stringify(value, null, 2)
+                            : String(value)
+                    content += `**${key}**\n${strValue}\n\n`
+                }
+                const trimmed = content.trim()
+                if (trimmed) {
+                    obj['content'] = trimmed
+                }
+            }
+
+            return obj
         }
 
         // Primitive arg (string, number, boolean) — use positional mapping
@@ -103,7 +196,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
         if (args.length > 1) {
             const lastArg = args[args.length - 1]
             if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
-                Object.assign(result, lastArg)
+                Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>))
             }
         }
         return result
@@ -123,7 +216,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
     if (args.length > paramMapping.length) {
         const lastArg = args[args.length - 1]
         if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
-            Object.assign(result, lastArg)
+            Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>))
         }
     }
 
@@ -215,6 +308,7 @@ export class JournalApi {
     readonly github: GroupApiRecord
     readonly backup: GroupApiRecord
     readonly team: GroupApiRecord
+    readonly memory: GroupApiRecord // Alias for core to handle cross-server hallucinations
 
     private readonly toolsByGroup: Map<string, ToolDefinition[]>
 
@@ -248,6 +342,51 @@ export class JournalApi {
         this.github = createGroupApi('github', this.toolsByGroup.get('github') ?? [], dispatcher)
         this.backup = createGroupApi('backup', this.toolsByGroup.get('backup') ?? [], dispatcher)
         this.team = createGroupApi('team', this.toolsByGroup.get('team') ?? [], dispatcher)
+        this.memory = this.core
+
+        // Smooth out common cross-group agent hallucinations
+        const searchEntriesFn = this.search['searchEntries']
+        if (searchEntriesFn) {
+            this.core['searchEntries'] = searchEntriesFn
+            this.core['search'] = searchEntriesFn
+            this.core['readQuery'] = searchEntriesFn // db-mcp bleedover
+        }
+
+        // db-mcp bleedover: upsert maps to createEntry in journal context
+        const createEntryFn = this.core['createEntry']
+        if (createEntryFn) {
+            this.core['upsert'] = createEntryFn
+        }
+
+        // Cross-group: admin operations commonly attempted on core
+        const deleteEntryFn = this.admin['deleteEntry']
+        if (deleteEntryFn) this.core['deleteEntry'] = deleteEntryFn
+        const updateEntryFn = this.admin['updateEntry']
+        if (updateEntryFn) this.core['updateEntry'] = updateEntryFn
+        const mergeTagsFn = this.admin['mergeTags']
+        if (mergeTagsFn) this.core['mergeTags'] = mergeTagsFn
+
+        // Cross-group: io/backup operations commonly attempted on core
+        const exportFn = this.io['exportEntries']
+        if (exportFn) this.core['exportEntries'] = exportFn
+        const backupFn = this.backup['backupJournal']
+        if (backupFn) this.core['backupJournal'] = backupFn
+
+        // Cross-group: db-mcp admin operations mapping to backup
+        const restoreFn = this.backup['restoreBackup']
+        if (backupFn) this.admin['backup'] = backupFn
+        if (restoreFn) this.admin['restore'] = restoreFn
+
+        // db-mcp bleedover: database operations → closest journal equivalents
+        const statsFn = this.analytics['getStatistics']
+        if (statsFn) {
+            this.core['count'] = statsFn
+            this.core['listTables'] = statsFn
+            this.core['describeTable'] = statsFn
+            this.admin['analyze'] = statsFn
+        }
+        const getByIdFn = this.core['getEntryById']
+        if (getByIdFn) this.core['exists'] = getByIdFn
     }
 
     /**
@@ -273,7 +412,7 @@ export class JournalApi {
      * This is the object injected as `mj` in the sandbox.
      * Includes group namespaces + top-level aliases for common operations.
      */
-    createSandboxBindings(): Record<string, unknown> {
+    createSandboxBindings(progressCtx?: ProgressContext): Record<string, unknown> {
         const bindings: Record<string, unknown> = {
             // Group namespaces
             core: this.core,
@@ -287,12 +426,36 @@ export class JournalApi {
             github: this.github,
             backup: this.backup,
             team: this.team,
+            memory: this.memory,
 
             // Top-level convenience aliases
             createEntry: this.core['createEntry'],
             getRecentEntries: this.core['getRecentEntries'],
             searchEntries: this.search['searchEntries'],
             getStatistics: this.analytics['getStatistics'],
+
+            // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
+            addEntry: this.core['createEntry'],
+            sqlite_journal_add_entry: this.core['createEntry'],
+            entries: this.core,
+            deleteEntry: (params: number | { entry_id: number }) => {
+                const entry_id = typeof params === 'number' ? params : params.entry_id
+                const deleteFn = this.admin['deleteEntry']
+                if (deleteFn === undefined) {
+                    return Promise.reject(new Error('deleteEntry method not found'))
+                }
+                return deleteFn({ entry_id })
+            },
+            updateEntry: this.admin['updateEntry'],
+
+            // Extended top-level convenience aliases for common hallucinations
+            find: this.search['searchEntries'],
+            recent: this.core['getRecentEntries'],
+            listTags: this.core['listTags'],
+            semanticSearch: this.search['semanticSearch'],
+            linkEntries: this.relationships['linkEntries'],
+            mergeTags: this.admin['mergeTags'],
+            exportEntries: this.io['exportEntries'],
 
             // Top-level help
             help: (): Promise<{
@@ -313,7 +476,46 @@ export class JournalApi {
             },
         }
 
+        // Progress notification reporting
+        bindings['reportProgress'] = async (
+            progress: number,
+            total?: number,
+            message?: string
+        ): Promise<void> => {
+            await sendProgress(progressCtx, progress, total, message)
+        }
+
         return bindings
+    }
+
+    /**
+     * Create the sandbox schemas object.
+     * Contains the TypeScript type string representation for each method.
+     */
+    createSandboxSchemas(): Record<string, Record<string, string>> {
+        const schemas: Record<string, Record<string, string>> = {}
+
+        for (const [groupName, tools] of this.toolsByGroup.entries()) {
+            const groupSchemas: Record<string, string> = {}
+            for (const tool of tools) {
+                const methodName = toolNameToMethodName(tool.name, groupName)
+                groupSchemas[methodName] = getZodTypeString(tool.inputSchema)
+            }
+
+            // Handle aliases
+            const aliases = METHOD_ALIASES[groupName]
+            if (aliases) {
+                for (const [aliasName, canonicalName] of Object.entries(aliases)) {
+                    if (groupSchemas[canonicalName] !== undefined) {
+                        groupSchemas[aliasName] = groupSchemas[canonicalName]
+                    }
+                }
+            }
+
+            schemas[groupName] = groupSchemas
+        }
+
+        return schemas
     }
 }
 

@@ -64,6 +64,11 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}) {
             state: 'approved',
             commentCount: 3,
         }),
+        getLocalGitStatus: vi.fn().mockResolvedValue({
+            modified: 0,
+            untracked: 0,
+            isClean: true,
+        }),
         ...overrides,
     }
 }

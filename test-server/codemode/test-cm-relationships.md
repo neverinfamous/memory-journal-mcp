@@ -6,15 +6,15 @@ Test relationship linking (all types), duplicate detection, error paths, and Mer
 
 **Prerequisites:**
 
-- Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -27,7 +27,7 @@ Test relationship linking (all types), duplicate detection, error paths, and Mer
 
 ```javascript
 // Test code:
-const r = await mj.core.getRecentEntries({ limit: 4 })
+const r = await mj.core.getRecentEntries({ project_number: 5, limit: 4 })
 const ids = r.entries.map((e) => e.id)
 if (ids.length < 4) return { error: 'Need at least 4 entries' }
 
@@ -77,7 +77,7 @@ return {
 
 ```javascript
 // Test code (run after 24.1):
-const r = await mj.core.getRecentEntries({ limit: 2 })
+const r = await mj.core.getRecentEntries({ project_number: 5, limit: 2 })
 const [a, b] = r.entries.map((e) => e.id)
 
 const dup = await mj.relationships.linkEntries({
@@ -120,7 +120,7 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.core.getRecentEntries({ limit: 1 })
+const r = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
 const id = r.entries[0].id
 
 const viz = await mj.relationships.visualizeRelationships({ entry_id: id })
@@ -155,7 +155,7 @@ After testing, remove all entries created during Phases 22-24:
 
 ```javascript
 // Cleanup code:
-const cmEntries = await mj.search.searchEntries({ query: 'CodeMode', limit: 50 })
+const cmEntries = await mj.search.searchEntries({ project_number: 5, query: 'CodeMode', limit: 50 })
 const results = []
 for (const e of cmEntries.entries) {
   if (
@@ -173,9 +173,11 @@ return { cleaned: results.length, details: results }
 
 ## Success Criteria
 
-- [ ] All relationship types (`references`, `implements`, `blocked_by`, `resolved`, `caused`) create via Code Mode
-- [ ] `link_entries` with `description` persists the description
-- [ ] Duplicate detection returns `duplicate: true`
-- [ ] Nonexistent IDs return `success: false` with descriptive message
-- [ ] `visualize_relationships` returns Mermaid with legend, supports tags/depth/limit filters
-- [ ] Nonexistent entry ID returns "not found" message
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- All relationship types (`references`, `implements`, `blocked_by`, `resolved`, `caused`) create via Code Mode
+- `link_entries` with `description` persists the description
+- Duplicate detection returns `duplicate: true`
+- Nonexistent IDs return `success: false` with descriptive message
+- `visualize_relationships` returns Mermaid with legend, supports tags/depth/limit filters
+- Nonexistent entry ID returns "not found" message

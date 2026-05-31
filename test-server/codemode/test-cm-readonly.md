@@ -6,15 +6,15 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 **Prerequisites:**
 
-- Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file.
-2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -28,20 +28,20 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ### 18.1 Read Operations Succeed
 
-| Test               | Code (readonly: true)                                              | Expected Result               |
-| ------------------ | ------------------------------------------------------------------ | ----------------------------- |
-| Get recent entries | `return await mj.core.getRecentEntries({limit: 2});`               | `{ count, entries }` returned |
-| Search entries     | `return await mj.search.searchEntries({query: "test", limit: 2});` | `{ count, entries }` returned |
-| Get statistics     | `return await mj.analytics.getStatistics({});`                     | data returned                 |
-| Help still works   | `return await mj.help();`                                          | Groups and methods listed     |
+| Test               | Code (readonly: true)                                                                 | Expected Result               |
+| ------------------ | ------------------------------------------------------------------------------------- | ----------------------------- |
+| Get recent entries | `return await mj.core.getRecentEntries({project_number: 5, limit: 2});`               | `{ count, entries }` returned |
+| Search entries     | `return await mj.search.searchEntries({project_number: 5, query: "test", limit: 2});` | `{ count, entries }` returned |
+| Get statistics     | `return await mj.analytics.getStatistics({});`                                        | data returned                 |
+| Help still works   | `return await mj.help();`                                                             | Groups and methods listed     |
 
 ### 18.2 Write Operations Blocked
 
-| Test                 | Code (readonly: true)                                                | Expected Result                                                     |
-| -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Create entry blocked | `return await mj.core.createEntry({content: "should fail"});`        | ⚠️ Verify: either method doesn't exist (TypeError) or returns error |
-| Update entry blocked | `return await mj.admin.updateEntry({entry_id: 1, content: "fail"});` | ⚠️ Verify: blocked or error                                         |
-| Delete entry blocked | `return await mj.admin.deleteEntry({entry_id: 999999});`             | ⚠️ Verify: blocked or error                                         |
+| Test                 | Code (readonly: true)                                                            | Expected Result                                                     |
+| -------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Create entry blocked | `return await mj.core.createEntry({project_number: 5, content: "should fail"});` | ⚠️ Verify: either method doesn't exist (TypeError) or returns error |
+| Update entry blocked | `return await mj.admin.updateEntry({entry_id: 1, content: "fail"});`             | ⚠️ Verify: blocked or error                                         |
+| Delete entry blocked | `return await mj.admin.deleteEntry({entry_id: 999999});`                         | ⚠️ Verify: blocked or error                                         |
 
 ### 18.3 Default Mode Allows Writes
 
@@ -49,11 +49,20 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | Create works in default | `const r = await mj.core.createEntryMinimal({content: "readonly=false test"}); return { success: r.success, id: r.entry?.id };` | `success: true`, entry created |
 
+### 18.4 Cleanup
+
+| Test                   | Code                                                                      | Expected Result |
+| ---------------------- | ------------------------------------------------------------------------- | --------------- |
+| Clean up test artifact | `return await mj.admin.deleteEntry({entry_id: <ID_FROM_PREVIOUS_STEP>});` | `success: true` |
+
 ---
 
 ## Success Criteria
 
-- [ ] `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
-- [ ] `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
-- [ ] `readonly: false` (default) allows both read and write operations
-- [ ] `mj.help()` still works in readonly mode
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
+- `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
+- `readonly: false` (default) allows both read and write operations
+- `mj.help()` still works in readonly mode
+- Test artifact created in 18.3 is successfully deleted in 18.4

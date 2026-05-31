@@ -604,7 +604,10 @@ describe('McpServer', function () {
                 extra: Record<string, unknown>
             ) => Promise<{ content: { type: string; text: string }[] }>
 
-            const result = await handler({ content: 'Test from mock' }, { _meta: {} })
+            const result = await handler(
+                { project_number: 1, content: 'Test from mock' },
+                { _meta: {} }
+            )
 
             expect(result.content).toBeDefined()
             expect(result.content[0]!.type).toBe('text')
@@ -633,7 +636,7 @@ describe('McpServer', function () {
                 isError?: boolean
             }>
 
-            const result = await handler({ content: 'Will fail' }, { _meta: {} })
+            const result = await handler({ project_number: 1, content: 'Will fail' }, { _meta: {} })
 
             // With deterministic error handling, errors are caught by the handler
             // and returned as structured JSON (not as MCP isError)
@@ -641,7 +644,7 @@ describe('McpServer', function () {
             expect(result.content[0]!.type).toBe('text')
 
             const text = result.content[0]!.text
-            expect(text).toContain('[Structured output attached]')
+            expect(text).toContain('An internal error occurred')
 
             const struct = result as { structuredContent?: { success: boolean; error: string } }
             expect(struct.structuredContent).toBeDefined()
@@ -714,7 +717,7 @@ describe('McpServer', function () {
             ) as unknown[][]
 
             const handler = toolCalls[0]![2] as any
-            const result = await handler({ content: 'Test' }, { _meta: {} })
+            const result = await handler({ project_number: 1, content: 'Test' }, { _meta: {} })
 
             expect(result.content[0].text).toBe('Just a simple string result')
 

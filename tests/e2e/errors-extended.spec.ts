@@ -31,7 +31,10 @@ test.describe('Errors: Core', () => {
     test('get_entry_by_id with negative ID → structured error', async () => {
         const client = await createClient()
         try {
-            const p = await callToolAndParse(client, 'get_entry_by_id', { entry_id: -1 })
+            const p = await callToolAndParse(client, 'get_entry_by_id', {
+                project_number: 1,
+                entry_id: -1,
+            })
             expectHandlerError(p)
         } finally {
             await client.close()
@@ -41,7 +44,10 @@ test.describe('Errors: Core', () => {
     test('get_entry_by_id with zero → structured error', async () => {
         const client = await createClient()
         try {
-            const p = await callToolAndParse(client, 'get_entry_by_id', { entry_id: 0 })
+            const p = await callToolAndParse(client, 'get_entry_by_id', {
+                project_number: 1,
+                entry_id: 0,
+            })
             // Zero may or may not be a valid ID — accept either error or success
             expect(typeof p).toBe('object')
         } finally {
@@ -53,6 +59,7 @@ test.describe('Errors: Core', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'create_entry', {
+                project_number: 1,
                 content: '',
                 entry_type: 'test_entry',
             })
@@ -102,6 +109,7 @@ test.describe('Errors: Search', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'search_by_date_range', {
+                project_number: 1,
                 start_date: '2030-12-31',
                 end_date: '2020-01-01',
             })
@@ -191,6 +199,7 @@ test.describe('Errors: Admin', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'delete_entry', {
+                project_number: 1,
                 entry_id: 999999999,
             })
             // May soft-succeed on missing rows or return structured error

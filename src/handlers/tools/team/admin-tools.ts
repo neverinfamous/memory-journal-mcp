@@ -19,6 +19,7 @@ import {
     TeamDeleteOutputSchema,
     TeamMergeTagsOutputSchema,
 } from './schemas.js'
+import { coerceSignificanceAlias } from '../schemas.js'
 
 // ============================================================================
 // Tool Definitions
@@ -31,38 +32,41 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_update_entry',
             title: 'Update Team Entry',
-            description: 'Update a team entry (content, type, or tags). Requires TEAM_DB_PATH.',
+            description:
+                'Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, content, entry_type, tags, project_number } =
-                        TeamUpdateEntrySchema.parse(params)
+                    coerceSignificanceAlias(params)
 
-                    // Verify entry exists and belongs to the project (if project_number is specified)
-                    const existing = teamDb.getEntryById(entry_id)
-                    if (
-                        !existing ||
-                        (project_number !== undefined && existing.projectNumber !== project_number)
-                    ) {
+                    const input = TeamUpdateEntrySchema.parse(params)
+
+                    // Verify entry exists
+                    const existing = teamDb.getEntryById(input.entry_id)
+                    if (!existing) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: `Team entry ${String(input.entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                            suggestion: 'Verify the team entry ID and try again',
                             recoverable: true,
                         }
                     }
 
-                    const author = fetchAuthor(teamDb, entry_id)
+                    const author = fetchAuthor(teamDb, input.entry_id)
 
                     const currentUser = resolveAuthenticatedAuthor()
 
@@ -77,10 +81,21 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const updated = teamDb.updateEntry(entry_id, {
-                        content,
-                        entryType: entry_type,
-                        tags,
+                    const updated = teamDb.updateEntry(input.entry_id, {
+                        content: input.content,
+                        entryType: input.entry_type,
+                        tags: input.tags,
+                        significanceType: input.significance_type,
+                        projectNumber: input.project_number,
+                        projectOwner: input.project_owner,
+                        issueNumber: input.issue_number,
+                        issueUrl: input.issue_url,
+                        prNumber: input.pr_number,
+                        prUrl: input.pr_url,
+                        prStatus: input.pr_status,
+                        workflowRunId: input.workflow_run_id,
+                        workflowName: input.workflow_name,
+                        workflowStatus: input.workflow_status,
                     })
 
                     return {
@@ -96,7 +111,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             name: 'team_delete_entry',
             title: 'Delete Team Entry',
             description:
-                'Soft-delete a team entry (marks as deleted, preservable). Requires TEAM_DB_PATH.',
+                'Soft-delete a team entry (marks as deleted, preservable). Calling with permanent: true on a previously soft-deleted entry works. Returns success: false for nonexistent entries. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamDeleteEntrySchemaMcp,
             outputSchema: TeamDeleteOutputSchema,
@@ -162,11 +177,16 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             name: 'team_merge_tags',
             title: 'Merge Team Tags',
             description:
-                'Merge a source tag into a target tag in the team database. All entries with the source tag will be re-tagged with the target tag. Requires TEAM_DB_PATH.',
+                'Merge a source tag into a target tag in the team database. All entries with the source tag will be re-tagged with the target tag. Only updates non-deleted entries. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamMergeTagsSchemaMcp,
             outputSchema: TeamMergeTagsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {

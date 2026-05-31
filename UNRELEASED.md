@@ -1,3 +1,3 @@
 # Unreleased Changes
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.7.1...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.0...HEAD)

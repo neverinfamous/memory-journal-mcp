@@ -2,17 +2,19 @@
 
 **Scope:** Cross-cutting verification of all 4 payload optimization features — Kanban throttling, body truncation, MAX_QUERY_LIMIT enforcement, and Code Mode result cap.
 
-**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
+**Prerequisites:**
 
-**Prerequisites:** Seed data from `test-seed.md` must be present. MCP server instructions auto-injected. Use https://github.com/users/neverinfamous/projects/5 for Kanban testing.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Seed data from `test-seed.md` must be present. MCP server instructions auto-injected. Use https://github.com/users/neverinfamous/projects/5 for Kanban testing.
 
 **Workflow after testing:**
 
-1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. Implement, update `UNRELEASED.md`, commit without push.
-3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
@@ -31,12 +33,14 @@
 | 5   | Over-limit rejected  | `get_kanban_board(project_number: 5, item_limit: 101)`                    | Structured validation error (max 100)                                                          |
 | 6   | Combined params      | `get_kanban_board(project_number: 5, summary_only: false, item_limit: 5)` | `summaryOnly` is `false` or absent, items present but capped at 5 per column                   |
 
-### Verification Checks
+## Success Criteria
 
-- [ ] `summaryOnly` flag is `true` in response for tests #1 and #3
-- [ ] `itemCount` is a number on every column in all responses
-- [ ] `truncated: true` appears on columns where total items exceed `item_limit`
-- [ ] `item_limit: 101` produces a structured validation error, not a raw `-32602`
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `summaryOnly` flag is `true` in response for tests #1 and #3
+- `itemCount` is a number on every column in all responses
+- `truncated: true` appears on columns where total items exceed `item_limit`
+- `item_limit: 101` produces a structured validation error, not a raw `-32602`
 
 ---
 
@@ -57,11 +61,11 @@
 
 ### Verification Checks
 
-- [ ] Default `truncate_body: 800` applied without explicit param
-- [ ] `truncate_body: 0` disables truncation — full body returned
-- [ ] `bodyTruncated` and `bodyFullLength` metadata present when truncation occurs
-- [ ] `include_comments: true` returns `comments` array and `commentCount`
-- [ ] PR truncation mirrors issue behavior
+- Default `truncate_body: 800` applied without explicit param
+- `truncate_body: 0` disables truncation — full body returned
+- `bodyTruncated` and `bodyFullLength` metadata present when truncation occurs
+- `include_comments: true` returns `comments` array and `commentCount`
+- PR truncation mirrors issue behavior
 
 ---
 
@@ -70,20 +74,20 @@
 > [!NOTE]
 > `MAX_QUERY_LIMIT` is 500 — enforced on `get_recent_entries`, `get_github_issues`, `get_github_prs`, `search_entries`, and `search_by_date_range`.
 
-| #   | Test                | Command                                     | Expected Result                 |
-| --- | ------------------- | ------------------------------------------- | ------------------------------- |
-| 14  | Under limit         | `get_recent_entries(limit: 100)`            | Accepted, returns ≤ 100 entries |
-| 15  | At limit            | `get_recent_entries(limit: 500)`            | Accepted, returns ≤ 500 entries |
-| 16  | Over limit (core)   | `get_recent_entries(limit: 501)`            | Structured validation error     |
-| 17  | Over limit (issues) | `get_github_issues(limit: 501)`             | Structured validation error     |
-| 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                | Structured validation error     |
-| 19  | Over limit (search) | `search_entries(query: "test", limit: 501)` | Structured validation error     |
+| #   | Test                | Command                                                        | Expected Result                 |
+| --- | ------------------- | -------------------------------------------------------------- | ------------------------------- |
+| 14  | Under limit         | `get_recent_entries(project_number: 5, limit: 100)`            | Accepted, returns ≤ 100 entries |
+| 15  | At limit            | `get_recent_entries(project_number: 5, limit: 500)`            | Accepted, returns ≤ 500 entries |
+| 16  | Over limit (core)   | `get_recent_entries(project_number: 5, limit: 501)`            | Structured validation error     |
+| 17  | Over limit (issues) | `get_github_issues(limit: 501)`                                | Structured validation error     |
+| 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                                   | Structured validation error     |
+| 19  | Over limit (search) | `search_entries(project_number: 5, query: "test", limit: 501)` | Structured validation error     |
 
 ### Verification Checks
 
-- [ ] `limit: 500` accepted across all paginated tools
-- [ ] `limit: 501` returns `{success: false, error: "..."}` with validation message — not a raw `-32602`
-- [ ] The error message references the limit or max value
+- `limit: 500` accepted across all paginated tools
+- `limit: 501` returns `{success: false, error: "..."}` with validation message — not a raw `-32602`
+- The error message references the limit or max value
 
 ---
 
@@ -101,19 +105,21 @@
 
 ### Verification Checks
 
-- [ ] Results under 100KB pass through without error
-- [ ] Results over 100KB produce structured error (not a crash or raw exception)
-- [ ] Error message includes actual size in KB, limit in KB, and aggregation guidance example
+- Results under 100KB pass through without error
+- Results over 100KB produce structured error (not a crash or raw exception)
+- Error message includes actual size in KB, limit in KB, and aggregation guidance example
 
 ---
 
 ## Success Criteria
 
-- [ ] Kanban `summary_only` returns zero items per column with `itemCount` metadata
-- [ ] Kanban `item_limit: 101` is rejected by validation
-- [ ] Body truncation defaults to 800 chars with metadata flags
-- [ ] `include_comments: true` returns comment data
-- [ ] `MAX_QUERY_LIMIT` (500) enforced on core, github, and search tools
-- [ ] Code Mode 100KB cap produces agent-guidance error with KB values
-- [ ] No raw `-32602` errors from any new parameter
-- [ ] Agent reports the Total Token Estimate in the final summary
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Kanban `summary_only` returns zero items per column with `itemCount` metadata
+- Kanban `item_limit: 101` is rejected by validation
+- Body truncation defaults to 800 chars with metadata flags
+- `include_comments: true` returns comment data
+- `MAX_QUERY_LIMIT` (500) enforced on core, github, and search tools
+- Code Mode 100KB cap produces agent-guidance error with KB values
+- No raw `-32602` errors from any new parameter
+- Agent reports the Total Token Estimate in the final summary

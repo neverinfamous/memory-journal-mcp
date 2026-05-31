@@ -2,7 +2,7 @@
  * memory-journal-mcp — Briefing User Message Formatter Unit Tests
  *
  * Tests for the formatUserMessage function that builds the
- * markdown summary table displayed to the user.
+ * hybrid markdown briefing (table + flat lines) displayed to the user.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -18,7 +18,7 @@ function baseOpts() {
         branchName: 'main',
         ciStatus: 'passing',
         totalEntries: 42,
-        latestPreview: '#1: Recent entry preview',
+        latestPreviews: ['#1: Recent entry preview'],
         github: null,
     }
 }
@@ -31,7 +31,6 @@ describe('formatUserMessage', () => {
     it('should produce basic markdown table without GitHub', () => {
         const result = formatUserMessage(baseOpts())
 
-        expect(result).toContain('📋 **Session Context Loaded**')
         expect(result).toContain('memory-journal-mcp')
         expect(result).toContain('main')
         expect(result).toContain('passing')
@@ -45,13 +44,12 @@ describe('formatUserMessage', () => {
             teamTotalEntries: 15,
         })
 
-        expect(result).toContain('**Team DB**')
-        expect(result).toContain('15 entries')
+        expect(result).toContain('Team: 15')
     })
 
     it('should NOT include team DB row when teamTotalEntries is undefined', () => {
         const result = formatUserMessage(baseOpts())
-        expect(result).not.toContain('**Team DB**')
+        expect(result).not.toContain('Team:')
     })
 
     // ========================================================================
@@ -130,7 +128,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Issues**')
+        expect(result).toContain('Issues:')
         expect(result).toContain('#42 Fix bug')
         expect(result).toContain('#43 Add feature')
     })
@@ -148,7 +146,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Issues**')
+        expect(result).toContain('Issues:')
         expect(result).toContain('5 open')
     })
 
@@ -170,7 +168,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**PRs**')
+        expect(result).toContain('PRs:')
         expect(result).toContain('2 open')
         expect(result).toContain('5 merged')
         expect(result).toContain('1 closed')
@@ -190,7 +188,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**PRs**')
+        expect(result).toContain('PRs:')
         expect(result).toContain('#10 Add OAuth')
     })
 
@@ -207,7 +205,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**PRs**')
+        expect(result).toContain('PRs:')
         expect(result).toContain('7 open')
     })
 
@@ -231,7 +229,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Milestones**')
+        expect(result).toContain('MS:')
         expect(result).toContain('v1.0 (75%, due 2025-03-15)')
         expect(result).toContain('v2.0 (25%)')
     })
@@ -249,7 +247,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).not.toContain('**Milestones**')
+        expect(result).not.toContain('MS:')
     })
 
     // ========================================================================
@@ -276,10 +274,10 @@ describe('formatUserMessage', () => {
         })
 
         expect(result).toContain('**Insights**')
-        expect(result).toContain('⭐ 120 stars')
-        expect(result).toContain('🍴 30 forks')
-        expect(result).toContain('📦 500 clones')
-        expect(result).toContain('👁️ 2000 views')
+        expect(result).toContain('⭐ 120')
+        expect(result).toContain('🍴 30')
+        expect(result).toContain('📦 500')
+        expect(result).toContain('👁️ 2000')
         expect(result).toContain('(14d)')
     })
 
@@ -323,7 +321,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot**')
+        expect(result).toContain('**Insights**')
         expect(result).toContain('5 reviewed')
         expect(result).toContain('3 approved')
         expect(result).toContain('1 changes requested')
@@ -349,7 +347,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Copilot**')
+        expect(result).toContain('**Insights**')
         expect(result).not.toContain('changes requested')
         expect(result).not.toContain('comments')
     })
@@ -369,10 +367,8 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Rules**')
         expect(result).toContain('.rules')
         expect(result).toContain('4 KB')
-        expect(result).toContain('2h ago')
     })
 
     it('should include skills directory info', () => {
@@ -385,8 +381,7 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('**Skills**')
-        expect(result).toContain('3 skills available')
+        expect(result).toContain('3 skills')
     })
 
     it('should use singular "skill" for count of 1', () => {
@@ -399,7 +394,169 @@ describe('formatUserMessage', () => {
             },
         })
 
-        expect(result).toContain('1 skill available')
+        expect(result).toContain('1 skill')
         expect(result).not.toContain('1 skills')
+    })
+
+    it('should combine rules and skills on one line with · separator', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            rulesFile: {
+                path: '/path/to/GEMINI.md',
+                name: 'GEMINI.md',
+                sizeKB: 7,
+                lastModified: '3h ago',
+            },
+            skillsDir: {
+                path: '/path/to/skills',
+                count: 41,
+                names: [],
+            },
+        })
+
+        // Both should appear in the same System table row, joined by ·
+        expect(result).toContain('GEMINI.md')
+        expect(result).toContain('41 skills')
+        expect(result).toContain('·')
+    })
+
+    // ========================================================================
+    // Version & Surface Area
+    // ========================================================================
+
+    it('should include version in System row', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            version: '8.0.0',
+        })
+
+        expect(result).toContain('v8.0.0')
+    })
+
+    it('should include surface area counts', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            toolCount: 70,
+            resourceCount: 36,
+            promptCount: 17,
+        })
+
+        expect(result).toContain('70 tools')
+        expect(result).toContain('36 resources')
+        expect(result).toContain('17 prompts')
+    })
+
+    it('should combine version and surface area on one line', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            version: '8.0.0',
+            toolCount: 70,
+            resourceCount: 36,
+            promptCount: 17,
+        })
+
+        // Version, resources, and prompts on one line. Tools on a separate line.
+        expect(result).toContain('v8.0.0 · 36 resources · 17 prompts')
+        expect(result).toContain('70 tools')
+    })
+
+    // ========================================================================
+    // Test Health
+    // ========================================================================
+
+    it('should include test health', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            testHealth: { unitTests: 1782, e2eTests: 391, coverage: 91.07 },
+        })
+
+        expect(result).toContain('Tests: 1782+391 E2E')
+        expect(result).toContain('91%')
+    })
+
+    it('should omit coverage when zero', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            testHealth: { unitTests: 500, e2eTests: 100, coverage: 0 },
+        })
+
+        expect(result).toContain('Tests: 500+100 E2E')
+        expect(result).not.toContain('%')
+    })
+
+    // ========================================================================
+    // Local Time
+    // ========================================================================
+
+    it('should include localTime in System row', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            localTime: '2026-05-25 06:12 EDT',
+        })
+
+        expect(result).toContain('2026-05-25 06:12 EDT')
+    })
+
+    // ========================================================================
+    // Unreleased Summary
+    // ========================================================================
+
+    it('should include unreleased summary in Analytics', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            unreleasedSummary: {
+                added: 5,
+                changed: 3,
+                fixed: 2,
+                security: 1,
+                removed: 0,
+                keyItems: ['feature-a', 'config'],
+            },
+        })
+
+        expect(result).toContain('**Unreleased**')
+        expect(result).toContain('5 added')
+        expect(result).toContain('3 changed')
+        expect(result).toContain('2 fixed')
+        expect(result).toContain('1 security')
+        expect(result).not.toContain('removed')
+        expect(result).toContain('Recent focus: feature-a, config')
+    })
+
+    it('should omit unreleased when not provided', () => {
+        const result = formatUserMessage(baseOpts())
+        expect(result).not.toContain('**Unreleased**')
+    })
+
+    // ========================================================================
+    // Graph Suppression
+    // ========================================================================
+
+    it('should suppress graph line when totalRelationships is 0', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            graphSummary: {
+                totalRelationships: 0,
+                density: 0,
+                causalMetrics: {},
+            },
+        })
+
+        expect(result).not.toContain('**Graph**')
+    })
+
+    it('should include graph line when totalRelationships > 0', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            graphSummary: {
+                totalRelationships: 15,
+                density: 1.5,
+                causalMetrics: { evolves_from: 8, implements: 7 },
+            },
+        })
+
+        expect(result).toContain('**Graph**')
+        expect(result).toContain('15 relationships')
+        expect(result).toContain('evolves_from: 8')
     })
 })

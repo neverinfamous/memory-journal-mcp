@@ -2,17 +2,18 @@
 
 **Scope:** Create 17 seed entries (S1–S17) for FTS5, filter, semantic search, cross-DB, and cross-project insight tests. **This file must run first** — all other test files depend on this seed data.
 
-**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
+**Prerequisites:**
 
-**Prerequisites:** MCP server instructions auto-injected. `TEAM_DB_PATH` configured for S11–S12, S15–S17.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
 
 **Workflow after testing:**
 
-1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
-2. Implement, update `UNRELEASED.md`, commit without push.
-3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
@@ -52,10 +53,10 @@ These entries ensure filter tests (`issue_number`, `pr_status`, `workflow_run_id
 
 These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) returns results from both databases.
 
-| #   | Tool                | Params                                                                                                                                                                                     | Enables Tests                                                                    |
-| --- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| S11 | `create_entry`      | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
-| S12 | `team_create_entry` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]`, `author: "alice"`                | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB           |
+| #   | Tool                                   | Params                                                                                                                                                                                     | Enables Tests                                                                    |
+| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| S11 | `create_entry`                         | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
+| S12 | `team_create_entry(project_number: 5)` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]`, `author: "alice"`                | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB           |
 
 ### 0.4 Cross-Project Insights Seed
 
@@ -71,35 +72,37 @@ These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) ret
 
 **Team DB — seed 3 project-linked entries:**
 
-| #   | Tool                | Params                                                                                                                                                                                                                 | Enables Tests                                                                         |
-| --- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| S15 | `team_create_entry` | `content: "Team kickoff for project #5: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["kickoff", "project"]`, `author: "alice"`                                      | `team_get_cross_project_insights` non-zero `project_count`                            |
-| S16 | `team_create_entry` | `content: "Project #5 mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["standup", "project"]`, `author: "bob"`                     | `team_get_cross_project_insights` — 2nd team entry for project 5                      |
-| S17 | `team_create_entry` | `content: "Project #5 release review: all acceptance criteria met, feature flags enabled for rollout"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["release", "project", "team-shared"]`, `author: "alice"` | `team_get_cross_project_insights` — 3rd team entry to meet `min_entries: 3` threshold |
+| #   | Tool                                   | Params                                                                                                                                                                                                                 | Enables Tests                                                                         |
+| --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| S15 | `team_create_entry(project_number: 5)` | `content: "Team kickoff for project #5: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["kickoff", "project"]`, `author: "alice"`                                      | `team_get_cross_project_insights` non-zero `project_count`                            |
+| S16 | `team_create_entry(project_number: 5)` | `content: "Project #5 mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["standup", "project"]`, `author: "bob"`                     | `team_get_cross_project_insights` — 2nd team entry for project 5                      |
+| S17 | `team_create_entry(project_number: 5)` | `content: "Project #5 release review: all acceptance criteria met, feature flags enabled for rollout"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["release", "project", "team-shared"]`, `author: "alice"` | `team_get_cross_project_insights` — 3rd team entry to meet `min_entries: 3` threshold |
 
 ### 0.5 Post-Seed Verification
 
 After creating all 17 entries, verify the seed data is searchable:
 
-| Check                       | Command                                           | Expected                                                                                                            |
-| --------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| FTS5 indexed                | `search_entries(query: "architecture")`           | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
-| Filters work                | `search_entries(issue_number: 44)`                | ≥ 1 result (S7)                                                                                                     |
-| Cross-DB merged             | `search_entries(query: "architecture")`           | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs               |
-| Rebuild vector index        | `rebuild_vector_index`                            | `entriesIndexed` > 0                                                                                                |
-| Semantic search             | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar)                                                                 |
-| Cross-project insights      | `get_cross_project_insights({})`                  | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
-| Team cross-project insights | `team_get_cross_project_insights({})`             | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
+| Check                       | Command                                                    | Expected                                                                                                            |
+| --------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| FTS5 indexed                | `search_entries(project_number: 5, query: "architecture")` | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
+| Filters work                | `search_entries(project_number: 5, issue_number: 44)`      | ≥ 1 result (S7)                                                                                                     |
+| Cross-DB merged             | `search_entries(project_number: 5, query: "architecture")` | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs               |
+| Rebuild vector index        | `rebuild_vector_index`                                     | `entriesIndexed` > 0                                                                                                |
+| Semantic search             | `semantic_search(query: "improving performance")`          | ≥ 1 result (S7, S10 should be semantically similar)                                                                 |
+| Cross-project insights      | `get_cross_project_insights({})`                           | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
+| Team cross-project insights | `team_get_cross_project_insights({})`                      | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
 
 ---
 
 ## Success Criteria
 
-- [ ] All 17 seed entries (S1–S17) created successfully
-- [ ] FTS5 search returns results for `"architecture"` query
-- [ ] Filter search returns results for `issue_number: 44`
-- [ ] Cross-DB search includes `source: 'team'` entries
-- [ ] Vector index rebuilt with `entriesIndexed > 0`
-- [ ] Semantic search returns results for `"improving performance"`
-- [ ] `get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)
-- [ ] `team_get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- All 17 seed entries (S1–S17) created successfully
+- FTS5 search returns results for `"architecture"` query
+- Filter search returns results for `issue_number: 44`
+- Cross-DB search includes `source: 'team'` entries
+- Vector index rebuilt with `entriesIndexed > 0`
+- Semantic search returns results for `"improving performance"`
+- `get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)
+- `team_get_cross_project_insights` returns `project_count ≥ 1` (project 5 with ≥ 3 entries)

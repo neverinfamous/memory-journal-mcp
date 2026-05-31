@@ -55,8 +55,23 @@ export async function resolveGitHubRepo(
             }
         }
         const registry = config?.projectRegistry
-        if (registry && Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
-            const entry = registry[targetRepo]
+
+        // Attempt to find exact match, then fallback to just the repo name if owner/repo format was used
+        let registryKey: string = targetRepo
+        if (registry && !Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
+            const parts = targetRepo.split('/')
+            const repoPart = parts[1]
+            if (
+                parts.length === 2 &&
+                repoPart &&
+                Object.prototype.hasOwnProperty.call(registry, repoPart)
+            ) {
+                registryKey = repoPart
+            }
+        }
+
+        if (registry && Object.prototype.hasOwnProperty.call(registry, registryKey)) {
+            const entry = registry[registryKey]
             if (entry) {
                 activeGithub = getGitHubIntegration(entry.path, runtime)
             }

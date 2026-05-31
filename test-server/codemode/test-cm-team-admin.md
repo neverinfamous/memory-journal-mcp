@@ -11,12 +11,13 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+   - **Clean up test artifacts:** Delete any files exported to the `cm_team_export` directory (or other mock output directories) created during testing.
 
 ---
 
@@ -26,19 +27,31 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ limit: 1 })
+const r = await mj.team.teamGetRecent({ project_number: 5, limit: 1, project_number: 5 })
 const id = r.entries[0].id
 
 const updated = await mj.team.teamUpdateEntry({
+  project_number: 5,
+  project_number: 5,
   entry_id: id,
   content: 'CM4 updated team content',
   tags: ['cm4-updated-team'],
 })
-const verify = await mj.team.teamGetEntryById({ entry_id: id })
+const verify = await mj.team.teamGetEntryById({
+  project_number: 5,
+  project_number: 5,
+  entry_id: id,
+})
 
 // Merge tags
-await mj.team.teamCreateEntry({ content: 'CM4 merge source', tags: ['cm4-team-old'] })
+await mj.team.teamCreateEntry({
+  project_number: 5,
+  content: 'CM4 merge source',
+  tags: ['cm4-team-old'],
+  project_number: 5,
+})
 const merged = await mj.team.teamMergeTags({
+  project_number: 5,
   source_tag: 'cm4-team-old',
   target_tag: 'cm4-team-new',
 })
@@ -47,8 +60,16 @@ const oldGone = !afterTags.tags?.some((t) => t.name === 'cm4-team-old')
 const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
 
 // Soft delete
-const toDelete = await mj.team.teamCreateEntry({ content: 'CM4 delete me' })
-const deleted = await mj.team.teamDeleteEntry({ entry_id: toDelete.entry.id })
+const toDelete = await mj.team.teamCreateEntry({
+  project_number: 5,
+  content: 'CM4 delete me',
+  project_number: 5,
+})
+const deleted = await mj.team.teamDeleteEntry({
+  project_number: 5,
+  project_number: 5,
+  entry_id: toDelete.entry.id,
+})
 
 return {
   updateSuccess: updated.success,
@@ -94,22 +115,29 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ limit: 2 })
+const r = await mj.team.teamGetRecent({ project_number: 5, limit: 2, project_number: 5 })
 const [a, b] = r.entries.map((e) => e.id)
 
 const linked = await mj.team.teamLinkEntries({
+  project_number: 5,
   from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
   description: 'CM4 team link test',
+  project_number: 5,
 })
 const dup = await mj.team.teamLinkEntries({
+  project_number: 5,
   from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
+  project_number: 5,
 })
-const viz = await mj.team.teamVisualizeRelationships({ entry_id: a })
-const vizTag = await mj.team.teamVisualizeRelationships({ tag: 'codemode4-team-test' })
+const viz = await mj.team.teamVisualizeRelationships({ project_number: 5, entry_id: a })
+const vizTag = await mj.team.teamVisualizeRelationships({
+  project_number: 5,
+  tag: 'codemode4-team-test',
+})
 
 return {
   linkSuccess: linked.success,
@@ -132,19 +160,25 @@ return {
 
 ```javascript
 // Test code:
-const jsonExport = await mj.team.teamExportEntries({ format: 'json', limit: 5 })
-const mdExport = await mj.team.teamExportEntries({ format: 'markdown', limit: 5 })
+const jsonExport = await mj.team.teamExportEntries({ project_number: 5, format: 'json', limit: 5 })
+const mdExport = await mj.team.teamExportEntries({
+  project_number: 5,
+  format: 'markdown',
+  limit: 5,
+})
 
-const MOCK_DIR = 'cm_team_export'
+const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_team_export'
 
 const ioExport = await mj.team.teamExportMarkdown({
   output_dir: MOCK_DIR,
   limit: 5,
+  project_number: 5,
 })
 
 const ioImport = await mj.team.teamImportMarkdown({
   source_dir: MOCK_DIR,
   dry_run: true,
+  project_number: 5,
 })
 
 return {
@@ -216,13 +250,15 @@ return {
 
 ## Success Criteria
 
-- [ ] `team_update_entry` updates content, tags, and entry_type
-- [ ] `team_delete_entry` soft-deletes team entries
-- [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
-- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- [ ] `team_link_entries` creates relationships with duplicate detection
-- [ ] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
-- [ ] `team_export_entries` exports JSON and markdown with filters
-- [ ] `team_backup` creates named and auto-named backups
-- [ ] `team_list_backups` returns backup metadata
-- [ ] `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `team_update_entry(project_number: 5)` updates content, tags, and entry_type
+- `team_delete_entry(project_number: 5)` soft-deletes team entries
+- `team_merge_tags(project_number: 5)` consolidates tags — source removed, entries re-tagged
+- `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
+- `team_link_entries(project_number: 5)` creates relationships with duplicate detection
+- `team_visualize_relationships(project_number: 5)` returns Mermaid diagram with node/edge counts
+- `team_export_entries(project_number: 5)` exports JSON and markdown with filters
+- `team_backup` creates named and auto-named backups
+- `team_list_backups` returns backup metadata
+- `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings

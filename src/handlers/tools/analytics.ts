@@ -181,7 +181,12 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'analytics',
             inputSchema: GetStatisticsSchemaMcp,
             outputSchema: StatisticsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { group_by, start_date, end_date, project_breakdown } =
@@ -201,11 +206,17 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'get_cross_project_insights',
             title: 'Get Cross-Project Insights',
-            description: 'Analyze patterns across all GitHub Projects tracked in journal entries',
+            description:
+                'Analyze patterns across all GitHub Projects tracked in journal entries. Use for architecture planning.',
             group: 'analytics',
             inputSchema: CrossProjectInsightsInputSchemaMcp,
             outputSchema: CrossProjectInsightsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)

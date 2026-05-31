@@ -11,9 +11,9 @@ Test tag management, export formats/filters, and the backup/restore lifecycle th
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. Use `code-map.md` as a source of truth.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -30,7 +30,11 @@ const tags = await mj.core.listTags({})
 const hasEntries = tags.tags?.length > 0
 
 // Create source tag for merge
-await mj.core.createEntry({ content: 'CM4 merge test entry', tags: ['cm4-old-tag'] })
+await mj.core.createEntry({
+  project_number: 5,
+  content: 'CM4 merge test entry',
+  tags: ['cm4-old-tag'],
+})
 const merged = await mj.admin.mergeTags({
   source_tag: 'cm4-old-tag',
   target_tag: 'cm4-new-tag',
@@ -124,13 +128,15 @@ return {
 
 ## Success Criteria
 
-- [ ] `list_tags` returns tag list via Code Mode
-- [ ] `merge_tags` consolidates tags correctly — source removed, target exists
-- [ ] `merge_tags` returns structured errors for same-tag and nonexistent source
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- [ ] `backup_journal` named and auto-named both succeed
-- [ ] `backup_journal` path traversal blocked with structured error
-- [ ] `list_backups` returns backup metadata
-- [ ] `restore_backup` succeeds with `revertedChanges` field
-- [ ] `restore_backup` nonexistent file returns structured error
-- [ ] `cleanup_backups` deletes old backups
+- `list_tags` returns tag list via Code Mode
+- `merge_tags` consolidates tags correctly — source removed, target exists
+- `merge_tags` returns structured errors for same-tag and nonexistent source
+
+- `backup_journal` named and auto-named both succeed
+- `backup_journal` path traversal blocked with structured error
+- `list_backups` returns backup metadata
+- `restore_backup` succeeds with `revertedChanges` field
+- `restore_backup` nonexistent file returns structured error
+- `cleanup_backups` deletes old backups

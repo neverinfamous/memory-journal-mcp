@@ -55,12 +55,33 @@ export const ENTRY_TYPES = [
 export const SIGNIFICANCE_TYPES = [
     'milestone',
     'breakthrough',
-    'technical_breakthrough',
     'decision',
+    'architecture',
     'lesson_learned',
     'blocker_resolved',
     'release',
+    'security',
 ] as const
+
+/**
+ * Coerce common invalid significance_type aliases to their valid enum equivalents.
+ * Mutates the params object directly before Zod validation.
+ */
+export function coerceSignificanceAlias(params: unknown): void {
+    if (params !== null && params !== undefined && typeof params === 'object') {
+        const obj = params as Record<string, unknown>
+        if (typeof obj['significance_type'] === 'string') {
+            const lower = obj['significance_type'].toLowerCase()
+            if (lower === 'important') obj['significance_type'] = 'milestone'
+            else if (lower === 'major') obj['significance_type'] = 'breakthrough'
+            else if (lower === 'critical') obj['significance_type'] = 'security'
+            else if (lower === 'learning') obj['significance_type'] = 'lesson_learned'
+            else if (lower === 'key_decision') obj['significance_type'] = 'decision'
+            else if (lower === 'resolved') obj['significance_type'] = 'blocker_resolved'
+            else if (lower === 'maintenance' || lower === 'minor') delete obj['significance_type']
+        }
+    }
+}
 
 /** Maximum content length for journal entries (chars) */
 export const MAX_CONTENT_LENGTH = 50_000
@@ -92,6 +113,16 @@ export const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'
 export const relaxedNumber = (): z.ZodUnion<[z.ZodNumber, z.ZodString]> =>
     z.union([z.number(), z.string()])
 
+/**
+ * Strict schema for project_number validation.
+ * Used in handler strict schemas to provide an informative error when missing,
+ * since project_number is left optional in the SDK's MCP schema so it reaches the handler.
+ */
+export const StrictProjectNumberSchema = z.number({
+    message:
+        'Missing project_number. You MUST provide a valid project_number (e.g., 1) to associate this action with a specific project context.',
+})
+
 // ============================================================================
 // Cross-Group Output Schemas
 // ============================================================================
@@ -103,7 +134,7 @@ export const relaxedNumber = (): z.ZodUnion<[z.ZodNumber, z.ZodString]> =>
 export const EntryOutputSchema = z
     .object({
         id: z.number(),
-        content: z.string(),
+        content: z.string().max(MAX_CONTENT_LENGTH),
         entryType: z.string(),
         isPersonal: z.boolean(),
         timestamp: z.string(),

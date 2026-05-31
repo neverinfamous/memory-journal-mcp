@@ -16,6 +16,7 @@ import {
     relaxedNumber,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    StrictProjectNumberSchema,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
@@ -37,7 +38,7 @@ export const TeamCreateEntrySchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
     project_owner: z.string().optional(),
     issue_number: z.number().optional(),
     issue_url: z.string().optional(),
@@ -53,7 +54,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.string().optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
@@ -66,7 +67,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -77,7 +78,7 @@ export const TeamGetRecentSchema = z.object({
 /** team_get_recent — relaxed */
 export const TeamGetRecentSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(10),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     sort_by: z
         .string()
         .optional()
@@ -89,7 +90,7 @@ export const TeamGetRecentSchemaMcp = z.object({
 export const TeamSearchSchema = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     limit: z.number().max(500).optional().default(10),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -115,7 +116,7 @@ export const TeamSearchSchemaMcp = z.object({
 export const TeamGetEntryByIdSchema = z.object({
     entry_id: z.number(),
     include_relationships: z.boolean().optional().default(true),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_get_entry_by_id — relaxed */
@@ -135,7 +136,7 @@ export const TeamSearchByDateRangeSchema = z.object({
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     limit: z.number().max(500).optional().default(50),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -169,7 +170,17 @@ export const TeamUpdateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
+    significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: z.number().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: z.number().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
+    workflow_run_id: z.number().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
 })
 
 /** team_update_entry — relaxed */
@@ -178,13 +189,23 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().nullable().optional(),
+    significance_type: z.string().nullable().optional(),
+    project_owner: z.string().nullable().optional(),
+    issue_number: relaxedNumber().nullable().optional(),
+    issue_url: z.string().nullable().optional(),
+    pr_number: relaxedNumber().nullable().optional(),
+    pr_url: z.string().nullable().optional(),
+    pr_status: z.string().nullable().optional(),
+    workflow_run_id: relaxedNumber().nullable().optional(),
+    workflow_name: z.string().nullable().optional(),
+    workflow_status: z.string().nullable().optional(),
 })
 
 /** team_delete_entry — strict */
 export const TeamDeleteEntrySchema = z.object({
     entry_id: z.number(),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_delete_entry — relaxed */
@@ -241,17 +262,30 @@ export const TeamLinkEntriesSchema = z.object({
         .optional()
         .default('references'),
     description: z.string().optional(),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_link_entries — relaxed */
-export const TeamLinkEntriesSchemaMcp = z.object({
-    from_entry_id: relaxedNumber().optional(),
-    to_entry_id: relaxedNumber().optional(),
-    relationship_type: z.string().optional().default('references'),
-    description: z.string().optional(),
-    project_number: relaxedNumber(),
-})
+export const TeamLinkEntriesSchemaMcp = z
+    .object({
+        from_entry_id: relaxedNumber().optional(),
+        to_entry_id: relaxedNumber().optional(),
+        from: relaxedNumber().optional(),
+        to: relaxedNumber().optional(),
+        from_id: relaxedNumber().optional(),
+        to_id: relaxedNumber().optional(),
+        relationship_type: z.string().optional().default('references'),
+        type: z.string().optional(),
+        description: z.string().optional(),
+        project_number: relaxedNumber().optional(),
+    })
+    .transform((data) => ({
+        from_entry_id: data.from_entry_id ?? data.from_id ?? data.from,
+        to_entry_id: data.to_entry_id ?? data.to_id ?? data.to,
+        relationship_type: data.type ?? data.relationship_type,
+        description: data.description,
+        project_number: data.project_number,
+    }))
 
 /** team_visualize_relationships — strict */
 export const TeamVisualizeRelationshipsSchema = z.object({
@@ -472,7 +506,7 @@ export const TeamSemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_semantic_search — relaxed */
@@ -490,19 +524,19 @@ export const TeamSemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_add_to_vector_index — strict */
 export const TeamAddToVectorIndexSchema = z.object({
     entry_id: z.number(),
-    project_number: z.number(),
+    project_number: StrictProjectNumberSchema,
 })
 
 /** team_add_to_vector_index — relaxed */
 export const TeamAddToVectorIndexSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 // ============================================================================
@@ -695,7 +729,7 @@ export const PassTeamFlagSchema = z.object({
     message: z.string().min(1).max(49_000).describe('Flag message describing the issue or request'),
     target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
     link: z.string().optional().describe('Related file path, URL, or reference'),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     issue_number: z.number().optional(),
     author: z.string().optional(),
 })
@@ -746,6 +780,154 @@ export const ResolveFlagOutputSchema = z
         flag_type: z.string().optional(),
         resolved: z.boolean().optional(),
         resolution: z.string().nullable().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+// ============================================================================
+// New Flag Tool Schemas (List, Update, Analytics)
+// ============================================================================
+
+/** list_team_flags — strict */
+export const ListTeamFlagsSchema = z.object({
+    status: z.enum(['active', 'resolved', 'all']).optional().default('active'),
+    flag_type: z.string().optional().describe('Filter by flag type from vocabulary'),
+    target_user: z.string().optional().describe('Filter by target user'),
+    author: z.string().optional().describe('Filter by flag creator'),
+    limit: z.number().min(1).max(500).optional().default(20),
+    project_number: StrictProjectNumberSchema,
+    sort_by: z.enum(['timestamp', 'priority']).optional().default('priority'),
+})
+
+/** list_team_flags — relaxed for MCP SDK */
+export const ListTeamFlagsSchemaMcp = z.object({
+    status: z.string().optional().default('active'),
+    flag_type: z.string().optional(),
+    target_user: z.string().optional(),
+    author: z.string().optional(),
+    limit: relaxedNumber().optional().default(20),
+    project_number: relaxedNumber().optional(),
+    sort_by: z.string().optional().default('priority'),
+})
+
+/** update_team_flag — strict */
+export const UpdateTeamFlagSchema = z.object({
+    flag_id: z.number().describe('Entry ID of the flag to update'),
+    flag_type: z.string().optional().describe('New flag type'),
+    target_user: z.string().nullable().optional().describe('New target user (null to clear)'),
+    message: z.string().min(1).max(49_000).optional().describe('Updated flag message'),
+    link: z.string().nullable().optional().describe('Updated link (null to clear)'),
+    reopen: z.boolean().optional().describe('If true, reopen a resolved flag'),
+})
+
+/** update_team_flag — relaxed for MCP SDK */
+export const UpdateTeamFlagSchemaMcp = z.object({
+    flag_id: relaxedNumber().optional(),
+    flag_type: z.string().optional(),
+    target_user: z.string().nullable().optional(),
+    message: z.string().optional(),
+    link: z.string().nullable().optional(),
+    reopen: z.boolean().optional(),
+})
+
+/** flag_analytics — strict */
+export const FlagAnalyticsSchema = z.object({
+    period: z.enum(['day', 'week', 'month']).optional().default('week'),
+    project_number: StrictProjectNumberSchema,
+})
+
+/** flag_analytics — relaxed for MCP SDK */
+export const FlagAnalyticsSchemaMcp = z.object({
+    period: z.string().optional().default('week'),
+    project_number: relaxedNumber().optional(),
+})
+
+// ============================================================================
+// New Flag Output Schemas (List, Update, Analytics)
+// ============================================================================
+
+export const ListFlagsOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        flags: z
+            .array(
+                z.object({
+                    id: z.number(),
+                    flag_type: z.string(),
+                    target_user: z.string().nullable().optional(),
+                    author: z.string().nullable().optional(),
+                    message: z.string(),
+                    link: z.string().nullable().optional(),
+                    resolved: z.boolean(),
+                    resolved_at: z.string().nullable().optional(),
+                    resolution: z.string().nullable().optional(),
+                    timestamp: z.string(),
+                    age_hours: z.number(),
+                    is_stale: z.boolean(),
+                    tags: z.array(z.string()).optional(),
+                    project_number: z.number().nullable().optional(),
+                })
+            )
+            .optional(),
+        count: z.number().optional(),
+        active_count: z.number().optional(),
+        resolved_count: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const UpdateFlagOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: TeamEntryOutputSchema.optional(),
+        flag_type: z.string().optional(),
+        target_user: z.string().nullable().optional(),
+        resolved: z.boolean().optional(),
+        author: z.string().optional(),
+        changes: z.array(z.string()).optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const FlagAnalyticsOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        summary: z
+            .object({
+                total_flags: z.number(),
+                active_flags: z.number(),
+                resolved_flags: z.number(),
+                avg_resolution_hours: z.number().nullable(),
+                median_resolution_hours: z.number().nullable(),
+                stale_count: z.number(),
+            })
+            .optional(),
+        by_type: z
+            .record(
+                z.string(),
+                z.object({
+                    total: z.number(),
+                    active: z.number(),
+                    avg_resolution_hours: z.number().nullable(),
+                })
+            )
+            .optional(),
+        by_target: z
+            .array(
+                z.object({
+                    user: z.string(),
+                    received: z.number(),
+                    active: z.number(),
+                })
+            )
+            .optional(),
+        trend: z
+            .object({
+                current_period: z.number(),
+                previous_period: z.number(),
+                change_pct: z.number().nullable(),
+            })
+            .optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

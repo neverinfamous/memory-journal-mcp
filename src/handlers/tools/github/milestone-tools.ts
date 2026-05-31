@@ -45,7 +45,12 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
             }),
             outputSchema: GitHubMilestonesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -103,7 +108,12 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
             }),
             outputSchema: GitHubMilestoneResultOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -172,7 +182,12 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: CreateMilestoneOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -242,7 +257,12 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: UpdateMilestoneOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z

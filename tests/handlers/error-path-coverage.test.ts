@@ -288,6 +288,7 @@ describe('Error Path Coverage', () => {
             const result = (await callTool(
                 'create_entry',
                 {
+                    project_number: 1,
                     content: 'Test share without team',
                     share_with_team: true,
                 },

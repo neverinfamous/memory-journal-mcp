@@ -1,14 +1,12 @@
 ---
 name: github-commander
 description: |
-  Structured workflows for triaging GitHub issues, reviewing PRs, sprinting
-  through milestones, and running security/quality/performance audits — with
-  configurable validation gates, auto-detected security scanning, journal audit
-  trails, and human-in-the-loop checkpoints. Use this skill whenever you are
-  working on a GitHub issue, reviewing or submitting a PR, running any kind of
-  code audit, updating dependencies, or working through a milestone. Also use
-  when the user mentions issue numbers, PR numbers, milestone names, or
-  asks you to "fix", "triage", "audit", "review", or "update deps".
+  Structured workflows for GitHub issues, PRs, milestones, and code audits with validation gates and HITL checkpoints. 
+  Use when assigned a GitHub issue, reviewing a PR, sprinting through a milestone, updating dependencies, or running code audits. 
+  Also use when asked to "triage an issue", "review a PR", or "update deps". 
+  Do NOT trigger on bare verbs (e.g. "fix this"); require GitHub context. 
+  NOT for pipeline authoring (use github-actions instead).
+  Delegate all code quality, performance, and security audits to the dedicated `adversarial-*` skills instead.
 ---
 
 # GitHub Commander
@@ -35,17 +33,13 @@ Load this skill when any of these apply:
 
 ## Quick Reference
 
-| Workflow                | File                              | Purpose                                     |
-| ----------------------- | --------------------------------- | ------------------------------------------- |
-| **Issue Triage**        | `workflows/issue-triage.md`       | Fix a single GitHub issue end-to-end        |
-| **PR Review**           | `workflows/pr-review.md`          | Review a PR with validation pipeline        |
-| **Copilot Audit**       | `workflows/copilot-audit.md`      | Adversarial Copilot CLI repo/PR review      |
-| **Milestone Sprint**    | `workflows/milestone-sprint.md`   | Work through milestone issues sequentially  |
-| **Roadmap Kickoff**     | `workflows/roadmap-kickoff.md`    | Translate planning epics into Kanban issues |
-| **Update Dependencies** | `workflows/update-deps.md`        | Dependency update with audit trail          |
-| **Security Audit**      | `workflows/security-audit.md`     | Auto-detected security scanning             |
-| **Code Quality Audit**  | `workflows/code-quality-audit.md` | Static code quality analysis                |
-| **Performance Audit**   | `workflows/perf-audit.md`         | Build, bundle, runtime, test speed analysis |
+| Workflow                | File                            | Purpose                                     |
+| ----------------------- | ------------------------------- | ------------------------------------------- |
+| **Issue Triage**        | `workflows/issue-triage.md`     | Fix a single GitHub issue end-to-end        |
+| **PR Review**           | `workflows/pr-review.md`        | Review a PR with validation pipeline        |
+| **Milestone Sprint**    | `workflows/milestone-sprint.md` | Work through milestone issues sequentially  |
+| **Roadmap Kickoff**     | `workflows/roadmap-kickoff.md`  | Translate planning epics into Kanban issues |
+| **Update Dependencies** | `workflows/update-deps.md`      | Dependency update with audit trail          |
 
 ## Prerequisites
 
@@ -143,10 +137,8 @@ These entry types are used by Commander workflows for structured audit trails:
 | `implementation`         | issue-triage     | Fix implemented                             |
 | `gate_pass`              | all              | Validation gate passed                      |
 | `gate_fail`              | all              | Validation gate failed (with error details) |
-| `security_finding`       | security-audit   | Security scan finding                       |
 | `pr_submitted`           | issue-triage     | PR created and pushed                       |
 | `review_start`           | pr-review        | PR review initiated                         |
 | `review_complete`        | pr-review        | PR review completed                         |
 | `milestone_sprint_start` | milestone-sprint | Sprint started                              |
 | `deps_update`            | update-deps      | Dependency update completed                 |
-| `audit_finding`          | all audits       | Code quality or perf finding                |

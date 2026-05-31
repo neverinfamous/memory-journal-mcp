@@ -4,7 +4,7 @@ description: |
   Multi-pass adversarial planning and review skill that improves agent-generated
   plans through structured critique stages. Combines an initial planning agent
   (structure, logic, task sequencing) with an adversarial review agent
-  (performance, security, maintainability) and a final Copilot CLI validation
+  (performance, security, maintainability) and a final Copilot extension validation
   pass. Use when creating implementation plans, designing architecture, planning
   roadmaps or milestones, or when the user says "plan this", "review my plan",
   "adversarial review", or "multi-pass plan".
@@ -26,64 +26,33 @@ Load this skill when any of these apply:
 - Designing multi-file refactors or system migrations
 - Planning project roadmaps, milestones, or sprint scopes
 - The user asks for an adversarial or multi-pass review of a plan
-- The user says "plan this", "review my plan", "critique this plan", or
-  "multi-pass plan"
+- The user says "plan this", "review my plan", "critique this plan",
+  "multi-pass plan", "architect this", "design this system", or "how should I build"
 - You want to reduce confirmation bias in your own planning output
 
-## Agent Roles
+## Adversarial Protocol
 
-This skill operates with two distinct mental models. You are both agents — you
-switch perspectives at phase boundaries.
+This skill follows the standard dual-agent adversarial pattern (Agent A: The Planner, Agent B: The Adversarial Reviewer).
+For the core pipeline rules, phase definitions, and agent switching protocols, read:
+**[../adversarial-security/references/adversarial-base-protocol.md](../adversarial-security/references/adversarial-base-protocol.md)**
 
-### Agent A — The Planner
+For the planner-specific protocol with review dimensions, scoring weights, and output templates, read:
+**[references/multi-pass-protocol.md](references/multi-pass-protocol.md)**
 
-**Mandate:** Produce a comprehensive, well-structured plan.
+## External Validation (Phase 4)
 
-- Gather requirements from user request, code context, and prior work
-- Structure the plan with clear scope, file changes, task ordering, and risk
-  assessment
-- Optimize for completeness and logical sequencing
-- Reference prior planning sessions via journal search before starting
-
-### Agent B — The Adversarial Reviewer
-
-**Mandate:** Find every weakness the Planner missed.
-
-- Switch to a skeptical senior reviewer mindset
-- Challenge assumptions, flag gaps, and identify risks
-- Score findings across weighted review dimensions (see protocol reference)
-- Provide concrete, actionable remediation suggestions — not vague concerns
-
-The reason for explicit role separation is that it counteracts the natural
-tendency to defend your own output. By formally switching perspective, you
-engage different evaluation criteria than the ones that guided the draft.
-
-## The Multi-Pass Protocol
-
-The protocol runs in 4 phases. Each phase produces a journaled artifact.
-
-| Phase                 | Agent        | Output                                 | Entry Type           | Tags                                |
-| --------------------- | ------------ | -------------------------------------- | -------------------- | ----------------------------------- |
-| 1. Plan Draft         | A (Planner)  | Structured plan document               | `plan_draft`         | `adversarial-planner`, `plan-draft` |
-| 2. Adversarial Review | B (Reviewer) | Critique table with severity ratings   | `adversarial_review` | `adversarial-planner`, `review`     |
-| 3. Plan Refinement    | A (Planner)  | Refined plan with disposition notes    | `plan_refinement`    | `adversarial-planner`, `refinement` |
-| 4. Copilot Validation | External     | Independent architecture/security pass | `copilot_validation` | `adversarial-planner`, `copilot`    |
-
-For the full protocol with review dimensions, scoring weights, and output
-templates, read [references/multi-pass-protocol.md](references/multi-pass-protocol.md).
-
-## Copilot Integration
-
-Phase 4 triggers an independent validation pass using the GitHub Copilot CLI.
-This provides a fundamentally different model's perspective on the plan,
+Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).
+The `copilot` subcommand is built into modern `gh` CLI — no separate extension is
+needed. This provides a fundamentally different model's perspective on the plan,
 reducing confirmation bias that persists even after adversarial self-review.
 
 For Copilot-specific prompt templates and integration details, read
 [references/copilot-integration.md](references/copilot-integration.md).
 
-**Prerequisites:** The `github-copilot-cli` skill must be available for CLI
-setup and authentication. The `copilot-audit` workflow in `github-commander`
-handles full repo audits — this skill focuses on plan-specific review.
+**Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
+is not available, skip Phase 4 gracefully and note the skip in the journal entry.
+
+Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
 
 ## Feedback Loop & Documentation
 
@@ -96,11 +65,11 @@ retrospective templates, read
 
 ## Configuration
 
-| Variable             | Default    | Description                                     |
-| -------------------- | ---------- | ----------------------------------------------- |
-| `MAX_PLAN_PASSES`    | `2`        | Maximum refinement cycles (phases 2–3 repeat)   |
-| `PLAN_REVIEW_DEPTH`  | `standard` | Review depth: `light`, `standard`, or `deep`    |
-| `COPILOT_VALIDATION` | `true`     | Enable/disable the Copilot CLI validation phase |
+| Variable             | Default    | Description                                           |
+| -------------------- | ---------- | ----------------------------------------------------- |
+| `MAX_PLAN_PASSES`    | `2`        | Maximum refinement cycles (phases 2–3 repeat)         |
+| `PLAN_REVIEW_DEPTH`  | `standard` | Review depth: `light`, `standard`, or `deep`          |
+| `COPILOT_VALIDATION` | `true`     | Enable/disable the Copilot extension validation phase |
 
 ### Review Depth Profiles
 
@@ -115,6 +84,6 @@ retrospective templates, read
 | Skill/Workflow                   | Relationship                                                                                                                                          |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `autonomous-dev`                 | The Generator/Evaluator pipeline in `autonomous-dev` applies at the code level; this skill applies the same adversarial pattern at the planning level |
-| `github-copilot-cli`             | Provides the CLI setup and auth required for Phase 4                                                                                                  |
+| GitHub CLI (`gh copilot`)        | Built-in `copilot` subcommand used for Phase 4 external validation                                                                                    |
 | `github-commander/copilot-audit` | Full repo/PR audit; this skill uses Copilot for plan-specific review instead                                                                          |
 | `skill-builder`                  | Use to refine this skill's instructions based on observed agent behavior                                                                              |

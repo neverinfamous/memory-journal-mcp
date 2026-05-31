@@ -171,6 +171,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
 
     test('team_merge_tags succeeds', async () => {
         const payload = await callToolAndParse(client, 'team_merge_tags', {
+            project_number: 1,
             source_tag: 'merge-source',
             target_tag: 'team-test',
         })

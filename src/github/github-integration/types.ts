@@ -41,3 +41,12 @@ export interface PullRequestDetails extends GitHubPullRequest {
     deletions: number
     changedFiles: number
 }
+
+/**
+ * Local Git status details
+ */
+export interface LocalGitStatus {
+    modified: number
+    untracked: number
+    isClean: boolean
+}

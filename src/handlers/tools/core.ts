@@ -24,8 +24,10 @@ import {
     RelationshipOutputSchema,
     ImportanceBreakdownSchema,
     relaxedNumber,
-    TagOutputSchema,
     MAX_QUERY_LIMIT,
+    coerceSignificanceAlias,
+    StrictProjectNumberSchema,
+    TagOutputSchema,
 } from './schemas.js'
 
 // ============================================================================
@@ -40,7 +42,7 @@ const CreateEntrySchema = z.object({
     is_personal: z.boolean().optional().default(true),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
     auto_context: z.boolean().optional().default(true),
-    project_number: z.number().optional(),
+    project_number: StrictProjectNumberSchema,
     project_owner: z.string().optional(),
     issue_number: z.number().optional(),
     issue_url: z.string().optional(),
@@ -56,11 +58,26 @@ const CreateEntrySchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const CreateEntrySchemaMcp = z.object({
     content: z.string().optional(),
-    entry_type: z.string().optional().default('personal_reflection'),
-    tags: z.array(z.string().max(100)).max(50).optional().default([]),
+    entry_type: z
+        .string()
+        .optional()
+        .default('personal_reflection')
+        .describe('Choose the most accurate type. Do NOT default to personal_reflection.'),
+    tags: z
+        .array(z.string().max(100))
+        .max(50)
+        .optional()
+        .default([])
+        .describe(
+            'MANDATORY: Provide at least one tag. Use activity (bug-fix, release), domain (security, architecture), or tool group tags.'
+        ),
     is_personal: z.boolean().optional().default(true),
-    significance_type: z.string().optional(),
-    auto_context: z.boolean().optional().default(true),
+    significance_type: z
+        .string()
+        .optional()
+        .describe(
+            'Mark milestone completions, architecture decisions, and releases with a significance_type.'
+        ),
     project_number: relaxedNumber().optional(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
@@ -173,13 +190,26 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             name: 'create_entry',
             title: 'Create Journal Entry',
             description:
-                'Create a new journal entry with context and tags (v2.1.0: GitHub Actions support)',
+                'Create a new personal journal entry. MANDATORY: After creating, always attempt to causally link new entries to prior context (evolves_from, implements, blocked_by, resolved) using link_entries.',
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
+                    coerceSignificanceAlias(params)
+
+                    if (params !== null && typeof params === 'object' && 'auto_context' in params) {
+                        context.config?.runtime?.metrics?.recordDeprecationWarning(
+                            'Agent recently used deprecated auto_context field in create_entry. This field is ignored.'
+                        )
+                    }
+
                     const input = CreateEntrySchema.parse(params)
 
                     // The user's provided issueUrl (if any)
@@ -191,6 +221,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         significanceType: input.significance_type ?? null,
+                        autoContext: !input.auto_context
+                            ? JSON.stringify({ disabled: true })
+                            : undefined,
                         projectNumber: input.project_number ?? context.config?.defaultProjectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
@@ -315,7 +348,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetEntryByIdSchemaMcp,
             outputSchema: EntryByIdOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params)
@@ -354,7 +392,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { limit, is_personal, sort_by } = GetRecentEntriesSchema.parse(params)
@@ -372,7 +415,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
@@ -394,7 +442,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: TestSimpleSchema,
             outputSchema: TestSimpleOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (params: unknown) => {
                 try {
                     const { message } = TestSimpleSchema.parse(params)
@@ -407,11 +460,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'list_tags',
             title: 'List Tags',
-            description: 'List all available tags',
+            description:
+                'List all available tags. Tags are auto-formatted to kebab-case. Returns only name and count. Does not return orphan tags with zero usage.',
             group: 'core',
             inputSchema: z.object({}).strict(),
             outputSchema: TagsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: (_params: unknown) => {
                 try {
                     const rawTags = db.listTags()

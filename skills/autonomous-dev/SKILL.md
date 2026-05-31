@@ -1,6 +1,6 @@
 ---
 name: autonomous-dev
-description: Harness for autonomous software development. Enforces lifecycle through alignment gates (PROJECT.md), adversarial generator/evaluator agents, CI/CD pipeline automation, and strict Git workflows (Conventional Commits, Branching).
+description: Harness for autonomous software development. Use when fixing or remediating known issues (including security vulnerabilities). Enforces lifecycle through alignment gates (PROJECT.md), adversarial generator/evaluator agents, and autonomous orchestration of project issues. NOT for setting up standalone CI/CD pipelines.
 ---
 
 # Autonomous Development Workflow
@@ -9,13 +9,19 @@ This skill provides a deterministic software engineering harness, designed to wr
 
 ## 1. Project Alignment Gate (PROJECT.md)
 
-Before beginning implementation, you MUST cross-reference the proposed feature against `PROJECT.md` at the repository root.
+Before beginning implementation, you MUST cross-reference the proposed feature against `PROJECT.md` at the repository root. If `PROJECT.md` is missing, ask the user to clarify the project goals or constraints before proceeding.
 
-- **In-Scope**: Proceed with confidence.
+- **In-Scope**: Confirm the feature directly serves a goal in `PROJECT.md`. Proceed.
 - **Out-of-Scope**: Hard block. Halt work immediately and inform the user.
 - **Constraints**: Abide strictly by the constraints (language, architecture, dependencies) defined in the project file.
 
-## 2. Generator / Evaluator Pipeline
+## 2. Security Safety Nets
+
+- **Execution Sandboxing**: Never run unknown or unverified shell scripts directly. Execute isolated tasks within the `tmp/` scratch directory.
+- **Secret Protection**: Check for exposed credentials or PII in diffs before committing. Never commit `.env`.
+- **Command Gates**: Do not execute destructive commands (`rm -rf`, `git reset --hard`) without explicit Human-in-the-Loop approval.
+
+## 3. Generator / Evaluator Pipeline
 
 Features cannot simply be written and committed. They must navigate a rigid pipeline based on the adversarial evaluation pattern:
 
@@ -27,26 +33,9 @@ Features cannot simply be written and committed. They must navigate a rigid pipe
 5. **Adversarial Review**: Self-evaluate the code as a skeptical reviewer (evaluator). Actively search for edge cases, security vulnerabilities, efficiency loss, and anti-patterns.
 6. **Documentation**: Ensure docs stay tightly in sync with the codebase after the feature clears CI.
 
-## 3. Git Workflow & Versioning
+## 4. Workflow Orchestration
 
-Enforce strict version control standards on all changes:
-
-- **Branching**: Use feature branches (`feature/my-feature`), bugfix branches (`fix/bug-name`), or standard trunk-based branching flows depending on the repository context.
-- **Atomic Commits**: Group distinct changes into smaller, logical, single-purpose commits. Do not lump refactoring with new logic.
-- **Conventional Commits**: You MUST format all commits according to the Conventional Commits specification:
-  - `feat: <description>` for new features (MINOR bump)
-  - `fix: <description>` for bug fixes (PATCH bump)
-  - `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`, `chore:` for specific maintenance scopes.
-  - Suffix `!` for breaking changes (e.g., `feat!: remove API v1`) (MAJOR bump).
-
-## 4. Continuous Integration/Deployment (CI/CD)
-
-When designing automation and pipelines:
-
-- **GitHub Actions First**: Prioritize GitHub Actions for CI/CD pipeline orchestration, favoring Reusable Workflows and matrix builds.
-- **Validation Blocks**: Every PR or merge MUST require passing lint, test, and type-check gates.
-- **Automation Constraints**: Automate Semantic Versioning (using conventional commits) to power automated release notes and changelog generation.
-- **Security Scans**: Mandate security scanning (e.g. CodeQL, Trivy) on standard PR flows.
+Follow strict version control (Conventional Commits, atomic commits) and CI/CD automation rules. Test code locally before creating PRs.
 
 ## 5. Context Management & Drift Prevention
 
@@ -54,3 +43,37 @@ As the context window fills up, context anxiety can degrade performance.
 
 - Recognize when the session has spanned too many features or files (e.g., beyond 4-5 features).
 - Use session summaries or persistent memories to bookmark state, clear the context, and resume with a fresh perspective.
+
+## 6. Output Templates
+
+**Generator Plan Output:**
+
+```markdown
+### Feature Plan: [Feature Name]
+
+**Scope:** [In-Scope/Out-of-Scope based on PROJECT.md]
+**Constraints:** [Key constraints to respect]
+**Acceptance Criteria:**
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+```
+
+**Evaluator Review Output:**
+
+```markdown
+### Adversarial Review: [Feature Name]
+
+**Pass/Fail:** [Result]
+**Security Risks:** [Identified risks or "None"]
+**Edge Cases Missed:** [Edge cases]
+**Required Fixes:** [List of fixes before proceeding]
+```
+
+## Synergies
+
+| Skill/Workflow         | Relationship                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `github-commander`     | Complementary — handles issue orchestration while this handles the dev lifecycle |
+| `adversarial-planner`  | Can be used during the Planning phase of the Generator pipeline                  |
+| `adversarial-security` | Can be used during the Evaluator phase                                           |

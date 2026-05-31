@@ -21,7 +21,19 @@ import {
 // ============================================================================
 
 /** Content preview length for briefing entry summaries */
-const PREVIEW_LENGTH = 80
+const PREVIEW_LENGTH = 120
+
+function cleanPreview(content: string | undefined | null, length: number): string {
+    if (!content) return ''
+    const clean = content.trim().replace(/\s+/g, ' ')
+    if (clean.length <= length) return clean
+
+    // Truncate at a word boundary to avoid cutting mid-word
+    const truncated = clean.slice(0, length)
+    const lastSpace = truncated.lastIndexOf(' ')
+    const boundary = lastSpace > length * 0.6 ? lastSpace : length
+    return clean.slice(0, boundary) + '…'
+}
 
 export interface JournalContext {
     totalEntries: number
@@ -36,23 +48,7 @@ export function buildJournalContext(
     config: BriefingConfig,
     projectNumber?: number | null
 ): JournalContext {
-    const recentEntries =
-        typeof projectNumber === 'number'
-            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
-            : context.db.getRecentEntries(config.entryCount)
-    const latestEntries = recentEntries.map((e) => {
-        const content = e.content ?? ''
-        return {
-            id: e.id,
-            timestamp: e.timestamp,
-            type: e.entryType,
-            preview: markUntrustedContentInline(
-                content.slice(0, PREVIEW_LENGTH) + (content.length > PREVIEW_LENGTH ? '...' : '')
-            ),
-        }
-    })
-
-    // Fetch latest session summaries
+    // ── Session summaries (computed first to enable deduplication) ──────
     const summaryEntries =
         typeof projectNumber === 'number'
             ? context.db.searchEntries('', {
@@ -86,18 +82,34 @@ export function buildJournalContext(
     let sessionSummaries
     if (finalSummaryEntries.length > 0) {
         sessionSummaries = finalSummaryEntries.map((entry) => {
-            const c = entry.content ?? ''
             return {
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: markUntrustedContentInline(
-                    c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')
-                ),
+                preview: markUntrustedContentInline(cleanPreview(entry.content, PREVIEW_LENGTH)),
             }
         })
         latestSessionSummary = sessionSummaries[0]
     }
+
+    // ── Latest entries (deduplicated against summaries) ──────────────
+    const recentEntries =
+        typeof projectNumber === 'number'
+            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
+            : context.db.getRecentEntries(config.entryCount)
+
+    // Exclude entries already shown in the Summary slot to diversify briefing content
+    const summaryIds = new Set(finalSummaryEntries.map((e) => e.id))
+    const dedupedRecent = recentEntries.filter((e) => !summaryIds.has(e.id))
+
+    const latestEntries = dedupedRecent.map((e) => {
+        return {
+            id: e.id,
+            timestamp: e.timestamp,
+            type: e.entryType,
+            preview: markUntrustedContentInline(cleanPreview(e.content, PREVIEW_LENGTH)),
+        }
+    })
 
     const totalEntries = context.db.getActiveEntryCount()
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
@@ -135,7 +147,7 @@ export function buildTeamContext(
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
             : ''
         const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry['id'])}: ${markUntrustedContentInline(teamContent.slice(0, TEAM_PREVIEW_LENGTH) + (teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''))}`
+            ? `#${String(teamLatestEntry['id'])}: ${markUntrustedContentInline(cleanPreview(teamContent, TEAM_PREVIEW_LENGTH))}`
             : null
         const teamInfo = {
             totalEntries: teamTotalEntries,
@@ -152,14 +164,12 @@ export function buildTeamContext(
                     ? context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber })
                     : context.teamDb.getRecentEntries(config.entryCount)
             teamLatestEntries = teamEntries.map((e) => {
-                const content = e.content ?? ''
                 return {
                     id: e.id,
                     timestamp: e.timestamp,
                     type: e.entryType,
                     preview: markUntrustedContentInline(
-                        content.slice(0, TEAM_PREVIEW_LENGTH) +
-                            (content.length > TEAM_PREVIEW_LENGTH ? '...' : '')
+                        cleanPreview(e.content, TEAM_PREVIEW_LENGTH)
                     ),
                 }
             })
@@ -270,6 +280,7 @@ export interface FlagSummary {
         flag_type: string
         target_user: string | null
         preview: string
+        fullContent: string
         timestamp: string
     }[]
 }
@@ -292,14 +303,12 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
                 const ctx = parseFlagContext(entry.autoContext)
                 if (!ctx || ctx.resolved) return null
 
-                const content = entry.content ?? ''
                 return {
                     id: entry.id,
                     flag_type: ctx.flag_type,
                     target_user: ctx.target_user ?? null,
-                    preview: markUntrustedContentInline(
-                        content.slice(0, 80) + (content.length > 80 ? '...' : '')
-                    ),
+                    preview: markUntrustedContentInline(cleanPreview(entry.content, 80)),
+                    fullContent: markUntrustedContentInline(entry.content),
                     timestamp: entry.timestamp,
                 }
             })
@@ -315,6 +324,41 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
         logger.debug('Failed to build flags context', {
             module: 'BRIEFING',
             operation: 'flags-context',
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return undefined
+    }
+}
+
+// ============================================================================
+// Graph Context
+// ============================================================================
+
+export interface GraphSummary {
+    totalRelationships: number
+    density: number
+    causalMetrics: Record<string, number>
+}
+
+export function buildGraphContext(context: ResourceContext): GraphSummary | undefined {
+    try {
+        const stats = context.db.getStatistics('week')
+        const comp = stats['relationshipComplexity'] as
+            | { totalRelationships: number; avgPerEntry: number }
+            | undefined
+        const causal = stats['causalMetrics'] as Record<string, number> | undefined
+
+        if (!comp || !causal) return undefined
+
+        return {
+            totalRelationships: comp.totalRelationships,
+            density: comp.avgPerEntry,
+            causalMetrics: causal,
+        }
+    } catch (error) {
+        logger.debug('Failed to build graph context', {
+            module: 'BRIEFING',
+            operation: 'graph-context',
             error: error instanceof Error ? error.message : String(error),
         })
         return undefined

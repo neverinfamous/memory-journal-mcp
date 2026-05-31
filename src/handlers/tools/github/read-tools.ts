@@ -49,7 +49,12 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubIssuesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -111,7 +116,12 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubPRsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -173,7 +183,12 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .describe('Include issue comments (default false). Each comment adds tokens.'),
             }),
             outputSchema: GitHubIssueResultOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -244,7 +259,8 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     return {
                         issue: {
                             ...safeIssue,
-                            ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
+                            bodyTruncated,
+                            ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
                         },
                         ...(comments ? { comments, commentCount: comments.length } : {}),
                         owner: resolved.owner,
@@ -261,7 +277,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             name: 'get_github_pr',
             title: 'Get GitHub PR Details',
             description:
-                'Get detailed information about a specific GitHub pull request. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
+                'Get detailed information about a specific GitHub pull request, including live prStatus. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
                 pr_number: z.number(),
@@ -275,7 +291,12 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     ),
             }),
             outputSchema: GitHubPRResultOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -330,7 +351,8 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     return {
                         pullRequest: {
                             ...safePr,
-                            ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
+                            bodyTruncated,
+                            ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
                         },
                         owner: resolved.owner,
                         repo: resolved.repo,
@@ -356,7 +378,12 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name (use this to switch projects dynamically)'),
             }),
             outputSchema: GitHubContextOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z

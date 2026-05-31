@@ -4,13 +4,13 @@
 
 ## Files
 
-| File                              | Purpose                                                                                                                             | When to Read          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| [`standard/`](standard/README.md) | **Standard Modular Tests** — Directory containing 14 core modular test files. See `standard/README.md` for full list.               | **Always start here** |
-| [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 14 phase-aligned Code Mode test prompts. See `codemode/README.md` for full list. | After standard tests  |
+| File                              | Purpose                                                                                                                                               | When to Read          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| [`standard/`](standard/README.md) | **Standard Modular Tests** — Directory containing 22 modular test files across feature and stress-test tiers. See `standard/README.md` for full list. | **Always start here** |
+| [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 20 phase-aligned Code Mode test prompts. See `codemode/README.md` for full list.                   | After standard tests  |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
-| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 61 tools across 11 groups | Reference |
+| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 70 tools across 10 groups + codemode | Reference |
 | [`code-map.md`](code-map.md) | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns | When debugging source code or making changes |
 
 ## Integration Test Scripts
@@ -26,8 +26,8 @@ These scripts test features that require separate server processes — they **ca
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
 | `scripts/test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
 | `scripts/test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
-| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61)                                                                | stdio         | ~5s      |
-| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)                                                                    | stdio         | ~10s     |
+| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts — 70 tools verified                                                                      | stdio         | ~5s      |
+| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 19 prompts (shape + errors)                                                                    | stdio         | ~10s     |
 | `scripts/test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 
 ### Quick Run
@@ -77,26 +77,26 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 ### Instruction Levels (Phase 1.3A)
 
-- [ ] essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
+- [ ] essential < standard < full (strict token ordering)
 - [ ] No runtime errors in server logs
 
 ### Filter-Aware Instructions (Phase 1.3B)
 
 - [ ] 9/9 filter configs pass section presence/absence checks
-- [ ] `full` includes CORE + COPILOT + CODE_MODE + GITHUB_INTEGRATION + SEARCH_ROW (~1790 tokens)
-- [ ] `codemode` omits COPILOT + GITHUB_INTEGRATION + SEARCH_ROW (~1190 tokens)
-- [ ] `essential` — CORE + CODE_MODE only (~1214 tokens)
-- [ ] `starter` — CORE + CODE_MODE + SEARCH_ROW (~1250 tokens)
-- [ ] `core` — CORE only (~759 tokens)
-- [ ] `full -codemode` — COPILOT + GITHUB_INTEGRATION + SEARCH_ROW, no CODE_MODE (~1147 tokens)
-- [ ] `full -github` — CODE_MODE + SEARCH_ROW, no COPILOT/GITHUB_INTEGRATION (~1391 tokens)
-- [ ] `readonly` — CORE + SEARCH_ROW, no CODE_MODE/COPILOT/GITHUB_INTEGRATION (~771 tokens)
-- [ ] `full --instruction-level essential` — omits GITHUB_INTEGRATION but keeps COPILOT + CODE_MODE (~1582 tokens)
+- [ ] `full` includes CORE + COPILOT + CODE_MODE + GITHUB_INTEGRATION + SEARCH_ROW
+- [ ] `codemode` omits COPILOT + GITHUB_INTEGRATION + SEARCH_ROW
+- [ ] `essential` — CORE + CODE_MODE only
+- [ ] `starter` — CORE + CODE_MODE + SEARCH_ROW
+- [ ] `core` — CORE only
+- [ ] `full -codemode` — COPILOT + GITHUB_INTEGRATION + SEARCH_ROW, no CODE_MODE
+- [ ] `full -github` — CODE_MODE + SEARCH_ROW, no COPILOT/GITHUB_INTEGRATION
+- [ ] `readonly` — CORE + SEARCH_ROW, no CODE_MODE/COPILOT/GITHUB_INTEGRATION
+- [ ] `full --instruction-level essential` — omits GITHUB_INTEGRATION but keeps COPILOT + CODE_MODE
 
 ### Tool Annotations (Phase 1.3C)
 
-- [ ] 61 tools returned, all with `annotations` object
-- [ ] 45 tools with `openWorldHint: false`, 16 with `openWorldHint: true`, 0 missing
+- [ ] 70 tools returned, all with `annotations` object
+- [ ] Tools correctly categorized by `openWorldHint` with 0 missing
 
 ### Scheduler (Phase 9)
 
@@ -147,12 +147,12 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 
 1. Read the server instructions you received during initialization, then `memory://briefing`.
 2. Navigate to the `standard/` directory and **always run `standard/test-seed.md` first** — all other test files depend on it.
-3. Run any combination of the independent test files in `standard/` (`test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-tool-group-*.md`, `test-team.md`).
+3. Run any combination of the independent test files in `standard/` (`test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-kanban-lifecycle.md`, `test-errors.md`, `test-integrity.md`, `test-payload-optimization.md`, `test-tool-group-*.md`, `test-team.md`).
 4. Each file is self-contained — pick the one relevant to your current task or run them in any order.
 5. **Run integration test scripts** for instruction levels, annotations, prompts, and scheduler (see Script Reference above).
 6. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
 7. Report findings returning proper handler formatting.
-8. (Optional) Run Code Mode tests from `codemode/` — see `codemode/README.md` for the 14-file module list and dependency DAG.
+8. (Optional) Run Code Mode tests from `codemode/` — see `codemode/README.md` for the 20-file module list and dependency DAG.
 
 ## Troubleshooting
 

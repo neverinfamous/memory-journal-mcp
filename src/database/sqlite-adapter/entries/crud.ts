@@ -74,7 +74,13 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
         // Link tags
         if (input.tags && input.tags.length > 0) {
-            tagsMgr.linkTagsToEntry(insertId, input.tags)
+            const formattedTags = input.tags.map((t) =>
+                t
+                    .toLowerCase()
+                    .replace(/[^a-z0-9:@]+/g, '-')
+                    .replace(/^-+|-+$/g, '')
+            )
+            tagsMgr.linkTagsToEntry(insertId, formattedTags)
         }
     })
 
@@ -169,18 +175,18 @@ export function updateEntry(
         entryType?: EntryType
         tags?: string[]
         isPersonal?: boolean
-        significanceType?: string
+        significanceType?: string | null
         autoContext?: string | null
-        projectNumber?: number
-        projectOwner?: string
-        issueNumber?: number
-        issueUrl?: string
-        prNumber?: number
-        prUrl?: string
-        prStatus?: string
-        workflowRunId?: number
-        workflowName?: string
-        workflowStatus?: string
+        projectNumber?: number | null
+        projectOwner?: string | null
+        issueNumber?: number | null
+        issueUrl?: string | null
+        prNumber?: number | null
+        prUrl?: string | null
+        prStatus?: string | null
+        workflowRunId?: number | null
+        workflowName?: string | null
+        workflowStatus?: string | null
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
@@ -241,7 +247,13 @@ export function updateEntry(
 
     if (input.tags !== undefined) {
         db.prepare('DELETE FROM entry_tags WHERE entry_id = ?').run(id)
-        tagsMgr.linkTagsToEntry(id, input.tags)
+        const formattedTags = input.tags.map((t) =>
+            t
+                .toLowerCase()
+                .replace(/[^a-z0-9:@]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+        )
+        tagsMgr.linkTagsToEntry(id, formattedTags)
     }
 
     return getEntryById(context, id)

@@ -79,8 +79,22 @@ describe('Team Flag Tool Handlers', () => {
         }
     })
 
-    const callTeamTool = async (name: string, args: Record<string, unknown>) =>
-        callTool(name, args, personalDb, undefined, undefined, undefined, undefined, teamDb)
+    const callTeamTool = async (name: string, args: Record<string, unknown>) => {
+        const needsProject = ['team_pass_flag', 'team_resolve_flag', 'team_update_flag'].includes(
+            name
+        )
+        const enhancedArgs = needsProject ? { project_number: 1, ...args } : args
+        return callTool(
+            name,
+            enhancedArgs,
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )
+    }
 
     describe('team_pass_flag', () => {
         it('should create a flag entry', async () => {
@@ -107,6 +121,45 @@ describe('Team Flag Tool Handlers', () => {
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
+        })
+
+        it('should return error for invalid flag type', async () => {
+            const result = (await callTeamTool('team_pass_flag', {
+                flag_type: 'invalid_type',
+                message: 'test',
+            })) as any
+
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Invalid flag type')
+        })
+
+        it('should return error for author mismatch', async () => {
+            const result = (await callTeamTool('team_pass_flag', {
+                flag_type: 'fyi',
+                message: 'test',
+                author: 'wrong-author',
+            })) as any
+
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Author mismatch')
+        })
+
+        it('should catch errors gracefully', async () => {
+            const originalCreate = teamDb.createEntry
+            try {
+                teamDb.createEntry = () => {
+                    throw new Error('DB Error')
+                }
+                const result = (await callTeamTool('team_pass_flag', {
+                    flag_type: 'fyi',
+                    message: 'test',
+                })) as any
+
+                expect(result.success).toBe(false)
+                expect(result.error).toContain('internal error')
+            } finally {
+                teamDb.createEntry = originalCreate
+            }
         })
     })
 
@@ -144,6 +197,60 @@ describe('Team Flag Tool Handlers', () => {
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
+        })
+
+        it('should return error if flag not found', async () => {
+            const result = (await callTeamTool('team_resolve_flag', { flag_id: 9999 })) as any
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('not found')
+        })
+
+        it('should return error if entry is not a flag', async () => {
+            const rawDb = teamDb['connection'].getNativeDb() as any
+            rawDb
+                .prepare(
+                    `INSERT INTO memory_journal (entry_type, content, timestamp) VALUES ('technical_note', 'test', '2026-01-01')`
+                )
+                .run()
+            const lastInsert = rawDb.prepare('SELECT last_insert_rowid() as id').get() as {
+                id: number
+            }
+            const result = (await callTeamTool('team_resolve_flag', {
+                flag_id: lastInsert.id,
+            })) as any
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('not a flag')
+        })
+
+        it('should handle already resolved flags idempotently', async () => {
+            const createResult = (await callTeamTool('team_pass_flag', {
+                flag_type: 'fyi',
+                message: 'test',
+            })) as any
+
+            await callTeamTool('team_resolve_flag', { flag_id: createResult.entry.id })
+
+            // Call it again
+            const resolveResult = (await callTeamTool('team_resolve_flag', {
+                flag_id: createResult.entry.id,
+            })) as any
+            expect(resolveResult.success).toBe(true)
+            expect(resolveResult.resolved).toBe(true)
+        })
+
+        it('should catch errors gracefully', async () => {
+            const originalGet = teamDb.getEntryById
+            try {
+                teamDb.getEntryById = () => {
+                    throw new Error('DB Error')
+                }
+                const result = (await callTeamTool('team_resolve_flag', { flag_id: 1 })) as any
+
+                expect(result.success).toBe(false)
+                expect(result.error).toContain('internal error')
+            } finally {
+                teamDb.getEntryById = originalGet
+            }
         })
     })
 })

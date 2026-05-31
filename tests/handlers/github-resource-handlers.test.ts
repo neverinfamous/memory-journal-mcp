@@ -97,6 +97,11 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
             clones: { total: 120, uniqueCloners: 30 },
             views: { total: 500, uniqueVisitors: 80 },
         }),
+        getLocalGitStatus: vi.fn().mockResolvedValue({
+            modified: 0,
+            untracked: 0,
+            isClean: true,
+        }),
     }
     const finalMock = { ...mock, ...overrides } as any
     if (!overrides.getRepoContext) {
@@ -402,28 +407,12 @@ describe('GitHub Resource Handlers', () => {
             const github = createMockGitHub()
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const data = result.data as {
-                github: {
-                    repo: string
-                    insights?: {
-                        stars: number | null
-                        forks: number | null
-                        clones14d?: number
-                        views14d?: number
-                    }
-                }
-                userMessage: string
-            }
+            const text = result.data as string
 
-            expect(data.github.repo).toBe('testowner/testrepo')
-            expect(data.github.insights).toBeDefined()
-            expect(data.github.insights!.stars).toBe(42)
-            expect(data.github.insights!.forks).toBe(7)
-            expect(data.github.insights!.clones14d).toBe(120)
-            expect(data.github.insights!.views14d).toBe(500)
-            expect(data.userMessage).toContain('stars')
-            expect(data.userMessage).toContain('forks')
-            expect(data.userMessage).toContain('clones')
+            expect(text).toBeDefined()
+            expect(text).toContain('⭐ 42')
+            expect(text).toContain('🍴 7')
+            expect(text).toContain('📦 120')
         })
 
         it('should include insights without traffic when getTrafficData fails', async () => {
@@ -432,25 +421,14 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const data = result.data as {
-                github: {
-                    insights?: {
-                        stars: number | null
-                        forks: number | null
-                        clones14d?: number
-                        views14d?: number
-                    }
-                }
-                userMessage: string
-            }
+            const text = result.data as string
 
             // Stars and forks should still be present
-            expect(data.github.insights).toBeDefined()
-            expect(data.github.insights!.stars).toBe(42)
-            expect(data.github.insights!.forks).toBe(7)
+            expect(text).toContain('⭐ 42')
+            expect(text).toContain('🍴 7')
             // Traffic should be absent
-            expect(data.github.insights!.clones14d).toBeUndefined()
-            expect(data.github.insights!.views14d).toBeUndefined()
+            expect(text).not.toContain('📦')
+            expect(text).not.toContain('👁️')
         })
 
         it('should omit insights when getRepoStats fails', async () => {
@@ -459,24 +437,9 @@ describe('GitHub Resource Handlers', () => {
             })
             const result = await readResource('memory://briefing', db, undefined, undefined, github)
 
-            const data = result.data as {
-                github: {
-                    insights?: unknown
-                }
-            }
+            const text = result.data as string
 
-            expect(data.github.insights).toBeUndefined()
-        })
-
-        it('should include repoInsights in more section', async () => {
-            const github = createMockGitHub()
-            const result = await readResource('memory://briefing', db, undefined, undefined, github)
-
-            const data = result.data as {
-                more: { repoInsights: string }
-            }
-
-            expect(data.more.repoInsights).toBe('memory://github/insights')
+            expect(text).not.toContain('⭐')
         })
     })
 

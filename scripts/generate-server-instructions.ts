@@ -1,108 +1,69 @@
 /**
- * Generates src/constants/server-instructions.ts from src/constants/server-instructions.md
+ * Generates src/constants/server-instructions.ts from per-group markdown files.
  *
- * Reads the markdown source file, splits it by section delimiters,
- * escapes for template literals, and produces the full TypeScript module
- * with types, constants, and the generateInstructions function.
+ * Reads server-instructions/*.md, escapes for template literals, and wraps them
+ * in a TypeScript module with:
+ *   - HELP_CONTENT map (on-demand pull-based reference)
+ *   - generateInstructions() function (composable, filter-aware instructions)
  *
- * Sections: CORE, COPILOT, CODE_MODE, GITHUB, HELP_POINTERS, SERVER_ACCESS
- * CORE is always included. COPILOT and CODE_MODE are conditionally included
- * based on enabled tool groups. GITHUB is conditional at standard+ level.
+ * Pattern: Matches db-mcp and postgres-mcp directory-per-group architecture.
  *
  * Usage: node scripts/generate-server-instructions.ts
  */
 
-import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectRoot = resolve(__dirname, '..')
-
-const mdPath = resolve(projectRoot, 'src/constants/server-instructions.md')
-const tsPath = resolve(projectRoot, 'src/constants/server-instructions.ts')
-
-// Read plain markdown source
-const markdown = readFileSync(mdPath, 'utf-8')
-
-// Section names in order
-const SECTION_NAMES = ['CORE', 'COPILOT', 'CODE_MODE', 'GITHUB', 'HELP_POINTERS', 'SERVER_ACCESS']
+const constantsDir = resolve(projectRoot, 'src/constants')
+const helpDir = resolve(constantsDir, 'server-instructions')
 
 /**
- * Parse sections from markdown using <!-- SECTION:NAME --> delimiters
- */
-function parseSections(content: string): Record<string, string> {
-    const sections: Record<string, string> = {}
-
-    for (let i = 0; i < SECTION_NAMES.length; i++) {
-        const name = SECTION_NAMES[i]
-        const startMarker = '<!-- SECTION:' + name + ' -->'
-        const startIdx = content.indexOf(startMarker)
-
-        if (startIdx === -1) {
-            throw new Error('Missing section marker: ' + startMarker)
-        }
-
-        const contentStart = startIdx + startMarker.length
-
-        // Find next section marker or end of file
-        let contentEnd
-        if (i + 1 < SECTION_NAMES.length) {
-            const nextMarker = '<!-- SECTION:' + SECTION_NAMES[i + 1] + ' -->'
-            contentEnd = content.indexOf(nextMarker)
-            if (contentEnd === -1) {
-                throw new Error('Missing section marker: ' + nextMarker)
-            }
-        } else {
-            contentEnd = content.length
-        }
-
-        // Trim leading/trailing whitespace but preserve internal structure
-        sections[name] = content.slice(contentStart, contentEnd).trim()
-    }
-
-    return sections
-}
-
-/**
- * Escape content for use inside a JS/TS template literal
+ * Escape content for use inside a JS/TS template literal.
+ * Handles: backslashes, backticks, and template expressions (${).
  */
 function escapeForTemplateLiteral(content: string): string {
     return content.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${')
 }
 
-const sections = parseSections(markdown)
+// Read overview (slim instructions field content)
+const overviewMd = readFileSync(resolve(helpDir, 'overview.md'), 'utf-8').trim()
+const overviewEscaped = escapeForTemplateLiteral(overviewMd)
 
-// Read the function body template (static TypeScript code after the constants)
-const FUNCTION_BODY = readFileSync(
-    resolve(projectRoot, 'scripts/server-instructions-function-body.ts'),
-    'utf-8'
-)
+// Read all help files (everything except overview.md and README.md)
+const helpFiles = readdirSync(helpDir)
+    .filter((f) => f.endsWith('.md') && f !== 'overview.md' && f.toLowerCase() !== 'readme.md')
+    .sort()
 
-// Read the gotchas content (kept as a separate const, not in .md sections)
-const GOTCHAS_BODY = readFileSync(
-    resolve(projectRoot, 'scripts/server-instructions-gotchas.ts'),
-    'utf-8'
-)
+const helpEntries: { key: string; content: string }[] = []
+for (const file of helpFiles) {
+    const key = basename(file, '.md') // "gotchas", "codemode", "github", etc.
+    const content = readFileSync(resolve(helpDir, file), 'utf-8').trim()
+    helpEntries.push({ key, content })
+}
 
-// Build the TypeScript file using string concatenation to avoid nested escaping
-const lines = []
+// Identify group-specific help entries (everything except gotchas)
+const helpGroupKeys = helpEntries.filter((e) => e.key !== 'gotchas').map((e) => e.key)
+
+// Use backtick char for building string to avoid nesting issues
+const BT = '`'
+
+// Build the TypeScript file using string concatenation
+const lines: string[] = []
 
 lines.push('/**')
 lines.push(' * Server instructions for Memory Journal MCP.')
 lines.push(' *')
 lines.push(' * ⚠️  AUTO-GENERATED — DO NOT EDIT THIS FILE DIRECTLY')
-lines.push(' *     Edit src/constants/server-instructions.md instead,')
+lines.push(' *     Edit src/constants/server-instructions/*.md instead,')
 lines.push(' *     then run: npm run generate:instructions')
 lines.push(' *')
-lines.push(' * These instructions are automatically sent to MCP clients during initialization,')
-lines.push(' * providing guidance for AI agents on tool usage.')
-lines.push(' *')
-lines.push(' * Tool parameter reference is served dynamically via memory://help/{group}.')
-lines.push(' * Field notes and gotchas are served via memory://help/gotchas.')
-lines.push(' *')
-lines.push(' * Optimized for token efficiency with tiered instruction levels.')
-lines.push(' * Sections are conditionally included based on enabled tool groups.')
+lines.push(' * Slim instructions are sent to MCP clients during initialization.')
+lines.push(' * Detailed help is available on-demand via memory://help resources.')
+lines.push(' * Instructions are dynamically generated based on enabled tool groups')
+lines.push(' * and instruction level for token efficiency.')
 lines.push(' */')
 lines.push('')
 lines.push("import type { ToolGroup } from '../types/index.js'")
@@ -137,173 +98,228 @@ lines.push('}')
 lines.push('')
 lines.push('/**')
 lines.push(' * Instruction detail level for token efficiency')
-lines.push(' * - essential: ~200 tokens - Core behaviors only (for token-constrained clients)')
-lines.push(' * - standard: ~350 tokens - + GitHub patterns + help pointers')
-lines.push(' * - full: ~400 tokens - + active tools/prompts summary')
+lines.push(
+    ' * - essential: ~300 tokens - Core behaviors + quick access (for token-constrained clients)'
+)
+lines.push(' * - standard: ~350 tokens - + help pointers for enabled groups')
+lines.push(' * - full: ~500 tokens - + active tools/prompts summary')
 lines.push(' */')
 lines.push("export type InstructionLevel = 'essential' | 'standard' | 'full'")
 lines.push('')
 
-// ---- Composable Segments ----
+// ==========================================================================
+// Composable Instruction Segments
+// ==========================================================================
 
 lines.push('// =============================================================================')
 lines.push('// Composable Instruction Segments')
 lines.push('// =============================================================================')
 lines.push('')
 lines.push('/**')
-lines.push(' * Core behavioral guidance — always included regardless of enabled groups.')
-lines.push(' * Session Start, Behaviors, Rule & Skill Suggestions.')
+lines.push(' * Core instructions — always included regardless of enabled groups.')
+lines.push(' * Contains quick access, help pointers, and essential behavioral guidance.')
 lines.push(' */')
-lines.push('const CORE_INSTRUCTIONS = `' + escapeForTemplateLiteral(sections.CORE) + '\n`')
+lines.push('const CORE_INSTRUCTIONS = ' + BT + overviewEscaped + BT)
 lines.push('')
 lines.push('/**')
-lines.push(' * Copilot Review Patterns — only when `github` group is enabled.')
-lines.push(' * References `get_copilot_reviews` which is a GitHub tool.')
+lines.push(' * Code Mode summary — only included when codemode group is enabled.')
+lines.push(' * Points to memory://help/codemode for full API reference.')
 lines.push(' */')
 lines.push(
-    'const COPILOT_REVIEW_INSTRUCTIONS = `\\n' + escapeForTemplateLiteral(sections.COPILOT) + '\n`'
+    'const CODE_MODE_INSTRUCTIONS = ' +
+        BT +
+        escapeForTemplateLiteral(
+            [
+                '',
+                '',
+                '## Code Mode',
+                '',
+                'API: `tool_name` → `mj.group.action()` (e.g., `search_entries` → `mj.search.searchEntries()`)',
+                'Globals: `createEntry()`, `find()`, `recent()`, `searchEntries()`, `deleteEntry()`, `help()` work without the `mj.` prefix.',
+                'Positional: `create("note")`, `searchEntries("performance")`',
+                'Aliases: Common parameter names are auto-corrected (`text`→`content`, `entry`→`entry_id`, `q`→`query`, `tag`→`tags[]`).',
+                'Discovery: `mj.help()` → `{groups, totalMethods}`. `mj.core.help()` for group-specific.',
+                'Sandbox: No `setTimeout`, `setInterval`, `fetch`, or network access.',
+                'Readonly: Pass `readonly: true` to `mj_execute_code` to restrict execution to read-only operations.',
+                'Read `memory://help/codemode` for full namespace table, examples, and patterns.',
+                '**Codemode-only**: When `mj_execute_code` is the only registered tool, all tool names referenced in these instructions (e.g., `create_entry`, `search_entries`) must be called via `mj_execute_code` using `mj.*` namespaces or bare globals. Do NOT call them as direct MCP tools.',
+            ].join('\n')
+        ) +
+        BT
 )
-lines.push('')
-lines.push('/**')
-lines.push(' * Quick Access table — always included.')
-lines.push(' * The semantic_search row is conditional on the `search` group.')
-lines.push(' */')
-lines.push('function buildQuickAccess(groups: Set<ToolGroup>): string {')
-lines.push('    let table = `')
-lines.push('## Quick Access')
-lines.push('')
-lines.push('| Purpose         | Action                      |')
-lines.push('| --------------- | --------------------------- |')
-lines.push('| Session context | \\`memory://briefing\\`         |')
-lines.push('| Recent entries  | \\`memory://recent\\`           |')
-lines.push('| Health/time     | \\`memory://health\\`           |')
-lines.push('`')
-lines.push("    if (groups.has('search')) {")
-lines.push('        table += `| Semantic search | \\`semantic_search(query)\\`    |')
-lines.push('`')
-lines.push('    }')
-lines.push('    table += `| Full context    | \\`get-context-bundle\\` prompt |')
-lines.push('`')
-lines.push('    return table')
-lines.push('}')
-lines.push('')
-lines.push('/**')
-lines.push(' * Code Mode namespace row definitions.')
-lines.push(' * Each maps a tool group to its Code Mode API namespace.')
-lines.push(' */')
-lines.push(
-    'const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = ['
-)
-lines.push(
-    "    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry(\"Implemented feature X\")`' },"
-)
-lines.push(
-    "    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries(\"performance\")`' },"
-)
-lines.push(
-    "    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },"
-)
-lines.push(
-    "    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, \"implements\")`' },"
-)
-lines.push(
-    "    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.importMarkdown(\"content\")`' },"
-)
-lines.push(
-    "    { group: 'io', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries(\"json\")`' },"
-)
-lines.push(
-    "    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },"
-)
-lines.push(
-    "    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: \"open\" })`' },"
-)
-lines.push(
-    "    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },"
-)
-lines.push(
-    "    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry(\"Team update\")`' },"
-)
-lines.push(']')
-lines.push('')
-lines.push('/**')
-lines.push(' * Code Mode section — only when `codemode` group is enabled.')
-lines.push(' * The namespace table dynamically omits rows for disabled groups.')
-lines.push(
-    ' * The behavioral text (await patterns, readonly, return shape) comes from the .md source.'
-)
-lines.push(' */')
-lines.push('function buildCodeModeInstructions(groups: Set<ToolGroup>): string {')
-lines.push('    // Build namespace table with only enabled groups')
-lines.push('    const rows = CODE_MODE_NAMESPACE_ROWS')
-lines.push('        .filter((r) => groups.has(r.group))')
-lines.push(
-    '        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)'
-)
-lines.push("        .join('\\n')")
-lines.push('')
-lines.push('    // Build the static behavioral text from the .md source,')
-lines.push('    // but replace the full namespace table with the filtered version')
-lines.push('    const fullSection = CODE_MODE_FULL_TEXT')
-lines.push("    const tableStart = fullSection.indexOf('| Group')")
-lines.push("    const tableEnd = fullSection.indexOf('\\n\\n**Features**')")
-lines.push('    if (tableStart === -1 || tableEnd === -1) {')
-lines.push('        // Fallback: return full section if markers not found')
-lines.push("        return '\\n' + fullSection")
-lines.push('    }')
-lines.push('    const beforeTable = fullSection.slice(0, tableStart)')
-lines.push(
-    "    const headerLine = '| Group         | Namespace            | Example                                            |'"
-)
-lines.push(
-    "    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'"
-)
-lines.push('    const afterTable = fullSection.slice(tableEnd)')
-lines.push(
-    "    return '\\n' + beforeTable + headerLine + '\\n' + separatorLine + '\\n' + rows + afterTable"
-)
-lines.push('}')
-lines.push('')
-lines.push('/**')
-lines.push(' * Full Code Mode section text from .md source (used as template for filtered version)')
-lines.push(' */')
-lines.push('const CODE_MODE_FULL_TEXT = `' + escapeForTemplateLiteral(sections.CODE_MODE) + '\n`')
 lines.push('')
 
-// ---- Original static sections ----
 lines.push('/**')
-lines.push(' * GitHub integration patterns (~150 additional tokens)')
-lines.push(' * Only included when `github` group is enabled.')
+lines.push(' * All help keys that have content (for dynamic help pointer generation).')
 lines.push(' */')
-lines.push('const GITHUB_INSTRUCTIONS = `\\n' + escapeForTemplateLiteral(sections.GITHUB) + '\n`')
+lines.push('const HELP_GROUP_KEYS: readonly string[] = ' + JSON.stringify(helpGroupKeys))
 lines.push('')
+
 lines.push('/**')
-lines.push(' * Help resource pointers — directs agents to pull-based reference')
+lines.push(' * Build dynamic help pointers listing only the enabled groups.')
 lines.push(' */')
-lines.push('const HELP_POINTERS = `\\n' + escapeForTemplateLiteral(sections.HELP_POINTERS) + '\n`')
+lines.push('function buildHelpPointers(groups: Set<ToolGroup>): string {')
+lines.push('    const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => {')
+lines.push("        if (k === 'hush-protocol') return groups.has('team')")
+lines.push("        if (k === 'skills') return true")
+lines.push('        return groups.has(k as ToolGroup)')
+lines.push('    })')
+lines.push('    if (enabledHelpGroups.length === 0) {')
+lines.push("        return '\\n\\nRead `memory://help` for gotchas and critical usage patterns.'")
+lines.push('    }')
+lines.push("    return '\\n\\n## Available Help\\n\\n' +")
+lines.push("        'Read `memory://help` for gotchas and critical usage patterns.\\n' +")
+lines.push("        'Read `memory://help/{group}` for: ' + enabledHelpGroups.join(', ') + '.'")
+lines.push('}')
 lines.push('')
+
 lines.push('/**')
-lines.push(' * Server access instructions - critical for AI agents to call tools correctly')
+lines.push(' * Build active groups summary listing enabled group names with tool counts.')
 lines.push(' */')
+lines.push('function buildActiveGroupsSummary(enabledTools: Set<string>): string {')
+lines.push('    const activeGroups: { group: ToolGroup; tools: string[] }[] = []')
+lines.push('')
 lines.push(
-    'const SERVER_ACCESS_INSTRUCTIONS = `\\n' +
-        escapeForTemplateLiteral(sections.SERVER_ACCESS) +
-        '\n`'
+    '    for (const [group, allTools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {'
 )
+lines.push('        const enabledInGroup = allTools.filter((tool) => enabledTools.has(tool))')
+lines.push('        if (enabledInGroup.length > 0) {')
+lines.push('            activeGroups.push({ group, tools: enabledInGroup })')
+lines.push('        }')
+lines.push('    }')
 lines.push('')
-lines.push(GOTCHAS_BODY)
+lines.push("    if (activeGroups.length === 0) return ''")
 lines.push('')
-lines.push(FUNCTION_BODY)
+lines.push('    let summary = `\\n\\n## Active Tools (${String(enabledTools.size)})\\n`')
+lines.push('    for (const { group, tools } of activeGroups) {')
+lines.push("        summary += `**${group}**: ${tools.map((t) => `\\`${t}\\``).join(', ')}\\n`")
+lines.push('    }')
+lines.push('    return summary')
+lines.push('}')
+lines.push('')
+
+// ==========================================================================
+// Public API
+// ==========================================================================
+
+lines.push('// =============================================================================')
+lines.push('// Public API')
+lines.push('// =============================================================================')
+lines.push('')
+lines.push('/**')
+lines.push(' * Generate dynamic instructions based on enabled tool groups and instruction level.')
+lines.push(' *')
+lines.push(' * Sections are conditionally included based on which tool groups are enabled:')
+lines.push(' * - Code Mode snippet → only with `codemode` group')
+lines.push(' * - Help group listing → `standard`+ level, only lists enabled groups')
+lines.push(' * - Active tools summary → `full` level only')
+lines.push(' * - Prompts listing → `full` level only')
+lines.push(' *')
+lines.push(' * @param enabledTools - Set of enabled tool names')
+lines.push(' * @param prompts - Available prompt definitions')
+lines.push(' * @param latestEntry - Optional latest entry for context snapshot')
+lines.push(" * @param level - Instruction detail level (default: 'standard')")
+lines.push(
+    ' * @param enabledGroups - Optional pre-computed enabled groups; derived from enabledTools if omitted'
+)
+lines.push(' */')
+lines.push('export function generateInstructions(')
+lines.push('    enabledTools: Set<string>,')
+lines.push('    prompts: PromptDefinition[],')
+lines.push('    latestEntry?: LatestEntrySnapshot,')
+lines.push("    level: InstructionLevel = 'standard',")
+lines.push('    enabledGroups?: Set<ToolGroup>')
+lines.push('): string {')
+lines.push('    // Derive enabled groups from enabled tools if not provided (backward compat)')
+lines.push('    const groups = enabledGroups ?? getEnabledGroups(enabledTools)')
+lines.push('')
+lines.push('    // Always start with core instructions (overview + behaviors)')
+lines.push('    let instructions = CORE_INSTRUCTIONS')
+lines.push('')
+lines.push('    // Code Mode snippet — only when codemode group is enabled')
+lines.push("    if (groups.has('codemode')) {")
+lines.push('        instructions += CODE_MODE_INSTRUCTIONS')
+lines.push('    }')
+lines.push('')
+lines.push('    // Add latest entry snapshot for immediate context (compact format)')
+lines.push('    if (latestEntry) {')
+lines.push('        const preview = latestEntry.content.slice(0, 120)')
+lines.push(
+    "        instructions += `\\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\\n`"
+)
+lines.push('    }')
+lines.push('')
+lines.push('    // Essential: minimal help pointer (no group listing)')
+lines.push('    // Standard+: dynamic help pointers listing enabled groups')
+lines.push("    if (level === 'essential') {")
+lines.push(
+    "        instructions += '\\n\\nRead `memory://help` for gotchas and critical usage patterns.'"
+)
+lines.push('    } else {')
+lines.push('        instructions += buildHelpPointers(groups)')
+lines.push('    }')
+lines.push('')
+lines.push('    // Full level includes active groups summary + prompts')
+lines.push("    if (level === 'full') {")
+lines.push('        instructions += buildActiveGroupsSummary(enabledTools)')
+lines.push('')
+lines.push('        // Add prompts section')
+lines.push('        if (prompts.length > 0) {')
+lines.push('            instructions += `\\n## Prompts (${String(prompts.length)})\\n`')
+lines.push("            instructions += 'Pre-built templates and guided workflows:\\n'")
+lines.push('            for (const prompt of prompts) {')
+lines.push(
+    "                instructions += `- \\`${prompt.name}\\` - ${prompt.description ?? ''}\\n`"
+)
+lines.push('            }')
+lines.push('        }')
+lines.push('    }')
+lines.push('')
+lines.push('    return instructions')
+lines.push('}')
+lines.push('')
+
+// Static backward compat
+lines.push('/**')
+lines.push(' * Static instructions for backward compatibility.')
+lines.push(' * @deprecated Use generateInstructions() instead for dynamic content')
+lines.push(' */')
+lines.push('export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS')
+lines.push('')
+
+// ==========================================================================
+// HELP_CONTENT map
+// ==========================================================================
+
+lines.push('/**')
+lines.push(' * Help content keyed by group name.')
+lines.push(" * 'gotchas' is the always-available help (memory://help).")
+lines.push(' * Other keys are feature-specific help (memory://help/{key}).')
+lines.push(' */')
+lines.push('export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([')
+for (const { key, content } of helpEntries) {
+    const escaped = escapeForTemplateLiteral(content)
+    lines.push('  [' + JSON.stringify(key) + ', ' + BT + escaped + BT + '],')
+}
+lines.push('])')
 lines.push('')
 
 const tsContent = lines.join('\n')
-
+const tsPath = resolve(constantsDir, 'server-instructions.ts')
 writeFileSync(tsPath, tsContent, 'utf-8')
 
 process.stderr.write(
-    '✅ Generated server-instructions.ts (' +
-        tsContent.length.toLocaleString() +
-        ' bytes) from server-instructions.md (' +
-        markdown.length.toLocaleString() +
-        ' bytes)\n'
+    [
+        '',
+        '✅ Generated server-instructions.ts (' +
+            tsContent.length.toLocaleString() +
+            ' bytes) from ' +
+            (helpEntries.length + 1) +
+            ' markdown files',
+        '   Overview: ' + overviewMd.length.toLocaleString() + ' chars',
+        '   Help entries: ' + helpEntries.map((e) => e.key).join(', '),
+        '   Help group keys: ' + helpGroupKeys.join(', '),
+        '   Exports: generateInstructions(), SERVER_INSTRUCTIONS (deprecated), HELP_CONTENT',
+        '',
+    ].join('\n')
 )
