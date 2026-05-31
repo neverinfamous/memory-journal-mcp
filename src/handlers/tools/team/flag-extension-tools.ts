@@ -156,6 +156,9 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                         const ctx = parseFlagContext(entry.autoContext)
                         if (!ctx) continue
 
+                        // Project boundary filter
+                        if (input.project_number !== undefined && entry.projectNumber !== input.project_number) continue
+
                         // Status filter
                         if (input.status === 'active' && ctx.resolved) continue
                         if (input.status === 'resolved' && !ctx.resolved) continue
@@ -477,6 +480,9 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                     for (const entry of flagEntries) {
                         const ctx = parseFlagContext(entry.autoContext)
                         if (!ctx) continue
+
+                        // Project boundary filter
+                        if (input.project_number !== undefined && entry.projectNumber !== input.project_number) continue
 
                         totalFlags++
                         const entryTime = new Date(entry.timestamp).getTime()

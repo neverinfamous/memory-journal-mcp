@@ -59,6 +59,8 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
+- **server**: Fixed Zod type mismatch leakage where the `isError: true` flag caused the MCP client to throw raw cascade step errors instead of returning the expected structured `VALIDATION_ERROR` JSON payload
+- **team**: Fixed `team_list_flags` and `team_get_flag_analytics` ignoring the `project_number` filter parameter, ensuring queries are correctly scoped to the targeted project boundary
 - **github**: Fixed `get_github_issue` and `get_github_pr` to explicitly return `bodyTruncated: false` when truncation does not occur
 - **server**: Fixed SDK-level Zod validation interceptor to parse returned `isError: true` payload strings instead of exceptions, ensuring `success: false` structured responses instead of raw `-32602` leakages
 - **instructions**: Fixed hallucinated instructions directing agents to parse JSON from `memory://briefing` when it already returns a pre-rendered Markdown string

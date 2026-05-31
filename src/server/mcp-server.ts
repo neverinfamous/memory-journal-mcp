@@ -690,8 +690,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                             text: finalText
                                         }
                                     ],
-                                    structuredContent: errorResult,
-                                    isError: true
+                                    structuredContent: errorResult
                                 }
                             }
                         }
@@ -745,8 +744,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                     text: finalText
                                 }
                             ],
-                            structuredContent: errorResult,
-                            isError: true
+                            structuredContent: errorResult
                         }
                     }
                     throw error
