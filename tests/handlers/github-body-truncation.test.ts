@@ -158,7 +158,7 @@ describe('GitHub Body Truncation', () => {
                 github
             )) as { issue: { body: string; bodyTruncated?: boolean } }
 
-            expect(result.issue.bodyTruncated).toBeUndefined()
+            expect(result.issue.bodyTruncated).toBe(false)
             expect(result.issue.body).toHaveLength(2055)
         })
 
@@ -189,7 +189,7 @@ describe('GitHub Body Truncation', () => {
                 github
             )) as { issue: { body: string; bodyTruncated?: boolean } }
 
-            expect(result.issue.bodyTruncated).toBeUndefined()
+            expect(result.issue.bodyTruncated).toBe(false)
             expect(result.issue.body).toBe(
                 '<untrusted_remote_content>\nShort body text\n</untrusted_remote_content>'
             )
@@ -278,7 +278,7 @@ describe('GitHub Body Truncation', () => {
                 github
             )) as { pullRequest: { body: string; bodyTruncated?: boolean } }
 
-            expect(result.pullRequest.bodyTruncated).toBeUndefined()
+            expect(result.pullRequest.bodyTruncated).toBe(false)
             expect(result.pullRequest.body).toHaveLength(3055)
         })
     })

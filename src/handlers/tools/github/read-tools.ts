@@ -244,7 +244,8 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     return {
                         issue: {
                             ...safeIssue,
-                            ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
+                            bodyTruncated,
+                            ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
                         },
                         ...(comments ? { comments, commentCount: comments.length } : {}),
                         owner: resolved.owner,
@@ -330,7 +331,8 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     return {
                         pullRequest: {
                             ...safePr,
-                            ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
+                            bodyTruncated,
+                            ...(bodyFullLength !== undefined ? { bodyFullLength } : {}),
                         },
                         owner: resolved.owner,
                         repo: resolved.repo,

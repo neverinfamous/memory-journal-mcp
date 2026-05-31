@@ -58,6 +58,7 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
+- **github**: Fixed `get_github_issue` and `get_github_pr` to explicitly return `bodyTruncated: false` when truncation does not occur
 - **server**: Fixed SDK-level Zod validation interceptor to parse returned `isError: true` payload strings instead of exceptions, ensuring `success: false` structured responses instead of raw `-32602` leakages
 - **instructions**: Fixed hallucinated instructions directing agents to parse JSON from `memory://briefing` when it already returns a pre-rendered Markdown string
 - **tests**: Fixed hallucinated test expectations in `test-resources.md` regarding the `memory://briefing` JSON payload
