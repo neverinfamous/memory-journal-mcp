@@ -251,6 +251,14 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - [x] CI/CD security pipeline (CodeQL, Trivy, secret scanning)
 - [x] Comprehensive security documentation
 
+## 📦 **Supported Versions**
+
+| Component | Supported Versions | Notes |
+| --- | --- | --- |
+| Node.js | 24.x (LTS) | Minimum required version for `worker_threads` and isolation features. |
+| MCP Protocol | 2024-11-05 | Full compatibility with the official Model Context Protocol. |
+| Docker Base | `node:24-alpine` | Alpine-based images receive regular vulnerability patches. |
+
 ## 🚨 **Reporting Security Issues**
 
 If you discover a security vulnerability, please:

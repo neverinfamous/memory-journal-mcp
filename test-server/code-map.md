@@ -272,6 +272,8 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 47 resources total — 29 static + 18 template.
 
+> **Note**: The server also registers 5 alias endpoints (e.g., `memory://status`, `memory://tools`) for backward compatibility. This brings the dynamic resource count reported by `memory://briefing` to 52, though they map to the 47 capabilities listed below.
+
 ### Static Resources
 
 | Handler File               | Resources                                                                                                                                                                     |
