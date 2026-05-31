@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**73 MCP Tools** · **19 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**73 MCP Tools** · **19 Workflow Prompts** · **47 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -211,7 +211,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **38 Resources** (29 Static + 9 Template)
+### 📡 **47 Resources** (29 Static + 18 Template)
 
 **29 Static Resources** (appear in resource lists):
 
@@ -243,7 +243,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://flags/vocabulary` - Configured flag vocabulary terms
 - `memory://flags/history` - Recently resolved flags with resolution details and avg time-to-resolution (last 7 days)
 
-**Template Resources** (require parameters, fetch directly by URI):
+**18 Template Resources** (9 base templates + 9 dynamic `{repo}` variants):
 
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue

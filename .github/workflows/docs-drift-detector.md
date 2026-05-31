@@ -32,7 +32,7 @@ concurrency: docs-drift-detector
 
 # Documentation Drift Detector
 
-You are auditing documentation for the **memory-journal-mcp** project — a TypeScript MCP server for project context management with 70 tools, Code Mode, HTTP/SSE, OAuth 2.1, Tool Filtering, an adaptive memory graph, and significance-based pruning. Your job is to check if documentation is accurate and consistent with each other and with recent changes.
+You are auditing documentation for the **memory-journal-mcp** project — a TypeScript MCP server for project context management with 73 tools, Code Mode, HTTP/SSE, OAuth 2.1, Tool Filtering, an adaptive memory graph, and significance-based pruning. Your job is to check if documentation is accurate and consistent with each other and with recent changes.
 
 ## Important Rules
 

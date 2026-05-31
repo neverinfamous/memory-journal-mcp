@@ -135,9 +135,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 Standups, retrospectives, PR summaries, weekly digests, period analysis, milestone tracking, context bundles, session summaries, adversarial plan reviews, and flag triage dashboards. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **38 Resources** (29 Static + 9 Template)
+### 📡 **47 Resources** (29 Static + 18 Template)
 
-29 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://flags`, `memory://flags/vocabulary`, `memory://flags/history`, GitHub status/insights, team stats, and more) plus 9 template resources for dynamic briefings (`memory://briefing/{repo}`), project timelines, issue/PR entries, Kanban boards, milestone details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+29 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://flags`, `memory://flags/vocabulary`, `memory://flags/history`, GitHub status/insights, team stats, and more) plus 18 template resources for dynamic briefings (`memory://briefing/{repo}`), project timelines, issue/PR entries, Kanban boards, milestone details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
 
