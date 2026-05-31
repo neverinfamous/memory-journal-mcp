@@ -1,15 +1,14 @@
 # Memory Journal MCP Server - TypeScript Version
 # Multi-stage build for optimized production image
-FROM node:26.2.0-bookworm-slim AS builder
+FROM node:26.2.0-alpine AS builder
 
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
-# Debian bookworm-slim receives regular security updates. Upgrade them all to patch CVEs.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 make g++ curl libssl-dev && \
-    apt-get upgrade -y && \
-    rm -rf /var/lib/apt/lists/*
+# Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, etc.)
+RUN apk add --no-cache python3 make g++ && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 nghttp2-libs && \
+    apk upgrade --no-cache
 
 # Upgrade npm globally to a pinned version to ensure reproducible builds
 # Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
@@ -33,6 +32,15 @@ COPY src/ ./src/
 # Build TypeScript
 RUN npm run build
 
+# Compile sqlite-vec native extension from source for Alpine (musl libc)
+# We use v0.1.7-alpha.2 to match the package.json version
+RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.7-alpha.2.tar.gz | tar -xz && \
+    cd sqlite-vec-0.1.7-alpha.2 && \
+    make loadable && \
+    cp dist/vec0.so /app/vec0.so && \
+    cd .. && \
+    rm -rf sqlite-vec-0.1.7-alpha.2
+
 # Install production-only dependencies in a separate directory for clean copy
 RUN mkdir /app/prod_modules && \
     cp package*.json .npmrc /app/prod_modules/ && \
@@ -50,20 +58,22 @@ RUN rm -rf /app/prod_modules/node_modules/onnxruntime-web \
            /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/win32
 
 # Production stage
-FROM node:26.2.0-bookworm-slim
+FROM node:26.2.0-alpine
 
 WORKDIR /app
 
 # Install runtime dependencies with security fixes
-# Debian bookworm-slim receives regular security updates. Upgrade them all to patch CVEs.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends git ca-certificates curl && \
-    apt-get upgrade -y && \
-    rm -rf /var/lib/apt/lists/* && \
+# Use Alpine edge for curl with CVE fixes (and nghttp2-libs for CVE-2026-27135)
+# Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
+# Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
+RUN apk add --no-cache git ca-certificates && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib libcrypto3 libssl3 nghttp2-libs && \
+    apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
-# Copy built artifacts and production dependencies from builder
+# Copy built artifacts, sqlite-vec, and production dependencies from builder
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/vec0.so ./vec0.so
 COPY --from=builder /app/prod_modules/node_modules ./node_modules
 COPY package*.json ./
 COPY LICENSE ./
@@ -72,8 +82,8 @@ COPY LICENSE ./
 RUN mkdir -p /app/data && chmod 700 /app/data
 
 # Create non-root user for security
-RUN groupadd -g 1001 appgroup && \
-    useradd -u 1001 -g appgroup -s /bin/sh -m appuser && \
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup && \
     chown -R appuser:appgroup /app
 
 # Set environment variables
