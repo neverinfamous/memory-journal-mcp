@@ -124,7 +124,27 @@ export function extractParameters(inputSchema: unknown): ParameterInfo[] {
         return []
     }
 
-    const schema = inputSchema as Record<string, unknown>
+    let schema = inputSchema as Record<string, unknown>
+    
+    // Unwrap ZodEffects (.transform, .refine) or ZodPipe (Zod 4 .transform)
+    if (typeof schema['innerType'] === 'function') {
+        const innerTypeFn = schema['innerType'] as () => unknown
+        schema = innerTypeFn() as Record<string, unknown>
+    } else if (
+        schema['_def'] !== undefined &&
+        schema['_def'] !== null &&
+        typeof schema['_def'] === 'object' &&
+        'schema' in schema['_def']
+    ) {
+        schema = (schema['_def'] as Record<string, unknown>)['schema'] as Record<string, unknown>
+    } else if (
+        schema['in'] !== undefined &&
+        schema['in'] !== null &&
+        typeof schema['in'] === 'object'
+    ) {
+        schema = schema['in'] as Record<string, unknown>
+    }
+
     const rawShape: unknown = schema['shape']
     if (rawShape === undefined || rawShape === null || typeof rawShape !== 'object') {
         return []
