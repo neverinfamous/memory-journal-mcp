@@ -32,6 +32,7 @@
 - **team**: `team_get_flag_analytics` tool for aggregate flag analytics
 
 ### Changed
+- **tests**: Added artifact cleanup instruction to the end of Phase 26 test workflow in `test-cm-io.md`
 - **deps**: Updated npm dependencies
 - **briefing**: Filtered out stale milestones to ensure the briefing cycles automatically
 - **briefing**: Surfaced capability statuses directly in the Config row and renamed designations for clarity
