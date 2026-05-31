@@ -25,7 +25,7 @@
 
 | Resource          | URI                          | Test                                                                                                                                                                                   |
 | ----------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Briefing          | `memory://briefing`          | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`, optional `rulesFile`, `skillsDir`, `workflowSummary`, `copilotReviews`, `localTime`, optional `activeFlags` |
+| Briefing          | `memory://briefing`          | Returns pre-formatted Markdown string containing any active flags and a dense 2-column context table                                                                                   |
 | Instructions      | `memory://instructions`      | Full server instructions — verify it references all 61 tools and key resources                                                                                                         |
 | Recent entries    | `memory://recent`            | Read, verify 10 entries with typed fields                                                                                                                                              |
 | Significant       | `memory://significant`       | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                                                                                |
@@ -104,7 +104,7 @@
 - `memory://flags` returns active flag dashboard (empty when no unresolved flags)
 - `memory://flags/vocabulary` returns configured vocabulary list
 - `memory://flags/history` returns resolved flags with resolution details or empty array when none recent
-- `memory://briefing` includes `localTime` field for chronological grounding
+- `memory://briefing` includes local time for chronological grounding
 - `memory://briefing/<repo>` returns repo-scoped briefing
 - `memory://metrics/summary` returns session-level metrics
 - `memory://audit` returns last 50 audit entries

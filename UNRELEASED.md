@@ -57,6 +57,8 @@
 - **resources**: Redundant `memory://briefing-message` and `memory://briefing-message/{repo}` endpoints
 
 ### Fixed
+- **instructions**: Fixed hallucinated instructions directing agents to parse JSON from `memory://briefing` when it already returns a pre-rendered Markdown string
+- **tests**: Fixed hallucinated test expectations in `test-resources.md` regarding the `memory://briefing` JSON payload
 - **instructions**: Restored `gotchas.md` to resolve `Group "gotchas" not found` error during resource testing
 - **server**: Added JSON-RPC structured error handler to intercept and format Express PayloadTooLargeError
 - **io**: Increased `export_entries` maximum limit to 5000 to allow testing the 5MB payload truncation ceiling

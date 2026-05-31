@@ -81,11 +81,8 @@ Only help resources for your enabled tool groups are registered.
 1. You **MUST** read the \`memory://briefing/{repo_name}\` at the start of each chat!
 2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
 3. Infer the \`repo_name\` from the user's prompt or your active workspace context.
-4. **ACKNOWLEDGE FLAGS**: If the briefing JSON contains \`activeFlags\` (count > 0), you MUST print an alert ABOVE the table: \`⚠️ **{count} active flag(s)** — review before proceeding.\` followed by each flag (\`🚩 {flag_type} → @{target_user}: {preview}\`).
-5. **RENDER TABLE**: Parse the remaining JSON into a dense 2-column Markdown Table (Field, Value).
-   - **RESTRICTION**: NO bulleted lists inside the table. Do NOT truncate summaries or issues.
-   - **FORMATTING**: Group related properties (use \`<br>\` for line breaks).
-   - **REQUIRED GROUPS**: GitHub, Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
+4. **RENDER BRIEFING**: The briefing resource returns a pre-formatted Markdown string containing any active flags and a dense 2-column context table. You MUST output this exact string as your response without any modifications.
+5. **REVIEW ALERTS**: Pay special attention to any active flags listed at the top of the briefing. Do NOT truncate any summaries or issues.
 6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
 
 - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
