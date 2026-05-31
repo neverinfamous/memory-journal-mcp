@@ -20,6 +20,10 @@ For detailed session handoff context, search for entries tagged `session-summary
 
 If you find issues during code review, use `create_entry` with tag `copilot-finding` to record them for the development agent to see in their next session briefing.
 
+## Tooling Standards
+
+- **Copilot CLI**: Always reference and use `gh copilot`, NOT the deprecated `github-copilot-cli`.
+
 ## Coding Standards
 
 ### Naming

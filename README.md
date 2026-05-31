@@ -775,7 +775,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (70)      │  │ Resources (36)  │  │ Prompts (17)│  │
+│  │ Tools (73)      │  │ Resources (47)  │  │ Prompts (19)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
@@ -869,6 +869,3 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 Built by developers, for developers. PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
----
-
-_Migrating from v2.x?_ Your existing database is fully compatible. The TypeScript version uses the same schema and data format.
