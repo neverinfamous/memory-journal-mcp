@@ -210,7 +210,7 @@ describe('Team Admin Tool Handlers', () => {
             expect(updateResult.entry.prStatus).toBe('merged')
         })
 
-        it('should return validation error if project_number is missing and no default is set on update', async () => {
+        it('should successfully update an entry when project_number is omitted by falling back to its existing project number', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
                 {
@@ -241,7 +241,7 @@ describe('Team Admin Tool Handlers', () => {
                 'team_update_entry',
                 {
                     entry_id: createResult.entry.id,
-                    content: 'updated without project number',
+                    content: 'updated without project number parameter',
                 },
                 personalDb,
                 undefined,
@@ -251,9 +251,8 @@ describe('Team Admin Tool Handlers', () => {
                 teamDb
             )) as any
 
-            expect(result.success).toBe(false)
-            expect(result.code).toBe('VALIDATION_ERROR')
-            expect(result.error).toContain('Missing project_number')
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(1)
         })
 
         it('should successfully fallback to defaultProjectNumber on update', async () => {
