@@ -247,6 +247,35 @@ return {
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ project_number: 5, content: "CM3 issue link", issue_number: 1, project_number: 5 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
 
+### 20.13 Get Entry History
+
+```javascript
+// Test code:
+const created = await mj.core.createEntryMinimal({ content: 'CM3 history test v1' })
+const id = created.entry.id
+
+await mj.admin.updateEntry({ entry_id: id, content: 'CM3 history test v2' })
+await mj.admin.updateEntry({ entry_id: id, content: 'CM3 history test v3' })
+
+const history = await mj.core.getEntryHistory({ entry_id: id })
+
+return {
+  historyCount: history.revisions?.length,
+  firstRevNumber: history.revisions?.[0]?.revisionNumber,
+  firstRevContent: history.revisions?.[0]?.contentSnapshot,
+  secondRevNumber: history.revisions?.[1]?.revisionNumber,
+  secondRevContent: history.revisions?.[1]?.contentSnapshot,
+}
+```
+
+| Check              | Expected                |
+| ------------------ | ----------------------- |
+| `historyCount`     | `2`                     |
+| `firstRevNumber`   | `2`                     |
+| `firstRevContent`  | `"CM3 history test v2"` |
+| `secondRevNumber`  | `1`                     |
+| `secondRevContent` | `"CM3 history test v1"` |
+
 ---
 
 ## Cleanup
@@ -261,6 +290,7 @@ After testing, remove test entries created during Phase 20:
 | Delete owner test entry  | `delete_entry(entry_id: <owner_test_id>, permanent: true)`  |
 | Delete toggle test entry | `delete_entry(entry_id: <toggle_test_id>, permanent: true)` |
 | Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
+| Delete history test entry| `delete_entry(entry_id: <history_test_id>, permanent: true)`|
 
 ---
 
@@ -283,4 +313,5 @@ After testing, remove test entries created during Phase 20:
 - `delete_entry` soft delete hides entry from search
 - `delete_entry` permanent delete and nonexistent ID both return structured responses
 - `get_recent_entries` with `is_personal` filter returns correctly filtered entries
+- `get_entry_history` returns multiple historical snapshots successfully via Code Mode
 - `test_simple` callable via Code Mode

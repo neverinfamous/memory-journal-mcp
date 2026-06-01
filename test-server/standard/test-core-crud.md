@@ -50,6 +50,9 @@
 | Update is_personal        | `update_entry(project_number: 5, entry_id: <N>, is_personal: false)`              | `isPersonal` toggled                                                     |
 | Update nonexistent        | `update_entry(project_number: 5, entry_id: 999999, tags: ["x"])`                  | Returns `{ success: false, error: "Entry 999999 not found" }`            |
 | Update invalid type       | `update_entry(project_number: 5, entry_id: <N>, entry_type: "invalid")`           | Structured error listing valid enum values                               |
+| History of new entry      | `get_entry_history(project_number: 5, entry_id: <N>)`                             | Returns empty list (0 revisions)                                         |
+| History after update      | `update_entry(..., content: "Changed"); get_entry_history(...)`                   | Returns 1 revision with `revisionNumber: 1` and previous content snapshot|
+| History nonexistent entry | `get_entry_history(project_number: 5, entry_id: 999999)`                          | Returns empty list or structured error                                   |
 | Get recent                | `get_recent_entries(project_number: 5, limit: 5)`                                 | Returns `structuredContent` array                                        |
 | Get recent (personal)     | `get_recent_entries(project_number: 5, limit: 5, is_personal: true)`              | Only personal entries returned                                           |
 | Get recent (not personal) | `get_recent_entries(project_number: 5, limit: 5, is_personal: false)`             | Only non-personal entries returned                                       |
@@ -74,5 +77,6 @@
 - `create_entry` with `issue_number` auto-populates `issueUrl` from cached repo info
 - `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
 - `get_recent_entries` with `is_personal` filter returns only matching entries
+- `get_entry_history` correctly returns historical snapshots after updates
 - `update_entry` returns `success: false` for nonexistent entry IDs
 - `delete_entry` returns `success: false` for nonexistent entry IDs

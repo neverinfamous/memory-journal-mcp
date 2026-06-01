@@ -35,12 +35,14 @@ const getByIdEmpty = await mj.core.getEntryById({})
 const recentEmpty = await mj.core.getRecentEntries({ project_number: 5 })
 const statsEmpty = await mj.analytics.getStatistics({})
 const tagsEmpty = await mj.core.listTags({})
+const getHistoryEmpty = await mj.core.getEntryHistory({})
 
 // Type mismatches
 const contentNum = await mj.core.createEntry({ project_number: 5, content: 123 })
 const limitStr = await mj.core.getRecentEntries({ project_number: 5, limit: 'abc' })
 const idStr = await mj.core.getEntryById({ entry_id: 'abc' })
 const limitNeg = await mj.core.getRecentEntries({ project_number: 5, limit: -1 })
+const historyIdStr = await mj.core.getEntryHistory({ entry_id: 'abc' })
 
 return {
   createEmpty: createEmpty.success === false,
@@ -53,6 +55,8 @@ return {
   limitStrHandled: limitStr.success === false || Array.isArray(limitStr.entries),
   idStrError: idStr.success === false,
   limitNegError: limitNeg.success === false,
+  getHistoryEmptyError: getHistoryEmpty.success === false,
+  historyIdStrError: historyIdStr.success === false,
 }
 ```
 
@@ -68,6 +72,8 @@ return {
 | `limitStrHandled` | `true` (coerces or errors — never crashes) |
 | `idStrError`      | `true` (entry_id must be number)           |
 | `limitNegError`   | `true` (limit must be ≥ 1)                 |
+| `getHistoryEmptyError` | `true` (entry_id required)            |
+| `historyIdStrError` | `true` (entry_id must be number)         |
 
 ### 29.2 Search Group — Empty Params & Boundaries
 
