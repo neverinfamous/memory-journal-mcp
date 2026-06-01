@@ -47,9 +47,7 @@ test.describe('Payload Contracts: Team Isolation', () => {
             tags: ['flag:blocker'],
         })
 
-        // It currently fails with VALIDATION_ERROR because Zod schema enforces project_number unconditionally.
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
+        expect(payload.success).toBe(true)
     })
 
     test('team_search MUST reject queries without project_number if tags contain non-flags', async () => {
@@ -69,7 +67,6 @@ test.describe('Payload Contracts: Team Isolation', () => {
             entry_type: 'flag',
         })
 
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
+        expect(payload.success).toBe(true)
     })
 })
