@@ -5,8 +5,9 @@ import * as path from 'node:path'
 import { execFile } from 'node:child_process'
 import { logger } from '../../utils/logger.js'
 import { ConnectionError } from '../../types/errors.js'
-import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from '../core/schema.js'
+import { MigrationManager } from '../migrations/migration-manager.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
+
 
 /**
  * Pre-compiled regex to detect SQL mutation statements.
@@ -15,32 +16,6 @@ import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 const IS_MUTATION_RE =
     /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check))./i
 
-/**
- * Shared migration columns required by both personal and team schemas.
- * Adding a new column here ensures it is applied in both migrateSchema() and applyTeamSchema().
- */
-const SHARED_MIGRATION_COLUMNS: { name: string; sql: string }[] = [
-    {
-        name: 'significance_type',
-        sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT',
-    },
-    { name: 'auto_context', sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT' },
-    { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
-    { name: 'is_archived', sql: 'ALTER TABLE memory_journal ADD COLUMN is_archived INTEGER DEFAULT 0' },
-    { name: 'project_number', sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER' },
-    { name: 'project_owner', sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT' },
-    { name: 'issue_number', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER' },
-    { name: 'issue_url', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_url TEXT' },
-    { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
-    { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
-    { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
-    {
-        name: 'workflow_run_id',
-        sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER',
-    },
-    { name: 'workflow_name', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT' },
-    { name: 'workflow_status', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT' },
-]
 
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
@@ -98,8 +73,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 })
             }
 
-            // Create base schema
-            db.exec(SCHEMA_SQL)
+            // Run schema migrations (creates memory_journal and other core tables versioned)
+            this.migrateSchema()
 
             // Create vector embeddings table (sqlite-vec vec0 virtual table)
             db.exec(`
@@ -109,8 +84,6 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 )
             `)
 
-            // Run schema migrations
-            this.migrateSchema()
 
             this.initialized = true
             logger.info('Native database opened', {
@@ -129,22 +102,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private migrateSchema(): void {
         const db = this.ensureDb()
 
-        // table_info in better-sqlite3 returns an array of objects like { "cid": 0, "name": "id", ...}
-        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
-            name: string
-        }[]
-        const columns = new Set(tableInfo.map((row) => row.name))
+        // 1. Run versioned migrations
+        MigrationManager.runMigrations(db, false)
 
-        const added: string[] = []
-
+        // 2. Perform post-migration checks and updates
         db.transaction(() => {
-            for (const col of SHARED_MIGRATION_COLUMNS) {
-                if (!columns.has(col.name)) {
-                    db.exec(col.sql)
-                    added.push(col.name)
-                }
-            }
-
             db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
 
             // Populate FTS5 index for existing databases that were created before FTS5 was added.
@@ -179,7 +141,6 @@ export class NativeConnectionManager implements IDatabaseConnection {
             }
 
             if (needsRebuild) {
-                added.push(rebuildReason)
                 // Defer rebuilding FTS5 index to prevent blocking server startup
                 const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000
                 setTimeout(() => {
@@ -207,48 +168,13 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 }, deferMs)
             }
         })()
-
-        if (added.length > 0) {
-            logger.info('Schema migrated', {
-                module: 'NativeConnectionManager',
-                dbPath: this.dbPath,
-                changes: added.map((c) => (c.startsWith('fts5:') ? c : `column:${c}`)),
-            })
-        }
     }
 
     applyTeamSchema(): void {
         const db = this.ensureDb()
-        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
-            name: string
-        }[]
-        const columns = new Set(tableInfo.map((row) => row.name))
-
-        // Shared columns + team-only author column
-        const teamColumns: { name: string; sql: string }[] = [
-            ...SHARED_MIGRATION_COLUMNS,
-            { name: 'author', sql: TEAM_SCHEMA_SQL.trim() },
-        ]
-
-        const added: string[] = []
-
-        db.transaction(() => {
-            for (const col of teamColumns) {
-                if (!columns.has(col.name)) {
-                    db.exec(col.sql)
-                    added.push(col.name)
-                }
-            }
-        })()
-
-        if (added.length > 0) {
-            logger.info('Team schema migrated', {
-                module: 'NativeConnectionManager',
-                dbPath: this.dbPath,
-                columnsAdded: added,
-            })
-        }
+        MigrationManager.applyTeamMigrations(db)
     }
+
 
     /**
      * @internal QUARANTINED

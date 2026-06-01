@@ -94,6 +94,13 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
         expectConfigError(payload)
     })
 
+    test('team_list_deleted_entries → CONFIGURATION_ERROR', async () => {
+        const payload = await callToolAndParse(client, 'team_list_deleted_entries', {
+            project_number: 1,
+        })
+        expectConfigError(payload)
+    })
+
     // --- Admin ---
     test('team_update_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_update_entry', {
@@ -106,6 +113,14 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_delete_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
+            project_number: 1,
+            entry_id: 1,
+        })
+        expectConfigError(payload)
+    })
+
+    test('team_restore_entry → CONFIGURATION_ERROR', async () => {
+        const payload = await callToolAndParse(client, 'team_restore_entry', {
             project_number: 1,
             entry_id: 1,
         })

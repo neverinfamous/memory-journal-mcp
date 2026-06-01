@@ -93,6 +93,7 @@ Only help resources for your enabled tool groups are registered.
 
 - **Strict Validation**: The \`project_number\` parameter is resolved at runtime (checking tool inputs, workspace registry mappings, and \`DEFAULT_PROJECT_NUMBER\` fallbacks). You will receive a \`VALIDATION_ERROR\` if no project number can be resolved for core or team tool operations.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
+- **Entry History**: Every modification to an entry creates a revision. Use \`get_entry_history\` to view past versions and changes of an entry.
 - **Soft-Delete & Recovery**: Entries can be soft-deleted and restored via \`restore_entry\` or \`team_restore_entry\`. Use \`list_deleted_entries\` or \`team_list_deleted_entries\` to discover soft-deleted entries. Entries can also be archived (\`is_archived = 1\`) to preserve them in history while excluding them from normal search queries.
 - **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`auto_index\` to rebuild the vector index for these entries.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"

@@ -23,7 +23,7 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                | Phase | Focus                                                 | When to Run        |
 | ------------------- | :---: | ----------------------------------------------------- | ------------------ |
-| `test-cm-crud.md`   |  20   | Create/read/update/delete, recovery, archiving, pagination, full params, error paths | After Phases 16–19 |
+| `test-cm-crud.md`   |  20   | Create/read/update/delete, recovery, history tracking, archiving, pagination, full params, error paths | After Phases 16–19 |
 | `test-cm-search.md` |  21   | FTS5, filters, date range, semantic search, archiving & pagination, analytics | After Phases 16–19 |
 
 ### Workflows & Relationships (from CM-3)

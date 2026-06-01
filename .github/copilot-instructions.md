@@ -69,8 +69,8 @@ All tool handlers return structured error responses — never raw exceptions:
 
 ### Database
 
-- Schema migrations in `src/database/core/schema.ts` via `migrateSchema()`
-- Backward compatible — never break existing data
+- Schema migrations in `src/database/migrations/` via `MigrationManager` (versioned 001 to 007)
+- Backward compatible with self-healing legacy database retrofitting — never break existing data
 - Consider index implications for new queries
 
 ## Architecture
@@ -88,6 +88,7 @@ src/
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
+│   ├── migrations/             # Versioned schema migrations (001-007)
 │   └── sqlite-adapter/         # SQLite operations via better-sqlite3
 ├── filtering/
 │   └── tool-filter.ts          # Tool filtering (groups, meta-groups)

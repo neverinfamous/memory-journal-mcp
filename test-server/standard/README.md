@@ -19,7 +19,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 
 | File                         | Phase | Purpose                                                                                             | When to Run |
 | ---------------------------- | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
-| `test-core-crud.md`          |   2   | **Entry CRUD & Recovery** — Create, read, update, delete, recovery, and pagination operations        | After seed  |
+| `test-core-crud.md`          |   2   | **Entry CRUD & Recovery** — Create, read, update, delete, recovery, pagination, and history tracking operations        | After seed  |
 | `test-core-search.md`        |   3   | **Text Search** — FTS5, phrase/prefix/boolean, hybrid mode, date range, filters, archiving, cursor pagination | After seed  |
 | `test-core-semantic.md`      |   4   | **Semantic Search & Analytics** — Vector search, index management, statistics, cross-project        | After seed  |
 | `test-core-relationships.md` |   5   | **Relationships** — Entry linking, causal types, visualization (Mermaid), graph resources           | After seed  |

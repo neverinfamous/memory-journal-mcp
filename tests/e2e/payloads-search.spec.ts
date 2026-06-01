@@ -64,4 +64,13 @@ test.describe('Payload Contracts: Search', () => {
         expectSuccess(payload)
         expect(payload.available).toBeDefined()
     })
+
+    test('list_deleted_entries returns { entries, count }', async () => {
+        const payload = await callToolAndParse(client, 'list_deleted_entries', {
+            project_number: 1,
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.entries)).toBe(true)
+        expect(typeof payload.count).toBe('number')
+    })
 })

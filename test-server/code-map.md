@@ -97,6 +97,11 @@ src/
 │   │   ├── interfaces.ts           # IDatabaseAdapter interface (database contract)
 │   │   ├── schema.ts               # Database schema DDL (tables, indexes, FTS5)
 │   │   └── entry-columns.ts        # Column name constants for entry queries
+│   ├── migrations/                 # Versioned database migrations (001-007, migration-manager)
+│   │   ├── 001-init.ts ... 007-add-team-author.ts
+│   │   ├── migration.ts            # Migration interface contract
+│   │   ├── migration-list.ts       # Sequential migration chain array registry
+│   │   └── migration-manager.ts    # Transactional runner & self-healing legacy retrofitting
 │   └── sqlite-adapter/
 │       ├── index.ts                # SqliteAdapter class (implements IDatabaseAdapter)
 │       ├── native-connection.ts    # better-sqlite3 connection management

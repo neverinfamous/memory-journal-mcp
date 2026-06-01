@@ -253,4 +253,22 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         expectSuccess(payload)
         expect(payload.success).toBe(true)
     })
+
+    test('team_list_deleted_entries returns deleted entries', async () => {
+        const payload = await callToolAndParse(client, 'team_list_deleted_entries', {
+            project_number: 1,
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.entries)).toBe(true)
+        expect(typeof payload.count).toBe('number')
+    })
+
+    test('team_restore_entry restores deleted entry', async () => {
+        const payload = await callToolAndParse(client, 'team_restore_entry', {
+            project_number: 1,
+            entry_id: entryId2,
+        })
+        expectSuccess(payload)
+        expect(payload.success).toBe(true)
+    })
 })

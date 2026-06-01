@@ -76,6 +76,16 @@ test.describe('Payload Contracts: Core', () => {
         expect(payload.importance).toBeDefined()
     })
 
+    test('get_entry_history returns { revisions, count }', async () => {
+        const payload = await callToolAndParse(client, 'get_entry_history', {
+            project_number: 1,
+            entry_id: createdEntryId,
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.revisions)).toBe(true)
+        expect(typeof payload.count).toBe('number')
+    })
+
     test('list_tags returns { tags, count }', async () => {
         const payload = await callToolAndParse(client, 'list_tags', {})
         expectSuccess(payload)

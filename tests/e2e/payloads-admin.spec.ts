@@ -77,4 +77,14 @@ test.describe('Payload Contracts: Admin', () => {
         expect(payload.success).toBeDefined()
         expect(payload.entryId).toBe(entryId)
     })
+
+    test('restore_entry returns { success, entryId }', async () => {
+        const payload = await callToolAndParse(client, 'restore_entry', {
+            project_number: 1,
+            entry_id: entryId,
+        })
+        expectSuccess(payload)
+        expect(payload.success).toBeDefined()
+        expect(payload.entryId).toBe(entryId)
+    })
 })
