@@ -199,7 +199,7 @@ async function main() {
     console.log('\n--- Phase 3: Batch Operation Progress (batch_delete_entries) ---')
     progressEvents.length = 0
 
-    // Seed entries for deletion
+    // 1. Batch Create Entries with Progress
     const seedBatch = await rpc('tools/call', {
         name: 'batch_create_entries',
         arguments: {
@@ -207,8 +207,9 @@ async function main() {
                 { content: 'Delete me 1', entry_type: 'technical_note', project_number: 1 }, 
                 { content: 'Delete me 2', entry_type: 'technical_note', project_number: 1 }
             ],
-            auto_index: false
-        }
+            auto_index: true
+        },
+        _meta: { progressToken: 'phase3-batch' }
     })
     
     let ids = []
@@ -228,13 +229,32 @@ async function main() {
         } catch (err) {}
     }
 
-    progressEvents.length = 0
+    // 2. Batch Update Entries with Progress
+    if (ids.length > 0) {
+        const updateBatch = await rpc('tools/call', {
+            name: 'batch_update_entries',
+            arguments: {
+                updates: ids.map(id => ({
+                    entry_id: id,
+                    content: 'Updated content'
+                }))
+            },
+            _meta: { progressToken: 'phase3-batch' }
+        })
+        
+        if (updateBatch.error) {
+            console.error('FAIL: batch_update_entries returned error:', updateBatch.error)
+            failures++
+        }
+    }
+
+    // 3. Batch Delete Entries with Progress
     const batchResponse = await rpc('tools/call', {
         name: 'batch_delete_entries',
         arguments: { entry_ids: ids },
         _meta: { progressToken: 'phase3-batch' }
     })
-
+    
     if (batchResponse.error) {
         console.error('FAIL: batch_delete_entries returned error:', batchResponse.error)
         failures++
@@ -254,13 +274,13 @@ async function main() {
             // Wait briefly for any pending stdout data events to process
             await new Promise(resolve => setTimeout(resolve, 500))
             
-            console.log('\nBatch delete finished successfully!')
-            if (progressEvents.length >= 2) {
+            console.log('\nBatch operations finished successfully!')
+            if (progressEvents.length >= 6) {
                 console.log(
-                    `PASS: Received ${progressEvents.length} progress notifications (expected ≥ 2)`
+                    `PASS: Received ${progressEvents.length} progress notifications (expected ≥ 6)`
                 )
             } else {
-                console.error(`FAIL: Expected ≥ 2 progress notifications, got ${progressEvents.length}`)
+                console.error(`FAIL: Expected ≥ 6 progress notifications, got ${progressEvents.length}`)
                 failures++
             }
         } else {
