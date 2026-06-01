@@ -32,8 +32,8 @@ import { spawn } from 'child_process'
 
 const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
 
-/** Expected total tool count: 73 (10 groups + codemode) */
-const EXPECTED_TOOL_COUNT = 73
+/** Expected total tool count: 79 (10 groups + codemode) */
+const EXPECTED_TOOL_COUNT = 79
 
 /**
  * Exact allowlist of tools that legitimately need openWorldHint=true.
@@ -78,9 +78,11 @@ const OPEN_WORLD_ALLOWLIST = new Set([
  */
 const DESTRUCTIVE_ALLOWLIST = new Set([
     'delete_entry', // Soft/hard delete journal entry
+    'batch_delete_entries', // Bulk delete journal entries
     'delete_github_milestone', // Permanently deletes GitHub milestone
     'restore_backup', // Replaces entire database with backup
-    'team_delete_entry', // Soft/hard delete team entry
+    'team_delete_entry', // Soft delete team entry
+    'team_batch_delete_entries', // Bulk soft delete team entries
 ])
 
 /**
