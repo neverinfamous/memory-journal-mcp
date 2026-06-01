@@ -8,4 +8,4 @@
 - Added support for all batch operations via Code Mode API with method aliases.
 
 ### Fixed
-- Fixed an issue where the Docker Hub repository description wouldn't be updated during tag-based deployments
+- Fixed Docker Hub repository description not updating during tag-based deployments

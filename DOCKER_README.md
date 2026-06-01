@@ -100,9 +100,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `full`               | 79    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 17    | Disable all mutations    |
-| `-github`            | 52    | Exclude a group          |
-| `-github,-analytics` | 50    | Exclude multiple groups  |
+| `readonly`           | 18    | Disable all mutations    |
+| `-github`            | 61    | Exclude a group          |
+| `-github,-analytics` | 59    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
