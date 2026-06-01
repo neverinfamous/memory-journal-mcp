@@ -634,7 +634,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     if (vectorManager) {
                         const reporter = createBatchProgressReporter(progress, deleted.length, 10)
                         for (let i = 0; i < deleted.length; i++) {
-                            db.deleteVector(deleted[i])
+                            const id = deleted[i]
+                            if (id !== undefined) db.deleteVector(id)
                             await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
                         }
                     } else {

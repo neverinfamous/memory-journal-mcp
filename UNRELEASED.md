@@ -7,7 +7,9 @@
 - Added `team_batch_create_entries`, `team_batch_update_entries`, and `team_batch_delete_entries` tools to the team admin group.
 - Added support for all batch operations via Code Mode API with method aliases.
 - Added comprehensive test suite coverage (Standard & Code Mode) for all new bulk/batch operations.
+- Added progress reporting to all batch tools for both standard and Code Mode execution.
 
 ### Fixed
 - Fixed a ReferenceError crash in `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (and their team variants) by properly importing the `sendProgress` utility.
+- Fixed unit test regressions in batch tool handlers by correctly mocking vectorManager and injecting parameters.
 - Fixed Docker Hub repository description not updating during tag-based deployments

@@ -33,6 +33,7 @@ src/
 │   ├── server-instructions/        # Source markdown files for behavioral instructions (directory-per-group)
 │   │   ├── overview.md             # Core behaviors, entry types, tag taxonomy, relationship patterns
 │   │   ├── github.md               # GitHub integration patterns, Copilot review workflow
+│   │   ├── gotchas.md              # Common pitfalls and critical usage patterns
 │   │   ├── hush-protocol.md        # Team flag protocol, flag types, resolution workflow
 │   │   ├── skills.md               # Agent skills index, SKILLS_DIR_PATH, skill-builder
 │   │   └── README.md               # Developer guide for the instruction system

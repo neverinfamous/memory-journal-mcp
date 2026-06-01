@@ -439,7 +439,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     if (context.teamVectorManager) {
                         const reporter = createBatchProgressReporter(context.progress, result.deleted.length, 10)
                         for (let i = 0; i < result.deleted.length; i++) {
-                            teamDb.deleteVector(result.deleted[i])
+                            const id = result.deleted[i]
+                            if (id !== undefined) teamDb.deleteVector(id)
                             await reporter(i + 1, `Updating index ${String(i + 1)}/${String(result.deleted.length)}...`)
                         }
                     } else {
