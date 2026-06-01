@@ -92,16 +92,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    if (existing.projectNumber !== projectNumber) {
-                        return {
-                            success: false,
-                            error: `Permission Denied: Team entry ${String(input.entry_id)} belongs to project ${existing.projectNumber}, not project ${projectNumber}.`,
-                            code: 'PERMISSION_DENIED',
-                            category: 'auth',
-                            suggestion: 'You can only update entries belonging to the specified project number.',
-                            recoverable: false,
-                        }
-                    }
+
 
                     const author = fetchAuthor(teamDb, input.entry_id)
 
@@ -448,19 +439,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                                 recoverable: true,
                             }
                         }
-
                         if (existing) {
-                            if (existing.projectNumber !== projectNumber) {
-                                return {
-                                    success: false,
-                                    error: `Permission Denied: Team entry ${String(u.entry_id)} belongs to project ${existing.projectNumber}, not project ${projectNumber}.`,
-                                    code: 'PERMISSION_DENIED',
-                                    category: 'auth',
-                                    suggestion: 'You can only update entries belonging to the specified project number.',
-                                    recoverable: false,
-                                }
-                            }
-
                             const author = fetchAuthor(teamDb, u.entry_id)
                             if (author && author !== currentUser) {
                                 return {

@@ -263,8 +263,11 @@ export function updateEntry(
             const evictStmt = db.prepare(`
                 DELETE FROM entry_revisions 
                 WHERE entry_id = ? 
-                  AND revision_number <= (
-                      SELECT revision_number FROM entry_revisions WHERE entry_id = ? ORDER BY revision_number DESC LIMIT 1 OFFSET 9
+                  AND revision_number IN (
+                      SELECT revision_number FROM entry_revisions 
+                      WHERE entry_id = ? 
+                      ORDER BY revision_number DESC 
+                      LIMIT -1 OFFSET 10
                   )
             `)
             evictStmt.run(id, id)

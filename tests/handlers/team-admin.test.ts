@@ -225,6 +225,18 @@ describe('Team Admin Tool Handlers', () => {
                 teamDb
             )) as any
 
+            const customConfig = {
+                defaultProjectNumber: undefined,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            }
+
             const result = (await callTool(
                 'team_update_entry',
                 {
@@ -234,7 +246,7 @@ describe('Team Admin Tool Handlers', () => {
                 personalDb,
                 undefined,
                 undefined,
-                { defaultProjectNumber: undefined } as any, // explicitly bypass default
+                customConfig,
                 undefined,
                 teamDb
             )) as any
@@ -289,7 +301,7 @@ describe('Team Admin Tool Handlers', () => {
             expect(result.entry.projectNumber).toBe(1)
         })
 
-        it('should return permission denied if trying to update an entry belonging to another project', async () => {
+        it('should successfully change the project number of an entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
                 {
@@ -319,9 +331,8 @@ describe('Team Admin Tool Handlers', () => {
                 teamDb
             )) as any
 
-            expect(result.success).toBe(false)
-            expect(result.code).toBe('PERMISSION_DENIED')
-            expect(result.error).toContain('belongs to project 1, not project 2')
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(2)
         })
     })
 
