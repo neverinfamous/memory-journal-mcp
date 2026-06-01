@@ -57,7 +57,9 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         tags.length > 0 &&
                         tags.every((t) => t.startsWith('flag:'))
 
-                    if (project_number == null && !isGlobalFlagSearch) {
+                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+
+                    if (projectNumber == null && !isGlobalFlagSearch) {
                         return {
                             success: false,
                             error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
@@ -80,13 +82,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         limit: searchLimit,
                         cursor,
                         sortBy: sort_by,
-                        projectNumber: project_number,
+                        projectNumber: projectNumber,
                         includeArchived: include_archived,
                     })
                     let entries = result.entries
 
                     // Security: Enforce entryType constraint for cross-tenant searches
-                    if (project_number == null) {
+                    if (projectNumber == null) {
                         entries = entries.filter((e) => e.entryType === 'flag')
                     }
 
@@ -166,7 +168,9 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                             tags.length > 0 &&
                             tags.every((t) => t.startsWith('flag:')))
 
-                    if (project_number == null && !isGlobalFlagSearch) {
+                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+
+                    if (projectNumber == null && !isGlobalFlagSearch) {
                         return {
                             success: false,
                             error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
@@ -194,12 +198,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const result = teamDb.searchByDateRange(start_date, end_date, {
                         // Security: Enforce entryType constraint for cross-tenant searches
-                        entryType: project_number == null ? 'flag' : entry_type,
+                        entryType: projectNumber == null ? 'flag' : entry_type,
                         tags,
                         limit,
                         cursor,
                         sortBy: sort_by,
-                        projectNumber: project_number,
+                        projectNumber: projectNumber,
                         includeArchived: include_archived,
                     })
                     const entries = result.entries
@@ -243,12 +247,21 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     const { limit, offset, project_number } = TeamListDeletedEntriesSchema.parse(params)
+                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
                     
                     const result = teamDb.getDeletedEntries({ limit, offset })
                     let entries = result.entries
-                    if (project_number !== undefined) {
-                        entries = entries.filter((e) => e.projectNumber === project_number)
-                    }
+                    entries = entries.filter((e) => e.projectNumber === projectNumber)
                     const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
                     const enriched = entries.map((e) => ({
                         ...e,

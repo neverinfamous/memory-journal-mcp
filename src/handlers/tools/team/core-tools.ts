@@ -58,6 +58,18 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const input = TeamCreateEntrySchema.parse(params)
 
+                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+
                     // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
                     // Hard-reject if caller supplies a mismatched author — prevents impersonation.
                     const authCtx = getAuthContext()
@@ -109,7 +121,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const resolvedIssueUrl = await resolveIssueUrl(
                         context,
-                        input.project_number,
+                        projectNumber,
                         input.issue_number,
                         input.issue_url
                     )
@@ -120,7 +132,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: false,
                         significanceType: input.significance_type ?? null,
-                        projectNumber: input.project_number,
+                        projectNumber: projectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: resolvedIssueUrl,
@@ -167,15 +179,26 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number } =
                         TeamGetEntryByIdSchema.parse(params)
+                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
                     const entry = teamDb.getEntryById(entry_id)
 
                     if (
                         !entry ||
-                        (project_number !== undefined && entry.projectNumber !== project_number)
+                        (projectNumber !== undefined && entry.projectNumber !== projectNumber)
                     ) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found or does not belong to project ${project_number}`,
+                            error: `Team entry ${String(entry_id)} not found or does not belong to project ${projectNumber}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion:
@@ -228,11 +251,22 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const { limit, cursor, sort_by, project_number } = TeamGetRecentSchema.parse(params)
+                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
                     const result = teamDb.searchEntries('', {
                         limit,
                         cursor,
                         sortBy: sort_by,
-                        projectNumber: project_number,
+                        projectNumber: projectNumber,
                     })
 
                     const entries = result.entries

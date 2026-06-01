@@ -318,7 +318,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const entry = teamDb.getEntryById(entry_id)
-                    if (entry?.projectNumber !== project_number) {
+                    if (!entry || entry.projectNumber !== project_number) {
                         return {
                             success: false,
                             entryId: entry_id,

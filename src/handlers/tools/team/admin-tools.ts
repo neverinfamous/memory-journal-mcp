@@ -80,6 +80,29 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const projectNumber = input.project_number ?? existing.projectNumber ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+
+                    if (existing.projectNumber !== projectNumber) {
+                        return {
+                            success: false,
+                            error: `Permission Denied: Team entry ${String(input.entry_id)} belongs to project ${existing.projectNumber}, not project ${projectNumber}.`,
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'You can only update entries belonging to the specified project number.',
+                            recoverable: false,
+                        }
+                    }
+
                     const author = fetchAuthor(teamDb, input.entry_id)
 
                     const currentUser = resolveAuthenticatedAuthor()
@@ -100,7 +123,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         entryType: input.entry_type,
                         tags: input.tags,
                         significanceType: input.significance_type,
-                        projectNumber: input.project_number,
+                        projectNumber: projectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: input.issue_url,
@@ -144,15 +167,27 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, project_number } = TeamDeleteEntrySchema.parse(params)
 
-                    // Verify entry exists and belongs to project (if project_number is specified)
+                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+
+                    // Verify entry exists and belongs to project (if projectNumber is specified)
                     const existing = teamDb.getEntryById(entry_id)
                     if (
                         !existing ||
-                        (project_number !== undefined && existing.projectNumber !== project_number)
+                        (projectNumber !== undefined && existing.projectNumber !== projectNumber)
                     ) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion:
@@ -205,7 +240,29 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     
-                    const { entry_id } = TeamRestoreEntrySchema.parse(params)
+                    const { entry_id, project_number } = TeamRestoreEntrySchema.parse(params)
+                    
+                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+
+                    // Verify entry exists and belongs to project (if projectNumber is specified)
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id)
+                    if (!existing || (projectNumber !== undefined && existing.projectNumber !== projectNumber)) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
+                        }
+                    }
                     
                     const success = teamDb.restoreEntry(entry_id)
                     if (!success) {
@@ -288,20 +345,41 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(context.progress, 0, 2, 'Creating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
                     
-                    const inputs = input.entries.map((e) => ({
-                        content: e.content,
-                        entryType: e.entry_type,
-                        tags: e.tags,
-                        significanceType: e.significance_type,
-                        projectNumber: e.project_number,
-                        projectOwner: e.project_owner,
-                        issueNumber: e.issue_number,
-                        issueUrl: e.issue_url,
-                        prNumber: e.pr_number,
-                        prUrl: e.pr_url,
-                        prStatus: e.pr_status,
-                        author: e.author ?? currentUser,
-                    }))
+                    // Validate all entries first
+                    for (const e of input.entries) {
+                        const projectNumber = e.project_number ?? context.config?.defaultProjectNumber
+                        if (projectNumber === undefined || projectNumber === null) {
+                            return {
+                                success: false,
+                                error: 'Missing project_number. Each entry in the batch MUST provide a valid project_number or configure DEFAULT_PROJECT_NUMBER on the server.',
+                                code: 'VALIDATION_ERROR',
+                                category: 'validation',
+                                suggestion: 'Specify the project_number for all entries in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                                recoverable: true,
+                            }
+                        }
+                    }
+
+                    const inputs = input.entries.map((e) => {
+                        const projectNumber = e.project_number ?? context.config?.defaultProjectNumber
+                        if (projectNumber === undefined || projectNumber === null) {
+                            throw new Error('projectNumber is required')
+                        }
+                        return {
+                            content: e.content,
+                            entryType: e.entry_type,
+                            tags: e.tags,
+                            significanceType: e.significance_type,
+                            projectNumber,
+                            projectOwner: e.project_owner,
+                            issueNumber: e.issue_number,
+                            issueUrl: e.issue_url,
+                            prNumber: e.pr_number,
+                            prUrl: e.pr_url,
+                            prStatus: e.pr_status,
+                            author: e.author ?? currentUser,
+                        }
+                    })
 
                     const results = teamDb.createEntries(inputs)
 
@@ -354,10 +432,35 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(context.progress, 0, 2, 'Updating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
                     
-                    // Verify ownership
+                    // Verify ownership and project boundary safety
+                    const updates = []
                     for (const u of input.updates) {
                         const existing = teamDb.getEntryById(u.entry_id)
+                        
+                        const projectNumber = u.project_number ?? existing?.projectNumber ?? context.config?.defaultProjectNumber
+                        if (projectNumber === undefined || projectNumber === null) {
+                            return {
+                                success: false,
+                                error: `Missing project_number for team entry ${String(u.entry_id)}. You MUST provide a valid project_number or configure DEFAULT_PROJECT_NUMBER on the server.`,
+                                code: 'VALIDATION_ERROR',
+                                category: 'validation',
+                                suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                                recoverable: true,
+                            }
+                        }
+
                         if (existing) {
+                            if (existing.projectNumber !== projectNumber) {
+                                return {
+                                    success: false,
+                                    error: `Permission Denied: Team entry ${String(u.entry_id)} belongs to project ${existing.projectNumber}, not project ${projectNumber}.`,
+                                    code: 'PERMISSION_DENIED',
+                                    category: 'auth',
+                                    suggestion: 'You can only update entries belonging to the specified project number.',
+                                    recoverable: false,
+                                }
+                            }
+
                             const author = fetchAuthor(teamDb, u.entry_id)
                             if (author && author !== currentUser) {
                                 return {
@@ -370,26 +473,26 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                                 }
                             }
                         }
-                    }
 
-                    const updates = input.updates.map((u) => ({
-                        id: u.entry_id,
-                        content: u.content,
-                        entryType: u.entry_type,
-                        tags: u.tags,
-                        significanceType: u.significance_type,
-                        projectNumber: u.project_number,
-                        projectOwner: u.project_owner,
-                        issueNumber: u.issue_number,
-                        issueUrl: u.issue_url,
-                        prNumber: u.pr_number,
-                        prUrl: u.pr_url,
-                        prStatus: u.pr_status,
-                        workflowRunId: u.workflow_run_id,
-                        workflowName: u.workflow_name,
-                        workflowStatus: u.workflow_status,
-                        isArchived: u.is_archived,
-                    }))
+                        updates.push({
+                            id: u.entry_id,
+                            content: u.content,
+                            entryType: u.entry_type,
+                            tags: u.tags,
+                            significanceType: u.significance_type,
+                            projectNumber,
+                            projectOwner: u.project_owner,
+                            issueNumber: u.issue_number,
+                            issueUrl: u.issue_url,
+                            prNumber: u.pr_number,
+                            prUrl: u.pr_url,
+                            prStatus: u.pr_status,
+                            workflowRunId: u.workflow_run_id,
+                            workflowName: u.workflow_name,
+                            workflowStatus: u.workflow_status,
+                            isArchived: u.is_archived,
+                        })
+                    }
 
                     const { updated, notFound } = teamDb.updateEntries(updates)
                     
@@ -445,18 +548,30 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(context.progress, 0, 2, 'Deleting team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
                     
+                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+
                     // Filter ids to those that match the project number and check permissions
                     const validIds: number[] = []
                     const notFound: number[] = []
                     
                     for (const id of input.entry_ids) {
                         const existing = teamDb.getEntryById(id)
-                        if (existing?.projectNumber !== input.project_number) {
+                        if (existing?.projectNumber !== projectNumber) {
                             notFound.push(id)
                             continue
                         }
                         
-                            const author = fetchAuthor(teamDb, id)
+                        const author = fetchAuthor(teamDb, id)
                         if (author && author !== currentUser) {
                             return {
                                 success: false,

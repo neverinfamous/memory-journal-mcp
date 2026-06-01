@@ -124,7 +124,7 @@ export const relaxedNumber = (): z.ZodUnion<[z.ZodNumber, z.ZodString]> =>
 export const StrictProjectNumberSchema = z.number({
     message:
         'Missing project_number. You MUST provide a valid project_number (e.g., 1) to associate this action with a specific project context.',
-})
+}).optional()
 
 // ============================================================================
 // Cross-Group Output Schemas

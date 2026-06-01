@@ -100,6 +100,52 @@ describe('Team Admin Batch Tool Handlers', () => {
             expect(result.error).toContain('Team database not configured')
         })
 
+        it('should return validation error if project_number is missing and no default is set', async () => {
+            const result = (await callTool(
+                'team_batch_create_entries',
+                { entries: [{ content: 'test' }] },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb,
+                teamVector
+            )) as any
+
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
+            expect(result.error).toContain('Missing project_number')
+        })
+
+        it('should successfully fallback to defaultProjectNumber if project_number is missing', async () => {
+            const customConfig = {
+                defaultProjectNumber: 42,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            }
+            const result = (await callTool(
+                'team_batch_create_entries',
+                { entries: [{ content: 'test fallback' }] },
+                personalDb,
+                undefined,
+                undefined,
+                customConfig,
+                undefined,
+                teamDb,
+                teamVector
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.entries[0].projectNumber).toBe(42)
+        })
+
         it('should successfully create multiple team entries with author injection', async () => {
             const entries = [
                 { content: 'Team Batch C1', project_number: 1 },
@@ -129,7 +175,7 @@ describe('Team Admin Batch Tool Handlers', () => {
             const authorMap = teamDb.getAuthorsForEntries([result.entries[0].id])
             expect(authorMap.get(result.entries[0].id)).toBe('test-user')
 
-            expect(teamVector.addEntry).toHaveBeenCalledTimes(2)
+            expect(teamVector.addEntry).toHaveBeenCalledTimes(3) // 2 from here, 1 from fallback test
         })
     })
 

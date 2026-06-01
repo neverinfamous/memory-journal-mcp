@@ -209,6 +209,120 @@ describe('Team Admin Tool Handlers', () => {
             expect(updateResult.entry.prNumber).toBe(7)
             expect(updateResult.entry.prStatus).toBe('merged')
         })
+
+        it('should return validation error if project_number is missing and no default is set on update', async () => {
+            const createResult = (await callTool(
+                'team_create_entry',
+                {
+                    project_number: 1,
+                    content: 'test',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            const result = (await callTool(
+                'team_update_entry',
+                {
+                    entry_id: createResult.entry.id,
+                    content: 'updated without project number',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                { defaultProjectNumber: undefined } as any, // explicitly bypass default
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
+            expect(result.error).toContain('Missing project_number')
+        })
+
+        it('should successfully fallback to defaultProjectNumber on update', async () => {
+            const createResult = (await callTool(
+                'team_create_entry',
+                {
+                    project_number: 1,
+                    content: 'test',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            const customConfig = {
+                defaultProjectNumber: 1,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            }
+
+            const result = (await callTool(
+                'team_update_entry',
+                {
+                    entry_id: createResult.entry.id,
+                    content: 'updated with default fallback',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                customConfig,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(1)
+        })
+
+        it('should return permission denied if trying to update an entry belonging to another project', async () => {
+            const createResult = (await callTool(
+                'team_create_entry',
+                {
+                    project_number: 1,
+                    content: 'project 1 entry',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            const result = (await callTool(
+                'team_update_entry',
+                {
+                    entry_id: createResult.entry.id,
+                    project_number: 2,
+                    content: 'trying to move to project 2',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('PERMISSION_DENIED')
+            expect(result.error).toContain('belongs to project 1, not project 2')
+        })
     })
 
     describe('team_delete_entry', () => {

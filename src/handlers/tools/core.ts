@@ -223,6 +223,18 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const input = CreateEntrySchema.parse(params)
 
+                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+
                     // The user's provided issueUrl (if any)
                     const initialIssueUrl = input.issue_url
 
@@ -235,7 +247,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         autoContext: !input.auto_context
                             ? JSON.stringify({ disabled: true })
                             : undefined,
-                        projectNumber: input.project_number ?? context.config?.defaultProjectNumber,
+                        projectNumber: projectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: initialIssueUrl,
@@ -275,7 +287,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 isPersonal: false,
                                 significanceType: input.significance_type ?? null,
                                 autoContext: JSON.stringify({ author }),
-                                projectNumber: input.project_number,
+                                projectNumber: projectNumber,
                                 projectOwner: input.project_owner,
                                 issueNumber: input.issue_number,
                                 issueUrl: initialIssueUrl,
@@ -309,7 +321,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         try {
                             const resolvedUrl = await resolveIssueUrl(
                                 context,
-                                input.project_number ?? context.config?.defaultProjectNumber,
+                                projectNumber,
                                 input.issue_number,
                                 input.issue_url
                             )

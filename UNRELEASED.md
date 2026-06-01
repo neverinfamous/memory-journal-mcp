@@ -19,8 +19,10 @@
 - Conducted a comprehensive documentation and file structure audit across the main repository and GitHub Wiki, syncing tool counts (84 tools total), group presets, and capability metrics.
 - Added and updated direct MCP and sandboxed Code Mode test prompts covering soft-delete recovery, archiving, and keyset cursor pagination.
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
+- Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
 
 ### Fixed
 - Fixed a ReferenceError crash in `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (and their team variants) by properly importing the `sendProgress` utility.
 - Fixed unit test regressions in batch tool handlers by correctly mocking vectorManager and injecting parameters.
 - Fixed Docker Hub repository description not updating during tag-based deployments
+- Fixed strict type safety and potential null runtime checks in semantic search and vector indexing handler routines.
