@@ -174,8 +174,6 @@ export function searchEntries(
 
     const buildAndExecute = (useFts: boolean): { entries: JournalEntry[]; nextCursor?: string } => {
         const { sql, params } = buildSearchQuery(queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
-        console.log('buildAndExecute SQL:', sql)
-        console.log('buildAndExecute Params:', params)
         const stmt = db.prepare(sql)
         const rows = stmt.all(params)
         const entries = rowsToEntries(tagsMgr, rows)

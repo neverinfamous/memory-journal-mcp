@@ -139,8 +139,8 @@ export function ftsSearch(
             compoundNextCursor = encodeCompoundCursor(personalNextCursor, teamNextCursor)
         }
 
-        const isTeamDegraded = (teamResult as any).degraded === true
-        const isPersonalDegraded = (personalResult as any).degraded === true
+        const isTeamDegraded = 'degraded' in teamResult && teamResult.degraded === true
+        const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded === true
         return {
             entries: merged,
             count: merged.length,
@@ -149,7 +149,7 @@ export function ftsSearch(
         }
     }
 
-    const isPersonalDegraded = (personalResult as any).degraded === true
+    const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded === true
 
     return {
         entries: personalEntries.map((e) => ({ ...e, source: 'personal' as const })),

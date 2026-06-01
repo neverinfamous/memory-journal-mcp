@@ -15,6 +15,7 @@ import {
     assertSafeFilePath,
     assertSafeDirectoryPath,
 } from '../../../../utils/security-utils.js'
+import type { JournalEntry } from '../../../../types/index.js'
 
 // ============================================================================
 // Journal Context
@@ -43,7 +44,10 @@ export interface JournalContext {
     lastModified: string
 }
 
-function extractEntries(result: any): any[] { return Array.isArray(result) ? result : (result?.entries || []); }
+function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): JournalEntry[] {
+    if (Array.isArray(result)) return result
+    return 'entries' in result ? result.entries : []
+}
 
 export function buildJournalContext(
     context: ResourceContext,
@@ -83,7 +87,7 @@ export function buildJournalContext(
     let latestSessionSummary
     let sessionSummaries
     if (finalSummaryEntries.length > 0) {
-        sessionSummaries = finalSummaryEntries.map((entry: any) => {
+        sessionSummaries = finalSummaryEntries.map((entry: JournalEntry) => {
             return {
                 id: entry.id,
                 timestamp: entry.timestamp,
@@ -101,10 +105,10 @@ export function buildJournalContext(
             : extractEntries(context.db.getRecentEntries(config.entryCount))
 
     // Exclude entries already shown in the Summary slot to diversify briefing content
-    const summaryIds = new Set(finalSummaryEntries.map((e: any) => e.id))
-    const dedupedRecent = recentEntries.filter((e: any) => !summaryIds.has(e.id))
+    const summaryIds = new Set(finalSummaryEntries.map((e: JournalEntry) => e.id))
+    const dedupedRecent = recentEntries.filter((e: JournalEntry) => !summaryIds.has(e.id))
 
-    const latestEntries = dedupedRecent.map((e: any) => {
+    const latestEntries = dedupedRecent.map((e: JournalEntry) => {
         return {
             id: e.id,
             timestamp: e.timestamp,
