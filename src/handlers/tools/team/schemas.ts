@@ -69,6 +69,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     project_number: StrictProjectNumberSchema,
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -80,6 +81,7 @@ export const TeamGetRecentSchema = z.object({
 /** team_get_recent — relaxed */
 export const TeamGetRecentSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(10),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     project_number: relaxedNumber().optional(),
     sort_by: z
         .string()
@@ -91,6 +93,7 @@ export const TeamGetRecentSchemaMcp = z.object({
 /** team_search — strict */
 export const TeamSearchSchema = z.object({
     query: z.string().optional(),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     tags: z.array(z.string()).optional(),
     project_number: StrictProjectNumberSchema,
     limit: z.number().max(500).optional().default(10),
@@ -104,6 +107,7 @@ export const TeamSearchSchema = z.object({
 /** team_search — relaxed */
 export const TeamSearchSchemaMcp = z.object({
     query: z.string().optional(),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     tags: z.array(z.string()).optional(),
     project_number: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(10),
@@ -136,6 +140,7 @@ export const TeamGetEntryByIdSchemaMcp = z.object({
 export const TeamSearchByDateRangeSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
     project_number: StrictProjectNumberSchema,
@@ -151,6 +156,7 @@ export const TeamSearchByDateRangeSchema = z.object({
 export const TeamSearchByDateRangeSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     project_number: relaxedNumber().optional(),
@@ -387,6 +393,7 @@ export const TeamEntriesListOutputSchema = z
     .object({
         entries: z.array(TeamEntryOutputSchema).optional(),
         count: z.number().optional(),
+        next_cursor: z.string().optional().describe('Cursor for the next page of results'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

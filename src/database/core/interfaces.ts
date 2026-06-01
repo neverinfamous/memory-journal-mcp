@@ -93,9 +93,10 @@ export interface IDatabaseAdapter {
     getRecentEntries(
         limit?: number,
         isPersonal?: boolean,
-        sortBy?: 'timestamp' | 'importance'
-    ): JournalEntry[]
-    getEntriesPage(offset: number, limit: number): JournalEntry[]
+        sortBy?: 'timestamp' | 'importance',
+        cursor?: string
+    ): { entries: JournalEntry[]; nextCursor?: string }
+    getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
     getActiveEntryCount(): number
     updateEntry(
         id: number,
@@ -152,6 +153,7 @@ export interface IDatabaseAdapter {
         query: string,
         options?: {
             limit?: number
+            cursor?: string
             isPersonal?: boolean
             projectNumber?: number
             issueNumber?: number
@@ -164,13 +166,14 @@ export interface IDatabaseAdapter {
             endDate?: string
             sortBy?: 'timestamp' | 'importance'
         }
-    ): JournalEntry[]
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean }
     searchByDateRange(
         startDate: string,
         endDate: string,
         options?: {
             entryType?: EntryType
             tags?: string[]
+            cursor?: string
             isPersonal?: boolean
             projectNumber?: number
             issueNumber?: number
@@ -179,7 +182,7 @@ export interface IDatabaseAdapter {
             limit?: number
             sortBy?: 'timestamp' | 'importance'
         }
-    ): JournalEntry[]
+    ): { entries: JournalEntry[]; nextCursor?: string }
     getStatistics(
         groupBy?: 'day' | 'week' | 'month' | 'year',
         startDate?: string,

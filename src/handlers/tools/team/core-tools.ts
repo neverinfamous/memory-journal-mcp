@@ -227,13 +227,15 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { limit, sort_by, project_number } = TeamGetRecentSchema.parse(params)
-                    const entries = teamDb.searchEntries('', {
+                    const { limit, cursor, sort_by, project_number } = TeamGetRecentSchema.parse(params)
+                    const result = teamDb.searchEntries('', {
                         limit,
+                        cursor,
                         sortBy: sort_by,
                         projectNumber: project_number,
                     })
 
+                    const entries = result.entries
                     const authorMap = batchFetchAuthors(
                         teamDb,
                         entries.map((e) => e.id)
@@ -245,7 +247,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             e.entryType === 'flag' ? parseFlagContext(e.autoContext) : undefined,
                     }))
 
-                    return { entries: enriched, count: enriched.length }
+                    return { entries: enriched, count: enriched.length, next_cursor: result.nextCursor }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

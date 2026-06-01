@@ -44,7 +44,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, sort_by, project_number } =
+                    const { query, tags, limit, cursor, sort_by, project_number } =
                         TeamSearchSchema.parse(params)
 
                     // Security: To bypass project_number, the search must explicitly be for flags only.
@@ -74,11 +74,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                             ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT)
                             : limit
 
-                    let entries = teamDb.searchEntries(query ?? '', {
+                    const result = teamDb.searchEntries(query ?? '', {
                         limit: searchLimit,
+                        cursor,
                         sortBy: sort_by,
                         projectNumber: project_number,
                     })
+                    let entries = result.entries
 
                     // Security: Enforce entryType constraint for cross-tenant searches
                     if (project_number == null) {
@@ -115,6 +117,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entries: enriched,
                         count: enriched.length,
                         degraded: false,
+                        next_cursor: result.nextCursor,
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -147,6 +150,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entry_type,
                         tags,
                         limit,
+                        cursor,
                         sort_by,
                         project_number,
                     } = TeamSearchByDateRangeSchema.parse(params)
@@ -184,14 +188,16 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entries = teamDb.searchByDateRange(start_date, end_date, {
+                    const result = teamDb.searchByDateRange(start_date, end_date, {
                         // Security: Enforce entryType constraint for cross-tenant searches
                         entryType: project_number == null ? 'flag' : entry_type,
                         tags,
                         limit,
+                        cursor,
                         sortBy: sort_by,
                         projectNumber: project_number,
                     })
+                    const entries = result.entries
 
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(
@@ -208,6 +214,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entries: enriched,
                         count: enriched.length,
                         degraded: false,
+                        next_cursor: result.nextCursor,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

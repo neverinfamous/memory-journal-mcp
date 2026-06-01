@@ -353,7 +353,8 @@ export class VectorSearchManager {
                 partial = true
                 break
             }
-            const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
+            const result = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
+            const page = result.entries
 
             // Generate embeddings in parallel batches
             for (let i = 0; i < page.length; i += REBUILD_BATCH_SIZE) {

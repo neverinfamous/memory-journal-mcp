@@ -58,7 +58,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 
 | File                           | Phase | Purpose                                                                                             | When to Run |
 | ------------------------------ | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
-| `test-payload-optimization.md` |  16   | **Payload Optimization** — Kanban throttling, body truncation, pagination cap, Code Mode result cap | After seed  |
+| `test-payload-optimization.md` |  16   | **Payload Optimization** — Kanban throttling, body truncation, pagination cap (limits & cursors), Code Mode result cap | After seed  |
 
 ## Node.js Helper Scripts
 

@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added O(1) keyset cursor pagination to `get_recent_entries`, `search_entries`, `search_by_date_range`, and their team equivalents (via `cursor` parameter and `next_cursor` output).
+- Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support and correct stale metrics.
 - Added `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` tools to the admin group for bulk operations with vector indexing support.
 - Added `team_batch_create_entries`, `team_batch_update_entries`, and `team_batch_delete_entries` tools to the team admin group.
 - Added support for all batch operations via Code Mode API with method aliases.

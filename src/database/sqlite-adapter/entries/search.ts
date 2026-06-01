@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import type { JournalEntry, EntryType } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import {
@@ -12,14 +13,41 @@ import { sanitizeSearchQuery } from '../../../utils/security-utils.js'
 /** Allowed sort dimensions for search results */
 export type SortBy = 'timestamp' | 'importance'
 
+// ============================================================================
+// Cursor Pagination Helpers
+// ============================================================================
+
+export function encodeCursor(payload: { t: string; id: number } | { offset: number }): string {
+    return Buffer.from(JSON.stringify(payload)).toString('base64')
+}
+
+export function decodeCursor(cursor: string): { t: string; id: number } | { offset: number } | null {
+    try {
+        const decoded = Buffer.from(cursor, 'base64').toString('utf8')
+        return JSON.parse(decoded)
+    } catch {
+        return null
+    }
+}
+
+// ============================================================================
+// Query Functions
+// ============================================================================
+
 export function getRecentEntries(
     context: EntriesSharedContext,
     limit: number,
-    sortBy: SortBy = 'timestamp'
-): JournalEntry[] {
+    sortBy: SortBy = 'timestamp',
+    cursor?: string
+): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
     if (sortBy === 'importance') {
+        let offset = 0
+        if (cursor) {
+            const decoded = decodeCursor(cursor)
+            if (decoded && 'offset' in decoded) offset = decoded.offset
+        }
         const importanceExpr = buildImportanceSqlExpression()
         const cte = buildImportanceCte()
         const stmt = db.prepare(`
@@ -28,19 +56,45 @@ export function getRecentEntries(
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             WHERE e.deleted_at IS NULL
-            ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ?
+            ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
         `)
-        const rows = stmt.all([limit])
-        return rowsToEntries(tagsMgr, rows)
+        const rows = stmt.all([limit, offset])
+        const entries = rowsToEntries(tagsMgr, rows)
+        
+        let nextCursor: string | undefined
+        if (entries.length === limit && limit > 0) {
+            nextCursor = encodeCursor({ offset: offset + limit })
+        }
+        return { entries, nextCursor }
+    }
+
+    let cursorCondition = ''
+    const params: unknown[] = []
+    
+    if (cursor) {
+        const decoded = decodeCursor(cursor)
+        if (decoded && 't' in decoded) {
+            cursorCondition = ' AND (timestamp < ? OR (timestamp = ? AND id < ?))'
+            params.push(decoded.t, decoded.t, decoded.id)
+        }
     }
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
-        WHERE deleted_at IS NULL 
+        WHERE deleted_at IS NULL ${cursorCondition}
         ORDER BY timestamp DESC, id DESC LIMIT ?
     `)
-    const rows = stmt.all([limit])
-    return rowsToEntries(tagsMgr, rows)
+    params.push(limit)
+    const rows = stmt.all(params)
+    const entries = rowsToEntries(tagsMgr, rows)
+
+    let nextCursor: string | undefined
+    if (entries.length === limit && limit > 0) {
+        const last = entries[entries.length - 1]!
+        nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+    }
+
+    return { entries, nextCursor }
 }
 
 export function getEntriesPage(
@@ -48,7 +102,7 @@ export function getEntriesPage(
     offset: number,
     limit: number,
     order: 'asc' | 'desc' = 'desc'
-): JournalEntry[] {
+): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
     const sortDir = order === 'asc' ? 'ASC' : 'DESC'
@@ -60,8 +114,14 @@ export function getEntriesPage(
         LIMIT ? OFFSET ?
     `)
     const rows = stmt.all([limit, offset])
+    const entries = rowsToEntries(tagsMgr, rows)
 
-    return rowsToEntries(tagsMgr, rows)
+    let nextCursor: string | undefined
+    if (entries.length === limit && limit > 0) {
+        nextCursor = encodeCursor({ offset: offset + limit })
+    }
+
+    return { entries, nextCursor }
 }
 
 export function searchEntries(
@@ -69,6 +129,7 @@ export function searchEntries(
     queryStr: string,
     options?: {
         limit?: number
+        cursor?: string
         isPersonal?: boolean
         projectNumber?: number
         issueNumber?: number
@@ -81,7 +142,7 @@ export function searchEntries(
         endDate?: string
         sortBy?: SortBy
     }
-): JournalEntry[] {
+): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
     const { db, tagsMgr } = context
 
     if (queryStr.length > 500) {
@@ -90,13 +151,47 @@ export function searchEntries(
         )
     }
 
+    let offset = 0
+    let keysetT = ''
+    let keysetId = 0
+    let hasKeyset = false
+
+    if (options?.cursor) {
+        const decoded = decodeCursor(options.cursor)
+        if (decoded) {
+            if ('t' in decoded) {
+                hasKeyset = true
+                keysetT = decoded.t
+                keysetId = decoded.id
+            } else if ('offset' in decoded) {
+                offset = decoded.offset
+            }
+        }
+    }
+
+    const buildAndExecute = (useFts: boolean) => {
+        const { sql, params } = buildSearchQuery(queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
+        const stmt = db.prepare(sql)
+        const rows = stmt.all(params)
+        const entries = rowsToEntries(tagsMgr, rows)
+        
+        let nextCursor: string | undefined
+        const limit = options?.limit ?? 10
+        if (entries.length === limit && limit > 0) {
+            if (!useFts && options?.sortBy !== 'importance' && entries.length > 0) {
+                const last = entries[entries.length - 1]!
+                nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+            } else {
+                nextCursor = encodeCursor({ offset: offset + limit })
+            }
+        }
+        return { entries, nextCursor }
+    }
+
     // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
     if (queryStr.length > 0) {
         try {
-            const { sql, params } = buildSearchQuery(queryStr, options, true)
-            const stmt = db.prepare(sql)
-            const rows = stmt.all(params)
-            return rowsToEntries(tagsMgr, rows)
+            return buildAndExecute(true)
         } catch (error) {
             // FTS5 syntax error (e.g. unbalanced quotes, special chars) — fall back to LIKE
             // Rethrow if it's an infrastructural error (like missing extension)
@@ -113,21 +208,12 @@ export function searchEntries(
             }
 
             // Syntax error - fall back to LIKE with degraded flag
-            const { sql, params } = buildSearchQuery(queryStr, options, false)
-            const stmt = db.prepare(sql)
-            const rows = stmt.all(params)
-            const entries = rowsToEntries(tagsMgr, rows)
-            if (queryStr.length > 0) {
-                Object.defineProperty(entries, 'degraded', { value: true, enumerable: false })
-            }
-            return entries
+            const result = buildAndExecute(false)
+            return { ...result, degraded: true }
         }
     }
 
-    const { sql, params } = buildSearchQuery(queryStr, options, false)
-    const stmt = db.prepare(sql)
-    const rows = stmt.all(params)
-    return rowsToEntries(tagsMgr, rows)
+    return buildAndExecute(false)
 }
 
 /**
@@ -152,7 +238,11 @@ function buildSearchQuery(
               sortBy?: SortBy
           }
         | undefined,
-    useFts: boolean
+    useFts: boolean,
+    offset: number,
+    hasKeyset: boolean,
+    keysetT: string,
+    keysetId: number
 ): { sql: string; params: unknown[] } {
     let query: string
     const useImportance = options?.sortBy === 'importance'
@@ -258,6 +348,11 @@ function buildSearchQuery(
         params.push(end)
     }
 
+    if (hasKeyset && !useFts && !useImportance) {
+        conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
+        params.push(keysetT, keysetT, keysetId)
+    }
+
     if (conditions.length > 0) {
         query += ` WHERE ${conditions.join(' AND ')}`
     }
@@ -273,8 +368,8 @@ function buildSearchQuery(
         query += ` ORDER BY e.timestamp DESC, e.id DESC`
     }
 
-    query += ` LIMIT ?`
-    params.push(options?.limit ?? 10)
+    query += ` LIMIT ? OFFSET ?`
+    params.push(options?.limit ?? 10, offset)
 
     return { sql: query, params }
 }
@@ -286,6 +381,7 @@ export function searchByDateRange(
     options?: {
         entryType?: EntryType
         tags?: string[]
+        cursor?: string
         isPersonal?: boolean
         projectNumber?: number
         issueNumber?: number
@@ -294,7 +390,7 @@ export function searchByDateRange(
         limit?: number
         sortBy?: SortBy
     }
-): JournalEntry[] {
+): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
     let start = startDate
@@ -314,6 +410,23 @@ export function searchByDateRange(
     const importanceCol = useImportance
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
+
+    let offset = 0
+    let hasKeyset = false
+    let keysetT = ''
+    let keysetId = 0
+    if (options?.cursor) {
+        const decoded = decodeCursor(options.cursor)
+        if (decoded) {
+            if ('t' in decoded) {
+                hasKeyset = true
+                keysetT = decoded.t
+                keysetId = decoded.id
+            } else if ('offset' in decoded) {
+                offset = decoded.offset
+            }
+        }
+    }
 
     let query = ''
     if (useImportance) {
@@ -367,19 +480,36 @@ export function searchByDateRange(
         params.push(options.workflowRunId)
     }
 
+    if (hasKeyset && !useImportance) {
+        conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
+        params.push(keysetT, keysetT, keysetId)
+    }
+
     if (useImportance) {
         query += ` WHERE ${conditions.join(' AND ')} ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
     } else {
         query += ` WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC`
     }
 
-    query += ` LIMIT ?`
-    params.push(options?.limit ?? 500)
+    query += ` LIMIT ? OFFSET ?`
+    params.push(options?.limit ?? 500, offset)
 
     const stmt = db.prepare(query)
     const rows = stmt.all(params)
 
-    return rowsToEntries(tagsMgr, rows)
+    const entries = rowsToEntries(tagsMgr, rows)
+    let nextCursor: string | undefined
+    const limit = options?.limit ?? 500
+    if (entries.length === limit && limit > 0) {
+        if (!useImportance && entries.length > 0) {
+            const last = entries[entries.length - 1]!
+            nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+        } else {
+            nextCursor = encodeCursor({ offset: offset + limit })
+        }
+    }
+
+    return { entries, nextCursor }
 }
 
 // ============================================================================
@@ -395,16 +525,16 @@ export function searchByDateRange(
  *
  * Threat Vectors Mitigated:
  * - Unbalanced quotes & parentheses causing SQLITE_ERROR syntax crashes
- * - Deeply nested or hallucinated `NEAR/xxx` proximity operators causing FTS planner ReDoS
- * - Column filters (`col:val`) leaking unintended field traversals
- * - Naked booleans (`word AND OR NOT word`) confusing the FTS AST parser
+ * - Deeply nested or hallucinated \`NEAR/xxx\` proximity operators causing FTS planner ReDoS
+ * - Column filters (\`col:val\`) leaking unintended field traversals
+ * - Naked booleans (\`word AND OR NOT word\`) confusing the FTS AST parser
  */
 function sanitizeFtsQuery(query: string): string {
     if (!query) return ''
 
     // Strip quotes entirely to prevent unterminated string syntax errors
     const noQuotes = query.replace(/"/g, ' ')
-    const tokens = noQuotes.split(/\s+/)
+    const tokens = noQuotes.split(/\\s+/)
     const safeTokens: string[] = []
 
     for (let i = 0; i < tokens.length; i++) {
@@ -412,13 +542,13 @@ function sanitizeFtsQuery(query: string): string {
         if (!token) continue
 
         // Strip out non-alphanumeric characters, except hyphen, underscore, and asterisk
-        let sanitizedToken = token.replace(/[^a-zA-Z0-9_\-*]/g, '')
+        let sanitizedToken = token.replace(/[^a-zA-Z0-9_*-]/g, '')
         if (!sanitizedToken) continue
 
         // Ensure asterisk is only at the end of the token for prefix matching,
         // preventing standalone asterisks or inner asterisks which cause syntax errors.
         const hasAsterisk = token.endsWith('*')
-        sanitizedToken = sanitizedToken.replace(/\*/g, '')
+        sanitizedToken = sanitizedToken.replace(/\\*/g, '')
         if (hasAsterisk && sanitizedToken.length > 0) {
             sanitizedToken += '*'
         }
@@ -449,8 +579,8 @@ function sanitizeFtsQuery(query: string): string {
                 const rawNext = tokens[j]
                 if (!rawNext) continue
 
-                let nextToken = rawNext.replace(/[^a-zA-Z0-9_\-*]/g, '')
-                nextToken = nextToken.replace(/\*/g, '')
+                let nextToken = rawNext.replace(/[^a-zA-Z0-9_*-]/g, '')
+                nextToken = nextToken.replace(/\\*/g, '')
                 if (nextToken && !/^(AND|OR|NOT|NEAR)$/i.test(nextToken)) {
                     hasValidNext = true
                     break

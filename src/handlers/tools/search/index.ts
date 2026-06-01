@@ -36,6 +36,7 @@ import type { SemanticSearchResult } from '../../../vector/vector-search-manager
 /** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
     query: z.string().max(250).optional(),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     mode: z
         .enum(['auto', 'fts', 'semantic', 'hybrid'])
         .optional()
@@ -69,6 +70,7 @@ const SearchEntriesSchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const SearchEntriesSchemaMcp = z.object({
     query: z.string().max(250).optional(),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     mode: z
         .string()
         .optional()
@@ -103,6 +105,7 @@ const SearchEntriesSchemaMcp = z.object({
 const SearchByDateRangeSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
     is_personal: z.boolean().optional(),
@@ -127,6 +130,7 @@ const SearchByDateRangeSchema = z.object({
 const SearchByDateRangeSchemaMcp = z.object({
     start_date: z.string(),
     end_date: z.string(),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     is_personal: z.boolean().optional(),
@@ -306,6 +310,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const searchOptions = {
                         limit: input.limit,
+                        cursor: input.cursor,
                         isPersonal: input.is_personal,
                         projectNumber: input.project_number,
                         issueNumber: input.issue_number,
@@ -431,6 +436,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 success: true,
                                 searchMode: isAuto ? 'fts (auto)' : 'fts',
                                 degraded: result.degraded ?? false,
+                                next_cursor: result.nextCursor,
                             }
                         }
                     }
@@ -452,7 +458,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
 
@@ -468,6 +474,17 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    let personalCursor = input.cursor
+                    let teamCursor = input.cursor
+                    if (input.cursor && input.include_team && input.is_personal !== true) {
+                        const { decodeCompoundCursor } = await import('./fts.js')
+                        const compound = decodeCompoundCursor(input.cursor)
+                        if (compound) {
+                            personalCursor = compound.p
+                            teamCursor = compound.t
+                        }
+                    }
+
                     const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
                     const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
@@ -479,6 +496,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: input.workflow_run_id,
                         limit: perDbLimit,
                         sortBy: input.sort_by,
+                        cursor: personalCursor,
                     })
 
                     // Cross-database merge when team DB is available
@@ -496,30 +514,38 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 workflowRunId: input.workflow_run_id,
                                 limit: perDbLimit,
                                 sortBy: input.sort_by,
+                                cursor: teamCursor,
                             }
                         )
                         const merged = mergeAndDedup(
-                            personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
-                            teamEntries.map((e) => ({ ...e, source: 'team' as const })),
+                            personalEntries.entries.map((e) => ({ ...e, source: 'personal' as const })),
+                            teamEntries.entries.map((e) => ({ ...e, source: 'team' as const })),
                             input.limit,
                             input.sort_by
                         )
+                        let compoundNextCursor: string | undefined
+                        if (personalEntries.nextCursor || teamEntries.nextCursor) {
+                            const { encodeCompoundCursor } = await import('./fts.js')
+                            compoundNextCursor = encodeCompoundCursor(personalEntries.nextCursor, teamEntries.nextCursor)
+                        }
                         return {
                             success: true,
                             entries: merged,
                             count: merged.length,
                             degraded: false,
+                            next_cursor: compoundNextCursor,
                         }
                     }
 
                     return {
                         success: true,
-                        entries: personalEntries.map((e) => ({
+                        entries: personalEntries.entries.map((e) => ({
                             ...e,
                             source: 'personal' as const,
                         })),
-                        count: personalEntries.length,
+                        count: personalEntries.entries.length,
                         degraded: false,
+                        next_cursor: personalEntries.nextCursor,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -107,7 +107,7 @@ export async function hybridSearch(
     ])
 
     // Build ranked ID lists
-    const ftsRanked = ftsResults.map((e) => e.id)
+    const ftsRanked = ftsResults.entries.map((e) => e.id)
     const semanticRanked = semanticResults.map((r) => r.entryId)
 
     // Compute RRF scores
@@ -140,8 +140,7 @@ export async function hybridSearch(
         entries.push({ ...entry, source: 'personal' as const })
     }
 
-    const isDegraded =
-        (ftsResults as unknown as { degraded?: boolean }).degraded === true || semanticDegraded
+    const isDegraded = ftsResults.degraded === true || semanticDegraded
 
     return { entries, fusionScores, degraded: isDegraded }
 }

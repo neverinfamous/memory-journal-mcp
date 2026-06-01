@@ -8,6 +8,21 @@
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { EntryType } from '../../../types/index.js'
 import { calcPerDbLimit, mergeAndDedup, type EntryWithSource } from './helpers.js'
+import { Buffer } from 'buffer'
+
+// Helper for compound cursor encoding/decoding
+export function encodeCompoundCursor(personalCursor?: string, teamCursor?: string): string {
+    return Buffer.from(JSON.stringify({ p: personalCursor, t: teamCursor })).toString('base64')
+}
+
+export function decodeCompoundCursor(cursor: string): { p?: string; t?: string } | null {
+    try {
+        const decoded = Buffer.from(cursor, 'base64').toString('utf8')
+        return JSON.parse(decoded)
+    } catch {
+        return null
+    }
+}
 
 /**
  * Execute an FTS5-based search across personal + optional team DB.
@@ -18,6 +33,7 @@ export function ftsSearch(
     teamDb: IDatabaseAdapter | undefined,
     options: {
         limit: number
+        cursor?: string
         isPersonal?: boolean
         projectNumber?: number
         issueNumber?: number
@@ -31,7 +47,7 @@ export function ftsSearch(
         sortBy?: 'timestamp' | 'importance'
         includeTeam?: boolean
     }
-): { entries: EntryWithSource[]; count: number; degraded?: boolean } {
+): { entries: EntryWithSource[]; count: number; degraded?: boolean; nextCursor?: string } {
     const hasFilters =
         options.projectNumber !== undefined ||
         options.issueNumber !== undefined ||
@@ -44,16 +60,32 @@ export function ftsSearch(
         options.startDate !== undefined ||
         options.endDate !== undefined
 
-    // When merging across DBs, fetch more per-DB so BM25 ranking
-    // in one DB doesn't silently drop entries before the merge.
+    // Decode compound cursor if it exists
+    let personalCursor: string | undefined
+    let teamCursor: string | undefined
+    if (options.cursor) {
+        if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
+            const compound = decodeCompoundCursor(options.cursor)
+            if (compound) {
+                personalCursor = compound.p
+                teamCursor = compound.t
+            } else {
+                personalCursor = options.cursor
+            }
+        } else {
+            personalCursor = options.cursor
+        }
+    }
+
     const perDbLimit = calcPerDbLimit(options.limit, !!teamDb)
 
-    let personalEntries
+    let personalResult
     if (!query && !hasFilters) {
-        personalEntries = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy)
+        personalResult = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy, personalCursor)
     } else {
-        personalEntries = db.searchEntries(query || '', {
+        personalResult = db.searchEntries(query || '', {
             limit: perDbLimit,
+            cursor: personalCursor,
             isPersonal: options.isPersonal,
             projectNumber: options.projectNumber,
             issueNumber: options.issueNumber,
@@ -68,15 +100,17 @@ export function ftsSearch(
         })
     }
 
-    // Cross-database merge when team DB is available and includeTeam is explicitly true
-    // Skip team DB when is_personal is explicitly true (team entries are never personal)
+    const personalEntries = personalResult.entries
+    const personalNextCursor = personalResult.nextCursor
+
     if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
-        let teamEntries
+        let teamResult
         if (!query && !hasFilters) {
-            teamEntries = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy)
+            teamResult = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy, teamCursor)
         } else {
-            teamEntries = teamDb.searchEntries(query || '', {
+            teamResult = teamDb.searchEntries(query || '', {
                 limit: perDbLimit,
+                cursor: teamCursor,
                 projectNumber: options.projectNumber,
                 issueNumber: options.issueNumber,
                 prNumber: options.prNumber,
@@ -89,28 +123,38 @@ export function ftsSearch(
                 sortBy: options.sortBy,
             })
         }
+        
+        const teamEntries = teamResult.entries
+        const teamNextCursor = teamResult.nextCursor
+
         const merged = mergeAndDedup(
             personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
             teamEntries.map((e) => ({ ...e, source: 'team' as const })),
             options.limit,
             options.sortBy
         )
-        const isTeamDegraded = (teamEntries as unknown as { degraded?: boolean }).degraded === true
-        const isPersonalDegraded =
-            (personalEntries as unknown as { degraded?: boolean }).degraded === true
+        
+        let compoundNextCursor: string | undefined
+        if (personalNextCursor || teamNextCursor) {
+            compoundNextCursor = encodeCompoundCursor(personalNextCursor, teamNextCursor)
+        }
+
+        const isTeamDegraded = teamResult.degraded === true
+        const isPersonalDegraded = personalResult.degraded === true
         return {
             entries: merged,
             count: merged.length,
             degraded: isPersonalDegraded || isTeamDegraded,
+            nextCursor: compoundNextCursor
         }
     }
 
-    const isPersonalDegraded =
-        (personalEntries as unknown as { degraded?: boolean }).degraded === true
+    const isPersonalDegraded = personalResult.degraded === true
 
     return {
         entries: personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
         count: personalEntries.length,
         degraded: isPersonalDegraded,
+        nextCursor: personalNextCursor
     }
 }

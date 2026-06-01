@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Payload Optimization
 
-**Scope:** Cross-cutting verification of all 4 payload optimization features — Kanban throttling, body truncation, MAX_QUERY_LIMIT enforcement, and Code Mode result cap.
+**Scope:** Cross-cutting verification of all 4 payload optimization features — Kanban throttling, body truncation, MAX_QUERY_LIMIT enforcement (with cursor keyset pagination), and Code Mode result cap.
 
 **Prerequisites:**
 
@@ -69,10 +69,10 @@
 
 ---
 
-## 16.3 MAX_QUERY_LIMIT (Pagination Cap)
+## 16.3 MAX_QUERY_LIMIT & Cursor Pagination
 
 > [!NOTE]
-> `MAX_QUERY_LIMIT` is 500 — enforced on `get_recent_entries`, `get_github_issues`, `get_github_prs`, `search_entries`, and `search_by_date_range`.
+> `MAX_QUERY_LIMIT` is 500 — enforced on `get_recent_entries`, `get_github_issues`, `get_github_prs`, `search_entries`, and `search_by_date_range`. Core and Team search tools also support O(1) keyset pagination via the `cursor` parameter and `next_cursor` output.
 
 | #   | Test                | Command                                                        | Expected Result                 |
 | --- | ------------------- | -------------------------------------------------------------- | ------------------------------- |
@@ -82,12 +82,16 @@
 | 17  | Over limit (issues) | `get_github_issues(limit: 501)`                                | Structured validation error     |
 | 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                                   | Structured validation error     |
 | 19  | Over limit (search) | `search_entries(project_number: 5, query: "test", limit: 501)` | Structured validation error     |
+| 20  | Cursor keyset (1)   | `get_recent_entries(project_number: 5, limit: 1)`              | Returns 1 entry and a `next_cursor` string |
+| 21  | Cursor keyset (2)   | `get_recent_entries(project_number: 5, limit: 1, cursor: "<next_cursor_from_test_20>")` | Returns distinct next entry and a new `next_cursor` |
 
 ### Verification Checks
 
 - `limit: 500` accepted across all paginated tools
 - `limit: 501` returns `{success: false, error: "..."}` with validation message — not a raw `-32602`
 - The error message references the limit or max value
+- Keyset cursor pagination successfully traverses distinct entries (no duplicates across pages)
+- `next_cursor` is present when results are returned
 
 ---
 
@@ -120,6 +124,7 @@
 - Body truncation defaults to 800 chars with metadata flags
 - `include_comments: true` returns comment data
 - `MAX_QUERY_LIMIT` (500) enforced on core, github, and search tools
+- O(1) keyset cursor pagination correctly returns `next_cursor` and allows distinct forward traversal
 - Code Mode 100KB cap produces agent-guidance error with KB values
 - No raw `-32602` errors from any new parameter
 - Agent reports the Total Token Estimate in the final summary

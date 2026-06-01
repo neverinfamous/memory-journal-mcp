@@ -52,7 +52,7 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                              | Phase | Focus                                                                                           | When to Run        |
 | --------------------------------- | :---: | ----------------------------------------------------------------------------------------------- | ------------------ |
-| `test-cm-payload-optimization.md` |  30   | Payload optimization — Kanban throttling, body truncation, pagination cap, Code Mode result cap | After Phases 16–19 |
+| `test-cm-payload-optimization.md` |  30   | Payload optimization — Kanban throttling, body truncation, pagination cap (limits & cursors), Code Mode result cap | After Phases 16–19 |
 
 ## Dependency DAG
 

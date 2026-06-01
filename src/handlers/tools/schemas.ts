@@ -190,6 +190,7 @@ export const EntriesListOutputSchema = z
             .describe(
                 'True if the search degraded to a slower fallback method due to infrastructure failure'
             ),
+        next_cursor: z.string().optional().describe('Cursor for the next page of results'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

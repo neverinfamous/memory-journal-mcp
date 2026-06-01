@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Code Mode: Payload Optimization
 
-Test all 4 payload optimization features via Code Mode: Kanban throttling (`summary_only`, `item_limit`), body truncation (`truncate_body`, `include_comments`), `MAX_QUERY_LIMIT` enforcement, and Code Mode result size cap.
+Test all 4 payload optimization features via Code Mode: Kanban throttling (`summary_only`, `item_limit`), body truncation (`truncate_body`, `include_comments`), `MAX_QUERY_LIMIT` enforcement (with keyset cursors), and Code Mode result size cap.
 
 **Scope:** 1 tool (`mj_execute_code`), Phase 30 — ~4 test scripts covering all payload optimization features via Code Mode.
 
@@ -159,7 +159,7 @@ return {
 | `failures`  | `[]` (empty array) |
 | `prChecked` | `true`             |
 
-### 30.3 MAX_QUERY_LIMIT
+### 30.3 MAX_QUERY_LIMIT & Cursor Pagination
 
 ```javascript
 // Test code (Execute with mj_execute_code):
@@ -184,6 +184,17 @@ if (prsOver.success !== false) failures.push('github PRs limit 501 should be rej
 // Search over limit
 const searchOver = await mj.search.searchEntries({ project_number: 5, query: 'test', limit: 501 })
 if (searchOver.success !== false) failures.push('search limit 501 should be rejected')
+
+// Test cursor pagination
+const cursorPage1 = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
+if (!cursorPage1.next_cursor) failures.push('cursorPage1 missing next_cursor')
+
+if (cursorPage1.next_cursor) {
+  const cursorPage2 = await mj.core.getRecentEntries({ project_number: 5, limit: 1, cursor: cursorPage1.next_cursor })
+  if (cursorPage1.entries[0]?.id === cursorPage2.entries?.[0]?.id) {
+    failures.push('cursor pagination returned identical first item')
+  }
+}
 
 return {
   failures,
@@ -249,6 +260,7 @@ return 'z'.repeat(50 * 1024)
 - Body truncation defaults to 800 chars with `bodyTruncated`/`bodyFullLength` metadata
 - `include_comments: true` returns `comments` array and `commentCount`
 - `MAX_QUERY_LIMIT` (500) enforced — `limit: 501` produces structured errors on core, github, and search tools
+- O(1) keyset cursor pagination successfully traverses distinct entries and returns `next_cursor`
 - Code Mode 100KB cap produces structured error with "aggregate" guidance and KB sizes
 - Results under 100KB pass through without error
 - All test scripts return `{ success: true, failures: [] }`

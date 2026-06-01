@@ -104,6 +104,7 @@ const GetEntryByIdSchemaMcp = z.object({
 
 const GetRecentEntriesSchema = z.object({
     limit: z.number().min(1).max(MAX_QUERY_LIMIT).optional().default(5),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     is_personal: z.boolean().optional(),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -115,6 +116,7 @@ const GetRecentEntriesSchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const GetRecentEntriesSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(5),
+    cursor: z.string().optional().describe('Cursor for pagination'),
     is_personal: z.boolean().optional(),
     sort_by: z
         .string()
@@ -400,9 +402,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { limit, is_personal, sort_by } = GetRecentEntriesSchema.parse(params)
-                    const entries = db.getRecentEntries(limit, is_personal, sort_by)
-                    return { success: true, entries, count: entries.length, degraded: false }
+                    const { limit, cursor, is_personal, sort_by } = GetRecentEntriesSchema.parse(params)
+                    const result = db.getRecentEntries(limit, is_personal, sort_by, cursor)
+                    return { success: true, entries: result.entries, count: result.entries.length, degraded: false, next_cursor: result.nextCursor }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
