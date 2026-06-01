@@ -35,7 +35,7 @@ import {
 // ============================================================================
 
 /** Strict schema — used inside handler for structured Zod errors */
-const CreateEntrySchema = z.object({
+export const CreateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH),
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string().max(100)).max(50).optional().default([]),
@@ -56,7 +56,7 @@ const CreateEntrySchema = z.object({
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
-const CreateEntrySchemaMcp = z.object({
+export const CreateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z
         .string()

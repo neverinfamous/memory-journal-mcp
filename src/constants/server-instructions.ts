@@ -93,6 +93,7 @@ Only help resources for your enabled tool groups are registered.
 
 - **Strict Validation**: The \`project_number\` parameter is STRICTLY REQUIRED for almost all core and team tool operations (e.g., \`create_entry\`, \`search_entries\`, \`team_update_entry\`). You will receive a \`VALIDATION_ERROR\` if you omit it.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
+- **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`auto_index\` to rebuild the vector index for these entries.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots.
@@ -202,7 +203,7 @@ Read \`memory://help/codemode\` for full namespace table, examples, and patterns
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ['github', 'hush-protocol', 'skills']
+const HELP_GROUP_KEYS: readonly string[] = ["github","hush-protocol","skills"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -216,13 +217,9 @@ function buildHelpPointers(groups: Set<ToolGroup>): string {
     if (enabledHelpGroups.length === 0) {
         return '\n\nRead `memory://help` for gotchas and critical usage patterns.'
     }
-    return (
-        '\n\n## Available Help\n\n' +
+    return '\n\n## Available Help\n\n' +
         'Read `memory://help` for gotchas and critical usage patterns.\n' +
-        'Read `memory://help/{group}` for: ' +
-        enabledHelpGroups.join(', ') +
-        '.'
-    )
+        'Read `memory://help/{group}` for: ' + enabledHelpGroups.join(', ') + '.'
 }
 
 /**
@@ -327,9 +324,7 @@ export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
  * Other keys are feature-specific help (memory://help/{key}).
  */
 export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
-    [
-        'github',
-        `# GitHub Integration
+  ["github", `# GitHub Integration
 
 - Include \`issue_number\`/\`pr_number\` and \`project_number\` in \`create_entry\` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
@@ -348,16 +343,13 @@ When the user has GitHub Copilot code review enabled:
 
 **Learn from reviews** — After a PR is merged or reviewed, use \`get_copilot_reviews({ pr_number, repo })\` to read Copilot's findings (pass \`repo\` in multi-project setups). If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged \`copilot-finding\` and link to the PR via \`pr_number\`.
 
-**Pre-emptive checking** — Before creating or modifying code, search journal entries with tag \`copilot-finding\` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.`,
-    ],
-    [
-        'gotchas',
-        `# Field Notes & Gotchas
+**Pre-emptive checking** — Before creating or modifying code, search journal entries with tag \`copilot-finding\` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.`],
+  ["gotchas", `# Field Notes & Gotchas
 
 ## Tool Usage Pitfalls
 
 1. **Missing \`project_number\`**: The single most common failure reason. Always pass \`project_number: <N>\` to core and team tools. Omitting it triggers a \`VALIDATION_ERROR\`.
-2. **Result Limits**: The \`MAX_QUERY_LIMIT\` is strictly 500 for most search tools. Use \`search_by_date_range\` to iterate through large histories safely.
+2. **Result Limits**: The \`MAX_QUERY_LIMIT\` is strictly 500 for most search tools. Batch operations are strictly limited to \`MAX_BATCH_SIZE\` (50) per transaction.
 3. **Code Mode Restrictions**: The \`mj_execute_code\` sandbox cannot make network requests (\`fetch\` is undefined) or use timers (\`setTimeout\`/\`setInterval\`). Use it strictly for orchestrating \`mj.*\` API calls.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the \`memory://help\` resource. If a tool doesn't exist, use \`mj_execute_code\` to combine existing tools.
 
@@ -370,11 +362,8 @@ When the user has GitHub Copilot code review enabled:
 
 - **Session Summaries**: Always use \`entry_type: "retrospective"\` and tag with \`session-summary\`.
 - **References**: Never guess \`entry_id\`, \`issue_number\`, or \`pr_number\`. Always query them first to avoid broken links.
-- **Significance**: Only mark entries with \`significance_type\` if they are genuinely major milestones, decisions, or breakthroughs. Overusing this degrades the signal-to-noise ratio of the journal.`,
-    ],
-    [
-        'hush-protocol',
-        `# Hush Protocol (Team Flags)
+- **Significance**: Only mark entries with \`significance_type\` if they are genuinely major milestones, decisions, or breakthroughs. Overusing this degrades the signal-to-noise ratio of the journal.`],
+  ["hush-protocol", `# Hush Protocol (Team Flags)
 
 Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
 
@@ -400,15 +389,13 @@ Flags are machine-actionable signals stored in the team database. They replace S
 **Triage prompt**: Use the \`flag-dashboard\` prompt to triage active flags with priority assessment, staleness detection, analytics summary, and resolution guidance.
 
 **Code Mode**:
+
 - \`mj.team.passTeamFlag({ project_number: 1, flag_type, message, target_user })\`
 - \`mj.team.resolveTeamFlag({ flag_id })\`
 - \`mj.team.teamListFlags({ status: "active" })\`
 - \`mj.team.teamUpdateFlag({ flag_id: 42, flag_type: "blocker" })\`
-- \`mj.team.teamGetFlagAnalytics()\``,
-    ],
-    [
-        'skills',
-        `# Rule & Skill Suggestions
+- \`mj.team.teamGetFlagAnalytics()\``],
+  ["skills", `# Rule & Skill Suggestions
 
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
 
@@ -444,6 +431,5 @@ When you notice the user consistently applies patterns, preferences, or workflow
 This server leverages the \`neverinfamous-agent-skills\` package. If the user's \`SKILLS_DIR_PATH\` environment variable targets these, you have native access to skills covering TypeScript, React, Playwright, Go, Rust, Python, Docker, Tailwind CSS, shadcn/ui, security auditing, MCP server development, and DevOps workflows (\`issue-triage\`, \`pr-review\`, \`github-actions\`, \`copilot-audit\`, etc.). The \`adversarial-planner\` skill provides multi-pass plan review with structured critique stages.
 
 - The user can distribute or update these skills across their repositories by running \`npx neverinfamous-agent-skills@latest\`.
-- If you need to create a new skill, reference the bundled \`skill-builder\` instructions!`,
-    ],
+- If you need to create a new skill, reference the bundled \`skill-builder\` instructions!`],
 ])

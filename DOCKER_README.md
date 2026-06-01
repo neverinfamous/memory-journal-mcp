@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-90.48%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-88.48%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -42,7 +42,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**73 MCP Tools** · **19 Workflow Prompts** · **46 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**79 MCP Tools** · **19 Workflow Prompts** · **46 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -97,7 +97,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 73    | All tools (default)      |
+| `full`               | 79    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 17    | Disable all mutations    |
@@ -114,7 +114,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **73 MCP Tools** (10 Groups)
+### 🛠️ **79 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                                                                                               |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -124,10 +124,10 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                        |
 | `relationships` | 2     | Link entries, visualize graphs                                                                                                                                            |
 | `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                            |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                                                   |
+| `admin`         | 8     | Update, delete, rebuild/add to vector index, merge tags, bulk operations (batch create/update/delete)                                                                     |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                      |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                            |
-| `team`          | 28    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags** (requires `TEAM_DB_PATH`) |
+| `team`          | 31    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags** (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 

@@ -14,8 +14,12 @@ import {
     EntryOutputSchema,
     relaxedNumber,
     coerceSignificanceAlias,
+    MAX_BATCH_SIZE,
+    BatchResultOutputSchema,
 } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import { CreateEntrySchema, CreateEntrySchemaMcp } from './core.js'
+import { createBatchProgressReporter } from '../../utils/progress-utils.js'
 
 // ============================================================================
 // Input Schemas
@@ -72,9 +76,56 @@ const DeleteEntrySchemaMcp = z.object({
     permanent: z.boolean().optional().default(false),
 })
 
+const BatchCreateEntriesSchema = z.object({
+    entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+    auto_index: z.boolean().optional().default(true),
+})
+
+const BatchCreateEntriesSchemaMcp = z.object({
+    entries: z.array(CreateEntrySchemaMcp),
+    auto_index: z.boolean().optional().default(true),
+})
+
+const BatchUpdateEntriesSchema = z.object({
+    updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+    auto_index: z.boolean().optional().default(true),
+})
+
+const BatchUpdateEntriesSchemaMcp = z.object({
+    updates: z.array(UpdateEntrySchemaMcp),
+    auto_index: z.boolean().optional().default(true),
+})
+
+const BatchDeleteEntriesSchema = z.object({
+    entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
+    permanent: z.boolean().optional().default(false),
+})
+
+const BatchDeleteEntriesSchemaMcp = z.object({
+    entry_ids: z.array(relaxedNumber()),
+    permanent: z.boolean().optional().default(false),
+})
 // ============================================================================
 // Output Schemas
 // ============================================================================
+
+const BatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend({
+    entries: z.array(EntryOutputSchema).optional(),
+    indexStatuses: z.array(z.string()).optional(),
+})
+
+const BatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({
+    updated: z.array(EntryOutputSchema).optional(),
+    notFound: z.array(z.number()).optional(),
+    indexStatuses: z.array(z.string()).optional(),
+})
+
+const BatchDeleteEntriesOutputSchema = BatchResultOutputSchema.extend({
+    deleted: z.array(z.number()).optional(),
+    notFound: z.array(z.number()).optional(),
+    permanent: z.boolean().optional(),
+    warning: z.string().optional(),
+})
 
 const UpdateEntryOutputSchema = z
     .object({
@@ -429,6 +480,151 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             ? {}
                             : { error: result.error ?? 'Failed to generate or store embedding' }),
                     }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+
+        {
+            name: 'batch_create_entries',
+            title: 'Batch Create Entries',
+            description: 'Create multiple journal entries at once. Max 50 per batch. Use this for imports or bulk creation.',
+            group: 'admin',
+            inputSchema: BatchCreateEntriesSchemaMcp,
+            outputSchema: BatchCreateEntriesOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    const input = BatchCreateEntriesSchema.parse(params)
+                    const results = db.createEntries(input.entries.map((e) => ({
+                        content: e.content,
+                        entryType: e.entry_type,
+                        tags: e.tags,
+                        isPersonal: e.is_personal,
+                        significanceType: e.significance_type,
+                        autoContext: e.auto_context ? undefined : undefined, // Ignore deprecated auto_context
+                        projectNumber: e.project_number,
+                        projectOwner: e.project_owner,
+                        issueNumber: e.issue_number,
+                        issueUrl: e.issue_url,
+                        prNumber: e.pr_number,
+                        prUrl: e.pr_url,
+                        prStatus: e.pr_status,
+                        workflowRunId: e.workflow_run_id,
+                        workflowName: e.workflow_name,
+                        workflowStatus: e.workflow_status,
+                    })))
+                    
+                    const indexStatuses: string[] = []
+                    if (input.auto_index && vectorManager) {
+                        const reporter = createBatchProgressReporter(progress, results.length, 10)
+                        for (let i = 0; i < results.length; i++) {
+                            const entry = results[i]
+                            if (entry) {
+                                const status = await autoIndexEntry(vectorManager, entry.id, entry.content)
+                                if (status) indexStatuses.push(status)
+                            }
+                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(results.length)}...`)
+                        }
+                    }
+
+                    return { success: true, count: results.length, entries: results, indexStatuses }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'batch_update_entries',
+            title: 'Batch Update Entries',
+            description: 'Update multiple existing journal entries in a single transaction. Max 50 per batch.',
+            group: 'admin',
+            inputSchema: BatchUpdateEntriesSchemaMcp,
+            outputSchema: BatchUpdateEntriesOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    const input = BatchUpdateEntriesSchema.parse(params)
+                    const updates = input.updates.map((u) => ({
+                        id: u.entry_id,
+                        content: u.content,
+                        entryType: u.entry_type,
+                        isPersonal: u.is_personal,
+                        tags: u.tags,
+                        significanceType: u.significance_type,
+                        projectNumber: u.project_number,
+                        projectOwner: u.project_owner,
+                        issueNumber: u.issue_number,
+                        issueUrl: u.issue_url,
+                        prNumber: u.pr_number,
+                        prUrl: u.pr_url,
+                        prStatus: u.pr_status,
+                        workflowRunId: u.workflow_run_id,
+                        workflowName: u.workflow_name,
+                        workflowStatus: u.workflow_status,
+                    }))
+
+                    const { updated, notFound } = db.updateEntries(updates)
+
+                    const indexStatuses: string[] = []
+                    if (input.auto_index && vectorManager) {
+                        const reporter = createBatchProgressReporter(progress, updated.length, 10)
+                        for (let i = 0; i < updated.length; i++) {
+                            const entry = updated[i]
+                            if (entry) {
+                                // Re-index only if content was part of the update
+                                const originalUpdate = input.updates.find(u => u.entry_id === entry.id)
+                                if (originalUpdate?.content) {
+                                    const status = await autoIndexEntry(vectorManager, entry.id, entry.content)
+                                    if (status) indexStatuses.push(status)
+                                }
+                            }
+                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(updated.length)}...`)
+                        }
+                    }
+
+                    return { success: true, count: updated.length, updated, notFound, indexStatuses }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'batch_delete_entries',
+            title: 'Batch Delete Entries',
+            description: 'Delete multiple existing journal entries in a single transaction. Max 50 per batch.',
+            group: 'admin',
+            inputSchema: BatchDeleteEntriesSchemaMcp,
+            outputSchema: BatchDeleteEntriesOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    const input = BatchDeleteEntriesSchema.parse(params)
+                    const { deleted, notFound } = db.deleteEntries(input.entry_ids, input.permanent)
+                    
+                    if (vectorManager) {
+                        for (const id of deleted) {
+                            db.deleteVector(id)
+                        }
+                    }
+
+                    return { success: true, count: deleted.length, deleted, notFound, permanent: input.permanent }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

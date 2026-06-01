@@ -34,6 +34,7 @@ Only help resources for your enabled tool groups are registered.
 
 - **Strict Validation**: The `project_number` parameter is STRICTLY REQUIRED for almost all core and team tool operations (e.g., `create_entry`, `search_entries`, `team_update_entry`). You will receive a `VALIDATION_ERROR` if you omit it.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., `create_entry`) by default. ONLY save to the team journal (e.g., `team_create_entry`) if the user explicitly requests it.
+- **Batch Operations**: Use `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (or team equivalents) to process bulk data up to 50 entries per transaction. Use `auto_index` to rebuild the vector index for these entries.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use `sort_by: "importance"` on `search_entries`, `get_recent_entries`, or `search_by_date_range` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
 - **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) before defining architectures. Use `team_get_collaboration_matrix` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (`memory://github/insights`) to gauge traction. View `memory://insights/digest` and `memory://insights/team-collaboration` for automated analytics snapshots.

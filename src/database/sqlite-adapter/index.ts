@@ -134,6 +134,44 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         })
     }
 
+    createEntries(inputs: CreateEntryInput[]): JournalEntry[] {
+        return this.entriesMgr.createEntries(inputs)
+    }
+
+    updateEntries(
+        updates: {
+            id: number
+            content?: string
+            entryType?: EntryType
+            tags?: string[]
+            isPersonal?: boolean
+            significanceType?: string | null
+            autoContext?: string | null
+            projectNumber?: number | null
+            projectOwner?: string | null
+            issueNumber?: number | null
+            issueUrl?: string | null
+            prNumber?: number | null
+            prUrl?: string | null
+            prStatus?: string | null
+            workflowRunId?: number | null
+            workflowName?: string | null
+            workflowStatus?: string | null
+        }[]
+    ): { updated: JournalEntry[]; notFound: number[] } {
+        return this.entriesMgr.updateEntries(updates)
+    }
+
+    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[] } {
+        return this.executeInTransaction(() => {
+            const result = this.entriesMgr.deleteEntries(ids, permanent)
+            for (const id of result.deleted) {
+                this.deleteVector(id)
+            }
+            return result
+        })
+    }
+
     searchEntries(
         query: string,
         options?: {

@@ -12,6 +12,9 @@ import {
     getActiveEntryCount,
     updateEntry,
     deleteEntry,
+    createEntries,
+    updateEntries,
+    deleteEntries,
 } from './crud.js'
 import {
     getRecentEntries as getRecentEntriesQuery,
@@ -88,6 +91,38 @@ export class EntriesManager {
 
     deleteEntry(id: number, permanent = false): boolean {
         return deleteEntry(this.sharedContext, id, permanent)
+    }
+
+    createEntries(inputs: CreateEntryInput[]): JournalEntry[] {
+        return createEntries(this.sharedContext, inputs)
+    }
+
+    updateEntries(
+        updates: {
+            id: number
+            content?: string
+            entryType?: EntryType
+            tags?: string[]
+            isPersonal?: boolean
+            significanceType?: string | null
+            autoContext?: string | null
+            projectNumber?: number | null
+            projectOwner?: string | null
+            issueNumber?: number | null
+            issueUrl?: string | null
+            prNumber?: number | null
+            prUrl?: string | null
+            prStatus?: string | null
+            workflowRunId?: number | null
+            workflowName?: string | null
+            workflowStatus?: string | null
+        }[]
+    ): { updated: JournalEntry[]; notFound: number[] } {
+        return updateEntries(this.sharedContext, updates)
+    }
+
+    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[] } {
+        return deleteEntries(this.sharedContext, ids, permanent)
     }
 
     getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy): JournalEntry[] {

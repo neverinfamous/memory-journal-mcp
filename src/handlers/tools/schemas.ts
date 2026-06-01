@@ -89,6 +89,9 @@ export const MAX_CONTENT_LENGTH = 50_000
 /** Maximum entries returned by any single search query */
 export const MAX_QUERY_LIMIT = 500
 
+/** Maximum entries per batch operation */
+export const MAX_BATCH_SIZE = 50
+
 /** Date sentinels for "all time" date range queries */
 export const DATE_MIN_SENTINEL = '1970-01-01'
 export const DATE_MAX_SENTINEL = '2999-12-31'
@@ -126,6 +129,12 @@ export const StrictProjectNumberSchema = z.number({
 // ============================================================================
 // Cross-Group Output Schemas
 // ============================================================================
+
+export const BatchResultOutputSchema = z.object({
+    success: z.boolean().optional(),
+    count: z.number().optional(),
+    error: z.string().optional(),
+}).extend(ErrorFieldsMixin.shape)
 
 /**
  * Schema for a journal entry in output responses.

@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-90.48%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-88.48%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -151,7 +151,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 73    | All tools (default)      |
+| `full`               | 79    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 17    | Disable all mutations    |
@@ -170,7 +170,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **73 MCP Tools** (10 Groups)
+### 🛠️ **79 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                                                                                               |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -180,10 +180,10 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                        |
 | `relationships` | 2     | Link entries, visualize graphs                                                                                                                                            |
 | `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                            |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                                                   |
+| `admin`         | 8     | Update, delete, rebuild/add to vector index, merge tags, bulk operations (batch create/update/delete)                                                                     |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                      |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                            |
-| `team`          | 28    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags** (requires `TEAM_DB_PATH`) |
+| `team`          | 31    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags** (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 

@@ -3,7 +3,7 @@
 ## Tool Usage Pitfalls
 
 1. **Missing `project_number`**: The single most common failure reason. Always pass `project_number: <N>` to core and team tools. Omitting it triggers a `VALIDATION_ERROR`.
-2. **Result Limits**: The `MAX_QUERY_LIMIT` is strictly 500 for most search tools. Use `search_by_date_range` to iterate through large histories safely.
+2. **Result Limits**: The `MAX_QUERY_LIMIT` is strictly 500 for most search tools. Batch operations are strictly limited to `MAX_BATCH_SIZE` (50) per transaction.
 3. **Code Mode Restrictions**: The `mj_execute_code` sandbox cannot make network requests (`fetch` is undefined) or use timers (`setTimeout`/`setInterval`). Use it strictly for orchestrating `mj.*` API calls.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the `memory://help` resource. If a tool doesn't exist, use `mj_execute_code` to combine existing tools.
 

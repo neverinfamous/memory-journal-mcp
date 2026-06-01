@@ -17,6 +17,8 @@ import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
     StrictProjectNumberSchema,
+    MAX_BATCH_SIZE,
+    BatchResultOutputSchema,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
@@ -226,6 +228,40 @@ export const TeamMergeTagsSchemaMcp = z.object({
     target_tag: z.string().optional(),
 })
 
+// Team Batch Schemas
+
+export const TeamBatchCreateEntriesSchema = z.object({
+    entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+    auto_index: z.boolean().optional().default(true),
+})
+
+export const TeamBatchCreateEntriesSchemaMcp = z.object({
+    entries: z.array(TeamCreateEntrySchemaMcp),
+    auto_index: z.boolean().optional().default(true),
+})
+
+export const TeamBatchUpdateEntriesSchema = z.object({
+    updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+    auto_index: z.boolean().optional().default(true),
+})
+
+export const TeamBatchUpdateEntriesSchemaMcp = z.object({
+    updates: z.array(TeamUpdateEntrySchemaMcp),
+    auto_index: z.boolean().optional().default(true),
+})
+
+export const TeamBatchDeleteEntriesSchema = z.object({
+    entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
+    project_number: StrictProjectNumberSchema,
+    permanent: z.boolean().optional().default(false),
+})
+
+export const TeamBatchDeleteEntriesSchemaMcp = z.object({
+    entry_ids: z.array(relaxedNumber()),
+    project_number: relaxedNumber().optional(),
+    permanent: z.boolean().optional().default(false),
+})
+
 // ============================================================================
 // Analytics Tool Schemas
 // ============================================================================
@@ -412,6 +448,24 @@ export const TeamMergeTagsOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+
+export const TeamBatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend({
+    entries: z.array(TeamEntryOutputSchema).optional(),
+    indexStatuses: z.array(z.string()).optional(),
+})
+
+export const TeamBatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({
+    updated: z.array(TeamEntryOutputSchema).optional(),
+    notFound: z.array(z.number()).optional(),
+    indexStatuses: z.array(z.string()).optional(),
+})
+
+export const TeamBatchDeleteEntriesOutputSchema = BatchResultOutputSchema.extend({
+    deleted: z.array(z.number()).optional(),
+    notFound: z.array(z.number()).optional(),
+    permanent: z.boolean().optional(),
+    warning: z.string().optional(),
+})
 
 export const TeamStatisticsOutputSchema = z
     .object({

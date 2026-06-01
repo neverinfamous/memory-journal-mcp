@@ -18,8 +18,19 @@ import {
     TeamUpdateOutputSchema,
     TeamDeleteOutputSchema,
     TeamMergeTagsOutputSchema,
+    TeamBatchCreateEntriesSchema,
+    TeamBatchCreateEntriesSchemaMcp,
+    TeamBatchCreateEntriesOutputSchema,
+    TeamBatchUpdateEntriesSchema,
+    TeamBatchUpdateEntriesSchemaMcp,
+    TeamBatchUpdateEntriesOutputSchema,
+    TeamBatchDeleteEntriesSchema,
+    TeamBatchDeleteEntriesSchemaMcp,
+    TeamBatchDeleteEntriesOutputSchema,
 } from './schemas.js'
 import { coerceSignificanceAlias } from '../schemas.js'
+import { createBatchProgressReporter } from '../../../utils/progress-utils.js'
+import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 
 // ============================================================================
 // Tool Definitions
@@ -214,6 +225,214 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         entriesUpdated: result.entriesUpdated,
                         sourceDeleted: result.sourceDeleted,
                     }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_batch_create_entries',
+            title: 'Team Batch Create Entries',
+            description: 'Create multiple team journal entries at once. Max 50 per batch.',
+            group: 'team',
+            inputSchema: TeamBatchCreateEntriesSchemaMcp,
+            outputSchema: TeamBatchCreateEntriesOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+
+                    const input = TeamBatchCreateEntriesSchema.parse(params)
+                    const currentUser = resolveAuthenticatedAuthor()
+                    
+                    const inputs = input.entries.map((e) => ({
+                        content: e.content,
+                        entryType: e.entry_type,
+                        tags: e.tags,
+                        significanceType: e.significance_type,
+                        projectNumber: e.project_number,
+                        projectOwner: e.project_owner,
+                        issueNumber: e.issue_number,
+                        issueUrl: e.issue_url,
+                        prNumber: e.pr_number,
+                        prUrl: e.pr_url,
+                        prStatus: e.pr_status,
+                        author: e.author ?? currentUser,
+                    }))
+
+                    const results = teamDb.createEntries(inputs)
+
+                    const entries = results.map((r, i) => {
+                        const author = inputs[i]?.author
+                        return { ...r, author }
+                    })
+
+                    const indexStatuses: string[] = []
+                    if (input.auto_index && context.teamVectorManager) {
+                        const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
+                        for (let i = 0; i < entries.length; i++) {
+                            const entry = entries[i]
+                            if (entry) {
+                                const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
+                                if (status) indexStatuses.push(status)
+                            }
+                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
+                        }
+                    }
+
+                    return { success: true, count: entries.length, entries, indexStatuses }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_batch_update_entries',
+            title: 'Team Batch Update Entries',
+            description: 'Update multiple existing team journal entries in a single transaction. Max 50 per batch. Can only update entries you authored.',
+            group: 'team',
+            inputSchema: TeamBatchUpdateEntriesSchemaMcp,
+            outputSchema: TeamBatchUpdateEntriesOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+
+                    const input = TeamBatchUpdateEntriesSchema.parse(params)
+                    const currentUser = resolveAuthenticatedAuthor()
+                    
+                    // Verify ownership
+                    for (const u of input.updates) {
+                        const existing = teamDb.getEntryById(u.entry_id)
+                        if (existing) {
+                            const author = fetchAuthor(teamDb, u.entry_id)
+                            if (author && author !== currentUser) {
+                                return {
+                                    success: false,
+                                    error: `Permission Denied: Only the original author ("${author}") can modify team entry ${String(u.entry_id)}.`,
+                                    code: 'PERMISSION_DENIED',
+                                    category: 'auth',
+                                    suggestion: 'You can only update entries that you authored.',
+                                    recoverable: false,
+                                }
+                            }
+                        }
+                    }
+
+                    const updates = input.updates.map((u) => ({
+                        id: u.entry_id,
+                        content: u.content,
+                        entryType: u.entry_type,
+                        tags: u.tags,
+                        significanceType: u.significance_type,
+                        projectNumber: u.project_number,
+                        projectOwner: u.project_owner,
+                        issueNumber: u.issue_number,
+                        issueUrl: u.issue_url,
+                        prNumber: u.pr_number,
+                        prUrl: u.pr_url,
+                        prStatus: u.pr_status,
+                        workflowRunId: u.workflow_run_id,
+                        workflowName: u.workflow_name,
+                        workflowStatus: u.workflow_status,
+                    }))
+
+                    const { updated, notFound } = teamDb.updateEntries(updates)
+                    
+                    const entries = updated.map(r => ({
+                        ...r,
+                        author: fetchAuthor(teamDb, r.id)
+                    }))
+
+                    const indexStatuses: string[] = []
+                    if (input.auto_index && context.teamVectorManager) {
+                        const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
+                        for (let i = 0; i < entries.length; i++) {
+                            const entry = entries[i]
+                            if (entry) {
+                                const originalUpdate = input.updates.find(u => u.entry_id === entry.id)
+                                if (originalUpdate?.content) {
+                                    const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
+                                    if (status) indexStatuses.push(status)
+                                }
+                            }
+                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
+                        }
+                    }
+
+                    return { success: true, count: entries.length, updated: entries, notFound, indexStatuses }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_batch_delete_entries',
+            title: 'Team Batch Delete Entries',
+            description: 'Delete multiple existing team journal entries in a single transaction. Max 50 per batch. Can only delete entries you authored.',
+            group: 'team',
+            inputSchema: TeamBatchDeleteEntriesSchemaMcp,
+            outputSchema: TeamBatchDeleteEntriesOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+
+                    const input = TeamBatchDeleteEntriesSchema.parse(params)
+                    const currentUser = resolveAuthenticatedAuthor()
+                    
+                    // Filter ids to those that match the project number and check permissions
+                    const validIds: number[] = []
+                    const notFound: number[] = []
+                    
+                    for (const id of input.entry_ids) {
+                        const existing = teamDb.getEntryById(id)
+                        if (existing?.projectNumber !== input.project_number) {
+                            notFound.push(id)
+                            continue
+                        }
+                        
+                            const author = fetchAuthor(teamDb, id)
+                        if (author && author !== currentUser) {
+                            return {
+                                success: false,
+                                error: `Permission Denied: Only the original author ("${author}") can delete team entry ${String(id)}.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'You can only delete entries that you authored.',
+                                recoverable: false,
+                            }
+                        }
+                        validIds.push(id)
+                    }
+
+                    const result = teamDb.deleteEntries(validIds, input.permanent)
+                    
+                    if (context.teamVectorManager) {
+                        for (const id of result.deleted) {
+                            teamDb.deleteVector(id)
+                        }
+                    }
+
+                    // Merge notFound arrays
+                    const finalNotFound = [...notFound, ...result.notFound]
+
+                    return { success: true, count: result.deleted.length, deleted: result.deleted, notFound: finalNotFound, permanent: input.permanent }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

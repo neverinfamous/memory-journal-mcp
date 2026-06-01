@@ -104,7 +104,7 @@ src/
 │       ├── relationships.ts        # Entry relationship operations
 │       └── entries/
 │           ├── index.ts                # Entry operations barrel
-│           ├── crud.ts             # Entry create/read/update/delete
+│           ├── crud.ts             # Entry create/read/update/delete, including batch operations
 │           ├── search.ts           # FTS5 search, date-range search
 │           ├── importance.ts       # Importance scoring algorithm
 │           ├── statistics.ts       # Journal statistics and analytics
@@ -234,7 +234,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **analytics**     | `analytics.ts`                 | 2     | `get_statistics`, `get_cross_project_insights`                                                                                                     |
 | **relationships** | `relationships.ts`             | 2     | `link_entries`, `visualize_relationships`                                                                                                          |
 | **io**            | `io.ts`                        | 3     | `export_entries`, `export_markdown`, `import_markdown`                                                                                             |
-| **admin**         | `admin.ts`                     | 5     | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`                                                        |
+| **admin**         | `admin.ts`                     | 8     | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries` |
 | **github**        | `github/read-tools.ts`         | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue` (truncate_body, include_comments), `get_github_pr` (truncate_body), `get_github_context` |
 |                   | `github/issue-tools.ts`        | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                                  |
 |                   | `github/kanban-tools.ts`       | 4     | `get_kanban_board` (summary_only, item_limit), `move_kanban_item`, `addKanbanItem`, `deleteKanbanItem`                                             |
@@ -244,7 +244,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **backup**        | `backup.ts`                    | 4     | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups`                                                                              |
 | **team**          | `team/core-tools.ts`           | 4     | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`                                                                   |
 |                   | `team/search-tools.ts`         | 2     | `team_search`, `team_search_by_date_range`                                                                                                         |
-|                   | `team/admin-tools.ts`          | 3     | `team_update_entry`, `team_delete_entry`, `team_merge_tags`                                                                                        |
+|                   | `team/admin-tools.ts`          | 6     | `team_update_entry`, `team_delete_entry`, `team_merge_tags`, `team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries` |
 |                   | `team/analytics-tools.ts`      | 3     | `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`                                                          |
 |                   | `team/relationship-tools.ts`   | 2     | `team_link_entries`, `team_visualize_relationships`                                                                                                |
 |                   | `team/export-tools.ts`         | 1     | `team_export_entries`                                                                                                                              |

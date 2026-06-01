@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **73 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **79 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -80,7 +80,7 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 ---
 
-## admin (5 tools + Code Mode)
+## admin (8 tools + Code Mode)
 
 Entry mutations, vector index management, and tag maintenance.
 
@@ -91,6 +91,9 @@ Entry mutations, vector index management, and tag maintenance.
 | `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.                                   |
 | `rebuild_vector_index` | Rebuild the semantic search vector index from all existing entries.                                                                                                    |
 | `add_to_vector_index`  | Add a specific entry to the semantic search vector index.                                                                                                              |
+| `batch_create_entries` | Create multiple journal entries at once (Max 50 per batch). Ideal for data imports or bulk processing.                                                                  |
+| `batch_update_entries` | Update multiple existing journal entries in a single transaction (Max 50 per batch).                                                                                    |
+| `batch_delete_entries` | Delete multiple existing journal entries in a single transaction (Max 50 per batch).                                                                                    |
 
 ---
 
@@ -134,7 +137,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (28 tools + Code Mode)
+## team (31 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -161,6 +164,9 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_update_entry` | Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
 | `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).                                                                                                 |
 | `team_merge_tags`   | Merge a source tag into a target tag in the team database.                                                                                                |
+| `team_batch_create_entries` | Create multiple team journal entries at once (Max 50 per batch). Ideal for data imports or bulk processing.                                                                  |
+| `team_batch_update_entries` | Update multiple existing team journal entries in a single transaction (Max 50 per batch).                                                                                    |
+| `team_batch_delete_entries` | Delete multiple existing team journal entries in a single transaction (Max 50 per batch).                                                                                    |
 
 ### Analytics
 

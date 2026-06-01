@@ -2,5 +2,10 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
+### Added
+- Added `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` tools to the admin group for bulk operations with vector indexing support.
+- Added `team_batch_create_entries`, `team_batch_update_entries`, and `team_batch_delete_entries` tools to the team admin group.
+- Added support for all batch operations via Code Mode API with method aliases.
+
 ### Fixed
 - Fixed an issue where the Docker Hub repository description wouldn't be updated during tag-based deployments

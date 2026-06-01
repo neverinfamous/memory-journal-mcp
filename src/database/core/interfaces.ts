@@ -119,6 +119,35 @@ export interface IDatabaseAdapter {
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
+    
+    // Batch Operations
+    createEntries(inputs: CreateEntryInput[]): JournalEntry[]
+    updateEntries(
+        updates: {
+            id: number
+            content?: string
+            entryType?: EntryType
+            tags?: string[]
+            isPersonal?: boolean
+            significanceType?: string | null
+            autoContext?: string | null
+            projectNumber?: number | null
+            projectOwner?: string | null
+            issueNumber?: number | null
+            issueUrl?: string | null
+            prNumber?: number | null
+            prUrl?: string | null
+            prStatus?: string | null
+            workflowRunId?: number | null
+            workflowName?: string | null
+            workflowStatus?: string | null
+        }[]
+    ): { updated: JournalEntry[]; notFound: number[] }
+    deleteEntries(
+        ids: number[],
+        permanent?: boolean
+    ): { deleted: number[]; notFound: number[] }
+
     searchEntries(
         query: string,
         options?: {
