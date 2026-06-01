@@ -142,6 +142,22 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
 
                     const input = ListTeamFlagsSchema.parse(params)
 
+                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST specify a project_number to isolate results.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Provide a valid project_number in the tool parameters, or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            recoverable: true,
+                            flags: [],
+                            count: 0,
+                            active_count: 0,
+                            resolved_count: 0,
+                        }
+                    }
+
                     const { entries: flagEntries } = teamDb.searchEntries('', {
                         entryType: 'flag',
                         limit: 500, // fetch all, filter in-memory
@@ -157,11 +173,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                         if (!ctx) continue
 
                         // Project boundary filter
-                        if (
-                            input.project_number !== undefined &&
-                            entry.projectNumber !== input.project_number
-                        )
-                            continue
+                        if (entry.projectNumber !== projectNumber) continue
 
                         // Status filter
                         if (input.status === 'active' && ctx.resolved) continue
@@ -448,6 +460,19 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                     }
 
                     const input = FlagAnalyticsSchema.parse(params)
+
+                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST specify a project_number to isolate results.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Provide a valid project_number in the tool parameters, or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            recoverable: true,
+                        }
+                    }
+
                     const now = Date.now()
                     const periodMs = getPeriodMs(input.period)
 
@@ -477,11 +502,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                         if (!ctx) continue
 
                         // Project boundary filter
-                        if (
-                            input.project_number !== undefined &&
-                            entry.projectNumber !== input.project_number
-                        )
-                            continue
+                        if (entry.projectNumber !== projectNumber) continue
 
                         totalFlags++
                         const entryTime = new Date(entry.timestamp).getTime()

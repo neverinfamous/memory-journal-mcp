@@ -64,6 +64,19 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = PassTeamFlagSchema.parse(params)
+
+                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+
                     const vocabulary = getVocabulary(context)
 
                     // Validate flag_type against vocabulary
@@ -128,7 +141,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         tags,
                         isPersonal: false,
                         autoContext: JSON.stringify(flagContext),
-                        projectNumber: input.project_number,
+                        projectNumber: projectNumber,
                         issueNumber: input.issue_number,
                         author,
                     })

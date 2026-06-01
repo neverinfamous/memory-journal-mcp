@@ -16,7 +16,7 @@
 - Added progress reporting to all batch tools for both standard and Code Mode execution.
 - Added entry versioning/history tracking. Updates to entries now automatically save content snapshots (capped at 10 revisions per entry) in an `entry_revisions` table. Added a new `get_entry_history` tool to retrieve these snapshots.
 - Added comprehensive testing coverage in `test-server/` prompts to verify history tracking functionality.
-- Conducted a comprehensive documentation and file structure audit across the main repository and GitHub Wiki, syncing tool counts (84 tools total), group presets, and capability metrics.
+- Conducted a comprehensive documentation and file structure audit across the main repository and GitHub Wiki, syncing tool counts (84 tools total), resource counts (52 resources total: 46 core + 6 aliases), group presets, and capability metrics.
 - Added and updated direct MCP and sandboxed Code Mode test prompts covering soft-delete recovery, archiving, and keyset cursor pagination.
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
 - Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
@@ -29,3 +29,4 @@
 - Fixed entry history/revision eviction policy logic to correctly preserve exactly the 10 newest revision snapshots using SQL `OFFSET 10`.
 - Fixed restrictive update project number checks in team_update_entry and team_batch_update_entries to allow moving entries to a different project context during updates.
 - Fixed error codes inside team search handlers to consistently return `VALIDATION_ERROR` instead of `PERMISSION_DENIED` when the `project_number` context is missing, satisfying the E2E contract isolation tests.
+- Fixed missing `project_number` validation and default fallback resolution logic inside `team_pass_flag`, `team_list_flags`, and `team_get_flag_analytics` tool handlers to prevent multi-tenant context leakage.

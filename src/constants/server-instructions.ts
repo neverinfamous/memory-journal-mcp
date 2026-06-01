@@ -91,7 +91,7 @@ Only help resources for your enabled tool groups are registered.
 
 ### Journal Behaviors
 
-- **Strict Validation**: The \`project_number\` parameter is STRICTLY REQUIRED for almost all core and team tool operations (e.g., \`create_entry\`, \`search_entries\`, \`team_update_entry\`). You will receive a \`VALIDATION_ERROR\` if you omit it.
+- **Strict Validation**: The \`project_number\` parameter is resolved at runtime (checking tool inputs, workspace registry mappings, and \`DEFAULT_PROJECT_NUMBER\` fallbacks). You will receive a \`VALIDATION_ERROR\` if no project number can be resolved for core or team tool operations.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Soft-Delete & Recovery**: Entries can be soft-deleted and restored via \`restore_entry\` or \`team_restore_entry\`. Use \`list_deleted_entries\` or \`team_list_deleted_entries\` to discover soft-deleted entries. Entries can also be archived (\`is_archived = 1\`) to preserve them in history while excluding them from normal search queries.
 - **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`auto_index\` to rebuild the vector index for these entries.
@@ -349,7 +349,7 @@ When the user has GitHub Copilot code review enabled:
 
 ## Tool Usage Pitfalls
 
-1. **Missing \`project_number\`**: The single most common failure reason. Always pass \`project_number: <N>\` to core and team tools. Omitting it triggers a \`VALIDATION_ERROR\`.
+1. **Missing \`project_number\`**: The single most common failure reason. Always pass \`project_number: <N>\` or ensure \`DEFAULT_PROJECT_NUMBER\` is configured on the server. Omitting both triggers a \`VALIDATION_ERROR\`.
 2. **Result Limits**: The \`MAX_QUERY_LIMIT\` is strictly 500 for most search tools. Use the optional \`cursor\` parameter and \`next_cursor\` output for O(1) keyset pagination on large datasets. Batch operations are strictly limited to \`MAX_BATCH_SIZE\` (50) per transaction.
 3. **Code Mode Restrictions**: The \`mj_execute_code\` sandbox cannot make network requests (\`fetch\` is undefined) or use timers (\`setTimeout\`/\`setInterval\`). Use it strictly for orchestrating \`mj.*\` API calls.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the \`memory://help\` resource. If a tool doesn't exist, use \`mj_execute_code\` to combine existing tools.
