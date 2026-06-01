@@ -387,6 +387,23 @@ export class JournalApi {
         }
         const getByIdFn = this.core['getEntryById']
         if (getByIdFn) this.core['exists'] = getByIdFn
+
+        // Implement listProjects hallucination gracefully across groups
+        const listProjectsFn = (): Promise<unknown> => {
+            try {
+                if (process.env['PROJECT_REGISTRY']) {
+                    return Promise.resolve(JSON.parse(process.env['PROJECT_REGISTRY']))
+                }
+            } catch {
+                // Ignore parse errors and fallback to analytics
+            }
+            const statsFn = this.analytics['getStatistics']
+            if (!statsFn) return Promise.reject(new Error('getStatistics is not available'))
+            return statsFn({ group_by: 'month', project_breakdown: true })
+        }
+        this.core['listProjects'] = listProjectsFn
+        this.search['listProjects'] = listProjectsFn
+        this.admin['listProjects'] = listProjectsFn
     }
 
     /**
@@ -433,6 +450,18 @@ export class JournalApi {
             getRecentEntries: this.core['getRecentEntries'],
             searchEntries: this.search['searchEntries'],
             getStatistics: this.analytics['getStatistics'],
+            listProjects: (): Promise<unknown> => {
+                try {
+                    if (process.env['PROJECT_REGISTRY']) {
+                        return Promise.resolve(JSON.parse(process.env['PROJECT_REGISTRY']))
+                    }
+                } catch {
+                    // Ignore parse errors and fallback to analytics
+                }
+                const statsFn = this.analytics['getStatistics']
+                if (!statsFn) return Promise.reject(new Error('getStatistics is not available'))
+                return statsFn({ group_by: 'month', project_breakdown: true })
+            },
 
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
             addEntry: this.core['createEntry'],

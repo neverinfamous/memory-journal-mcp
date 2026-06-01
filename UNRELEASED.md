@@ -15,6 +15,7 @@
 - Added `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` tools to the admin group for bulk operations with vector indexing support.
 - Added `team_batch_create_entries`, `team_batch_update_entries`, and `team_batch_delete_entries` tools to the team admin group.
 - Added support for all batch operations via Code Mode API with method aliases.
+- Added a custom Code Mode mapping for `mj.listProjects()` and `mj.core.listProjects()` agent hallucinations that actually returns project statistics by returning the `PROJECT_REGISTRY` environment mapping or falling back to `mj.analytics.getStatistics({ project_breakdown: true })` instead of throwing an error.
 - Added comprehensive test suite coverage (Standard & Code Mode) for all new bulk/batch operations.
 - Added progress reporting to all batch tools for both standard and Code Mode execution.
 - Added entry versioning/history tracking. Updates to entries now automatically save content snapshots (capped at 10 revisions per entry) in an `entry_revisions` table. Added a new `get_entry_history` tool to retrieve these snapshots.
@@ -38,3 +39,4 @@
 - Fixed restrictive update project number checks in team_update_entry and team_batch_update_entries to allow moving entries to a different project context during updates.
 - Fixed error codes inside team search handlers to consistently return `VALIDATION_ERROR` instead of `PERMISSION_DENIED` when the `project_number` context is missing, satisfying the E2E contract isolation tests.
 - Fixed missing `project_number` validation and default fallback resolution logic inside `team_pass_flag`, `team_list_flags`, and `team_get_flag_analytics` tool handlers to prevent multi-tenant context leakage.
+- Fixed a Windows-specific race condition in `SqliteAdapter.restoreFromFile` where lingering empty lock directories caused subsequent restores to abort. The adapter now correctly detects orphaned lock directories with missing `lock.json` files as stale and safely overrides them.

@@ -274,8 +274,16 @@ export class BackupManager {
                             }
                         }
                     }
-                } catch {
-                    // Ignore read errors
+                } catch (readErr: unknown) {
+                    // If the directory exists but the lock file is missing, it's an orphaned lock
+                    if (
+                        typeof readErr === 'object' &&
+                        readErr !== null &&
+                        'code' in readErr &&
+                        (readErr as NodeJS.ErrnoException).code === 'ENOENT'
+                    ) {
+                        isStale = true
+                    }
                 }
 
                 if (isStale) {
