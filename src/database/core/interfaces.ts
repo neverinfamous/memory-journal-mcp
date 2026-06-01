@@ -96,7 +96,8 @@ export interface IDatabaseAdapter {
         limit?: number,
         isPersonal?: boolean,
         sortBy?: 'timestamp' | 'importance',
-        cursor?: string
+        cursor?: string,
+        includeArchived?: boolean
     ): { entries: JournalEntry[]; nextCursor?: string }
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
     getActiveEntryCount(): number
@@ -119,9 +120,14 @@ export interface IDatabaseAdapter {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
+    
+    // Soft-Delete Recovery
+    restoreEntry(id: number): boolean
+    getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number }
     
     // Batch Operations
     createEntries(inputs: CreateEntryInput[]): JournalEntry[]
@@ -144,6 +150,7 @@ export interface IDatabaseAdapter {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
         }[]
     ): { updated: JournalEntry[]; notFound: number[] }
     deleteEntries(
@@ -167,6 +174,7 @@ export interface IDatabaseAdapter {
             startDate?: string
             endDate?: string
             sortBy?: 'timestamp' | 'importance'
+            includeArchived?: boolean
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean }
     searchByDateRange(
@@ -183,6 +191,7 @@ export interface IDatabaseAdapter {
             workflowRunId?: number
             limit?: number
             sortBy?: 'timestamp' | 'importance'
+            includeArchived?: boolean
         }
     ): { entries: JournalEntry[]; nextCursor?: string }
     getStatistics(

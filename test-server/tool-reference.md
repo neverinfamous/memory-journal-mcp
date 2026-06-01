@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **80 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **84 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -44,6 +44,7 @@ Full-text, date-range, and semantic/vector search.
 | `search_by_date_range`   | Search journal entries within a date range with optional filters, `sort_by` (timestamp or importance), and cursor pagination.                                                                                                |
 | `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                   |
 | `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                   |
+| `list_deleted_entries`   | List recently soft-deleted entries that can be restored.                                                                                                                                                 |
 
 ---
 
@@ -89,6 +90,7 @@ Entry mutations, vector index management, and tag maintenance.
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `update_entry`         | Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
 | `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                                                   |
+| `restore_entry`        | Restore a soft-deleted journal entry.                                                                                                                                  |
 | `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.                                   |
 | `rebuild_vector_index` | Rebuild the semantic search vector index from all existing entries.                                                                                                    |
 | `add_to_vector_index`  | Add a specific entry to the semantic search vector index.                                                                                                              |
@@ -138,7 +140,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (31 tools + Code Mode)
+## team (33 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -157,6 +159,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | --------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `team_search`               | Search entries in the team database by text and/or tags. Supports `sort_by` (timestamp or importance) and cursor pagination. |
 | `team_search_by_date_range` | Search team entries within a date range with optional filters, `sort_by` (timestamp or importance), and cursor pagination. |
+| `team_list_deleted_entries` | List recently soft-deleted team entries that can be restored. Requires TEAM_DB_PATH. |
 
 ### Admin
 
@@ -164,6 +167,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `team_update_entry` | Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
 | `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).                                                                                                 |
+| `team_restore_entry`| Restore a soft-deleted team entry. Requires TEAM_DB_PATH.                                                                                                 |
 | `team_merge_tags`   | Merge a source tag into a target tag in the team database.                                                                                                |
 | `team_batch_create_entries` | Create multiple team journal entries at once (Max 50 per batch). Ideal for data imports or bulk processing.                                                                  |
 | `team_batch_update_entries` | Update multiple existing team journal entries in a single transaction (Max 50 per batch).                                                                                    |
@@ -226,7 +230,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 80    | All tools (default)      |
+| `full`               | 84    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 18    | Disable all mutations    |

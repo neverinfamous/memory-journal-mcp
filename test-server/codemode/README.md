@@ -23,8 +23,8 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                | Phase | Focus                                                 | When to Run        |
 | ------------------- | :---: | ----------------------------------------------------- | ------------------ |
-| `test-cm-crud.md`   |  20   | Create/read/update/delete, full params, error paths   | After Phases 16–19 |
-| `test-cm-search.md` |  21   | FTS5, filters, date range, semantic search, analytics | After Phases 16–19 |
+| `test-cm-crud.md`   |  20   | Create/read/update/delete, recovery, archiving, pagination, full params, error paths | After Phases 16–19 |
+| `test-cm-search.md` |  21   | FTS5, filters, date range, semantic search, archiving & pagination, analytics | After Phases 16–19 |
 
 ### Workflows & Relationships (from CM-3)
 
@@ -43,7 +43,7 @@ This directory contains agent-optimized test prompts specifically designed to va
 | `test-cm-io.md`                 |     26      | IO namespaces, Markdown orchestration roundtrips, and file schemas    | After Phases 16–19 |
 | `test-cm-admin-backup.md`       |     27      | Tag management, batch operations, backup lifecycle                                      | After Phases 16–19 |
 | `test-cm-team-crud.md`          |  28.1–28.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
-| `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, batch operations, analytics, relationships, IO logic, backup                | After Team CRUD    |
+| `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, batch operations, recovery, archiving, pagination, analytics, relationships, IO logic, backup | After Team CRUD    |
 | `test-cm-team-vector-errors.md` | 28.10–28.11 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
 | `test-cm-team-flags.md`         | 28.12–28.15 | Hush Protocol flags: create, vocabulary, resolve lifecycle, cleanup   | After Team Admin   |
 | `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches across all `mj.*` groups | After Phases 16–19 |

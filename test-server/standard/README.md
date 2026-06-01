@@ -19,8 +19,8 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 
 | File                         | Phase | Purpose                                                                                             | When to Run |
 | ---------------------------- | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
-| `test-core-crud.md`          |   2   | **Entry CRUD** — Create, read, update, delete operations                                            | After seed  |
-| `test-core-search.md`        |   3   | **Text Search** — FTS5, phrase/prefix/boolean, LIKE fallback, hybrid auto-mode, date range, filters | After seed  |
+| `test-core-crud.md`          |   2   | **Entry CRUD & Recovery** — Create, read, update, delete, recovery, and pagination operations        | After seed  |
+| `test-core-search.md`        |   3   | **Text Search** — FTS5, phrase/prefix/boolean, hybrid mode, date range, filters, archiving, cursor pagination | After seed  |
 | `test-core-semantic.md`      |   4   | **Semantic Search & Analytics** — Vector search, index management, statistics, cross-project        | After seed  |
 | `test-core-relationships.md` |   5   | **Relationships** — Entry linking, causal types, visualization (Mermaid), graph resources           | After seed  |
 | `test-core-io.md`            |   6   | **IO & Interoperability** — Export/Import Markdown roundtrips, slugification, JSON legacy exports   | After seed  |
@@ -41,7 +41,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | -------------------------- | :---: | ------------------------------------------------------------------------------------------------------- | ----------- |
 | `test-github.md`           |  13   | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, milestones, insights, Copilot, cleanup) | After seed  |
 | `test-kanban-lifecycle.md` | 13.5  | **Kanban Lifecycle** — Seamless Add/Move/Delete flow using token-efficient `get_kanban_board`           | After seed  |
-| `test-team.md`             |  14   | **Team Collaboration** — 25 team tools + 4 team resources (incl. Hush Protocol flags)                   | After seed  |
+| `test-team.md`             |  14   | **Team Collaboration** — 33 team tools + 4 team resources (incl. Hush Protocol flags)                   | After seed  |
 
 ### Granular Tool Group Stress Tests
 

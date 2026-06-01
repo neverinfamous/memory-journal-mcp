@@ -276,6 +276,47 @@ return {
 | `secondRevNumber`  | `1`                     |
 | `secondRevContent` | `"CM3 history test v1"` |
 
+### 20.14 Soft-Delete Recovery, Archiving & Cursor Pagination
+
+```javascript
+// Test code:
+const created = await mj.core.createEntryMinimal({ content: 'CM3 recovery test' })
+const id = created.entry.id
+await mj.admin.deleteEntry({ entry_id: id, permanent: false })
+const deletedList = await mj.search.listDeletedEntries({ project_number: 5 })
+const isDeleted = deletedList.entries?.some(e => e.id === id)
+const restored = await mj.admin.restoreEntry({ entry_id: id })
+const verifyDeleted = await mj.search.listDeletedEntries({ project_number: 5 })
+const isNoLongerDeleted = !verifyDeleted.entries?.some(e => e.id === id)
+
+const archived = await mj.admin.updateEntry({ entry_id: id, is_archived: true })
+const archivedOff = await mj.core.getRecentEntries({ project_number: 5, limit: 10, include_archived: false })
+const isArchivedHidden = !archivedOff.entries?.some(e => e.id === id)
+const archivedOn = await mj.core.getRecentEntries({ project_number: 5, limit: 10, include_archived: true })
+const isArchivedVisible = archivedOn.entries?.some(e => e.id === id)
+
+const pagPage1 = await mj.core.getRecentEntries({ project_number: 5, limit: 2 })
+const hasCursor = typeof pagPage1.next_cursor === 'string'
+
+return {
+  isDeleted,
+  restoreSuccess: restored.success,
+  isNoLongerDeleted,
+  isArchivedHidden,
+  isArchivedVisible,
+  hasCursor,
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `isDeleted`         | `true`   |
+| `restoreSuccess`    | `true`   |
+| `isNoLongerDeleted` | `true`   |
+| `isArchivedHidden`  | `true`   |
+| `isArchivedVisible` | `true`   |
+| `hasCursor`         | `true`   |
+
 ---
 
 ## Cleanup
@@ -291,6 +332,7 @@ After testing, remove test entries created during Phase 20:
 | Delete toggle test entry | `delete_entry(entry_id: <toggle_test_id>, permanent: true)` |
 | Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
 | Delete history test entry| `delete_entry(entry_id: <history_test_id>, permanent: true)`|
+| Delete recovery test entry| `delete_entry(entry_id: <recovery_test_id>, permanent: true)`|
 
 ---
 
@@ -315,3 +357,5 @@ After testing, remove test entries created during Phase 20:
 - `get_recent_entries` with `is_personal` filter returns correctly filtered entries
 - `get_entry_history` returns multiple historical snapshots successfully via Code Mode
 - `test_simple` callable via Code Mode
+- `restore_entry` and `list_deleted_entries` are functional and callable via Code Mode scripts
+- Keyset cursor pagination and `is_archived` status filters execute successfully via Code Mode scripts

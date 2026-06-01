@@ -157,6 +157,7 @@ export const EntryOutputSchema = z
         author: z.string().nullable().optional(),
         flagMetadata: z.record(z.string(), z.unknown()).nullable().optional(),
         deletedAt: z.string().nullable().optional(),
+        isArchived: z.boolean().optional(),
         projectNumber: z.number().nullable().optional(),
         projectOwner: z.string().nullable().optional(),
         issueNumber: z.number().nullable().optional(),

@@ -76,6 +76,7 @@ export const TeamGetRecentSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** team_get_recent — relaxed */
@@ -88,6 +89,7 @@ export const TeamGetRecentSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** team_search — strict */
@@ -102,6 +104,7 @@ export const TeamSearchSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** team_search — relaxed */
@@ -116,6 +119,21 @@ export const TeamSearchSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_archived: z.boolean().optional().default(false),
+})
+
+/** team_list_deleted_entries — strict */
+export const TeamListDeletedEntriesSchema = z.object({
+    limit: z.number().optional().default(50),
+    offset: z.number().optional().default(0),
+    project_number: StrictProjectNumberSchema,
+})
+
+/** team_list_deleted_entries — relaxed */
+export const TeamListDeletedEntriesSchemaMcp = z.object({
+    limit: relaxedNumber().optional().default(50),
+    offset: relaxedNumber().optional().default(0),
+    project_number: relaxedNumber().optional(),
 })
 
 /** team_get_entry_by_id — strict */
@@ -150,6 +168,7 @@ export const TeamSearchByDateRangeSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** team_search_by_date_range — relaxed */
@@ -166,6 +185,7 @@ export const TeamSearchByDateRangeSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 // ============================================================================
@@ -189,6 +209,7 @@ export const TeamUpdateEntrySchema = z.object({
     workflow_run_id: z.number().nullable().optional(),
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
+    is_archived: z.boolean().optional(),
 })
 
 /** team_update_entry — relaxed */
@@ -208,6 +229,7 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     workflow_run_id: relaxedNumber().nullable().optional(),
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.string().nullable().optional(),
+    is_archived: z.boolean().optional(),
 })
 
 /** team_delete_entry — strict */
@@ -218,6 +240,18 @@ export const TeamDeleteEntrySchema = z.object({
 
 /** team_delete_entry — relaxed */
 export const TeamDeleteEntrySchemaMcp = z.object({
+    entry_id: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional(),
+})
+
+/** team_restore_entry — strict */
+export const TeamRestoreEntrySchema = z.object({
+    entry_id: z.number(),
+    project_number: StrictProjectNumberSchema,
+})
+
+/** team_restore_entry — relaxed */
+export const TeamRestoreEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     project_number: relaxedNumber().optional(),
 })
@@ -446,6 +480,14 @@ export const TeamDeleteOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
+export const TeamRestoreOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entryId: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
 export const TeamMergeTagsOutputSchema = z
     .object({
         success: z.boolean().optional(),
@@ -568,6 +610,7 @@ export const TeamSemanticSearchSchema = z.object({
         .default(true)
         .describe('Include hint when no results found (default: true)'),
     project_number: StrictProjectNumberSchema,
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** team_semantic_search — relaxed */
@@ -586,6 +629,7 @@ export const TeamSemanticSearchSchemaMcp = z.object({
         .default(true)
         .describe('Include hint when no results found (default: true)'),
     project_number: relaxedNumber().optional(),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** team_add_to_vector_index — strict */

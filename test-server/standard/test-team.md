@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Team Collaboration
 
-**Scope:** 25 team tools + 4 team resources — happy paths, core error paths, and feature verification for all team collaboration features including Hush Protocol flags.
+**Scope:** 33 team tools + 4 team resources — happy paths, core error paths, and feature verification for all team collaboration features including Hush Protocol flags.
 
 **Prerequisites:**
 
@@ -20,12 +20,12 @@
 
 ---
 
-## Phase 14: Team Collaboration (25 tools + 4 resources)
+## Phase 14: Team Collaboration (33 tools + 4 resources)
 
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`. Team entries are stored in a separate public database with author attribution.
 >
-> **`team_delete_entry(project_number: 5)` is soft-delete only** — no `permanent` flag (unlike individual `delete_entry`).
+> **`team_delete_entry(project_number: 5)` is soft-delete only** — no `permanent` flag (unlike individual `delete_entry`). Replaced with `team_restore_entry` for recovery.
 
 ### 14.1 Team Entry Creation
 
@@ -49,15 +49,19 @@
 
 ### 14.3 Team Read Tools
 
-| Test            | Command/Action                                                        | Expected Result                                  |
-| --------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
-| Get recent      | `team_get_recent(project_number: 5, limit: 5)`                        | `entries` array (each with `author`), `count`    |
-| Default limit   | `team_get_recent(project_number: 5)`                                  | Returns up to 10 entries (default)               |
-| Search by text  | `team_search(project_number: 5, query: "team test", mode: "fts")`     | Matching entries with `author` field             |
-| Search by tags  | `team_search(project_number: 5, tags: ["team-test"])`                 | Tag-filtered results                             |
-| Combined search | `team_search(project_number: 5, query: "test", tags: ["team-test"])`  | Text + tag filtered results                      |
-| Hybrid search   | `team_search(project_number: 5, query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
-| No query/tags   | `team_search(project_number: 5)`                                      | Returns recent entries (fallback to `getRecent`) |
+| Test                 | Command/Action                                                        | Expected Result                                  |
+| -------------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
+| Get recent           | `team_get_recent(project_number: 5, limit: 5)`                        | `entries` array (each with `author`), `count`    |
+| Default limit        | `team_get_recent(project_number: 5)`                                  | Returns up to 10 entries (default)               |
+| Get recent pag. pg 1 | `team_get_recent(project_number: 5, limit: 2)`                        | Returns 2 entries and a non-empty `next_cursor`  |
+| Get recent pag. pg 2 | `team_get_recent(project_number: 5, limit: 2, cursor: "<next_cursor>")`| Returns next page of entries sequentially        |
+| Search by text       | `team_search(project_number: 5, query: "team test", mode: "fts")`     | Matching entries with `author` field             |
+| Search (archived off)| `team_search(project_number: 5, query: "test", include_archived: false)`| Excludes archived team entries from results      |
+| Search (archived on) | `team_search(project_number: 5, query: "test", include_archived: true)` | Returns archived team entries in results         |
+| Search by tags       | `team_search(project_number: 5, tags: ["team-test"])`                 | Tag-filtered results                             |
+| Combined search      | `team_search(project_number: 5, query: "test", tags: ["team-test"])`  | Text + tag filtered results                      |
+| Hybrid search        | `team_search(project_number: 5, query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
+| No query/tags        | `team_search(project_number: 5)`                                      | Returns recent entries (fallback to `getRecent`) |
 
 ### 14.4 Team Entry Detail
 
@@ -84,15 +88,19 @@
 | With tags filter | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
 | Invalid date     | `team_search_by_date_range(project_number: 5, start_date: "Jan 1", end_date: "Jan 31")`                                 | Structured error with YYYY-MM-DD hint                |
 
-### 14.7 Team Admin
+### 14.7 Team Admin & Recovery
 
 | Test                     | Command/Action                                                                          | Expected Result                                      |
 | ------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Update content           | `team_update_entry(project_number: 5, entry_id: <id>, content: "Updated team content")` | `success: true`, `entry` with updated content        |
 | Update tags              | `team_update_entry(project_number: 5, entry_id: <id>, tags: ["updated-team"])`          | Tags changed on team entry                           |
 | Update entry_type        | `team_update_entry(project_number: 5, entry_id: <id>, entry_type: "technical_note")`    | Entry type changed                                   |
+| Update is_archived       | `team_update_entry(project_number: 5, entry_id: <id>, is_archived: true)`               | Entry is archived                                    |
 | Update nonexistent       | `team_update_entry(project_number: 5, entry_id: 999999, content: "x")`                  | Structured error: `{ success: false, error: "..." }` |
 | Soft delete              | `team_delete_entry(project_number: 5, entry_id: <id>)`                                  | `success: true`, `message` confirming deletion       |
+| List deleted entries     | `team_list_deleted_entries(project_number: 5)`                                          | Returns soft-deleted entry in the list               |
+| Restore entry            | `team_restore_entry(project_number: 5, entry_id: <id>)`                                 | `success: true`, entry is restored (`is_deleted = 0`)|
+| Restore nonexistent      | `team_restore_entry(project_number: 5, entry_id: 999999)`                               | Structured error: `{ success: false, error: "..." }` |
 | Delete nonexistent       | `team_delete_entry(project_number: 5, entry_id: 999999)`                                | Structured error: `{ success: false, error: "..." }` |
 | Merge tags               | `team_merge_tags(project_number: 5, source_tag: "team-old", target_tag: "team-new")`    | `success: true`, `entriesUpdated`, `sourceDeleted`   |
 | Merge same tag           | `team_merge_tags(project_number: 5, source_tag: "team-new", target_tag: "team-new")`    | Structured error: `{ success: false, error: "..." }` |
@@ -267,7 +275,7 @@
 - `team_get_cross_project_insights` returns `project_count ≥ 1` with seed entries S15–S17 present (project 5 has 3 entries, meeting `min_entries: 3`)
 - `team_get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
 - `team_get_cross_project_insights` returns `project_count: 0`, `projects: []`, and `message` when no projects meet the threshold
-- All 22 team tools return structured errors when `TEAM_DB_PATH` not configured
+- All 33 team tools return structured errors when `TEAM_DB_PATH` not configured
 - `team_pass_flag(project_number: 5)` creates entries with `entry_type: "flag"` and structured `auto_context`
 - `team_pass_flag(project_number: 5)` strips `@` prefix from `target_user` before storage
 - `team_pass_flag(project_number: 5)` generates `flag:{type}` and `@{user}` tags automatically
@@ -290,3 +298,5 @@
 - `memory://insights/team-collaboration` returns static matrix metrics without error
 - `team_batch_create_entries(project_number: 5)` correctly creates entries in the shared team DB with author attribution
 - `team_batch_delete_entries(project_number: 5)` correctly soft-deletes team entries in bulk
+- `team_list_deleted_entries` discovers soft-deleted team entries, and `team_restore_entry` un-deletes them successfully
+- Keyset cursor pagination and `is_archived` status are supported across team reads and searches

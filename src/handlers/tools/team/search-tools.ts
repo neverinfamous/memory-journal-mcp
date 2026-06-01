@@ -14,6 +14,8 @@ import {
     TeamSearchByDateRangeSchema,
     TeamSearchByDateRangeSchemaMcp,
     TeamEntriesListOutputSchema,
+    TeamListDeletedEntriesSchema,
+    TeamListDeletedEntriesSchemaMcp,
 } from './schemas.js'
 
 // ============================================================================
@@ -44,7 +46,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, cursor, sort_by, project_number } =
+                    const { query, tags, limit, cursor, sort_by, project_number, include_archived } =
                         TeamSearchSchema.parse(params)
 
                     // Security: To bypass project_number, the search must explicitly be for flags only.
@@ -79,6 +81,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         cursor,
                         sortBy: sort_by,
                         projectNumber: project_number,
+                        includeArchived: include_archived,
                     })
                     let entries = result.entries
 
@@ -153,6 +156,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         cursor,
                         sort_by,
                         project_number,
+                        include_archived,
                     } = TeamSearchByDateRangeSchema.parse(params)
 
                     // Security: To bypass project_number, the search must explicitly be for flags only.
@@ -196,6 +200,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         cursor,
                         sortBy: sort_by,
                         projectNumber: project_number,
+                        includeArchived: include_archived,
                     })
                     const entries = result.entries
 
@@ -216,6 +221,40 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         degraded: false,
                         next_cursor: result.nextCursor,
                     }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_list_deleted_entries',
+            title: 'List Deleted Team Entries',
+            description: 'List recently soft-deleted team entries that can be restored. Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: TeamListDeletedEntriesSchemaMcp,
+            outputSchema: TeamEntriesListOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    const { limit, offset, project_number } = TeamListDeletedEntriesSchema.parse(params)
+                    
+                    const result = teamDb.getDeletedEntries({ limit, offset })
+                    let entries = result.entries
+                    if (project_number !== undefined) {
+                        entries = entries.filter((e) => e.projectNumber === project_number)
+                    }
+                    const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
+                    const enriched = entries.map((e) => ({
+                        ...e,
+                        author: authorMap.get(e.id) ?? null,
+                    }))
+                    return { success: true, entries: enriched, count: enriched.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

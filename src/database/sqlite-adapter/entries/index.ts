@@ -16,6 +16,8 @@ import {
     updateEntries,
     deleteEntries,
     getEntryHistory,
+    restoreEntry,
+    getDeletedEntries,
 } from './crud.js'
 import {
     getRecentEntries as getRecentEntriesQuery,
@@ -126,11 +128,11 @@ export class EntriesManager {
         return deleteEntries(this.sharedContext, ids, permanent)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string): { entries: JournalEntry[]; nextCursor?: string } {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean): { entries: JournalEntry[]; nextCursor?: string } {
         if (isPersonal !== undefined) {
-            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor })
+            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor)
+        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived)
     }
 
     getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): { entries: JournalEntry[]; nextCursor?: string } {
@@ -149,6 +151,7 @@ export class EntriesManager {
             workflowRunId?: number
             sortBy?: SortBy
             cursor?: string
+            includeArchived?: boolean
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return searchEntries(this.sharedContext, queryStr, options)
@@ -168,6 +171,7 @@ export class EntriesManager {
             limit?: number
             sortBy?: SortBy
             cursor?: string
+            includeArchived?: boolean
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
@@ -188,5 +192,13 @@ export class EntriesManager {
 
     getEntryHistory(id: number): EntryRevision[] {
         return getEntryHistory(this.sharedContext, id)
+    }
+
+    restoreEntry(id: number): boolean {
+        return restoreEntry(this.sharedContext, id)
+    }
+
+    getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number } {
+        return getDeletedEntries(this.sharedContext, options)
     }
 }

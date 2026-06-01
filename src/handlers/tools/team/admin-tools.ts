@@ -13,10 +13,13 @@ import {
     TeamUpdateEntrySchemaMcp,
     TeamDeleteEntrySchema,
     TeamDeleteEntrySchemaMcp,
+    TeamRestoreEntrySchema,
+    TeamRestoreEntrySchemaMcp,
     TeamMergeTagsSchema,
     TeamMergeTagsSchemaMcp,
     TeamUpdateOutputSchema,
     TeamDeleteOutputSchema,
+    TeamRestoreOutputSchema,
     TeamMergeTagsOutputSchema,
     TeamBatchCreateEntriesSchema,
     TeamBatchCreateEntriesSchemaMcp,
@@ -107,6 +110,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: input.workflow_run_id,
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status,
+                        isArchived: input.is_archived,
                     })
 
                     return {
@@ -179,6 +183,39 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         message: `Team entry ${String(entry_id)} soft-deleted`,
                     }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_restore_entry',
+            title: 'Restore Team Entry',
+            description: 'Restore a soft-deleted team entry. Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: TeamRestoreEntrySchemaMcp,
+            outputSchema: TeamRestoreOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    
+                    const { entry_id } = TeamRestoreEntrySchema.parse(params)
+                    
+                    const success = teamDb.restoreEntry(entry_id)
+                    if (!success) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: `Team entry ${String(entry_id)} not found or not deleted`,
+                        }
+                    }
+                    return { success: true, entryId: entry_id }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -351,6 +388,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: u.workflow_run_id,
                         workflowName: u.workflow_name,
                         workflowStatus: u.workflow_status,
+                        isArchived: u.is_archived,
                     }))
 
                     const { updated, notFound } = teamDb.updateEntries(updates)

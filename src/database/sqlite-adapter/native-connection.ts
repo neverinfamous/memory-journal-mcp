@@ -26,6 +26,7 @@ const SHARED_MIGRATION_COLUMNS: { name: string; sql: string }[] = [
     },
     { name: 'auto_context', sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT' },
     { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
+    { name: 'is_archived', sql: 'ALTER TABLE memory_journal ADD COLUMN is_archived INTEGER DEFAULT 0' },
     { name: 'project_number', sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER' },
     { name: 'project_owner', sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT' },
     { name: 'issue_number', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER' },

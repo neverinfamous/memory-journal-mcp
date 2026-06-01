@@ -39,7 +39,8 @@ export function getRecentEntries(
     context: EntriesSharedContext,
     limit: number,
     sortBy: SortBy = 'timestamp',
-    cursor?: string
+    cursor?: string,
+    includeArchived = false
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
@@ -56,7 +57,7 @@ export function getRecentEntries(
             SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-            WHERE e.deleted_at IS NULL
+            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''}
             ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
         `)
         const rows = stmt.all([limit, offset])
@@ -82,7 +83,7 @@ export function getRecentEntries(
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
-        WHERE deleted_at IS NULL ${cursorCondition}
+        WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${cursorCondition}
         ORDER BY timestamp DESC, id DESC LIMIT ?
     `)
     params.push(limit)
@@ -144,6 +145,7 @@ export function searchEntries(
         startDate?: string
         endDate?: string
         sortBy?: SortBy
+        includeArchived?: boolean
     }
 ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
     const { db, tagsMgr } = context
@@ -241,6 +243,7 @@ function buildSearchQuery(
               startDate?: string
               endDate?: string
               sortBy?: SortBy
+              includeArchived?: boolean
           }
         | undefined,
     useFts: boolean,
@@ -287,6 +290,9 @@ function buildSearchQuery(
 
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
+    if (!options?.includeArchived) {
+        conditions.push('e.is_archived = 0')
+    }
 
     if (queryStr.length > 0) {
         if (useFts) {
@@ -394,6 +400,7 @@ export function searchByDateRange(
         workflowRunId?: number
         limit?: number
         sortBy?: SortBy
+        includeArchived?: boolean
     }
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
@@ -401,11 +408,14 @@ export function searchByDateRange(
     let start = startDate
     if (!start.includes('T')) start += 'T00:00:00.000Z'
 
-    const conditions = ['deleted_at IS NULL', 'timestamp >= ?']
+    const conditions = ['e.deleted_at IS NULL', 'e.timestamp >= ?']
+    if (!options?.includeArchived) {
+        conditions.push('e.is_archived = 0')
+    }
     const params: unknown[] = [start]
 
     if (endDate) {
-        conditions.push('timestamp <= ?')
+        conditions.push('e.timestamp <= ?')
         let end = endDate
         if (!end.includes('T')) end += 'T23:59:59.999Z'
         params.push(end)

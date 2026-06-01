@@ -1,6 +1,6 @@
 import type { JournalEntry, EntryType, EntryRevision } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
-import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject } from './shared.js'
+import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject, rowsToEntries } from './shared.js'
 
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
     const { db, tagsMgr } = context
@@ -40,6 +40,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             'workflow_run_id',
             'workflow_name',
             'workflow_status',
+            'is_archived',
         ]
         const values = [
             input.entryType ?? 'personal_reflection',
@@ -58,6 +59,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.workflowRunId ?? null,
             input.workflowName || null,
             input.workflowStatus || null,
+            input.isArchived ? 1 : 0,
         ]
 
         if (input.author !== undefined) {
@@ -187,6 +189,7 @@ export function updateEntry(
         workflowRunId?: number | null
         workflowName?: string | null
         workflowStatus?: string | null
+        isArchived?: boolean
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
@@ -217,6 +220,10 @@ export function updateEntry(
     if (input.autoContext !== undefined) {
         updates.push('auto_context = ?')
         values.push(input.autoContext ?? null)
+    }
+    if (input.isArchived !== undefined) {
+        updates.push('is_archived = ?')
+        values.push(input.isArchived ? 1 : 0)
     }
     // GitHub extensions
     for (const key of [
@@ -341,6 +348,7 @@ export function createEntries(
                 'workflow_run_id',
                 'workflow_name',
                 'workflow_status',
+                'is_archived',
             ]
             const values = [
                 input.entryType ?? 'personal_reflection',
@@ -359,6 +367,7 @@ export function createEntries(
                 input.workflowRunId ?? null,
                 input.workflowName || null,
                 input.workflowStatus || null,
+                input.isArchived ? 1 : 0,
             ]
 
             if (input.author !== undefined) {
@@ -412,6 +421,7 @@ export function updateEntries(
         workflowRunId?: number | null
         workflowName?: string | null
         workflowStatus?: string | null
+        isArchived?: boolean
     }[]
 ): { updated: JournalEntry[]; notFound: number[] } {
     const { db } = context
@@ -488,5 +498,31 @@ export function getEntryHistory(
     
     const rows = stmt.all(id) as EntryRevision[]
     return rows
+}
+
+export function restoreEntry(context: EntriesSharedContext, id: number): boolean {
+    const { db } = context
+    const stmt = db.prepare('UPDATE memory_journal SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL')
+    const result = stmt.run(id)
+    return result.changes > 0
+}
+
+export function getDeletedEntries(
+    context: EntriesSharedContext,
+    options?: { limit?: number; offset?: number }
+): { entries: JournalEntry[]; count: number } {
+    const { db, tagsMgr } = context
+    const limit = options?.limit ?? 50
+    const offset = options?.offset ?? 0
+
+    const countStmt = db.prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NOT NULL')
+    const countRow = rowToObject(countStmt.get())
+    const count = (countRow?.['count'] as number) || 0
+
+    const stmt = db.prepare(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT ? OFFSET ?`)
+    const rows = stmt.all([limit, offset])
+    const entries = rowsToEntries(tagsMgr, rows)
+
+    return { entries, count }
 }
 

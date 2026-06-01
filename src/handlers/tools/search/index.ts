@@ -65,6 +65,7 @@ const SearchEntriesSchema = z.object({
         .optional()
         .default(true)
         .describe('Include team entries in the search results'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -99,6 +100,7 @@ const SearchEntriesSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include team entries in the search results'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -124,6 +126,7 @@ const SearchByDateRangeSchema = z.object({
         .optional()
         .default(true)
         .describe('Include team entries in the search results'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -149,6 +152,7 @@ const SearchByDateRangeSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include team entries in the search results'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -185,6 +189,7 @@ const SemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include team entries in the search results'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
@@ -212,6 +217,7 @@ const SemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include team entries in the search results'),
+    include_archived: z.boolean().optional().default(false),
 })
 
 // ============================================================================
@@ -323,6 +329,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         endDate: input.end_date,
                         sortBy: input.sort_by,
                         includeTeam: input.include_team,
+                        includeArchived: input.include_archived,
                     }
 
                     // Route to the appropriate search strategy
@@ -497,6 +504,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         limit: perDbLimit,
                         sortBy: input.sort_by,
                         cursor: personalCursor,
+                        includeArchived: input.include_archived,
                     })
 
                     // Cross-database merge when team DB is available
@@ -515,6 +523,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 limit: perDbLimit,
                                 sortBy: input.sort_by,
                                 cursor: teamCursor,
+                                includeArchived: input.include_archived,
                             }
                         )
                         const merged = mergeAndDedup(
@@ -642,6 +651,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         startDate: input.start_date,
                         endDate: input.end_date,
                         includeTeam: input.include_team,
+                        includeArchived: input.include_archived,
                     }
 
                     if (input.tags && input.tags.length > 0) {
@@ -733,6 +743,36 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     }
                     const stats = vectorManager.getStats()
                     return { success: true, available: true, ...stats }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'list_deleted_entries',
+            title: 'List Deleted Entries',
+            description: 'List recently soft-deleted entries that can be restored',
+            group: 'search',
+            inputSchema: z.object({
+                limit: relaxedNumber().optional().default(50),
+                offset: relaxedNumber().optional().default(0),
+            }),
+            outputSchema: EntriesListOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    const { limit, offset } = z.object({ limit: z.number(), offset: z.number() }).parse(params)
+                    const result = db.getDeletedEntries({ limit, offset })
+                    return {
+                        success: true,
+                        entries: result.entries.map((e) => ({ ...e, source: 'personal' as const })),
+                        count: result.count,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

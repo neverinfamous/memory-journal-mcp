@@ -410,6 +410,41 @@ return {
 
 ---
 
+### 21.10 Keyset Pagination & Archiving in Search
+
+```javascript
+// Test code:
+const created = await mj.core.createEntryMinimal({ content: 'CM3 search archiving pagination test' })
+const id = created.entry.id
+await mj.admin.updateEntry({ entry_id: id, is_archived: true })
+
+const searchArchivedOff = await mj.search.searchEntries({ project_number: 5, query: "search archiving pagination", include_archived: false })
+const isArchivedHidden = !searchArchivedOff.entries?.some(e => e.id === id)
+
+const searchArchivedOn = await mj.search.searchEntries({ project_number: 5, query: "search archiving pagination", include_archived: true })
+const isArchivedVisible = searchArchivedOn.entries?.some(e => e.id === id)
+
+const searchPagPage1 = await mj.search.searchEntries({ project_number: 5, query: "test", limit: 2 })
+const hasSearchCursor = typeof searchPagPage1.next_cursor === 'string'
+
+// Clean up
+await mj.admin.deleteEntry({ entry_id: id, permanent: true })
+
+return {
+  isArchivedHidden,
+  isArchivedVisible,
+  hasSearchCursor,
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `isArchivedHidden`  | `true`   |
+| `isArchivedVisible` | `true`   |
+| `hasSearchCursor`   | `true`   |
+
+---
+
 ## Success Criteria
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
@@ -437,3 +472,5 @@ return {
 - `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
 - `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
 - Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
+- `search_entries` and `search_by_date_range` correctly respect the `include_archived` filter via Code Mode scripts
+- Keyset cursor pagination (`cursor` & `next_cursor`) works reliably across FTS, semantic, and date range searches via Code Mode scripts

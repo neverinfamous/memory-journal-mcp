@@ -65,6 +65,20 @@
 | Permanent delete         | `delete_entry(project_number: 5, entry_id: <test_id>, permanent: true)`  | Entry removed                                             |
 | Delete nonexistent entry | `delete_entry(project_number: 5, entry_id: 999999, permanent: false)`    | Returns `success: false, error: "Entry 999999 not found"` |
 
+### 2.4 Soft-Delete Recovery, Archiving & Cursor Pagination
+
+| Test                      | Command/Action                                                                                                                    | Expected Result                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| List deleted initially    | `list_deleted_entries(project_number: 5)`                                                                                         | Returns empty list or list of previously soft-deleted entries                             |
+| Soft delete for recovery   | `delete_entry(project_number: 5, entry_id: <test_id>, permanent: false)`                                                          | Entry hidden from standard queries; appears in `list_deleted_entries`                     |
+| Restore entry             | `restore_entry(project_number: 5, entry_id: <test_id>)`                                                                           | Entry restored (`is_deleted = 0`); no longer in `list_deleted_entries`; visible in search |
+| Restore nonexistent       | `restore_entry(project_number: 5, entry_id: 999999)`                                                                              | Structured error: `{ success: false, error: "Entry 999999 not found" }`                   |
+| Set archived              | `update_entry(project_number: 5, entry_id: <test_id>, is_archived: true)`                                                         | `isArchived` set to `true` (verified via `get_entry_by_id`)                               |
+| Get recent (archived off) | `get_recent_entries(project_number: 5, limit: 10, include_archived: false)` (or omit parameter)                                   | Default search/recent excludes archived entry                                             |
+| Get recent (archived on)  | `get_recent_entries(project_number: 5, limit: 10, include_archived: true)`                                                        | Returns the archived entry in the list                                                    |
+| Cursor pagination page 1  | `get_recent_entries(project_number: 5, limit: 2)`                                                                                 | Returns 2 entries and a non-empty `next_cursor` string                                    |
+| Cursor pagination page 2  | `get_recent_entries(project_number: 5, limit: 2, cursor: "<next_cursor>")`                                                        | Returns next page of entries; continues sequentially                                      |
+
 ---
 
 ## Success Criteria
@@ -80,3 +94,6 @@
 - `get_entry_history` correctly returns historical snapshots after updates
 - `update_entry` returns `success: false` for nonexistent entry IDs
 - `delete_entry` returns `success: false` for nonexistent entry IDs
+- `list_deleted_entries` discovers soft-deleted entries, and `restore_entry` successfully un-deletes them
+- `is_archived` column and `include_archived` filter work seamlessly on CRUD reads
+- `cursor` and `next_cursor` allow clean O(1) keyset pagination on `get_recent_entries`

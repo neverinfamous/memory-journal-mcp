@@ -93,9 +93,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         limit?: number,
         isPersonal?: boolean,
         sortBy?: 'timestamp' | 'importance',
-        cursor?: string
+        cursor?: string,
+        includeArchived?: boolean
     ): { entries: JournalEntry[]; nextCursor?: string } {
-        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor)
+        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor, includeArchived)
     }
 
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string } {
@@ -125,6 +126,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
@@ -138,6 +140,14 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             }
             return success
         })
+    }
+
+    restoreEntry(id: number): boolean {
+        return this.entriesMgr.restoreEntry(id)
+    }
+
+    getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number } {
+        return this.entriesMgr.getDeletedEntries(options)
     }
 
     createEntries(inputs: CreateEntryInput[]): JournalEntry[] {
@@ -163,6 +173,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
         }[]
     ): { updated: JournalEntry[]; notFound: number[] } {
         return this.entriesMgr.updateEntries(updates)
@@ -194,6 +205,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             endDate?: string
             sortBy?: 'timestamp' | 'importance'
             cursor?: string
+            includeArchived?: boolean
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return this.entriesMgr.searchEntries(query, options)
@@ -213,6 +225,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             limit?: number
             sortBy?: 'timestamp' | 'importance'
             cursor?: string
+            includeArchived?: boolean
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return this.entriesMgr.searchByDateRange(startDate, endDate, options)

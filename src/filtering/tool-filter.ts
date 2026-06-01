@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 80 tools are categorized here for filtering support.
+ * All 84 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -25,13 +25,20 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'test_simple',
         'list_tags',
     ],
-    search: ['search_entries', 'search_by_date_range', 'semantic_search', 'get_vector_index_stats'],
+    search: [
+        'search_entries',
+        'search_by_date_range',
+        'semantic_search',
+        'get_vector_index_stats',
+        'list_deleted_entries',
+    ],
     analytics: ['get_statistics', 'get_cross_project_insights'],
     relationships: ['link_entries', 'visualize_relationships'],
     io: ['export_entries', 'export_markdown', 'import_markdown'],
     admin: [
         'update_entry',
         'delete_entry',
+        'restore_entry',
         'rebuild_vector_index',
         'add_to_vector_index',
         'merge_tags',
@@ -69,6 +76,8 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_search_by_date_range',
         'team_update_entry',
         'team_delete_entry',
+        'team_restore_entry',
+        'team_list_deleted_entries',
         'team_merge_tags',
         'team_batch_create_entries',
         'team_batch_update_entries',

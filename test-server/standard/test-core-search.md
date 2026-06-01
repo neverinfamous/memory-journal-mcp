@@ -54,6 +54,11 @@
 | Importance sort rcnt  | `get_recent_entries(project_number: 5, limit: 5, sort_by: "importance")`                                            | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
 | Importance sort date  | `search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", sort_by: "importance")`  | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
 | Default no overhead   | `search_entries(project_number: 5, query: "architecture")`                                                          | No `importanceScore` field present on entries (default `sort_by: 'timestamp'`)                                                                                                                |
+| Search (archived off) | `search_entries(project_number: 5, query: "test", include_archived: false)` (or omit)                              | Excludes archived entries from FTS/semantic results                                                                             |
+| Search (archived on)  | `search_entries(project_number: 5, query: "test", include_archived: true)`                                              | Returns archived entries alongside active entries in results                                                                   |
+| Search date range arch | `search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", include_archived: true)` | Returns archived entries matching date range                                                                                  |
+| Search cursor pag.     | `search_entries(project_number: 5, query: "test", limit: 2)`                                                        | Returns 2 matching entries and a non-empty `next_cursor` string                                                                 |
+| Search cursor pag. rd  | `search_entries(project_number: 5, query: "test", limit: 2, cursor: "<next_cursor>")`                               | Returns next page of matching results sequentially                                                                              |
 
 > [!TIP]
 > **Token Conservation in Code Mode:** When testing search across dozens of queries via `mj_execute_code`, do NOT append the full `res` objects to your results array. Map responses to `{ success: true, count: res.entries?.length || 0 }` to prevent returning massive JSON payloads (megabytes in size) that artificially inflate `_meta.tokenEstimate`.
@@ -81,3 +86,5 @@
 - `get_recent_entries` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
 - `search_by_date_range` with `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending
 - Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
+- `search_entries` and `search_by_date_range` correctly respect the `include_archived` filter
+- Keyset cursor pagination (`cursor` & `next_cursor`) works reliably across FTS, semantic, and date range search modes

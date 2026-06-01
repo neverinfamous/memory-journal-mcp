@@ -43,6 +43,7 @@ const UpdateEntrySchema = z.object({
     workflow_run_id: z.number().nullable().optional(),
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
+    is_archived: z.boolean().optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -63,6 +64,7 @@ const UpdateEntrySchemaMcp = z.object({
     workflow_run_id: relaxedNumber().nullable().optional(),
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.string().nullable().optional(),
+    is_archived: z.boolean().optional(),
 })
 
 const DeleteEntrySchema = z.object({
@@ -224,6 +226,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: input.workflow_run_id,
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status,
+                        isArchived: input.is_archived,
                     })
                     if (!entry) {
                         return {
@@ -297,6 +300,40 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         permanent,
                         ...(warning ? { warning } : {}),
                     }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'restore_entry',
+            title: 'Restore Entry',
+            description: 'Restore a soft-deleted journal entry.',
+            group: 'admin',
+            inputSchema: z.object({ entry_id: relaxedNumber().optional() }),
+            outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    const { entry_id } = z.object({ entry_id: z.number() }).parse(params)
+                    const success = db.restoreEntry(entry_id)
+                    if (!success) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: `Entry ${String(entry_id)} not found or not deleted`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID',
+                            recoverable: true,
+                        }
+                    }
+                    return { success, entryId: entry_id }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -579,6 +616,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: u.workflow_run_id,
                         workflowName: u.workflow_name,
                         workflowStatus: u.workflow_status,
+                        isArchived: u.is_archived,
                     }))
 
                     const { updated, notFound } = db.updateEntries(updates)

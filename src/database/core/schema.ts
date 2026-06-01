@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     significance_type TEXT,
     auto_context TEXT,
     deleted_at TEXT,
+    is_archived INTEGER DEFAULT 0,
     -- GitHub integration fields
     project_number INTEGER,
     project_owner TEXT,
@@ -149,6 +150,7 @@ export interface CreateEntryInput {
     isPersonal?: boolean
     significanceType?: SignificanceType
     autoContext?: string
+    isArchived?: boolean
     /** Optional ISO 8601 timestamp override (defaults to current time) */
     timestamp?: string
     projectNumber?: number

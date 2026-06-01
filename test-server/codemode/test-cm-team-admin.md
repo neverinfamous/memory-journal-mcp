@@ -59,17 +59,48 @@ const afterTags = await mj.team.teamListTags({})
 const oldGone = !afterTags.tags?.some((t) => t.name === 'cm4-team-old')
 const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
 
-// Soft delete
+// Soft delete and recovery
 const toDelete = await mj.team.teamCreateEntry({
   project_number: 5,
-  content: 'CM4 delete me',
-  project_number: 5,
+  content: 'CM4 delete and recover me',
 })
 const deleted = await mj.team.teamDeleteEntry({
   project_number: 5,
+  entry_id: toDelete.entry.id,
+})
+const deletedList = await mj.team.teamListDeletedEntries({
+  project_number: 5,
+})
+const isDeleted = deletedList.entries?.some((e) => e.id === toDelete.entry.id)
+const restored = await mj.team.teamRestoreEntry({
   project_number: 5,
   entry_id: toDelete.entry.id,
 })
+const verifyDeleted = await mj.team.teamListDeletedEntries({
+  project_number: 5,
+})
+const isNoLongerDeleted = !verifyDeleted.entries?.some((e) => e.id === toDelete.entry.id)
+
+// Archiving & Keyset pagination
+const archived = await mj.team.teamUpdateEntry({
+  project_number: 5,
+  entry_id: toDelete.entry.id,
+  is_archived: true,
+})
+const verifyArchived = await mj.team.teamGetEntryById({
+  project_number: 5,
+  entry_id: toDelete.entry.id,
+})
+const isArchived = verifyArchived.entry?.isArchived === true
+
+// Clean up
+await mj.team.teamDeleteEntry({
+  project_number: 5,
+  entry_id: toDelete.entry.id,
+})
+
+const pag1 = await mj.team.teamGetRecent({ project_number: 5, limit: 2 })
+const hasCursor = typeof pag1.next_cursor === 'string'
 
 return {
   updateSuccess: updated.success,
@@ -78,17 +109,27 @@ return {
   oldTagGone: oldGone,
   newTagExists: newExists,
   deleteSuccess: deleted.success,
+  isDeleted,
+  restoreSuccess: restored.success,
+  isNoLongerDeleted,
+  isArchived,
+  hasCursor,
 }
 ```
 
-| Check            | Expected |
-| ---------------- | -------- |
-| `updateSuccess`  | `true`   |
-| `contentUpdated` | `true`   |
-| `mergeSuccess`   | `true`   |
-| `oldTagGone`     | `true`   |
-| `newTagExists`   | `true`   |
-| `deleteSuccess`  | `true`   |
+| Check               | Expected |
+| ------------------- | -------- |
+| `updateSuccess`     | `true`   |
+| `contentUpdated`    | `true`   |
+| `mergeSuccess`      | `true`   |
+| `oldTagGone`        | `true`   |
+| `newTagExists`      | `true`   |
+| `deleteSuccess`     | `true`   |
+| `isDeleted`         | `true`   |
+| `restoreSuccess`    | `true`   |
+| `isNoLongerDeleted` | `true`   |
+| `isArchived`        | `true`   |
+| `hasCursor`         | `true`   |
 
 ### 28.4b Team Batch Operations
 
@@ -322,3 +363,5 @@ return {
 - `team_list_backups` returns backup metadata
 - `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings
 - Team batch operations execute successfully via Code Mode and fallback aliases resolve correctly
+- Team soft-delete recovery (`team_restore_entry`, `team_list_deleted_entries`) is functional via Code Mode scripts
+- Keyset cursor pagination and archiving filters (`is_archived`) are supported on team entries via Code Mode scripts

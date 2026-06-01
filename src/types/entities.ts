@@ -82,6 +82,7 @@ export interface JournalEntry {
     significanceType: SignificanceType
     autoContext: string | null
     deletedAt: string | null
+    isArchived: boolean
     tags: string[]
     // GitHub integration fields
     projectNumber?: number | null

@@ -10,7 +10,8 @@ export const ENTRY_COLUMNS =
     'issue_number as issueNumber, issue_url as issueUrl, ' +
     'pr_number as prNumber, pr_url as prUrl, pr_status as prStatus, ' +
     'workflow_run_id as workflowRunId, workflow_name as workflowName, ' +
-    'workflow_status as workflowStatus, deleted_at as deletedAt'
+    'workflow_status as workflowStatus, deleted_at as deletedAt, ' +
+    'is_archived as isArchived'
 
 export const ALIASED_ENTRY_COLUMNS =
     'e.id, e.entry_type as entryType, e.content, e.timestamp, ' +
@@ -20,7 +21,7 @@ export const ALIASED_ENTRY_COLUMNS =
     'e.issue_url as issueUrl, e.pr_number as prNumber, e.pr_url as prUrl, ' +
     'e.pr_status as prStatus, e.workflow_run_id as workflowRunId, ' +
     'e.workflow_name as workflowName, e.workflow_status as workflowStatus, ' +
-    'e.deleted_at as deletedAt'
+    'e.deleted_at as deletedAt, e.is_archived as isArchived'
 
 /**
  * Shared context for entries manager operations
@@ -52,6 +53,7 @@ export function rowsToEntries(tagsMgr: TagsManager, rows: unknown[]): JournalEnt
         return {
             ...p,
             isPersonal: Boolean(p.isPersonal), // SQLite uses 0/1
+            isArchived: Boolean(p.isArchived),
             tags: [],
             // Attach importanceScore if the query computed it (importance-sorted results)
             ...(p.importanceScore !== undefined
