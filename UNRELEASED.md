@@ -9,4 +9,5 @@
 - Added comprehensive test suite coverage (Standard & Code Mode) for all new bulk/batch operations.
 
 ### Fixed
+- Fixed a ReferenceError crash in `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (and their team variants) by properly importing the `sendProgress` utility.
 - Fixed Docker Hub repository description not updating during tag-based deployments

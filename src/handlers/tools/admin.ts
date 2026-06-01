@@ -19,7 +19,7 @@ import {
 } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from './core.js'
-import { createBatchProgressReporter } from '../../utils/progress-utils.js'
+import { createBatchProgressReporter, sendProgress } from '../../utils/progress-utils.js'
 
 // ============================================================================
 // Input Schemas
@@ -502,6 +502,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchCreateEntriesSchema.parse(params)
+                    await sendProgress(progress, 0, 2, 'Creating entries...')
                     const results = db.createEntries(input.entries.map((e) => ({
                         content: e.content,
                         entryType: e.entry_type,
@@ -521,6 +522,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: e.workflow_status,
                     })))
                     
+                    await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
+
                     const indexStatuses: string[] = []
                     if (input.auto_index && vectorManager) {
                         const reporter = createBatchProgressReporter(progress, results.length, 10)
@@ -532,6 +535,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             }
                             await reporter(i + 1, `Indexing ${String(i + 1)}/${String(results.length)}...`)
                         }
+                    } else {
+                        await sendProgress(progress, 2, 2, 'Batch create complete')
                     }
 
                     return { success: true, count: results.length, entries: results, indexStatuses }
@@ -556,6 +561,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchUpdateEntriesSchema.parse(params)
+                    await sendProgress(progress, 0, 2, 'Updating entries...')
                     const updates = input.updates.map((u) => ({
                         id: u.entry_id,
                         content: u.content,
@@ -577,6 +583,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
 
                     const { updated, notFound } = db.updateEntries(updates)
 
+                    await sendProgress(progress, 1, 2, `Updated ${String(updated.length)} entries...`)
+
                     const indexStatuses: string[] = []
                     if (input.auto_index && vectorManager) {
                         const reporter = createBatchProgressReporter(progress, updated.length, 10)
@@ -592,6 +600,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             }
                             await reporter(i + 1, `Indexing ${String(i + 1)}/${String(updated.length)}...`)
                         }
+                    } else {
+                        await sendProgress(progress, 2, 2, 'Batch update complete')
                     }
 
                     return { success: true, count: updated.length, updated, notFound, indexStatuses }
@@ -613,15 +623,22 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const input = BatchDeleteEntriesSchema.parse(params)
+                    await sendProgress(progress, 0, 2, 'Deleting entries...')
                     const { deleted, notFound } = db.deleteEntries(input.entry_ids, input.permanent)
                     
+                    await sendProgress(progress, 1, 2, `Deleted ${String(deleted.length)} entries...`)
+                    
                     if (vectorManager) {
-                        for (const id of deleted) {
-                            db.deleteVector(id)
+                        const reporter = createBatchProgressReporter(progress, deleted.length, 10)
+                        for (let i = 0; i < deleted.length; i++) {
+                            db.deleteVector(deleted[i])
+                            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
                         }
+                    } else {
+                        await sendProgress(progress, 2, 2, 'Batch delete complete')
                     }
 
                     return { success: true, count: deleted.length, deleted, notFound, permanent: input.permanent }

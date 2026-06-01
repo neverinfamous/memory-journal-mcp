@@ -29,7 +29,7 @@ import {
     TeamBatchDeleteEntriesOutputSchema,
 } from './schemas.js'
 import { coerceSignificanceAlias } from '../schemas.js'
-import { createBatchProgressReporter } from '../../../utils/progress-utils.js'
+import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 
 // ============================================================================
@@ -248,6 +248,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
 
                     const input = TeamBatchCreateEntriesSchema.parse(params)
+                    await sendProgress(context.progress, 0, 2, 'Creating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
                     
                     const inputs = input.entries.map((e) => ({
@@ -272,6 +273,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         return { ...r, author }
                     })
 
+                    await sendProgress(context.progress, 1, 2, `Created ${String(entries.length)} team entries...`)
+
                     const indexStatuses: string[] = []
                     if (input.auto_index && context.teamVectorManager) {
                         const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
@@ -283,6 +286,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                             }
                             await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
                         }
+                    } else {
+                        await sendProgress(context.progress, 2, 2, 'Team batch create complete')
                     }
 
                     return { success: true, count: entries.length, entries, indexStatuses }
@@ -309,6 +314,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
 
                     const input = TeamBatchUpdateEntriesSchema.parse(params)
+                    await sendProgress(context.progress, 0, 2, 'Updating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
                     
                     // Verify ownership
@@ -354,6 +360,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         author: fetchAuthor(teamDb, r.id)
                     }))
 
+                    await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
+
                     const indexStatuses: string[] = []
                     if (input.auto_index && context.teamVectorManager) {
                         const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
@@ -368,6 +376,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                             }
                             await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
                         }
+                    } else {
+                        await sendProgress(context.progress, 2, 2, 'Team batch update complete')
                     }
 
                     return { success: true, count: entries.length, updated: entries, notFound, indexStatuses }
@@ -389,11 +399,12 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
 
                     const input = TeamBatchDeleteEntriesSchema.parse(params)
+                    await sendProgress(context.progress, 0, 2, 'Deleting team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
                     
                     // Filter ids to those that match the project number and check permissions
@@ -423,10 +434,16 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
 
                     const result = teamDb.deleteEntries(validIds, input.permanent)
                     
+                    await sendProgress(context.progress, 1, 2, `Deleted ${String(result.deleted.length)} team entries...`)
+
                     if (context.teamVectorManager) {
-                        for (const id of result.deleted) {
-                            teamDb.deleteVector(id)
+                        const reporter = createBatchProgressReporter(context.progress, result.deleted.length, 10)
+                        for (let i = 0; i < result.deleted.length; i++) {
+                            teamDb.deleteVector(result.deleted[i])
+                            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(result.deleted.length)}...`)
                         }
+                    } else {
+                        await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
                     }
 
                     // Merge notFound arrays

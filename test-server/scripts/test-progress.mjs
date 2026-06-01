@@ -194,6 +194,81 @@ async function main() {
     }
 
     // =========================================================================
+    // Phase 3: Batch Operation Progress (batch_delete_entries)
+    // =========================================================================
+    console.log('\n--- Phase 3: Batch Operation Progress (batch_delete_entries) ---')
+    progressEvents.length = 0
+
+    // Seed entries for deletion
+    const seedBatch = await rpc('tools/call', {
+        name: 'batch_create_entries',
+        arguments: {
+            entries: [
+                { content: 'Delete me 1', entry_type: 'technical_note', project_number: 1 }, 
+                { content: 'Delete me 2', entry_type: 'technical_note', project_number: 1 }
+            ],
+            auto_index: false
+        }
+    })
+    
+    let ids = []
+    if (seedBatch.error) {
+        console.error('FAIL: Could not seed batch entries:', seedBatch.error)
+        failures++
+    } else {
+        try {
+            const content = seedBatch.result?.content?.[0]?.text
+            const parsed = JSON.parse(content)
+            if (parsed.success) {
+                ids = parsed.entries.map(e => e.id)
+            } else {
+                console.error('FAIL: Seed batch returned application error:', parsed.error)
+                failures++
+            }
+        } catch (err) {}
+    }
+
+    progressEvents.length = 0
+    const batchResponse = await rpc('tools/call', {
+        name: 'batch_delete_entries',
+        arguments: { entry_ids: ids },
+        _meta: { progressToken: 'phase3-batch' }
+    })
+
+    if (batchResponse.error) {
+        console.error('FAIL: batch_delete_entries returned error:', batchResponse.error)
+        failures++
+    } else {
+        // Check for application-level error
+        const text = batchResponse.result?.content?.[0]?.text
+        let success = true
+        try {
+            const parsed = JSON.parse(text)
+            if (parsed.success === false) {
+                console.error('FAIL: Application error:', parsed.error)
+                success = false
+            }
+        } catch(e) {}
+
+        if (success) {
+            // Wait briefly for any pending stdout data events to process
+            await new Promise(resolve => setTimeout(resolve, 500))
+            
+            console.log('\nBatch delete finished successfully!')
+            if (progressEvents.length >= 2) {
+                console.log(
+                    `PASS: Received ${progressEvents.length} progress notifications (expected ≥ 2)`
+                )
+            } else {
+                console.error(`FAIL: Expected ≥ 2 progress notifications, got ${progressEvents.length}`)
+                failures++
+            }
+        } else {
+            failures++
+        }
+    }
+
+    // =========================================================================
     // Summary
     // =========================================================================
     console.log('\n--- Summary ---')
