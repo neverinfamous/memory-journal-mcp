@@ -471,7 +471,7 @@ chmod 700 /shared/team-data
 
 | Component    | Supported Versions | Notes                                                                 |
 | ------------ | ------------------ | --------------------------------------------------------------------- |
-| Node.js      | 26.x (LTS)         | Minimum required version for `worker_threads` and isolation features. |
+| Node.js      | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
 | MCP Protocol | 2024-11-05         | Full compatibility with the official Model Context Protocol.          |
 | Docker Base  | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
 

@@ -242,6 +242,8 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://flags` - Active (unresolved) team flags dashboard (requires `TEAM_DB_PATH`)
 - `memory://flags/vocabulary` - Configured flag vocabulary terms
 - `memory://flags/history` - Recently resolved flags with resolution details and avg time-to-resolution (last 7 days)
+- `memory://insights/digest` - Aggregate insights digest
+- `memory://insights/team-collaboration` - Team collaboration metrics
 
 **17 Template Resources** (9 base templates + 8 dynamic `{repo}` variants):
 
