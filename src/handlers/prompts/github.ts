@@ -45,7 +45,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             ],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const projectNumber = parseInt(args['project_number'] ?? '0', 10)
-                const entries = db.searchEntries('', { projectNumber, limit: 20 })
+                const { entries } = db.searchEntries('', { projectNumber, limit: 20 })
 
                 return {
                     messages: [
@@ -71,7 +71,7 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = db.searchEntries('', { prNumber, limit: 100 }).reverse()
+                const entries = db.searchEntries('', { prNumber, limit: 100 }).entries.reverse()
 
                 return {
                     messages: [
@@ -97,7 +97,7 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = db.searchEntries('', { prNumber, limit: 100 }).reverse()
+                const entries = db.searchEntries('', { prNumber, limit: 100 }).entries.reverse()
 
                 return {
                     messages: [
@@ -123,7 +123,7 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = db.searchEntries('', { prNumber, limit: 100 }).reverse()
+                const entries = db.searchEntries('', { prNumber, limit: 100 }).entries.reverse()
 
                 return {
                     messages: [

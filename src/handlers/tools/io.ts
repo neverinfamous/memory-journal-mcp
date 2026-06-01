@@ -197,15 +197,15 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit: fetchLimit,
-                        })
+                        }).entries
                     } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         // Tags/types filter: use a wide date range to scan the full database
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit: fetchLimit,
-                        })
+                        }).entries
                     } else {
-                        entries = db.getRecentEntries(fetchLimit)
+                        entries = db.getRecentEntries(fetchLimit).entries
                     }
 
                     // Post-filter by entry_types, then cap to requested limit
@@ -303,14 +303,14 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit,
-                        })
+                        }).entries
                     } else if (input.tags && input.tags.length > 0) {
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit,
-                        })
+                        }).entries
                     } else {
-                        entries = db.getRecentEntries(limit)
+                        entries = db.getRecentEntries(limit).entries
                     }
 
                     // Post-filter by entry_types

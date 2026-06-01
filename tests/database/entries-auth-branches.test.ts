@@ -198,58 +198,58 @@ describe('searchByDateRange — filter combinations', () => {
     })
 
     it('should filter by date range only', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-01-31')
+        const result = searchByDateRange(context, '2025-01-01', '2025-01-31').entries
         expect(result.length).toBe(2)
     })
 
     it('should filter by isPersonal', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { isPersonal: true })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { isPersonal: true }).entries
         expect(result.every((e) => e.isPersonal === true)).toBe(true)
     })
 
     it('should filter by projectNumber', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { projectNumber: 42 })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { projectNumber: 42 }).entries
         expect(result.length).toBe(2)
     })
 
     it('should filter by issueNumber', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { issueNumber: 10 })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { issueNumber: 10 }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by prNumber', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { prNumber: 20 })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { prNumber: 20 }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by workflowRunId', () => {
         const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
             workflowRunId: 100,
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by entryType', () => {
         const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
             entryType: 'decision',
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by tags', () => {
         const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
             tags: ['test-tag'],
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 
     it('should handle startDate without T (appends time)', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-01-31')
+        const result = searchByDateRange(context, '2025-01-01', '2025-01-31').entries
         expect(result.length).toBeGreaterThanOrEqual(0)
     })
 
     it('should handle endDate without T (appends time)', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-01-31')
+        const result = searchByDateRange(context, '2025-01-01', '2025-01-31').entries
         expect(result.length).toBeGreaterThanOrEqual(0)
     })
 
@@ -260,7 +260,7 @@ describe('searchByDateRange — filter combinations', () => {
             issueNumber: 10,
             prNumber: 20,
             workflowRunId: 100,
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 })

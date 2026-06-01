@@ -43,6 +43,8 @@ export interface JournalContext {
     lastModified: string
 }
 
+function extractEntries(result: any): any[] { return Array.isArray(result) ? result : (result?.entries || []); }
+
 export function buildJournalContext(
     context: ResourceContext,
     config: BriefingConfig,
@@ -51,29 +53,29 @@ export function buildJournalContext(
     // ── Session summaries (computed first to enable deduplication) ──────
     const summaryEntries =
         typeof projectNumber === 'number'
-            ? context.db.searchEntries('', {
+            ? extractEntries(context.db.searchEntries('', {
                   limit: config.summaryCount,
                   projectNumber,
                   tags: ['session-summary'],
-              })
-            : context.db.searchEntries('', {
+              }))
+            : extractEntries(context.db.searchEntries('', {
                   limit: config.summaryCount,
                   tags: ['session-summary'],
-              })
+              }))
 
     // Fallback to retrospective type if no tag matched
     const retroEntries =
         summaryEntries.length === 0
             ? typeof projectNumber === 'number'
-                ? context.db.searchEntries('', {
+                ? extractEntries(context.db.searchEntries('', {
                       limit: config.summaryCount,
                       projectNumber,
                       entryType: 'retrospective',
-                  })
-                : context.db.searchEntries('', {
+                  }))
+                : extractEntries(context.db.searchEntries('', {
                       limit: config.summaryCount,
                       entryType: 'retrospective',
-                  })
+                  }))
             : []
 
     const finalSummaryEntries = summaryEntries.length > 0 ? summaryEntries : retroEntries
@@ -81,7 +83,7 @@ export function buildJournalContext(
     let latestSessionSummary
     let sessionSummaries
     if (finalSummaryEntries.length > 0) {
-        sessionSummaries = finalSummaryEntries.map((entry) => {
+        sessionSummaries = finalSummaryEntries.map((entry: any) => {
             return {
                 id: entry.id,
                 timestamp: entry.timestamp,
@@ -95,14 +97,14 @@ export function buildJournalContext(
     // ── Latest entries (deduplicated against summaries) ──────────────
     const recentEntries =
         typeof projectNumber === 'number'
-            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
-            : context.db.getRecentEntries(config.entryCount)
+            ? extractEntries(context.db.searchEntries('', { limit: config.entryCount, projectNumber }))
+            : extractEntries(context.db.getRecentEntries(config.entryCount))
 
     // Exclude entries already shown in the Summary slot to diversify briefing content
-    const summaryIds = new Set(finalSummaryEntries.map((e) => e.id))
-    const dedupedRecent = recentEntries.filter((e) => !summaryIds.has(e.id))
+    const summaryIds = new Set(finalSummaryEntries.map((e: any) => e.id))
+    const dedupedRecent = recentEntries.filter((e: any) => !summaryIds.has(e.id))
 
-    const latestEntries = dedupedRecent.map((e) => {
+    const latestEntries = dedupedRecent.map((e: any) => {
         return {
             id: e.id,
             timestamp: e.timestamp,
@@ -140,8 +142,8 @@ export function buildTeamContext(
         const teamTotalEntries = context.teamDb.getActiveEntryCount()
         const teamRecent =
             typeof projectNumber === 'number'
-                ? context.teamDb.searchEntries('', { limit: 1, projectNumber })
-                : context.teamDb.getRecentEntries(1)
+                ? extractEntries(context.teamDb.searchEntries('', { limit: 1, projectNumber }))
+                : extractEntries(context.teamDb.getRecentEntries(1))
         const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
         const teamContent = teamLatestEntry
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
@@ -161,8 +163,8 @@ export function buildTeamContext(
         if (config.includeTeam) {
             const teamEntries =
                 typeof projectNumber === 'number'
-                    ? context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber })
-                    : context.teamDb.getRecentEntries(config.entryCount)
+                    ? extractEntries(context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber }))
+                    : extractEntries(context.teamDb.getRecentEntries(config.entryCount))
             teamLatestEntries = teamEntries.map((e) => {
                 return {
                     id: e.id,
@@ -293,10 +295,10 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
     if (!context.teamDb) return undefined
 
     try {
-        const flagEntries = context.teamDb.searchEntries('', {
+        const flagEntries = extractEntries(context.teamDb.searchEntries('', {
             entryType: 'flag',
             limit: 20,
-        })
+        }))
 
         const activeFlags = flagEntries
             .map((entry) => {

@@ -76,10 +76,10 @@ describe('VectorSearchManager - error coverage', () => {
                 if (calls++ === 0) throw new Error('insert err first')
             }),
             getActiveEntryCount: vi.fn().mockReturnValue(2),
-            getEntriesPage: vi.fn().mockReturnValue([
+            getEntriesPage: vi.fn().mockReturnValue({ entries: [
                 { id: 1, content: 'fail db' },
                 { id: 2, content: 'fail embed' },
-            ]),
+            ]}),
             executeInTransaction: vi.fn().mockImplementation((cb) => cb()),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)

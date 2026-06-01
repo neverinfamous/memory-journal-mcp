@@ -62,16 +62,16 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                             entryType: entry_type,
                             tags,
                             limit: fetchLimit,
-                        })
+                        }).entries
                     } else if (hasTypeFilter || hasTagFilter) {
                         // Use wide date range to scan the full database
                         entries = teamDb.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             entryType: entry_type,
                             tags,
                             limit: fetchLimit,
-                        })
+                        }).entries
                     } else {
-                        entries = teamDb.getRecentEntries(fetchLimit)
+                        entries = teamDb.getRecentEntries(fetchLimit).entries
                     }
 
                     // Post-filter by entry_type if searchByDateRange

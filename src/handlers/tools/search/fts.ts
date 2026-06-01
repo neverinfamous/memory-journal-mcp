@@ -18,7 +18,7 @@ export function encodeCompoundCursor(personalCursor?: string, teamCursor?: strin
 export function decodeCompoundCursor(cursor: string): { p?: string; t?: string } | null {
     try {
         const decoded = Buffer.from(cursor, 'base64').toString('utf8')
-        return JSON.parse(decoded)
+        return JSON.parse(decoded) as { p?: string; t?: string }
     } catch {
         return null
     }
@@ -139,8 +139,8 @@ export function ftsSearch(
             compoundNextCursor = encodeCompoundCursor(personalNextCursor, teamNextCursor)
         }
 
-        const isTeamDegraded = teamResult.degraded === true
-        const isPersonalDegraded = personalResult.degraded === true
+        const isTeamDegraded = (teamResult as any).degraded === true
+        const isPersonalDegraded = (personalResult as any).degraded === true
         return {
             entries: merged,
             count: merged.length,
@@ -149,7 +149,7 @@ export function ftsSearch(
         }
     }
 
-    const isPersonalDegraded = personalResult.degraded === true
+    const isPersonalDegraded = (personalResult as any).degraded === true
 
     return {
         entries: personalEntries.map((e) => ({ ...e, source: 'personal' as const })),

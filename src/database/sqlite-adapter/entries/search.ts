@@ -24,7 +24,8 @@ export function encodeCursor(payload: { t: string; id: number } | { offset: numb
 export function decodeCursor(cursor: string): { t: string; id: number } | { offset: number } | null {
     try {
         const decoded = Buffer.from(cursor, 'base64').toString('utf8')
-        return JSON.parse(decoded)
+        const parsed = JSON.parse(decoded) as unknown
+        return parsed as { t: string; id: number } | { offset: number }
     } catch {
         return null
     }
@@ -90,8 +91,10 @@ export function getRecentEntries(
 
     let nextCursor: string | undefined
     if (entries.length === limit && limit > 0) {
-        const last = entries[entries.length - 1]!
-        nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+        const last = entries[entries.length - 1]
+        if (last) {
+            nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+        }
     }
 
     return { entries, nextCursor }
@@ -169,8 +172,10 @@ export function searchEntries(
         }
     }
 
-    const buildAndExecute = (useFts: boolean) => {
+    const buildAndExecute = (useFts: boolean): { entries: JournalEntry[]; nextCursor?: string } => {
         const { sql, params } = buildSearchQuery(queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
+        console.log('buildAndExecute SQL:', sql)
+        console.log('buildAndExecute Params:', params)
         const stmt = db.prepare(sql)
         const rows = stmt.all(params)
         const entries = rowsToEntries(tagsMgr, rows)
@@ -179,8 +184,10 @@ export function searchEntries(
         const limit = options?.limit ?? 10
         if (entries.length === limit && limit > 0) {
             if (!useFts && options?.sortBy !== 'importance' && entries.length > 0) {
-                const last = entries[entries.length - 1]!
-                nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+                const last = entries[entries.length - 1]
+                if (last) {
+                    nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+                }
             } else {
                 nextCursor = encodeCursor({ offset: offset + limit })
             }
@@ -502,8 +509,10 @@ export function searchByDateRange(
     const limit = options?.limit ?? 500
     if (entries.length === limit && limit > 0) {
         if (!useImportance && entries.length > 0) {
-            const last = entries[entries.length - 1]!
-            nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+            const last = entries[entries.length - 1]
+            if (last) {
+                nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+            }
         } else {
             nextCursor = encodeCursor({ offset: offset + limit })
         }
@@ -534,7 +543,7 @@ function sanitizeFtsQuery(query: string): string {
 
     // Strip quotes entirely to prevent unterminated string syntax errors
     const noQuotes = query.replace(/"/g, ' ')
-    const tokens = noQuotes.split(/\\s+/)
+    const tokens = noQuotes.split(/\s+/)
     const safeTokens: string[] = []
 
     for (let i = 0; i < tokens.length; i++) {
@@ -548,7 +557,7 @@ function sanitizeFtsQuery(query: string): string {
         // Ensure asterisk is only at the end of the token for prefix matching,
         // preventing standalone asterisks or inner asterisks which cause syntax errors.
         const hasAsterisk = token.endsWith('*')
-        sanitizedToken = sanitizedToken.replace(/\\*/g, '')
+        sanitizedToken = sanitizedToken.replace(/\*/g, '')
         if (hasAsterisk && sanitizedToken.length > 0) {
             sanitizedToken += '*'
         }
@@ -580,7 +589,7 @@ function sanitizeFtsQuery(query: string): string {
                 if (!rawNext) continue
 
                 let nextToken = rawNext.replace(/[^a-zA-Z0-9_*-]/g, '')
-                nextToken = nextToken.replace(/\\*/g, '')
+                nextToken = nextToken.replace(/\*/g, '')
                 if (nextToken && !/^(AND|OR|NOT|NEAR)$/i.test(nextToken)) {
                     hasValidNext = true
                     break

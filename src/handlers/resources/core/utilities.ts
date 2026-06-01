@@ -34,7 +34,7 @@ export const recentResource: InternalResourceDef = {
     icons: [ICON_CLOCK],
     annotations: withPriority(0.8, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
-        const entries = context.db.getRecentEntries(10)
+        const { entries } = context.db.getRecentEntries(10)
         const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
         return {
             data: { entries, count: entries.length },

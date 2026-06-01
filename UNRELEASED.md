@@ -10,6 +10,7 @@
 - Added support for all batch operations via Code Mode API with method aliases.
 - Added comprehensive test suite coverage (Standard & Code Mode) for all new bulk/batch operations.
 - Added progress reporting to all batch tools for both standard and Code Mode execution.
+- Added entry versioning/history tracking. Updates to entries now automatically save content snapshots (capped at 10 revisions per entry) in an `entry_revisions` table. Added a new `get_entry_history` tool to retrieve these snapshots.
 
 ### Fixed
 - Fixed a ReferenceError crash in `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (and their team variants) by properly importing the `sendProgress` utility.

@@ -142,7 +142,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
 
                     const input = ListTeamFlagsSchema.parse(params)
 
-                    const flagEntries = teamDb.searchEntries('', {
+                    const { entries: flagEntries } = teamDb.searchEntries('', {
                         entryType: 'flag',
                         limit: 500, // fetch all, filter in-memory
                     })
@@ -451,7 +451,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                     const now = Date.now()
                     const periodMs = getPeriodMs(input.period)
 
-                    const flagEntries = teamDb.searchEntries('', {
+                    const { entries: flagEntries } = teamDb.searchEntries('', {
                         entryType: 'flag',
                         limit: 500,
                     })

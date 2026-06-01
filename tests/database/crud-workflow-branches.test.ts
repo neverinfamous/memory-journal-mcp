@@ -57,6 +57,15 @@ function createTestDb() {
         );
         CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, usage_count INTEGER DEFAULT 0);
         CREATE TABLE entry_tags (entry_id INTEGER, tag_id INTEGER);
+        CREATE TABLE entry_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id INTEGER NOT NULL,
+            revision_number INTEGER NOT NULL,
+            content_snapshot TEXT NOT NULL,
+            changed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            changed_by TEXT,
+            FOREIGN KEY (entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+        );
         CREATE TABLE relationships (
             id INTEGER PRIMARY KEY,
             from_entry_id INTEGER,
@@ -302,7 +311,7 @@ describe('Workflow prompts — branch coverage', () => {
 
     function createMockDb(entries: JournalEntry[] = []): IDatabaseAdapter {
         return {
-            searchByDateRange: vi.fn().mockReturnValue(entries),
+            searchByDateRange: vi.fn().mockReturnValue({ entries }),
             getStatistics: vi.fn().mockReturnValue({
                 totalEntries: entries.length,
                 entriesByType: {},
@@ -312,8 +321,8 @@ describe('Workflow prompts — branch coverage', () => {
                 activityTrend: { currentPeriod: '', previousPeriod: '', growthPercent: null },
                 causalMetrics: {},
             }),
-            searchEntries: vi.fn().mockReturnValue(entries),
-            getRecentEntries: vi.fn().mockReturnValue(entries),
+            searchEntries: vi.fn().mockReturnValue({ entries }),
+            getRecentEntries: vi.fn().mockReturnValue({ entries }),
             getSignificantEntries: vi.fn().mockReturnValue(
                 entries.map((e) => ({
                     id: e.id,

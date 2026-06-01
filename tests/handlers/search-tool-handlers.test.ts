@@ -366,6 +366,7 @@ describe('Search Tool Handlers - Coverage', () => {
                 { query: 'error handling', limit: 10 },
                 db
             )) as { entries: { content: string }[]; count: number }
+            console.log('unquoted:', unquoted)
             expect(unquoted.count).toBeGreaterThan(0)
 
             // Quoted phrase — should also match after sanitizeFtsQuery rewrites it

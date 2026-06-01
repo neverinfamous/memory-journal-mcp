@@ -28,6 +28,7 @@ import {
     coerceSignificanceAlias,
     StrictProjectNumberSchema,
     TagOutputSchema,
+    EntryHistoryListOutputSchema,
 } from './schemas.js'
 
 // ============================================================================
@@ -100,6 +101,14 @@ const GetEntryByIdSchema = z.object({
 const GetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     include_relationships: z.boolean().optional().default(true),
+})
+
+const GetEntryHistorySchema = z.object({
+    entry_id: z.number().int(),
+})
+
+const GetEntryHistorySchemaMcp = z.object({
+    entry_id: relaxedNumber().optional(),
 })
 
 const GetRecentEntriesSchema = z.object({
@@ -382,6 +391,41 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         result['relationships'] = db.getRelationships(entry_id)
                     }
                     return result
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'get_entry_history',
+            title: 'Get Entry History',
+            description: 'Get the revision history for a specific journal entry',
+            group: 'core',
+            inputSchema: GetEntryHistorySchemaMcp,
+            outputSchema: EntryHistoryListOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    const { entry_id } = GetEntryHistorySchema.parse(params)
+                    // Check if entry exists first
+                    const entry = db.getEntryByIdIncludeDeleted(entry_id)
+                    if (!entry) {
+                        return {
+                            success: false,
+                            error: `Entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
+                        }
+                    }
+                    const revisions = db.getEntryHistory(entry_id)
+                    return { success: true, revisions, count: revisions.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

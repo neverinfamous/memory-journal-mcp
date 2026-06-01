@@ -33,6 +33,7 @@ export type {
     Embedding,
     ImportanceBreakdown,
     ImportanceResult,
+    EntryRevision,
 } from './entities.js'
 export type {
     GitHubProject,

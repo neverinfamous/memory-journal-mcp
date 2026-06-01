@@ -9,9 +9,9 @@ describe('Workflow Prompts', () => {
         const mockDb = {
             searchByDateRange: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { timestamp: '2025-01-01', entryType: 'note', content: 'test note' },
-                ]),
+                ]}),
         }
 
         const result = standup.handler({}, mockDb as any)
@@ -26,9 +26,9 @@ describe('Workflow Prompts', () => {
         const mockDb = {
             searchByDateRange: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { timestamp: '2025-01-01', entryType: 'note', content: 'retro note' },
-                ]),
+                ]}),
         }
 
         const result = retro.handler({ days: '10' }, mockDb as any)
@@ -43,9 +43,9 @@ describe('Workflow Prompts', () => {
         const mockDb = {
             searchByDateRange: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { timestamp: '2025-01-01', entryType: 'note', content: 'digest note' },
-                ]),
+                ]}),
         }
 
         const result = digest.handler({}, mockDb as any)
@@ -58,7 +58,7 @@ describe('Workflow Prompts', () => {
         const analyze = prompts.find((p) => p.name === 'analyze-period')!
 
         const mockDb = {
-            searchByDateRange: vi.fn().mockReturnValue([]),
+            searchByDateRange: vi.fn().mockReturnValue({ entries: [] }),
             getStatistics: vi.fn().mockReturnValue({}),
         }
 
@@ -92,14 +92,14 @@ describe('Workflow Prompts', () => {
         const bundle = prompts.find((p) => p.name === 'get-context-bundle')!
 
         const mockDb = {
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 1,
                     entryType: 'note',
                     timestamp: 'test',
                     content: 'test content '.repeat(10),
                 },
-            ]),
+            ]}),
             getStatistics: vi.fn().mockReturnValue({}),
         }
 
@@ -114,9 +114,9 @@ describe('Workflow Prompts', () => {
         const mockDb = {
             getRecentEntries: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { id: 1, entryType: 'note', timestamp: 'test', content: 'test' },
-                ]),
+                ]}),
             getStatistics: vi.fn().mockReturnValue({ totalEntries: 1 }),
         }
 

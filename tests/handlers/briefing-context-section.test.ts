@@ -34,7 +34,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 
 function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
     return {
-        getRecentEntries: vi.fn().mockReturnValue([
+        getRecentEntries: vi.fn().mockReturnValue({ entries: [
             {
                 id: 1,
                 timestamp: '2025-01-15T10:00:00Z',
@@ -47,8 +47,8 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
                 entryType: 'decision',
                 content: 'Decided to use TypeScript for the project.',
             },
-        ]),
-        searchEntries: vi.fn().mockReturnValue([]),
+        ] }),
+        searchEntries: vi.fn().mockReturnValue({ entries: [] }),
         getActiveEntryCount: vi.fn().mockReturnValue(42),
         ...overrides,
     }
@@ -96,14 +96,14 @@ describe('buildJournalContext', () => {
     it('should truncate long content previews with ellipsis', () => {
         const longContent = 'A'.repeat(200)
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 1,
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: longContent,
                 },
-            ]),
+            ] }),
         })
         const context = { db } as never
 
@@ -116,7 +116,7 @@ describe('buildJournalContext', () => {
 
     it('should handle empty database', () => {
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([]),
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
             getActiveEntryCount: vi.fn().mockReturnValue(0),
         })
         const context = { db } as never
@@ -131,14 +131,14 @@ describe('buildJournalContext', () => {
 
     it('should handle entries with null content', () => {
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 1,
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: null,
                 },
-            ]),
+            ] }),
         })
         const context = { db } as never
 
@@ -165,14 +165,14 @@ describe('buildTeamContext', () => {
 
     it('should return team info with latest preview', () => {
         const teamDb = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 5,
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: 'Team entry content',
                 },
-            ]),
+            ] }),
             getActiveEntryCount: vi.fn().mockReturnValue(10),
         })
         const context = { teamDb } as never
@@ -226,7 +226,7 @@ describe('buildTeamContext', () => {
 
     it('should handle team DB with no entries', () => {
         const teamDb = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([]),
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
             getActiveEntryCount: vi.fn().mockReturnValue(0),
         })
         const context = { teamDb } as never
@@ -241,14 +241,14 @@ describe('buildTeamContext', () => {
     it('should truncate long team content previews', () => {
         const longContent = 'B'.repeat(200)
         const teamDb = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 1,
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: longContent,
                 },
-            ]),
+            ] }),
             getActiveEntryCount: vi.fn().mockReturnValue(1),
         })
         const context = { teamDb } as never

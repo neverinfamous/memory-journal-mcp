@@ -75,7 +75,7 @@ function partitionFlags(
 ): { active: ParsedFlag[]; recentlyResolved: ParsedFlag[] } {
     const now = Date.now()
 
-    const flagEntries = teamDb.searchEntries('', {
+    const { entries: flagEntries } = teamDb.searchEntries('', {
         entryType: 'flag',
         limit: 50,
     })
@@ -185,7 +185,7 @@ export function getTeamPromptDefinitions(): InternalPromptDef[] {
                 )
 
                 // Compute analytics summary for the prompt
-                const allFlagEntries = teamDb.searchEntries('', {
+                const { entries: allFlagEntries } = teamDb.searchEntries('', {
                     entryType: 'flag',
                     limit: 500,
                 })

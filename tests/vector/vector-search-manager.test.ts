@@ -51,7 +51,7 @@ function createMockDbAdapter() {
     const adapter = {
         getRawDb: vi.fn().mockReturnValue(mockDb),
         getActiveEntryCount: vi.fn().mockReturnValue(0),
-        getEntriesPage: vi.fn().mockReturnValue([]),
+        getEntriesPage: vi.fn().mockReturnValue({ entries: [] }),
 
         // Proxy new adapter primitives to the original test assertions
         getVector: (entryId: number) => {
@@ -409,10 +409,10 @@ describe('VectorSearchManager', () => {
 
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(2),
-                getEntriesPage: vi.fn().mockReturnValue([
+                getEntriesPage: vi.fn().mockReturnValue({ entries: [
                     { id: 1, content: 'Entry one' },
                     { id: 2, content: 'Entry two' },
-                ]),
+                ]}),
                 executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
@@ -430,7 +430,7 @@ describe('VectorSearchManager', () => {
 
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(1),
-                getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Active entry' }]),
+                getEntriesPage: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'Active entry' }] }),
                 cleanupStaleVectors: () => {
                     mockPrepare(
                         'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
@@ -451,7 +451,7 @@ describe('VectorSearchManager', () => {
         it('should return 0 when db not available', async () => {
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(0),
-                getEntriesPage: vi.fn().mockReturnValue([]),
+                getEntriesPage: vi.fn().mockReturnValue({ entries: [] }),
                 executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
@@ -470,10 +470,10 @@ describe('VectorSearchManager', () => {
 
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(2),
-                getEntriesPage: vi.fn().mockReturnValue([
+                getEntriesPage: vi.fn().mockReturnValue({ entries: [
                     { id: 1, content: 'Good entry' },
                     { id: 2, content: 'Will fail embedding' },
-                ]),
+                ]}),
                 executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
@@ -509,10 +509,10 @@ describe('VectorSearchManager', () => {
 
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(2),
-                getEntriesPage: vi.fn().mockReturnValue([
+                getEntriesPage: vi.fn().mockReturnValue({ entries: [
                     { id: 1, content: 'Good entry' },
                     { id: 2, content: 'Will fail insert' },
-                ]),
+                ]}),
                 executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 

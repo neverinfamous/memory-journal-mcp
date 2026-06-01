@@ -130,21 +130,21 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
                     : 'standard'
 
                 // Pre-fetch prior plan drafts related to this topic
-                const priorDrafts = db.searchEntries(topic, {
+                const { entries: priorDrafts } = db.searchEntries(topic, {
                     entryType: 'plan_draft',
                     tags: ['adversarial-planner'],
                     limit: 5,
                 })
 
                 // Pre-fetch prior adversarial reviews for recurring findings
-                const priorReviews = db.searchEntries(topic, {
+                const { entries: priorReviews } = db.searchEntries(topic, {
                     entryType: 'adversarial_review',
                     tags: ['adversarial-planner'],
                     limit: 5,
                 })
 
                 // Pre-fetch plan refinements for evolution tracking
-                const priorRefinements = db.searchEntries(topic, {
+                const { entries: priorRefinements } = db.searchEntries(topic, {
                     entryType: 'plan_refinement',
                     tags: ['adversarial-planner'],
                     limit: 3,

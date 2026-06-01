@@ -23,9 +23,9 @@ import { getGraphResourceDefinitions } from '../../src/handlers/resources/graph.
 
 function createMockDb(overrides: Record<string, unknown> = {}) {
     return {
-        searchEntries: vi.fn().mockReturnValue([]),
-        searchByDateRange: vi.fn().mockReturnValue([]),
-        getRecentEntries: vi.fn().mockReturnValue([]),
+        searchEntries: vi.fn().mockReturnValue({ entries: [] }),
+        searchByDateRange: vi.fn().mockReturnValue({ entries: [] }),
+        getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
         getStatistics: vi.fn().mockReturnValue({ totalEntries: 0 }),
         getSignificantEntries: vi.fn().mockReturnValue([]),
         getRecentGraphRelationships: vi.fn().mockReturnValue([]),
@@ -69,9 +69,9 @@ describe('Workflow prompts — branch coverage', () => {
         const db = createMockDb({
             searchByDateRange: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { timestamp: '2025-01-01', entryType: 'note', content: 'Did things' },
-                ]),
+                ]}),
         })
         const result = standup.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('Did things')
@@ -89,9 +89,9 @@ describe('Workflow prompts — branch coverage', () => {
         const db = createMockDb({
             searchByDateRange: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(250) },
-                ]),
+                ]}),
         })
         const result = retro.handler({ days: '7' }, db as never)
         expect(result.messages[0]!.content.text).toContain('last 7 days')
@@ -102,9 +102,9 @@ describe('Workflow prompts — branch coverage', () => {
         const db = createMockDb({
             searchByDateRange: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(200) },
-                ]),
+                ]}),
         })
         const result = digest.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('weekly digest')
@@ -139,10 +139,10 @@ describe('Workflow prompts — branch coverage', () => {
     it('get-context-bundle: should truncate content over 60 chars', () => {
         const contextBundle = prompts.find((p) => p.name === 'get-context-bundle')!
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(70) },
                 { id: 2, entryType: 'note', timestamp: '2025-01-02', content: 'short' },
-            ]),
+            ]}),
         })
         const result = contextBundle.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('...')
@@ -151,7 +151,7 @@ describe('Workflow prompts — branch coverage', () => {
     it('get-recent-entries: should use default limit', () => {
         const recent = prompts.find((p) => p.name === 'get-recent-entries')!
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 1,
                     entryType: 'note',
@@ -159,7 +159,7 @@ describe('Workflow prompts — branch coverage', () => {
                     content: 'test',
                     tags: ['a'],
                 },
-            ]),
+            ]}),
         })
         const result = recent.handler({}, db as never)
         expect(db.getRecentEntries).toHaveBeenCalledWith(10)
@@ -169,7 +169,7 @@ describe('Workflow prompts — branch coverage', () => {
     it('get-recent-entries: should use custom limit and handle empty tags', () => {
         const recent = prompts.find((p) => p.name === 'get-recent-entries')!
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 1,
                     entryType: 'note',
@@ -177,7 +177,7 @@ describe('Workflow prompts — branch coverage', () => {
                     content: 'test',
                     tags: [],
                 },
-            ]),
+            ]}),
         })
         const result = recent.handler({ limit: '5' }, db as never)
         expect(db.getRecentEntries).toHaveBeenCalledWith(5)
@@ -196,9 +196,9 @@ describe('Workflow prompts — branch coverage', () => {
         const db = createMockDb({
             getRecentEntries: vi
                 .fn()
-                .mockReturnValue([
+                .mockReturnValue({ entries: [
                     { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(50) },
-                ]),
+                ]}),
             getStatistics: vi.fn().mockReturnValue({ totalEntries: 42 }),
         })
         const result = confirm.handler({}, db as never)
@@ -215,10 +215,10 @@ describe('Workflow prompts — branch coverage', () => {
     it('session-summary: should truncate long content', () => {
         const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 { id: 1, entryType: 'note', content: 'x'.repeat(90) },
                 { id: 2, entryType: 'note', content: 'short' },
-            ]),
+            ]}),
         })
         const result = summary.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('...')
@@ -256,9 +256,9 @@ describe('Team resources — branch coverage', () => {
             const teamDb = createMockDb({
                 getRecentEntries: vi
                     .fn()
-                    .mockReturnValue([
+                    .mockReturnValue({ entries: [
                         { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test' },
-                    ]),
+                    ]}),
                 getAuthorsForEntries: vi.fn().mockReturnValue(new Map([[1, 'alice']])),
             })
             const context = createMockContext({ teamDb })
@@ -274,7 +274,7 @@ describe('Team resources — branch coverage', () => {
 
         it('should handle empty entries with fallback timestamp', () => {
             const teamDb = createMockDb({
-                getRecentEntries: vi.fn().mockReturnValue([]),
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!

@@ -178,16 +178,18 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     if (input.start_date || input.end_date) {
                         const startDate = input.start_date ?? DATE_MIN_SENTINEL
                         const endDate = input.end_date ?? DATE_MAX_SENTINEL
-                        entries = teamDb.searchByDateRange(startDate, endDate, {
+                        const result = teamDb.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit,
                             projectNumber: input.project_number,
                         })
+                        entries = result.entries
                     } else {
-                        entries = teamDb.searchEntries('', {
+                        const result = teamDb.searchEntries('', {
                             limit,
                             projectNumber: input.project_number,
                         })
+                        entries = result.entries
                     }
 
                     await sendProgress(

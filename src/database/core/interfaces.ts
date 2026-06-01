@@ -5,6 +5,7 @@ import type {
     EntryType,
     RelationshipType,
     ImportanceResult,
+    EntryRevision,
 } from '../../types/index.js'
 import type { CreateEntryInput } from './schema.js'
 
@@ -85,6 +86,7 @@ export interface IDatabaseAdapter {
     createEntry(input: CreateEntryInput): JournalEntry
     getEntryById(id: number): JournalEntry | null
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null
+    getEntryHistory(id: number): EntryRevision[]
     getEntriesByIds(ids: number[]): Map<number, JournalEntry>
     getEntriesByIdsWithImportance(
         ids: number[]

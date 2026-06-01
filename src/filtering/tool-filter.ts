@@ -13,13 +13,14 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 79 tools are categorized here for filtering support.
+ * All 80 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
         'create_entry',
         'get_entry_by_id',
         'get_recent_entries',
+        'get_entry_history',
         'create_entry_minimal',
         'test_simple',
         'list_tags',

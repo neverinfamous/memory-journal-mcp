@@ -60,8 +60,8 @@ function createMockEntries(count = 3) {
 function createMockContext(dbOverrides: Partial<Record<string, unknown>> = {}) {
     return {
         db: {
-            getRecentEntries: vi.fn().mockReturnValue(createMockEntries()),
-            searchByDateRange: vi.fn().mockReturnValue(createMockEntries(2)),
+            getRecentEntries: vi.fn().mockReturnValue({ entries: createMockEntries() }),
+            searchByDateRange: vi.fn().mockReturnValue({ entries: createMockEntries(2) }),
             ...dbOverrides,
         },
         progress: null,
@@ -193,7 +193,7 @@ describe('getIoTools', () => {
             { id: 3, timestamp: '2025-01-13', entryType: 'note', content: 'Another note' },
         ]
         const context = createMockContext({
-            searchByDateRange: vi.fn().mockReturnValue(entries),
+            searchByDateRange: vi.fn().mockReturnValue({ entries }),
         })
         const tools = getIoTools(context as never)
         const handler = tools[0]!.handler

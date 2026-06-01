@@ -62,6 +62,17 @@ CREATE TABLE IF NOT EXISTS relationships (
     FOREIGN KEY (to_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
 );
 
+-- Entry revisions for history tracking
+CREATE TABLE IF NOT EXISTS entry_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    revision_number INTEGER NOT NULL,
+    content_snapshot TEXT NOT NULL,
+    changed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    changed_by TEXT,
+    FOREIGN KEY (entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+);
+
 -- Legacy embeddings table (active embeddings use sqlite-vec vec0 virtual table)
 CREATE TABLE IF NOT EXISTS embeddings (
     entry_id INTEGER PRIMARY KEY,
@@ -83,6 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entry_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id);
+CREATE INDEX IF NOT EXISTS idx_entry_revisions_entry_id ON entry_revisions(entry_id, revision_number DESC);
 
 -- Composite covering index for getRecentEntries (WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC)
 CREATE INDEX IF NOT EXISTS idx_memory_journal_recent ON memory_journal(deleted_at, timestamp DESC, id DESC);

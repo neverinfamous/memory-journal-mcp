@@ -34,7 +34,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             ],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const query = args['query'] ?? ''
-                const entries = db.searchEntries(query, { limit: 5 })
+                const { entries } = db.searchEntries(query, { limit: 5 })
 
                 return {
                     messages: [
@@ -66,7 +66,7 @@ ${markUntrustedContent(entries.map((e) => `- [${String(e.id)}] ${e.content.slice
                 const yesterday =
                     new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
-                const entries = db.searchByDateRange(yesterday, today)
+                const { entries } = db.searchByDateRange(yesterday, today)
 
                 // Inject digest signals when available
                 const digestSignal = buildDigestSignalForPrompt(db)
@@ -113,7 +113,7 @@ ${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.
                 const startDate =
                     new Date(Date.now() - days * MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
-                const entries = db.searchByDateRange(startDate, endDate)
+                const { entries } = db.searchByDateRange(startDate, endDate)
 
                 // Inject digest signals when available
                 const digestSignal = buildDigestSignalForPrompt(db)
@@ -154,7 +154,7 @@ ${markUntrustedContent(
                 const startDate =
                     new Date(Date.now() - 7 * MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
-                const entries = db.searchByDateRange(startDate, endDate)
+                const { entries } = db.searchByDateRange(startDate, endDate)
 
                 return {
                     messages: [
@@ -185,7 +185,7 @@ ${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.
                 const startDate = args['start_date'] ?? ''
                 const endDate = args['end_date'] ?? ''
 
-                const entries = db.searchByDateRange(startDate, endDate)
+                const { entries } = db.searchByDateRange(startDate, endDate)
                 const stats = db.getStatistics('day')
 
                 return {
@@ -253,7 +253,7 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const recent = db.getRecentEntries(5)
+                const { entries: recent } = db.getRecentEntries(5)
                 const stats = db.getStatistics('week')
 
                 const entrySummaries = recent.map((e) => ({
@@ -293,7 +293,7 @@ ${markUntrustedContent(entrySummaries.map((e) => `- #${String(e.id)} (${e.type})
             ],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const limit = parseInt(args['limit'] ?? '10', 10)
-                const entries = db.getRecentEntries(limit)
+                const { entries } = db.getRecentEntries(limit)
 
                 return {
                     messages: [
@@ -317,7 +317,7 @@ ${markUntrustedContent(entries.map((e) => `## ${e.timestamp} (${e.entryType})\n\
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const recent = db.getRecentEntries(3)
+                const { entries: recent } = db.getRecentEntries(3)
                 const stats = db.getStatistics('week')
                 const totalEntries = (stats as { totalEntries?: number }).totalEntries ?? 0
 
@@ -369,7 +369,7 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const recent = db.getRecentEntries(5)
+                const { entries: recent } = db.getRecentEntries(5)
 
                 const entrySummary =
                     recent.length > 0
@@ -418,7 +418,7 @@ ${markUntrustedContent(entrySummary)}`,
                     throw new ConfigurationError('Team database not configured')
                 }
 
-                const recent = teamDb.getRecentEntries(5)
+                const { entries: recent } = teamDb.getRecentEntries(5)
 
                 const entrySummary =
                     recent.length > 0
@@ -510,7 +510,7 @@ function buildFlagSignalForPrompt(teamDb?: IDatabaseAdapter): string {
     if (!teamDb) return ''
 
     try {
-        const flagEntries = teamDb.searchEntries('', {
+        const { entries: flagEntries } = teamDb.searchEntries('', {
             entryType: 'flag',
             limit: 20,
         })

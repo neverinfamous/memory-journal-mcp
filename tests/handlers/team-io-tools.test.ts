@@ -43,8 +43,8 @@ describe('getTeamIoTools', () => {
     function createMockContext() {
         return {
             teamDb: {
-                getRecentEntries: vi.fn().mockReturnValue([]),
-                searchEntries: vi.fn().mockReturnValue([]),
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
+                searchEntries: vi.fn().mockReturnValue({ entries: [] }),
             },
             progress: null,
         }
@@ -120,6 +120,7 @@ describe('getTeamIoTools', () => {
                 output_dir: '/tmp/team-out',
                 project_number: 1,
             })) as Record<string, unknown>
+            console.log('team_export_markdown result:', result)
 
             expect(result['success']).toBe(true)
             expect(result['exported_count']).toBe(2)

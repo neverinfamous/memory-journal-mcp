@@ -99,6 +99,18 @@ export interface JournalEntry {
 }
 
 /**
+ * Entry revision entity for history tracking
+ */
+export interface EntryRevision {
+    id: number
+    entryId: number
+    revisionNumber: number
+    contentSnapshot: string
+    changedAt: string
+    changedBy: string | null
+}
+
+/**
  * Tag entity
  */
 export interface Tag {

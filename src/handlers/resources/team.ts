@@ -67,7 +67,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const entries = context.teamDb.getRecentEntries(10)
+                const { entries } = context.teamDb.getRecentEntries(10)
                 const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
                 const enriched = enrichWithAuthor(entries, context)
 
@@ -150,7 +150,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 // Query all flag entries, then filter by resolved status in auto_context
-                const flagEntries = context.teamDb.searchEntries('', {
+                const { entries: flagEntries } = context.teamDb.searchEntries('', {
                     entryType: 'flag',
                     limit: 100,
                 })
@@ -239,7 +239,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 const now = Date.now()
                 const HISTORY_WINDOW_MS = 604_800_000 // 7 days
 
-                const flagEntries = context.teamDb.searchEntries('', {
+                const { entries: flagEntries } = context.teamDb.searchEntries('', {
                     entryType: 'flag',
                     limit: 100,
                 })

@@ -38,7 +38,7 @@ const {
     mockConnect: vi.fn().mockResolvedValue(undefined),
     mockServer: { server: {} },
     mockDbInitialize: vi.fn().mockResolvedValue(undefined),
-    mockDbGetRecentEntries: vi.fn().mockReturnValue([
+    mockDbGetRecentEntries: vi.fn().mockReturnValue({ entries: [
         {
             id: 1,
             content: 'Test entry',
@@ -47,7 +47,7 @@ const {
             isPersonal: true,
             tags: [],
         },
-    ]),
+    ]}),
     mockDbGetStatistics: vi.fn().mockReturnValue({
         totalEntries: 5,
         entriesByType: {},
@@ -140,8 +140,8 @@ vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
             getActiveEntryCount: vi.fn().mockReturnValue(5),
             createEntry: mockCreateEntry,
             getEntryById: vi.fn().mockReturnValue(null),
-            searchEntries: vi.fn().mockReturnValue([]),
-            searchByDateRange: vi.fn().mockReturnValue([]),
+            searchEntries: vi.fn().mockReturnValue({ entries: [] }),
+            searchByDateRange: vi.fn().mockReturnValue({ entries: [] }),
             getRelationships: vi.fn().mockReturnValue([]),
             linkEntries: vi.fn().mockReturnValue({ id: 1, relationshipType: 'references' }),
             updateEntry: vi.fn().mockReturnValue(null),

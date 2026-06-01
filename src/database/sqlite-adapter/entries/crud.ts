@@ -1,4 +1,4 @@
-import type { JournalEntry, EntryType } from '../../../types/index.js'
+import type { JournalEntry, EntryType, EntryRevision } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
 import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject } from './shared.js'
 
@@ -240,8 +240,33 @@ export function updateEntry(
 
     if (updates.length > 0) {
         const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL`
-        const stmt = db.prepare(query)
-        const result = stmt.run(...values, id)
+        
+        const txn = db.transaction(() => {
+            // Snapshot creation
+            const maxRevStmt = db.prepare('SELECT MAX(revision_number) as maxRev FROM entry_revisions WHERE entry_id = ?')
+            const maxRevRow = maxRevStmt.get(id) as { maxRev: number | null }
+            const nextRev = (maxRevRow.maxRev ?? 0) + 1
+
+            const snapshotStmt = db.prepare(
+                'INSERT INTO entry_revisions (entry_id, revision_number, content_snapshot, changed_at, changed_by) VALUES (?, ?, ?, ?, ?)'
+            )
+            snapshotStmt.run(id, nextRev, existing.content, new Date().toISOString(), null)
+
+            // Evict oldest (keep last 10)
+            const evictStmt = db.prepare(`
+                DELETE FROM entry_revisions 
+                WHERE entry_id = ? 
+                  AND revision_number <= (
+                      SELECT revision_number FROM entry_revisions WHERE entry_id = ? ORDER BY revision_number DESC LIMIT 1 OFFSET 9
+                  )
+            `)
+            evictStmt.run(id, id)
+
+            const stmt = db.prepare(query)
+            return stmt.run(...values, id)
+        })
+
+        const result = txn()
         if (result.changes === 0) return null
     }
 
@@ -444,5 +469,24 @@ export function deleteEntries(
     }
 
     return { deleted: toDelete, notFound }
+}
+
+export function getEntryHistory(
+    context: EntriesSharedContext,
+    id: number
+): EntryRevision[] {
+    const { db } = context
+    
+    const stmt = db.prepare(`
+        SELECT id, entry_id as entryId, revision_number as revisionNumber,
+               content_snapshot as contentSnapshot, changed_at as changedAt,
+               changed_by as changedBy
+        FROM entry_revisions
+        WHERE entry_id = ?
+        ORDER BY revision_number DESC
+    `)
+    
+    const rows = stmt.all(id) as EntryRevision[]
+    return rows
 }
 

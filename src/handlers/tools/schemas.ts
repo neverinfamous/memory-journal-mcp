@@ -197,6 +197,32 @@ export const EntriesListOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 /**
+ * Schema for a single entry revision (snapshot).
+ */
+export const EntryRevisionOutputSchema = z
+    .object({
+        id: z.number(),
+        entryId: z.number(),
+        revisionNumber: z.number(),
+        contentSnapshot: z.string(),
+        changedAt: z.string(),
+        changedBy: z.string().nullable().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+/**
+ * Schema for a list of entry revisions.
+ */
+export const EntryHistoryListOutputSchema = z
+    .object({
+        revisions: z.array(EntryRevisionOutputSchema).optional(),
+        count: z.number().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+/**
  * Schema for a relationship between entries.
  */
 export const RelationshipOutputSchema = z

@@ -31,7 +31,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     return { error: 'Invalid project number' }
                 }
 
-                const entries = context.db.searchEntries('', { projectNumber, limit: 50 })
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 50 })
                 return { projectNumber, entries, count: entries.length }
             },
         },
@@ -51,7 +51,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     return { error: 'Invalid issue number' }
                 }
 
-                const entries = context.db.searchEntries('', { issueNumber, limit: 100 })
+                const { entries } = context.db.searchEntries('', { issueNumber, limit: 100 })
                 return { issueNumber, entries, count: entries.length }
             },
         },
@@ -71,7 +71,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     return { error: 'Invalid PR number' }
                 }
 
-                const entries = context.db.searchEntries('', { prNumber, limit: 100 })
+                const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
                 return {
                     prNumber,
                     entries,
@@ -139,7 +139,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const entries = context.db.searchEntries('', { prNumber, limit: 100 })
+                const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
 
                 let timelineNote: string
                 if (prMetadata) {

@@ -5,6 +5,7 @@ import type {
     EntryType,
     RelationshipType,
     ImportanceResult,
+    EntryRevision,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
 import type { IDatabaseAdapter, QueryResult } from '../core/interfaces.js'
@@ -66,6 +67,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.getEntryById(id)
     }
 
+    getEntryHistory(id: number): EntryRevision[] {
+        return this.entriesMgr.getEntryHistory(id)
+    }
+
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
         return this.entriesMgr.getEntryByIdIncludeDeleted(id)
     }
@@ -87,12 +92,13 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     getRecentEntries(
         limit?: number,
         isPersonal?: boolean,
-        sortBy?: 'timestamp' | 'importance'
-    ): JournalEntry[] {
-        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy)
+        sortBy?: 'timestamp' | 'importance',
+        cursor?: string
+    ): { entries: JournalEntry[]; nextCursor?: string } {
+        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor)
     }
 
-    getEntriesPage(offset: number, limit: number): JournalEntry[] {
+    getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string } {
         return this.entriesMgr.getEntriesPage(offset, limit)
     }
 
@@ -187,8 +193,9 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             startDate?: string
             endDate?: string
             sortBy?: 'timestamp' | 'importance'
+            cursor?: string
         }
-    ): JournalEntry[] {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return this.entriesMgr.searchEntries(query, options)
     }
 
@@ -205,8 +212,9 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowRunId?: number
             limit?: number
             sortBy?: 'timestamp' | 'importance'
+            cursor?: string
         }
-    ): JournalEntry[] {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return this.entriesMgr.searchByDateRange(startDate, endDate, options)
     }
 

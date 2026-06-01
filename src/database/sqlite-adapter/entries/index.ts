@@ -1,4 +1,4 @@
-import type { JournalEntry, EntryType, ImportanceResult } from '../../../types/index.js'
+import type { JournalEntry, EntryType, ImportanceResult, EntryRevision } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { TagsManager } from '../tags.js'
@@ -15,6 +15,7 @@ import {
     createEntries,
     updateEntries,
     deleteEntries,
+    getEntryHistory,
 } from './crud.js'
 import {
     getRecentEntries as getRecentEntriesQuery,
@@ -125,14 +126,14 @@ export class EntriesManager {
         return deleteEntries(this.sharedContext, ids, permanent)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy): JournalEntry[] {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string): { entries: JournalEntry[]; nextCursor?: string } {
         if (isPersonal !== undefined) {
-            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy })
+            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit, sortBy)
+        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor)
     }
 
-    getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): JournalEntry[] {
+    getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): { entries: JournalEntry[]; nextCursor?: string } {
         return getEntriesPage(this.sharedContext, offset, limit, order)
     }
 
@@ -147,8 +148,9 @@ export class EntriesManager {
             prStatus?: string
             workflowRunId?: number
             sortBy?: SortBy
+            cursor?: string
         }
-    ): JournalEntry[] {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return searchEntries(this.sharedContext, queryStr, options)
     }
 
@@ -165,8 +167,9 @@ export class EntriesManager {
             workflowRunId?: number
             limit?: number
             sortBy?: SortBy
+            cursor?: string
         }
-    ): JournalEntry[] {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
     }
 
@@ -181,5 +184,9 @@ export class EntriesManager {
         projectBreakdown?: boolean
     ): Record<string, unknown> {
         return getStatistics(this.sharedContext, timeframe, startDate, endDate, projectBreakdown)
+    }
+
+    getEntryHistory(id: number): EntryRevision[] {
+        return getEntryHistory(this.sharedContext, id)
     }
 }
