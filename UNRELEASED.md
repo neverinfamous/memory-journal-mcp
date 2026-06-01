@@ -26,3 +26,5 @@
 - Fixed unit test regressions in batch tool handlers by correctly mocking vectorManager and injecting parameters.
 - Fixed Docker Hub repository description not updating during tag-based deployments
 - Fixed strict type safety and potential null runtime checks in semantic search and vector indexing handler routines.
+- Fixed entry history/revision eviction policy logic to correctly preserve exactly the 10 newest revision snapshots using SQL `OFFSET 10`.
+- Fixed restrictive update project number checks in team_update_entry and team_batch_update_entries to allow moving entries to a different project context during updates.
