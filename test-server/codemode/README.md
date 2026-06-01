@@ -14,7 +14,7 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                        | Phase | Focus                                                              | When to Run      |
 | --------------------------- | :---: | ------------------------------------------------------------------ | ---------------- |
-| `test-cm-sandbox-basics.md` |  16   | Simple expressions, async, metrics, timeout                        | Always run first |
+| `test-cm-sandbox-basics.md` |  16   | Simple expressions, async, metrics, timeout, and schema index checks | Always run first |
 | `test-cm-api-discovery.md`  |  17   | `mj.help()`, per-group help, aliases, positional args              | After Phase 16   |
 | `test-cm-readonly.md`       |  18   | Readonly mode enforcement (read succeed, writes blocked)           | After Phase 16   |
 | `test-cm-security.md`       |  19   | Input validation, blocked patterns, runtime errors, nulled globals | After Phase 16   |

@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added composite and partial performance indexes to the database schema (`idx_memory_journal_active_timestamp`, `idx_memory_journal_active_recent`, `idx_memory_journal_type_timestamp`) to optimize active queries, default timestamp sorting, and entry-type filtering.
 - Added soft-delete recovery via new `restore_entry` and `team_restore_entry` tools.
 - Added `list_deleted_entries` and `team_list_deleted_entries` tools for discovery of deleted entries prior to permanent deletion.
 - Added archiving capabilities with an `is_archived` status to exclude historical entries from default search results.

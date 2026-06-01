@@ -31,6 +31,7 @@
 | Scheduler inactive | Read `memory://health` | `scheduler.active: false`, `scheduler.jobs: []` (scheduler is HTTP-only, inactive in stdio)     |
 | Statistics         | `get_statistics`       | Returns `structuredContent` with entry counts, types, periods                                   |
 | Enhanced analytics | `get_statistics`       | Returns `decisionDensity`, `relationshipComplexity`, `activityTrend`, `causalMetrics`           |
+| Database Indexes   | Run raw check via SQLite or verify in health/schema checks | `idx_memory_journal_active_timestamp`, `idx_memory_journal_active_recent`, `idx_memory_journal_type_timestamp` exist |
 
 ### 1.2 Briefing Resource
 
@@ -112,3 +113,4 @@ rm test-team-prompts.db*
 - 48 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (70 total, 0 missing)
 - `get_statistics` returns all 4 enhanced analytics metrics
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
+- Verified that all composite and partial performance indexes exist and are valid in the database schema

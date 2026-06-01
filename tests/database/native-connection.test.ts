@@ -83,6 +83,21 @@ describe('NativeConnectionManager', () => {
             mgr.close()
         })
 
+        it('should successfully create composite and partial performance indexes', async () => {
+            const mgr = new NativeConnectionManager(':memory:')
+            await mgr.initialize()
+
+            const db = mgr.getNativeDb() as Database
+            const indexes = db.prepare("PRAGMA index_list('memory_journal')").all() as { name: string }[]
+            const names = indexes.map((idx) => idx.name)
+
+            expect(names).toContain('idx_memory_journal_active_timestamp')
+            expect(names).toContain('idx_memory_journal_active_recent')
+            expect(names).toContain('idx_memory_journal_type_timestamp')
+
+            mgr.close()
+        })
+
         it('should handle and wrap initialization errors', async () => {
             const mkdirSpy = vi
                 .spyOn(fs.promises, 'mkdir')

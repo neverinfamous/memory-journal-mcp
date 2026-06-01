@@ -69,7 +69,7 @@ All tool handlers return structured error responses — never raw exceptions:
 
 ### Database
 
-- Schema migrations in `src/database/schema.ts` via `migrateSchema()`
+- Schema migrations in `src/database/core/schema.ts` via `migrateSchema()`
 - Backward compatible — never break existing data
 - Consider index implications for new queries
 

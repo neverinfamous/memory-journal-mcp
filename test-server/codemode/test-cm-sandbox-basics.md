@@ -63,6 +63,15 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 | Custom timeout succeeds | `return "fast";` with `timeout: 5000` | `{ success: true, result: "fast" }`                        |
 | Infinite loop timeout   | `while(true) {}` with `timeout: 2000` | `{ success: false, error: "..." }` with timeout indication |
 
+### 16.5 Database Schema & Indexes Verification
+
+Validate that Code Mode can successfully execute raw SQL or introspect the schema to verify that our new composite and partial performance-optimizing indexes exist:
+
+| Test                    | Code                                                                                                                                                                                                                                                                              | Expected Result                                                                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verify index schema     | `const res = mj.admin._executeRawQueryUnsafe("PRAGMA index_list('memory_journal');"); const names = res[0].values.map(v => v[1]); return ["idx_memory_journal_active_timestamp", "idx_memory_journal_active_recent", "idx_memory_journal_type_timestamp"].every(idx => names.includes(idx));` | `{ success: true, result: true }` (meaning all three new indexes exist in the `memory_journal` table index list)                                                                |
+
+
 ---
 
 ## Success Criteria
@@ -76,3 +85,5 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 - `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
 - Custom `timeout` parameter accepted and enforced
 - Infinite loop terminated with structured error (not hang or crash)
+- Verified index schema via `_executeRawQueryUnsafe` check returning all three new composite and partial indexes
+

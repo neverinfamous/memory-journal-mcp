@@ -13,7 +13,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | File                 | Phase | Purpose                                                                                    | When to Run          |
 | -------------------- | :---: | ------------------------------------------------------------------------------------------ | -------------------- |
 | `test-seed.md`       |   0   | **Seed Data** — Create 17 entries (S1–S17) required by all other test files                | **Always run first** |
-| `test-core-infra.md` |   1   | **Infrastructure** — Health, briefing, protocol validation scripts, GitHub status resource | After seed           |
+| `test-core-infra.md` |   1   | **Infrastructure** — Health, briefing, protocol validation scripts, GitHub status resource, and performance index schema checks | After seed           |
 
 ### Core Functional Tests
 
