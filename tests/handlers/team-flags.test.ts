@@ -161,7 +161,58 @@ describe('Team Flag Tool Handlers', () => {
                 teamDb.createEntry = originalCreate
             }
         })
+
+        it('should return error if project_number is missing and no default is set', async () => {
+            const result = (await callTool(
+                'team_pass_flag',
+                {
+                    flag_type: 'fyi',
+                    message: 'no project number',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
+        })
+
+        it('should fallback to defaultProjectNumber when project_number is omitted', async () => {
+            const mockConfig = {
+                defaultProjectNumber: 1,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            }
+
+            const result = (await callTool(
+                'team_pass_flag',
+                {
+                    flag_type: 'fyi',
+                    message: 'omitted with default',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                mockConfig,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(1)
+        })
     })
+
 
     describe('team_resolve_flag', () => {
         it('should resolve an active flag', async () => {

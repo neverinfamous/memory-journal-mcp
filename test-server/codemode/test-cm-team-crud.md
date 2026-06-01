@@ -37,55 +37,57 @@ const created = await mj.team.teamCreateEntry({
   content: 'CM4 team entry test',
   tags: ['codemode4-team-test'],
   entry_type: 'standup',
-  project_number: 5,
 })
 const withAuthor = await mj.team.teamCreateEntry({
   project_number: 5,
   content: 'CM4 team explicit author',
   author: 'CM4Bot',
-  project_number: 5,
 })
-const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 5, project_number: 5 })
+const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 5 })
 const search = await mj.team.teamSearch({
   project_number: 5,
   query: 'CM4 team entry test',
-  project_number: 5,
 })
 const tagSearch = await mj.team.teamSearch({
   project_number: 5,
   tags: ['codemode4-team-test'],
-  project_number: 5,
 })
 const combined = await mj.team.teamSearch({
   project_number: 5,
   query: 'team',
   tags: ['codemode4-team-test'],
-  project_number: 5,
 })
 const hybridAuto = await mj.team.teamSearch({
   project_number: 5,
   query: 'how did we fix performance',
-  project_number: 5,
 })
 const forcedFts = await mj.team.teamSearch({
   project_number: 5,
   query: 'CM4',
   mode: 'fts',
-  project_number: 5,
 })
-const noArgs = await mj.team.teamSearch({ project_number: 5, project_number: 5 })
+const noArgs = await mj.team.teamSearch({ project_number: 5 })
+
+// Search without project_number for pure flag search (bypasses project_number constraint)
+const searchPureFlag = await mj.team.teamSearch({
+  query: 'CM4',
+  tags: ['flag:blocker'],
+})
+// Search without project_number with non-flag tags (should return VALIDATION_ERROR)
+const searchNonFlagTags = await mj.team.teamSearch({
+  query: 'CM4',
+  tags: ['flag:blocker', 'frontend'],
+})
 
 // New: get by ID, list tags
 const detail = await mj.team.teamGetEntryById({
   project_number: 5,
   entry_id: created.entry.id,
-  project_number: 5,
 })
 const detailNoRels = await mj.team.teamGetEntryById({
   project_number: 5,
   entry_id: created.entry.id,
   include_relationships: false,
-  project_number: 5,
 })
 const tags = await mj.team.teamListTags({ project_number: 5 })
 
@@ -101,6 +103,8 @@ return {
   hybridAutoCount: hybridAuto.entries?.length ?? 0,
   forcedFtsCount: forcedFts.entries?.length ?? 0,
   noArgsCount: noArgs.entries?.length ?? 0,
+  searchPureFlagSuccess: searchPureFlag.success === true,
+  searchNonFlagTagsError: searchNonFlagTags.success === false && searchNonFlagTags.code === 'VALIDATION_ERROR',
   detailHasEntry: !!detail.entry,
   detailHasImportance: !!detail.importance,
   detailNoRelsEmpty: !detailNoRels.relationships?.length,
@@ -108,18 +112,21 @@ return {
 }
 ```
 
-| Check             | Expected                          |
-| ----------------- | --------------------------------- |
-| `createSuccess`   | `true`                            |
-| `createAuthor`    | Non-empty string (auto-populated) |
-| `explicitAuthor`  | `"CM4Bot"`                        |
-| `recentHasAuthor` | `true`                            |
-| `searchCount`     | ≥ 1                               |
-| `tagSearchCount`  | ≥ 1                               |
-| `hybridAutoCount` | ≥ 0                               |
-| `forcedFtsCount`  | ≥ 1                               |
-| `detailHasEntry`  | `true`                            |
-| `tagCount`        | ≥ 1                               |
+| Check                    | Expected                          |
+| ------------------------ | --------------------------------- |
+| `createSuccess`          | `true`                            |
+| `createAuthor`           | Non-empty string (auto-populated) |
+| `explicitAuthor`         | `"CM4Bot"`                        |
+| `recentHasAuthor`        | `true`                            |
+| `searchCount`            | ≥ 1                               |
+| `tagSearchCount`         | ≥ 1                               |
+| `hybridAutoCount`        | ≥ 0                               |
+| `forcedFtsCount`         | ≥ 1                               |
+| `searchPureFlagSuccess`  | `true` (bypasses constraint)      |
+| `searchNonFlagTagsError` | `true` (VALIDATION_ERROR)         |
+| `detailHasEntry`         | `true`                            |
+| `tagCount`               | ≥ 1                               |
+
 
 ### 28.2 Team Error Paths
 
@@ -141,34 +148,50 @@ const results = await mj.team.teamSearchByDateRange({
   project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
-  project_number: 5,
 })
 const typed = await mj.team.teamSearchByDateRange({
   project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'standup',
-  project_number: 5,
 })
 const tagged = await mj.team.teamSearchByDateRange({
   project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   tags: ['codemode4-team-test'],
-  project_number: 5,
 })
+
+// Search by date range without project_number for flag entry_type (bypasses constraint)
+const rangePureFlag = await mj.team.teamSearchByDateRange({
+  start_date: '2026-01-01',
+  end_date: '2026-12-31',
+  entry_type: 'flag',
+})
+// Search by date range without project_number for non-flag entry_type (should return VALIDATION_ERROR)
+const rangeNonFlag = await mj.team.teamSearchByDateRange({
+  start_date: '2026-01-01',
+  end_date: '2026-12-31',
+  entry_type: 'standup',
+})
+
 return {
   hasEntries: Array.isArray(results.entries),
   count: results.count ?? 0,
   typedFiltered: typed.entries?.every((e) => e.entryType === 'standup') ?? true,
   taggedCount: tagged.entries?.length ?? 0,
+  rangePureFlagSuccess: rangePureFlag.success === true,
+  rangeNonFlagError: rangeNonFlag.success === false && rangeNonFlag.code === 'VALIDATION_ERROR',
 }
 ```
 
-| Check           | Expected |
-| --------------- | -------- |
-| `hasEntries`    | `true`   |
-| `typedFiltered` | `true`   |
+| Check                  | Expected                     |
+| ---------------------- | ---------------------------- |
+| `hasEntries`           | `true`                       |
+| `typedFiltered`        | `true`                       |
+| `rangePureFlagSuccess` | `true` (bypasses constraint) |
+| `rangeNonFlagError`    | `true` (VALIDATION_ERROR)    |
+
 
 ---
 

@@ -38,13 +38,11 @@ const blocker = await mj.team.passTeamFlag({
   message: 'FK constraint prevents migration from running',
   target_user: '@sarah',
   link: 'src/database/migrations/005.ts',
-  project_number: 5,
 })
 const fyi = await mj.team.passTeamFlag({
   project_number: 5,
   flag_type: 'fyi',
   message: 'New linting rule added for strict-boolean-expressions',
-  project_number: 5,
 })
 const review = await mj.team.passTeamFlag({
   project_number: 5,
@@ -52,18 +50,15 @@ const review = await mj.team.passTeamFlag({
   message: 'Authentication refactor ready for review',
   target_user: 'chris',
   issue_number: 42,
-  project_number: 5,
 })
 const help = await mj.team.passTeamFlag({
   project_number: 5,
   flag_type: 'help_requested',
   message: 'Cannot reproduce the race condition on Windows',
-  project_number: 5,
 })
 
 // Verify entry structure
 const detail = await mj.team.teamGetEntryById({
-  project_number: 5,
   project_number: 5,
   entry_id: blocker.entry?.id,
 })
@@ -117,21 +112,24 @@ const badType = await mj.team.passTeamFlag({
   project_number: 5,
   flag_type: 'urgent',
   message: 'This should fail vocabulary check',
-  project_number: 5,
 })
 
 // Missing required fields
 const noType = await mj.team.passTeamFlag({
   project_number: 5,
   message: 'no type',
-  project_number: 5,
 })
 const noMessage = await mj.team.passTeamFlag({
   project_number: 5,
   flag_type: 'blocker',
-  project_number: 5,
 })
-const empty = await mj.team.passTeamFlag({ project_number: 5, project_number: 5 })
+const empty = await mj.team.passTeamFlag({ project_number: 5 })
+
+// Omit project_number parameter to test fallback / validation
+const omitProject = await mj.team.passTeamFlag({
+  flag_type: 'fyi',
+  message: 'CM fallback test',
+})
 
 // Resolve nonexistent flag
 const resolveGhost = await mj.team.resolveTeamFlag({ flag_id: 999999 })
@@ -140,7 +138,7 @@ const resolveGhost = await mj.team.resolveTeamFlag({ flag_id: 999999 })
 const resolveEmpty = await mj.team.resolveTeamFlag({})
 
 // Resolve a non-flag entry (get a recent non-flag entry first)
-const recent = await mj.team.teamGetRecent({ project_number: 5, project_number: 5, limit: 10 })
+const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 10 })
 const nonFlagEntry = recent.entries?.find((e) => e.entryType !== 'flag')
 let resolveWrongType = { skipped: true }
 if (nonFlagEntry) {
@@ -154,6 +152,7 @@ const result = {
   noTypeError: noType.success === false,
   noMessageError: noMessage.success === false,
   emptyError: empty.success === false,
+  omitProjectValid: omitProject.success === true || (omitProject.success === false && omitProject.code === 'VALIDATION_ERROR'),
   resolveGhostError: resolveGhost.success === false,
   resolveGhostCode: resolveGhost.code,
   resolveEmptyError: resolveEmpty.success === false,
@@ -170,10 +169,12 @@ return result
 | `noTypeError`           | `true` (flag_type required)      |
 | `noMessageError`        | `true` (message required)        |
 | `emptyError`            | `true` (both required)           |
+| `omitProjectValid`      | `true` (falls back or errors gracefully) |
 | `resolveGhostError`     | `true` (entry not found)         |
 | `resolveGhostCode`      | `"RESOURCE_NOT_FOUND"`           |
 | `resolveEmptyError`     | `true` (flag_id required)        |
 | `resolveWrongTypeError` | `true` (entry is not a flag)     |
+
 
 ### 28.14 Flag Resolution Lifecycle
 
@@ -305,6 +306,9 @@ const timeSorted = await mj.team.teamListFlags({
   sort_by: 'timestamp',
 })
 
+// Omit project_number on teamListFlags to test fallback / validation
+const omitListFlags = await mj.team.teamListFlags({ status: 'active' })
+
 // Verify enriched flag object shape
 const firstFlag = activeOnly.flags?.[0] || allFlags.flags?.[0] || null
 
@@ -322,6 +326,7 @@ const result = {
   blockersOnlyAllBlocker: blockersOnly.flags?.every((f) => f.flag_type === 'blocker') ?? true,
   sarahFlagsAllSarah: sarahFlags.flags?.every((f) => f.target_user === 'sarah') ?? true,
   prioritySortFirstType: prioritySorted.flags?.[0]?.flag_type,
+  omitListFlagsValid: omitListFlags.success === true || (omitListFlags.success === false && omitListFlags.code === 'VALIDATION_ERROR'),
   hasEnrichedShape:
     firstFlag !== null &&
     'age_hours' in firstFlag &&
@@ -348,8 +353,10 @@ return result
 | `blockersOnlyAllBlocker`  | `true` (type filter works)               |
 | `sarahFlagsAllSarah`      | `true` (target filter works, @ stripped) |
 | `prioritySortFirstType`   | `"blocker"` (highest priority)           |
+| `omitListFlagsValid`      | `true` (falls back or errors gracefully) |
 | `hasEnrichedShape`        | `true` (parsed FlagContext inline)       |
 | `hasCountSummary`         | `true` (active_count and resolved_count) |
+
 
 ### 28.16 Flag Update & Metadata Mutation (team_update_flag)
 
@@ -552,6 +559,9 @@ const analytics = await mj.team.teamGetFlagAnalytics({ project_number: 5 })
 const daily = await mj.team.teamGetFlagAnalytics({ project_number: 5, period: 'day' })
 const monthly = await mj.team.teamGetFlagAnalytics({ project_number: 5, period: 'month' })
 
+// Omit project_number on teamGetFlagAnalytics to test fallback / validation
+const omitAnalytics = await mj.team.teamGetFlagAnalytics({ period: 'day' })
+
 // Verify structure
 const result = {
   analyticsSuccess: analytics.success,
@@ -581,6 +591,7 @@ const result = {
     : false,
   dailySuccess: daily.success,
   monthlySuccess: monthly.success,
+  omitAnalyticsValid: omitAnalytics.success === true || (omitAnalytics.success === false && omitAnalytics.code === 'VALIDATION_ERROR'),
   countsConsistent:
     (analytics.summary?.total_flags ?? 0) ===
     (analytics.summary?.active_flags ?? 0) + (analytics.summary?.resolved_flags ?? 0),
@@ -607,7 +618,9 @@ return result
 | `trendShape`          | `true` (current_period, previous_period) |
 | `dailySuccess`        | `true`                                   |
 | `monthlySuccess`      | `true`                                   |
+| `omitAnalyticsValid`  | `true` (falls back or errors gracefully) |
 | `countsConsistent`    | `true` (total = active + resolved)       |
+
 
 ### 28.19 Flag Resources & Cleanup
 

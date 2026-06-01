@@ -62,6 +62,10 @@
 | Combined search      | `team_search(project_number: 5, query: "test", tags: ["team-test"])`  | Text + tag filtered results                      |
 | Hybrid search        | `team_search(project_number: 5, query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
 | No query/tags        | `team_search(project_number: 5)`                                      | Returns recent entries (fallback to `getRecent`) |
+| Pure flag search     | `team_search(query: "test", tags: ["flag:blocker"])`                  | `success: true` (bypasses project_number check)  |
+| Non-flag tag search  | `team_search(query: "test", tags: ["flag:blocker", "team-test"])`     | `{ success: false, code: "VALIDATION_ERROR" }`  |
+| Missing project no.  | `team_search(query: "test")`                                          | `{ success: false, code: "VALIDATION_ERROR" }`  |
+
 
 ### 14.4 Team Entry Detail
 
@@ -87,13 +91,18 @@
 | With entry_type  | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "standup")` | Only `standup` entries returned                      |
 | With tags filter | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
 | Invalid date     | `team_search_by_date_range(project_number: 5, start_date: "Jan 1", end_date: "Jan 31")`                                 | Structured error with YYYY-MM-DD hint                |
+| Pure flag range  | `team_search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "flag")`                       | `success: true` (bypasses project_number check)  |
+| Non-flag range   | `team_search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "standup")`                    | `{ success: false, code: "VALIDATION_ERROR" }`  |
+
 
 ### 14.7 Team Admin & Recovery
 
 | Test                     | Command/Action                                                                          | Expected Result                                      |
 | ------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Update content           | `team_update_entry(project_number: 5, entry_id: <id>, content: "Updated team content")` | `success: true`, `entry` with updated content        |
+| Update omit project_no   | `team_update_entry(entry_id: <id>, content: "Updated without project number parameter")` | `success: true` (falls back to existing project number)|
 | Update tags              | `team_update_entry(project_number: 5, entry_id: <id>, tags: ["updated-team"])`          | Tags changed on team entry                           |
+
 | Update entry_type        | `team_update_entry(project_number: 5, entry_id: <id>, entry_type: "technical_note")`    | Entry type changed                                   |
 | Update is_archived       | `team_update_entry(project_number: 5, entry_id: <id>, is_archived: true)`               | Entry is archived                                    |
 | Update nonexistent       | `team_update_entry(project_number: 5, entry_id: 999999, content: "x")`                  | Structured error: `{ success: false, error: "..." }` |
@@ -198,12 +207,15 @@
 | Help requested      | `team_pass_flag(project_number: 5, flag_type: "help_requested", message: "Race condition on Windows")`                                  | `success: true`, all 4 vocabulary types accepted                  |
 | With link           | `team_pass_flag(project_number: 5, flag_type: "blocker", message: "Migration file", link: "src/db/migrations/005.ts")`                  | `auto_context.link` populated                                     |
 | With project_number | `team_pass_flag(flag_type: "fyi", message: "Scoped flag", project_number: 5)`                                                           | Entry has `projectNumber: 5`                                      |
+| Omit project (error)| `team_pass_flag(flag_type: "fyi", message: "Missing project number test")` without server default                                      | `{ success: false, code: "VALIDATION_ERROR" }`                    |
+| Omit project (ok)   | `team_pass_flag(flag_type: "fyi", message: "Fallback project number test")` with server default                                          | `success: true` (falls back to default project_number)            |
 | Entry structure     | `team_get_entry_by_id(project_number: 5, entry_id: <flag_id>)`                                                                          | `entryType: "flag"`, tags include `flag:blocker` and `@sarah`     |
 | Auto_context shape  | Inspect `autoContext` JSON from entry detail                                                                                            | Contains `flag_type`, `target_user`, `link`, `resolved: false`    |
 | Invalid vocab       | `team_pass_flag(project_number: 5, flag_type: "urgent", message: "test")`                                                               | `{ success: false, code: "VALIDATION_ERROR" }`, lists valid types |
 | Missing message     | `team_pass_flag(project_number: 5, flag_type: "blocker")`                                                                               | Structured error: message required                                |
 | Missing flag_type   | `team_pass_flag(project_number: 5, message: "test")`                                                                                    | Structured error: flag_type required                              |
 | Empty params        | `team_pass_flag(project_number: 5, {})`                                                                                                 | Structured error: both required                                   |
+
 
 ### 14.18 Hush Protocol — Flag Resolution
 

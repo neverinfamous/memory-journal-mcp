@@ -18,8 +18,12 @@
 - Added comprehensive testing coverage in `test-server/` prompts to verify history tracking functionality.
 - Conducted a comprehensive documentation and file structure audit across the main repository and GitHub Wiki, syncing tool counts (84 tools total), resource counts (52 resources total: 46 core + 6 aliases), group presets, and capability metrics.
 - Added and updated direct MCP and sandboxed Code Mode test prompts covering soft-delete recovery, archiving, and keyset cursor pagination.
+- Added comprehensive standard and Code Mode test prompt coverage to verify dynamic `project_number` validation, server fallback resolution, and search boundary bypass rules for pure flag and entry-type queries.
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
+- Added comprehensive Vitest unit and integration test coverage for team flag and search tools to assert dynamic `project_number` validation error paths, fallback resolution to server configuration defaults, and pure flag query search isolation bypasses.
 - Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
+
+
 
 ### Fixed
 - Fixed a ReferenceError crash in `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (and their team variants) by properly importing the `sendProgress` utility.

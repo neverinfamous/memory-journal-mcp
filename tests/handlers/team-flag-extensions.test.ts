@@ -146,10 +146,34 @@ describe('Team Flag Extensions Tool Handlers', () => {
 
     describe('team_list_flags', () => {
         it('should require teamDb', async () => {
-            const result = (await callTool('team_list_flags', {}, personalDb)) as any
+            const result = (await callTool('team_list_flags', { project_number: 1 }, personalDb)) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
+
+        it('should return error if project_number is missing and no default is set', async () => {
+            const result = (await callTool('team_list_flags', {}, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
+        })
+
+        it('should fallback to defaultProjectNumber when project_number is omitted', async () => {
+            const mockConfig = {
+                defaultProjectNumber: 1,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+                flagVocabulary: ['fyi', 'blocker', 'needs_review', 'custom_type'],
+            }
+            const result = (await callTool('team_list_flags', {}, personalDb, undefined, undefined, mockConfig, undefined, teamDb)) as any
+            expect(result.success).toBe(true)
+        })
+
 
         it('should list all flags for a project', async () => {
             const result = (await callTeamTool('team_list_flags', { project_number: 1 })) as any
@@ -321,12 +345,54 @@ describe('Team Flag Extensions Tool Handlers', () => {
         it('should require teamDb', async () => {
             const result = (await callTool(
                 'team_get_flag_analytics',
-                { period: 'week' },
+                { project_number: 1, period: 'week' },
                 personalDb
             )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
+
+        it('should return error if project_number is missing and no default is set', async () => {
+            const result = (await callTool(
+                'team_get_flag_analytics',
+                { period: 'week' },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
+        })
+
+        it('should fallback to defaultProjectNumber when project_number is omitted', async () => {
+            const mockConfig = {
+                defaultProjectNumber: 1,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+                flagVocabulary: ['fyi', 'blocker', 'needs_review', 'custom_type'],
+            }
+            const result = (await callTool(
+                'team_get_flag_analytics',
+                { period: 'week' },
+                personalDb,
+                undefined,
+                undefined,
+                mockConfig,
+                undefined,
+                teamDb
+            )) as any
+            expect(result.success).toBe(true)
+        })
+
 
         it('should return valid analytics for all flags', async () => {
             const result = (await callTeamTool('team_get_flag_analytics', {

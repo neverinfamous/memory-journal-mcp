@@ -44,6 +44,9 @@
 - **Unavailable Team Vector**: Use `team_semantic_search(project_number: 5)` without vector initialization -> verify structured JSON error.
 - **Team Insights**: Verify `team_get_cross_project_insights` returns the requisite fields even when the query returns absolutely zero rows.
 - **Flag Vocabulary Validation**: Verify `team_pass_flag(project_number: 5)` returns `VALIDATION_ERROR` with `suggestion` listing valid vocabulary types.
+- **Flag Dynamic Project Omission**: Verify that `team_pass_flag`, `team_list_flags`, and `team_get_flag_analytics` return structured `VALIDATION_ERROR` when `project_number` is omitted and no server default or workspace context fallback is configured, and succeed when a fallback is available.
+- **Search Isolation Bypass**: Verify that `team_search` bypasses `project_number` validation for pure flag searches (tags starting with `flag:`), and `team_search_by_date_range` bypasses it when `entry_type === "flag"`, while rejecting queries containing non-flag targets with a `VALIDATION_ERROR`.
+- **Update Project Omission**: Verify that `team_update_entry` successfully updates an entry when `project_number` is omitted by falling back to its existing project number.
 - **Resolve Non-Flag Entry**: Verify `team_resolve_flag(project_number: 5)` on a non-flag entry returns `VALIDATION_ERROR` (not crash).
 - **Resolve Idempotency**: Verify calling `team_resolve_flag(project_number: 5)` on an already-resolved flag returns `success: true` with original resolution.
 - **List Flags Default**: Verify `team_list_flags(project_number: 5)` with no filters returns only active flags (default `status: "active"`).
@@ -53,6 +56,7 @@
 - **Update Invalid Vocabulary**: Verify `team_update_flag({ flag_id: <valid>, flag_type: "urgent" })` returns `VALIDATION_ERROR`.
 - **Update Reopen**: Verify `team_update_flag({ flag_id: <resolved-flag>, reopen: true })` transitions a resolved flag back to active.
 - **Analytics Empty**: Verify `team_get_flag_analytics(project_number: 5)` returns valid structure with zero counts when no flags exist.
+
 
 ## Success Criteria
 
