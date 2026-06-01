@@ -583,6 +583,8 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                                                                                |
 | `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                                                          |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                                                               |
+| `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold (CLI: `--prune-older-than-days`; `0` = disabled)                                |
+| `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold for pruning (CLI: `--prune-importance-threshold`; default: `0.15`)                                                         |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
 | `ALLOWED_IO_ROOTS`                | **Critical Security Boundary**: Comma-separated absolute paths granting filesystem access to Code Mode and export tools (default: none / fail-closed) |
