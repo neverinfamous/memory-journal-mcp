@@ -41,9 +41,9 @@ This directory contains agent-optimized test prompts specifically designed to va
 | `test-cm-github.md`             |     25      | GitHub 18 tools (read, Kanban, issues, milestones, insights)          | After Phases 16–19 |
 | `test-cm-kanban-lifecycle.md`   |    25.1     | End-to-end Code Mode pipelined execution of Kanban lifecycle tools    | After Phases 16–19 |
 | `test-cm-io.md`                 |     26      | IO namespaces, Markdown orchestration roundtrips, and file schemas    | After Phases 16–19 |
-| `test-cm-admin-backup.md`       |     27      | Tag management, backup lifecycle                                      | After Phases 16–19 |
+| `test-cm-admin-backup.md`       |     27      | Tag management, batch operations, backup lifecycle                                      | After Phases 16–19 |
 | `test-cm-team-crud.md`          |  28.1–28.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
-| `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, analytics, relationships, IO logic, backup                | After Team CRUD    |
+| `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, batch operations, analytics, relationships, IO logic, backup                | After Team CRUD    |
 | `test-cm-team-vector-errors.md` | 28.10–28.11 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
 | `test-cm-team-flags.md`         | 28.12–28.15 | Hush Protocol flags: create, vocabulary, resolve lifecycle, cleanup   | After Team Admin   |
 | `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches across all `mj.*` groups | After Phases 16–19 |

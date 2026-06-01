@@ -28,6 +28,9 @@
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
 | `team_create_entry(project_number: 5)`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
 | `team_update_entry(project_number: 5)`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_batch_create_entries(project_number: 5)` | `entries: []`                                        | ⚠️ Should return validation error | `entries: "abc"`  |
+| `team_batch_update_entries(project_number: 5)` | `updates: []`                                        | ⚠️ Should return validation error | `updates: "abc"`  |
+| `team_batch_delete_entries(project_number: 5)` | `entry_ids: []`                                      | ⚠️ Should return validation error | `entry_ids: "abc"`|
 | `team_search_by_date_range(project_number: 5)` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
 | `team_merge_tags(project_number: 5)`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
 | `team_pass_flag(project_number: 5)`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`  |

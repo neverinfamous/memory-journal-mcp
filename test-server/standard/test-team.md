@@ -38,7 +38,16 @@
 | With entry type    | `team_create_entry(project_number: 5, content: "...", entry_type: "project_decision")` | Entry type set correctly                                    |
 | Invalid entry_type | `team_create_entry(project_number: 5, content: "...", entry_type: "invalid")`          | Structured error: `{ success: false, error: "..." }`        |
 
-### 14.2 Team Read Tools
+### 14.2 Team Batch Operations
+
+| Test               | Command/Action                                                                         | Expected Result                                             |
+| ------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Team Batch Create  | `team_batch_create_entries(project_number: 5, entries: [{ content: "T1" }, { content: "T2" }])` | `success: true`, returns array of new entry IDs with `author` |
+| Team Batch Limit   | `team_batch_create_entries(project_number: 5, entries: [51 items])`                    | Structured error: `{ success: false, error: "..." }`        |
+| Team Batch Update  | `team_batch_update_entries(project_number: 5, updates: [{ entry_id: <id1>, content: "U1" }])`   | `success: true` and array of updated IDs                    |
+| Team Batch Delete  | `team_batch_delete_entries(project_number: 5, entry_ids: [<id1>, <id2>])`              | `success: true` and count of deleted entries                |
+
+### 14.3 Team Read Tools
 
 | Test            | Command/Action                                                        | Expected Result                                  |
 | --------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
@@ -50,7 +59,7 @@
 | Hybrid search   | `team_search(project_number: 5, query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
 | No query/tags   | `team_search(project_number: 5)`                                      | Returns recent entries (fallback to `getRecent`) |
 
-### 14.3 Team Entry Detail
+### 14.4 Team Entry Detail
 
 | Test             | Command/Action                                                                          | Expected Result                                                  |
 | ---------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -59,14 +68,14 @@
 | No relationships | `team_get_entry_by_id(project_number: 5, entry_id: <id>, include_relationships: false)` | Response omits `relationships` array                             |
 | Nonexistent ID   | `team_get_entry_by_id(project_number: 5, entry_id: 999999)`                             | Structured error: `{ success: false, error: "..." }`             |
 
-### 14.4 Team Tags
+### 14.5 Team Tags
 
 | Test       | Command/Action   | Expected Result                              |
 | ---------- | ---------------- | -------------------------------------------- |
 | List tags  | `team_list_tags` | `tags` array with `{ name, count }` per tag  |
 | Tag counts | Inspect response | Counts match entries created with those tags |
 
-### 14.5 Team Date Range Search
+### 14.6 Team Date Range Search
 
 | Test             | Command/Action                                                                                                          | Expected Result                                      |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -75,7 +84,7 @@
 | With tags filter | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
 | Invalid date     | `team_search_by_date_range(project_number: 5, start_date: "Jan 1", end_date: "Jan 31")`                                 | Structured error with YYYY-MM-DD hint                |
 
-### 14.6 Team Admin
+### 14.7 Team Admin
 
 | Test                     | Command/Action                                                                          | Expected Result                                      |
 | ------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -89,7 +98,7 @@
 | Merge same tag           | `team_merge_tags(project_number: 5, source_tag: "team-new", target_tag: "team-new")`    | Structured error: `{ success: false, error: "..." }` |
 | Merge nonexistent source | `team_merge_tags(project_number: 5, source_tag: "nonexistent-xyz", target_tag: "x")`    | Structured error: `{ success: false, error: "..." }` |
 
-### 14.7 Team Analytics
+### 14.8 Team Analytics
 
 | Test             | Command/Action                           | Expected Result                                                     |
 | ---------------- | ---------------------------------------- | ------------------------------------------------------------------- |
@@ -98,7 +107,7 @@
 | Group by day     | `team_get_statistics(group_by: "day")`   | `entriesByPeriod` periods grouped by day                            |
 | Author breakdown | Inspect `authors` field                  | Array of `{ author, count }` for each contributor                   |
 
-### 14.8 Team Vector Search
+### 14.9 Team Vector Search
 
 | Test                    | Command/Action                                                                      | Expected Result                                     |
 | ----------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -110,7 +119,7 @@
 | Team add to index       | `team_add_to_vector_index(project_number: 5, entry_id: <team_entry_id>)`            | `success: true`, `entryId` in response              |
 | Team add nonexistent    | `team_add_to_vector_index(project_number: 5, entry_id: 999999)`                     | `{ success: false, error: "..." }`                  |
 
-### 14.9 Team Cross-Project Insights
+### 14.10 Team Cross-Project Insights
 
 | Test                 | Command/Action                                                                      | Expected Result                                                                           |
 | -------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -119,7 +128,7 @@
 | Insights min_entries | `team_get_cross_project_insights(min_entries: 1)`                                   | Same or more projects than default (`min_entries: 3`)                                     |
 | Empty result         | `team_get_cross_project_insights(min_entries: 9999)`                                | `project_count: 0`, `projects: []`, `message` present                                     |
 
-### 14.10 Team Relationships
+### 14.11 Team Relationships
 
 | Test                  | Command/Action                                                                                                                    | Expected Result                                      |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -131,7 +140,7 @@
 | Visualize by tag      | `team_visualize_relationships(project_number: 5, tag: "team-test")`                                                               | Mermaid diagram scoped to tag                        |
 | Visualize nonexistent | `team_visualize_relationships(project_number: 5, entry_id: 999999)`                                                               | Structured error or empty diagram                    |
 
-### 14.11 Team IO & Export
+### 14.12 Team IO & Export
 
 | Test               | Command/Action                                                                      | Expected Result                           |
 | ------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------- |
@@ -140,7 +149,7 @@
 | IO Export markdown | `team_export_markdown(project_number: 5, output_dir: "tmp_team_md", limit: 5)`      | Generates local `.md` files in target dir |
 | IO Import dry run  | `team_import_markdown(project_number: 5, source_dir: "tmp_team_md", dry_run: true)` | Returns mock counts, resolves `author`    |
 
-### 14.12 Team Backup
+### 14.13 Team Backup
 
 | Test              | Command/Action                          | Expected Result                                            |
 | ----------------- | --------------------------------------- | ---------------------------------------------------------- |
@@ -148,7 +157,7 @@
 | Auto-named backup | `team_backup`                           | Backup created with auto-generated timestamped name        |
 | List backups      | `team_list_backups`                     | `backups` array with metadata, `total`, `backupsDirectory` |
 
-### 14.13 Team Resources
+### 14.14 Team Resources
 
 | Test             | URI                        | Expected Result                                                       |
 | ---------------- | -------------------------- | --------------------------------------------------------------------- |
@@ -156,7 +165,7 @@
 | Statistics       | `memory://team/statistics` | `configured: true`, `totalEntries`, `authors` array, `source: "team"` |
 | Author breakdown | `memory://team/statistics` | `authors` contains `{ author: "<name>", count: N }` for each author   |
 
-### 14.14 Insights & Team Collaboration Metrics
+### 14.15 Insights & Team Collaboration Metrics
 
 | Test                 | Command/Action                                 | Expected Result                                                                |
 | -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -165,13 +174,13 @@
 | Digest resource      | Read `memory://insights/digest`                | Either full snapshot JSON or graceful "no digest available" message            |
 | Team collab resource | Read `memory://insights/team-collaboration`    | Same payload structure as `team_get_collaboration_matrix` with `success: true` |
 
-### 14.15 Cleanup
+### 14.16 Cleanup
 
 | Test        | Command/Action                                                        | Expected Result                 |
 | ----------- | --------------------------------------------------------------------- | ------------------------------- |
 | Delete test | `delete_entry(project_number: 5, entry_id: <team_test_id>)` on teamDb | Test entries removed (optional) |
 
-### 14.16 Hush Protocol — Flag Creation
+### 14.17 Hush Protocol — Flag Creation
 
 | Test                | Command/Action                                                                                                                          | Expected Result                                                   |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -188,7 +197,7 @@
 | Missing flag_type   | `team_pass_flag(project_number: 5, message: "test")`                                                                                    | Structured error: flag_type required                              |
 | Empty params        | `team_pass_flag(project_number: 5, {})`                                                                                                 | Structured error: both required                                   |
 
-### 14.17 Hush Protocol — Flag Resolution
+### 14.18 Hush Protocol — Flag Resolution
 
 | Test                  | Command/Action                                                                           | Expected Result                                                 |
 | --------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -201,7 +210,7 @@
 | Non-flag entry        | `team_resolve_flag(project_number: 5, flag_id: <non_flag_entry_id>)`                     | `{ success: false, code: "VALIDATION_ERROR" }`                  |
 | Empty params          | `team_resolve_flag(project_number: 5, {})`                                               | Structured error: flag_id required                              |
 
-### 14.18 Hush Protocol — Flag Resources
+### 14.19 Hush Protocol — Flag Resources
 
 | Test               | URI                         | Expected Result                                                           |
 | ------------------ | --------------------------- | ------------------------------------------------------------------------- |
@@ -211,7 +220,7 @@
 | Briefing flags     | `memory://briefing`         | `activeFlags` section present when unresolved flags exist                 |
 | Briefing localTime | `memory://briefing`         | `localTime` field present with human-readable timestamp                   |
 
-### 14.19 Hush Protocol — Cleanup
+### 14.20 Hush Protocol — Cleanup
 
 | Test         | Command/Action                                                            | Expected Result               |
 | ------------ | ------------------------------------------------------------------------- | ----------------------------- |
@@ -279,3 +288,5 @@
 - `team_get_collaboration_matrix` returns populated `authorActivity` and `impactFactor` metrics
 - `memory://insights/digest` handles un-configured digest gracefully or returns valid JSON
 - `memory://insights/team-collaboration` returns static matrix metrics without error
+- `team_batch_create_entries(project_number: 5)` correctly creates entries in the shared team DB with author attribution
+- `team_batch_delete_entries(project_number: 5)` correctly soft-deletes team entries in bulk

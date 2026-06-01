@@ -90,6 +90,65 @@ return {
 | `newTagExists`   | `true`   |
 | `deleteSuccess`  | `true`   |
 
+### 28.4b Team Batch Operations
+
+```javascript
+// Test code:
+// Batch Create
+const bCreated = await mj.team.teamBatchCreateEntries({
+  project_number: 5,
+  entries: [
+    { content: 'CM4 team batch 1' },
+    { content: 'CM4 team batch 2' }
+  ]
+})
+const [id1, id2] = bCreated.entryIds
+
+// Batch Update
+const bUpdated = await mj.team.teamBatchUpdateEntries({
+  project_number: 5,
+  updates: [
+    { entry_id: id1, content: 'CM4 team batch 1 updated' }
+  ]
+})
+
+// Batch Delete
+const bDeleted = await mj.team.teamBatchDeleteEntries({
+  project_number: 5,
+  entry_ids: [id1, id2]
+})
+
+// Verify Aliases
+const bAliasCreated = await mj.team.bulkCreate({
+  project_number: 5,
+  entries: [
+    { content: 'CM4 team alias 1' }
+  ]
+})
+await mj.team.bulkDelete({
+  project_number: 5,
+  entry_ids: bAliasCreated.entryIds
+})
+
+return {
+  bCreateSuccess: bCreated.success,
+  bCreateCount: bCreated.entryIds?.length === 2,
+  bUpdateSuccess: bUpdated.success,
+  bDeleteSuccess: bDeleted.success,
+  bDeleteCount: bDeleted.deletedCount === 2,
+  aliasSuccess: bAliasCreated.success
+}
+```
+
+| Check              | Expected |
+| ------------------ | -------- |
+| `bCreateSuccess`   | `true`   |
+| `bCreateCount`     | `true`   |
+| `bUpdateSuccess`   | `true`   |
+| `bDeleteSuccess`   | `true`   |
+| `bDeleteCount`     | `true`   |
+| `aliasSuccess`     | `true`   |
+
 ### 28.5 Team Analytics
 
 ```javascript
@@ -262,3 +321,4 @@ return {
 - `team_backup` creates named and auto-named backups
 - `team_list_backups` returns backup metadata
 - `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings
+- Team batch operations execute successfully via Code Mode and fallback aliases resolve correctly

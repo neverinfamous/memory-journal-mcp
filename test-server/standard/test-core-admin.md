@@ -47,6 +47,15 @@
 | Restore backup        | `restore_backup(filename: "test-backup.db", confirm: true)` | Restores + `revertedChanges` field with details                                  |
 | Restore nonexistent   | `restore_backup(filename: "nonexistent.db", confirm: true)` | Structured error: `{ success: false, error: "Backup file not found: ..." }`      |
 
+### 5.3 Batch Operations
+
+| Test                  | Command/Action                                              | Expected Result                                                                  |
+| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Batch Create          | `batch_create_entries(entries: [{ project_number: 5, content: "B1" }, { project_number: 5, content: "B2" }])` | Array of two entry IDs returned |
+| Batch Create Limit    | `batch_create_entries(entries: [51 items])`                 | Structured error: `{ success: false, error: "..." }` exceeding 50 limit          |
+| Batch Update          | `batch_update_entries(updates: [{ entry_id: <id1>, content: "U1" }, { entry_id: <id2>, content: "U2" }])` | `success: true` and array of IDs       |
+| Batch Delete          | `batch_delete_entries(entry_ids: [<id1>, <id2>])`           | `success: true` and count of deleted entries                                     |
+
 ---
 
 ## Success Criteria
@@ -57,3 +66,5 @@
 - `merge_tags` returns structured error when source equals target or source tag nonexistent
 - `backup_journal` rejects names containing path traversal characters (`../`) with structured errors
 - `restore_backup` with nonexistent filename returns structured error
+- `batch_create_entries` enforces max 50 limit with structured error
+- `batch_delete_entries` soft-deletes multiple entries atomically

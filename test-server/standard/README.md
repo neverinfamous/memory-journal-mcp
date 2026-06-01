@@ -24,7 +24,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-core-semantic.md`      |   4   | **Semantic Search & Analytics** — Vector search, index management, statistics, cross-project        | After seed  |
 | `test-core-relationships.md` |   5   | **Relationships** — Entry linking, causal types, visualization (Mermaid), graph resources           | After seed  |
 | `test-core-io.md`            |   6   | **IO & Interoperability** — Export/Import Markdown roundtrips, slugification, JSON legacy exports   | After seed  |
-| `test-core-admin.md`         |   7   | **Admin & Backup** — Tag management, backup/restore operations                                      | After seed  |
+| `test-core-admin.md`         |   7   | **Admin & Backup** — Tag management, batch operations, backup/restore operations                                      | After seed  |
 
 ### Cross-Cutting Validation
 

@@ -124,6 +124,60 @@ return {
 | `badRestoreError`  | `true`   |
 | `cleanupSuccess`   | `true`   |
 
+### 27.3 Admin Batch Operations
+
+```javascript
+// Test code:
+// Batch Create
+const bCreated = await mj.admin.batchCreateEntries({
+  entries: [
+    { project_number: 5, content: 'CM4 batch entry 1' },
+    { project_number: 5, content: 'CM4 batch entry 2' }
+  ]
+})
+const [id1, id2] = bCreated.entryIds
+
+// Batch Update
+const bUpdated = await mj.admin.batchUpdateEntries({
+  updates: [
+    { entry_id: id1, content: 'CM4 batch entry 1 updated' }
+  ]
+})
+
+// Batch Delete
+const bDeleted = await mj.admin.batchDeleteEntries({
+  entry_ids: [id1, id2]
+})
+
+// Verify Aliases (Hallucination Fallbacks)
+const bAliasCreated = await mj.admin.bulkCreate({
+  entries: [
+    { project_number: 5, content: 'CM4 alias entry 1' }
+  ]
+})
+await mj.admin.bulkDelete({
+  entry_ids: bAliasCreated.entryIds
+})
+
+return {
+  bCreateSuccess: bCreated.success,
+  bCreateCount: bCreated.entryIds?.length === 2,
+  bUpdateSuccess: bUpdated.success,
+  bDeleteSuccess: bDeleted.success,
+  bDeleteCount: bDeleted.deletedCount === 2,
+  aliasSuccess: bAliasCreated.success
+}
+```
+
+| Check              | Expected |
+| ------------------ | -------- |
+| `bCreateSuccess`   | `true`   |
+| `bCreateCount`     | `true`   |
+| `bUpdateSuccess`   | `true`   |
+| `bDeleteSuccess`   | `true`   |
+| `bDeleteCount`     | `true`   |
+| `aliasSuccess`     | `true`   |
+
 ---
 
 ## Success Criteria
@@ -140,3 +194,5 @@ return {
 - `restore_backup` succeeds with `revertedChanges` field
 - `restore_backup` nonexistent file returns structured error
 - `cleanup_backups` deletes old backups
+- Admin batch operations (`batchCreateEntries`, `batchUpdateEntries`, `batchDeleteEntries`) execute successfully via Code Mode
+- Code Mode correctly resolves fallback aliases like `mj.admin.bulkCreate`
