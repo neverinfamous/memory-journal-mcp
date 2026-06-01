@@ -18,7 +18,7 @@ Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*
 
 ---
 
-## core (6 tools + Code Mode)
+## core (7 tools + Code Mode)
 
 Entry lifecycle — create, retrieve, tags, and test.
 
@@ -27,6 +27,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 | `create_entry`         | Create a new journal entry with context and tags (v2.1.0: GitHub Actions support). |
 | `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
 | `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance) and cursor pagination.          |
+| `get_entry_history`    | Get the revision history of a specific journal entry (capped at 10 revisions).     |
 | `create_entry_minimal` | Minimal entry creation without context or tags.                                    |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
 | `list_tags`            | List all available tags.                                                           |
@@ -225,7 +226,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 79    | All tools (default)      |
+| `full`               | 80    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 18    | Disable all mutations    |
