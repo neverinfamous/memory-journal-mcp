@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added a versioned database schema migration framework under `src/database/migrations` (using sequential versioned migrations 001 to 007) and updated `NativeConnectionManager` to run migrations during initialization. Pre-existing databases are automatically retrofitted with a self-healing strategy.
+- Added a comprehensive integration test suite `tests/database/migrations.test.ts` to assert fresh database migrations, team schema transitions, pre-migration retrofitting, and idempotency.
 - Added composite and partial performance indexes to the database schema (`idx_memory_journal_active_timestamp`, `idx_memory_journal_active_recent`, `idx_memory_journal_type_timestamp`) to optimize active queries, default timestamp sorting, and entry-type filtering.
 - Added soft-delete recovery via new `restore_entry` and `team_restore_entry` tools.
 - Added `list_deleted_entries` and `team_list_deleted_entries` tools for discovery of deleted entries prior to permanent deletion.
@@ -23,6 +25,7 @@
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
 - Added comprehensive Vitest unit and integration test coverage for team flag and search tools to assert dynamic `project_number` validation error paths, fallback resolution to server configuration defaults, and pure flag query search isolation bypasses.
 - Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
+- Added Playwright E2E payload contract tests for the new History, Archiving, and Recovery tools to strictly enforce output schema boundaries.
 
 
 

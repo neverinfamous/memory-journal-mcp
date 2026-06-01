@@ -34,7 +34,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 ---
 
-## search (4 tools + Code Mode)
+## search (5 tools + Code Mode)
 
 Full-text, date-range, and semantic/vector search.
 
@@ -82,7 +82,7 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 ---
 
-## admin (8 tools + Code Mode)
+## admin (9 tools + Code Mode)
 
 Entry mutations, vector index management, and tag maintenance.
 
