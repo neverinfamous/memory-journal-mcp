@@ -388,6 +388,23 @@ export class JournalApi {
         const getByIdFn = this.core['getEntryById']
         if (getByIdFn) this.core['exists'] = getByIdFn
 
+        // Smooth out team aliases since KEEP_PREFIX_GROUPS makes them verbose
+        const teamDeleteEntryFn = this.team['teamDeleteEntry']
+        if (teamDeleteEntryFn) {
+            this.team['deleteEntry'] = teamDeleteEntryFn
+            this.team['delete'] = teamDeleteEntryFn
+        }
+        const teamUpdateEntryFn = this.team['teamUpdateEntry']
+        if (teamUpdateEntryFn) {
+            this.team['updateEntry'] = teamUpdateEntryFn
+            this.team['update'] = teamUpdateEntryFn
+        }
+        const teamCreateEntryFn = this.team['teamCreateEntry']
+        if (teamCreateEntryFn) {
+            this.team['createEntry'] = teamCreateEntryFn
+            this.team['create'] = teamCreateEntryFn
+        }
+
         // Implement listProjects hallucination gracefully across groups
         const listProjectsFn = (): Promise<unknown> => {
             try {

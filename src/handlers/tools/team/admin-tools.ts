@@ -97,8 +97,9 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     const author = fetchAuthor(teamDb, input.entry_id)
 
                     const currentUser = resolveAuthenticatedAuthor()
+                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
 
-                    if (author && author !== currentUser) {
+                    if (author && author !== currentUser && !codemodeBypass) {
                         return {
                             success: false,
                             error: `Permission Denied: Only the original author ("${author}") can modify this team entry.`,
@@ -190,8 +191,9 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     const author = fetchAuthor(teamDb, entry_id)
 
                     const currentUser = resolveAuthenticatedAuthor()
+                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
 
-                    if (author && author !== currentUser) {
+                    if (author && author !== currentUser && !codemodeBypass) {
                         return {
                             success: false,
                             error: `Permission Denied: Only the original author ("${author}") can delete this team entry.`,
@@ -422,9 +424,12 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamBatchUpdateEntriesSchema.parse(params)
                     await sendProgress(context.progress, 0, 2, 'Updating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
+                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
                     
                     // Verify ownership and project boundary safety
                     const updates = []
+                    const notFound: number[] = []
+                    
                     for (const u of input.updates) {
                         const existing = teamDb.getEntryById(u.entry_id)
                         
@@ -441,7 +446,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                         if (existing) {
                             const author = fetchAuthor(teamDb, u.entry_id)
-                            if (author && author !== currentUser) {
+                            if (author && author !== currentUser && !codemodeBypass) {
                                 return {
                                     success: false,
                                     error: `Permission Denied: Only the original author ("${author}") can modify team entry ${String(u.entry_id)}.`,
@@ -451,6 +456,9 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                                     recoverable: false,
                                 }
                             }
+                        } else {
+                            notFound.push(u.entry_id)
+                            continue
                         }
 
                         updates.push({
@@ -473,7 +481,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         })
                     }
 
-                    const { updated, notFound } = teamDb.updateEntries(updates)
+                    const { updated, notFound: updateNotFound } = teamDb.updateEntries(updates)
                     
                     const entries = updated.map(r => ({
                         ...r,
@@ -500,7 +508,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         await sendProgress(context.progress, 2, 2, 'Team batch update complete')
                     }
 
-                    return { success: true, count: entries.length, updated: entries, notFound, indexStatuses }
+                    return { success: true, count: entries.length, updated: entries, notFound: [...notFound, ...updateNotFound], indexStatuses }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -526,6 +534,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamBatchDeleteEntriesSchema.parse(params)
                     await sendProgress(context.progress, 0, 2, 'Deleting team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
+                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
                     
                     const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
                     if (projectNumber === undefined || projectNumber === null) {
@@ -551,7 +560,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                         
                         const author = fetchAuthor(teamDb, id)
-                        if (author && author !== currentUser) {
+                        if (author && author !== currentUser && !codemodeBypass) {
                             return {
                                 success: false,
                                 error: `Permission Denied: Only the original author ("${author}") can delete team entry ${String(id)}.`,
