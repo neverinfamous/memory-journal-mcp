@@ -21,7 +21,7 @@
 - Added progress reporting to all batch tools for both standard and Code Mode execution.
 - Added entry versioning/history tracking. Updates to entries now automatically save content snapshots (capped at 10 revisions per entry) in an `entry_revisions` table. Added a new `get_entry_history` tool to retrieve these snapshots.
 - Added comprehensive testing coverage in `test-server/` prompts to verify history tracking functionality.
-- Conducted a comprehensive documentation and file structure audit across the main repository and GitHub Wiki, syncing tool counts (84 tools total), resource counts (52 resources total: 46 core + 6 aliases), group presets, and capability metrics.
+- Conducted a comprehensive documentation and file structure audit across the main repository and GitHub Wiki, syncing tool counts (84 tools total), resource counts (52 resources total: 46 core + 6 aliases), group presets, and capability metrics. Specifically updated the `Architecture.md` tree in the wiki to reflect newly added batch, restoration, and soft-delete tools.
 - Added and updated direct MCP and sandboxed Code Mode test prompts covering soft-delete recovery, archiving, and keyset cursor pagination.
 - Added comprehensive standard and Code Mode test prompt coverage to verify dynamic `project_number` validation, server fallback resolution, and search boundary bypass rules for pure flag and entry-type queries.
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
