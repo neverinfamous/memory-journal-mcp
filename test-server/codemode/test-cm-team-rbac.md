@@ -26,14 +26,14 @@ Test team member management tools and role-based access limits through Code Mode
 ```javascript
 // Test code:
 const added = await mj.team.teamAddMember({
-  username: 'cm_test_viewer',
+  author: 'cm_test_viewer',
   role: 'viewer'
 })
 
 let duplicateCaught = false;
 try {
   await mj.team.teamAddMember({
-    username: 'cm_test_viewer',
+    author: 'cm_test_viewer',
     role: 'member'
   })
 } catch (error) {
@@ -41,24 +41,24 @@ try {
 }
 
 const getMem = await mj.team.teamGetMember({
-  username: 'cm_test_viewer'
+  author: 'cm_test_viewer'
 })
 
 const updated = await mj.team.teamUpdateMemberRole({
-  username: 'cm_test_viewer',
+  author: 'cm_test_viewer',
   role: 'member'
 })
 
 const listMem = await mj.team.teamListMembers({})
 
 const removed = await mj.team.teamRemoveMember({
-  username: 'cm_test_viewer'
+  author: 'cm_test_viewer'
 })
 
 let notFoundCaught = false;
 try {
   await mj.team.teamGetMember({
-    username: 'cm_test_viewer'
+    author: 'cm_test_viewer'
   })
 } catch (error) {
   notFoundCaught = true;
@@ -71,7 +71,7 @@ return {
   getSuccess: getMem.success,
   updateSuccess: updated.success,
   updatedRole: updated.member?.role === 'member',
-  listHasMember: listMem.members?.some(m => m.username === 'cm_test_viewer'),
+  listHasMember: listMem.members?.some(m => m.author === 'cm_test_viewer'),
   removeSuccess: removed.success,
   notFoundCaught
 }

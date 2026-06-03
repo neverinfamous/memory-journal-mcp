@@ -23,13 +23,13 @@
 
 | Test | Command/Action | Expected Result |
 |---|---|---|
-| Add Member | `team_add_member(username: "test_viewer", role: "viewer")` | `success: true`, returns member details including `role: "viewer"` |
-| Add Duplicate | `team_add_member(username: "test_viewer", role: "member")` | Structured error: Member already exists |
-| Get Member | `team_get_member(username: "test_viewer")` | Returns member details with `role: "viewer"` |
-| Update Role | `team_update_member_role(username: "test_viewer", role: "member")` | `success: true`, role updated to `member` |
+| Add Member | `team_add_member(author: "test_viewer", role: "viewer")` | `success: true`, returns member details including `role: "viewer"` |
+| Add Duplicate | `team_add_member(author: "test_viewer", role: "member")` | Structured error: Member already exists |
+| Get Member | `team_get_member(author: "test_viewer")` | Returns member details with `role: "viewer"` |
+| Update Role | `team_update_member_role(author: "test_viewer", role: "member")` | `success: true`, role updated to `member` |
 | List Members | `team_list_members` | Array includes `test_viewer` |
-| Remove Member | `team_remove_member(username: "test_viewer")` | `success: true` |
-| Get Nonexistent | `team_get_member(username: "test_viewer")` | Structured error: Member not found |
+| Remove Member | `team_remove_member(author: "test_viewer")` | `success: true` |
+| Get Nonexistent | `team_get_member(author: "test_viewer")` | Structured error: Member not found |
 
 ---
 

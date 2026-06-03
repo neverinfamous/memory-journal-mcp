@@ -11,7 +11,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
  * Prefers OAuth claims, falls back to an explicit 'author' parameter, 
  * and ultimately to the TEAM_AUTHOR environment variable.
  */
-export function getCallerIdentity(params?: Record<string, unknown>): string {
+export function getCallerIdentity(_params?: Record<string, unknown>): string {
     const authCtx = getAuthContext()
     if (authCtx?.authenticated) {
         const claims = authCtx.claims
@@ -20,10 +20,7 @@ export function getCallerIdentity(params?: Record<string, unknown>): string {
         const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
         return claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
     }
-    // For non-OAuth environments, fallback to explicit author param or environment variable
-    if (params !== undefined && typeof params['author'] === 'string') {
-        return params['author']
-    }
+    // For non-OAuth environments, fallback to the environment variable (TEAM_AUTHOR)
     return resolveAuthor()
 }
 
