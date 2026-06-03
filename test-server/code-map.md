@@ -151,8 +151,8 @@ src/
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
-    │   ├── core.ts                 # Core tool group (6 tools)
-    │   ├── search/                 # Search tool group (4 tools)
+    │   ├── core.ts                 # Core tool group (7 tools)
+    │   ├── search/                 # Search tool group (5 tools)
     │   │   ├── index.ts            # Barrel — connects 4 search tools
     │   │   ├── helpers.ts          # Search helper functions
     │   │   ├── auto.ts             # Auto-mode query heuristic classifier
@@ -161,10 +161,10 @@ src/
     │   ├── analytics.ts            # Analytics tool group (2 tools)
     │   ├── relationships.ts        # Relationships tool group (2 tools)
     │   ├── io.ts                   # IO tool group (3 tools)
-    │   ├── admin.ts                # Admin tool group (8 tools)
+    │   ├── admin.ts                # Admin tool group (9 tools)
     │   ├── backup.ts               # Backup tool group (4 tools)
     │   ├── codemode.ts             # Code Mode tool group (1 tool)
-    │   ├── team/                   # Team tool group (31 tools)
+    │   ├── team/                   # Team tool group (38 tools)
     │   │   ├── index.ts            # Barrel — composes all team sub-modules
     │   │   ├── helpers.ts          # Shared team helpers (author batch-fetch, constants)
     │   │   ├── schemas.ts          # Team Zod input/output schemas (all 31 tools)

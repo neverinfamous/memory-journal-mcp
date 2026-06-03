@@ -127,6 +127,13 @@ function buildApiProxy(
                 if (typeof prop === 'symbol') return undefined
                 const key = prop
                 if (key in target) return target[key]
+
+                // Generic snake_case to camelCase fallback
+                if (typeof key === 'string' && key.includes('_')) {
+                    const camelKey = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+                    if (camelKey in target) return target[camelKey]
+                }
+
                 if (key === 'then') return undefined
                 const available = methodNames.join(', ') || 'none'
                 const reason = readonlyMode
@@ -270,6 +277,32 @@ async function executeCode(
                         return createEntry({ type, tags, content, metadata })
                     }
                 }
+                // Generic snake_case to camelCase fallback for top-level operations
+                if (typeof prop === 'string' && prop.includes('_')) {
+                    const camelProp = prop.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+                    if (camelProp !== prop) {
+                        // Check if the camelProp is mapped in DB_TO_JOURNAL
+                        const DB_TO_JOURNAL: Record<string, [string, string]> = {
+                            listTables: ['analytics', 'getStatistics'],
+                            describeTable: ['analytics', 'getStatistics'],
+                            count: ['analytics', 'getStatistics'],
+                            analyze: ['analytics', 'getStatistics'],
+                            vacuum: ['analytics', 'getStatistics'],
+                            integrityCheck: ['analytics', 'getStatistics'],
+                            exists: ['core', 'getEntryById'],
+                            upsert: ['core', 'createEntry'],
+                            batchInsert: ['core', 'createEntry'],
+                            readQuery: ['search', 'searchEntries'],
+                        }
+                        const mapping = DB_TO_JOURNAL[camelProp]
+                        if (mapping !== undefined) {
+                            const [group, method] = mapping
+                            if (group in target) return (target[group] as Record<string, unknown>)[method]
+                        }
+                        if (camelProp in target) return Reflect.get(target, camelProp)
+                    }
+                }
+
                 // db-mcp bleedover: silently route database-specific methods to closest journal equivalents
                 if (typeof prop === 'string') {
                     const DB_TO_JOURNAL: Record<string, [string, string]> = {

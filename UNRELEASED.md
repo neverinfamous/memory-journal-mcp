@@ -61,6 +61,8 @@
 - Fixed a bug where team admin tools (`team_delete_entry`, `team_update_entry`, `team_batch_update_entries`, `team_batch_delete_entries`) failed to check the `codemodeInternalFullAccess` configuration flag, correctly enabling Code Mode agents to bypass author permission constraints when configured.
 - Fixed a Windows-specific race condition in `SqliteAdapter.restoreFromFile` where lingering empty lock directories caused subsequent restores to abort. The adapter now correctly detects orphaned lock directories with missing `lock.json` files as stale and safely overrides them.
 - Fixed a Zod schema validation error during hybrid search execution by correctly casting the internal `isArchived` flag to a boolean value during batch database retrieval.
+- Fixed Code Mode agent execution errors when calling `read_query` by transparently wrapping the alias to `searchEntries` and injecting the result set into a `.rows` array property, satisfying the `db-mcp` hallucination contract.
+- Added a generic `snake_case` to `camelCase` fallback mapping to the Code Mode worker sandbox proxy (`shimMj`) to seamlessly support ergonomic database tool execution styles without throwing missing operation errors.
 - Fixed Code Mode execution failures caused by common LLM hallucinations by mapping the `searchProjects` alias to the `core` and `search` namespaces, and by refactoring `listProjects` to explicitly return a native Array instead of an Object, correctly supporting iteration methods like `.find` through `isolated-vm` serialization boundaries.
 - Fixed a test suite state pollution issue in the team flag extension tools on Windows by ensuring explicit removal of leftover `.db` files during `beforeAll` initialization.
 

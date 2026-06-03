@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **84 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **89 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -140,7 +140,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (33 tools + Code Mode)
+## team (38 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -222,6 +222,16 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_update_flag`        | Update a flag's metadata without resolving it. Escalate severity, reassign target_user, edit message, add link, or reopen a resolved flag.                |
 | `team_get_flag_analytics` | Aggregate flag analytics: resolution velocity, type distribution, per-user workload, staleness counts, and period-over-period trend comparison.           |
 
+### Members
+
+| Tool                        | Description                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team_add_member`           | Add a new member to the team with a specified role (viewer, member, admin). Admins only.                                                                  |
+| `team_remove_member`        | Remove a member from the team. Admins only.                                                                                                               |
+| `team_update_member_role`   | Update the role of an existing team member. Admins only.                                                                                                  |
+| `team_list_members`         | List all team members and their roles.                                                                                                                    |
+| `team_get_member`           | Get details about a specific team member by their author name.                                                                                            |
+
 ---
 
 ## ⚙️ Tool Filtering
@@ -230,12 +240,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 84    | All tools (default)      |
-| `starter`            | ~11   | Core + search + codemode |
-| `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 18    | Disable all mutations    |
-| `-github`            | 61    | Exclude a group          |
-| `-github,-analytics` | 59    | Exclude multiple groups  |
+| `full`               | 89    | All tools (default)      |
+| `starter`            | ~13   | Core + search + codemode |
+| `essential`          | ~8    | Minimal footprint        |
+| `readonly`           | 20    | Disable all mutations    |
+| `-github`            | 71    | Exclude a group          |
+| `-github,-analytics` | 69    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

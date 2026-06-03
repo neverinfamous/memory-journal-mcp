@@ -42,7 +42,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**84 MCP Tools** · **19 Workflow Prompts** · **46 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**89 MCP Tools** · **19 Workflow Prompts** · **52 Resources (46 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -55,7 +55,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                            |
 | **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                  |
-| **Team Collaboration**        | 28 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution, Hush Protocol flags (list, update, reopen, analytics)                     |
+| **Team Collaboration**        | 38 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics), RBAC, and member management  |
 | **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                                    |
 | **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                               |
 | **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                     |
@@ -97,12 +97,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 84    | All tools (default)      |
-| `starter`            | ~11   | Core + search + codemode |
-| `essential`          | ~7    | Minimal footprint        |
+| `full`               | 89    | All tools (default)      |
+| `starter`            | ~13   | Core + search + codemode |
+| `essential`          | ~8    | Minimal footprint        |
 | `readonly`           | 20    | Disable all mutations    |
-| `-github`            | 65    | Exclude a group          |
-| `-github,-analytics` | 63    | Exclude multiple groups  |
+| `-github`            | 71    | Exclude a group          |
+| `-github,-analytics` | 69    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -114,7 +114,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **84 MCP Tools** (10 Groups)
+### 🛠️ **89 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                                                                                               |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -127,7 +127,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `admin`         | 9     | Update, delete, rebuild/add to vector index, merge tags, bulk operations (batch create/update/delete)                                                                     |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                      |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                            |
-| `team`          | 33    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags** (requires `TEAM_DB_PATH`) |
+| `team`          | 38    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags**, RBAC member management (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 

@@ -365,7 +365,13 @@ export class JournalApi {
         if (searchEntriesFn) {
             this.core['searchEntries'] = searchEntriesFn
             this.core['search'] = searchEntriesFn
-            this.core['readQuery'] = searchEntriesFn // db-mcp bleedover
+            this.core['readQuery'] = async (...args: unknown[]) => {
+                const res = await searchEntriesFn(...args)
+                if (res !== null && typeof res === 'object' && 'entries' in res) {
+                    return { ...res, rows: (res as Record<string, unknown>)['entries'] }
+                }
+                return res
+            }
         }
 
         // db-mcp bleedover: upsert maps to createEntry in journal context
