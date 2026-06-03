@@ -40,7 +40,7 @@ Full-text, date-range, and semantic/vector search.
 
 | Tool                     | Description                                                                                                                                                                                              |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_entries`         | Full-text search journal entries using FTS5 (supports phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by relevance). Optional filters, `sort_by`, and cursor pagination. |
+| `search_entries`         | Full-text search journal entries using FTS5 (supports phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by relevance). Optional filters, `sort_by`, cursor pagination, `include_facets`, `include_highlights`, and hybrid search weights. |
 | `search_by_date_range`   | Search journal entries within a date range with optional filters, `sort_by` (timestamp or importance), and cursor pagination.                                                                                                |
 | `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                   |
 | `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                   |
@@ -157,7 +157,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 | Tool                        | Description                                                                                            |
 | --------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `team_search`               | Search entries in the team database by text and/or tags. Supports `sort_by` (timestamp or importance) and cursor pagination. |
+| `team_search`               | Search entries in the team database by text and/or tags. Supports `sort_by` (timestamp or importance), cursor pagination, `include_facets`, `include_highlights`, and hybrid search weights. |
 | `team_search_by_date_range` | Search team entries within a date range with optional filters, `sort_by` (timestamp or importance), and cursor pagination. |
 | `team_list_deleted_entries` | List recently soft-deleted team entries that can be restored. Requires TEAM_DB_PATH. |
 

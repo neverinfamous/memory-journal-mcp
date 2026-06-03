@@ -146,8 +146,9 @@ export function searchEntries(
         endDate?: string
         sortBy?: SortBy
         includeArchived?: boolean
+        includeHighlights?: boolean
     }
-): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
+): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] } {
     const { db, tagsMgr } = context
 
     if (queryStr.length > 500) {
@@ -174,7 +175,7 @@ export function searchEntries(
         }
     }
 
-    const buildAndExecute = (useFts: boolean): { entries: JournalEntry[]; nextCursor?: string } => {
+    const buildAndExecute = (useFts: boolean): { entries: JournalEntry[]; nextCursor?: string; highlights?: { id: number; snippet: string }[] } => {
         const { sql, params } = buildSearchQuery(queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
         const stmt = db.prepare(sql)
         const rows = stmt.all(params)
@@ -192,7 +193,19 @@ export function searchEntries(
                 nextCursor = encodeCursor({ offset: offset + limit })
             }
         }
-        return { entries, nextCursor }
+        
+        let highlights: { id: number; snippet: string }[] | undefined
+        if (useFts && options?.includeHighlights) {
+            highlights = rows.map((row: unknown) => {
+                const r = row as { id: number; highlight_snippet: string }
+                return {
+                    id: r.id,
+                    snippet: r.highlight_snippet,
+                }
+            })
+        }
+        
+        return { entries, nextCursor, highlights }
     }
 
     // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
@@ -244,6 +257,7 @@ function buildSearchQuery(
               endDate?: string
               sortBy?: SortBy
               includeArchived?: boolean
+              includeHighlights?: boolean
           }
         | undefined,
     useFts: boolean,
@@ -265,10 +279,12 @@ function buildSearchQuery(
         joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id`
     }
 
+    const snippetCol = (useFts && options?.includeHighlights) ? ", snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet" : ""
+
     if (useFts) {
         query = `
             ${ctePrefix}
-            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
+            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}${snippetCol}
             FROM memory_journal e
             JOIN fts_content fts ON fts.rowid = e.id
             ${joinClause}
@@ -383,6 +399,138 @@ function buildSearchQuery(
     params.push(options?.limit ?? 10, offset)
 
     return { sql: query, params }
+}
+
+export function getSearchFacets(
+    context: EntriesSharedContext,
+    queryStr: string,
+    options?: {
+        isPersonal?: boolean
+        projectNumber?: number
+        issueNumber?: number
+        prNumber?: number
+        prStatus?: string
+        workflowRunId?: number
+        tags?: string[]
+        entryType?: EntryType
+        startDate?: string
+        endDate?: string
+        includeArchived?: boolean
+    }
+): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+    const { db } = context
+    
+    // Build shared conditions based on options and query
+    const params: unknown[] = []
+    const conditions: string[] = ['e.deleted_at IS NULL']
+    if (!options?.includeArchived) {
+        conditions.push('e.is_archived = 0')
+    }
+
+    const useFts = queryStr.length > 0
+
+    if (useFts) {
+        conditions.push(`fts_content MATCH ?`)
+        params.push(sanitizeFtsQuery(queryStr))
+    }
+
+    if (options?.isPersonal !== undefined) {
+        conditions.push(`e.is_personal = ?`)
+        params.push(options.isPersonal ? 1 : 0)
+    }
+
+    if (options?.projectNumber !== undefined) {
+        conditions.push(`e.project_number = ?`)
+        params.push(options.projectNumber)
+    }
+
+    if (options?.issueNumber !== undefined) {
+        conditions.push(`e.issue_number = ?`)
+        params.push(options.issueNumber)
+    }
+
+    if (options?.prNumber !== undefined) {
+        conditions.push(`e.pr_number = ?`)
+        params.push(options.prNumber)
+    }
+
+    if (options?.prStatus !== undefined) {
+        conditions.push(`e.pr_status = ?`)
+        params.push(options.prStatus)
+    }
+
+    if (options?.workflowRunId !== undefined) {
+        conditions.push(`e.workflow_run_id = ?`)
+        params.push(options.workflowRunId)
+    }
+
+    if (options?.tags && options.tags.length > 0) {
+        const placeholders = options.tags.map(() => '?').join(',')
+        conditions.push(`t.name IN (${placeholders})`)
+        params.push(...options.tags)
+    }
+
+    if (options?.entryType !== undefined) {
+        conditions.push(`e.entry_type = ?`)
+        params.push(options.entryType)
+    }
+
+    if (options?.startDate) {
+        let start = options.startDate
+        if (!start.includes('T')) start += 'T00:00:00.000Z'
+        conditions.push(`e.timestamp >= ?`)
+        params.push(start)
+    }
+
+    if (options?.endDate) {
+        let end = options.endDate
+        if (!end.includes('T')) end += 'T23:59:59.999Z'
+        conditions.push(`e.timestamp <= ?`)
+        params.push(end)
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    const joinFts = useFts ? `JOIN fts_content fts ON fts.rowid = e.id` : ''
+
+    // 1. Tag facets query
+    const tagsSql = `
+        SELECT t.name, COUNT(DISTINCT e.id) AS cnt
+        FROM memory_journal e
+        ${joinFts}
+        JOIN entry_tags et ON e.id = et.entry_id
+        JOIN tags t ON et.tag_id = t.id
+        ${whereClause}
+        GROUP BY t.name ORDER BY cnt DESC LIMIT 20
+    `
+    // We pass params twice if options.tags was used, because the whereClause has the tags condition in it.
+    // Wait, if options.tags was used, it adds a JOIN in tagsSql? Yes, but tagsSql ALREADY has a JOIN tags t.
+    // It's perfectly fine to reuse the whereClause, but we need to ensure the table aliases match.
+    // `e`, `fts`, `et`, `t` are used in tagsSql exactly as expected.
+    
+    // However, if options?.tags was used, `conditions` uses `t.name IN (...)`.
+    // In tagsSql, `t` is already joined.
+    
+    // What about entry types query? It does NOT join `tags` or `entry_tags` normally, UNLESS `options.tags` is provided.
+    const entryTypesJoinTags = options?.tags && options.tags.length > 0 ? `JOIN entry_tags et ON e.id = et.entry_id JOIN tags t ON et.tag_id = t.id` : ''
+    const entryTypesSql = `
+        SELECT e.entry_type AS name, COUNT(DISTINCT e.id) AS cnt
+        FROM memory_journal e
+        ${joinFts}
+        ${entryTypesJoinTags}
+        ${whereClause}
+        GROUP BY e.entry_type ORDER BY cnt DESC
+    `
+
+    const tagsStmt = db.prepare(tagsSql)
+    const entryTypesStmt = db.prepare(entryTypesSql)
+
+    const tagsRows = tagsStmt.all(params) as { name: string; cnt: number }[]
+    const entryTypesRows = entryTypesStmt.all(params) as { name: string; cnt: number }[]
+
+    return {
+        tags: tagsRows.map(r => ({ name: r.name, count: r.cnt })),
+        entryTypes: entryTypesRows.map(r => ({ name: r.name, count: r.cnt })),
+    }
 }
 
 export function searchByDateRange(
@@ -546,11 +694,28 @@ export function searchByDateRange(
  * - Column filters (\`col:val\`) leaking unintended field traversals
  * - Naked booleans (\`word AND OR NOT word\`) confusing the FTS AST parser
  */
-function sanitizeFtsQuery(query: string): string {
+export function sanitizeFtsQuery(query: string): string {
     if (!query) return ''
 
-    // Strip quotes entirely to prevent unterminated string syntax errors
-    const noQuotes = query.replace(/"/g, ' ')
+    // Phase 1: Extract balanced quoted phrases and protect them
+    const phrases: string[] = []
+    const withoutPhrases = query.replace(/"([^"]+)"/g, (_match, inner: string) => {
+        // Sanitize tokens inside the phrase (strip special chars, keep alphanumeric + hyphen + underscore)
+        const safeInner = inner
+            .split(/\s+/)
+            .map((t: string) => t.replace(/[^a-zA-Z0-9_-]/g, ''))
+            .filter((t: string) => t.length > 0)
+            .join(' ')
+        if (safeInner) {
+            phrases.push(`"${safeInner}"`)
+        }
+        return ' ' // Replace the matched phrase with space in the remaining text
+    })
+
+    // Phase 2: Strip any remaining unbalanced quotes
+    const noQuotes = withoutPhrases.replace(/"/g, ' ')
+
+    // Phase 3: Tokenize and sanitize the non-phrase portion
     const tokens = noQuotes.split(/\s+/)
     const safeTokens: string[] = []
 
@@ -573,7 +738,7 @@ function sanitizeFtsQuery(query: string): string {
         if (!sanitizedToken || sanitizedToken === '*') continue
 
         // Drop NEAR as it causes ReDoS
-        if (/^NEAR$/i.test(sanitizedToken)) continue
+        if (/^NEAR\d*$/i.test(sanitizedToken)) continue
 
         const isOperator = /^(AND|OR|NOT)$/i.test(sanitizedToken)
         if (isOperator) {
@@ -610,5 +775,7 @@ function sanitizeFtsQuery(query: string): string {
         safeTokens.push(sanitizedToken)
     }
 
-    return safeTokens.join(' ')
+    // Phase 4: Combine phrases + safe tokens
+    // Phrases go first (they're the user's strongest intent signal)
+    return [...phrases, ...safeTokens].join(' ')
 }

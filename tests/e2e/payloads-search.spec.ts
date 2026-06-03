@@ -39,6 +39,40 @@ test.describe('Payload Contracts: Search', () => {
         expect(typeof payload.count).toBe('number')
     })
 
+    test('search_entries returns highlights when requested', async () => {
+        const payload = await callToolAndParse(client, 'search_entries', {
+            project_number: 1,
+            query: 'performance',
+            include_highlights: true,
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.highlights)).toBe(true)
+    })
+
+    test('search_entries returns facets when requested', async () => {
+        const payload = await callToolAndParse(client, 'search_entries', {
+            project_number: 1,
+            query: 'performance',
+            include_facets: true,
+        })
+        expectSuccess(payload)
+        expect(typeof payload.facets).toBe('object')
+        expect(Array.isArray(payload.facets?.tags)).toBe(true)
+        expect(Array.isArray(payload.facets?.entryTypes)).toBe(true)
+    })
+
+    test('search_entries processes hybrid weights safely', async () => {
+        const payload = await callToolAndParse(client, 'search_entries', {
+            project_number: 1,
+            query: 'performance',
+            mode: 'hybrid',
+            fts_weight: 1.5,
+            semantic_weight: 0.5,
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.entries)).toBe(true)
+    })
+
     test('search_by_date_range returns { entries, count }', async () => {
         const payload = await callToolAndParse(client, 'search_by_date_range', {
             project_number: 1,

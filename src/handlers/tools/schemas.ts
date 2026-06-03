@@ -192,6 +192,11 @@ export const EntriesListOutputSchema = z
                 'True if the search degraded to a slower fallback method due to infrastructure failure'
             ),
         next_cursor: z.string().optional().describe('Cursor for the next page of results'),
+        highlights: z.array(z.object({ id: z.number(), snippet: z.string() })).optional().describe('FTS5 search snippets when include_highlights is true'),
+        facets: z.object({
+            tags: z.array(z.object({ name: z.string(), count: z.number() })),
+            entryTypes: z.array(z.object({ name: z.string(), count: z.number() })),
+        }).optional().describe('Distribution counts when include_facets is true'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

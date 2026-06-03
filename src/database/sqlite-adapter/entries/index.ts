@@ -23,6 +23,7 @@ import {
     getRecentEntries as getRecentEntriesQuery,
     getEntriesPage,
     searchEntries,
+    getSearchFacets,
     searchByDateRange,
     type SortBy,
 } from './search.js'
@@ -152,9 +153,29 @@ export class EntriesManager {
             sortBy?: SortBy
             cursor?: string
             includeArchived?: boolean
+            includeHighlights?: boolean
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] } {
         return searchEntries(this.sharedContext, queryStr, options)
+    }
+
+    getSearchFacets(
+        queryStr: string,
+        options?: {
+            isPersonal?: boolean
+            projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
+            prStatus?: string
+            workflowRunId?: number
+            tags?: string[]
+            entryType?: EntryType
+            startDate?: string
+            endDate?: string
+            includeArchived?: boolean
+        }
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+        return getSearchFacets(this.sharedContext, queryStr, options)
     }
 
     searchByDateRange(

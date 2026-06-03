@@ -206,9 +206,29 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             sortBy?: 'timestamp' | 'importance'
             cursor?: string
             includeArchived?: boolean
+            includeHighlights?: boolean
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] } {
         return this.entriesMgr.searchEntries(query, options)
+    }
+
+    getSearchFacets(
+        query: string,
+        options?: {
+            isPersonal?: boolean
+            projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
+            prStatus?: string
+            workflowRunId?: number
+            tags?: string[]
+            entryType?: EntryType
+            startDate?: string
+            endDate?: string
+            includeArchived?: boolean
+        }
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
+        return this.entriesMgr.getSearchFacets(query, options)
     }
 
     searchByDateRange(

@@ -97,6 +97,7 @@ const dateInverted = await mj.search.searchByDateRange({
   start_date: '2026-12-31',
   end_date: '2026-01-01',
 })
+const searchTypeMismatch = await mj.search.searchEntries({ project_number: 5, query: 'test', fts_weight: 'abc', include_highlights: 'abc' })
 
 return {
   searchEmptyHandled: searchEmpty.success === false || Array.isArray(searchEmpty.entries),
@@ -107,6 +108,7 @@ return {
   thresholdStrError: thresholdStr.success === false,
   dateInvalidError: dateInvalid.success === false,
   dateInvertedError: dateInverted.success === false,
+  searchTypeMismatchError: searchTypeMismatch.success === false,
 }
 ```
 
@@ -118,6 +120,7 @@ return {
 | `limitOverError`      | `true` (limit max 500)              |
 | `dateInvalidError`    | `true` (YYYY-MM-DD required)        |
 | `dateInvertedError`   | `true` (start must be before end)   |
+| `searchTypeMismatchError` | `true` (type mismatches caught) |
 
 ### 29.3 Admin Group — Empty Params & Domain Errors
 
@@ -315,6 +318,7 @@ const updateStrId = await mj.team.teamUpdateEntry({
   content: 'test',
 })
 const resolveFlagStrId = await mj.team.resolveTeamFlag({ flag_id: 'abc' })
+const teamSearchTypeMismatch = await mj.team.teamSearch({ project_number: 5, query: 'test', fts_weight: 'abc' })
 
 return {
   createEmptyError: createEmpty.success === false,
@@ -336,6 +340,7 @@ return {
   createNumContentError: createNumContent.success === false,
   updateStrIdError: updateStrId.success === false,
   resolveFlagStrIdError: resolveFlagStrId.success === false,
+  teamSearchTypeMismatchError: teamSearchTypeMismatch.success === false,
 }
 ```
 
@@ -354,6 +359,7 @@ return {
 | `resolveFlagEmptyError` | `true` (flag_id required)             |
 | `createNumContentError` | `true` (content must be string)       |
 | `resolveFlagStrIdError` | `true` (flag_id must be number)       |
+| `teamSearchTypeMismatchError` | `true` (type mismatches caught) |
 
 ### 29.8 IO Group — Empty Params & Security
 

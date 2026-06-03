@@ -46,8 +46,9 @@ export function ftsSearch(
         endDate?: string
         sortBy?: 'timestamp' | 'importance'
         includeTeam?: boolean
+        includeHighlights?: boolean
     }
-): { entries: EntryWithSource[]; count: number; degraded?: boolean; nextCursor?: string } {
+): { entries: EntryWithSource[]; count: number; degraded?: boolean; nextCursor?: string; highlights?: { id: number; snippet: string }[] } {
     const hasFilters =
         options.projectNumber !== undefined ||
         options.issueNumber !== undefined ||
@@ -97,6 +98,7 @@ export function ftsSearch(
             startDate: options.startDate,
             endDate: options.endDate,
             sortBy: options.sortBy,
+            includeHighlights: options.includeHighlights,
         })
     }
 
@@ -121,6 +123,7 @@ export function ftsSearch(
                 startDate: options.startDate,
                 endDate: options.endDate,
                 sortBy: options.sortBy,
+                includeHighlights: options.includeHighlights,
             })
         }
         
@@ -141,11 +144,23 @@ export function ftsSearch(
 
         const isTeamDegraded = 'degraded' in teamResult && teamResult.degraded === true
         const isPersonalDegraded = 'degraded' in personalResult && personalResult.degraded === true
+        
+        // Merge highlights from both sources if present
+        let mergedHighlights: { id: number; snippet: string }[] | undefined
+        if (options.includeHighlights) {
+            const pHighlights = ((personalResult as { highlights?: { id: number; snippet: string }[] }).highlights) ?? []
+            const tHighlights = ((teamResult as { highlights?: { id: number; snippet: string }[] }).highlights) ?? []
+            if (pHighlights.length > 0 || tHighlights.length > 0) {
+                mergedHighlights = [...pHighlights, ...tHighlights]
+            }
+        }
+        
         return {
             entries: merged,
             count: merged.length,
             degraded: isPersonalDegraded || isTeamDegraded,
-            nextCursor: compoundNextCursor
+            nextCursor: compoundNextCursor,
+            highlights: mergedHighlights
         }
     }
 
@@ -155,6 +170,7 @@ export function ftsSearch(
         entries: personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
         count: personalEntries.length,
         degraded: isPersonalDegraded,
-        nextCursor: personalNextCursor
+        nextCursor: personalNextCursor,
+        highlights: (personalResult as { highlights?: { id: number; snippet: string }[] }).highlights
     }
 }

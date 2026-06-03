@@ -61,7 +61,9 @@ The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify th
 | Test                  | Input                                                         | Expected Result                                                      |
 | --------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
 | String limit (core)   | `get_recent_entries(project_number: 5, limit: "abc")`         | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
-| String limit (search) | `search_entries(project_number: 5, query: "x", limit: "abc")` | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
+| String limit (search) | `search_entries(project_number: 5, query: "x", limit: "abc")`         | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
+| String weight         | `search_entries(project_number: 5, query: "x", fts_weight: "abc")`    | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
+| Float weight          | `search_entries(project_number: 5, query: "x", fts_weight: 1.5)`      | Success — float is valid for weight multipliers                      |
 | String entry_id       | `get_entry_by_id(project_number: 5, entry_id: "abc")`         | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
 | String threshold      | `semantic_search(query: "x", similarity_threshold: "abc")`    | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
 | Negative limit        | `get_recent_entries(project_number: 5, limit: -1)`            | `VALIDATION_ERROR`: min boundary enforced (`>=1`)                    |

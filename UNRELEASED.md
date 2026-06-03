@@ -3,6 +3,10 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+
+- Added support for returning FTS5 highlight snippets via `include_highlights` parameter in `search_entries` and `team_search`.
+- Added faceted search capability via `include_facets` parameter in `search_entries` and `team_search`, returning tag and entry-type distribution counts.
+- Added dynamic weighting for hybrid searches via `fts_weight` and `semantic_weight` parameters in `search_entries` and `team_search`.
 - Added a versioned database schema migration framework under `src/database/migrations` (using sequential versioned migrations 001 to 007) and updated `NativeConnectionManager` to run migrations during initialization. Pre-existing databases are automatically retrofitted with a self-healing strategy.
 - Added a comprehensive integration test suite `tests/database/migrations.test.ts` to assert fresh database migrations, team schema transitions, pre-migration retrofitting, and idempotency.
 - Added composite and partial performance indexes to the database schema (`idx_memory_journal_active_timestamp`, `idx_memory_journal_active_recent`, `idx_memory_journal_type_timestamp`) to optimize active queries, default timestamp sorting, and entry-type filtering.
@@ -21,7 +25,6 @@
 - Added progress reporting to all batch tools for both standard and Code Mode execution.
 - Added entry versioning/history tracking. Updates to entries now automatically save content snapshots (capped at 10 revisions per entry) in an `entry_revisions` table. Added a new `get_entry_history` tool to retrieve these snapshots.
 - Added comprehensive testing coverage in `test-server/` prompts to verify history tracking functionality.
-- Conducted a comprehensive documentation and file structure audit across the main repository and GitHub Wiki, syncing tool counts (84 tools total), resource counts (52 resources total: 46 core + 6 aliases), group presets, and capability metrics. Specifically updated the `Architecture.md` tree in the wiki to reflect newly added batch, restoration, and soft-delete tools.
 - Added and updated direct MCP and sandboxed Code Mode test prompts covering soft-delete recovery, archiving, and keyset cursor pagination.
 - Added comprehensive standard and Code Mode test prompt coverage to verify dynamic `project_number` validation, server fallback resolution, and search boundary bypass rules for pure flag and entry-type queries.
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
@@ -29,9 +32,9 @@
 - Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
 - Added Playwright E2E payload contract tests for the new History, Archiving, and Recovery tools to strictly enforce output schema boundaries.
 
-
-
 ### Fixed
+
+- Fixed FTS search phrase matching by updating the query sanitizer to preserve balanced double-quotes for exact phrase matches, while still stripping malicious unbalanced quotes and operators.
 - Fixed a ReferenceError crash in `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (and their team variants) by properly importing the `sendProgress` utility.
 - Fixed unit test regressions in batch tool handlers by correctly mocking vectorManager and injecting parameters.
 - Fixed Docker Hub repository description not updating during tag-based deployments
@@ -42,3 +45,4 @@
 - Fixed missing `project_number` validation and default fallback resolution logic inside `team_pass_flag`, `team_list_flags`, and `team_get_flag_analytics` tool handlers to prevent multi-tenant context leakage.
 - Fixed a bug where team admin tools (`team_delete_entry`, `team_update_entry`, `team_batch_update_entries`, `team_batch_delete_entries`) failed to check the `codemodeInternalFullAccess` configuration flag, correctly enabling Code Mode agents to bypass author permission constraints when configured.
 - Fixed a Windows-specific race condition in `SqliteAdapter.restoreFromFile` where lingering empty lock directories caused subsequent restores to abort. The adapter now correctly detects orphaned lock directories with missing `lock.json` files as stale and safely overrides them.
+- Fixed a Zod schema validation error during hybrid search execution by correctly casting the internal `isArchived` flag to a boolean value during batch database retrieval.

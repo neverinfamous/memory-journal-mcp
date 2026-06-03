@@ -66,6 +66,10 @@ const SearchEntriesSchema = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
+    include_facets: z.boolean().optional().default(false).describe('Include facet distributions (tags, entry types) for the search results'),
+    include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
+    fts_weight: z.number().optional().default(1.0).describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
+    semantic_weight: z.number().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -101,6 +105,10 @@ const SearchEntriesSchemaMcp = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
+    include_facets: z.boolean().optional().default(false).describe('Include facet distributions (tags, entry types) for the search results'),
+    include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
+    fts_weight: relaxedNumber().optional().default(1.0).describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
+    semantic_weight: relaxedNumber().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -330,6 +338,26 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         sortBy: input.sort_by,
                         includeTeam: input.include_team,
                         includeArchived: input.include_archived,
+                        includeHighlights: input.include_highlights,
+                    }
+
+                    let facets: { tags: {name: string; count: number}[]; entryTypes: {name: string; count: number}[] } | undefined
+                    if (input.include_facets) {
+                        facets = db.getSearchFacets(query, {
+                            isPersonal: input.is_personal,
+                            projectNumber: input.project_number,
+                            issueNumber: input.issue_number,
+                            prNumber: input.pr_number,
+                            prStatus: input.pr_status,
+                            workflowRunId: input.workflow_run_id,
+                            tags: input.tags,
+                            entryType: input.entry_type,
+                            startDate: input.start_date,
+                            endDate: input.end_date,
+                            includeArchived: input.include_archived,
+                        })
+                        // Team facets could be merged here, but we'll stick to personal DB for now to keep it simple and fast,
+                        // or merge if needed. Since we usually query one DB, this is acceptable for phase 1.
                     }
 
                     // Route to the appropriate search strategy
@@ -391,6 +419,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 count: entries.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
                                 degraded: false,
+                                facets,
                             }
                         }
                         case 'hybrid': {
@@ -403,7 +432,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 query,
                                 db,
                                 vectorManager,
-                                searchOptions
+                                {
+                                    ...searchOptions,
+                                    ftsWeight: input.fts_weight,
+                                    semanticWeight: input.semantic_weight,
+                                }
                             )
 
                             // Post-fetch importance re-sort for vector results
@@ -424,6 +457,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     count: scored.length,
                                     searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
                                     degraded: degraded === true,
+                                    facets,
                                 }
                             }
 
@@ -433,6 +467,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 count: entries.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
                                 degraded: degraded === true,
+                                facets,
                             }
                         }
                         case 'fts':
@@ -444,6 +479,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 searchMode: isAuto ? 'fts (auto)' : 'fts',
                                 degraded: result.degraded ?? false,
                                 next_cursor: result.nextCursor,
+                                highlights: result.highlights,
+                                facets,
                             }
                         }
                     }

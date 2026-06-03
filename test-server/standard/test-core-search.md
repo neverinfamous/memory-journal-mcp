@@ -59,6 +59,10 @@
 | Search date range arch | `search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", include_archived: true)` | Returns archived entries matching date range                                                                                  |
 | Search cursor pag.     | `search_entries(project_number: 5, query: "test", limit: 2)`                                                        | Returns 2 matching entries and a non-empty `next_cursor` string                                                                 |
 | Search cursor pag. rd  | `search_entries(project_number: 5, query: "test", limit: 2, cursor: "<next_cursor>")`                               | Returns next page of matching results sequentially                                                                              |
+| Search highlights      | `search_entries(project_number: 5, query: "architecture", include_highlights: true)`                                | Results include `highlights` snippet array for FTS match                                                                        |
+| Search facets          | `search_entries(project_number: 5, query: "architecture", include_facets: true)`                                    | Results include `facets` object with `tags` and `entryTypes` distributions                                                      |
+| Hybrid search weights  | `search_entries(project_number: 5, query: "architecture", mode: "hybrid", fts_weight: 2.0, semantic_weight: 0.5)`   | Executes successfully without validation errors and returns results                                                             |
+| True phrase quotes     | `search_entries(project_number: 5, query: "\"exact match\" \"other phrase\"", mode: "fts")`                         | Executes successfully without SQLite syntax errors (balanced quotes preserved)                                                  |
 
 > [!TIP]
 > **Token Conservation in Code Mode:** When testing search across dozens of queries via `mj_execute_code`, do NOT append the full `res` objects to your results array. Map responses to `{ success: true, count: res.entries?.length || 0 }` to prevent returning massive JSON payloads (megabytes in size) that artificially inflate `_meta.tokenEstimate`.
@@ -88,3 +92,7 @@
 - Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
 - `search_entries` and `search_by_date_range` correctly respect the `include_archived` filter
 - Keyset cursor pagination (`cursor` & `next_cursor`) works reliably across FTS, semantic, and date range search modes
+- `search_entries` with `include_highlights: true` returns snippets with FTS query terms highlighted
+- `search_entries` with `include_facets: true` returns aggregate tag and entry-type distribution counts
+- Hybrid mode properly supports `fts_weight` and `semantic_weight` dynamic biasing multipliers
+- FTS query parser safely preserves balanced double-quotes for true phrase matching without crashing

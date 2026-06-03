@@ -132,6 +132,7 @@ export function getEntriesByIds(
         return {
             ...p,
             isPersonal: Boolean(p.isPersonal),
+            isArchived: Boolean(p.isArchived),
             tags: [],
         } as JournalEntry
     })

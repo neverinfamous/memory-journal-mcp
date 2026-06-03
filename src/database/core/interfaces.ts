@@ -175,8 +175,25 @@ export interface IDatabaseAdapter {
             endDate?: string
             sortBy?: 'timestamp' | 'importance'
             includeArchived?: boolean
+            includeHighlights?: boolean
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean }
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] }
+    getSearchFacets(
+        query: string,
+        options?: {
+            isPersonal?: boolean
+            projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
+            prStatus?: string
+            workflowRunId?: number
+            tags?: string[]
+            entryType?: EntryType
+            startDate?: string
+            endDate?: string
+            includeArchived?: boolean
+        }
+    ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] }
     searchByDateRange(
         startDate: string,
         endDate: string,

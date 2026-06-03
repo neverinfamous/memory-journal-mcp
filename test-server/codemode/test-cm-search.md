@@ -445,6 +445,34 @@ return {
 
 ---
 
+### 21.11 Search Enhancements (Highlights, Facets, Weights, Quotes)
+
+```javascript
+// Test code:
+const withHighlights = await mj.search.searchEntries({ project_number: 5, query: "architecture", include_highlights: true, mode: "fts" })
+const withFacets = await mj.search.searchEntries({ project_number: 5, query: "test", include_facets: true })
+const withWeights = await mj.search.searchEntries({ project_number: 5, query: "performance", mode: "hybrid", fts_weight: 2.0, semantic_weight: 0.1 })
+const withQuotes = await mj.search.searchEntries({ project_number: 5, query: '"error handling" AND "performance"', mode: "fts" })
+
+return {
+  hasHighlights: Array.isArray(withHighlights.highlights) && withHighlights.highlights.length >= 0,
+  hasTagsFacet: typeof withFacets.facets === 'object' && Array.isArray(withFacets.facets.tags),
+  hasTypesFacet: typeof withFacets.facets === 'object' && Array.isArray(withFacets.facets.entryTypes),
+  weightsExecutes: typeof withWeights.count === 'number',
+  quotesExecutes: typeof withQuotes.count === 'number',
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `hasHighlights`     | `true`   |
+| `hasTagsFacet`      | `true`   |
+| `hasTypesFacet`     | `true`   |
+| `weightsExecutes`   | `true`   |
+| `quotesExecutes`    | `true`   |
+
+---
+
 ## Success Criteria
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
@@ -474,3 +502,7 @@ return {
 - Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
 - `search_entries` and `search_by_date_range` correctly respect the `include_archived` filter via Code Mode scripts
 - Keyset cursor pagination (`cursor` & `next_cursor`) works reliably across FTS, semantic, and date range searches via Code Mode scripts
+- `search_entries` with `include_highlights: true` returns snippets with FTS query terms highlighted via Code Mode
+- `search_entries` with `include_facets: true` returns aggregate tag and entryType distribution counts via Code Mode
+- Hybrid mode properly supports `fts_weight` and `semantic_weight` dynamic biasing multipliers via Code Mode
+- FTS query parser safely preserves balanced double-quotes for true phrase matching without crashing the sandbox
