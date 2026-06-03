@@ -100,6 +100,17 @@ Only help resources for your enabled tool groups are registered.
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries. Use the \`mode\` parameter (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`) to control search strategy. The \`fts\` and \`hybrid\` modes include Levenshtein distance typo-tolerance fallback (via \`fuzzy_match\` and \`auto_correct\`), making searches more resilient to misspellings.
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots.
 
+### Team RBAC & Access Control
+
+The team database features a Role-Based Access Control (RBAC) system for team members:
+- **Roles**: 
+  - \`viewer\`: Read-only access to all team data.
+  - \`member\`: Read all, Create/Edit/Delete *own* entries, resolve own flags.
+  - \`admin\`: Read/Write/Delete *all* entries and flags, manage team members, rebuild vector indexes, backup data.
+- **Bootstrap Workflow**: The RBAC system is inactive until the first member is added. The first time \`team_add_member\` is called, the caller is automatically registered as an \`admin\`. Alternatively, the server can be bootstrapped via the \`TEAM_ADMIN\` environment variable or \`--team-admin\` CLI flag.
+- **Managing Members**: Admins can manage members using \`team_add_member\`, \`team_remove_member\`, and \`team_update_member_role\`. 
+- **OAuth Scopes**: OAuth scopes (read/write/admin) govern broad HTTP endpoint access. RBAC roles govern fine-grained internal tool capabilities. Both must be satisfied when OAuth is active.
+
 ### Session Summaries
 
 Use \`create_entry\` to record session summaries. Required fields:
@@ -357,6 +368,7 @@ When the user has GitHub Copilot code review enabled:
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the \`memory://help\` resource. If a tool doesn't exist, use \`mj_execute_code\` to combine existing tools.
 5. **Phrase Matching**: The \`query\` parameter in search tools supports true phrase matching. Wrap exact strings in double quotes (e.g., \`"error handling"\`) when word order and adjacency are critical.
 6. **Typo Tolerance**: FTS5 search operations automatically fall back to Levenshtein distance matching on tags and entry types if no results are found. To disable this when strict exact matching is needed, explicitly set \`fuzzy_match: false\`.
+7. **Team RBAC**: If the team database has at least one member registered, RBAC is active. Unregistered authors are denied access by default. Non-admin members can only modify or resolve entries/flags they originally authored.
 
 ## GitHub & Kanban Sync
 
