@@ -466,7 +466,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 // Add usage percent
-                const resourcesWithPercent: Record<string, any> = {}
+                const resourcesWithPercent: Record<string, unknown> = {}
                 for (const [key, details] of Object.entries(rateLimitInfo.resources)) {
                     resourcesWithPercent[key] = {
                         ...details,
@@ -489,7 +489,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                             mostConstrained,
                             overallUsagePercent: overallUsage
                         },
-                        passiveSnapshot: passiveSnapshot || null,
+                        passiveSnapshot: passiveSnapshot ?? null,
                         hint: `Rate limit for core resets at ${resetDate.toISOString()}. ${
                             overallUsage > 90 ? 'WARNING: Rate limit nearly exhausted. Throttle API calls.' : 'No throttling needed.'
                         }`

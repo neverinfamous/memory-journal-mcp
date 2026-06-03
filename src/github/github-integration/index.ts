@@ -92,7 +92,7 @@ export class GitHubIntegration {
 
     async getRateLimit(): Promise<GitHubRateLimitResponse> {
         const cached = this.client.getCachedWithTtl('rate-limit', 30_000)
-        if (cached) return cached as GitHubRateLimitResponse
+        if (cached !== undefined) return cached as GitHubRateLimitResponse
 
         if (!this.client.octokit) throw new Error('GitHub API not available')
         const { data } = await this.client.octokit.rateLimit.get()
