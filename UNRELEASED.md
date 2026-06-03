@@ -3,6 +3,10 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added a comprehensive Team Role-Based Access Control (RBAC) system for the shared team database, supporting `admin`, `member`, and `viewer` roles, with backward compatibility for existing uninitialized team databases.
+- Added 5 new administrative member management tools (`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`).
+- Added `TEAM_DEFAULT_ROLE` environment variable (`--team-default-role`) to configure the fallback role for unrecognized team authors.
+- Added `TEAM_ADMIN` environment variable (`--team-admin`) to support headless/Docker RBAC bootstrapping of the first admin.
 - Added GitHub rate limit resource (`memory://github/rate-limit`) for proactive API throttling awareness.
 - Added passive rate limit header capture from all GitHub API responses to provide real-time state without API cost.
 - Added fuzzy search fallback for search queries (typo tolerance) using Levenshtein distance on entry tags and types.

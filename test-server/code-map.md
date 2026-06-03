@@ -98,7 +98,7 @@ src/
 │   │   ├── schema.ts               # Database schema DDL (tables, indexes, FTS5)
 │   │   └── entry-columns.ts        # Column name constants for entry queries
 │   ├── migrations/                 # Versioned database migrations (001-007, migration-manager)
-│   │   ├── 001-init.ts ... 007-add-team-author.ts
+│   │   ├── 001-init.ts ... 008-add-team-members.ts
 │   │   ├── migration.ts            # Migration interface contract
 │   │   ├── migration-list.ts       # Sequential migration chain array registry
 │   │   └── migration-manager.ts    # Transactional runner & self-healing legacy retrofitting
@@ -108,6 +108,7 @@ src/
 │       ├── backup.ts               # Backup/restore operations
 │       ├── tags.ts                 # Tag CRUD and merge operations
 │       ├── relationships.ts        # Entry relationship operations
+│       ├── members.ts              # Team member CRUD and RBAC role resolution
 │       └── entries/
 │           ├── index.ts                # Entry operations barrel
 │           ├── crud.ts             # Entry create/read/update/delete, including batch operations
@@ -260,6 +261,8 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 |                   | `team/flag-tools.ts`           | 2     | `team_pass_flag`, `team_resolve_flag`                                                                                                              |
 |                   | `team/flag-extension-tools.ts` | 3     | `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`                                                                                   |
 |                   | `team/vector-tools.ts`         | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                                     |
+|                   | `team/member-tools.ts`         | 5     | `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`                                         |
+|                   | `team/rbac.ts`                 | 0     | Shared RBAC enforcement module, role hierarchy, ownership enforcement, `TEAM_TOOL_MIN_ROLES`                                                       |
 
 ### Utility Files (no tools, shared helpers)
 

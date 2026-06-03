@@ -21,6 +21,8 @@
                 "DB_PATH": "/app/data/memory_journal.db",
                 "TEAM_DB_PATH": "/app/data/team.db",
                 "TEAM_AUTHOR": "",
+                "TEAM_DEFAULT_ROLE": "denied",
+                "TEAM_ADMIN": "",
                 "FLAG_VOCABULARY": "blocker,needs_review,help_requested,fyi",
                 "GITHUB_TOKEN": "",
                 "DEFAULT_PROJECT_NUMBER": "1",
