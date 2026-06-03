@@ -292,7 +292,7 @@ async function executeCode(
                             exists: ['core', 'getEntryById'],
                             upsert: ['core', 'createEntry'],
                             batchInsert: ['core', 'createEntry'],
-                            readQuery: ['search', 'searchEntries'],
+                            readQuery: ['core', 'readQuery'],
                         }
                         const mapping = DB_TO_JOURNAL[camelProp]
                         if (mapping !== undefined) {
@@ -315,7 +315,7 @@ async function executeCode(
                         exists: ['core', 'getEntryById'],
                         upsert: ['core', 'createEntry'],
                         batchInsert: ['core', 'createEntry'],
-                        readQuery: ['search', 'searchEntries'],
+                        readQuery: ['core', 'readQuery'],
                     }
                     const mapping = DB_TO_JOURNAL[prop]
                     if (mapping !== undefined) {
