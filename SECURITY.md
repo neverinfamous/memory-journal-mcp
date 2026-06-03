@@ -87,8 +87,10 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Session Management (Stateful Mode)**
 
 - ✅ **UUID-based session IDs** (cryptographically random)
-- ✅ **30-minute session timeout** - idle sessions automatically expired
-- ✅ **5-minute sweep interval** - periodic cleanup of abandoned sessions
+- ✅ **Idle timeout** — Sessions inactive for 30 minutes are automatically expired
+- ✅ **Absolute TTL** — Sessions have a hard 24-hour maximum lifetime regardless of activity, forcing periodic re-authentication
+- ✅ **In-flight protection** — Sessions with active requests are skipped by the sweep timer to prevent mid-request disconnection
+- ✅ **5-minute sweep interval** — periodic cleanup of abandoned sessions
 - ✅ **Explicit session termination** via `DELETE /mcp`
 
 ### **Request Size Limits**
@@ -406,7 +408,8 @@ chmod 700 /shared/team-data
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
 - [x] DNS rebinding protection and strict HSTS
 - [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy, Permissions-Policy)
-- [x] Session timeout (30 minutes)
+- [x] Session idle timeout (30 minutes) and 5-minute sweep interval
+- [x] Session absolute TTL (24 hours) and in-flight request protection
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture

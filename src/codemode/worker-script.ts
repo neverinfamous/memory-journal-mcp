@@ -314,7 +314,9 @@ async function executeCode(
                 info: (...args: unknown[]) => args,
                 debug: (...args: unknown[]) => args,
             },
-            setTimeout: undefined,
+            sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5000))),
+            setTimeout: (cb: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) =>
+                setTimeout(cb, Math.min(ms ?? 0, 5000), ...args),
             setInterval: undefined,
             setImmediate: undefined,
             process: undefined,
