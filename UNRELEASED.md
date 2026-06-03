@@ -61,6 +61,7 @@
 - Fixed a Windows-specific race condition in `SqliteAdapter.restoreFromFile` where lingering empty lock directories caused subsequent restores to abort. The adapter now correctly detects orphaned lock directories with missing `lock.json` files as stale and safely overrides them.
 - Fixed a Zod schema validation error during hybrid search execution by correctly casting the internal `isArchived` flag to a boolean value during batch database retrieval.
 - Fixed Code Mode execution failures caused by common LLM hallucinations by mapping the `searchProjects` alias to the `core` and `search` namespaces, and by refactoring `listProjects` to explicitly return a native Array instead of an Object, correctly supporting iteration methods like `.find` through `isolated-vm` serialization boundaries.
+- Fixed a test suite state pollution issue in the team flag extension tools on Windows by ensuring explicit removal of leftover `.db` files during `beforeAll` initialization.
 
 ### Changed
 

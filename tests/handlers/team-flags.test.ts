@@ -59,6 +59,14 @@ describe('Team Flag Tool Handlers', () => {
     const teamDbPath = './test-team-flags-team.db'
 
     beforeAll(async () => {
+        try {
+            const fs = require('node:fs')
+            if (fs.existsSync(personalDbPath)) fs.unlinkSync(personalDbPath)
+            if (fs.existsSync(teamDbPath)) fs.unlinkSync(teamDbPath)
+        } catch {
+            // Ignore cleanup errors
+        }
+
         personalDb = new DatabaseAdapter(personalDbPath)
         await personalDb.initialize()
 
