@@ -65,4 +65,6 @@
 
 ### Changed
 
+- Updated agent server instructions to reflect the new Team RBAC system and Optimistic Locking (`expected_version`) features.
+
 - Migrated all primary documentation, configuration templates, GitHub Actions workflows, and AI instruction guides from `npm` to `pnpm` to establish `pnpm` as the single required package manager for internal development and deployment pipelines.

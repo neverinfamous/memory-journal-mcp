@@ -13,7 +13,7 @@ If you need to update a tool group's instructions or the general gotchas, follow
 1. Modify the relevant `.md` file in this directory (e.g., `gotchas.md`, `overview.md`, etc.).
 2. Run the generator script to compile these markdown files into the TypeScript constant map:
    ```bash
-   npm run generate:instructions
+   pnpm run generate:instructions
    ```
    _(or `npx tsx scripts/generate-server-instructions.ts`)_
 3. The generator script converts your markdown into escaped strings embedded in the `server-instructions.ts` generated code.

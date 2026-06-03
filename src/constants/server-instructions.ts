@@ -93,7 +93,7 @@ Only help resources for your enabled tool groups are registered.
 
 - **Strict Validation**: The \`project_number\` parameter is resolved at runtime (checking tool inputs, workspace registry mappings, and \`DEFAULT_PROJECT_NUMBER\` fallbacks). You will receive a \`VALIDATION_ERROR\` if no project number can be resolved for core or team tool operations.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
-- **Entry History**: Every modification to an entry creates a revision. Use \`get_entry_history\` to view past versions and changes of an entry.
+- **Entry History**: Every modification to an entry creates a revision. Use \`get_entry_history\` to view past versions and changes of an entry. When updating entries, consider passing \`expected_version\` to use optimistic locking and avoid overwriting concurrent edits.
 - **Soft-Delete & Recovery**: Entries can be soft-deleted and restored via \`restore_entry\` or \`team_restore_entry\`. Use \`list_deleted_entries\` or \`team_list_deleted_entries\` to discover soft-deleted entries. Entries can also be archived (\`is_archived = 1\`) to preserve them in history while excluding them from normal search queries.
 - **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`auto_index\` to rebuild the vector index for these entries.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
@@ -107,8 +107,8 @@ The team database features a Role-Based Access Control (RBAC) system for team me
   - \`viewer\`: Read-only access to all team data.
   - \`member\`: Read all, Create/Edit/Delete *own* entries, resolve own flags.
   - \`admin\`: Read/Write/Delete *all* entries and flags, manage team members, rebuild vector indexes, backup data.
-- **Bootstrap Workflow**: The RBAC system is inactive until the first member is added. The first time \`team_add_member\` is called, the caller is automatically registered as an \`admin\`. Alternatively, the server can be bootstrapped via the \`TEAM_ADMIN\` environment variable or \`--team-admin\` CLI flag.
-- **Managing Members**: Admins can manage members using \`team_add_member\`, \`team_remove_member\`, and \`team_update_member_role\`. 
+- **Bootstrap Workflow**: The RBAC system is inactive until the first member is added. The first time \`team_add_member\` is called, the caller is automatically registered as an \`admin\`. Alternatively, the server can be bootstrapped via the \`TEAM_ADMIN\` environment variable or \`--team-admin\` CLI flag. Unregistered authors fall back to the configured \`TEAM_DEFAULT_ROLE\`.
+- **Managing Members**: Admins can manage members using \`team_add_member\`, \`team_remove_member\`, \`team_update_member_role\`, \`team_list_members\`, and \`team_get_member\`. 
 - **OAuth Scopes**: OAuth scopes (read/write/admin) govern broad HTTP endpoint access. RBAC roles govern fine-grained internal tool capabilities. Both must be satisfied when OAuth is active.
 
 ### Session Summaries
@@ -368,7 +368,8 @@ When the user has GitHub Copilot code review enabled:
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the \`memory://help\` resource. If a tool doesn't exist, use \`mj_execute_code\` to combine existing tools.
 5. **Phrase Matching**: The \`query\` parameter in search tools supports true phrase matching. Wrap exact strings in double quotes (e.g., \`"error handling"\`) when word order and adjacency are critical.
 6. **Typo Tolerance**: FTS5 search operations automatically fall back to Levenshtein distance matching on tags and entry types if no results are found. To disable this when strict exact matching is needed, explicitly set \`fuzzy_match: false\`.
-7. **Team RBAC**: If the team database has at least one member registered, RBAC is active. Unregistered authors are denied access by default. Non-admin members can only modify or resolve entries/flags they originally authored.
+7. **Team RBAC**: If the team database has at least one member registered, RBAC is active. Unregistered authors fall back to the \`TEAM_DEFAULT_ROLE\` (which denies access by default). Non-admin members can only modify or resolve entries/flags they originally authored.
+8. **Concurrent Edits**: When updating an entry (\`update_entry\`, \`team_update_entry\`), always pass \`expected_version\` if you know the current version to prevent silently overwriting concurrent changes. If you get a \`VERSION_CONFLICT\` error, re-read the latest entry state returned in the error payload, merge your changes, and retry.
 
 ## GitHub & Kanban Sync
 
