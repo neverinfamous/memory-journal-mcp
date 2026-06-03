@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added optimistic concurrency control (conflict detection) for entry updates via a new `version` column and `expected_version` parameter. Agents trying to overwrite an entry concurrently will receive a structured `VERSION_CONFLICT` error with the current entry state instead of silently overwriting.
 - Added a comprehensive Team Role-Based Access Control (RBAC) system for the shared team database, supporting `admin`, `member`, and `viewer` roles, with backward compatibility for existing uninitialized team databases.
 - Added 5 new administrative member management tools (`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`).
 - Added `TEAM_DEFAULT_ROLE` environment variable (`--team-default-role`) to configure the fallback role for unrecognized team authors.
@@ -60,3 +61,7 @@
 - Fixed a Windows-specific race condition in `SqliteAdapter.restoreFromFile` where lingering empty lock directories caused subsequent restores to abort. The adapter now correctly detects orphaned lock directories with missing `lock.json` files as stale and safely overrides them.
 - Fixed a Zod schema validation error during hybrid search execution by correctly casting the internal `isArchived` flag to a boolean value during batch database retrieval.
 - Fixed Code Mode execution failures caused by common LLM hallucinations by mapping the `searchProjects` alias to the `core` and `search` namespaces, and by refactoring `listProjects` to explicitly return a native Array instead of an Object, correctly supporting iteration methods like `.find` through `isolated-vm` serialization boundaries.
+
+### Changed
+
+- Migrated all primary documentation, configuration templates, GitHub Actions workflows, and AI instruction guides from `npm` to `pnpm` to establish `pnpm` as the single required package manager for internal development and deployment pipelines.

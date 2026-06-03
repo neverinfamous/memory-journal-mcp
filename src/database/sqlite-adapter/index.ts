@@ -130,6 +130,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowName?: string | null
             workflowStatus?: string | null
             isArchived?: boolean
+            expectedVersion?: number
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
@@ -211,6 +212,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowName?: string | null
             workflowStatus?: string | null
             isArchived?: boolean
+            expectedVersion?: number
         }[]
     ): { updated: JournalEntry[]; notFound: number[] } {
         return this.entriesMgr.updateEntries(updates)

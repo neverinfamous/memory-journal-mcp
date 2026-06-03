@@ -16,7 +16,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(7) // 1 to 6, plus 8
+        expect(applied.length).toBe(8) // 1 to 6, plus 8, 9
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
         expect(applied[6].version).toBe(8)
@@ -60,7 +60,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(8)
+        expect(applied.length).toBe(9)
         expect(applied[7].version).toBe(8) // since 007 is applied after 008 if not careful? Wait, 007 is 7, 008 is 8. So it sorts by version. applied[6] = 7, applied[7] = 8.
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
@@ -107,7 +107,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(7)
+        expect(applied.length).toBe(8)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
@@ -141,8 +141,8 @@ describe('Database Migration Framework', () => {
         MigrationManager.runMigrations(db, false)
         const count2 = (db.prepare('SELECT COUNT(*) as c FROM schema_migrations').get() as { c: number }).c
 
-        expect(count1).toBe(7)
-        expect(count2).toBe(7)
+        expect(count1).toBe(8)
+        expect(count2).toBe(8)
 
         db.close()
     })

@@ -47,7 +47,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             name: 'team_update_entry',
             title: 'Update Team Entry',
             description:
-                'Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field. Requires TEAM_DB_PATH.',
+                'Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass expected_version for optimistic locking. Pass null to clear a field. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,
@@ -126,6 +126,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status,
                         isArchived: input.is_archived,
+                        expectedVersion: input.expected_version,
                     })
 
                     return {
@@ -407,7 +408,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_batch_update_entries',
             title: 'Team Batch Update Entries',
-            description: 'Update multiple existing team journal entries in a single transaction. Max 50 per batch. Can only update entries you authored.',
+            description: 'Update multiple existing team journal entries in a single transaction. Max 50 per batch. Can only update entries you authored. Pass expected_version for optimistic locking.',
             group: 'team',
             inputSchema: TeamBatchUpdateEntriesSchemaMcp,
             outputSchema: TeamBatchUpdateEntriesOutputSchema,
@@ -478,6 +479,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                             workflowName: u.workflow_name,
                             workflowStatus: u.workflow_status,
                             isArchived: u.is_archived,
+                            expectedVersion: u.expected_version,
                         })
                     }
 

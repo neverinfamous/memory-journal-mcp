@@ -23,6 +23,7 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 ## Tooling Standards
 
 - **Copilot CLI**: Always reference and use `gh copilot`, NOT the deprecated `github-copilot-cli`.
+- **Package Manager**: Always use `pnpm`. Do NOT use `npm` or `yarn`. Use `pnpm install`, `pnpm run build`, `pnpm test`, etc.
 
 ## Coding Standards
 
@@ -84,7 +85,7 @@ src/
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
 │   ├── server-instructions/    # Modular instruction markdown sources
-│   └── server-instructions.ts  # Auto-generated (npx tsx scripts/generate-server-instructions.ts)
+│   └── server-instructions.ts  # Auto-generated (pnpm exec tsx scripts/generate-server-instructions.ts)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces

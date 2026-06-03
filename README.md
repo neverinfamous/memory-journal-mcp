@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-88.01%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-88.03%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -21,7 +21,7 @@
 
 **🚀 Quick Deploy:**
 
-- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp`
+- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp` (or `pnpm add -g memory-journal-mcp`)
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based with full semantic search
 
 ## 🧠 Stop Experiencing AI Amnesia
@@ -338,8 +338,8 @@ npm install -g memory-journal-mcp
 ```bash
 git clone https://github.com/neverinfamous/memory-journal-mcp.git
 cd memory-journal-mcp
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ### Add to MCP Config
@@ -621,10 +621,10 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                                                    |
 | `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                                                                       |
 | `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)                                                     |
-| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `npm run lint`)                                                                  |
-| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `npm run typecheck`; empty = skip)                                                                                |
-| `PROJECT_BUILD_CMD`               | Project build command (default: `npm run build`; empty = skip)                                                                                        |
-| `PROJECT_TEST_CMD`                | Project test command (default: `npm run test`)                                                                                                        |
+| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `pnpm run lint`)                                                                  |
+| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `pnpm run typecheck`; empty = skip)                                                                                |
+| `PROJECT_BUILD_CMD`               | Project build command (default: `pnpm run build`; empty = skip)                                                                                        |
+| `PROJECT_TEST_CMD`                | Project test command (default: `pnpm run test`)                                                                                                        |
 | `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                                                                      |
 | `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)                                                           |
 | `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                                                                      |
@@ -821,7 +821,7 @@ Memory Journal is designed for extremely low overhead during AI task execution. 
 To run the benchmarking suite locally:
 
 ```bash
-npm run bench
+pnpm run bench
 ```
 
 ### Testing
@@ -830,12 +830,12 @@ Extensively tested across two frameworks:
 
 | Suite                     | Command            | Covers                                                                          |
 | ------------------------- | ------------------ | ------------------------------------------------------------------------------- |
-| Vitest (unit/integration) | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
-| Playwright (e2e)          | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
+| Vitest (unit/integration) | `pnpm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
+| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
 
 ```bash
-npm test          # Unit + integration tests
-npm run test:e2e  # End-to-end HTTP/SSE transport tests
+pnpm test          # Unit + integration tests
+pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 ```
 
 ### Security

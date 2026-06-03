@@ -48,7 +48,8 @@ function createTestDb() {
             significance_type TEXT DEFAULT NULL,
             auto_context TEXT DEFAULT NULL,
             share_with_team INTEGER DEFAULT 0,
-            is_archived INTEGER DEFAULT 0
+            is_archived INTEGER DEFAULT 0,
+            version INTEGER DEFAULT 1
         );
         CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT UNIQUE, usage_count INTEGER DEFAULT 0);
         CREATE TABLE entry_tags (entry_id INTEGER, tag_id INTEGER);

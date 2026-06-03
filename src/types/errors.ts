@@ -141,6 +141,27 @@ export class ValidationError extends MemoryJournalMcpError {
 }
 
 // =============================================================================
+// Concurrency Errors
+// =============================================================================
+
+/**
+ * Optimistic concurrency version conflict
+ */
+export class ConflictError extends MemoryJournalMcpError {
+    readonly currentState: Record<string, unknown>
+
+    constructor(message: string, currentState: Record<string, unknown>) {
+        super(message, 'VERSION_CONFLICT', ErrorCategory.CONFLICT, {
+            suggestion: 'Re-read the entry to get the current version, then retry your update with the new expected_version',
+            recoverable: true,
+            details: currentState,
+        })
+        this.name = 'ConflictError'
+        this.currentState = currentState
+    }
+}
+
+// =============================================================================
 // Resource Errors
 // =============================================================================
 

@@ -30,7 +30,7 @@
         "test:scheduler": "node test-server/scripts/test-scheduler.mjs",
         "generate:instructions": "node scripts/generate-server-instructions.ts",
         "backfill:metadata": "tsx scripts/backfill-metadata.ts",
-        "prepublishOnly": "npm run check && npm run test && npm run build"
+        "prepublishOnly": "pnpm run check && pnpm run test && pnpm run build"
     },
     "keywords": [
         "mcp",

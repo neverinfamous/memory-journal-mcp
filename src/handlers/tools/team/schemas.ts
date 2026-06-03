@@ -214,6 +214,7 @@ export const TeamUpdateEntrySchema = z.object({
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
     is_archived: z.boolean().optional(),
+    expected_version: z.number().optional(),
 })
 
 /** team_update_entry — relaxed */
@@ -234,6 +235,7 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.string().nullable().optional(),
     is_archived: z.boolean().optional(),
+    expected_version: relaxedNumber().optional(),
 })
 
 /** team_delete_entry — strict */

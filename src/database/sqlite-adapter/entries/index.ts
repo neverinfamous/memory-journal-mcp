@@ -89,6 +89,7 @@ export class EntriesManager {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            expectedVersion?: number
         }
     ): JournalEntry | null {
         return updateEntry(this.sharedContext, id, input)
@@ -121,6 +122,7 @@ export class EntriesManager {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            expectedVersion?: number
         }[]
     ): { updated: JournalEntry[]; notFound: number[] } {
         return updateEntries(this.sharedContext, updates)

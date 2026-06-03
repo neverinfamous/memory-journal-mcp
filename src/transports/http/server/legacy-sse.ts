@@ -2,6 +2,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import type { McpServerFactory } from '../../../server/mcp-server.js'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { AuthRequest } from '../../../auth/middleware.js'
 import { logger } from '../../../utils/logger.js'
 import type { StatefulContext } from './stateful.js'
 import { JSONRPC_SERVER_ERROR } from '../types.js'
@@ -67,8 +68,9 @@ export function setupLegacySSE(
                 ctx.sseTransports.set(sseTransport.sessionId, sseTransport)
                 ctx.touchSession(sseTransport.sessionId)
 
-                if (req.auth) {
-                    ctx.sessionSubjects.set(sseTransport.sessionId, req.auth.sub)
+                const authReq = req as AuthRequest
+                if (authReq.auth) {
+                    ctx.sessionSubjects.set(sseTransport.sessionId, authReq.auth.sub)
                 }
 
                 logger.info('Legacy SSE connection established', {
@@ -119,7 +121,8 @@ export function setupLegacySSE(
         }
 
         const expectedSub = ctx.sessionSubjects.get(sessionId)
-        if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+        const authReq = req as AuthRequest
+        if (expectedSub !== undefined && authReq.auth?.sub !== expectedSub) {
             res.status(403).json({
                 jsonrpc: '2.0',
                 error: {

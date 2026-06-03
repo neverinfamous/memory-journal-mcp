@@ -44,6 +44,7 @@ const UpdateEntrySchema = z.object({
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
     is_archived: z.boolean().optional(),
+    expected_version: z.number().optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -65,6 +66,7 @@ const UpdateEntrySchemaMcp = z.object({
     workflow_name: z.string().nullable().optional(),
     workflow_status: z.string().nullable().optional(),
     is_archived: z.boolean().optional(),
+    expected_version: relaxedNumber().optional(),
 })
 
 const DeleteEntrySchema = z.object({
@@ -227,6 +229,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status,
                         isArchived: input.is_archived,
+                        expectedVersion: input.expected_version,
                     })
                     if (!entry) {
                         return {
@@ -617,6 +620,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         workflowName: u.workflow_name,
                         workflowStatus: u.workflow_status,
                         isArchived: u.is_archived,
+                        expectedVersion: u.expected_version,
                     }))
 
                     const { updated, notFound } = db.updateEntries(updates)

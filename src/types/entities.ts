@@ -97,6 +97,8 @@ export interface JournalEntry {
     workflowStatus?: string | null
     // Analytics & search
     importanceScore?: number
+    // Concurrency versioning
+    version: number
 }
 
 /**

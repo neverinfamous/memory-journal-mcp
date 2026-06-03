@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     auto_context TEXT,
     deleted_at TEXT,
     is_archived INTEGER DEFAULT 0,
+    version INTEGER NOT NULL DEFAULT 1,
     -- GitHub integration fields
     project_number INTEGER,
     project_owner TEXT,

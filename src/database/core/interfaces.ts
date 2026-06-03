@@ -133,6 +133,7 @@ export interface IDatabaseAdapter {
             workflowName?: string | null
             workflowStatus?: string | null
             isArchived?: boolean
+            expectedVersion?: number
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
@@ -173,6 +174,7 @@ export interface IDatabaseAdapter {
             workflowName?: string | null
             workflowStatus?: string | null
             isArchived?: boolean
+            expectedVersion?: number
         }[]
     ): { updated: JournalEntry[]; notFound: number[] }
     deleteEntries(

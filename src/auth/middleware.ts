@@ -22,15 +22,13 @@ import { logger } from '../utils/logger.js'
  * Extended Express Request with auth context
  * Uses module augmentation to extend Express.Request interface
  */
-declare module 'express-serve-static-core' {
-    interface Request {
-        /** Authenticated user claims */
-        auth?: TokenClaims
-        /** Raw access token */
-        accessToken?: string
-        /** Request ID for tracing */
-        requestId?: string
-    }
+export interface AuthRequest extends Request {
+    /** Authenticated user claims */
+    auth?: TokenClaims
+    /** Raw access token */
+    accessToken?: string
+    /** Request ID for tracing */
+    requestId?: string
 }
 
 // =============================================================================
@@ -136,9 +134,11 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
     const { tokenValidator, resourceServer, publicPaths = [] } = config
 
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        const authReq = req as AuthRequest
+
         // Generate request ID for tracing
         const requestId = crypto.randomUUID()
-        req.requestId = requestId
+        authReq.requestId = requestId
 
         // Check if path is public
         if (isPublicPath(req.path, publicPaths)) {
@@ -198,8 +198,8 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
             res.status(500).json({ error: 'internal_error' })
             return
         }
-        req.auth = claims
-        req.accessToken = token
+        authReq.auth = claims
+        authReq.accessToken = token
 
         logger.info(`Request authenticated: ${claims.sub}`, {
             module: 'AUTH',
@@ -223,7 +223,9 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
  */
 export function requireScope(scope: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        if (!req.auth) {
+        const authReq = req as AuthRequest
+
+        if (!authReq.auth) {
             // Should not happen if auth middleware is applied first
             res.status(401).json({
                 error: 'unauthorized',
@@ -233,12 +235,12 @@ export function requireScope(scope: string): RequestHandler {
         }
 
         const scopeGranted =
-            req.auth.scopes.includes(scope) ||
-            req.auth.scopes.includes('admin') ||
-            req.auth.scopes.includes('full')
+            authReq.auth.scopes.includes(scope) ||
+            authReq.auth.scopes.includes('admin') ||
+            authReq.auth.scopes.includes('full')
 
         if (!scopeGranted) {
-            const error = new InsufficientScopeError(scope, req.auth.scopes)
+            const error = new InsufficientScopeError(scope, authReq.auth.scopes)
 
             logger.warning(`Insufficient scope: required ${scope}`, {
                 module: 'AUTH',
@@ -267,7 +269,9 @@ export function requireScope(scope: string): RequestHandler {
  */
 export function requireAnyScope(scopes: string[]): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        if (!req.auth) {
+        const authReq = req as AuthRequest
+
+        if (!authReq.auth) {
             res.status(401).json({
                 error: 'unauthorized',
                 error_description: 'Authentication required',
@@ -276,15 +280,15 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
         }
 
         // Full or admin scope grants all
-        if (req.auth.scopes.includes('full') || req.auth.scopes.includes('admin')) {
+        if (authReq.auth.scopes.includes('full') || authReq.auth.scopes.includes('admin')) {
             next()
             return
         }
 
-        const hasAnyScope = scopes.some((scope) => req.auth?.scopes.includes(scope))
+        const hasAnyScope = scopes.some((scope) => authReq.auth?.scopes.includes(scope))
 
         if (!hasAnyScope) {
-            const error = new InsufficientScopeError(scopes, req.auth.scopes)
+            const error = new InsufficientScopeError(scopes, authReq.auth.scopes)
 
             logger.warning(`Insufficient scope: required one of [${scopes.join(', ')}]`, {
                 module: 'AUTH',
@@ -313,7 +317,9 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
  */
 export function requireToolScope(toolName: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        if (!req.auth) {
+        const authReq = req as AuthRequest
+
+        if (!authReq.auth) {
             res.status(401).json({
                 error: 'unauthorized',
                 error_description: 'Authentication required',
@@ -323,10 +329,10 @@ export function requireToolScope(toolName: string): RequestHandler {
 
         // Use scope hierarchy for tool access check
         const requiredScope = getRequiredScope(toolName)
-        const hasAccess = checkScope(req.auth.scopes, requiredScope)
+        const hasAccess = checkScope(authReq.auth.scopes, requiredScope)
 
         if (!hasAccess) {
-            const error = new InsufficientScopeError(`Tool access: ${toolName}`, req.auth.scopes)
+            const error = new InsufficientScopeError(`Tool access: ${toolName}`, authReq.auth.scopes)
 
             logger.warning(`Insufficient scope for tool: ${toolName}`, {
                 module: 'AUTH',

@@ -1,6 +1,7 @@
 import type { JournalEntry, EntryType, EntryRevision } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
 import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject, rowsToEntries } from './shared.js'
+import { ConflictError } from '../../../types/errors.js'
 
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
     const { db, tagsMgr } = context
@@ -191,6 +192,7 @@ export function updateEntry(
         workflowName?: string | null
         workflowStatus?: string | null
         isArchived?: boolean
+        expectedVersion?: number
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
@@ -199,7 +201,14 @@ export function updateEntry(
     const existing = getEntryById(context, id)
     if (!existing) return null
 
-    const updates: string[] = []
+    if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
+        throw new ConflictError(
+            `Version conflict: expected ${String(input.expectedVersion)} but found ${String(existing.version)}`,
+            existing as unknown as Record<string, unknown>
+        )
+    }
+
+    const updates: string[] = ['version = version + 1']
     const values: unknown[] = []
 
     if (input.entryType !== undefined) {
@@ -426,6 +435,7 @@ export function updateEntries(
         workflowName?: string | null
         workflowStatus?: string | null
         isArchived?: boolean
+        expectedVersion?: number
     }[]
 ): { updated: JournalEntry[]; notFound: number[] } {
     const { db } = context

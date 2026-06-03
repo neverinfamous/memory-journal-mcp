@@ -40,6 +40,9 @@ export enum ErrorCategory {
 
     /** Internal/unexpected server errors */
     INTERNAL = 'internal',
+
+    /** Optimistic concurrency version conflict */
+    CONFLICT = 'conflict',
 }
 
 // =============================================================================
