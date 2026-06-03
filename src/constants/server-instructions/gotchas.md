@@ -7,6 +7,7 @@
 3. **Code Mode Restrictions**: The `mj_execute_code` sandbox cannot make network requests (`fetch` is undefined) or use timers (`setTimeout`/`setInterval`). Use it strictly for orchestrating `mj.*` API calls.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the `memory://help` resource. If a tool doesn't exist, use `mj_execute_code` to combine existing tools.
 5. **Phrase Matching**: The `query` parameter in search tools supports true phrase matching. Wrap exact strings in double quotes (e.g., `"error handling"`) when word order and adjacency are critical.
+6. **Typo Tolerance**: FTS5 search operations automatically fall back to Levenshtein distance matching on tags and entry types if no results are found. To disable this when strict exact matching is needed, explicitly set `fuzzy_match: false`.
 
 ## GitHub & Kanban Sync
 

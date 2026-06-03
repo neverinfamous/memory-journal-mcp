@@ -197,6 +197,8 @@ export const EntriesListOutputSchema = z
             tags: z.array(z.object({ name: z.string(), count: z.number() })),
             entryTypes: z.array(z.object({ name: z.string(), count: z.number() })),
         }).optional().describe('Distribution counts when include_facets is true'),
+        suggestions: z.array(z.string()).optional().describe('Fuzzy matches when fuzzy_match=true and no exact results were found'),
+        correctedQuery: z.string().optional().describe('The corrected query when auto_correct=true and a confident match was found'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

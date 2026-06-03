@@ -86,6 +86,8 @@ export interface ServerOptions {
     // Auto-prune
     pruneOlderThanDays?: number
     pruneImportanceThreshold?: number
+    // Embedding model
+    embeddingModel?: string
 }
 
 /**
@@ -137,12 +139,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 
     // Initialize vector search manager (lazy loading - model loads on first use)
-    const vectorManager = new VectorSearchManager(db)
+    const vectorManager = new VectorSearchManager(db, options.embeddingModel)
 
     // Initialize team vector search manager if team DB is configured
     let teamVectorManager: VectorSearchManager | undefined
     if (teamDb) {
-        teamVectorManager = new VectorSearchManager(teamDb)
+        teamVectorManager = new VectorSearchManager(teamDb, options.embeddingModel)
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
@@ -337,8 +339,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             github,
             baseConfig,
             undefined,
-            teamDb,
-            teamVectorManager
+            teamDb ?? undefined,
+            teamVectorManager ?? undefined
         )
 
     const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
@@ -349,8 +351,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         vectorManager,
         github,
         customToolHandlerConfig,
-        teamDb,
-        teamVectorManager
+        teamDb ?? undefined,
+        teamVectorManager ?? undefined
     )
     const allToolNames = new Set(allTools.map((t) => t.name))
 
@@ -368,8 +370,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
               vectorManager,
               github,
               customToolHandlerConfig,
-              teamDb,
-              teamVectorManager
+              teamDb ?? undefined,
+              teamVectorManager ?? undefined
           )
         : allTools
 
@@ -513,8 +515,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         github,
                         customToolHandlerConfig,
                         progressContext,
-                        teamDb,
-                        teamVectorManager
+                        teamDb ?? undefined,
+                        teamVectorManager ?? undefined
                     )
 
                     // MCP 2025-11-25: If tool has outputSchema, return both:
@@ -608,7 +610,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 filterConfig,
                 github,
                 scheduler,
-                teamDb,
+                teamDb ?? undefined,
                 activeBriefingConfig,
                 runtime
             )
@@ -630,7 +632,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         registerResources(server, resources as ResourceDefinition[], handleResourceRead, runtime)
 
         // Register prompts (reusing prompts from instruction generation)
-        registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
+        registerPrompts(server, prompts as PromptDefinition[], db, teamDb ?? undefined, runtime)
 
         // Intercept SDK-level Zod validation errors to return structured error responses
         const serverObj = server.server as unknown as {

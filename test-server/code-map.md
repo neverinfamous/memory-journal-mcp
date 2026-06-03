@@ -112,6 +112,7 @@ src/
 │           ├── index.ts                # Entry operations barrel
 │           ├── crud.ts             # Entry create/read/update/delete, including batch operations
 │           ├── search.ts           # FTS5 search, date-range search
+│           ├── fuzzy-matcher.ts    # Fallback fuzzy string matching (Levenshtein)
 │           ├── importance.ts       # Importance scoring algorithm
 │           ├── statistics.ts       # Journal statistics and analytics
 │           └── shared.ts           # Shared entry query helpers
@@ -383,6 +384,7 @@ catch (error) {
 | Database schema DDL                | `src/database/core/schema.ts`          | Table definitions, indexes, FTS5 virtual table                                                                                                                                                                                                                           |
 | Database adapter interface         | `src/database/core/interfaces.ts`      | `IDatabaseAdapter` contract (all DB operations)                                                                                                                                                                                                                          |
 | Default config                     | `src/types/index.ts`                   | `DEFAULT_CONFIG` with default db path, model name, semantic search enabled                                                                                                                                                                                               |
+| Embedding model                    | env var / `--embedding-model`          | Swappable HuggingFace feature extraction model for semantic search embeddings.                                                                                                                                                                                           |
 | OAuth scope mapping                | `src/auth/scope-map.ts`                | Tool→scope mapping: `read`, `write`, `admin`                                                                                                                                                                                                                             |
 | MAX_QUERY_LIMIT                    | `src/handlers/tools/search/helpers.ts` | 500 — shared cap for all paginated tools (core, github, search)                                                                                                                                                                                                          |
 | CODE_MODE_MAX_RESULT_SIZE          | env var / `--codemode-max-result-size` | Configurable Code Mode output cap (default: 100KB). Read by `CodeModeSecurityManager` in `codemode.ts`                                                                                                                                                                   |

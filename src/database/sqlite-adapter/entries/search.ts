@@ -9,6 +9,7 @@ import {
 } from './shared.js'
 import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
 import { sanitizeSearchQuery } from '../../../utils/security-utils.js'
+import { buildVocabulary, expandFuzzyQuery } from './fuzzy-matcher.js'
 
 /** Allowed sort dimensions for search results */
 export type SortBy = 'timestamp' | 'importance'
@@ -147,8 +148,10 @@ export function searchEntries(
         sortBy?: SortBy
         includeArchived?: boolean
         includeHighlights?: boolean
+        fuzzy_match?: boolean
+        auto_correct?: boolean
     }
-): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] } {
+): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
     const { db, tagsMgr } = context
 
     if (queryStr.length > 500) {
@@ -211,7 +214,24 @@ export function searchEntries(
     // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
     if (queryStr.length > 0) {
         try {
-            return buildAndExecute(true)
+            const result = buildAndExecute(true)
+            
+            // Fuzzy search integration
+            if (result.entries.length === 0 && options?.fuzzy_match) {
+                const vocab = buildVocabulary(db)
+                const fuzzyRes = expandFuzzyQuery(queryStr, vocab, options.auto_correct)
+                
+                if (fuzzyRes.corrected && fuzzyRes.expanded !== queryStr) {
+                    // Try again with corrected query
+                    const correctedResult = searchEntries(context, fuzzyRes.expanded, { ...options, fuzzy_match: false, auto_correct: false })
+                    return { ...correctedResult, correctedQuery: fuzzyRes.expanded }
+                } else if (fuzzyRes.suggestions.length > 0) {
+                    // Return empty results but with suggestions
+                    return { ...result, suggestions: fuzzyRes.suggestions }
+                }
+            }
+            
+            return result
         } catch (error) {
             // FTS5 syntax error (e.g. unbalanced quotes, special chars) — fall back to LIKE
             // Rethrow if it's an infrastructural error (like missing extension)

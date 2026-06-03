@@ -70,6 +70,8 @@ const SearchEntriesSchema = z.object({
     include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
     fts_weight: z.number().optional().default(1.0).describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
     semantic_weight: z.number().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
+    fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
+    auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -109,6 +111,8 @@ const SearchEntriesSchemaMcp = z.object({
     include_highlights: z.boolean().optional().default(false).describe('Include snippets with matched terms highlighted (only applies to fts mode)'),
     fts_weight: relaxedNumber().optional().default(1.0).describe('Weight multiplier for FTS5 results in hybrid search (default: 1.0)'),
     semantic_weight: relaxedNumber().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
+    fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
+    auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -339,6 +343,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         includeTeam: input.include_team,
                         includeArchived: input.include_archived,
                         includeHighlights: input.include_highlights,
+                        fuzzy_match: input.fuzzy_match,
+                        auto_correct: input.auto_correct,
                     }
 
                     let facets: { tags: {name: string; count: number}[]; entryTypes: {name: string; count: number}[] } | undefined
@@ -480,6 +486,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 degraded: result.degraded ?? false,
                                 next_cursor: result.nextCursor,
                                 highlights: result.highlights,
+                                suggestions: result.suggestions,
+                                correctedQuery: result.correctedQuery,
                                 facets,
                             }
                         }

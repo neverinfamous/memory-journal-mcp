@@ -91,6 +91,10 @@ function createMockDbAdapter() {
             const res = mockGet()
             return res ? res.count : 0
         },
+        getVectorMetadata: vi.fn(),
+        setVectorMetadata: vi.fn(),
+        createVecTable: vi.fn(),
+        dropVecTable: vi.fn(),
         executeInTransaction: (cb: any) => cb(),
     } as unknown as IDatabaseAdapter
 
@@ -583,7 +587,7 @@ describe('VectorSearchManager', () => {
             const freshVm = new VectorSearchManager(fakeAdapter)
             const stats = freshVm.getStats()
             expect(stats.itemCount).toBe(0)
-            expect(stats.dimensions).toBe(384)
+            expect(stats.dimensions).toBe(0)
         })
 
         it('should return item count', async () => {

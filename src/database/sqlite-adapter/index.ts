@@ -207,8 +207,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             cursor?: string
             includeArchived?: boolean
             includeHighlights?: boolean
+            fuzzy_match?: boolean
+            auto_correct?: boolean
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] } {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
         return this.entriesMgr.searchEntries(query, options)
     }
 
@@ -391,6 +393,22 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     // Vector Search Primitives
     // ========================================================================
 
+    getVectorMetadata(key: string): string | undefined {
+        return this.connection.getVectorMetadata(key)
+    }
+
+    setVectorMetadata(key: string, value: string): void {
+        this.connection.setVectorMetadata(key, value)
+    }
+
+    createVecTable(dimensions: number): void {
+        this.connection.createVecTable(dimensions)
+    }
+
+    dropVecTable(): void {
+        this.connection.dropVecTable()
+    }
+
     upsertVector(entryId: number, embedding: Float32Array): void {
         const bigId = BigInt(entryId)
         const db = this.connection.getNativeDb()
@@ -434,40 +452,76 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     getVector(entryId: number): Float32Array | null {
-        const db = this.connection.getNativeDb()
-        const row = db
-            .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
-            .get(BigInt(entryId)) as { embedding: Buffer } | undefined
-        if (!row) return null
-        return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, 384)
+        try {
+            const db = this.connection.getNativeDb()
+            const row = db
+                .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
+                .get(BigInt(entryId)) as { embedding: Buffer } | undefined
+            if (!row) return null
+            return new Float32Array(row.embedding.buffer, row.embedding.byteOffset)
+        } catch (error: unknown) {
+            if (error instanceof Error && error.message.includes('no such table')) {
+                return null
+            }
+            throw error
+        }
     }
 
     deleteVector(entryId: number): void {
-        this.connection
-            .getNativeDb()
-            .prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
-            .run(BigInt(entryId))
+        try {
+            this.connection
+                .getNativeDb()
+                .prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+                .run(BigInt(entryId))
+        } catch (error: unknown) {
+            if (error instanceof Error && error.message.includes('no such table')) {
+                return
+            }
+            throw error
+        }
     }
 
     clearVectors(): void {
-        this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings').run()
+        try {
+            this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings').run()
+        } catch (error: unknown) {
+            if (error instanceof Error && error.message.includes('no such table')) {
+                return
+            }
+            throw error
+        }
     }
 
     getVectorCount(): number {
-        const row = this.connection
-            .getNativeDb()
-            .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
-            .get() as { count: number } | undefined
-        return row?.count ?? 0
+        try {
+            const row = this.connection
+                .getNativeDb()
+                .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
+                .get() as { count: number } | undefined
+            return row?.count ?? 0
+        } catch (error: unknown) {
+            if (error instanceof Error && error.message.includes('no such table')) {
+                return 0
+            }
+            throw error
+        }
     }
 
-    cleanupStaleVectors(): void {
-        this.connection
-            .getNativeDb()
-            .prepare(
-                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
-            )
-            .run()
+    cleanupStaleVectors(): number {
+        try {
+            const db = this.connection.getNativeDb()
+            const result = db
+                .prepare(
+                    'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+                )
+                .run()
+            return result.changes
+        } catch (error: unknown) {
+            if (error instanceof Error && error.message.includes('no such table')) {
+                return 0
+            }
+            throw error
+        }
     }
 
     pruneByImportance(olderThanDays: number, importanceThreshold: number): number {

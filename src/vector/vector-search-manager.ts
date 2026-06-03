@@ -16,8 +16,6 @@ import { ConfigurationError } from '../types/errors.js'
 /** Default model for embeddings (same as Python version) */
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2'
 
-/** Embedding dimensions for all-MiniLM-L6-v2 */
-const EMBEDDING_DIMENSIONS = 384
 
 /** Number of entries to embed concurrently during rebuild */
 const REBUILD_BATCH_SIZE = 5
@@ -49,12 +47,21 @@ export class VectorSearchManager {
     private readonly modelName: string
     private initialized = false
     private initPromise: Promise<void> | null = null
+    private dimensions = 0 // Auto-detected on initialization
 
     constructor(
         private readonly dbAdapter: IDatabaseAdapter,
         modelName = DEFAULT_MODEL
     ) {
         this.modelName = modelName
+    }
+
+    getModelName(): string {
+        return this.modelName
+    }
+
+    getDimensions(): number {
+        return this.dimensions
     }
 
     /**
@@ -88,6 +95,15 @@ export class VectorSearchManager {
 
                 // Get the raw better-sqlite3 database instance
                 // sqlite-vec extension is already loaded by NativeConnectionManager
+
+                // Detect embedding dimensions
+                logger.info('Detecting embedding dimensions...', { module: 'VectorSearch' })
+                const testEmbedding = await this.generateEmbedding('test')
+                this.dimensions = testEmbedding.length
+                logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`, { module: 'VectorSearch' })
+
+                // Verify or create vec table
+                this.verifyAndCreateVecTable()
 
                 this.initialized = true
                 logger.info('Vector search initialized successfully', { module: 'VectorSearch' })
@@ -123,13 +139,49 @@ export class VectorSearchManager {
         // Convert to number array
         const embedding = Array.from(output.data)
 
-        if (embedding.length !== EMBEDDING_DIMENSIONS) {
+        if (this.initialized && embedding.length !== this.dimensions) {
             throw new Error(
-                `Embedding dimension mismatch: expected ${String(EMBEDDING_DIMENSIONS)}, got ${String(embedding.length)}`
+                `Embedding dimension mismatch: expected ${String(this.dimensions)}, got ${String(embedding.length)}`
             )
         }
 
         return embedding
+    }
+
+    /**
+     * Verifies the metadata and creates the vec table if necessary
+     */
+    private verifyAndCreateVecTable(): void {
+        if (!this.db) return
+
+        const storedModel = this.dbAdapter.getVectorMetadata('model_name')
+        const storedDimensions = this.dbAdapter.getVectorMetadata('dimensions')
+
+        if (
+            storedModel !== this.modelName ||
+            storedDimensions !== String(this.dimensions)
+        ) {
+            logger.info('Vector model or dimensions changed, dropping old index', {
+                module: 'VectorSearch',
+                oldModel: storedModel,
+                newModel: this.modelName,
+                oldDimensions: storedDimensions,
+                newDimensions: this.dimensions,
+            })
+            
+            // Drop old table
+            this.dbAdapter.dropVecTable()
+            
+            // Create new table
+            this.dbAdapter.createVecTable(this.dimensions)
+            
+            // Save metadata
+            this.dbAdapter.setVectorMetadata('model_name', this.modelName)
+            this.dbAdapter.setVectorMetadata('dimensions', String(this.dimensions))
+        } else {
+            // Already matches, just ensure the table exists
+            this.dbAdapter.createVecTable(this.dimensions)
+        }
     }
 
     /**
@@ -481,7 +533,7 @@ export class VectorSearchManager {
             return {
                 itemCount: 0,
                 modelName: this.modelName,
-                dimensions: EMBEDDING_DIMENSIONS,
+                dimensions: this.dimensions,
                 isReady: this.initialized,
             }
         }
@@ -491,7 +543,7 @@ export class VectorSearchManager {
             return {
                 itemCount: count,
                 modelName: this.modelName,
-                dimensions: EMBEDDING_DIMENSIONS,
+                dimensions: this.dimensions,
                 isReady: this.initialized,
             }
         } catch (error) {
@@ -502,7 +554,7 @@ export class VectorSearchManager {
             return {
                 itemCount: 0,
                 modelName: this.modelName,
-                dimensions: EMBEDDING_DIMENSIONS,
+                dimensions: this.dimensions,
                 isReady: this.initialized,
             }
         }

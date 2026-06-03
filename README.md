@@ -585,6 +585,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                                                                                |
 | `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                                                          |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                                                               |
+| `EMBEDDING_MODEL`                 | Swappable HuggingFace feature extraction model for semantic search embeddings (CLI: `--embedding-model`; default: `Xenova/all-MiniLM-L6-v2`)          |
 | `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold (CLI: `--prune-older-than-days`; `0` = disabled)                                |
 | `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold for pruning (CLI: `--prune-importance-threshold`; default: `0.15`)                                                         |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |

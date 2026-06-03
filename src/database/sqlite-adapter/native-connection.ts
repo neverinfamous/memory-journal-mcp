@@ -76,14 +76,13 @@ export class NativeConnectionManager implements IDatabaseConnection {
             // Run schema migrations (creates memory_journal and other core tables versioned)
             this.migrateSchema()
 
-            // Create vector embeddings table (sqlite-vec vec0 virtual table)
+            // Create vector metadata table
             db.exec(`
-                CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-                    entry_id INTEGER PRIMARY KEY,
-                    embedding float[384]
+                CREATE TABLE IF NOT EXISTS vector_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
                 )
             `)
-
 
             this.initialized = true
             logger.info('Native database opened', {
@@ -302,5 +301,36 @@ export class NativeConnectionManager implements IDatabaseConnection {
         this.db = db as Database
         this.db.pragma('foreign_keys = ON')
         this.initialized = true
+    }
+
+    // ========================================================================
+    // Vector Metadata and Tables
+    // ========================================================================
+
+    getVectorMetadata(key: string): string | undefined {
+        const db = this.ensureDb()
+        const row = db.prepare('SELECT value FROM vector_metadata WHERE key = ?').get(key) as { value: string } | undefined
+        return row?.value
+    }
+
+    setVectorMetadata(key: string, value: string): void {
+        const db = this.ensureDb()
+        db.prepare('INSERT INTO vector_metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+    }
+
+    createVecTable(dimensions: number): void {
+        const db = this.ensureDb()
+        // Wait, vec0 doesn't support parameterized dimensions via '?', we have to interpolate
+        db.exec(`
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                entry_id INTEGER PRIMARY KEY,
+                embedding float[${dimensions}]
+            )
+        `)
+    }
+
+    dropVecTable(): void {
+        const db = this.ensureDb()
+        db.exec('DROP TABLE IF EXISTS vec_embeddings')
     }
 }

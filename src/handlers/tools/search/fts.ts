@@ -47,8 +47,10 @@ export function ftsSearch(
         sortBy?: 'timestamp' | 'importance'
         includeTeam?: boolean
         includeHighlights?: boolean
+        fuzzy_match?: boolean
+        auto_correct?: boolean
     }
-): { entries: EntryWithSource[]; count: number; degraded?: boolean; nextCursor?: string; highlights?: { id: number; snippet: string }[] } {
+): { entries: EntryWithSource[]; count: number; degraded?: boolean; nextCursor?: string; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
     const hasFilters =
         options.projectNumber !== undefined ||
         options.issueNumber !== undefined ||
@@ -99,6 +101,8 @@ export function ftsSearch(
             endDate: options.endDate,
             sortBy: options.sortBy,
             includeHighlights: options.includeHighlights,
+            fuzzy_match: options.fuzzy_match,
+            auto_correct: options.auto_correct,
         })
     }
 
@@ -124,6 +128,8 @@ export function ftsSearch(
                 endDate: options.endDate,
                 sortBy: options.sortBy,
                 includeHighlights: options.includeHighlights,
+                fuzzy_match: options.fuzzy_match,
+                auto_correct: options.auto_correct,
             })
         }
         
@@ -160,7 +166,9 @@ export function ftsSearch(
             count: merged.length,
             degraded: isPersonalDegraded || isTeamDegraded,
             nextCursor: compoundNextCursor,
-            highlights: mergedHighlights
+            highlights: mergedHighlights,
+            suggestions: (personalResult as { suggestions?: string[] }).suggestions ?? (teamResult as { suggestions?: string[] }).suggestions,
+            correctedQuery: (personalResult as { correctedQuery?: string }).correctedQuery ?? (teamResult as { correctedQuery?: string }).correctedQuery,
         }
     }
 
@@ -171,6 +179,8 @@ export function ftsSearch(
         count: personalEntries.length,
         degraded: isPersonalDegraded,
         nextCursor: personalNextCursor,
-        highlights: (personalResult as { highlights?: { id: number; snippet: string }[] }).highlights
+        highlights: (personalResult as { highlights?: { id: number; snippet: string }[] }).highlights,
+        suggestions: (personalResult as { suggestions?: string[] }).suggestions,
+        correctedQuery: (personalResult as { correctedQuery?: string }).correctedQuery,
     }
 }

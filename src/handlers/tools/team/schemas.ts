@@ -105,6 +105,8 @@ export const TeamSearchSchema = z.object({
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
     include_archived: z.boolean().optional().default(false),
+    fuzzy_match: z.boolean().optional().default(false),
+    auto_correct: z.boolean().optional().default(false),
 })
 
 /** team_search — relaxed */
@@ -120,6 +122,8 @@ export const TeamSearchSchemaMcp = z.object({
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
     include_archived: z.boolean().optional().default(false),
+    fuzzy_match: z.boolean().optional().default(false),
+    auto_correct: z.boolean().optional().default(false),
 })
 
 /** team_list_deleted_entries — strict */
@@ -428,6 +432,8 @@ export const TeamEntriesListOutputSchema = z
         entries: z.array(TeamEntryOutputSchema).optional(),
         count: z.number().optional(),
         next_cursor: z.string().optional().describe('Cursor for the next page of results'),
+        suggestions: z.array(z.string()).optional().describe('Fuzzy matches when fuzzy_match=true and no exact results were found'),
+        correctedQuery: z.string().optional().describe('The corrected query when auto_correct=true and a confident match was found'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

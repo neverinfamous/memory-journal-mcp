@@ -46,7 +46,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, cursor, sort_by, project_number, include_archived } =
+                    const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct } =
                         TeamSearchSchema.parse(params)
 
                     // Security: To bypass project_number, the search must explicitly be for flags only.
@@ -84,6 +84,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         sortBy: sort_by,
                         projectNumber: projectNumber,
                         includeArchived: include_archived,
+                        fuzzy_match,
+                        auto_correct,
                     })
                     let entries = result.entries
 
@@ -116,13 +118,14 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         ...e,
                         author: authorMap.get(e.id) ?? null,
                     }))
-
                     return {
                         success: true,
                         entries: enriched,
                         count: enriched.length,
                         degraded: false,
                         next_cursor: result.nextCursor,
+                        suggestions: (result as { suggestions?: string[] }).suggestions,
+                        correctedQuery: (result as { correctedQuery?: string }).correctedQuery,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -176,8 +176,10 @@ export interface IDatabaseAdapter {
             sortBy?: 'timestamp' | 'importance'
             includeArchived?: boolean
             includeHighlights?: boolean
+            fuzzy_match?: boolean
+            auto_correct?: boolean
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] }
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string }
     getSearchFacets(
         query: string,
         options?: {
@@ -328,7 +330,15 @@ export interface IDatabaseAdapter {
         to_content: string
     }[]
 
+    // ========================================================================
     // Vector Search Primitives
+    // ========================================================================
+
+    getVectorMetadata(key: string): string | undefined
+    setVectorMetadata(key: string, value: string): void
+    createVecTable(dimensions: number): void
+    dropVecTable(): void
+
     upsertVector(entryId: number, embedding: Float32Array): void
     upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void
     searchVectors(embedding: Float32Array, limit: number): { entry_id: number; distance: number }[]

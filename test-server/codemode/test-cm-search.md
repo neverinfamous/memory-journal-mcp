@@ -48,6 +48,8 @@ Test search, semantic search, date range, analytics, and vector index operations
 | FTS5 OR         | `return await mj.search.searchEntries({ project_number: 5, query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
 | LIKE fallback   | `return await mj.search.searchEntries({ project_number: 5, query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
 | Special chars   | `return await mj.search.searchEntries({ project_number: 5, query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
+| Fuzzy fallback  | `return await mj.search.searchEntries({ project_number: 5, query: "architeqture", mode: "fts", fuzzy_match: true });` | ≥ 1 result (S1/S11)             |
+| Fuzzy off       | `return await mj.search.searchEntries({ project_number: 5, query: "architeqture", mode: "fts", fuzzy_match: false });`| 0 results                       |
 | Hybrid auto     | `return await mj.search.searchEntries({ project_number: 5, query: "how did we fix performance" });`              | Heuristic RRF triggering S7     |
 | Forced semantic | `return await mj.search.searchEntries({ project_number: 5, query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
 
@@ -209,6 +211,8 @@ return {
   noHintHasQualityHint: !!noHint.hint,
   vectorAvailable: stats.available,
   vectorItemCount: stats.itemCount,
+  hasModelName: typeof stats.modelName === 'string',
+  hasDimensions: typeof stats.dimensions === 'number',
 }
 ```
 
@@ -220,6 +224,8 @@ return {
 | `noHintHasQualityHint` | `true` (quality gate hint always shown) |
 | `vectorAvailable`      | `true`                                  |
 | `vectorItemCount`      | Number > 0                              |
+| `hasModelName`         | `true`                                  |
+| `hasDimensions`        | `true`                                  |
 
 ### 21.7 Analytics
 
@@ -481,6 +487,7 @@ return {
 - `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
 - FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
 - FTS5 LIKE fallback works for special characters (`test's`, `100%`)
+- `search_entries` gracefully falls back to fuzzy Levenshtein matching via Code Mode when `fuzzy_match` is true and FTS yields zero results
 - `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
 - Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
 - `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works

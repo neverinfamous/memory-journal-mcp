@@ -141,6 +141,10 @@ program
         'Importance score threshold for pruning (env: PRUNE_IMPORTANCE_THRESHOLD, default: 0.15)',
         '0.15'
     )
+    .option(
+        '--embedding-model <model>',
+        'HuggingFace model name for semantic search embeddings (env: EMBEDDING_MODEL)'
+    )
     // Briefing configuration
     .option(
         '--briefing-entries <count>',
@@ -257,6 +261,7 @@ program
             codemodeInternalFullAccess?: boolean
             pruneOlderThanDays: string
             pruneImportanceThreshold: string
+            embeddingModel?: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -621,6 +626,7 @@ program
                         process.env['PRUNE_IMPORTANCE_THRESHOLD'] ??
                             options.pruneImportanceThreshold
                     ),
+                    embeddingModel: process.env['EMBEDDING_MODEL'] ?? options.embeddingModel,
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

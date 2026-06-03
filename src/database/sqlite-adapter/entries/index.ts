@@ -27,6 +27,7 @@ import {
     searchByDateRange,
     type SortBy,
 } from './search.js'
+export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
 import { calculateImportance, getEntriesByIdsWithImportance } from './importance.js'
 import { getStatistics } from './statistics.js'
 
@@ -154,8 +155,10 @@ export class EntriesManager {
             cursor?: string
             includeArchived?: boolean
             includeHighlights?: boolean
+            fuzzy_match?: boolean
+            auto_correct?: boolean
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[] } {
+    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
         return searchEntries(this.sharedContext, queryStr, options)
     }
 

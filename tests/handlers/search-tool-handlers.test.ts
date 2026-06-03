@@ -179,6 +179,27 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.success).toBe(false)
             expect(result.code).toBe('VALIDATION_ERROR')
         })
+
+        it('should accept search modes (fts, semantic, auto, hybrid) without validation errors', async () => {
+            const modes = ['fts', 'semantic', 'auto', 'hybrid']
+            for (const mode of modes) {
+                const result = (await callTool(
+                    'search_entries',
+                    { query: 'alpha', mode, limit: 10 },
+                    db
+                )) as { entries?: unknown[]; error?: string }
+                expect(result.error).toBeUndefined()
+            }
+        })
+
+        it('should accept fuzzy_match and auto_correct booleans without validation errors', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'alpha', fuzzy_match: false, auto_correct: true, limit: 10 },
+                db
+            )) as { entries?: unknown[]; error?: string }
+            expect(result.error).toBeUndefined()
+        })
     })
 
     // ========================================================================
