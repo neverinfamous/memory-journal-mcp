@@ -105,6 +105,8 @@
 
 | Update entry_type        | `team_update_entry(project_number: 5, entry_id: <id>, entry_type: "technical_note")`    | Entry type changed                                   |
 | Update is_archived       | `team_update_entry(project_number: 5, entry_id: <id>, is_archived: true)`               | Entry is archived                                    |
+| Update with version      | `team_update_entry(project_number: 5, entry_id: <id>, expected_version: <v>, content: "V2")`| `success: true`, version increments                  |
+| Update conflict          | `team_update_entry(project_number: 5, entry_id: <id>, expected_version: <stale_v>, content: "V3")`| Structured error with `VERSION_CONFLICT` code       |
 | Update nonexistent       | `team_update_entry(project_number: 5, entry_id: 999999, content: "x")`                  | Structured error: `{ success: false, error: "..." }` |
 | Soft delete              | `team_delete_entry(project_number: 5, entry_id: <id>)`                                  | `success: true`, `message` confirming deletion       |
 | List deleted entries     | `team_list_deleted_entries(project_number: 5)`                                          | Returns soft-deleted entry in the list               |
@@ -265,6 +267,7 @@
 - `team_search_by_date_range(project_number: 5)` filters by `entry_type` and `tags`
 - `team_search_by_date_range(project_number: 5)` rejects invalid date format with structured error
 - `team_update_entry(project_number: 5)` updates content, tags, and entry_type independently
+- `team_update_entry(project_number: 5)` with `expected_version` successfully prevents overwriting concurrent edits (returns `VERSION_CONFLICT`)
 - `team_update_entry(project_number: 5)` returns structured error for nonexistent ID
 - `team_delete_entry(project_number: 5)` soft-deletes team entry (no `permanent` flag)
 - `team_delete_entry(project_number: 5)` returns structured error for nonexistent ID

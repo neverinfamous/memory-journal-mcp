@@ -42,7 +42,18 @@ const verify = await mj.team.teamGetEntryById({
   project_number: 5,
   entry_id: id,
 })
+const v1 = verify.entry?.version
 
+let conflictCaught = false
+const update2 = await mj.team.teamUpdateEntry({
+  project_number: 5,
+  entry_id: id,
+  expected_version: v1, // deliberately stale (it incremented on previous update)
+  content: 'CM4 locking update 2'
+})
+if (!update2.success && update2.error?.includes('VERSION_CONFLICT')) {
+  conflictCaught = true
+}
 // Merge tags
 await mj.team.teamCreateEntry({
   project_number: 5,
@@ -114,6 +125,7 @@ return {
   isNoLongerDeleted,
   isArchived,
   hasCursor,
+  conflictCaught,
 }
 ```
 
@@ -130,6 +142,7 @@ return {
 | `isNoLongerDeleted` | `true`   |
 | `isArchived`        | `true`   |
 | `hasCursor`         | `true`   |
+| `conflictCaught`    | `true`   |
 
 ### 28.4b Team Batch Operations
 
@@ -353,6 +366,7 @@ return {
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - `team_update_entry(project_number: 5)` updates content, tags, and entry_type
+- `team_update_entry(project_number: 5)` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
 - `team_delete_entry(project_number: 5)` soft-deletes team entries
 - `team_merge_tags(project_number: 5)` consolidates tags — source removed, entries re-tagged
 - `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`

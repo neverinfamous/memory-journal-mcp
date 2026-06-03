@@ -317,6 +317,44 @@ return {
 | `isArchivedVisible` | `true`   |
 | `hasCursor`         | `true`   |
 
+### 20.15 Update Entry — Optimistic Locking
+
+```javascript
+// Test code:
+const created = await mj.core.createEntryMinimal({ content: 'CM3 locking test' })
+const id = created.entry.id
+const v1 = created.entry.version
+
+const update1 = await mj.admin.updateEntry({
+  entry_id: id,
+  expected_version: v1,
+  content: 'CM3 locking update 1'
+})
+const v2 = update1.entry?.version
+
+let conflictCaught = false
+const update2 = await mj.admin.updateEntry({
+  entry_id: id,
+  expected_version: v1, // deliberately stale
+  content: 'CM3 locking update 2'
+})
+if (!update2.success && update2.error?.includes('VERSION_CONFLICT')) {
+  conflictCaught = true
+}
+
+return {
+  firstUpdateSuccess: update1.success,
+  versionIncremented: v2 > v1,
+  conflictCaught
+}
+```
+
+| Check                | Expected |
+| -------------------- | -------- |
+| `firstUpdateSuccess` | `true`   |
+| `versionIncremented` | `true`   |
+| `conflictCaught`     | `true`   |
+
 ---
 
 ## Cleanup
@@ -333,6 +371,7 @@ After testing, remove test entries created during Phase 20:
 | Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
 | Delete history test entry| `delete_entry(entry_id: <history_test_id>, permanent: true)`|
 | Delete recovery test entry| `delete_entry(entry_id: <recovery_test_id>, permanent: true)`|
+| Delete locking test entry| `delete_entry(entry_id: <locking_test_id>, permanent: true)`|
 
 ---
 
@@ -351,6 +390,7 @@ After testing, remove test entries created during Phase 20:
 - `get_entry_by_id` with `include_relationships: false` omits relationship data
 - `update_entry` updates content, tags, and entry_type — verified via read-back
 - `update_entry` `is_personal` toggle correctly changes personal status
+- `update_entry` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
 - `update_entry` returns structured error for nonexistent IDs
 - `delete_entry` soft delete hides entry from search
 - `delete_entry` permanent delete and nonexistent ID both return structured responses
