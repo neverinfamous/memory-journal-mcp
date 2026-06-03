@@ -198,3 +198,17 @@ export class PermissionError extends MemoryJournalMcpError {
         this.name = 'PermissionError'
     }
 }
+
+/**
+ * Authorization error (e.g. RBAC denial)
+ */
+export class AuthorizationError extends MemoryJournalMcpError {
+    constructor(message: string, details?: Record<string, unknown>) {
+        super(message, 'AUTHORIZATION_FAILED', ErrorCategory.AUTHORIZATION, {
+            suggestion: 'Check your team role and permissions',
+            recoverable: false,
+            details,
+        })
+        this.name = 'AuthorizationError'
+    }
+}

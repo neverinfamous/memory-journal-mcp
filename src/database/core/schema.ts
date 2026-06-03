@@ -185,6 +185,25 @@ ALTER TABLE memory_journal ADD COLUMN author TEXT;
 `
 
 /**
+ * SQL migration to add the team_members table for team databases.
+ * Applied after TEAM_SCHEMA_SQL when initializing a team database.
+ */
+export const TEAM_MEMBERS_SQL = `
+CREATE TABLE IF NOT EXISTS team_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    author TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'viewer')),
+    display_name TEXT,
+    added_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_members_author ON team_members(author COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_team_members_role ON team_members(role);
+`
+
+/**
  * Input for creating a team entry (extends standard entry with author)
  */
 export interface CreateTeamEntryInput extends CreateEntryInput {

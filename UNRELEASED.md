@@ -26,6 +26,7 @@
 - Added missing tool aliases for the team group (`team.delete`, `team.update`, `team.create`) to the Code Mode API to prevent agent hallucination failures.
 - Added support for all batch operations via Code Mode API with method aliases.
 - Added a custom Code Mode mapping for `mj.listProjects()` and `mj.core.listProjects()` agent hallucinations that actually returns project statistics by returning the `PROJECT_REGISTRY` environment mapping or falling back to `mj.analytics.getStatistics({ project_breakdown: true })` instead of throwing an error.
+- Added Code Mode method aliases (`searchProjects`, `listProjects`, `getProjects`) to the team group that gracefully route to `teamGetCrossProjectInsights` instead of throwing missing operation errors.
 - Added safe `sleep(ms)` and capped `setTimeout` global aliases to the Code Mode VM sandbox to prevent common agent hallucinations from crashing execution.
 - Added comprehensive test suite coverage (Standard & Code Mode) for all new bulk/batch operations.
 - Added progress reporting to all batch tools for both standard and Code Mode execution.

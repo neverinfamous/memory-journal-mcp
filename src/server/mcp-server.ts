@@ -51,6 +51,8 @@ export interface ServerOptions {
     host?: string
     dbPath: string
     teamDbPath?: string
+    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
+    teamAdmin?: string
     toolFilter?: string
     defaultProjectNumber?: number
     autoRebuildIndex?: boolean
@@ -136,6 +138,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
         await teamDb.initialize()
         teamDb.applyTeamSchema()
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
+
+        // Bootstrap team admin if configured and RBAC is not yet active (empty table)
+        if (options.teamAdmin && teamDb.getTeamMemberCount !== undefined && teamDb.addTeamMember !== undefined) {
+            if (!teamDb.isTeamRbacActive?.()) {
+                teamDb.addTeamMember(options.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
+                logger.info('Bootstrapped initial team admin', { module: 'McpServer', admin: options.teamAdmin })
+            }
+        }
     }
 
     // Initialize vector search manager (lazy loading - model loads on first use)
@@ -327,6 +337,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         authEnabled: Boolean(options.authToken ?? process.env['MCP_AUTH_TOKEN']),
         oauthEnabled: options.oauthEnabled,
         codemodeInternalFullAccess: options.codemodeInternalFullAccess,
+        teamDefaultRole: options.teamDefaultRole,
+        teamAdmin: options.teamAdmin,
         runtime,
     }
 

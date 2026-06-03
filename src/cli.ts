@@ -45,6 +45,15 @@ program
     .option('--stateless', 'Use stateless HTTP mode (no session management)')
     .option('--db <path>', 'Database path (env: DB_PATH)', defaultDbPath)
     .option('--team-db <path>', 'Team database path (env: TEAM_DB_PATH)', defaultTeamDbPath)
+    .option(
+        '--team-default-role <role>',
+        'Default role for unrecognized team authors: admin, member, viewer, denied (env: TEAM_DEFAULT_ROLE)',
+        'denied'
+    )
+    .option(
+        '--team-admin <author>',
+        'Bootstrap this author as admin if team_members table is empty (env: TEAM_ADMIN)'
+    )
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
@@ -216,6 +225,8 @@ program
             stateless?: boolean
             db: string
             teamDb?: string
+            teamDefaultRole: string
+            teamAdmin?: string
             toolFilter?: string
             defaultProject: string
             autoRebuildIndex?: boolean
@@ -331,6 +342,8 @@ program
                     statelessHttp: options.stateless === true,
                     dbPath: options.db,
                     teamDbPath: options.teamDb,
+                    teamDefaultRole: (process.env['TEAM_DEFAULT_ROLE'] ?? options.teamDefaultRole) as 'admin' | 'member' | 'viewer' | 'denied',
+                    teamAdmin: process.env['TEAM_ADMIN'] ?? options.teamAdmin,
                     toolFilter: options.toolFilter,
                     defaultProjectNumber: options.defaultProject
                         ? parseConfigIntRequired(options.defaultProject, 'default-project', 1)

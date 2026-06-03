@@ -205,6 +205,10 @@ export interface ToolHandlerConfig {
     authEnabled?: boolean
     oauthEnabled?: boolean
     codemodeInternalFullAccess?: boolean
+    /** Default role for un-registered authors (default: denied) */
+    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
+    /** Admin author to bootstrap if team_members table is empty */
+    teamAdmin?: string
     /**
      * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
      */
@@ -326,6 +330,12 @@ export interface ServerConfig {
 
     /** Hush Protocol flag vocabulary (defaults: blocker, needs_review, help_requested, fyi) */
     flagVocabulary?: string[]
+
+    /** Default role for un-registered authors (default: denied) */
+    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
+
+    /** Admin author to bootstrap if team_members table is empty */
+    teamAdmin?: string
 }
 
 /**

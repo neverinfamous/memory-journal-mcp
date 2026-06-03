@@ -168,6 +168,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         flagAnalytics: 'teamGetFlagAnalytics',
         flagStats: 'teamGetFlagAnalytics',
         collaborationMatrix: 'teamGetCollaborationMatrix',
+        searchProjects: 'teamGetCrossProjectInsights',
+        listProjects: 'teamGetCrossProjectInsights',
+        getProjects: 'teamGetCrossProjectInsights',
     },
 }
 

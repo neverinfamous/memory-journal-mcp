@@ -8,13 +8,14 @@ import type {
     EntryRevision,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
-import type { IDatabaseAdapter, QueryResult } from '../core/interfaces.js'
+import type { IDatabaseAdapter, QueryResult, TeamMember, TeamRole } from '../core/interfaces.js'
 
 import { NativeConnectionManager } from './native-connection.js'
 import { TagsManager } from './tags.js'
 import { EntriesManager } from './entries/index.js'
 import { RelationshipsManager } from './relationships.js'
 import { BackupManager } from './backup.js'
+import { MembersManager } from './members.js'
 import {
     saveAnalyticsSnapshot as saveSnapshot,
     getLatestAnalyticsSnapshot as getLatestSnapshot,
@@ -34,6 +35,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     private entriesMgr: EntriesManager
     private relationshipsMgr: RelationshipsManager
     private backupMgr: BackupManager
+    private membersMgr: MembersManager
 
     constructor(dbPath: string) {
         this.connection = new NativeConnectionManager(dbPath)
@@ -41,6 +43,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr)
         this.relationshipsMgr = new RelationshipsManager(this.connection, this.entriesMgr)
         this.backupMgr = new BackupManager(this.connection)
+        this.membersMgr = new MembersManager(this.connection)
     }
 
     async initialize(): Promise<void> {
@@ -140,6 +143,40 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             }
             return success
         })
+    }
+
+    // Team Membership (RBAC)
+
+    addTeamMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember {
+        return this.membersMgr.addMember(author, role, addedBy, displayName)
+    }
+
+    removeTeamMember(author: string): boolean {
+        return this.membersMgr.removeMember(author)
+    }
+
+    updateTeamMemberRole(author: string, newRole: TeamRole): TeamMember | null {
+        return this.membersMgr.updateRole(author, newRole)
+    }
+
+    getTeamMember(author: string): TeamMember | null {
+        return this.membersMgr.getMember(author)
+    }
+
+    listTeamMembers(): TeamMember[] {
+        return this.membersMgr.listMembers()
+    }
+
+    getTeamMemberCount(): number {
+        return this.membersMgr.getMemberCount()
+    }
+
+    isTeamRbacActive(): boolean {
+        return this.membersMgr.isRbacActive()
+    }
+
+    resolveTeamRole(author: string, defaultRole?: TeamRole | 'denied'): TeamRole | null {
+        return this.membersMgr.resolveRole(author, defaultRole)
     }
 
     restoreEntry(id: number): boolean {

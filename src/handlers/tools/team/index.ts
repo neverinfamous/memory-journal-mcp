@@ -22,6 +22,7 @@
  */
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { wrapWithRbac } from './rbac.js'
 import { getTeamCoreTools } from './core-tools.js'
 import { getTeamSearchTools } from './search-tools.js'
 import { getTeamAdminTools } from './admin-tools.js'
@@ -33,12 +34,13 @@ import { getTeamBackupTools } from './backup-tools.js'
 import { getTeamVectorTools } from './vector-tools.js'
 import { getTeamFlagTools } from './flag-tools.js'
 import { getTeamFlagExtensionTools } from './flag-extension-tools.js'
+import { getTeamMemberTools } from './member-tools.js'
 
 /**
- * Get all team tool definitions (28 tools).
+ * Get all team tool definitions (33 tools).
  */
 export function getTeamTools(context: ToolContext): ToolDefinition[] {
-    return [
+    const tools = [
         ...getTeamCoreTools(context),
         ...getTeamSearchTools(context),
         ...getTeamAdminTools(context),
@@ -50,5 +52,8 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
         ...getTeamVectorTools(context),
         ...getTeamFlagTools(context),
         ...getTeamFlagExtensionTools(context),
+        ...getTeamMemberTools(context),
     ]
+
+    return wrapWithRbac(context, tools)
 }

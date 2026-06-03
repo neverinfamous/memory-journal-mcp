@@ -9,6 +9,18 @@ import type {
 } from '../../types/index.js'
 import type { CreateEntryInput } from './schema.js'
 
+export type TeamRole = 'admin' | 'member' | 'viewer'
+
+export interface TeamMember {
+    id: number
+    author: string
+    role: TeamRole
+    displayName: string | null
+    addedBy: string | null
+    createdAt: string
+    updatedAt: string
+}
+
 export interface QueryResult {
     columns: string[]
     values: unknown[][]
@@ -124,6 +136,16 @@ export interface IDatabaseAdapter {
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
+
+    // Team Membership (RBAC)
+    addTeamMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember
+    removeTeamMember(author: string): boolean
+    updateTeamMemberRole(author: string, newRole: TeamRole): TeamMember | null
+    getTeamMember(author: string): TeamMember | null
+    listTeamMembers(): TeamMember[]
+    getTeamMemberCount(): number
+    isTeamRbacActive(): boolean
+    resolveTeamRole(author: string, defaultRole?: TeamRole | 'denied'): TeamRole | null
     
     // Soft-Delete Recovery
     restoreEntry(id: number): boolean

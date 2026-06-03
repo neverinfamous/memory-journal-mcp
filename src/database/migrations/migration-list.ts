@@ -5,6 +5,7 @@ import { Migration004AddGithubAndWorkflowIntegration } from './004-add-github-an
 import { Migration005AddEntryRevisions } from './005-add-entry-revisions.js'
 import { Migration006AddAnalyticsSnapshots } from './006-add-analytics-snapshots.js'
 import { Migration007AddTeamAuthor } from './007-add-team-author.js'
+import { Migration008AddTeamMembers } from './008-add-team-members.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -15,4 +16,5 @@ export const MIGRATIONS: Migration[] = [
     Migration005AddEntryRevisions,
     Migration006AddAnalyticsSnapshots,
     Migration007AddTeamAuthor,
+    Migration008AddTeamMembers,
 ]

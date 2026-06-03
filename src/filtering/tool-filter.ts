@@ -101,6 +101,11 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_list_flags',
         'team_update_flag',
         'team_get_flag_analytics',
+        'team_add_member',
+        'team_remove_member',
+        'team_update_member_role',
+        'team_list_members',
+        'team_get_member',
     ],
     codemode: ['mj_execute_code'],
 }
