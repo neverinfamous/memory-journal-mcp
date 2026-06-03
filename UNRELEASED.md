@@ -44,6 +44,7 @@
 - Added `test-team-rbac.md` and `test-cm-team-rbac.md` testing prompts to verify standard MCP and Code Mode execution of the new team member management tools.
 - Added comprehensive Vitest unit testing suites (`rbac.test.ts` and `team-member-tools.test.ts`) covering the core RBAC access tier enforcement and team member tool handlers.
 - Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
+- Added comprehensive Vitest unit testing coverage for optimistic concurrency control (`optimistic-locking.test.ts`) enforcing strict `expected_version` increment logic and `VERSION_CONFLICT` abort mechanisms across single and batch updates for both personal and team databases.
 - Added Playwright E2E payload contract tests for the new History, Archiving, and Recovery tools to strictly enforce output schema boundaries.
 
 ### Fixed
