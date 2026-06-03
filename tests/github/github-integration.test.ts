@@ -59,6 +59,12 @@ function createOctokitMock() {
                 getTopPaths: vi.fn(),
             },
         },
+        rateLimit: {
+            get: vi.fn(),
+        },
+        hook: {
+            after: vi.fn(),
+        },
     }
 }
 
@@ -1067,6 +1073,42 @@ describe('GitHubIntegration', () => {
             gh.setCachedRepoInfo({ owner: 'o', repo: 'r', remoteUrl: 'u', branch: 'b' })
             const info = gh.getCachedRepoInfo()
             expect(info?.owner).toBe('o')
+        })
+    })
+
+    // ========================================================================
+    // Rate Limit API
+    // ========================================================================
+
+    describe('getRateLimit', () => {
+        it('should return rate limit info and cache it', async () => {
+            const mockRateLimitData = {
+                resources: {
+                    core: { limit: 5000, remaining: 4999, used: 1, reset: 1372700873 },
+                },
+                rate: { limit: 5000, remaining: 4999, used: 1, reset: 1372700873 },
+            }
+            octokit.rateLimit.get.mockResolvedValue({ data: mockRateLimitData })
+
+            const rateLimit = await gh.getRateLimit()
+            expect(rateLimit).toEqual(mockRateLimitData)
+            expect(octokit.rateLimit.get).toHaveBeenCalledTimes(1)
+
+            // Second call should use cache
+            const cachedRateLimit = await gh.getRateLimit()
+            expect(cachedRateLimit).toEqual(mockRateLimitData)
+            expect(octokit.rateLimit.get).toHaveBeenCalledTimes(1) // Not called again
+        })
+
+        it('should throw error when no octokit', async () => {
+            ;(gh as any).client.octokit = null
+            await expect(gh.getRateLimit()).rejects.toThrow('GitHub API not available')
+        })
+    })
+
+    describe('getLatestRateLimit', () => {
+        it('should return null initially', () => {
+            expect(gh.getLatestRateLimit()).toBeNull()
         })
     })
 })

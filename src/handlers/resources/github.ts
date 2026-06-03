@@ -423,6 +423,81 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 }
             },
         },
+        {
+            uri: 'memory://github/rate-limit',
+            name: 'GitHub Rate Limit',
+            title: 'GitHub API Rate Limit Status',
+            description: 'Current GitHub API rate limit status, including passive snapshots and explicit limits for core/search/graphql APIs.',
+            mimeType: 'application/json',
+            icons: [ICON_GITHUB],
+            annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
+            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
+                const match = /memory:\/\/github\/rate-limit\/?(.*)?/.exec(uri)
+                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo,
+                    context.runtime
+                )
+                if (isResourceError(resolved)) return resolved
+                const { owner, repo, github, lastModified } = resolved
+
+                let rateLimitInfo
+                try {
+                    rateLimitInfo = await github.getRateLimit()
+                } catch (error) {
+                    return {
+                        data: { error: 'Failed to fetch rate limit', details: error instanceof Error ? error.message : String(error) },
+                        annotations: { lastModified }
+                    }
+                }
+                const passiveSnapshot = github.getLatestRateLimit()
+
+                // Calculate most constrained resource
+                let mostConstrained = 'core'
+                let lowestRemaining = rateLimitInfo.resources.core.remaining
+
+                for (const [key, details] of Object.entries(rateLimitInfo.resources)) {
+                    if (details.remaining < lowestRemaining) {
+                        lowestRemaining = details.remaining
+                        mostConstrained = key
+                    }
+                }
+
+                // Add usage percent
+                const resourcesWithPercent: Record<string, any> = {}
+                for (const [key, details] of Object.entries(rateLimitInfo.resources)) {
+                    resourcesWithPercent[key] = {
+                        ...details,
+                        resetTime: new Date(details.reset * 1000).toISOString(),
+                        usagePercent: details.limit > 0 ? (details.used / details.limit) * 100 : 0
+                    }
+                }
+
+                const overallUsage = rateLimitInfo.resources.core.limit > 0 
+                    ? (rateLimitInfo.resources.core.used / rateLimitInfo.resources.core.limit) * 100 
+                    : 0
+
+                const resetDate = new Date(rateLimitInfo.resources.core.reset * 1000)
+
+                return {
+                    data: {
+                        repository: `${owner}/${repo}`,
+                        resources: resourcesWithPercent,
+                        summary: {
+                            mostConstrained,
+                            overallUsagePercent: overallUsage
+                        },
+                        passiveSnapshot: passiveSnapshot || null,
+                        hint: `Rate limit for core resets at ${resetDate.toISOString()}. ${
+                            overallUsage > 90 ? 'WARNING: Rate limit nearly exhausted. Throttle API calls.' : 'No throttling needed.'
+                        }`
+                    },
+                    annotations: { lastModified },
+                }
+            },
+        },
     ]
 
     // Generate dynamic `{repo}` variants for multi-project registry support

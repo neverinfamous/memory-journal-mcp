@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added GitHub rate limit resource (`memory://github/rate-limit`) for proactive API throttling awareness.
+- Added passive rate limit header capture from all GitHub API responses to provide real-time state without API cost.
 - Added fuzzy search fallback for search queries (typo tolerance) using Levenshtein distance on entry tags and types.
 - Added support for swappable vector embedding models via `--embedding-model` flag or `EMBEDDING_MODEL` environment variable. The database now dynamically tracks vector dimensions.
 
