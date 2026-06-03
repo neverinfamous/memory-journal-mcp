@@ -46,6 +46,7 @@ This directory contains agent-optimized test prompts specifically designed to va
 | `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, batch operations, recovery, archiving, pagination, analytics, relationships, IO logic, backup | After Team CRUD    |
 | `test-cm-team-vector-errors.md` | 28.10–28.11 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
 | `test-cm-team-flags.md`         | 28.12–28.15 | Hush Protocol flags: create, vocabulary, resolve lifecycle, cleanup   | After Team Admin   |
+| `test-cm-team-rbac.md`          | 28.16       | Team member management tools and RBAC enforcement                     | After Team Admin   |
 | `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches across all `mj.*` groups | After Phases 16–19 |
 
 ### Cross-Cutting Optimization Tests
@@ -77,7 +78,8 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
          └── Phase 28.1-3 (Team CRUD) ─────── sequential
               └── Phase 28.4-9 (Team Admin)
                    ├── Phase 28.10-11 (Team Vector/Errors + cleanup)
-                   └── Phase 28.12-15 (Team Flags)
+                   ├── Phase 28.12-15 (Team Flags)
+                   └── Phase 28.16 (Team RBAC)
 ```
 
 ## Execution Workflow
