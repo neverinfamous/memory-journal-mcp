@@ -24,6 +24,22 @@ import {
 } from './api-constants.js'
 import { getZodTypeString } from './type-generator.js'
 
+type ProjectInfo = Record<string, unknown> & { project_number?: number | null }
+type ProjectMap = Record<string, ProjectInfo>
+type ProjectArrayItem = ProjectInfo & { name: string; projectNumber?: number | null }
+
+function parseProjectRegistry(): unknown[] | undefined {
+    if (!process.env['PROJECT_REGISTRY']) return undefined
+    const parsed = JSON.parse(process.env['PROJECT_REGISTRY']) as ProjectMap
+    const arr: ProjectArrayItem[] = Object.entries(parsed).map(([name, val]) => ({
+        name,
+        projectNumber: val.project_number,
+        ...val,
+    }))
+
+    return arr
+}
+
 /**
  * Dispatcher function signature for SEC-1.1 Code Mode dispatch gate.
  * When provided, sandbox tool calls are routed through callTool() instead
@@ -408,9 +424,8 @@ export class JournalApi {
         // Implement listProjects hallucination gracefully across groups
         const listProjectsFn = (): Promise<unknown> => {
             try {
-                if (process.env['PROJECT_REGISTRY']) {
-                    return Promise.resolve(JSON.parse(process.env['PROJECT_REGISTRY']))
-                }
+                const registry = parseProjectRegistry()
+                if (registry !== undefined) return Promise.resolve(registry)
             } catch {
                 // Ignore parse errors and fallback to analytics
             }
@@ -419,7 +434,9 @@ export class JournalApi {
             return statsFn({ group_by: 'month', project_breakdown: true })
         }
         this.core['listProjects'] = listProjectsFn
+        this.core['searchProjects'] = listProjectsFn
         this.search['listProjects'] = listProjectsFn
+        this.search['searchProjects'] = listProjectsFn
         this.admin['listProjects'] = listProjectsFn
     }
 
@@ -467,18 +484,8 @@ export class JournalApi {
             getRecentEntries: this.core['getRecentEntries'],
             searchEntries: this.search['searchEntries'],
             getStatistics: this.analytics['getStatistics'],
-            listProjects: (): Promise<unknown> => {
-                try {
-                    if (process.env['PROJECT_REGISTRY']) {
-                        return Promise.resolve(JSON.parse(process.env['PROJECT_REGISTRY']))
-                    }
-                } catch {
-                    // Ignore parse errors and fallback to analytics
-                }
-                const statsFn = this.analytics['getStatistics']
-                if (!statsFn) return Promise.reject(new Error('getStatistics is not available'))
-                return statsFn({ group_by: 'month', project_breakdown: true })
-            },
+            listProjects: this.core['listProjects'],
+            searchProjects: this.core['listProjects'],
 
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
             addEntry: this.core['createEntry'],
