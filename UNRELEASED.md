@@ -40,6 +40,8 @@
 - Added comprehensive standard and Code Mode test prompt coverage to verify dynamic `project_number` validation, server fallback resolution, and search boundary bypass rules for pure flag and entry-type queries.
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
 - Added comprehensive Vitest unit and integration test coverage for team flag and search tools to assert dynamic `project_number` validation error paths, fallback resolution to server configuration defaults, and pure flag query search isolation bypasses.
+- Added `test-team-rbac.md` and `test-cm-team-rbac.md` testing prompts to verify standard MCP and Code Mode execution of the new team member management tools.
+- Added comprehensive Vitest unit testing suites (`rbac.test.ts` and `team-member-tools.test.ts`) covering the core RBAC access tier enforcement and team member tool handlers.
 - Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
 - Added Playwright E2E payload contract tests for the new History, Archiving, and Recovery tools to strictly enforce output schema boundaries.
 
