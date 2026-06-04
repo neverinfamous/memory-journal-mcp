@@ -65,6 +65,7 @@
 - Added a generic `snake_case` to `camelCase` fallback mapping to the Code Mode worker sandbox proxy (`shimMj`) to seamlessly support ergonomic database tool execution styles without throwing missing operation errors.
 - Fixed Code Mode execution failures caused by common LLM hallucinations by mapping the `searchProjects` alias to the `core` and `search` namespaces, and by refactoring `listProjects` to explicitly return a native Array instead of an Object, correctly supporting iteration methods like `.find` through `isolated-vm` serialization boundaries.
 - Fixed a test suite state pollution issue in the team flag extension tools on Windows by ensuring explicit removal of leftover `.db` files during `beforeAll` initialization.
+- Fixed obsolete test script entries and missing script documentation in `test-server/scripts/README.md`.
 
 ### Changed
 
