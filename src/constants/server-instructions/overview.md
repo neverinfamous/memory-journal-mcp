@@ -41,6 +41,10 @@ Only help resources for your enabled tool groups are registered.
 - **Search before**: major decisions, referencing prior work, understanding project context. Use `sort_by: "importance"` on `search_entries`, `get_recent_entries`, or `search_by_date_range` to surface structurally significant entries. Use the `mode` parameter (`auto`, `fts`, `semantic`, `hybrid`) to control search strategy. The `fts` and `hybrid` modes include Levenshtein distance typo-tolerance fallback (via `fuzzy_match` and `auto_correct`), making searches more resilient to misspellings.
 - **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) before defining architectures. Use `team_get_collaboration_matrix` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (`memory://github/insights`) to gauge traction. View `memory://insights/digest` and `memory://insights/team-collaboration` for automated analytics snapshots.
 
+### Real-Time Subscriptions
+
+The server supports the standard MCP `resources/subscribe` capability. You can subscribe to team resources (e.g., `memory://team/recent`, `memory://flags`, and `memory://briefing`) to receive real-time `notifications/resources/updated` notifications when other agents or team members mutate shared data.
+
 ### Team RBAC & Access Control
 
 The team database features a Role-Based Access Control (RBAC) system for team members:

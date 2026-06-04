@@ -13,6 +13,7 @@ import {
 } from '../types.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { requestContextStorage } from '../../../utils/request-context.js'
+import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 
 export interface StatefulContext {
     transports: Map<string, StreamableHTTPServerTransport>
@@ -55,6 +56,7 @@ export function setupStateful(
                 ctx.transports.delete(sid)
                 ctx.sessionSubjects.delete(sid)
                 ctx.sessionLastActivity.delete(sid)
+                globalSubscriptionManager.unregisterServer(sid)
                 if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
             }
 
@@ -223,6 +225,7 @@ export function setupStateful(
                                 })
                                 ctx.transports.delete(sid)
                                 ctx.sessionSubjects.delete(sid)
+                                globalSubscriptionManager.unregisterServer(sid)
                                 if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
                                 if (existingOnClose) existingOnClose()
                             }

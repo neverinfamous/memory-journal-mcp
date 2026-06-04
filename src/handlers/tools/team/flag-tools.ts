@@ -148,6 +148,12 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     teamDb.flushSave()
 
+                    if (context.config?.subscriptionManager) {
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://flags')
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+                    }
+
                     return {
                         success: true,
                         entry: {
@@ -259,6 +265,12 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         content: updatedContent,
                     })
                     teamDb.flushSave()
+
+                    if (context.config?.subscriptionManager) {
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://flags')
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+                    }
 
                     const updatedEntry = teamDb.getEntryById(input.flag_id)
                     const author = fetchAuthor(teamDb, input.flag_id)

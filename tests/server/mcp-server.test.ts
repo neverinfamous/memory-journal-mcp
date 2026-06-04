@@ -36,7 +36,7 @@ const {
     mockRegisterResource: vi.fn(),
     mockRegisterPrompt: vi.fn(),
     mockConnect: vi.fn().mockResolvedValue(undefined),
-    mockServer: { server: {} },
+    mockServer: { setRequestHandler: vi.fn() },
     mockDbInitialize: vi.fn().mockResolvedValue(undefined),
     mockDbGetRecentEntries: vi.fn().mockReturnValue({ entries: [
         {
@@ -127,9 +127,15 @@ vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
     },
 }))
 
-vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
-    isInitializeRequest: vi.fn().mockReturnValue(false),
-}))
+vi.mock('@modelcontextprotocol/sdk/types.js', async (importOriginal) => {
+    const actual = await importOriginal<any>()
+    return {
+        ...actual,
+        isInitializeRequest: vi.fn().mockReturnValue(false),
+        SubscribeRequestSchema: {},
+        UnsubscribeRequestSchema: {},
+    }
+})
 
 vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
     DatabaseAdapter: function () {

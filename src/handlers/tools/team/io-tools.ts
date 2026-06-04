@@ -17,7 +17,7 @@ import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries } from '../../../markdown/index.js'
 import type { ExportableEntry } from '../../../markdown/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { batchFetchAuthors } from './helpers.js'
+import { batchFetchAuthors, triggerTeamNotifications } from './helpers.js'
 import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -277,6 +277,10 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         context.teamVectorManager,
                         allowedRoots
                     )
+
+                    if (!input.dry_run) {
+                        triggerTeamNotifications(context)
+                    }
 
                     await sendProgress(progress, 2, 2, 'Team import complete')
                     return result

@@ -7,7 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from './helpers.js'
 import {
     TeamUpdateEntrySchema,
     TeamUpdateEntrySchemaMcp,
@@ -129,6 +129,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         expectedVersion: input.expected_version,
                     })
 
+                    triggerTeamNotifications(context)
+
                     return {
                         success: true,
                         entry: { ...updated, author },
@@ -208,6 +210,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     teamDb.deleteEntry(entry_id)
                     teamDb.deleteVector(entry_id)
 
+                    triggerTeamNotifications(context)
+
                     return {
                         success: true,
                         message: `Team entry ${String(entry_id)} soft-deleted`,
@@ -266,6 +270,9 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                             error: `Team entry ${String(entry_id)} not found or not deleted`,
                         }
                     }
+
+                    triggerTeamNotifications(context)
+
                     return { success: true, entryId: entry_id }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -306,6 +313,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const result = teamDb.mergeTags(source_tag, target_tag)
+
+                    triggerTeamNotifications(context)
 
                     return {
                         success: true,
@@ -398,6 +407,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     } else {
                         await sendProgress(context.progress, 2, 2, 'Team batch create complete')
                     }
+
+                    triggerTeamNotifications(context)
 
                     return { success: true, count: entries.length, entries, indexStatuses }
                 } catch (err) {
@@ -510,6 +521,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         await sendProgress(context.progress, 2, 2, 'Team batch update complete')
                     }
 
+                    triggerTeamNotifications(context)
+
                     return { success: true, count: entries.length, updated: entries, notFound: [...notFound, ...updateNotFound], indexStatuses }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -592,6 +605,8 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
 
                     // Merge notFound arrays
                     const finalNotFound = [...notFound, ...result.notFound]
+
+                    triggerTeamNotifications(context)
 
                     return { success: true, count: result.deleted.length, deleted: result.deleted, notFound: finalNotFound, permanent: input.permanent }
                 } catch (err) {

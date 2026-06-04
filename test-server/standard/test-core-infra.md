@@ -78,6 +78,9 @@ node test-server/scripts/test-team-db-fallback.mjs
 # Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
 # Term 2: npm run test:scheduler
 
+# Test H — Resource Subscriptions
+node test-server/scripts/test-subscribe.mjs
+
 # Cleanup Test Artifacts
 rm test-team-prompts.db*
 ```
@@ -91,6 +94,7 @@ rm test-team-prompts.db*
 | Progress            | Both native and code-mode progress APIs successfully complete        |
 | Team DB Fallback    | Graceful rejection when TEAM_DB_PATH is missing                      |
 | Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
+| Subscriptions       | Resources emit notifications correctly upon mutation                 |
 
 ### 1.4 GitHub Status Resource
 

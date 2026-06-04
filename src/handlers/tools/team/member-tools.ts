@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import { getCallerIdentity } from './rbac.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 // Tool Schemas
@@ -74,6 +74,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     // The MembersManager natively handles the bootstrap logic inside `addTeamMember`.
 
                     const member = teamDb.addTeamMember(input.author, input.role, caller, input.display_name)
+                    triggerTeamNotifications(context)
                     return { success: true, member, message: `Added ${input.author} as ${input.role}` }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -116,6 +117,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (!success) {
                         return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
                     }
+                    triggerTeamNotifications(context)
                     return { success: true, message: `Removed ${author} from team` }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -152,6 +154,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (!updated) {
                         return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
                     }
+                    triggerTeamNotifications(context)
                     return { success: true, member: updated }
                 } catch (err) {
                     return formatHandlerError(err)

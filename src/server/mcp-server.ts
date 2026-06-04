@@ -42,6 +42,8 @@ import { VERSION } from '../version.js'
 import { ServerRuntime } from '../utils/maintenance-lock.js'
 import { AuditLogger, createAuditInterceptor } from '../audit/index.js'
 import { runAutoPrune } from './auto-prune.js'
+import { globalSubscriptionManager } from './subscription-manager.js'
+import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
 export type McpServerFactory = () => McpServer
 
@@ -340,6 +342,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         teamDefaultRole: options.teamDefaultRole,
         teamAdmin: options.teamAdmin,
         runtime,
+        subscriptionManager: globalSubscriptionManager,
     }
 
     const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
@@ -411,6 +414,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
             {
                 capabilities: {
                     logging: {},
+                    resources: {
+                        subscribe: true,
+                        listChanged: true,
+                    },
                 },
                 instructions,
             }
@@ -531,6 +538,33 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         teamVectorManager ?? undefined
                     )
 
+                    const isSuccess = typeof result === 'object' && result !== null && (result as Record<string, unknown>)['success'] === true
+                    if (isSuccess) {
+                        const mutatingTools = [
+                            'create_entry', 'update_entry', 'delete_entry', 'restore_entry',
+                            'batch_create_entries', 'batch_update_entries', 'batch_delete_entries',
+                            'raise_flag', 'resolve_flag',
+                            'add_team_member', 'update_team_member', 'remove_team_member'
+                        ]
+                        const isMutation = mutatingTools.includes(tool.name) || (tool.name.startsWith('team_') && tool.name !== 'team_search' && tool.name !== 'get_team_entry_by_id')
+                        
+                        if (isMutation) {
+                            void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
+                            void globalSubscriptionManager.notifyResourceUpdated('memory://recent')
+                            void globalSubscriptionManager.notifyResourceUpdated('memory://statistics')
+                            
+                            if (tool.name.startsWith('team_') || tool.name.includes('flag') || tool.name.includes('team_member')) {
+                                void globalSubscriptionManager.notifyResourceUpdated('memory://team/recent')
+                                void globalSubscriptionManager.notifyResourceUpdated('memory://team/statistics')
+                            }
+                            
+                            if (tool.name.includes('flag')) {
+                                void globalSubscriptionManager.notifyResourceUpdated('memory://flags')
+                                void globalSubscriptionManager.notifyResourceUpdated('memory://flags/history')
+                            }
+                        }
+                    }
+
                     // MCP 2025-11-25: If tool has outputSchema, return both:
                     // - structuredContent: validated JSON for clients that support it
                     // - content: compact text fallback (~15-20% payload reduction per §3.1)
@@ -642,6 +676,20 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         // Register resources (reusing resources from instruction generation)
         registerResources(server, resources as ResourceDefinition[], handleResourceRead, runtime)
+
+        // Register subscribe/unsubscribe handlers on the underlying server
+        server.server.setRequestHandler(SubscribeRequestSchema, (request, extra) => {
+            const transportSessionId = (extra as { sessionId?: string })?.sessionId || 'stdio'
+            globalSubscriptionManager.registerServer(transportSessionId, server)
+            globalSubscriptionManager.subscribe(request.params.uri, transportSessionId)
+            return {}
+        })
+
+        server.server.setRequestHandler(UnsubscribeRequestSchema, (request, extra) => {
+            const transportSessionId = (extra as { sessionId?: string })?.sessionId || 'stdio'
+            globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)
+            return {}
+        })
 
         // Register prompts (reusing prompts from instruction generation)
         registerPrompts(server, prompts as PromptDefinition[], db, teamDb ?? undefined, runtime)

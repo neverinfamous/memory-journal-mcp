@@ -19,7 +19,7 @@ Flags are machine-actionable signals stored in the team database. They replace S
 
 **Briefing integration**: The `memory://briefing` payload includes `activeFlags` when unresolved flags exist. The user's agent rules may instruct you to render these prominently. Always check for and acknowledge active flags at session start.
 
-**Dashboard**: Read `memory://flags` to see all active (unresolved) flags. Read `memory://flags/history` for recently resolved flags with resolution details. Read `memory://flags/vocabulary` to see the configured flag types.
+**Dashboard**: Read `memory://flags` to see all active (unresolved) flags. Read `memory://flags/history` for recently resolved flags with resolution details. Read `memory://flags/vocabulary` to see the configured flag types. Clients can also subscribe to `memory://flags` using MCP `resources/subscribe` to receive real-time notifications when flags change.
 
 **Triage prompt**: Use the `flag-dashboard` prompt to triage active flags with priority assessment, staleness detection, analytics summary, and resolution guidance.
 

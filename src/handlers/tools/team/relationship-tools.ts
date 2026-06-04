@@ -6,7 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import {
     TeamLinkEntriesSchema,
     TeamLinkEntriesSchemaMcp,
@@ -115,6 +115,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         relationship_type,
                         description
                     )
+
+                    triggerTeamNotifications(context)
 
                     return {
                         success: true,

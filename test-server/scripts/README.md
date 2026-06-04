@@ -23,6 +23,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-team-zod.mjs`            | Validates that the Team Tool group properly intercepts SDK-level Zod validation errors and returns structured JSON-RPC responses.         | stdio         | ~2s      |
 | `test-http.mjs`                | Tests large payloads (50k/100k chars) via HTTP/fetch to ensure they don't break the HTTP transport boundary.                              | HTTP          | ~1s      |
 | `test-long-mcp.mjs`            | Tests large payloads (50k/100k chars) via standard stdio client transport.                                                                | stdio         | ~1s      |
+| `test-subscribe.mjs`           | Validates MCP real-time resource subscriptions, ensuring that mutating tools emit `notifications/resources/updated` via transport.        | stdio         | ~2s      |
 
 ## Scheduler Notes
 

@@ -144,6 +144,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     teamDb.flushSave()
 
+                    if (context.config?.subscriptionManager) {
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
+                        // Broad stroke briefing update trigger
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+                    }
+
                     const parsedFlagMetadata =
                         entry.entryType === 'flag' ? parseFlagContext(entry.autoContext) : undefined
 

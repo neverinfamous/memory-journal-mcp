@@ -175,6 +175,7 @@ export interface ProjectRegistryEntry {
  * Tool handler configuration options
  */
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import type { SubscriptionManager } from '../server/subscription-manager.js'
 
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
@@ -213,6 +214,10 @@ export interface ToolHandlerConfig {
      * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
      */
     runtime?: ServerRuntime
+    /**
+     * Optional subscription manager for triggering real-time MCP notifications.
+     */
+    subscriptionManager?: SubscriptionManager
 }
 
 /**

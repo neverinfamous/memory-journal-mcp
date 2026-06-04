@@ -100,6 +100,10 @@ Only help resources for your enabled tool groups are registered.
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries. Use the \`mode\` parameter (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`) to control search strategy. The \`fts\` and \`hybrid\` modes include Levenshtein distance typo-tolerance fallback (via \`fuzzy_match\` and \`auto_correct\`), making searches more resilient to misspellings.
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots.
 
+### Real-Time Subscriptions
+
+The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data.
+
 ### Team RBAC & Access Control
 
 The team database features a Role-Based Access Control (RBAC) system for team members:
@@ -208,7 +212,7 @@ Globals: \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`del
 Positional: \`create("note")\`, \`searchEntries("performance")\`
 Aliases: Common parameter names are auto-corrected (\`text\`→\`content\`, \`entry\`→\`entry_id\`, \`q\`→\`query\`, \`tag\`→\`tags[]\`).
 Discovery: \`mj.help()\` → \`{groups, totalMethods}\`. \`mj.core.help()\` for group-specific.
-Sandbox: No \`setTimeout\`, \`setInterval\`, \`fetch\`, or network access.
+Sandbox: No network access (\`fetch\` is undefined). \`setTimeout\` and \`sleep(ms)\` are available for minor delays.
 Readonly: Pass \`readonly: true\` to \`mj_execute_code\` to restrict execution to read-only operations.
 Read \`memory://help/codemode\` for full namespace table, examples, and patterns.
 **Codemode-only**: When \`mj_execute_code\` is the only registered tool, all tool names referenced in these instructions (e.g., \`create_entry\`, \`search_entries\`) must be called via \`mj_execute_code\` using \`mj.*\` namespaces or bare globals. Do NOT call them as direct MCP tools.`
@@ -364,7 +368,7 @@ When the user has GitHub Copilot code review enabled:
 
 1. **Missing \`project_number\`**: The single most common failure reason. Always pass \`project_number: <N>\` or ensure \`DEFAULT_PROJECT_NUMBER\` is configured on the server. Omitting both triggers a \`VALIDATION_ERROR\`.
 2. **Result Limits**: The \`MAX_QUERY_LIMIT\` is strictly 500 for most search tools. Use the optional \`cursor\` parameter and \`next_cursor\` output for O(1) keyset pagination on large datasets. Batch operations are strictly limited to \`MAX_BATCH_SIZE\` (50) per transaction.
-3. **Code Mode Restrictions**: The \`mj_execute_code\` sandbox cannot make network requests (\`fetch\` is undefined) or use timers (\`setTimeout\`/\`setInterval\`). Use it strictly for orchestrating \`mj.*\` API calls.
+3. **Code Mode Restrictions**: The \`mj_execute_code\` sandbox cannot make network requests (\`fetch\` is undefined). Use it strictly for orchestrating \`mj.*\` API calls. Note: \`setTimeout\` and \`sleep(ms)\` are available for minor delays, but avoid long-running operations.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the \`memory://help\` resource. If a tool doesn't exist, use \`mj_execute_code\` to combine existing tools.
 5. **Phrase Matching**: The \`query\` parameter in search tools supports true phrase matching. Wrap exact strings in double quotes (e.g., \`"error handling"\`) when word order and adjacency are critical.
 6. **Typo Tolerance**: FTS5 search operations automatically fall back to Levenshtein distance matching on tags and entry types if no results are found. To disable this when strict exact matching is needed, explicitly set \`fuzzy_match: false\`.
@@ -402,7 +406,7 @@ Flags are machine-actionable signals stored in the team database. They replace S
 
 **Briefing integration**: The \`memory://briefing\` payload includes \`activeFlags\` when unresolved flags exist. The user's agent rules may instruct you to render these prominently. Always check for and acknowledge active flags at session start.
 
-**Dashboard**: Read \`memory://flags\` to see all active (unresolved) flags. Read \`memory://flags/history\` for recently resolved flags with resolution details. Read \`memory://flags/vocabulary\` to see the configured flag types.
+**Dashboard**: Read \`memory://flags\` to see all active (unresolved) flags. Read \`memory://flags/history\` for recently resolved flags with resolution details. Read \`memory://flags/vocabulary\` to see the configured flag types. Clients can also subscribe to \`memory://flags\` using MCP \`resources/subscribe\` to receive real-time notifications when flags change.
 
 **Triage prompt**: Use the \`flag-dashboard\` prompt to triage active flags with priority assessment, staleness detection, analytics summary, and resolution guidance.
 

@@ -16,6 +16,7 @@ src/
 │
 ├── server/
 │   ├── mcp-server.ts               # McpServer setup, tool/resource/prompt wiring
+│   ├── subscription-manager.ts     # Real-time resource subscriptions and state management
 │   ├── auto-prune.ts               # Importance-based garbage collection on startup (backup → SQL CTE → vector cleanup)
 │   ├── registration.ts             # Tool/resource/prompt registration logic
 │   └── scheduler.ts                # HTTP-only automated scheduling (backup, vacuum, rebuild-index)

@@ -301,6 +301,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             })
                             teamEntryId = teamEntry.id
                             teamDb.flushSave()
+                            if (context.config?.subscriptionManager) {
+                                void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
+                                void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+                            }
                             sharedWithTeam = true
                         } catch (error) {
                             logger.error(
