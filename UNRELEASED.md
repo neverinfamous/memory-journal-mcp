@@ -13,6 +13,7 @@
 - Added fuzzy search fallback for search queries (typo tolerance) using Levenshtein distance on entry tags and types.
 - Added support for swappable vector embedding models via `--embedding-model` flag or `EMBEDDING_MODEL` environment variable. The database now dynamically tracks vector dimensions.
 
+- Added `resources/subscribe` capability and real-time subscription manager to stream targeted notifications to MCP clients whenever targeted team journal entries, hush-protocol flags, or context changes occur.
 - Added support for returning FTS5 highlight snippets via `include_highlights` parameter in `search_entries` and `team_search`.
 - Added faceted search capability via `include_facets` parameter in `search_entries` and `team_search`, returning tag and entry-type distribution counts.
 - Added dynamic weighting for hybrid searches via `fts_weight` and `semantic_weight` parameters in `search_entries` and `team_search`.
@@ -66,6 +67,7 @@
 - Fixed Code Mode execution failures caused by common LLM hallucinations by mapping the `searchProjects` alias to the `core` and `search` namespaces, and by refactoring `listProjects` to explicitly return a native Array instead of an Object, correctly supporting iteration methods like `.find` through `isolated-vm` serialization boundaries.
 - Fixed a test suite state pollution issue in the team flag extension tools on Windows by ensuring explicit removal of leftover `.db` files during `beforeAll` initialization.
 - Fixed obsolete test script entries and missing script documentation in `test-server/scripts/README.md`.
+- Fixed obsolete tool counts and shortcut limits across configuration templates (`.env.example`), READMEs, and filtering metadata to reflect the expanded 89-tool architecture.
 
 ### Changed
 

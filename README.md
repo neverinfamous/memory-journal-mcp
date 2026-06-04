@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-88%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-86.91%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -280,7 +280,7 @@ Code executes in a **worker_threads sandbox** designed as a secure multi-tenant 
 
 ### ⚡ Code Mode Only (Maximum Token Savings)
 
-Run with **only Code Mode enabled** — a single tool that provides access to all 83 tools' worth of capability through the `mj.*` API:
+Run with **only Code Mode enabled** — a single tool that provides access to all 88 tools' worth of capability through the `mj.*` API:
 
 ```json
 {
