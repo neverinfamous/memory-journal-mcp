@@ -53,13 +53,20 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                 stdio: 'pipe',
                 env: {
                     ...process.env,
+                    PORT: String(TEAM_PORT),
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     TEAM_DB_PATH: './.test-output/e2e/test-e2e-team-happy-team.db',
+                    ADDITIONAL_TEAM_DBS: JSON.stringify({ 
+                        "team-b": join(process.cwd(), '.test-output', 'e2e', 'test-e2e-team-happy-b.db') 
+                    }),
                     MCP_AUTH_SCOPES: 'read,write,team',
                 },
             }
         )
+
+        serverProcess.stdout?.pipe(process.stdout)
+        serverProcess.stderr?.pipe(process.stderr)
 
         // Wait for server readiness
         for (let i = 0; i < 30; i++) {
@@ -156,6 +163,22 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         })
         expectSuccess(payload)
         expect(Array.isArray(payload.entries)).toBe(true)
+    })
+
+    test('cross_team_search returns payload', async () => {
+        const payload = await callToolAndParse(client, 'cross_team_search', {
+            query: 'happy path',
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.entries)).toBe(true)
+        expect(Array.isArray(payload.searched_dbs)).toBe(true)
+        expect((payload.searched_dbs as string[])).toContain('primary')
+        expect((payload.searched_dbs as string[])).toContain('team-b')
+        // Ensure standard entry properties + team_db exist
+        const entries = payload.entries as Record<string, unknown>[]
+        if (entries.length > 0) {
+            expect(entries[0]!.team_db).toBeDefined()
+        }
     })
 
     // --- Admin ---

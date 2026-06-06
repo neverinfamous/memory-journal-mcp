@@ -195,11 +195,9 @@ export async function handleCrossTeamSearch(
     // 5. Merge, sort, and apply final limit
     const merged = mergeMultipleSources(sources, args.limit, args.sort_by)
 
-    // Ensure we strip internal ID fields as usual and enforce schema matching
+    // Ensure we enforce schema matching
     const finalEntries = merged.map((entry) => {
-        // Strip the extra id from the output, keeping entry_id instead
-        const { id, source, ...rest } = entry
-        void id
+        const { source, ...rest } = entry
         void source
         // Strip any specific things we don't want leaked in the schema
         return {

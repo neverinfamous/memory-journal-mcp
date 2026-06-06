@@ -105,6 +105,31 @@ describe('Cross-Team Search Handler', () => {
         )
     })
 
+    it('searches the primary team database when context.teamDb is provided', async () => {
+        const primaryAdapter = createMockAdapter([
+            { id: 1, content: 'Primary result', timestamp: '2026-01-04T10:00:00Z' },
+        ])
+        const adapterA = createMockAdapter([
+            { id: 2, content: 'Team A result', timestamp: '2026-01-02T10:00:00Z' },
+        ])
+
+        mockContext.teamDb = primaryAdapter as any
+
+        vi.mocked(DatabaseAdapterFactory.create).mockImplementation(async (path) => {
+            if (path === '/path/to/team-a.db') return adapterA as any
+            if (path === '/path/to/team-b.db') return createMockAdapter([]) as any
+            throw new Error('Unknown path')
+        })
+
+        const result = await handleCrossTeamSearch(CrossTeamSearchSchema.parse({ query: 'result', limit: 10 }), mockContext)
+
+        expect(result.success).toBe(true)
+        expect(result.searched_dbs).toEqual(expect.arrayContaining(['team-a', 'team-b', 'primary']))
+        
+        expect(primaryAdapter.searchEntries).toHaveBeenCalled()
+        expect(result.entries).toContainEqual(expect.objectContaining({ team_db: 'primary', content: 'Primary result' }))
+    })
+
     it('filters target DBs when team_dbs is provided', async () => {
         const adapterA = createMockAdapter([{ id: 1, content: 'Team A', timestamp: '2026-01-01' }])
         const adapterB = createMockAdapter([{ id: 1, content: 'Team B', timestamp: '2026-01-01' }])
