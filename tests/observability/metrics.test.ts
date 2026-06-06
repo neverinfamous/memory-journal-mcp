@@ -216,5 +216,69 @@ describe('MetricsAccumulator', () => {
             expect(s.totalCalls).toBe(0)
             expect(acc.getUserBreakdown()).toEqual({})
         })
+
+        it('clears latency data', () => {
+            acc.record({
+                toolName: 'test_tool',
+                durationMs: 42,
+                inputTokens: 0,
+                outputTokens: 0,
+                isError: false,
+            })
+            expect(acc.getLatencySummary()).toHaveLength(1)
+
+            acc.reset()
+
+            expect(acc.getLatencySummary()).toEqual([])
+        })
+    })
+
+    describe('getLatencySummary()', () => {
+        it('returns empty array when no calls recorded', () => {
+            expect(acc.getLatencySummary()).toEqual([])
+        })
+
+        it('returns correct percentiles for a known distribution', () => {
+            for (let i = 1; i <= 100; i++) {
+                acc.record({
+                    toolName: 'test_tool',
+                    durationMs: i,
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    isError: false,
+                })
+            }
+
+            const summary = acc.getLatencySummary()
+            expect(summary).toHaveLength(1)
+            expect(summary[0]?.p50Ms).toBe(50)
+            expect(summary[0]?.p95Ms).toBe(95)
+            expect(summary[0]?.p99Ms).toBe(99)
+            expect(summary[0]?.minMs).toBe(1)
+            expect(summary[0]?.maxMs).toBe(100)
+            expect(summary[0]?.count).toBe(100)
+        })
+
+        it('sorts by p99 descending across multiple tools', () => {
+            acc.record({
+                toolName: 'fast',
+                durationMs: 5,
+                inputTokens: 0,
+                outputTokens: 0,
+                isError: false,
+            })
+            acc.record({
+                toolName: 'slow',
+                durationMs: 500,
+                inputTokens: 0,
+                outputTokens: 0,
+                isError: false,
+            })
+
+            const summary = acc.getLatencySummary()
+            expect(summary[0]?.toolName).toBe('slow')
+            expect(summary[1]?.toolName).toBe('fast')
+        })
     })
 })
+

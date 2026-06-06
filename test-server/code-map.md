@@ -124,7 +124,8 @@ src/
 │
 ├── observability/                  # Phase 2: in-memory tool call metrics accumulation
 │   ├── index.ts                    # Barrel — exports globalMetrics singleton + helpers
-│   ├── metrics.ts                  # MetricsAccumulator — per-tool call counts, durations, token estimates
+│   ├── metrics.ts                  # MetricsAccumulator — per-tool call counts, durations, token estimates, latency percentiles
+│   ├── latency-tracker.ts          # LatencyTracker — per-tool sliding-window p50/p95/p99 percentile tracker
 │   ├── token-estimator.ts          # estimateTokens() (byte-length heuristic) + injectTokenEstimate()
 │   └── interceptor.ts              # wrapWithMetrics() — post-callTool() async timing + recording
 │
@@ -285,9 +286,9 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-46 resources total — 29 static + 17 template.
+47 resources total — 30 static + 17 template.
 
-> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 52, though they map to the 46 capabilities listed below.
+> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 53, though they map to the 47 capabilities listed below.
 
 ### Static Resources
 
@@ -301,7 +302,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `graph.ts`                 | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                  |
 | `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`, `memory://flags/history`                                                   |
 | `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)                                                                                          |
-| `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY) |
+| `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY), `memory://metrics/latency` (MEDIUM_PRIORITY) |
 | `audit/audit-resource.ts`  | `memory://audit` (ASSISTANT_FOCUSED) — last 50 write/admin audit entries from JSONL log; returns `audit: not configured` when `AUDIT_LOG_PATH` unset                          |
 
 ### Template Resources
@@ -381,7 +382,7 @@ catch (error) {
 | Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating                                                                                                                                             |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                                                                                                                                                                                             |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`)                                                                                                              |
-| Global metrics accumulator         | `src/observability/metrics.ts`         | `MetricsAccumulator` singleton (`globalMetrics`) — per-tool call counts, error counts, total/avg duration, input/output token estimates; exposes `getSummary()`, `getTokenBreakdown()`, `getSystemMetrics()`, `getUserBreakdown()`                                       |
+| Global metrics accumulator         | `src/observability/metrics.ts`         | `MetricsAccumulator` singleton (`globalMetrics`) — per-tool call counts, error counts, total/avg duration, input/output token estimates, latency percentiles (p50/p95/p99); exposes `getSummary()`, `getTokenBreakdown()`, `getSystemMetrics()`, `getUserBreakdown()`, `getLatencySummary()` |
 | Audit logger                       | `src/audit/audit-logger.ts`            | `AuditLogger` (async-buffered JSONL, 50-entry HWM, 100ms auto-flush, 10 MB rotation, 5 archives, configurable arg redaction via `AUDIT_REDACT`, stderr mode via `--audit-log stderr`) with graceful `close()` lifecycle and `recent()` streaming tail-read (64KB window) |
 | Audit types                        | `src/audit/types.ts`                   | `AuditEntry`, `AuditConfig` (`enabled`, `logPath`, `redact`, `auditReads`, `maxSizeBytes`), `AuditCategory` (`read` \| `write` \| `admin`)                                                                                                                               |
 | Audit interceptor                  | `src/audit/interceptor.ts`             | `createAuditInterceptor()` — scope-based filtering (write/admin by default, read opt-in via `--audit-reads`), token estimation, duration timing, error capture, compact read format                                                                                      |

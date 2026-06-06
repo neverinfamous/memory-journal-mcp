@@ -71,6 +71,15 @@ Validate that Code Mode can successfully execute raw SQL or introspect the schem
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Verify index schema     | `const res = mj.admin._executeRawQueryUnsafe("PRAGMA index_list('memory_journal');"); const names = res[0].values.map(v => v[1]); return ["idx_memory_journal_active_timestamp", "idx_memory_journal_active_recent", "idx_memory_journal_type_timestamp"].every(idx => names.includes(idx));` | `{ success: true, result: true }` (meaning all three new indexes exist in the `memory_journal` table index list)                                                                |
 
+### 16.6 Latency Percentile Resource Verification
+
+After the preceding test phases have executed several tool calls, verify that the latency metrics resource contains valid percentile data:
+
+| Test                    | Code                                                                                                                                         | Expected Result                                                                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Latency resource exists | `const entries = await mj.core.getRecentEntries({ limit: 1 }); return "latency data seeded";`<br>Then read `memory://metrics/latency` | Resource returns YAML-style text containing `p50_ms`, `p95_ms`, `p99_ms`, `min_ms`, `max_ms`, `count` fields for at least one tool            |
+| Graceful empty          | Read `memory://metrics/latency` on a fresh server with no prior tool calls                                                                    | Returns `note: No latency data recorded yet.` (graceful empty state)                                                                         |
+
 
 ---
 
@@ -86,4 +95,5 @@ Validate that Code Mode can successfully execute raw SQL or introspect the schem
 - Custom `timeout` parameter accepted and enforced
 - Infinite loop terminated with structured error (not hang or crash)
 - Verified index schema via `_executeRawQueryUnsafe` check returning all three new composite and partial indexes
+- `memory://metrics/latency` returns per-tool percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields after tool calls have been made
 

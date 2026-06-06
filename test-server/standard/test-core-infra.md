@@ -32,6 +32,7 @@
 | Statistics         | `get_statistics`       | Returns `structuredContent` with entry counts, types, periods                                   |
 | Enhanced analytics | `get_statistics`       | Returns `decisionDensity`, `relationshipComplexity`, `activityTrend`, `causalMetrics`           |
 | Database Indexes   | Run raw check via SQLite or verify in health/schema checks | `idx_memory_journal_active_timestamp`, `idx_memory_journal_active_recent`, `idx_memory_journal_type_timestamp` exist |
+| Latency resource   | Read `memory://metrics/latency` | Returns per-tool percentile data (`p50_ms`, `p95_ms`, `p99_ms`, `min_ms`, `max_ms`, `count`) after prior tool calls, or graceful empty note if no tool calls have been recorded |
 
 ### 1.2 Briefing Resource
 

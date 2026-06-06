@@ -12,7 +12,11 @@
  *   - totalInputTokens — sum of estimated input token counts
  *   - totalOutputTokens — sum of estimated output token counts
  *   - lastCalledAt   — ISO timestamp of most recent call
+ *   - latency percentiles (p50/p95/p99) via LatencyTracker
  */
+
+import { LatencyTracker } from './latency-tracker.js'
+import type { LatencyPercentiles } from './latency-tracker.js'
 
 // ============================================================================
 // Types
@@ -52,8 +56,13 @@ export interface SystemMetrics {
 export class MetricsAccumulator {
     private readonly toolData = new Map<string, ToolMetrics>()
     private readonly deprecationWarnings = new Set<string>()
+    private readonly latencyTracker: LatencyTracker
     readonly upSince: string = new Date().toISOString()
     private readonly startTime: number = Date.now()
+
+    constructor(maxLatencySamplesPerTool = 1000) {
+        this.latencyTracker = new LatencyTracker(maxLatencySamplesPerTool)
+    }
 
     /**
      * Record a deprecation warning to be surfaced in the briefing.
@@ -97,6 +106,9 @@ export class MetricsAccumulator {
         m.lastCalledAt = new Date().toISOString()
 
         this.toolData.set(opts.toolName, m)
+
+        // Feed latency tracker for percentile computation
+        this.latencyTracker.record(opts.toolName, opts.durationMs)
     }
 
     /**
@@ -160,6 +172,13 @@ export class MetricsAccumulator {
 
     private readonly userCounts = new Map<string, number>()
 
+    /**
+     * Per-tool latency percentile summary, sorted by p99 descending.
+     */
+    getLatencySummary(): LatencyPercentiles[] {
+        return this.latencyTracker.getLatencySummary()
+    }
+
     recordUser(user: string): void {
         if (this.userCounts.size >= 10000 && !this.userCounts.has(user)) {
             const bucket = 'other'
@@ -190,6 +209,7 @@ export class MetricsAccumulator {
         this.toolData.clear()
         this.userCounts.clear()
         this.deprecationWarnings.clear()
+        this.latencyTracker.reset()
     }
 }
 

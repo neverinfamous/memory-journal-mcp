@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Resources
 
-**Scope:** All 38 resources — 30 static resources, 8 template resources (happy path + error paths).
+**Scope:** All 39 resources — 31 static resources, 8 template resources (happy path + error paths).
 
 **Prerequisites:**
 
@@ -54,6 +54,7 @@
 | Metrics tokens    | `memory://metrics/tokens`              | Token breakdown: per-tool token usage and totals                                                                                    |
 | Metrics system    | `memory://metrics/system`              | System metrics: memory usage, database stats, vector index health                                                                   |
 | Metrics users     | `memory://metrics/users`               | Per-user metrics (when multi-user sessions active)                                                                                  |
+| Metrics latency   | `memory://metrics/latency`             | Per-tool latency percentiles (p50/p95/p99) with min/max bounds                                                                      |
 | Audit log         | `memory://audit`                       | Last 50 audit entries with tool name, timestamp, and result                                                                         |
 | Insights digest   | `memory://insights/digest`             | Cross-project digest snapshot (graceful empty if no digest available)                                                               |
 | Insights team     | `memory://insights/team-collaboration` | Team collaboration matrix with `authorActivity` and `impactFactor` (graceful if team DB not configured)                             |
@@ -92,7 +93,7 @@
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- All 30 static resources return valid data
+- All 31 static resources return valid data
 - All 8 template resources work with valid parameters
 - All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
@@ -107,6 +108,7 @@
 - `memory://briefing` includes local time for chronological grounding
 - `memory://briefing/<repo>` returns repo-scoped briefing
 - `memory://metrics/summary` returns session-level metrics
+- `memory://metrics/latency` returns per-tool latency percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields (or a graceful empty message if no tool calls have been made)
 - `memory://audit` returns last 50 audit entries
 - `memory://insights/digest` handles empty digest gracefully
 - `memory://insights/team-collaboration` returns collaboration matrix or graceful empty

@@ -4,6 +4,7 @@ import {
     metricsTokensResource,
     metricsSystemResource,
     metricsUsersResource,
+    metricsLatencyResource,
     getMetricsResourceDefinitions,
 } from '../../src/handlers/resources/core/metrics-resource.js'
 import { MetricsAccumulator } from '../../src/observability/metrics.js'
@@ -19,14 +20,15 @@ describe('Metrics Resources', () => {
         // Nothing to reset, instance is recreated
     })
 
-    it('getMetricsResourceDefinitions returns all four definitions', () => {
+    it('getMetricsResourceDefinitions returns all five definitions', () => {
         const defs = getMetricsResourceDefinitions()
-        expect(defs.length).toBe(4)
+        expect(defs.length).toBe(5)
         expect(defs.map((d) => d.name)).toEqual([
             'Metrics Summary',
             'Metrics Tokens',
             'Metrics System',
             'Metrics Users',
+            'Metrics Latency',
         ])
     })
 
@@ -158,6 +160,39 @@ describe('Metrics Resources', () => {
             expect(res.data).toContain('calls: 2')
             expect(res.data).toContain('user: bob')
             expect(res.data).toContain('calls: 1')
+        })
+    })
+
+    describe('metricsLatencyResource', () => {
+        it('returns note when no latency data recorded', async () => {
+            const res = (await metricsLatencyResource.handler('memory://metrics/latency', {
+                runtime: { metrics },
+            } as any)) as any
+            expect(res.data).toContain('No latency data recorded yet')
+        })
+
+        it('returns per-tool percentile data after recording calls', async () => {
+            for (let i = 1; i <= 100; i++) {
+                metrics.record({
+                    toolName: 'search_entries',
+                    isError: false,
+                    durationMs: i,
+                    inputTokens: 10,
+                    outputTokens: 20,
+                })
+            }
+
+            const res = (await metricsLatencyResource.handler('memory://metrics/latency', {
+                runtime: { metrics },
+            } as any)) as any
+
+            expect(res.data).toContain('tool: search_entries')
+            expect(res.data).toContain('p50_ms: 50')
+            expect(res.data).toContain('p95_ms: 95')
+            expect(res.data).toContain('p99_ms: 99')
+            expect(res.data).toContain('min_ms: 1')
+            expect(res.data).toContain('max_ms: 100')
+            expect(res.data).toContain('count: 100')
         })
     })
 })

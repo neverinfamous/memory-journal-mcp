@@ -203,6 +203,52 @@ export const metricsUsersResource: InternalResourceDef = {
 }
 
 // ============================================================================
+// memory://metrics/latency
+// ============================================================================
+
+export const metricsLatencyResource: InternalResourceDef = {
+    uri: 'memory://metrics/latency',
+    name: 'Metrics Latency',
+    title: 'Latency Percentile Breakdown by Tool',
+    description:
+        'Per-tool latency percentiles (p50, p95, p99) with min/max bounds. ' +
+        'Use this to identify tools with problematic tail latency.',
+    mimeType: 'text/plain',
+    annotations: {
+        ...MEDIUM_PRIORITY,
+        audience: ['assistant'],
+    },
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
+        const lastModified = nowIso()
+        const summary = ctx.runtime?.metrics.getLatencySummary() ?? []
+
+        if (summary.length === 0) {
+            return {
+                data: `latency_percentiles:\n  note: No latency data recorded yet.\n  as_of: ${lastModified}\n`,
+                annotations: { lastModified },
+            }
+        }
+
+        const rows = summary
+            .map(
+                (t) =>
+                    `  - tool: ${t.toolName}\n` +
+                    `    count: ${String(t.count)}\n` +
+                    `    p50_ms: ${String(t.p50Ms)}\n` +
+                    `    p95_ms: ${String(t.p95Ms)}\n` +
+                    `    p99_ms: ${String(t.p99Ms)}\n` +
+                    `    min_ms: ${String(t.minMs)}\n` +
+                    `    max_ms: ${String(t.maxMs)}`
+            )
+            .join('\n')
+
+        const text = `latency_percentiles:\n  as_of: ${lastModified}\n${rows}\n`
+
+        return { data: text, annotations: { lastModified } }
+    },
+}
+
+// ============================================================================
 // Convenience: all four metrics resources
 // ============================================================================
 
@@ -212,5 +258,6 @@ export function getMetricsResourceDefinitions(): InternalResourceDef[] {
         metricsTokensResource,
         metricsSystemResource,
         metricsUsersResource,
+        metricsLatencyResource,
     ]
 }

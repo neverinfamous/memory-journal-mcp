@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added per-tool latency percentile tracking (p50/p95/p99) to the observability stack via a zero-dependency sliding-window sorted-insert algorithm, exposed through a new `memory://metrics/latency` resource. Includes Playwright E2E payload contract tests.
 - Added new mj-mcp-optimize skill mapping the execution pipeline and Code Mode internals to assist agents in debugging sandbox mechanics.
 - Added optimistic concurrency control (conflict detection) for entry updates via a new `version` column and `expected_version` parameter. Agents trying to overwrite an entry concurrently will receive a structured `VERSION_CONFLICT` error with the current entry state instead of silently overwriting.
 - Added a comprehensive Team Role-Based Access Control (RBAC) system for the shared team database, supporting `admin`, `member`, and `viewer` roles, with backward compatibility for existing uninitialized team databases.
