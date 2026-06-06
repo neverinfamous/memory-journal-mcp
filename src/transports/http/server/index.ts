@@ -29,7 +29,7 @@ import {
     HTTP_HEADERS_TIMEOUT_MS,
 } from '../types.js'
 import { setSecurityHeaders, setCorsHeaders, checkRateLimit } from '../security.js'
-import { handleHealthCheck, handleRootInfo, createAuthMiddleware } from '../handlers.js'
+import { handleHealthCheck, handleRootInfo, createAuthMiddleware, handlePrometheusMetrics } from '../handlers.js'
 import {
     createTokenValidator,
     createOAuthResourceServer,
@@ -46,6 +46,7 @@ import { setupStateless } from './stateless.js'
 import { setupStateful } from './stateful.js'
 import { setupLegacySSE } from './legacy-sse.js'
 import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
+import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -88,7 +89,7 @@ export class HttpTransport {
     /**
      * Initialize and start the HTTP transport
      */
-    async start(serverFactory: McpServerFactory, scheduler: Scheduler | null): Promise<void> {
+    async start(serverFactory: McpServerFactory, scheduler: Scheduler | null, runtime: ServerRuntime): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
 
         const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
@@ -337,6 +338,12 @@ export class HttpTransport {
 
         // Health check endpoint
         this.app.get('/health', handleHealthCheck)
+
+        // Prometheus Metrics endpoint
+        if (this.config.metricsExport === 'prometheus') {
+            this.app.get('/metrics', handlePrometheusMetrics(runtime))
+            logger.info('Prometheus metrics export enabled on /metrics', { module: 'HTTP' })
+        }
 
         // Root info endpoint
         this.app.get('/', handleRootInfo)

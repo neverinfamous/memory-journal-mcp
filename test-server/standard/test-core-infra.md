@@ -82,6 +82,10 @@ node test-server/scripts/test-team-db-fallback.mjs
 # Test H — Resource Subscriptions
 node test-server/scripts/test-subscribe.mjs
 
+# Test I — Prometheus Metrics (Requires background server)
+# Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3100 --metrics-export prometheus --stateless
+# Term 2: Invoke-RestMethod -Uri http://localhost:3100/metrics | Select-String "memory_journal_mcp_tool_calls_total"
+
 # Cleanup Test Artifacts
 rm test-team-prompts.db*
 ```
@@ -96,6 +100,7 @@ rm test-team-prompts.db*
 | Team DB Fallback    | Graceful rejection when TEAM_DB_PATH is missing                      |
 | Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
 | Subscriptions       | Resources emit notifications correctly upon mutation                 |
+| Prometheus Metrics  | HTTP endpoint returns prometheus exposition format with tool metrics |
 
 ### 1.4 GitHub Status Resource
 
@@ -119,3 +124,4 @@ rm test-team-prompts.db*
 - `get_statistics` returns all 4 enhanced analytics metrics
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
 - Verified that all composite and partial performance indexes exist and are valid in the database schema
+- Prometheus `/metrics` endpoint exports tool tracking data correctly when `--metrics-export` is enabled

@@ -29,6 +29,7 @@ export default defineConfig({
             TEAM_DB_PATH: './.test-output/e2e/test-e2e-team.db',
             TEAM_AUTHOR: 'Alice',
             ALLOWED_IO_ROOTS: process.cwd() + '/.test-output/e2e',
+            METRICS_EXPORT: 'prometheus',
         },
         url: 'http://localhost:3100/health',
         reuseExistingServer: !process.env.CI,

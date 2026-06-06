@@ -143,4 +143,7 @@ export interface HttpTransportConfig {
      * Prevents accidental deployment of insecure issuers.
      */
     allowPlaintextLoopbackOAuth?: boolean
+
+    /** Metrics export format. When set to 'prometheus', exposes GET /metrics endpoint. */
+    metricsExport?: 'prometheus'
 }

@@ -94,6 +94,8 @@ export interface ServerOptions {
     pruneImportanceThreshold?: number
     // Embedding model
     embeddingModel?: string
+    // Metrics export
+    metricsExport?: 'prometheus'
 }
 
 /**
@@ -893,9 +895,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
             allowPlaintextLoopbackOAuth: options.allowPlaintextLoopbackOAuth,
             trustProxy: options.trustProxy,
             publicOrigin: options.publicOrigin,
+            metricsExport: options.metricsExport,
         })
 
-        await httpTransport.start(createServerInstance, scheduler)
+        await httpTransport.start(createServerInstance, scheduler, runtime)
 
         // Handle shutdown
         process.on('SIGINT', () => {

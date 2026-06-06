@@ -10,6 +10,8 @@ import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
 import { isValidScope } from '../../auth/scopes.js'
 import { getClientIp } from './security.js'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+import { formatPrometheusMetrics } from '../../observability/index.js'
 
 // =============================================================================
 // Health Check
@@ -23,6 +25,31 @@ export function handleHealthCheck(_req: Request, res: Response): void {
         status: 'healthy',
         timestamp: new Date().toISOString(),
     })
+}
+
+// =============================================================================
+// Prometheus Metrics
+// =============================================================================
+
+/**
+ * Handle the /metrics endpoint (Prometheus format)
+ */
+export function handlePrometheusMetrics(runtime: ServerRuntime): (req: Request, res: Response) => void {
+    return (_req: Request, res: Response): void => {
+        if (runtime?.metrics === undefined) {
+            res.status(503).send('Metrics not available')
+            return
+        }
+
+        try {
+            const metricsText = formatPrometheusMetrics(runtime.metrics)
+            res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+            res.status(200).send(metricsText)
+        } catch (error) {
+            logger.error('Failed to format Prometheus metrics', { module: 'HTTP', error })
+            res.status(500).send('Internal Server Error')
+        }
+    }
 }
 
 // =============================================================================
@@ -44,6 +71,7 @@ export function handleRootInfo(_req: Request, res: Response): void {
             'GET /sse': 'Legacy SSE connection (MCP 2024-11-05)',
             'POST /messages': 'Legacy SSE message endpoint',
             'GET /health': 'Health check',
+            'GET /metrics': 'Prometheus metrics export (if enabled)',
         },
         documentation: 'https://github.com/neverinfamous/memory-journal-mcp',
     })
@@ -55,7 +83,7 @@ export function handleRootInfo(_req: Request, res: Response): void {
 
 /**
  * Create a bearer token authentication middleware.
- * Bypasses /health endpoint. Uses timing-safe comparison.
+ * Bypasses /health and /metrics endpoints. Uses timing-safe comparison.
  */
 export function createAuthMiddleware(
     authToken: string
@@ -63,7 +91,7 @@ export function createAuthMiddleware(
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
 
     return (req: Request, res: Response, next: () => void): void => {
-        if (req.path === '/health') {
+        if (req.path === '/health' || req.path === '/metrics') {
             next()
             return
         }

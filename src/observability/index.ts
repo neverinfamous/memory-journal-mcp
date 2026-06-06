@@ -22,3 +22,4 @@ export { LatencyTracker } from './latency-tracker.js'
 
 export type { LatencyPercentiles } from './latency-tracker.js'
 
+export { formatPrometheusMetrics } from './prometheus-formatter.js'

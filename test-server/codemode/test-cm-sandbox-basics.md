@@ -46,6 +46,7 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 | Date available    | `return typeof Date;`                                | `{ success: true, result: "function" }`     |
 | Map/Set available | `const m = new Map(); m.set("a", 1); return m.size;` | `{ success: true, result: 1 }`              |
 | RegExp available  | `return /test/.test("testing");`                     | `{ success: true, result: true }`           |
+| Fetch unavailable | `return typeof fetch;`                               | `{ success: true, result: "undefined" }`    |
 
 ### 16.3 Execution Metrics
 
@@ -91,6 +92,7 @@ After the preceding test phases have executed several tool calls, verify that th
 - Circular object references are safely serialized as "[Circular]" without crashing
 - Async/await resolves correctly inside sandbox
 - Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
+- `fetch` is explicitly `undefined` (Code Mode cannot scrape `/metrics` directly)
 - `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
 - Custom `timeout` parameter accepted and enforced
 - Infinite loop terminated with structured error (not hang or crash)

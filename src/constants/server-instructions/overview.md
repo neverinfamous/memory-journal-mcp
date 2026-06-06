@@ -7,6 +7,7 @@
 | Session context | `memory://briefing`         |
 | Recent entries  | `memory://recent`           |
 | Health/time     | `memory://health`           |
+| Metrics/Latency | `memory://metrics/latency`  |
 | Full context    | `get-context-bundle` prompt |
 
 ## Help Resources
@@ -39,7 +40,7 @@ Only help resources for your enabled tool groups are registered.
 - **Batch Operations**: Use `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (or team equivalents) to process bulk data up to 50 entries per transaction. Use `auto_index` to rebuild the vector index for these entries.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use `sort_by: "importance"` on `search_entries`, `get_recent_entries`, or `search_by_date_range` to surface structurally significant entries. Use the `mode` parameter (`auto`, `fts`, `semantic`, `hybrid`) to control search strategy. The `fts` and `hybrid` modes include Levenshtein distance typo-tolerance fallback (via `fuzzy_match` and `auto_correct`), making searches more resilient to misspellings.
-- **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) and cross-team search (`cross_team_search`) before defining architectures spanning multiple teams or DBs. Use `team_get_collaboration_matrix` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (`memory://github/insights`) to gauge traction. View `memory://insights/digest` and `memory://insights/team-collaboration` for automated analytics snapshots.
+- **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) and cross-team search (`cross_team_search`) before defining architectures spanning multiple teams or DBs. Use `team_get_collaboration_matrix` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (`memory://github/insights`) to gauge traction. View `memory://insights/digest` and `memory://insights/team-collaboration` for automated analytics snapshots. Access per-tool telemetry and latency percentiles via `memory://metrics/latency`.
 
 ### Real-Time Subscriptions
 

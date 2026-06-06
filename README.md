@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-86.92%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-86.94%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -507,6 +507,7 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-i
 | `GET /sse`                                  | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
 | `POST /messages`                            | Legacy SSE message endpoint                      | Stateful |
 | `GET /health`                               | Health check (`{ status, timestamp }`)           | Both     |
+| `GET /metrics`                              | Prometheus metrics export (requires flag)        | Both     |
 | `GET /.well-known/oauth-protected-resource` | RFC 9728 Protected Resource Metadata             | Both     |
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
@@ -599,6 +600,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `PUBLIC_ORIGIN`                   | Public origin URL for OAuth redirect URIs (CLI: `--public-origin`)                                                                                    |
 | `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                                                                     |
 | `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)                                                                 |
+| `METRICS_EXPORT`                  | Metrics export format (e.g. `prometheus`) (CLI: `--metrics-export`)                                                                                   |
 | `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)                                                                |
 | `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                                                                          |
 | `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                                                        |

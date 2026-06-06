@@ -70,6 +70,7 @@
                 "AUDIT_READS": "false",
                 "AUDIT_LOG_MAX_SIZE": "10485760",
                 "MCP_METRICS_ENABLED": "true",
+                "METRICS_EXPORT": "",
                 "AUTO_REBUILD_INDEX": "false",
                 "EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
                 "PRUNE_OLDER_THAN_DAYS": "0",

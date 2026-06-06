@@ -158,6 +158,10 @@ program
         '--embedding-model <model>',
         'HuggingFace model name for semantic search embeddings (env: EMBEDDING_MODEL)'
     )
+    .option(
+        '--metrics-export <format>',
+        'Metrics export format: prometheus (env: METRICS_EXPORT)'
+    )
     // Briefing configuration
     .option(
         '--briefing-entries <count>',
@@ -244,6 +248,7 @@ program
             vacuumInterval: string
             rebuildIndexInterval: string
             digestInterval: string
+            metricsExport?: string
 
             codemodeMaxResultSize?: string
             oauthEnabled?: boolean
@@ -699,6 +704,22 @@ program
                             options.pruneImportanceThreshold
                     ),
                     embeddingModel: process.env['EMBEDDING_MODEL'] ?? options.embeddingModel,
+                    metricsExport: (() => {
+                        const raw = options.metricsExport ?? process.env['METRICS_EXPORT']
+                        if (raw) {
+                            if (raw !== 'prometheus') {
+                                throw new Error(`Unsupported metrics export format: ${raw}`)
+                            }
+                            if (options.transport !== 'http') {
+                                console.warn(
+                                    `\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n`
+                                )
+                                return undefined
+                            }
+                            return 'prometheus'
+                        }
+                        return undefined
+                    })(),
                 })
             } catch (error) {
                 logger.error('Failed to start server', {
