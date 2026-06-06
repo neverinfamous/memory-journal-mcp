@@ -38,6 +38,7 @@
 | `team_list_flags(project_number: 5)`           | `status: "invalid"`                                  | ⚠️ Should return validation error | `limit: "abc"`    |
 | `team_update_flag`                             | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
 | `team_get_flag_analytics(project_number: 5)`   | N/A (read-only, all optional)                        | ⚠️ Should return valid response   | `period: 123`     |
+| `cross_team_search`                            | `team_dbs: ["invalid"]`                              | ⚠️ Should return validation error | `limit: "abc"`    |
 
 ### Specific Domain Checks
 

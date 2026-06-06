@@ -65,6 +65,8 @@
 | Pure flag search     | `team_search(query: "test", tags: ["flag:blocker"])`                  | `success: true` (bypasses project_number check)  |
 | Non-flag tag search  | `team_search(query: "test", tags: ["flag:blocker", "team-test"])`     | `{ success: false, code: "VALIDATION_ERROR" }`  |
 | Missing project no.  | `team_search(query: "test")`                                          | `{ success: false, code: "VALIDATION_ERROR" }`  |
+| Cross-team search    | `cross_team_search(query: "test")`                                    | Searches all configured team DBs, returns entries tagged with `team_db` |
+| Cross-team labels    | `cross_team_search(query: "test", team_dbs: ["primary"])`             | Restricts cross-team search to only the `primary` DB |
 
 
 ### 14.4 Team Entry Detail

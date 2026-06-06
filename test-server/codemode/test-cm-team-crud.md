@@ -68,6 +68,9 @@ const forcedFts = await mj.team.teamSearch({
 })
 const noArgs = await mj.team.teamSearch({ project_number: 5 })
 
+const crossTeam = await mj.search.crossTeamSearch({ query: 'CM4 team' })
+const crossTeamSpecific = await mj.search.crossTeamSearch({ query: 'CM4 team', team_dbs: ['primary'] })
+
 // Search without project_number for pure flag search (bypasses project_number constraint)
 const searchPureFlag = await mj.team.teamSearch({
   query: 'CM4',
@@ -103,6 +106,8 @@ return {
   hybridAutoCount: hybridAuto.entries?.length ?? 0,
   forcedFtsCount: forcedFts.entries?.length ?? 0,
   noArgsCount: noArgs.entries?.length ?? 0,
+  crossTeamCount: crossTeam.entries?.length ?? 0,
+  crossTeamSpecificCount: crossTeamSpecific.entries?.length ?? 0,
   searchPureFlagSuccess: searchPureFlag.success === true,
   searchNonFlagTagsError: searchNonFlagTags.success === false && searchNonFlagTags.code === 'VALIDATION_ERROR',
   detailHasEntry: !!detail.entry,
@@ -122,6 +127,8 @@ return {
 | `tagSearchCount`         | ≥ 1                               |
 | `hybridAutoCount`        | ≥ 0                               |
 | `forcedFtsCount`         | ≥ 1                               |
+| `crossTeamCount`         | ≥ 1                               |
+| `crossTeamSpecificCount` | ≥ 1                               |
 | `searchPureFlagSuccess`  | `true` (bypasses constraint)      |
 | `searchNonFlagTagsError` | `true` (VALIDATION_ERROR)         |
 | `detailHasEntry`         | `true`                            |
@@ -202,6 +209,7 @@ return {
 - `team_create_entry(project_number: 5)` with auto-detected and explicit `author` works
 - `team_get_recent(project_number: 5)` returns entries with `author` field
 - `team_search(project_number: 5)` filters by text, tags, and combined
+- `cross_team_search` successfully aggregates entries across databases
 - `team_get_entry_by_id(project_number: 5)` returns entry detail with `importance` and optional `relationships`
 - `team_list_tags` returns tag list from team database
 - `team_search_by_date_range(project_number: 5)` filters by date range, entry_type, and tags

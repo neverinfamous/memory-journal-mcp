@@ -304,6 +304,7 @@ const statsEmpty = await mj.team.teamGetStatistics({})
 const insightsEmpty = await mj.team.teamGetCrossProjectInsights({})
 const passFlagEmpty = await mj.team.passTeamFlag({ project_number: 5 })
 const resolveFlagEmpty = await mj.team.resolveTeamFlag({})
+const crossTeamSearchTypeMismatch = await mj.search.crossTeamSearch({ team_dbs: "invalid_type" })
 
 // Type mismatches
 const createNumContent = await mj.team.teamCreateEntry({
@@ -341,6 +342,7 @@ return {
   updateStrIdError: updateStrId.success === false,
   resolveFlagStrIdError: resolveFlagStrId.success === false,
   teamSearchTypeMismatchError: teamSearchTypeMismatch.success === false,
+  crossTeamSearchTypeMismatchError: crossTeamSearchTypeMismatch.success === false,
 }
 ```
 
@@ -360,6 +362,7 @@ return {
 | `createNumContentError` | `true` (content must be string)       |
 | `resolveFlagStrIdError` | `true` (flag_id must be number)       |
 | `teamSearchTypeMismatchError` | `true` (type mismatches caught) |
+| `crossTeamSearchTypeMismatchError` | `true` (type mismatches caught) |
 
 ### 29.8 IO Group — Empty Params & Security
 
