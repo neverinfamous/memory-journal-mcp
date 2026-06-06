@@ -77,6 +77,8 @@ export interface ServerOptions {
     briefingConfig?: BriefingConfig
     // Project Registry
     projectRegistry?: Record<string, ProjectRegistryEntry>
+    // Additional team database mappings (label -> path)
+    additionalTeamDbs?: Record<string, string>
     // Instruction level
     instructionLevel?: 'essential' | 'standard' | 'full'
     // Audit configuration
@@ -333,6 +335,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber,
         projectRegistry: options.projectRegistry,
+        additionalTeamDbs: options.additionalTeamDbs,
         flagVocabulary: options.flagVocabulary,
         allowedIoRoots,
         filterConfig,

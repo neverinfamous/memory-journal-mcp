@@ -46,6 +46,10 @@ program
     .option('--db <path>', 'Database path (env: DB_PATH)', defaultDbPath)
     .option('--team-db <path>', 'Team database path (env: TEAM_DB_PATH)', defaultTeamDbPath)
     .option(
+        '--additional-team-dbs <json>',
+        'Additional team database mappings (label -> path) as JSON for cross-team discovery (env: ADDITIONAL_TEAM_DBS)'
+    )
+    .option(
         '--team-default-role <role>',
         'Default role for unrecognized team authors: admin, member, viewer, denied (env: TEAM_DEFAULT_ROLE)',
         'denied'
@@ -225,6 +229,7 @@ program
             stateless?: boolean
             db: string
             teamDb?: string
+            additionalTeamDbs?: string
             teamDefaultRole: string
             teamAdmin?: string
             toolFilter?: string
@@ -488,6 +493,60 @@ program
                             const errName = e instanceof Error ? e.message : String(e)
                             throw new Error(
                                 `Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON and safe paths: ${errName}`,
+                                { cause: e }
+                            )
+                        }
+                    })(),
+                    // Additional Team DBs
+                    additionalTeamDbs: (() => {
+                        const raw = options.additionalTeamDbs ?? process.env['ADDITIONAL_TEAM_DBS']
+                        if (!raw) return undefined
+                        if (raw.length > 51200) {
+                            throw new Error(
+                                'ADDITIONAL_TEAM_DBS environment variable exceeds size limit (50KB)'
+                            )
+                        }
+                        try {
+                            const dbSchema = z.record(z.string().min(1), z.string().min(1))
+                            const parsed: unknown = JSON.parse(raw)
+                            const deepClean = (obj: unknown): unknown => {
+                                if (obj === null || typeof obj !== 'object') return obj
+                                if (Array.isArray(obj)) return obj.map(deepClean)
+                                const out: Record<string, unknown> = {}
+                                for (const key of Object.keys(obj)) {
+                                    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+                                    out[key] = deepClean((obj as Record<string, unknown>)[key])
+                                }
+                                return out
+                            }
+                            const safeParsed = deepClean(parsed)
+                            const validated = dbSchema.parse(safeParsed)
+                            
+                            for (const [label, dbPath] of Object.entries(validated)) {
+                                if (!path.isAbsolute(dbPath)) {
+                                    throw new Error(`Additional team DB path must be absolute: ${dbPath} (label: ${label})`)
+                                }
+                                const resolvedPath = path.resolve(dbPath)
+                                // We don't check if file exists here because SQLite creates it if missing,
+                                // but we do check for symlinks if it does exist.
+                                try {
+                                    if (fs.existsSync(resolvedPath)) {
+                                        const stat = fs.lstatSync(resolvedPath)
+                                        if (stat.isSymbolicLink()) {
+                                            throw new Error(`Additional team DB path cannot be a symlink: ${resolvedPath}`)
+                                        }
+                                    }
+                                } catch (e) {
+                                    const errMsg = e instanceof Error ? e.message : String(e)
+                                    throw new Error(`Additional team DB path error: ${resolvedPath} (${errMsg})`, { cause: e })
+                                }
+                                validated[label] = resolvedPath
+                            }
+                            return validated
+                        } catch (e: unknown) {
+                            const errName = e instanceof Error ? e.message : String(e)
+                            throw new Error(
+                                `Failed to parse ADDITIONAL_TEAM_DBS environment variable. Must be valid JSON mapping strings to absolute paths: ${errName}`,
                                 { cause: e }
                             )
                         }

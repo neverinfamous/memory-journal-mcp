@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **89 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **90 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -34,7 +34,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 ---
 
-## search (5 tools + Code Mode)
+## search (6 tools + Code Mode)
 
 Full-text, date-range, and semantic/vector search.
 
@@ -45,6 +45,7 @@ Full-text, date-range, and semantic/vector search.
 | `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                   |
 | `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                   |
 | `list_deleted_entries`   | List recently soft-deleted entries that can be restored.                                                                                                                                                 |
+| `cross_team_search`      | Search across multiple configured team databases simultaneously. Returns results with team_db labels. Read-only and degrades gracefully. |
 
 ---
 

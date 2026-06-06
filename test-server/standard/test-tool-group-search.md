@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Search Tool Group
 
-**Scope:** Deterministic verification of the Search tool group (`search_entries`, `search_by_date_range`, `semantic_search`) against the strict error handling matrix.
+**Scope:** Deterministic verification of the Search tool group (`search_entries`, `search_by_date_range`, `semantic_search`, `cross_team_search`) against the strict error handling matrix.
 
 **Prerequisites:**
 
@@ -27,6 +27,7 @@
 | `search_by_date_range` | Search valid range     | `start_date: "2026-12-31", end_date: "2026-01-01"` (inverted)           | ⚠️ Should return validation error | `start_date: "Jan 1"`                         |
 | `semantic_search`      | Search by meaning      | Vector manager unavailable (returns `{ success: false, error: "..." }`) | ⚠️ Should return validation error | `limit: "abc"`, `similarity_threshold: "abc"` |
 | `list_deleted_entries` | List soft-deleted      | N/A                                                                     | Should succeed (defaults)         | `limit: "abc"`                                |
+| `cross_team_search`    | Search multiple DBs    | Database missing (degrades gracefully with error in output)             | ⚠️ Should return validation error | `team_dbs: "abc", limit: "abc"`               |
 
 ## 2. Integrity & Boundary Testing
 

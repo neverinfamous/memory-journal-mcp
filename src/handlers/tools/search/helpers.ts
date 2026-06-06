@@ -22,6 +22,7 @@ export interface EntryWithSource {
     content: string
     timestamp: string
     source: 'personal' | 'team'
+    team_db?: string // Optional label for cross-team search
     [key: string]: unknown
 }
 
@@ -55,20 +56,18 @@ export function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
 }
 
 /**
- * Merge personal and team results, deduplicate by content,
+ * Merge multiple arrays of entries, deduplicate by content/source,
  * and sort by timestamp descending.
  */
-export function mergeAndDedup(
-    personal: EntryWithSource[],
-    team: EntryWithSource[],
+export function mergeMultipleSources(
+    sources: EntryWithSource[][],
     limit?: number,
     sortBy: 'timestamp' | 'importance' = 'timestamp'
 ): EntryWithSource[] {
     const seen = new Set<string>()
     const merged: EntryWithSource[] = []
 
-    // Concat and sort by requested metric, with timestamp as secondary/fallback (ISO 8601 sorts lexicographically)
-    const all = [...personal, ...team].sort((a, b) => {
+    const all = sources.flat().sort((a, b) => {
         if (sortBy === 'importance') {
             const scoreA = Number(a['importanceScore']) || 0
             const scoreB = Number(b['importanceScore']) || 0
@@ -80,15 +79,15 @@ export function mergeAndDedup(
     })
 
     for (const entry of all) {
-        // Stop deduplicating cross-DB by content alone to prevent dropping identical text entries.
-        // Use source + id, fallback to source + content hash.
         const entryId =
             typeof entry['id'] === 'number' || typeof entry['id'] === 'string'
                 ? String(entry['id'])
                 : ''
+        // Use team_db label if available to prevent colliding IDs across team DBs
+        const sourceKey = entry.team_db ? `${entry.source}:${entry.team_db}` : entry.source
         const key = entryId
-            ? `${entry.source}:${entryId}`
-            : crypto.createHash('sha256').update(`${entry.source}:${entry.content}`).digest('hex')
+            ? `${sourceKey}:${entryId}`
+            : crypto.createHash('sha256').update(`${sourceKey}:${entry.content}`).digest('hex')
         if (!seen.has(key)) {
             seen.add(key)
             merged.push(entry)
@@ -96,6 +95,19 @@ export function mergeAndDedup(
     }
 
     return limit !== undefined ? merged.slice(0, limit) : merged
+}
+
+/**
+ * Merge personal and team results, deduplicate by content,
+ * and sort by timestamp descending.
+ */
+export function mergeAndDedup(
+    personal: EntryWithSource[],
+    team: EntryWithSource[],
+    limit?: number,
+    sortBy: 'timestamp' | 'importance' = 'timestamp'
+): EntryWithSource[] {
+    return mergeMultipleSources([personal, team], limit, sortBy)
 }
 
 /**

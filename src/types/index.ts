@@ -182,6 +182,8 @@ export interface ToolHandlerConfig {
     defaultProjectNumber?: number
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
+    /** Additional team database mappings (label -> path) for cross-team discovery */
+    additionalTeamDbs?: Record<string, string>
     /** Hush Protocol flag vocabulary */
     flagVocabulary?: string[]
     /** Allowlisted roots for file IO */

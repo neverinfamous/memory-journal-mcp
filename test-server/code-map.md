@@ -158,6 +158,7 @@ src/
     │   │   ├── helpers.ts          # Search helper functions
     │   │   ├── auto.ts             # Auto-mode query heuristic classifier
     │   │   ├── fts.ts              # FTS5 search logic
+    │   │   ├── cross-team.ts       # Cross-team search logic
     │   │   └── hybrid.ts           # RRF (Reciprocal Rank Fusion) hybrid logic
     │   ├── analytics.ts            # Analytics tool group (2 tools)
     │   ├── relationships.ts        # Relationships tool group (2 tools)
@@ -239,7 +240,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | ----------------- | ------------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **codemode**      | `codemode.ts`                  | 1     | `mj_execute_code`                                                                                                                                  |
 | **core**          | `core.ts`                      | 7     | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `create_entry_minimal`, `test_simple`, `list_tags`                                        |
-| **search**        | `search/index.ts`              | 5     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`, `list_deleted_entries`                                                              |
+| **search**        | `search/index.ts`              | 6     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`, `list_deleted_entries`, `cross_team_search`                                                              |
 | **analytics**     | `analytics.ts`                 | 2     | `get_statistics`, `get_cross_project_insights`                                                                                                     |
 | **relationships** | `relationships.ts`             | 2     | `link_entries`, `visualize_relationships`                                                                                                          |
 | **io**            | `io.ts`                        | 3     | `export_entries`, `export_markdown`, `import_markdown`                                                                                             |

@@ -12,6 +12,8 @@
 - Added passive rate limit header capture from all GitHub API responses to provide real-time state without API cost.
 - Added fuzzy search fallback for search queries (typo tolerance) using Levenshtein distance on entry tags and types.
 - Added support for swappable vector embedding models via `--embedding-model` flag or `EMBEDDING_MODEL` environment variable. The database now dynamically tracks vector dimensions.
+- Added `cross_team_search` tool to perform read-only, FTS5-only searches across multiple team databases simultaneously.
+- Added `--additional-team-dbs` CLI argument and `ADDITIONAL_TEAM_DBS` environment variable to configure dynamic sets of auxiliary team databases.
 
 - Added `resources/subscribe` capability and real-time subscription manager to stream targeted notifications to MCP clients whenever targeted team journal entries, hush-protocol flags, or context changes occur.
 - Added support for returning FTS5 highlight snippets via `include_highlights` parameter in `search_entries` and `team_search`.

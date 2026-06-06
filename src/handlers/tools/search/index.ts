@@ -27,6 +27,7 @@ import { calcPerDbLimit, mergeAndDedup, passMetadataFilters } from './helpers.js
 import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
+import { getCrossTeamTools } from './cross-team.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager.js'
 
 // ============================================================================
@@ -823,5 +824,6 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                 }
             },
         },
+        ...getCrossTeamTools(context),
     ]
 }

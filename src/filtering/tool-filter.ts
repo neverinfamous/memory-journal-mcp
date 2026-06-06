@@ -31,6 +31,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'semantic_search',
         'get_vector_index_stats',
         'list_deleted_entries',
+        'cross_team_search',
     ],
     analytics: ['get_statistics', 'get_cross_project_insights'],
     relationships: ['link_entries', 'visualize_relationships'],

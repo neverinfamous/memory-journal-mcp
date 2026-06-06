@@ -98,7 +98,7 @@ Only help resources for your enabled tool groups are registered.
 - **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`auto_index\` to rebuild the vector index for these entries.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries. Use the \`mode\` parameter (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`) to control search strategy. The \`fts\` and \`hybrid\` modes include Levenshtein distance typo-tolerance fallback (via \`fuzzy_match\` and \`auto_correct\`), making searches more resilient to misspellings.
-- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots.
+- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) and cross-team search (\`cross_team_search\`) before defining architectures spanning multiple teams or DBs. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots.
 
 ### Real-Time Subscriptions
 
@@ -374,6 +374,7 @@ When the user has GitHub Copilot code review enabled:
 6. **Typo Tolerance**: FTS5 search operations automatically fall back to Levenshtein distance matching on tags and entry types if no results are found. To disable this when strict exact matching is needed, explicitly set \`fuzzy_match: false\`.
 7. **Team RBAC**: If the team database has at least one member registered, RBAC is active. Unregistered authors fall back to the \`TEAM_DEFAULT_ROLE\` (which denies access by default). Non-admin members can only modify or resolve entries/flags they originally authored.
 8. **Concurrent Edits**: When updating an entry (\`update_entry\`, \`team_update_entry\`), always pass \`expected_version\` if you know the current version to prevent silently overwriting concurrent changes. If you get a \`VERSION_CONFLICT\` error, re-read the latest entry state returned in the error payload, merge your changes, and retry.
+9. **Cross-Team Search**: The \`cross_team_search\` tool searches across multiple team databases configured via \`ADDITIONAL_TEAM_DBS\`. Results include a \`team_db\` label identifying the source database. This tool is read-only and uses FTS5 only (no semantic/vector search across DBs). Individual DB failures are non-fatal — the response includes \`degraded: true\` and per-DB error details.
 
 ## GitHub & Kanban Sync
 
