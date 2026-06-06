@@ -52,6 +52,7 @@
 
 ### Fixed
 
+- Fixed `cross_team_search` incorrectly omitting the primary team database when executing cross-database searches.
 - Fixed FTS search phrase matching by updating the query sanitizer to preserve balanced double-quotes for exact phrase matches, while still stripping malicious unbalanced quotes and operators.
 - Fixed a ReferenceError crash in `batch_create_entries`, `batch_update_entries`, and `batch_delete_entries` (and their team variants) by properly importing the `sendProgress` utility.
 - Fixed unit test regressions in batch tool handlers by correctly mocking vectorManager and injecting parameters.

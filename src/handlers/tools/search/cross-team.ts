@@ -100,8 +100,13 @@ export async function handleCrossTeamSearch(
     const { config } = context
 
     // 1. Resolve configured additional team DBs
-    const allConfiguredDbs = config?.additionalTeamDbs ?? {}
-    const configuredLabels = Object.keys(allConfiguredDbs)
+    const additionalDbs: Record<string, string> = { ...(config?.additionalTeamDbs ?? {}) }
+    
+    // The list of all valid labels to search
+    const configuredLabels = Object.keys(additionalDbs)
+    if (context.teamDb) {
+        configuredLabels.push('primary')
+    }
 
     if (configuredLabels.length === 0) {
         throw new ConfigurationError(
@@ -131,9 +136,16 @@ export async function handleCrossTeamSearch(
     const perDbLimit = Math.min(args.limit * 2, 500)
 
     const searchPromises = targetLabels.map(async (label) => {
-        const dbPath = allConfiguredDbs[label]
-        if (!dbPath) throw new Error(`Missing configured path for ${label}`)
-        const adapter = await getOrCreateAdapter(label, dbPath)
+        let adapter: IDatabaseAdapter
+        
+        if (label === 'primary') {
+            if (!context.teamDb) throw new Error('Primary team database not configured')
+            adapter = context.teamDb
+        } else {
+            const dbPath = additionalDbs[label]
+            if (!dbPath) throw new Error(`Missing configured path for ${label}`)
+            adapter = await getOrCreateAdapter(label, dbPath)
+        }
 
         const results = adapter.searchEntries(args.query, {
             limit: perDbLimit,
