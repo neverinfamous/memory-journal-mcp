@@ -347,6 +347,12 @@ async function executeCode(
                 info: (...args: unknown[]) => args,
                 debug: (...args: unknown[]) => args,
             },
+            fetch: () =>
+                Promise.reject(
+                    new Error(
+                        "SandboxNetworkError: 'fetch' is not defined in Code Mode for security. Network and HTTP modules are isolated. To retrieve internal metrics, please use the appropriate 'mj.*' tools (e.g., await mj.io.readResource({ uri: 'memory://metrics/latency' }))."
+                    )
+                ),
             sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5000))),
             setTimeout: (cb: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) =>
                 setTimeout(cb, Math.min(ms ?? 0, 5000), ...args),
