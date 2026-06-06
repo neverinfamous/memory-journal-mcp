@@ -319,7 +319,7 @@ const updateStrId = await mj.team.teamUpdateEntry({
   content: 'test',
 })
 const resolveFlagStrId = await mj.team.resolveTeamFlag({ flag_id: 'abc' })
-const teamSearchTypeMismatch = await mj.team.teamSearch({ project_number: 5, query: 'test', fts_weight: 'abc' })
+const teamSearchTypeMismatch = await mj.team.teamSearch({ project_number: 5, query: 123 })
 
 return {
   createEmptyError: createEmpty.success === false,
