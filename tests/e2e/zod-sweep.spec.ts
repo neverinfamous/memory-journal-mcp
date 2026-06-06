@@ -140,11 +140,7 @@ test.describe('Zod Sweep: Backup', () => {
 // Code Mode
 // =============================================================================
 
-test.describe('Zod Sweep: Code Mode', () => {
-    test('mj_execute_code({}) → handler error', async () => {
-        await assertZodHandlerError('mj_execute_code')
-    })
-})
+// mj_execute_code is excluded because it has no required parameters (defaults to mj.help())
 
 // =============================================================================
 // Team Group (tools with required params)

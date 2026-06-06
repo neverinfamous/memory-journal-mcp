@@ -71,6 +71,8 @@
 - Fixed a test suite state pollution issue in the team flag extension tools on Windows by ensuring explicit removal of leftover `.db` files during `beforeAll` initialization.
 - Fixed obsolete test script entries and missing script documentation in `test-server/scripts/README.md`.
 - Fixed obsolete tool counts and shortcut limits across configuration templates (`.env.example`), READMEs, Wiki, and filtering metadata to reflect the expanded 90-tool architecture.
+- Fixed a validation error in `mj_execute_code` by making the `code` parameter optional and defaulting to `return await mj.help();` so that schema discovery calls using empty arguments `()` gracefully return API documentation instead of throwing Zod errors.
+- Fixed a failing E2E test in `tests/e2e/zod-sweep.spec.ts` by excluding `mj_execute_code` from the Zod empty argument sweep, correctly aligning the test suite with its new optional parameter behavior.
 
 ### Changed
 
