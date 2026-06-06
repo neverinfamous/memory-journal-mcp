@@ -34,16 +34,19 @@ import { generateTypescriptDeclarations } from '../../codemode/type-generator.js
 // =============================================================================
 
 const ExecuteCodeSchema = z.object({
-    code: z.string().min(1),
+    code: z.string().optional().default('return await mj.help();'),
     timeout: z.number().max(30000).optional().default(30000),
     readonly: z.boolean().optional().default(false),
     repo: z.string().optional(),
     context: z.record(z.string(), z.unknown()).optional(),
 })
 
-/** Relaxed schema for MCP registration */
 const ExecuteCodeSchemaMcp = z.object({
-    code: z.string().describe('JavaScript code to execute in the sandbox'),
+    code: z
+        .string()
+        .optional()
+        .default('return await mj.help();')
+        .describe('JavaScript code to execute in the sandbox. Defaults to returning the API help if omitted.'),
     timeout: relaxedNumber()
         .optional()
         .default(30000)
