@@ -68,3 +68,14 @@ To prevent silent failures, `wrapResult` converts failed results into a Proxy. I
 ## 6. Resource URIs
 
 Code Mode inherently operates over `memory-journal-mcp`'s tool layer. Operations that deal with raw resources (like `memory://briefing`) are handled via the host server's standard Resource hooks, exposed to the agent via tools like `mj.io.readResource`. 
+
+## 7. Sandbox Limitations & Network Isolation
+
+The `isolated-vm` sandbox enforces strict security bounds. The Node.js environment is completely stripped down.
+- **Network Access**: The `fetch` API, `http`/`https` modules, and `XMLHttpRequest` are **NOT DEFINED** and will throw a `ReferenceError`.
+- **Filesystem**: The `fs` module is strictly unavailable.
+- **Global Variables**: Standard Node globals like `process`, `require`, and `__dirname` are blocked.
+
+**When working with agents:** If an agent needs to retrieve internal metrics or server state, they cannot use `fetch('http://127.0.0.1:3000/metrics')` inside Code Mode. They must either:
+1. Use an available `mj.*` tool (e.g., `await mj.io.readResource({ uri: 'memory://metrics/latency' })`).
+2. Run standard host-level terminal tools (e.g. `Invoke-RestMethod`) entirely outside of Code Mode.
