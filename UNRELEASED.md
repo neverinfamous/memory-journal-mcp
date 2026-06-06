@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added resource read frequency tracking to the observability stack, exposed via a new `memory://metrics/resources` resource and aggregated in `memory://metrics/summary`. This provides telemetry on how often specific resources (e.g., `memory://briefing`) are accessed by agents.
 - Added `--metrics-export prometheus` CLI flag and `METRICS_EXPORT` environment variable to expose a `/metrics` HTTP endpoint for Prometheus scraping. The endpoint relies on zero-dependency plain-text formatting.
 - Added per-tool latency percentile tracking (p50/p95/p99) to the observability stack via a zero-dependency sliding-window sorted-insert algorithm, exposed through a new `memory://metrics/latency` resource. Includes Playwright E2E payload contract tests.
 - Added new mj-mcp-optimize skill mapping the execution pipeline and Code Mode internals to assist agents in debugging sandbox mechanics.

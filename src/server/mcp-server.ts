@@ -654,28 +654,37 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 flagVocabulary: options.flagVocabulary,
                 allowedIoRoots: allowedIoRoots,
             }
-            const result = await readResource(
-                uri.href,
-                db,
-                vectorManager,
-                filterConfig,
-                github,
-                scheduler,
-                teamDb ?? undefined,
-                activeBriefingConfig,
-                runtime
-            )
-            const dataStr =
-                typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
-            return {
-                contents: [
-                    {
-                        uri: uri.href,
-                        mimeType,
-                        text: dataStr,
-                        ...(result.annotations ? { annotations: result.annotations } : {}),
-                    },
-                ],
+
+            try {
+                const result = await readResource(
+                    uri.href,
+                    db,
+                    vectorManager,
+                    filterConfig,
+                    github,
+                    scheduler,
+                    teamDb ?? undefined,
+                    activeBriefingConfig,
+                    runtime
+                )
+
+                runtime.metrics.recordResourceRead(uri.href, false)
+
+                const dataStr =
+                    typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
+                return {
+                    contents: [
+                        {
+                            uri: uri.href,
+                            mimeType,
+                            text: dataStr,
+                            ...(result.annotations ? { annotations: result.annotations } : {}),
+                        },
+                    ],
+                }
+            } catch (error) {
+                runtime.metrics.recordResourceRead(uri.href, true)
+                throw error
             }
         }
 

@@ -42,6 +42,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         tags: 'listTags',
         appendInsight: 'createEntry',
         writeQuery: 'createEntry',
+        getProjects: 'listProjects',
     },
     search: {
         find: 'searchEntries',
@@ -188,6 +189,7 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.core.getRecentEntries({ limit: 10 })',
         'mj.core.createEntryMinimal({ content: "Quick note" })',
         'mj.core.listTags()',
+        'mj.core.listProjects()',
     ],
     search: [
         'mj.search.searchEntries({ query: "performance" })',

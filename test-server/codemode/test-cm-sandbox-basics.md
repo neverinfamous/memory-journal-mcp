@@ -80,6 +80,8 @@ After the preceding test phases have executed several tool calls, verify that th
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Latency resource exists | `const entries = await mj.core.getRecentEntries({ limit: 1 }); return "latency data seeded";`<br>Then read `memory://metrics/latency` | Resource returns YAML-style text containing `p50_ms`, `p95_ms`, `p99_ms`, `min_ms`, `max_ms`, `count` fields for at least one tool            |
 | Graceful empty          | Read `memory://metrics/latency` on a fresh server with no prior tool calls                                                                    | Returns `note: No latency data recorded yet.` (graceful empty state)                                                                         |
+| Resources metrics exists| Read `memory://help` then `memory://metrics/resources` | Resource returns YAML-style text containing `uri`, `read_count`, and `error_count` fields for at least one resource |
+| Resources empty         | Read `memory://metrics/resources` on a fresh server with no prior reads | Returns `note: No resource reads recorded yet.` (graceful empty state) |
 
 
 ---
@@ -98,4 +100,5 @@ After the preceding test phases have executed several tool calls, verify that th
 - Infinite loop terminated with structured error (not hang or crash)
 - Verified index schema via `_executeRawQueryUnsafe` check returning all three new composite and partial indexes
 - `memory://metrics/latency` returns per-tool percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields after tool calls have been made
+- `memory://metrics/resources` returns URI read telemetry after resource reads have occurred
 

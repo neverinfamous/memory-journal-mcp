@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
     metricsSummaryResource,
     metricsTokensResource,
+    metricsResourcesResource,
     metricsSystemResource,
     metricsUsersResource,
     metricsLatencyResource,
@@ -20,12 +21,13 @@ describe('Metrics Resources', () => {
         // Nothing to reset, instance is recreated
     })
 
-    it('getMetricsResourceDefinitions returns all five definitions', () => {
+    it('getMetricsResourceDefinitions returns all six definitions', () => {
         const defs = getMetricsResourceDefinitions()
-        expect(defs.length).toBe(5)
+        expect(defs.length).toBe(6)
         expect(defs.map((d) => d.name)).toEqual([
             'Metrics Summary',
             'Metrics Tokens',
+            'Metrics Resources',
             'Metrics System',
             'Metrics Users',
             'Metrics Latency',
@@ -104,6 +106,30 @@ describe('Metrics Resources', () => {
             expect(res.data).toContain('tool: tool_b')
             expect(res.data).toContain('tool: tool_a')
             expect(res.data).toContain('output_tokens: 100') // B has 100
+        })
+    })
+
+    describe('metricsResourcesResource', () => {
+        it('returns note when no resource reads recorded', async () => {
+            const res = (await metricsResourcesResource.handler('memory://metrics/resources', {
+                runtime: { metrics },
+            } as any)) as any
+            expect(res.data).toContain('note: No resource reads recorded yet.')
+        })
+
+        it('returns resource read breakdown sorted by total reads', async () => {
+            metrics.recordResourceRead('memory://briefing', false)
+            metrics.recordResourceRead('memory://briefing', false)
+            metrics.recordResourceRead('memory://status', true)
+
+            const res = (await metricsResourcesResource.handler('memory://metrics/resources', {
+                runtime: { metrics },
+            } as any)) as any
+
+            expect(res.data).toContain('uri: memory://briefing')
+            expect(res.data).toContain('read_count: 2')
+            expect(res.data).toContain('uri: memory://status')
+            expect(res.data).toContain('error_count: 1')
         })
     })
 

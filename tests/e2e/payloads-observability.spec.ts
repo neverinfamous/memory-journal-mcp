@@ -7,6 +7,7 @@
  *   memory://metrics/system   — process-level system metrics (YAML text)
  *   memory://metrics/users    — per-user call counts (YAML text, may be empty)
  *   memory://metrics/latency  — per-tool latency percentiles p50/p95/p99 (YAML text)
+ *   memory://metrics/resources — per-URI resource read counts and error counts (YAML text)
  *   memory://audit            — last 50 audit entries (YAML text, unconfigured in test env)
  *
  * Also verifies that _meta.tokenEstimate is injected on tool call responses
@@ -82,6 +83,7 @@ test.describe('Payload Contracts: Observability & Audit', () => {
         expect(uris).toContain('memory://metrics/system')
         expect(uris).toContain('memory://metrics/users')
         expect(uris).toContain('memory://metrics/latency')
+        expect(uris).toContain('memory://metrics/resources')
         expect(uris).toContain('memory://audit')
     })
 
@@ -275,6 +277,34 @@ test.describe('Payload Contracts: Observability & Audit', () => {
         expect(p99Match).not.toBeNull()
         const p99 = parseInt(p99Match![1]!, 10)
         expect(p99).toBeGreaterThanOrEqual(p50)
+    })
+
+    // =========================================================================
+    // Resource: memory://metrics/resources
+    // =========================================================================
+
+    test('memory://metrics/resources — returns YAML text with resource_breakdown key', async () => {
+        const response = await client.readResource({ uri: 'memory://metrics/resources' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = getResourceText(response)
+        expect(text).toContain('resource_breakdown:')
+        expect(text).toContain('as_of:')
+    })
+
+    test('memory://metrics/resources — contains per-URI rows after warm-up reads', async () => {
+        // First read a resource to ensure it's tracked
+        await client.readResource({ uri: 'memory://health' })
+
+        const response = await client.readResource({ uri: 'memory://metrics/resources' })
+        const text = getResourceText(response)
+
+        expect(text).not.toContain('No resource reads recorded yet')
+        expect(text).toContain('uri: memory://health')
+        expect(text).toContain('read_count:')
+        expect(text).toContain('error_count:')
     })
 
     // =========================================================================

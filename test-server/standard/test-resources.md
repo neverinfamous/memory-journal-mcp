@@ -55,6 +55,7 @@
 | Metrics system    | `memory://metrics/system`              | System metrics: memory usage, database stats, vector index health                                                                   |
 | Metrics users     | `memory://metrics/users`               | Per-user metrics (when multi-user sessions active)                                                                                  |
 | Metrics latency   | `memory://metrics/latency`             | Per-tool latency percentiles (p50/p95/p99) with min/max bounds                                                                      |
+| Metrics resources | `memory://metrics/resources`           | Resource read telemetry (counts, error rates, timestamps) per accessed URI                                                          |
 | Audit log         | `memory://audit`                       | Last 50 audit entries with tool name, timestamp, and result                                                                         |
 | Insights digest   | `memory://insights/digest`             | Cross-project digest snapshot (graceful empty if no digest available)                                                               |
 | Insights team     | `memory://insights/team-collaboration` | Team collaboration matrix with `authorActivity` and `impactFactor` (graceful if team DB not configured)                             |
@@ -109,6 +110,7 @@
 - `memory://briefing/<repo>` returns repo-scoped briefing
 - `memory://metrics/summary` returns session-level metrics
 - `memory://metrics/latency` returns per-tool latency percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields (or a graceful empty message if no tool calls have been made)
+- `memory://metrics/resources` returns read access counts and error counts for all accessed URIs, or a graceful empty message if no reads have occurred
 - `memory://audit` returns last 50 audit entries
 - `memory://insights/digest` handles empty digest gracefully
 - `memory://insights/team-collaboration` returns collaboration matrix or graceful empty

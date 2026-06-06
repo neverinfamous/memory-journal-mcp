@@ -31,14 +31,22 @@ export interface ToolMetrics {
     lastCalledAt: string | null
 }
 
+export interface ResourceMetrics {
+    readCount: number
+    errorCount: number
+    lastReadAt: string | null
+}
+
 export interface MetricsSummary {
     totalCalls: number
     totalErrors: number
     totalDurationMs: number
     totalInputTokens: number
     totalOutputTokens: number
+    totalResourceReads: number
     upSince: string
     toolBreakdown: Record<string, ToolMetrics>
+    resourceBreakdown: Record<string, ResourceMetrics>
 }
 
 export interface SystemMetrics {
@@ -55,6 +63,7 @@ export interface SystemMetrics {
 
 export class MetricsAccumulator {
     private readonly toolData = new Map<string, ToolMetrics>()
+    private readonly resourceData = new Map<string, ResourceMetrics>()
     private readonly deprecationWarnings = new Set<string>()
     private readonly latencyTracker: LatencyTracker
     readonly upSince: string = new Date().toISOString()
@@ -112,7 +121,25 @@ export class MetricsAccumulator {
     }
 
     /**
-     * Aggregate summary across all recorded tools.
+     * Record a single resource read.
+     */
+    recordResourceRead(uri: string, isError = false): void {
+        const existing = this.resourceData.get(uri)
+        const m: ResourceMetrics = existing ?? {
+            readCount: 0,
+            errorCount: 0,
+            lastReadAt: null,
+        }
+
+        m.readCount++
+        if (isError) m.errorCount++
+        m.lastReadAt = new Date().toISOString()
+
+        this.resourceData.set(uri, m)
+    }
+
+    /**
+     * Aggregate summary across all recorded tools and resources.
      */
     getSummary(): MetricsSummary {
         let totalCalls = 0
@@ -120,6 +147,7 @@ export class MetricsAccumulator {
         let totalDurationMs = 0
         let totalInputTokens = 0
         let totalOutputTokens = 0
+        let totalResourceReads = 0
 
         for (const m of this.toolData.values()) {
             totalCalls += m.callCount
@@ -129,14 +157,20 @@ export class MetricsAccumulator {
             totalOutputTokens += m.totalOutputTokens
         }
 
+        for (const m of this.resourceData.values()) {
+            totalResourceReads += m.readCount
+        }
+
         return {
             totalCalls,
             totalErrors,
             totalDurationMs,
             totalInputTokens,
             totalOutputTokens,
+            totalResourceReads,
             upSince: this.upSince,
             toolBreakdown: Object.fromEntries(this.toolData),
+            resourceBreakdown: Object.fromEntries(this.resourceData),
         }
     }
 
@@ -160,6 +194,25 @@ export class MetricsAccumulator {
                     m.callCount > 0 ? Math.round(m.totalOutputTokens / m.callCount) : 0,
             }))
             .sort((a, b) => b.outputTokens - a.outputTokens)
+    }
+
+    /**
+     * Per-resource read frequency breakdown, sorted by total reads desc.
+     */
+    getResourceBreakdown(): {
+        uri: string
+        readCount: number
+        errorCount: number
+        lastReadAt: string | null
+    }[] {
+        return Array.from(this.resourceData.entries())
+            .map(([uri, m]) => ({
+                uri,
+                readCount: m.readCount,
+                errorCount: m.errorCount,
+                lastReadAt: m.lastReadAt,
+            }))
+            .sort((a, b) => b.readCount - a.readCount)
     }
 
     /**
@@ -207,6 +260,7 @@ export class MetricsAccumulator {
      */
     reset(): void {
         this.toolData.clear()
+        this.resourceData.clear()
         this.userCounts.clear()
         this.deprecationWarnings.clear()
         this.latencyTracker.reset()

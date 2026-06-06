@@ -6,10 +6,11 @@
  * for token efficiency (mcp-builder §1.1).
  *
  * Resources:
- *   memory://metrics/summary  — HIGH_PRIORITY  — aggregate call/error/token stats
- *   memory://metrics/tokens   — MEDIUM_PRIORITY — per-tool token usage breakdown
- *   memory://metrics/system   — MEDIUM_PRIORITY — process memory, uptime, Node version
- *   memory://metrics/users    — LOW_PRIORITY    — per-user call count breakdown
+ *   memory://metrics/summary   — HIGH_PRIORITY   — aggregate call/error/token stats
+ *   memory://metrics/tokens    — MEDIUM_PRIORITY — per-tool token usage breakdown
+ *   memory://metrics/resources — MEDIUM_PRIORITY — per-resource read frequency breakdown
+ *   memory://metrics/system    — MEDIUM_PRIORITY — process memory, uptime, Node version
+ *   memory://metrics/users     — LOW_PRIORITY    — per-user call count breakdown
  */
 
 // Removed globalMetrics import
@@ -70,7 +71,9 @@ export const metricsSummaryResource: InternalResourceDef = {
             `  avg_duration_ms: ${avgDuration}\n` +
             `  total_input_tokens: ${s.totalInputTokens}\n` +
             `  total_output_tokens: ${s.totalOutputTokens}\n` +
-            `  tools_called: ${Object.keys(s.toolBreakdown).length}\n`
+            `  total_resource_reads: ${s.totalResourceReads}\n` +
+            `  tools_called: ${Object.keys(s.toolBreakdown).length}\n` +
+            `  resources_read: ${Object.keys(s.resourceBreakdown).length}\n`
 
         return { data: text, annotations: { lastModified } }
     },
@@ -115,6 +118,48 @@ export const metricsTokensResource: InternalResourceDef = {
             .join('\n')
 
         const text = `token_breakdown:\n  as_of: ${lastModified}\n${rows}\n`
+
+        return { data: text, annotations: { lastModified } }
+    },
+}
+
+// ============================================================================
+// memory://metrics/resources
+// ============================================================================
+
+export const metricsResourcesResource: InternalResourceDef = {
+    uri: 'memory://metrics/resources',
+    name: 'Metrics Resources',
+    title: 'Resource Read Frequency',
+    description:
+        'Per-resource read frequency breakdown sorted by total reads. ' +
+        'Use this to identify which resources are accessed most often.',
+    mimeType: 'text/plain',
+    annotations: {
+        ...MEDIUM_PRIORITY,
+        audience: ['assistant'],
+    },
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
+        const lastModified = nowIso()
+        const breakdown = ctx.runtime?.metrics.getResourceBreakdown() ?? []
+
+        if (breakdown.length === 0) {
+            return {
+                data: `resource_breakdown:\n  note: No resource reads recorded yet.\n  as_of: ${lastModified}\n`,
+                annotations: { lastModified },
+            }
+        }
+
+        const rows = breakdown
+            .map(
+                (r) =>
+                    `  - uri: ${r.uri}\n` +
+                    `    read_count: ${r.readCount}\n` +
+                    `    error_count: ${r.errorCount}`
+            )
+            .join('\n')
+
+        const text = `resource_breakdown:\n  as_of: ${lastModified}\n${rows}\n`
 
         return { data: text, annotations: { lastModified } }
     },
@@ -256,6 +301,7 @@ export function getMetricsResourceDefinitions(): InternalResourceDef[] {
     return [
         metricsSummaryResource,
         metricsTokensResource,
+        metricsResourcesResource,
         metricsSystemResource,
         metricsUsersResource,
         metricsLatencyResource,

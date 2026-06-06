@@ -67,6 +67,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 | Recent entries  | \`memory://recent\`           |
 | Health/time     | \`memory://health\`           |
 | Metrics/Latency | \`memory://metrics/latency\`  |
+| Resource reads  | \`memory://metrics/resources\`|
 | Full context    | \`get-context-bundle\` prompt |
 
 ## Help Resources
@@ -99,7 +100,7 @@ Only help resources for your enabled tool groups are registered.
 - **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`auto_index\` to rebuild the vector index for these entries.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries. Use the \`mode\` parameter (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`) to control search strategy. The \`fts\` and \`hybrid\` modes include Levenshtein distance typo-tolerance fallback (via \`fuzzy_match\` and \`auto_correct\`), making searches more resilient to misspellings.
-- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) and cross-team search (\`cross_team_search\`) before defining architectures spanning multiple teams or DBs. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots. Access per-tool telemetry and latency percentiles via \`memory://metrics/latency\`.
+- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) and cross-team search (\`cross_team_search\`) before defining architectures spanning multiple teams or DBs. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots. Access per-tool telemetry and latency percentiles via \`memory://metrics/latency\`, and resource read frequency via \`memory://metrics/resources\`.
 
 ### Real-Time Subscriptions
 
@@ -377,7 +378,7 @@ When the user has GitHub Copilot code review enabled:
 7. **Team RBAC**: If the team database has at least one member registered, RBAC is active. Unregistered authors fall back to the \`TEAM_DEFAULT_ROLE\` (which denies access by default). Non-admin members can only modify or resolve entries/flags they originally authored.
 8. **Concurrent Edits**: When updating an entry (\`update_entry\`, \`team_update_entry\`), always pass \`expected_version\` if you know the current version to prevent silently overwriting concurrent changes. If you get a \`VERSION_CONFLICT\` error, re-read the latest entry state returned in the error payload, merge your changes, and retry.
 9. **Cross-Team Search**: The \`cross_team_search\` tool searches across multiple team databases configured via \`ADDITIONAL_TEAM_DBS\`. Results include a \`team_db\` label identifying the source database. This tool is read-only and uses FTS5 only (no semantic/vector search across DBs). Individual DB failures are non-fatal — the response includes \`degraded: true\` and per-DB error details.
-10. **Observability**: If the server runs via HTTP with \`--metrics-export prometheus\` (or \`METRICS_EXPORT\`), a standard \`/metrics\` endpoint is exposed for external scrapers. Code Mode cannot natively fetch this endpoint; instead, use the \`memory://metrics/latency\` resource to retrieve telemetry from within the sandbox.
+10. **Observability**: If the server runs via HTTP with \`--metrics-export prometheus\` (or \`METRICS_EXPORT\`), a standard \`/metrics\` endpoint is exposed for external scrapers. Code Mode cannot natively fetch this endpoint; instead, use the \`memory://metrics/latency\` and \`memory://metrics/resources\` resources to retrieve telemetry from within the sandbox or via direct read.
 ## GitHub & Kanban Sync
 
 - **Eventual Consistency**: GitHub Projects V2 read indexes are eventually consistent. If you \`add_kanban_item\` or \`move_kanban_item\`, a subsequent \`get_kanban_board\` might take up to 10 seconds to reflect the change.

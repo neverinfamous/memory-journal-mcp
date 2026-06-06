@@ -143,3 +143,12 @@ All test workflows in `test-server/standard/` require the agent to track and rep
 - Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values.
 - _Alternatively_, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
 - Always provide this **Total Token Estimate** clearly in your final test report summary so the user can track context window consumption. The tokens tracked should only count the estimated tokens that actually entered the context window.
+
+## Resource Metric Validation
+
+During or after your execution workflows, explicitly verify that resource read telemetry is accumulating accurately:
+
+1. Perform a read on a known resource (e.g. `memory://briefing` or `memory://status`).
+2. Attempt a read on an invalid resource to trigger an error path.
+3. Read the `memory://metrics/resources` resource and `memory://metrics/summary`.
+4. Validate that `total_resource_reads` and the specific breakdown count for the read resources accurately reflect your actions.
