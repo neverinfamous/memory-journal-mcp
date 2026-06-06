@@ -441,9 +441,12 @@ export class JournalApi {
         }
         this.core['listProjects'] = listProjectsFn
         this.core['searchProjects'] = listProjectsFn
+        this.core['getProjects'] = listProjectsFn
         this.search['listProjects'] = listProjectsFn
         this.search['searchProjects'] = listProjectsFn
+        this.search['getProjects'] = listProjectsFn
         this.admin['listProjects'] = listProjectsFn
+        this.admin['getProjects'] = listProjectsFn
     }
 
     /**
@@ -492,6 +495,7 @@ export class JournalApi {
             getStatistics: this.analytics['getStatistics'],
             listProjects: this.core['listProjects'],
             searchProjects: this.core['listProjects'],
+            getProjects: this.core['listProjects'],
 
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
             addEntry: this.core['createEntry'],

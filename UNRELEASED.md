@@ -75,6 +75,7 @@
 - Fixed Code Mode agent execution errors when calling `read_query` by transparently wrapping the alias to `searchEntries` and injecting the result set into a `.rows` array property, satisfying the `db-mcp` hallucination contract.
 - Added a generic `snake_case` to `camelCase` fallback mapping to the Code Mode worker sandbox proxy (`shimMj`) to seamlessly support ergonomic database tool execution styles without throwing missing operation errors.
 - Fixed Code Mode execution failures caused by common LLM hallucinations by mapping the `searchProjects` alias to the `core` and `search` namespaces, and by refactoring `listProjects` to explicitly return a native Array instead of an Object, correctly supporting iteration methods like `.find` through `isolated-vm` serialization boundaries.
+- Fixed Code Mode execution failures when agents hallucinate `mj.core.getProjects` by mapping the `getProjects` alias to the `listProjects` function across both the top-level API bindings and the `shimMj` worker sandbox proxy intercept.
 - Fixed a test suite state pollution issue in the team flag extension tools on Windows by ensuring explicit removal of leftover `.db` files during `beforeAll` initialization.
 - Fixed obsolete test script entries and missing script documentation in `test-server/scripts/README.md`.
 - Fixed obsolete tool counts and shortcut limits across configuration templates (`.env.example`), READMEs, Wiki, and filtering metadata to reflect the expanded 95-tool architecture.
