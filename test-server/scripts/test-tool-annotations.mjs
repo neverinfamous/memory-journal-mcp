@@ -32,8 +32,8 @@ import { spawn } from 'child_process'
 
 const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
 
-/** Expected total tool count: 79 (10 groups + codemode) */
-const EXPECTED_TOOL_COUNT = 80
+/** Expected total tool count: 95 (10 groups + codemode) */
+const EXPECTED_TOOL_COUNT = 95
 
 /**
  * Exact allowlist of tools that legitimately need openWorldHint=true.
@@ -83,6 +83,9 @@ const DESTRUCTIVE_ALLOWLIST = new Set([
     'restore_backup', // Replaces entire database with backup
     'team_delete_entry', // Soft delete team entry
     'team_batch_delete_entries', // Bulk soft delete team entries
+    'team_remove_member', // Remove a member from the team
+    'team_remove_author_alias', // Remove an author alias
+    'team_consolidate_authors', // Consolidate aliases and retroactively update entries
 ])
 
 /**
@@ -93,6 +96,7 @@ const READ_ONLY_ALLOWLIST = new Set([
     // Core reads
     'get_entry_by_id',
     'get_recent_entries',
+    'get_entry_history',
     'test_simple',
     'list_tags',
     // Search reads
@@ -100,6 +104,7 @@ const READ_ONLY_ALLOWLIST = new Set([
     'search_by_date_range',
     'semantic_search',
     'get_vector_index_stats',
+    'list_deleted_entries',
     // Analytics reads
     'get_statistics',
     'get_cross_project_insights',
@@ -126,6 +131,7 @@ const READ_ONLY_ALLOWLIST = new Set([
     'team_list_tags',
     'team_search',
     'team_search_by_date_range',
+    'team_list_deleted_entries',
     'cross_team_search',
     'team_get_statistics',
     'team_get_cross_project_insights',
@@ -133,6 +139,10 @@ const READ_ONLY_ALLOWLIST = new Set([
     'team_visualize_relationships',
     'team_export_entries',
     'team_list_backups',
+    'team_list_members',
+    'team_get_member',
+    'team_list_author_aliases',
+    'team_resolve_author',
     // Team vector reads
     'team_semantic_search',
     'team_get_vector_index_stats',

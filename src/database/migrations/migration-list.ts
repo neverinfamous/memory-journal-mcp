@@ -7,6 +7,7 @@ import { Migration006AddAnalyticsSnapshots } from './006-add-analytics-snapshots
 import { Migration007AddTeamAuthor } from './007-add-team-author.js'
 import { Migration008AddTeamMembers } from './008-add-team-members.js'
 import { Migration009AddEntryVersion } from './009-add-entry-version.js'
+import { Migration010AddAuthorAliases } from './010-add-author-aliases.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -19,4 +20,5 @@ export const MIGRATIONS: Migration[] = [
     Migration007AddTeamAuthor,
     Migration008AddTeamMembers,
     Migration009AddEntryVersion,
+    Migration010AddAuthorAliases,
 ]

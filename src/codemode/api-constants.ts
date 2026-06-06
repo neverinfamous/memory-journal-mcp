@@ -341,6 +341,11 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamUpdateFlag: 'flag_id',
     listFlags: 'status',
     updateFlag: 'flag_id',
+    teamAddAuthorAlias: ['alias', 'canonical_author'],
+    teamRemoveAuthorAlias: 'alias',
+    teamListAuthorAliases: 'canonical_author',
+    teamResolveAuthor: 'author',
+    teamConsolidateAuthors: 'canonical_author',
 }
 
 // =============================================================================

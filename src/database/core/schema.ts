@@ -205,6 +205,23 @@ CREATE INDEX IF NOT EXISTS idx_team_members_role ON team_members(role);
 `
 
 /**
+ * SQL migration to add the author_aliases table for team databases.
+ * Applied after TEAM_MEMBERS_SQL when initializing a team database.
+ */
+export const AUTHOR_ALIASES_SQL = `
+CREATE TABLE IF NOT EXISTS author_aliases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alias TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    canonical_author TEXT NOT NULL COLLATE NOCASE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_author_aliases_alias ON author_aliases(alias COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_author_aliases_canonical ON author_aliases(canonical_author COLLATE NOCASE);
+`
+
+/**
  * Input for creating a team entry (extends standard entry with author)
  */
 export interface CreateTeamEntryInput extends CreateEntryInput {

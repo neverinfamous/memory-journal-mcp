@@ -142,13 +142,13 @@ src/
 │       ├── repository.ts           # Repository context detection (owner/repo from git remote)
 │       ├── issues.ts               # Issue operations (list, get, create, close, getIssueComments)
 │       ├── pull-requests.ts        # PR operations (list, get)
-│       ├── projects.ts             # GitHub Projects v2 / Kanban operations (GraphQL)
+│       ├── projects.ts               # GitHub Projects v2 / Kanban operations (GraphQL)
 │       ├── milestones.ts           # Milestone CRUD (create, get, update, delete)
 │       ├── insights.ts             # Repository insights (stars, forks, traffic, referrers)
 │       └── types.ts                # GitHub integration internal types
 │
 └── handlers/
-    ├── tools/                      # Tool handlers — see § Handler Map below
+    ├── tools/                      # 95 tools across 10 groups — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
@@ -180,6 +180,8 @@ src/
     │   │   ├── backup-tools.ts     # Backup team tools (backup, list_backups)
     │   │   ├── flag-tools.ts       # Flag team tools (team_pass_flag, team_resolve_flag)
     │   │   ├── flag-extension-tools.ts # Flag query/mutation/analytics tools (team_list_flags, team_update_flag, team_get_flag_analytics)
+    │   │   ├── member-tools.ts     # Team member tools (team_add_member, etc)
+    │   │   ├── alias-tools.ts      # Author alias tools (team_add_author_alias, etc)
     │   │   └── vector-tools.ts     # Vector team tools (semantic_search, vector_index_stats, rebuild, add)
     │   ├── github.ts               # GitHub tools barrel (re-exports from github/ subdirectory)
     │   └── github/                 # GitHub tool handlers (split by domain)
@@ -264,6 +266,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 |                   | `team/flag-extension-tools.ts` | 3     | `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`                                                                                   |
 |                   | `team/vector-tools.ts`         | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                                     |
 |                   | `team/member-tools.ts`         | 5     | `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`                                         |
+|                   | `team/alias-tools.ts`          | 5     | `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`                   |
 |                   | `team/rbac.ts`                 | 0     | Shared RBAC enforcement module, role hierarchy, ownership enforcement, `TEAM_TOOL_MIN_ROLES`                                                       |
 
 ### Utility Files (no tools, shared helpers)

@@ -8,9 +8,16 @@ import type {
     EntryRevision,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
-import type { IDatabaseAdapter, QueryResult, TeamMember, TeamRole } from '../core/interfaces.js'
+import type {
+    IDatabaseAdapter,
+    QueryResult,
+    TeamMember,
+    TeamRole,
+    AuthorAlias,
+} from '../core/interfaces.js'
 
 import { NativeConnectionManager } from './native-connection.js'
+import { AliasManager } from './aliases.js'
 import { TagsManager } from './tags.js'
 import { EntriesManager } from './entries/index.js'
 import { RelationshipsManager } from './relationships.js'
@@ -36,6 +43,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     private relationshipsMgr: RelationshipsManager
     private backupMgr: BackupManager
     private membersMgr: MembersManager
+    private aliasMgr: AliasManager
 
     constructor(dbPath: string) {
         this.connection = new NativeConnectionManager(dbPath)
@@ -44,6 +52,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.relationshipsMgr = new RelationshipsManager(this.connection, this.entriesMgr)
         this.backupMgr = new BackupManager(this.connection)
         this.membersMgr = new MembersManager(this.connection)
+        this.aliasMgr = new AliasManager(this.connection)
     }
 
     async initialize(): Promise<void> {
@@ -178,6 +187,34 @@ export class DatabaseAdapter implements IDatabaseAdapter {
 
     resolveTeamRole(author: string, defaultRole?: TeamRole | 'denied'): TeamRole | null {
         return this.membersMgr.resolveRole(author, defaultRole)
+    }
+
+    // ========================================================================
+    // Author Aliases (Level 2 Identity)
+    // ========================================================================
+
+    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string): AuthorAlias {
+        return this.aliasMgr.addAlias(alias, canonicalAuthor, createdBy)
+    }
+
+    removeAuthorAlias(alias: string): boolean {
+        return this.aliasMgr.removeAlias(alias)
+    }
+
+    listAuthorAliases(canonicalAuthor?: string): AuthorAlias[] {
+        return this.aliasMgr.listAliases(canonicalAuthor)
+    }
+
+    resolveAuthor(rawAuthor: string): string {
+        return this.aliasMgr.resolveAuthor(rawAuthor)
+    }
+
+    resolveAuthors(rawAuthors: string[]): Map<string, string> {
+        return this.aliasMgr.resolveAuthors(rawAuthors)
+    }
+
+    consolidateAuthors(canonicalAuthor: string): number {
+        return this.aliasMgr.consolidateAuthors(canonicalAuthor)
     }
 
     restoreEntry(id: number): boolean {
@@ -483,7 +520,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             .prepare(
                 `SELECT v.entry_id, v.distance 
                  FROM vec_embeddings v
-                 JOIN memory_journal mj ON v.entry_id = mj.id
+                 LEFT JOIN memory_journal mj ON v.entry_id = mj.id
                  WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL 
                  ORDER BY v.distance LIMIT ?`
             )
@@ -749,10 +786,11 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         let authors: { author: string; count: number }[] = []
         try {
             const authorResult = this.connection.exec(
-                `SELECT COALESCE(author, 'unknown') as author, COUNT(*) as count
-                 FROM memory_journal
-                 WHERE deleted_at IS NULL
-                 GROUP BY COALESCE(author, 'unknown')
+                `SELECT COALESCE(aa.canonical_author, mj.author, 'unknown') as author, COUNT(*) as count
+                 FROM memory_journal mj
+                 LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+                 WHERE mj.deleted_at IS NULL
+                 GROUP BY COALESCE(aa.canonical_author, mj.author, 'unknown')
                  ORDER BY count DESC`
             )
             if (authorResult[0]) {
@@ -774,7 +812,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         const placeholders = entryIds.map(() => '?').join(',')
         try {
             const authorResult = this.connection.exec(
-                `SELECT id, author FROM memory_journal WHERE id IN (${placeholders})`,
+                `SELECT mj.id, COALESCE(aa.canonical_author, mj.author) as author 
+                 FROM memory_journal mj
+                 LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+                 WHERE mj.id IN (${placeholders})`,
                 entryIds
             )
             if (authorResult[0]) {
@@ -1069,12 +1110,13 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         // Author activity heatmap
         const activityResult = this.connection.exec(
             `SELECT
-                COALESCE(author, 'unknown') AS author,
+                COALESCE(aa.canonical_author, mj.author, 'unknown') AS author,
                 ${dateExpression} AS period,
                 COUNT(*) AS entry_count
-            FROM memory_journal
-            WHERE deleted_at IS NULL
-            GROUP BY author, period
+            FROM memory_journal mj
+            LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+            WHERE mj.deleted_at IS NULL
+            GROUP BY COALESCE(aa.canonical_author, mj.author, 'unknown'), period
             ORDER BY period DESC, entry_count DESC
             LIMIT ?`,
             [limit * 10]
@@ -1089,14 +1131,16 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         // Cross-author linking
         const crossLinkResult = this.connection.exec(
             `SELECT
-                COALESCE(m1.author, 'unknown') AS from_author,
-                COALESCE(m2.author, 'unknown') AS to_author,
+                COALESCE(aa1.canonical_author, m1.author, 'unknown') AS from_author,
+                COALESCE(aa2.canonical_author, m2.author, 'unknown') AS to_author,
                 COUNT(*) AS link_count
             FROM relationships r
             JOIN memory_journal m1 ON r.from_entry_id = m1.id
             JOIN memory_journal m2 ON r.to_entry_id = m2.id
+            LEFT JOIN author_aliases aa1 ON LOWER(m1.author) = LOWER(aa1.alias)
+            LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias)
             WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL
-                AND COALESCE(m1.author, 'unknown') != COALESCE(m2.author, 'unknown')
+                AND COALESCE(aa1.canonical_author, m1.author, 'unknown') != COALESCE(aa2.canonical_author, m2.author, 'unknown')
             GROUP BY from_author, to_author
             ORDER BY link_count DESC
             LIMIT ?`,
@@ -1112,12 +1156,13 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         // Impact factor
         const impactResult = this.connection.exec(
             `SELECT
-                COALESCE(m2.author, 'unknown') AS author,
+                COALESCE(aa2.canonical_author, m2.author, 'unknown') AS author,
                 COUNT(*) AS inbound_links
             FROM relationships r
             JOIN memory_journal m2 ON r.to_entry_id = m2.id
+            LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias)
             WHERE m2.deleted_at IS NULL
-            GROUP BY author
+            GROUP BY COALESCE(aa2.canonical_author, m2.author, 'unknown')
             ORDER BY inbound_links DESC
             LIMIT ?`,
             [limit]
@@ -1131,10 +1176,11 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         // Totals
         const totalsResult = this.connection.exec(
             `SELECT
-                COUNT(DISTINCT COALESCE(author, 'unknown')) AS total_authors,
+                COUNT(DISTINCT COALESCE(aa.canonical_author, mj.author, 'unknown')) AS total_authors,
                 COUNT(*) AS total_entries
-            FROM memory_journal
-            WHERE deleted_at IS NULL`
+            FROM memory_journal mj
+            LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+            WHERE mj.deleted_at IS NULL`
         )
         const totalAuthors = (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
         const totalEntries = (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0

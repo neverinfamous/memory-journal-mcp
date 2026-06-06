@@ -88,7 +88,7 @@ rm test-team-prompts.db*
 | Check               | Expected                                                             |
 | ------------------- | -------------------------------------------------------------------- |
 | Instruction levels  | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations    | 70 tools, all with `annotations`, 48 `false` + 22 `true` = 0 missing |
+| Tool annotations    | 95 tools, all with `annotations`, 73 `false` + 22 `true` = 0 missing |
 | Filter instructions | Output confirms correct filtering of config sections                 |
 | Prompts API         | Successfully fetches and parses all 16 prompts                       |
 | Progress            | Both native and code-mode progress APIs successfully complete        |
@@ -114,7 +114,7 @@ rm test-team-prompts.db*
 - `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
-- 48 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (70 total, 0 missing)
+- 73 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (95 total, 0 missing)
 - `get_statistics` returns all 4 enhanced analytics metrics
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
 - Verified that all composite and partial performance indexes exist and are valid in the database schema

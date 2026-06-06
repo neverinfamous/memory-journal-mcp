@@ -1,5 +1,5 @@
 /**
- * Team Tool Group - 28 tools
+ * Team Tool Group - 43 tools
  *
  * Barrel re-export composing all team tool sub-modules.
  *
@@ -16,6 +16,10 @@
  *                  team_rebuild_vector_index, team_add_to_vector_index
  *   Flags:         team_pass_flag, team_resolve_flag,
  *                  team_list_flags, team_update_flag, team_get_flag_analytics
+ *   Members:       team_add_member, team_remove_member, team_update_member_role,
+ *                  team_list_members, team_get_member
+ *   Aliases:       team_add_author_alias, team_remove_author_alias, team_list_author_aliases,
+ *                  team_resolve_author, team_consolidate_authors
  *
  * Requires TEAM_DB_PATH to be configured. All tools return structured
  * errors when the team database is not available.
@@ -35,9 +39,10 @@ import { getTeamVectorTools } from './vector-tools.js'
 import { getTeamFlagTools } from './flag-tools.js'
 import { getTeamFlagExtensionTools } from './flag-extension-tools.js'
 import { getTeamMemberTools } from './member-tools.js'
+import { getTeamAliasTools } from './alias-tools.js'
 
 /**
- * Get all team tool definitions (33 tools).
+ * Get all team tool definitions (43 tools).
  */
 export function getTeamTools(context: ToolContext): ToolDefinition[] {
     const tools = [
@@ -53,6 +58,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
         ...getTeamFlagTools(context),
         ...getTeamFlagExtensionTools(context),
         ...getTeamMemberTools(context),
+        ...getTeamAliasTools(context),
     ]
 
     return wrapWithRbac(context, tools)

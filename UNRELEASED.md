@@ -7,6 +7,7 @@
 - Added optimistic concurrency control (conflict detection) for entry updates via a new `version` column and `expected_version` parameter. Agents trying to overwrite an entry concurrently will receive a structured `VERSION_CONFLICT` error with the current entry state instead of silently overwriting.
 - Added a comprehensive Team Role-Based Access Control (RBAC) system for the shared team database, supporting `admin`, `member`, and `viewer` roles, with backward compatibility for existing uninitialized team databases.
 - Added 5 new administrative member management tools (`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`).
+- Added 5 new administrative alias management tools (`team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`) to allow admins to map raw author names to canonical identities and retroactively consolidate past entries.
 - Added `TEAM_DEFAULT_ROLE` environment variable (`--team-default-role`) to configure the fallback role for unrecognized team authors.
 - Added `TEAM_ADMIN` environment variable (`--team-admin`) to support headless/Docker RBAC bootstrapping of the first admin.
 - Added GitHub rate limit resource (`memory://github/rate-limit`) for proactive API throttling awareness.
@@ -46,6 +47,7 @@
 - Added new Vitest unit and integration test suites covering soft-delete recovery, archiving filtering, keyset cursor-based pagination, and database-level version history/eviction limits.
 - Added comprehensive Vitest unit and integration test coverage for team flag and search tools to assert dynamic `project_number` validation error paths, fallback resolution to server configuration defaults, and pure flag query search isolation bypasses.
 - Added `test-team-rbac.md` and `test-cm-team-rbac.md` testing prompts to verify standard MCP and Code Mode execution of the new team member management tools.
+- Added `test-team-aliases.md` and `test-cm-team-aliases.md` testing prompts to verify standard MCP and Code Mode execution of the new team author alias tools.
 - Added comprehensive Vitest unit testing suites (`rbac.test.ts` and `team-member-tools.test.ts`) covering the core RBAC access tier enforcement and team member tool handlers.
 - Added unified and consistent `project_number` validation and fallback resolution logic across all team and core tools, using workspace context mapping and configured default values prior to raising structured `VALIDATION_ERROR` responses.
 - Added comprehensive Vitest unit testing coverage for optimistic concurrency control (`optimistic-locking.test.ts`) enforcing strict `expected_version` increment logic and `VERSION_CONFLICT` abort mechanisms across single and batch updates for both personal and team databases.
@@ -71,7 +73,7 @@
 - Fixed Code Mode execution failures caused by common LLM hallucinations by mapping the `searchProjects` alias to the `core` and `search` namespaces, and by refactoring `listProjects` to explicitly return a native Array instead of an Object, correctly supporting iteration methods like `.find` through `isolated-vm` serialization boundaries.
 - Fixed a test suite state pollution issue in the team flag extension tools on Windows by ensuring explicit removal of leftover `.db` files during `beforeAll` initialization.
 - Fixed obsolete test script entries and missing script documentation in `test-server/scripts/README.md`.
-- Fixed obsolete tool counts and shortcut limits across configuration templates (`.env.example`), READMEs, Wiki, and filtering metadata to reflect the expanded 90-tool architecture.
+- Fixed obsolete tool counts and shortcut limits across configuration templates (`.env.example`), READMEs, Wiki, and filtering metadata to reflect the expanded 95-tool architecture.
 - Fixed a validation error in `mj_execute_code` by making the `code` parameter optional and defaulting to `return await mj.help();` so that schema discovery calls using empty arguments `()` gracefully return API documentation instead of throwing Zod errors.
 - Fixed a silent failure in Code Mode's `auto-return` transformation where multiline template literals containing newlines caused the parser to fail to prepend `return`, silently swallowing Promises. The heuristic parser was rewritten to use a forward-scanning state machine that safely tracks string literal boundaries.
 - Fixed an issue where agents passing string repository names (e.g. `"db-mcp"`) as the `project_number` argument to Code Mode tools would trigger a validation error. The `secureDispatcher` now intercepts string-based project numbers and automatically resolves them to their numeric IDs using the `projectRegistry`.

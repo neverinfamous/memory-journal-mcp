@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import DatabaseAdapter from 'better-sqlite3'
 import type { Database } from 'better-sqlite3'
 import { MigrationManager } from '../../src/database/migrations/migration-manager.js'
+import { Migration009AddEntryVersion } from '../../src/database/migrations/009-add-entry-version.js'
+import { Migration010AddAuthorAliases } from '../../src/database/migrations/010-add-author-aliases.js'
 
 describe('Database Migration Framework', () => {
     it('should initialize a fresh database with all migrations applied', () => {
@@ -16,15 +18,15 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(8) // 1 to 6, plus 8, 9
+        expect(applied.length).toBe(9) // 1 to 6, plus 8, 9, 10
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
-        expect(applied[6].version).toBe(8)
-        expect(applied[6].name).toBe('008-add-team-members')
+        expect(applied[8].version).toBe(10)
+        expect(applied[8].name).toBe('010-add-author-aliases')
 
         // Verify tables exist
         const tables = db
-            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memory_journal', 'tags', 'entry_tags', 'relationships', 'entry_revisions', 'analytics_snapshots')")
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memory_journal', 'tags', 'entry_tags', 'relationships', 'entry_revisions', 'analytics_snapshots', 'author_aliases')")
             .all() as { name: string }[]
         const tableNames = tables.map((t) => t.name)
         expect(tableNames).toContain('memory_journal')
@@ -33,6 +35,7 @@ describe('Database Migration Framework', () => {
         expect(tableNames).toContain('relationships')
         expect(tableNames).toContain('entry_revisions')
         expect(tableNames).toContain('analytics_snapshots')
+        expect(tableNames).toContain('author_aliases')
 
         // Verify columns in memory_journal
         const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
@@ -43,6 +46,7 @@ describe('Database Migration Framework', () => {
         expect(cols).toContain('deleted_at')
         expect(cols).toContain('is_archived')
         expect(cols).toContain('project_number')
+        expect(cols).toContain('version')
         expect(cols).not.toContain('author') // personal db should not have author
 
         db.close()
@@ -60,8 +64,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(9)
-        expect(applied[7].version).toBe(8) // since 007 is applied after 008 if not careful? Wait, 007 is 7, 008 is 8. So it sorts by version. applied[6] = 7, applied[7] = 8.
+        expect(applied.length).toBe(10)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
 
@@ -70,6 +73,33 @@ describe('Database Migration Framework', () => {
         const cols = tableInfo.map((row) => row.name)
         expect(cols).toContain('author')
 
+        db.close()
+    })
+
+    it('Migration 009 creates version column idempotently', () => {
+        const db = new DatabaseAdapter(':memory:')
+        db.exec('CREATE TABLE memory_journal (id INTEGER PRIMARY KEY)')
+        
+        // Run migration on empty DB
+        Migration009AddEntryVersion.up(db)
+        const columns = db.pragma('table_info(memory_journal)') as { name: string }[]
+        expect(columns.some(c => c.name === 'version')).toBe(true)
+
+        // Run again
+        expect(() => Migration009AddEntryVersion.up(db)).not.toThrow()
+        db.close()
+    })
+
+    it('Migration 010 creates author_aliases table idempotently', () => {
+        const db = new DatabaseAdapter(':memory:')
+        
+        // Run migration on empty DB
+        Migration010AddAuthorAliases.up(db)
+        const tables = db.pragma('table_list') as { name: string }[]
+        expect(tables.some(t => t.name === 'author_aliases')).toBe(true)
+
+        // Run again
+        expect(() => Migration010AddAuthorAliases.up(db)).not.toThrow()
         db.close()
     })
 
@@ -107,7 +137,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(8)
+        expect(applied.length).toBe(9)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
@@ -139,10 +169,12 @@ describe('Database Migration Framework', () => {
 
         // Second run
         MigrationManager.runMigrations(db, false)
-        const count2 = (db.prepare('SELECT COUNT(*) as c FROM schema_migrations').get() as { c: number }).c
+        const count2 = (db.prepare('SELECT COUNT(*) as c FROM schema_migrations').get() as {
+            c: number
+        }).c
 
-        expect(count1).toBe(8)
-        expect(count2).toBe(8)
+        expect(count1).toBe(9)
+        expect(count2).toBe(9)
 
         db.close()
     })

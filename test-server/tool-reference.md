@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **90 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **95 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -141,7 +141,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (38 tools + Code Mode)
+## team (43 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -233,6 +233,16 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_list_members`         | List all team members and their roles.                                                                                                                    |
 | `team_get_member`           | Get details about a specific team member by their author name.                                                                                            |
 
+### Aliases
+
+| Tool                       | Description                                                                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team_add_author_alias`    | Map an alternate author name (alias) to a canonical author identity in the team database. Admins only.                                                    |
+| `team_remove_author_alias` | Remove an existing author alias mapping. Admins only.                                                                                                     |
+| `team_list_author_aliases` | List all author aliases and their canonical mappings.                                                                                                     |
+| `team_resolve_author`      | Resolve a given author name to its canonical identity based on existing aliases. Returns the original name if no alias exists.                            |
+| `team_consolidate_authors` | Retroactively update existing team entries and relationships to use the canonical author name for a given alias or canonical target. Admins only.         |
+
 ---
 
 ## ⚙️ Tool Filtering
@@ -241,12 +251,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 89    | All tools (default)      |
+| `full`               | 95    | All tools (default)      |
 | `starter`            | ~13   | Core + search + codemode |
 | `essential`          | ~8    | Minimal footprint        |
 | `readonly`           | 20    | Disable all mutations    |
-| `-github`            | 71    | Exclude a group          |
-| `-github,-analytics` | 69    | Exclude multiple groups  |
+| `-github`            | 77    | Exclude a group          |
+| `-github,-analytics` | 75    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

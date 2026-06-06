@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 90 tools are categorized here for filtering support.
+ * All 95 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -107,6 +107,11 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_update_member_role',
         'team_list_members',
         'team_get_member',
+        'team_add_author_alias',
+        'team_remove_author_alias',
+        'team_list_author_aliases',
+        'team_resolve_author',
+        'team_consolidate_authors',
     ],
     codemode: ['mj_execute_code'],
 }

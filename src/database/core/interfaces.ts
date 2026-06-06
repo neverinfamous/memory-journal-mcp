@@ -21,6 +21,14 @@ export interface TeamMember {
     updatedAt: string
 }
 
+export interface AuthorAlias {
+    id: number
+    alias: string
+    canonicalAuthor: string
+    createdAt: string
+    createdBy: string | null
+}
+
 export interface QueryResult {
     columns: string[]
     values: unknown[][]
@@ -148,6 +156,14 @@ export interface IDatabaseAdapter {
     isTeamRbacActive(): boolean
     resolveTeamRole(author: string, defaultRole?: TeamRole | 'denied'): TeamRole | null
     
+    // Author Aliases (Level 2 Identity)
+    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string): AuthorAlias
+    removeAuthorAlias(alias: string): boolean
+    listAuthorAliases(canonicalAuthor?: string): AuthorAlias[]
+    resolveAuthor(rawAuthor: string): string
+    resolveAuthors(rawAuthors: string[]): Map<string, string>
+    consolidateAuthors(canonicalAuthor: string): number
+
     // Soft-Delete Recovery
     restoreEntry(id: number): boolean
     getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number }

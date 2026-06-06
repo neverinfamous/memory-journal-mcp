@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **90 tools** across **10 groups** (core, search, analytics, relationships, io, admin, github, backup, team, codemode), **52 resources** (46 core + 6 aliases), and **19 prompts**.
+Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **95 tools** across **10 groups** (core, search, analytics, relationships, io, admin, github, backup, team, codemode), **52 resources** (46 core + 6 aliases), and **19 prompts**.
 
 **Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
@@ -96,7 +96,7 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
-│   ├── tools/                  # 90 tool handlers (10 groups)
+│   ├── tools/                  # 95 tool handlers (10 groups)
 │   ├── resources/              # 52 resource handlers (46 core + 6 aliases)
 │   └── prompts/                # 19 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
@@ -118,7 +118,7 @@ src/
 | ---------------------------------------- | ---------------------------------------------------- |
 | `src/constants/server-instructions/*.md` | Modular instruction sources (overview, github, etc.) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
-| `test-server/tool-reference.md`          | Categorized 90-tool inventory                        |
+| `test-server/tool-reference.md`          | Categorized 100-tool inventory                        |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
 
 ## Review Checklist
