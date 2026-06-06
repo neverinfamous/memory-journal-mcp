@@ -385,6 +385,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             args['repo'] = repo
                         }
 
+                        // Seamlessly resolve string-based project_number (e.g. 'db-mcp') to its numeric ID
+                        if (typeof args['project_number'] === 'string') {
+                            const pnStr = args['project_number']
+                            const registryEntry = sessionContext.config?.projectRegistry?.[pnStr]
+                            if (registryEntry?.project_number !== undefined) {
+                                args['project_number'] = registryEntry.project_number
+                            }
+                        }
+
                         const executeAuth = (): Promise<unknown> => {
                             if (capturedAuthCtx) {
                                 return runWithAuthContext(capturedAuthCtx, () =>

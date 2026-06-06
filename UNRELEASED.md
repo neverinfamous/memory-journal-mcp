@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added new mj-mcp-optimize skill mapping the execution pipeline and Code Mode internals to assist agents in debugging sandbox mechanics.
 - Added optimistic concurrency control (conflict detection) for entry updates via a new `version` column and `expected_version` parameter. Agents trying to overwrite an entry concurrently will receive a structured `VERSION_CONFLICT` error with the current entry state instead of silently overwriting.
 - Added a comprehensive Team Role-Based Access Control (RBAC) system for the shared team database, supporting `admin`, `member`, and `viewer` roles, with backward compatibility for existing uninitialized team databases.
 - Added 5 new administrative member management tools (`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`).
@@ -72,6 +73,8 @@
 - Fixed obsolete test script entries and missing script documentation in `test-server/scripts/README.md`.
 - Fixed obsolete tool counts and shortcut limits across configuration templates (`.env.example`), READMEs, Wiki, and filtering metadata to reflect the expanded 90-tool architecture.
 - Fixed a validation error in `mj_execute_code` by making the `code` parameter optional and defaulting to `return await mj.help();` so that schema discovery calls using empty arguments `()` gracefully return API documentation instead of throwing Zod errors.
+- Fixed a silent failure in Code Mode's `auto-return` transformation where multiline template literals containing newlines caused the parser to fail to prepend `return`, silently swallowing Promises. The heuristic parser was rewritten to use a forward-scanning state machine that safely tracks string literal boundaries.
+- Fixed an issue where agents passing string repository names (e.g. `"db-mcp"`) as the `project_number` argument to Code Mode tools would trigger a validation error. The `secureDispatcher` now intercepts string-based project numbers and automatically resolves them to their numeric IDs using the `projectRegistry`.
 - Fixed a failing E2E test in `tests/e2e/zod-sweep.spec.ts` by excluding `mj_execute_code` from the Zod empty argument sweep, correctly aligning the test suite with its new optional parameter behavior.
 
 ### Changed
