@@ -96,6 +96,9 @@ export interface ServerOptions {
     embeddingModel?: string
     // Metrics export
     metricsExport?: 'prometheus'
+    // Metrics persistence
+    persistMetrics?: boolean
+    metricsPath?: string
 }
 
 /**
@@ -135,6 +138,20 @@ export async function createServer(options: ServerOptions): Promise<void> {
             redact: options.auditConfig.redact,
             auditReads: options.auditConfig.auditReads,
         })
+    }
+
+    // Configure metrics persistence path
+    let activeMetricsPath: string | undefined
+    if (options.persistMetrics) {
+        const configuredPath = options.metricsPath ?? (dbPath.replace(/\.db$/, '') + '_metrics.json')
+        activeMetricsPath = configuredPath
+        
+        await runtime.metrics.loadFromFile(configuredPath)
+        
+        // Periodic save every 5 minutes
+        setInterval(() => {
+            void runtime.metrics.saveToFile(configuredPath)
+        }, 5 * 60 * 1000).unref()
     }
 
     // Initialize team database if configured
@@ -876,9 +893,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
             if (runtime.auditLogger) {
                 void runtime.auditLogger.close()
             }
-            db.close()
-            teamDb?.close()
-            process.exit(0)
+            if (activeMetricsPath) {
+                void runtime.metrics.saveToFile(activeMetricsPath).then(() => {
+                    db.close()
+                    teamDb?.close()
+                    process.exit(0)
+                })
+            } else {
+                db.close()
+                teamDb?.close()
+                process.exit(0)
+            }
         })
     } else {
         // HTTP transport
@@ -916,6 +941,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 // Flush audit log before exit
                 if (runtime.auditLogger) {
                     await runtime.auditLogger.close()
+                }
+                if (activeMetricsPath) {
+                    await runtime.metrics.saveToFile(activeMetricsPath)
                 }
                 db.close()
                 teamDb?.close()

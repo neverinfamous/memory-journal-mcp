@@ -343,6 +343,12 @@ export interface ServerConfig {
 
     /** Admin author to bootstrap if team_members table is empty */
     teamAdmin?: string
+
+    /** Whether to persist metrics to disk across server restarts */
+    persistMetrics?: boolean
+
+    /** Custom path to the metrics JSON file. If not provided, it is derived from dbPath */
+    metricsPath?: string
 }
 
 /**
@@ -352,6 +358,7 @@ export const DEFAULT_CONFIG: Partial<ServerConfig> = {
     dbPath: './memory_journal.db',
     enableSemanticSearch: true,
     modelName: 'all-MiniLM-L6-v2',
+    persistMetrics: false,
 }
 
 // ============================================================================

@@ -86,8 +86,12 @@ node test-server/scripts/test-subscribe.mjs
 # Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3100 --metrics-export prometheus --stateless
 # Term 2: Invoke-RestMethod -Uri http://localhost:3100/metrics | Select-String "memory_journal_mcp_tool_calls_total"
 
+# Test J — Metrics Persistence
+# Term 1: pnpm tsx test-server/scripts/test-metrics-persistence.ts
+
 # Cleanup Test Artifacts
 rm test-team-prompts.db*
+rm *_metrics.json
 ```
 
 | Check               | Expected                                                             |
@@ -101,6 +105,7 @@ rm test-team-prompts.db*
 | Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
 | Subscriptions       | Resources emit notifications correctly upon mutation                 |
 | Prometheus Metrics  | HTTP endpoint returns prometheus exposition format with tool metrics |
+| Metrics Persistence | Server loads/saves JSON metrics across restarts automatically        |
 
 ### 1.4 GitHub Status Resource
 
@@ -125,3 +130,4 @@ rm test-team-prompts.db*
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
 - Verified that all composite and partial performance indexes exist and are valid in the database schema
 - Prometheus `/metrics` endpoint exports tool tracking data correctly when `--metrics-export` is enabled
+- Metrics persistence loads and saves telemetry across server restarts when `--persist-metrics` is enabled

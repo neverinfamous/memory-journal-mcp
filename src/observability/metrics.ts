@@ -15,8 +15,10 @@
  *   - latency percentiles (p50/p95/p99) via LatencyTracker
  */
 
+import { promises as fs } from 'node:fs'
 import { LatencyTracker } from './latency-tracker.js'
 import type { LatencyPercentiles } from './latency-tracker.js'
+import { logger } from '../utils/logger.js'
 
 // ============================================================================
 // Types
@@ -264,6 +266,111 @@ export class MetricsAccumulator {
         this.userCounts.clear()
         this.deprecationWarnings.clear()
         this.latencyTracker.reset()
+    }
+
+    /**
+     * Export the current metrics state as a JSON string.
+     */
+    exportState(): string {
+        return JSON.stringify({
+            toolData: Array.from(this.toolData.entries()),
+            resourceData: Array.from(this.resourceData.entries()),
+            userCounts: Array.from(this.userCounts.entries()),
+            upSince: this.upSince,
+        })
+    }
+
+    /**
+     * Import metrics state from a JSON string, merging with current state.
+     */
+    importState(jsonState: string): void {
+        try {
+            const parsed = JSON.parse(jsonState) as {
+                toolData?: [string, ToolMetrics][]
+                resourceData?: [string, ResourceMetrics][]
+                userCounts?: [string, number][]
+            }
+            if (parsed.toolData) {
+                for (const [key, val] of parsed.toolData) {
+                    const existing = this.toolData.get(key)
+                    if (existing) {
+                        existing.callCount += val.callCount
+                        existing.errorCount += val.errorCount
+                        existing.totalDurationMs += val.totalDurationMs
+                        existing.totalInputTokens += val.totalInputTokens
+                        existing.totalOutputTokens += val.totalOutputTokens
+                        // Keep the most recent timestamp
+                        if (val.lastCalledAt) {
+                            if (!existing.lastCalledAt || new Date(val.lastCalledAt) > new Date(existing.lastCalledAt)) {
+                                existing.lastCalledAt = val.lastCalledAt
+                            }
+                        }
+                    } else {
+                        this.toolData.set(key, val)
+                    }
+                }
+            }
+            if (parsed.resourceData) {
+                for (const [key, val] of parsed.resourceData) {
+                    const existing = this.resourceData.get(key)
+                    if (existing) {
+                        existing.readCount += val.readCount
+                        existing.errorCount += val.errorCount
+                        if (val.lastReadAt) {
+                            if (!existing.lastReadAt || new Date(val.lastReadAt) > new Date(existing.lastReadAt)) {
+                                existing.lastReadAt = val.lastReadAt
+                            }
+                        }
+                    } else {
+                        this.resourceData.set(key, val)
+                    }
+                }
+            }
+            if (parsed.userCounts) {
+                for (const [key, val] of parsed.userCounts) {
+                    this.userCounts.set(key, (this.userCounts.get(key) ?? 0) + val)
+                }
+            }
+        } catch (error) {
+            logger.error('Failed to import metrics state', { module: 'Metrics', error: String(error) })
+        }
+    }
+
+    /**
+     * Save metrics to a file asynchronously.
+     */
+    async saveToFile(path: string): Promise<void> {
+        try {
+            const state = this.exportState()
+            await fs.writeFile(path, state, 'utf8')
+            logger.debug('Metrics saved to disk', { module: 'Metrics', path })
+        } catch (error) {
+            logger.error('Failed to save metrics to disk', { module: 'Metrics', error: String(error), path })
+        }
+    }
+
+    /**
+     * Load metrics from a file asynchronously.
+     */
+    async loadFromFile(path: string): Promise<void> {
+        try {
+            const data = await fs.readFile(path, 'utf8')
+            this.importState(data)
+            logger.info('Metrics loaded from disk', { module: 'Metrics', path })
+        } catch (error: unknown) {
+            if (
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                error.code !== 'ENOENT'
+            ) {
+                logger.error('Failed to load metrics from disk', { 
+                    module: 'Metrics', 
+                    error: error instanceof Error ? error.message : JSON.stringify(error), 
+                    path 
+                })
+            }
+        }
     }
 }
 

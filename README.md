@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-86.95%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-86.45%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -65,7 +65,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                            |
 | **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                  |
-| **Team Collaboration**        | 38 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics), RBAC, and member management  |
+| **Team Collaboration**        | 43 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics), RBAC, and member management  |
 | **Data Interoperability**     | Bidirectional Markdown roundtripping, unified IO namespace, and schema-safe JSON exports with hard bounds-checked path traversal defenses                                                           |
 | **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                               |
 | **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                     |
@@ -151,12 +151,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 100    | All tools (default)      |
+| `full`               | 95    | All tools (default)      |
 | `starter`            | ~14   | Core + search + codemode |
 | `essential`          | ~8    | Minimal footprint        |
-| `readonly`           | 20    | Disable all mutations    |
-| `-github`            | 71    | Exclude a group          |
-| `-github,-analytics` | 69    | Exclude multiple groups  |
+| `readonly`           | 21    | Disable all mutations    |
+| `-github`            | 77    | Exclude a group          |
+| `-github,-analytics` | 75    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

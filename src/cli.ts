@@ -162,6 +162,8 @@ program
         '--metrics-export <format>',
         'Metrics export format: prometheus (env: METRICS_EXPORT)'
     )
+    .option('--persist-metrics', 'Persist metrics to disk across server restarts (env: PERSIST_METRICS)')
+    .option('--metrics-path <path>', 'Custom path to the metrics JSON file (env: METRICS_PATH)')
     // Briefing configuration
     .option(
         '--briefing-entries <count>',
@@ -283,6 +285,8 @@ program
             pruneOlderThanDays: string
             pruneImportanceThreshold: string
             embeddingModel?: string
+            persistMetrics?: boolean
+            metricsPath?: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -720,6 +724,8 @@ program
                         }
                         return undefined
                     })(),
+                    persistMetrics: options.persistMetrics ?? process.env['PERSIST_METRICS'] === 'true',
+                    metricsPath: options.metricsPath ?? process.env['METRICS_PATH'],
                 })
             } catch (error) {
                 logger.error('Failed to start server', {
