@@ -47,6 +47,7 @@
 - Synchronized tool count references from 95 to 96 across all documentation, test scripts, and GitHub Wiki files following the addition of the `search_audit_log` tool.
 - Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support.
 - Updated agent server instructions for Team RBAC and Optimistic Locking.
+- Synchronized configuration templates (`.env.example`, `mcp-config-example.json`) and Wiki Configuration documentation with new Auto-Prune flags (`--prune-dry-run`, `--prune-exclude-tags`) and Observability metrics flags (`--persist-metrics`, `--metrics-path`).
 - Migrated documentation and GitHub Actions workflows from `npm` to `pnpm`.
 
 ### Fixed
