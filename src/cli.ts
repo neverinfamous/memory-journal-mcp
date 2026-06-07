@@ -145,8 +145,18 @@ program
     )
     // Auto-prune
     .option(
+        '--archive-older-than-days <days>',
+        'Archive active entries older than N days with importance below threshold (env: ARCHIVE_OLDER_THAN_DAYS, 0 = disabled)',
+        '0'
+    )
+    .option(
         '--prune-older-than-days <days>',
         'Soft-delete entries older than N days with importance below threshold (env: PRUNE_OLDER_THAN_DAYS, 0 = disabled)',
+        '0'
+    )
+    .option(
+        '--hard-delete-older-than-days <days>',
+        'Permanently delete soft-deleted entries that have been dead for N days (env: HARD_DELETE_OLDER_THAN_DAYS, 0 = disabled)',
         '0'
     )
     .option(
@@ -290,7 +300,9 @@ program
             auditReads?: boolean
             auditLogMaxSize: string
             codemodeInternalFullAccess?: boolean
+            archiveOlderThanDays: string
             pruneOlderThanDays: string
+            hardDeleteOlderThanDays: string
             pruneImportanceThreshold: string
             pruneDryRun?: boolean
             pruneExcludeTags?: string
@@ -708,9 +720,19 @@ program
                             .map((s) => s.trim().toLowerCase())
                             .filter(Boolean)
                     })(),
+                    archiveOlderThanDays: parseConfigIntRequired(
+                        process.env['ARCHIVE_OLDER_THAN_DAYS'] ?? options.archiveOlderThanDays,
+                        'archive-older-than-days',
+                        0
+                    ),
                     pruneOlderThanDays: parseConfigIntRequired(
                         process.env['PRUNE_OLDER_THAN_DAYS'] ?? options.pruneOlderThanDays,
                         'prune-older-than-days',
+                        0
+                    ),
+                    hardDeleteOlderThanDays: parseConfigIntRequired(
+                        process.env['HARD_DELETE_OLDER_THAN_DAYS'] ?? options.hardDeleteOlderThanDays,
+                        'hard-delete-older-than-days',
                         0
                     ),
                     pruneImportanceThreshold: parseFloat(

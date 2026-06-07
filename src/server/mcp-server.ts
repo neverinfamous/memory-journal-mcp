@@ -90,7 +90,9 @@ export interface ServerOptions {
     // Admin override for Code Mode
     codemodeInternalFullAccess?: boolean
     // Auto-prune
+    archiveOlderThanDays?: number
     pruneOlderThanDays?: number
+    hardDeleteOlderThanDays?: number
     pruneImportanceThreshold?: number
     pruneDryRun?: boolean
     pruneExcludeTags?: string[]
@@ -115,16 +117,24 @@ export async function createServer(options: ServerOptions): Promise<void> {
     logger.info('Database initialized', { module: 'McpServer', dbPath })
 
     // Auto-prune low-importance old entries if configured
-    if (options.pruneOlderThanDays !== undefined && options.pruneOlderThanDays > 0) {
+    const hasAutoPrune = ((options.archiveOlderThanDays ?? 0) > 0) ||
+                         ((options.pruneOlderThanDays ?? 0) > 0) ||
+                         ((options.hardDeleteOlderThanDays ?? 0) > 0)
+
+    if (hasAutoPrune) {
         const pruneResult = await runAutoPrune(db, {
-            olderThanDays: options.pruneOlderThanDays,
+            archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
+            pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
+            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
             importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
             dryRun: options.pruneDryRun,
             excludeTags: options.pruneExcludeTags,
         })
         logger.info('Auto-prune completed', {
             module: 'McpServer',
+            archivedCount: pruneResult.archivedCount,
             prunedCount: pruneResult.prunedCount,
+            hardDeletedCount: pruneResult.hardDeletedCount,
             backupFile: pruneResult.backupFile,
         })
     }
