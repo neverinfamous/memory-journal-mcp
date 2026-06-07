@@ -104,6 +104,13 @@ Only help resources for your enabled tool groups are registered.
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries. Use the \`mode\` parameter (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`) to control search strategy. The \`fts\` and \`hybrid\` modes include Levenshtein distance typo-tolerance fallback (via \`fuzzy_match\` and \`auto_correct\`), making searches more resilient to misspellings.
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) and cross-team search (\`cross_team_search\`) before defining architectures spanning multiple teams or DBs. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots. Access aggregate server metrics via \`memory://metrics/summary\`, per-tool telemetry and latency percentiles via \`memory://metrics/latency\`, and resource read frequency via \`memory://metrics/resources\`.
 
+### Auto-Prune
+
+On server startup, the auto-prune system automatically soft-deletes old entries with low significance scores.
+- **Configurable Thresholds**: Controlled via \`--prune-older-than-days\` and \`--prune-importance-threshold\`.
+- **Exclusion Rules**: Specific tags can be exempted from auto-pruning using \`--prune-exclude-tags <tags>\` (e.g. \`architecture\`, \`never-prune\`).
+- **Dry Run**: Server administrators can preview what would be deleted without mutating the database by using the \`--prune-dry-run\` flag.
+
 ### Real-Time Subscriptions
 
 The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data.

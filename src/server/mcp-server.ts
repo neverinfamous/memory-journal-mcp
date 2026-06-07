@@ -92,6 +92,8 @@ export interface ServerOptions {
     // Auto-prune
     pruneOlderThanDays?: number
     pruneImportanceThreshold?: number
+    pruneDryRun?: boolean
+    pruneExcludeTags?: string[]
     // Embedding model
     embeddingModel?: string
     // Metrics export
@@ -117,6 +119,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const pruneResult = await runAutoPrune(db, {
             olderThanDays: options.pruneOlderThanDays,
             importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
+            dryRun: options.pruneDryRun,
+            excludeTags: options.pruneExcludeTags,
         })
         logger.info('Auto-prune completed', {
             module: 'McpServer',

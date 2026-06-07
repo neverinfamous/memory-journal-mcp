@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added `--prune-dry-run` flag and `PRUNE_DRY_RUN` configuration to preview auto-prune candidates without mutating the database.
+- Added `--prune-exclude-tags` flag and `PRUNE_EXCLUDE_TAGS` configuration to exempt specific tags from being auto-pruned.
 - Added resource read frequency tracking to observability stack (`memory://metrics/resources`, `memory://metrics/summary`).
 - Added Prometheus metrics export via `/metrics` endpoint (`--metrics-export prometheus` flag or `METRICS_EXPORT` env var).
 - Added per-tool latency percentile tracking (p50/p95/p99) via `memory://metrics/latency` resource.

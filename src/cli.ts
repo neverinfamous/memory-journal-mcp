@@ -155,6 +155,14 @@ program
         '0.15'
     )
     .option(
+        '--prune-dry-run',
+        'Log auto-prune candidates without actually deleting them (env: PRUNE_DRY_RUN)'
+    )
+    .option(
+        '--prune-exclude-tags <tags>',
+        'Comma-separated list of tags to exclude from auto-prune (env: PRUNE_EXCLUDE_TAGS)'
+    )
+    .option(
         '--embedding-model <model>',
         'HuggingFace model name for semantic search embeddings (env: EMBEDDING_MODEL)'
     )
@@ -284,6 +292,8 @@ program
             codemodeInternalFullAccess?: boolean
             pruneOlderThanDays: string
             pruneImportanceThreshold: string
+            pruneDryRun?: boolean
+            pruneExcludeTags?: string
             embeddingModel?: string
             persistMetrics?: boolean
             metricsPath?: string
@@ -707,6 +717,12 @@ program
                         process.env['PRUNE_IMPORTANCE_THRESHOLD'] ??
                             options.pruneImportanceThreshold
                     ),
+                    pruneDryRun: options.pruneDryRun ?? process.env['PRUNE_DRY_RUN'] === 'true',
+                    pruneExcludeTags: (() => {
+                        const raw = options.pruneExcludeTags ?? process.env['PRUNE_EXCLUDE_TAGS']
+                        if (!raw) return undefined
+                        return raw.split(',').map(s => s.trim()).filter(Boolean)
+                    })(),
                     embeddingModel: process.env['EMBEDDING_MODEL'] ?? options.embeddingModel,
                     metricsExport: (() => {
                         const raw = options.metricsExport ?? process.env['METRICS_EXPORT']

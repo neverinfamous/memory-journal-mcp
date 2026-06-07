@@ -389,7 +389,7 @@ export interface IDatabaseAdapter {
     cleanupStaleVectors(): void
 
     // Auto-Prune
-    pruneByImportance(olderThanDays: number, importanceThreshold: number): number
+    pruneByImportance(olderThanDays: number, importanceThreshold: number, dryRun?: boolean, excludeTags?: string[]): { prunedCount: number, candidates?: { id: number, importance_score: number }[] }
 
     executeInTransaction<T>(cb: () => T): T
 }

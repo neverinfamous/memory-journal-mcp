@@ -24,6 +24,10 @@ export interface AutoPruneOptions {
     olderThanDays: number
     /** Importance score threshold — entries scoring below this are pruned */
     importanceThreshold: number
+    /** If true, return candidates but do not soft-delete or create backups */
+    dryRun?: boolean
+    /** Tags to exclude from auto-prune */
+    excludeTags?: string[]
 }
 
 export interface AutoPruneResult {
@@ -49,26 +53,47 @@ export async function runAutoPrune(
     db: IDatabaseAdapter,
     options: AutoPruneOptions
 ): Promise<AutoPruneResult> {
-    const { olderThanDays, importanceThreshold } = options
+    const { olderThanDays, importanceThreshold, dryRun, excludeTags } = options
 
     // ── Step 1: Safety backup ───────────────────────────────────────────
     let backupFile: string | null = null
-    try {
-        const backup = await db.exportToFile('pre-prune-backup')
-        backupFile = backup.filename
-        logger.info('Pre-prune backup created', {
-            module: 'AutoPrune',
-            context: { filename: backup.filename, sizeBytes: backup.sizeBytes },
-        })
-    } catch (backupError) {
-        logger.warning('Failed to create pre-prune backup — proceeding anyway', {
-            module: 'AutoPrune',
-            error: backupError instanceof Error ? backupError.message : String(backupError),
-        })
+    if (!dryRun) {
+        try {
+            const backup = await db.exportToFile('pre-prune-backup')
+            backupFile = backup.filename
+            logger.info('Pre-prune backup created', {
+                module: 'AutoPrune',
+                context: { filename: backup.filename, sizeBytes: backup.sizeBytes },
+            })
+        } catch (backupError) {
+            logger.warning('Failed to create pre-prune backup — proceeding anyway', {
+                module: 'AutoPrune',
+                error: backupError instanceof Error ? backupError.message : String(backupError),
+            })
+        }
     }
 
     // ── Step 2: Prune via adapter ───────────────────────────────────────
-    const prunedCount = db.pruneByImportance(olderThanDays, importanceThreshold)
+    const result = db.pruneByImportance(olderThanDays, importanceThreshold, dryRun, excludeTags)
+    const prunedCount = result.prunedCount
+
+    if (dryRun) {
+        if (result.candidates && result.candidates.length > 0) {
+            logger.info(`Auto-prune dry-run: found ${result.candidates.length} candidates`, {
+                module: 'AutoPrune',
+                olderThanDays,
+                importanceThreshold,
+                candidates: result.candidates,
+            })
+        } else {
+            logger.info('Auto-prune dry-run: no candidates found', {
+                module: 'AutoPrune',
+                olderThanDays,
+                importanceThreshold,
+            })
+        }
+        return { prunedCount: result.candidates?.length ?? 0, backupFile, olderThanDays, importanceThreshold }
+    }
 
     if (prunedCount === 0) {
         logger.info('Auto-prune: no candidates found', {

@@ -600,28 +600,61 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         }
     }
 
-    pruneByImportance(olderThanDays: number, importanceThreshold: number): number {
+    pruneByImportance(olderThanDays: number, importanceThreshold: number, dryRun = false, excludeTags: string[] = []): { prunedCount: number, candidates?: { id: number, importance_score: number }[] } {
         const db = this.connection.getNativeDb()
         const cte = buildImportanceCte()
         const importanceExpr = buildImportanceSqlExpression()
         const deletedAt = new Date().toISOString()
+        
+        let excludeTagsSql = ''
+        const params: unknown[] = []
+        
+        if (excludeTags.length > 0) {
+            const placeholders = excludeTags.map(() => '?').join(',')
+            excludeTagsSql = `AND e.id NOT IN (
+                SELECT entry_id FROM entry_tags 
+                JOIN tags ON tags.id = entry_tags.tag_id 
+                WHERE tags.name IN (${placeholders})
+            )`
+            params.push(...excludeTags)
+        }
+
+        const baseSelect = `
+                SELECT e.id, ${importanceExpr} as importance_score
+                FROM memory_journal e
+                LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+                WHERE e.deleted_at IS NULL
+                  AND julianday('now') - julianday(e.timestamp) > ${String(olderThanDays)}
+                  AND ${importanceExpr} < ${String(importanceThreshold)}
+                  ${excludeTagsSql}
+        `
+
+        if (dryRun) {
+            const sql = `
+                WITH ${cte}
+                ${baseSelect}
+            `
+            const rows = db.prepare(sql).all(...params) as { id: number | bigint, importance_score: number }[]
+            return {
+                prunedCount: 0,
+                candidates: rows.map(r => ({
+                    id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
+                    importance_score: r.importance_score
+                }))
+            }
+        }
 
         const sql = `
             WITH ${cte}
             UPDATE memory_journal
             SET deleted_at = ?
             WHERE id IN (
-                SELECT e.id
-                FROM memory_journal e
-                LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-                WHERE e.deleted_at IS NULL
-                  AND julianday('now') - julianday(e.timestamp) > ${String(olderThanDays)}
-                  AND ${importanceExpr} < ${String(importanceThreshold)}
+                SELECT id FROM (${baseSelect})
             )
         `
 
-        const result = db.prepare(sql).run(deletedAt)
-        return result.changes
+        const result = db.prepare(sql).run(deletedAt, ...params)
+        return { prunedCount: result.changes }
     }
 
     executeInTransaction<T>(cb: () => T): T {
