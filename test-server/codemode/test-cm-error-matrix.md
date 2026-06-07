@@ -131,6 +131,7 @@ const deleteEmpty = await mj.admin.deleteEntry({})
 const mergeEmpty = await mj.admin.mergeTags({})
 const addVecEmpty = await mj.admin.addToVectorIndex({})
 const rebuildEmpty = await mj.admin.rebuildVectorIndex({})
+const auditEmpty = await mj.admin.searchAuditLog({})
 
 // Domain errors
 const updateBadId = await mj.admin.updateEntry({ entry_id: 999999, content: 'fail' })
@@ -141,6 +142,8 @@ const addVecBadId = await mj.admin.addToVectorIndex({ entry_id: 999999 })
 // Type mismatches
 const updateStrId = await mj.admin.updateEntry({ entry_id: 'abc', content: 'fail' })
 const deleteStrId = await mj.admin.deleteEntry({ entry_id: 'abc' })
+const auditLimitStr = await mj.admin.searchAuditLog({ limit: 'abc' })
+const auditLimitNeg = await mj.admin.searchAuditLog({ limit: -1 })
 
 return {
   updateEmptyError: updateEmpty.success === false,
@@ -154,6 +157,9 @@ return {
   addVecBadIdError: addVecBadId.success === false,
   updateStrIdError: updateStrId.success === false,
   deleteStrIdError: deleteStrId.success === false,
+  auditEmptyOk: Array.isArray(auditEmpty.results) || auditEmpty.success === false,
+  auditLimitStrError: auditLimitStr.success === false,
+  auditLimitNegError: auditLimitNeg.success === false,
 }
 ```
 
@@ -166,6 +172,9 @@ return {
 | `rebuildOk`        | `true` (no required params)             |
 | `mergeSameError`   | `true` (same tag blocked)               |
 | `updateStrIdError` | `true` (entry_id must be number)        |
+| `auditEmptyOk`     | `true` (no required params)             |
+| `auditLimitStrError`| `true` (limit must be number)          |
+| `auditLimitNegError`| `true` (limit min 1)                   |
 
 ### 29.4 Relationships Group — Empty Params & Errors
 

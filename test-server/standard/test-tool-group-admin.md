@@ -31,6 +31,7 @@
 | `batch_create_entries`| Valid batch      | `entries: []`                                  | ⚠️ Should return validation error | `entries: "abc"`  |
 | `batch_update_entries`| Valid updates    | `updates: []`                                  | ⚠️ Should return validation error | `updates: "abc"`  |
 | `batch_delete_entries`| Valid deletes    | `entry_ids: []`                                | ⚠️ Should return validation error | `entry_ids: "abc"`|
+| `search_audit_log`    | Valid search     | `limit: -1`                                    | ⚠️ Should return validation error | `limit: "abc"`    |
 
 ### Specific Domain Checks
 

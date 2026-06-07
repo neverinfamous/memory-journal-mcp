@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **95 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **96 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -83,9 +83,9 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 ---
 
-## admin (9 tools + Code Mode)
+## admin (10 tools + Code Mode)
 
-Entry mutations, vector index management, and tag maintenance.
+Entry mutations, vector index management, tag maintenance, and audit log search.
 
 | Tool                   | Description                                                                                                                                                            |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -98,6 +98,7 @@ Entry mutations, vector index management, and tag maintenance.
 | `batch_create_entries` | Create multiple journal entries at once (Max 50 per batch). Ideal for data imports or bulk processing.                                                                  |
 | `batch_update_entries` | Update multiple existing journal entries in a single transaction (Max 50 per batch). Pass `expected_version` per entry for optimistic locking.                                                                                    |
 | `batch_delete_entries` | Delete multiple existing journal entries in a single transaction (Max 50 per batch).                                                                                    |
+| `search_audit_log`     | Search operational telemetry audit logs by tool name, user, date range, status, or category. Returns the most recent matches up to the limit.                          |
 
 ---
 
@@ -251,7 +252,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 95    | All tools (default)      |
+| `full`               | 96    | All tools (default)      |
 | `starter`            | ~13   | Core + search + codemode |
 | `essential`          | ~8    | Minimal footprint        |
 | `readonly`           | 20    | Disable all mutations    |

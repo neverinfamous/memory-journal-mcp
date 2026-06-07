@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 95 tools are categorized here for filtering support.
+ * All 96 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -46,6 +46,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'batch_create_entries',
         'batch_update_entries',
         'batch_delete_entries',
+        'search_audit_log',
     ],
     github: [
         'get_github_issues',

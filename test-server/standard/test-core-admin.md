@@ -56,6 +56,14 @@
 | Batch Update          | `batch_update_entries(updates: [{ entry_id: <id1>, content: "U1" }, { entry_id: <id2>, content: "U2" }])` | `success: true` and array of IDs       |
 | Batch Delete          | `batch_delete_entries(entry_ids: [<id1>, <id2>])`           | `success: true` and count of deleted entries                                     |
 
+### 5.4 Audit Telemetry
+
+| Test                  | Command/Action                                              | Expected Result                                                                  |
+| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Search audit by tool  | `search_audit_log(tool_name: "batch_create_entries", limit: 5)` | Returns array of recent matching audit entries for that tool                     |
+| Search audit by user  | `search_audit_log(user: "system")`                          | Returns audit logs filtered by user identity (if applicable)                     |
+| Search with limits    | `search_audit_log(limit: 1)`                                | Returns exactly 1 recent log entry                                               |
+
 ---
 
 ## Success Criteria
@@ -68,3 +76,4 @@
 - `restore_backup` with nonexistent filename returns structured error
 - `batch_create_entries` enforces max 50 limit with structured error
 - `batch_delete_entries` soft-deletes multiple entries atomically
+- `search_audit_log` successfully returns filtered audit logs

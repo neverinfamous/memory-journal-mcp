@@ -109,6 +109,18 @@ const BatchDeleteEntriesSchemaMcp = z.object({
     entry_ids: z.array(relaxedNumber()),
     permanent: z.boolean().optional().default(false),
 })
+
+const SearchAuditLogSchema = z.object({
+    tool_name: z.string().optional(),
+    user: z.string().optional(),
+    date_range: z.object({
+        start: z.string().optional(),
+        end: z.string().optional(),
+    }).optional(),
+    status: z.boolean().optional(),
+    category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
+    limit: z.number().max(1000).optional().default(100),
+})
 // ============================================================================
 // Output Schemas
 // ============================================================================
@@ -176,6 +188,15 @@ const AddToVectorIndexOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entryId: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+const SearchAuditLogOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        results: z.array(z.record(z.string(), z.unknown())).optional(),
+        count: z.number().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -685,6 +706,48 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     return { success: true, count: deleted.length, deleted, notFound, permanent: input.permanent }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'search_audit_log',
+            title: 'Search Audit Log',
+            description: 'Search operational telemetry audit logs by tool name, user, date range, status, or category. Returns the most recent matches up to the limit.',
+            group: 'admin',
+            inputSchema: SearchAuditLogSchema,
+            outputSchema: SearchAuditLogOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    const input = SearchAuditLogSchema.parse(params)
+                    
+                    if (!context.config?.runtime?.auditLogger) {
+                        return {
+                            success: false,
+                            results: [],
+                            count: 0,
+                            error: 'Audit logging is disabled or not configured on this server.',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable audit logging via AUDIT_LOG_PATH in the environment.',
+                            recoverable: false,
+                        }
+                    }
+
+                    // Map to the internal type AuditSearchFilters
+                    const results = await context.config.runtime.auditLogger.search(input)
+                    return {
+                        success: true,
+                        count: results.length,
+                        results,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

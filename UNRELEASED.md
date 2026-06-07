@@ -42,6 +42,7 @@
 - Added `snake_case` to `camelCase` fallback mapping for Code Mode operations.
 
 ### Changed
+- Synchronized tool count references from 95 to 96 across all documentation, test scripts, and GitHub Wiki files following the addition of the `search_audit_log` tool.
 - Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support.
 - Updated agent server instructions for Team RBAC and Optimistic Locking.
 - Migrated documentation and GitHub Actions workflows from `npm` to `pnpm`.

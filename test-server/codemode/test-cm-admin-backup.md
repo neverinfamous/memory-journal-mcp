@@ -178,6 +178,31 @@ return {
 | `bDeleteCount`     | `true`   |
 | `aliasSuccess`     | `true`   |
 
+### 27.4 Audit Telemetry
+
+```javascript
+// Test code:
+// Search by tool
+const auditByTool = await mj.admin.searchAuditLog({ tool_name: 'batch_create_entries', limit: 2 })
+
+// Search by limit
+const auditByLimit = await mj.admin.searchAuditLog({ limit: 1 })
+
+return {
+  auditByToolSuccess: auditByTool.success,
+  auditByToolCount: auditByTool.count <= 2,
+  auditByLimitSuccess: auditByLimit.success,
+  auditByLimitCount: auditByLimit.count === 1 || auditByLimit.count === 0,
+}
+```
+
+| Check                 | Expected |
+| --------------------- | -------- |
+| `auditByToolSuccess`  | `true`   |
+| `auditByToolCount`    | `true`   |
+| `auditByLimitSuccess` | `true`   |
+| `auditByLimitCount`   | `true`   |
+
 ---
 
 ## Success Criteria
@@ -196,3 +221,4 @@ return {
 - `cleanup_backups` deletes old backups
 - Admin batch operations (`batchCreateEntries`, `batchUpdateEntries`, `batchDeleteEntries`) execute successfully via Code Mode
 - Code Mode correctly resolves fallback aliases like `mj.admin.bulkCreate`
+- `searchAuditLog` successfully queries and limits audit telemetry
