@@ -55,7 +55,7 @@
 - Migrated documentation and GitHub Actions workflows from `npm` to `pnpm`.
 
 ### Fixed
-- Fixed missing configuration references for `--config` and `MEMORY_JOURNAL_CONFIG` in `README.md`, `.env.example`, `mcp-config-example.json`, and the GitHub Wiki following a comprehensive documentation parity audit.
+- Fixed missing configuration references for `--config`, `--dump-config`, and `MEMORY_JOURNAL_CONFIG` in `README.md`, `.env.example`, `mcp-config-example.json`, and the GitHub Wiki, and corrected tool counts in `copilot-instructions.md` following a comprehensive documentation parity audit.
 - Fixed generic `ReferenceError` for `fetch()` in Code Mode sandboxes by injecting a descriptive `SandboxNetworkError` interceptor.
 - Fixed `cross_team_search` incorrectly omitting the primary team database when executing cross-database searches.
 - Fixed FTS search phrase matching to preserve balanced double-quotes for exact phrase matches.

@@ -382,6 +382,8 @@ Load it simply via:
 
 *Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`.*
 
+> 🛠️ **Debugging Configuration:** Run `memory-journal-mcp --dump-config` (or pass `--dump-config` as an arg) to print the fully resolved configuration payload with automatically redacted secrets. This is the primary method for diagnosing overriding issues.
+
 ### Basic Configuration
 
 ```json

@@ -49,32 +49,53 @@ function wrapResult(result: unknown): unknown {
     if (
         result !== null &&
         result !== undefined &&
-        typeof result === 'object' &&
-        'success' in result &&
-        (result as Record<string, unknown>)['success'] === false
+        typeof result === 'object'
     ) {
-        const failedResult = result as Record<string | symbol, unknown>
-        return new Proxy(failedResult, {
-            get(target, prop) {
-                if (prop in target) return target[prop]
-                if (
-                    typeof prop === 'string' &&
-                    prop !== 'then' &&
-                    prop !== 'catch' &&
-                    prop !== 'finally' &&
-                    prop !== 'constructor' &&
-                    prop !== 'prototype' &&
-                    prop !== 'toJSON'
-                ) {
-                    const errVal = target['error']
-                    const errorMsg = typeof errVal === 'string' ? errVal : 'Unknown error'
-                    throw new Error(
-                        `Attempted to access missing property '${prop}' on a failed operation. API Error: ${errorMsg}`
-                    )
-                }
-                return undefined
-            },
-        })
+        const isFailed = 'success' in result && (result as Record<string, unknown>)['success'] === false
+
+        if (isFailed) {
+            const failedResult = result as Record<string | symbol, unknown>
+            return new Proxy(failedResult, {
+                get(target, prop) {
+                    if (prop in target) return target[prop]
+                    if (
+                        typeof prop === 'string' &&
+                        prop !== 'then' &&
+                        prop !== 'catch' &&
+                        prop !== 'finally' &&
+                        prop !== 'constructor' &&
+                        prop !== 'prototype' &&
+                        prop !== 'toJSON'
+                    ) {
+                        const errVal = target['error']
+                        const errorMsg = typeof errVal === 'string' ? errVal : 'Unknown error'
+                        throw new Error(
+                            `Attempted to access missing property '${prop}' on a failed operation. API Error: ${errorMsg}`
+                        )
+                    }
+                    return undefined
+                },
+            })
+        }
+
+        if (!Array.isArray(result)) {
+            const successResult = result as Record<string | symbol, unknown>
+            return new Proxy(successResult, {
+                get(target, prop) {
+                    if (prop in target) return target[prop]
+                    if (
+                        typeof prop === 'string' &&
+                        ['find', 'map', 'filter', 'reduce', 'forEach', 'some', 'every', 'flatMap', 'push', 'pop'].includes(prop)
+                    ) {
+                        const keys = Object.keys(target).join(', ') || 'none'
+                        throw new TypeError(
+                            `Attempted to call Array method '${prop}' on an Object. The returned result is not an Array. Keys available: ${keys}`
+                        )
+                    }
+                    return undefined
+                },
+            })
+        }
     }
     return result
 }
