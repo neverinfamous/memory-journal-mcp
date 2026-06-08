@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **96 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **97 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -83,12 +83,13 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 ---
 
-## admin (10 tools + Code Mode)
+## admin (11 tools + Code Mode)
 
 Entry mutations, vector index management, tag maintenance, and audit log search.
 
 | Tool                   | Description                                                                                                                                                            |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_configuration` | Dynamically update the running server configuration (e.g., briefing depth, token limits) without restarting.                                                           |
 | `update_entry`         | Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `expected_version` for optimistic locking. Pass `null` to clear a field. |
 | `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                                                   |
 | `restore_entry`        | Restore a soft-deleted journal entry.                                                                                                                                  |
@@ -252,12 +253,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 96    | All tools (default)      |
+| `full`               | 97    | All tools (default)      |
 | `starter`            | ~13   | Core + search + codemode |
 | `essential`          | ~8    | Minimal footprint        |
 | `readonly`           | 20    | Disable all mutations    |
-| `-github`            | 77    | Exclude a group          |
-| `-github,-analytics` | 75    | Exclude multiple groups  |
+| `-github`            | 79    | Exclude a group          |
+| `-github,-analytics` | 77    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

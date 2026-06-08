@@ -120,6 +120,28 @@ export class SubscriptionManager {
     }
 
     /**
+     * Broadcasts a generic notification to all connected clients.
+     */
+    public async broadcastNotification(method: string): Promise<void> {
+        if (this.servers.size === 0) {
+            return
+        }
+
+        const promises: Promise<void>[] = []
+        for (const [sessionId, server] of this.servers.entries()) {
+            promises.push(
+                server.server.notification({ method }).catch((error: unknown) => {
+                    logger.debug(`Failed to broadcast ${method} to session ${sessionId}`, {
+                        module: 'SubscriptionManager',
+                        error: error instanceof Error ? error.message : String(error),
+                    })
+                })
+            )
+        }
+        await Promise.allSettled(promises)
+    }
+
+    /**
      * Check if there are any active subscribers for a specific URI.
      */
     public hasSubscribers(uri: string): boolean {

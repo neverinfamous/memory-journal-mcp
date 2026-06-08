@@ -196,12 +196,37 @@ return {
 }
 ```
 
-| Check                 | Expected |
-| --------------------- | -------- |
-| `auditByToolSuccess`  | `true`   |
-| `auditByToolCount`    | `true`   |
 | `auditByLimitSuccess` | `true`   |
 | `auditByLimitCount`   | `true`   |
+
+### 27.5 Runtime Configuration
+
+```javascript
+// Test code:
+// Change config
+const configChange = await mj.admin.updateConfiguration({
+  briefing_entries: 3,
+  instruction_level: "essential"
+})
+
+// Revert config
+const revertChange = await mj.admin.updateConfiguration({
+  briefing_entries: 10,
+  instruction_level: "standard"
+})
+
+return {
+  configChangeSuccess: configChange.success,
+  configChangeKeys: configChange.updated?.includes("briefing_entries") && configChange.updated?.includes("instruction_level"),
+  revertSuccess: revertChange.success
+}
+```
+
+| Check                 | Expected |
+| --------------------- | -------- |
+| `configChangeSuccess` | `true`   |
+| `configChangeKeys`    | `true`   |
+| `revertSuccess`       | `true`   |
 
 ---
 
@@ -222,3 +247,4 @@ return {
 - Admin batch operations (`batchCreateEntries`, `batchUpdateEntries`, `batchDeleteEntries`) execute successfully via Code Mode
 - Code Mode correctly resolves fallback aliases like `mj.admin.bulkCreate`
 - `searchAuditLog` successfully queries and limits audit telemetry
+- `updateConfiguration` correctly updates server configuration via Code Mode

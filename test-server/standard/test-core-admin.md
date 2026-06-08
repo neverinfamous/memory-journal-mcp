@@ -64,6 +64,14 @@
 | Search audit by user  | `search_audit_log(user: "system")`                          | Returns audit logs filtered by user identity (if applicable)                     |
 | Search with limits    | `search_audit_log(limit: 1)`                                | Returns exactly 1 recent log entry                                               |
 
+### 5.5 Runtime Configuration
+
+| Test                  | Command/Action                                              | Expected Result                                                                  |
+| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Change briefing entries | `update_configuration(briefing_entries: 3)`               | `success: true` and `updated: ["briefing_entries"]`                              |
+| Change instruction level| `update_configuration(instruction_level: "essential")`    | `success: true` and `updated: ["instruction_level"]`                             |
+| Revert config changes   | `update_configuration(briefing_entries: 10, instruction_level: "standard")` | Reverts the changes back to defaults for remaining tests |
+
 ---
 
 ## Success Criteria
@@ -77,3 +85,4 @@
 - `batch_create_entries` enforces max 50 limit with structured error
 - `batch_delete_entries` soft-deletes multiple entries atomically
 - `search_audit_log` successfully returns filtered audit logs
+- `update_configuration` successfully modifies runtime config and returns `updated` keys

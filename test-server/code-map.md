@@ -149,7 +149,7 @@ src/
 │       └── types.ts                # GitHub integration internal types
 │
 └── handlers/
-    ├── tools/                      # 96 tools across 10 groups — see § Handler Map below
+    ├── tools/                      # 97 tools across 10 groups — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
@@ -247,7 +247,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **analytics**     | `analytics.ts`                 | 2     | `get_statistics`, `get_cross_project_insights`                                                                                                     |
 | **relationships** | `relationships.ts`             | 2     | `link_entries`, `visualize_relationships`                                                                                                          |
 | **io**            | `io.ts`                        | 3     | `export_entries`, `export_markdown`, `import_markdown`                                                                                             |
-| **admin**         | `admin.ts`                     | 10    | `update_entry`, `delete_entry`, `restore_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `search_audit_log` |
+| **admin**         | `admin.ts`                     | 11    | `update_configuration`, `update_entry`, `delete_entry`, `restore_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `search_audit_log` |
 | **github**        | `github/read-tools.ts`         | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue` (truncate_body, include_comments), `get_github_pr` (truncate_body), `get_github_context` |
 |                   | `github/issue-tools.ts`        | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                                  |
 |                   | `github/kanban-tools.ts`       | 4     | `get_kanban_board` (summary_only, item_limit), `move_kanban_item`, `addKanbanItem`, `deleteKanbanItem`                                             |

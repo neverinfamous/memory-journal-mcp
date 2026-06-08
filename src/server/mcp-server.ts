@@ -920,8 +920,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
     configManager.on('changed', () => {
         // Send tool list changed notification if using SSE/HTTP
         void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
-        // In MCP, server.server.sendNotification is available. Wait, we need an instance!
-        // We'll have to rely on clients re-fetching or polling unless we can emit the JSON-RPC directly.
+        try {
+            // Notify MCP clients that tools might have changed (e.g. tool filter updated)
+            void globalSubscriptionManager.broadcastNotification('notifications/tools/list_changed')
+            // Also notify that resources might have changed (for good measure)
+            void globalSubscriptionManager.broadcastNotification('notifications/resources/list_changed')
+        } catch (error: unknown) {
+            logger.debug('Failed to send list_changed notifications to MCP client', {
+                module: 'McpServer',
+                error: error instanceof Error ? error.message : String(error)
+            })
+        }
     })
 
     // Start server based on transport

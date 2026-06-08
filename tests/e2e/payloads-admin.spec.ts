@@ -87,4 +87,14 @@ test.describe('Payload Contracts: Admin', () => {
         expect(payload.success).toBeDefined()
         expect(payload.entryId).toBe(entryId)
     })
+
+    test('update_configuration returns { success, updated }', async () => {
+        const payload = await callToolAndParse(client, 'update_configuration', {
+            briefing_entries: 5,
+        })
+        expectSuccess(payload)
+        expect(payload.success).toBe(true)
+        expect(Array.isArray(payload.updated)).toBe(true)
+        expect(payload.updated).toContain('briefing_entries')
+    })
 })
