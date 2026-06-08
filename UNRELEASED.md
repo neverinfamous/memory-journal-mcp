@@ -79,3 +79,4 @@
 - Fixed regression where batch database operations (`createEntries`, `updateEntries`, `deleteEntries`) were failing atomically. Migrated methods to process items individually and return structured `errors` arrays for partial successes.
 - Fixed batch operation handlers (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, and team equivalents) to aggregate partial failures using `AggregateMcpError`.
 - Fixed `ConfigResolver` crashing with a JSON Syntax Error when loading pre-parsed `ADDITIONAL_TEAM_DBS`, `ALLOWED_IO_ROOTS`, and `PROJECT_REGISTRY` nested objects from `.json` configuration files.
+- Fixed silent and confusing `TypeError` failures in Code Mode by proxying successful non-array object results to explicitly intercept hallucinated Array method calls (`find`, `map`, `filter`, etc.) and throw descriptive errors containing the actual available keys.
