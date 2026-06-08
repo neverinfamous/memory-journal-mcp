@@ -42,7 +42,7 @@
 | View Exported Node     | `run_command` (cat/get-content) on one of the exported files in `test_export`                                              | Validates JSON frontmatter generated   |
 | Import Dry Run         | `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: true)` | Returns structured count of items      |
 | Create Invalid File    | Use `write_to_file` to create `invalid.md` in `test_export` with `entry_type: "invalid_type"` in its YAML frontmatter.     | File created successfully              |
-| Import Aggregated Error| `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: false)`| Returns structured ErrorResponse with `code: AGGREGATE_ERROR` and `aggregated_errors` array |
+| Import Aggregated Error| `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: false)`| Returns structured ErrorResponse with `code: AGGREGATE_ERROR` and an `aggregated_errors` array of objects (containing `message` and optionally `name`) for each item failure |
 | Path Traversal Defense | `export_markdown(output_dir: "../../etc/passwd")`                                                                          | Structured error rejecting `..` paths  |
 
 ---
@@ -53,6 +53,6 @@
 
 - `export_markdown` reliably targets OS local directories and generates correctly named files.
 - `import_markdown` gracefully executes dry run detection parsing.
-- `import_markdown` successfully aggregates partial failures (e.g., `invalid.md`) into a structured `AGGREGATE_ERROR` response with `aggregated_errors` details.
+- `import_markdown` successfully aggregates partial failures (e.g., `invalid.md`) into a structured `AGGREGATE_ERROR` response with an `aggregated_errors` array of specific item failures (e.g., `[{ "message": "..." }]`).
 - IO tooling throws structured path traversal errors `..` on local directory injections or when missing `ALLOWED_IO_ROOTS`.
 - Large JSON exports return `truncated: true` to prevent memory exhaustion when the payload exceeds 5MB.

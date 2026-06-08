@@ -323,95 +323,28 @@ export function deleteEntry(context: EntriesSharedContext, id: number, permanent
 export function createEntries(
     context: EntriesSharedContext,
     inputs: CreateEntryInput[]
-): JournalEntry[] {
-    const { db, tagsMgr } = context
-    if (inputs.length === 0) return []
+): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
+    if (inputs.length === 0) return { created: [], errors: [] }
 
-    const insertIds: number[] = []
+    const createdIds: number[] = []
+    const errors: { index: number; error: Error }[] = []
 
-    const txn = db.transaction(() => {
-        for (const input of inputs) {
-            let timestamp = input.timestamp ?? new Date().toISOString()
-            if (!timestamp.includes('T')) {
-                timestamp = `${timestamp}T00:00:00.000Z`
-            } else {
-                const parsedTimestamp = new Date(timestamp)
-                if (Number.isNaN(parsedTimestamp.getTime())) {
-                    throw new Error(
-                        `Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`
-                    )
-                }
-                timestamp = parsedTimestamp.toISOString()
-            }
-
-            const columns = [
-                'entry_type',
-                'content',
-                'timestamp',
-                'is_personal',
-                'significance_type',
-                'auto_context',
-                'project_number',
-                'project_owner',
-                'issue_number',
-                'issue_url',
-                'pr_number',
-                'pr_url',
-                'pr_status',
-                'workflow_run_id',
-                'workflow_name',
-                'workflow_status',
-                'is_archived',
-            ]
-            const values = [
-                input.entryType ?? 'personal_reflection',
-                input.content,
-                timestamp,
-                (input.isPersonal ?? true) ? 1 : 0,
-                input.significanceType || null,
-                input.autoContext ?? null,
-                input.projectNumber ?? null,
-                input.projectOwner || null,
-                input.issueNumber ?? null,
-                input.issueUrl || null,
-                input.prNumber ?? null,
-                input.prUrl || null,
-                input.prStatus || null,
-                input.workflowRunId ?? null,
-                input.workflowName || null,
-                input.workflowStatus || null,
-                input.isArchived ? 1 : 0,
-            ]
-
-            if (input.author !== undefined) {
-                columns.push('author')
-                values.push(input.author)
-            }
-
-            const placeholders = columns.map(() => '?').join(', ')
-            const stmt = db.prepare(
-                `INSERT INTO memory_journal (${columns.join(', ')}) VALUES (${placeholders})`
-            )
-            const result = stmt.run(...values)
-            const insertId = result.lastInsertRowid as number
-            insertIds.push(insertId)
-
-            if (input.tags && input.tags.length > 0) {
-                const formattedTags = input.tags.map((t) =>
-                    t
-                        .toLowerCase()
-                        .replace(/[^a-z0-9:@]+/g, '-')
-                        .replace(/^-+|-+$/g, '')
-                )
-                tagsMgr.linkTagsToEntry(insertId, formattedTags)
-            }
+    for (let i = 0; i < inputs.length; i++) {
+        const input = inputs[i]
+        if (!input) continue
+        try {
+            // createEntry inherently wraps the INSERT in a transaction and returns the entry.
+            const newEntry = createEntry(context, input)
+            createdIds.push(newEntry.id)
+        } catch (err) {
+            errors.push({ index: i, error: err instanceof Error ? err : new Error(String(err)) })
         }
-    })
+    }
 
-    txn()
-
-    const resultsMap = getEntriesByIds(context, insertIds)
-    return insertIds.map(id => resultsMap.get(id)).filter((entry): entry is JournalEntry => entry !== undefined)
+    const resultsMap = getEntriesByIds(context, createdIds)
+    const created = createdIds.map(id => resultsMap.get(id)).filter((entry): entry is JournalEntry => entry !== undefined)
+    
+    return { created, errors }
 }
 
 export function updateEntries(
@@ -437,62 +370,62 @@ export function updateEntries(
         isArchived?: boolean
         expectedVersion?: number
     }[]
-): { updated: JournalEntry[]; notFound: number[] } {
-    const { db } = context
-    if (updates.length === 0) return { updated: [], notFound: [] }
+): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+    if (updates.length === 0) return { updated: [], notFound: [], errors: [] }
 
     const notFound: number[] = []
     const updatedIds: number[] = []
+    const errors: { id: number; error: Error }[] = []
 
-    const txn = db.transaction(() => {
-        for (const input of updates) {
+    for (const input of updates) {
+        try {
             const entry = updateEntry(context, input.id, input)
             if (entry) {
                 updatedIds.push(input.id)
             } else {
                 notFound.push(input.id)
             }
+        } catch (err) {
+            errors.push({ id: input.id, error: err instanceof Error ? err : new Error(String(err)) })
         }
-    })
-
-    txn()
+    }
 
     const resultsMap = getEntriesByIds(context, updatedIds)
     const updated = updatedIds.map(id => resultsMap.get(id)).filter((entry): entry is JournalEntry => entry !== undefined)
 
-    return { updated, notFound }
+    return { updated, notFound, errors }
 }
 
 export function deleteEntries(
     context: EntriesSharedContext,
     ids: number[],
     permanent = false
-): { deleted: number[]; notFound: number[] } {
+): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
     const { db } = context
-    if (ids.length === 0) return { deleted: [], notFound: [] }
+    if (ids.length === 0) return { deleted: [], notFound: [], errors: [] }
 
     const placeholders = ids.map(() => '?').join(', ')
 
-    // To figure out which ones were not found, we can query before deleting, or just rely on the count if we don't need exact missing IDs.
-    // However, the spec says "notFound: number[]" so we should determine which ones actually existed.
-    // For simplicity, we can fetch existing IDs first, or just accept that returning exact missing ones requires a SELECT.
+    // Determine which IDs actually exist
     const existingRows = db.prepare(`SELECT id FROM memory_journal WHERE id IN (${placeholders}) ${permanent ? '' : 'AND deleted_at IS NULL'}`).all(...ids) as { id: number }[]
     const existingIds = new Set(existingRows.map(r => r.id))
     const notFound = ids.filter(id => !existingIds.has(id))
     const toDelete = ids.filter(id => existingIds.has(id))
+    const deleted: number[] = []
+    const errors: { id: number; error: Error }[] = []
 
-    if (toDelete.length > 0) {
-        const deletePlaceholders = toDelete.map(() => '?').join(', ')
-        if (permanent) {
-            const stmt = db.prepare(`DELETE FROM memory_journal WHERE id IN (${deletePlaceholders})`)
-            stmt.run(...toDelete)
-        } else {
-            const stmt = db.prepare(`UPDATE memory_journal SET deleted_at = ? WHERE id IN (${deletePlaceholders}) AND deleted_at IS NULL`)
-            stmt.run(new Date().toISOString(), ...toDelete)
+    for (const id of toDelete) {
+        try {
+            const success = deleteEntry(context, id, permanent)
+            if (success) {
+                deleted.push(id)
+            }
+        } catch (err) {
+            errors.push({ id, error: err instanceof Error ? err : new Error(String(err)) })
         }
     }
 
-    return { deleted: toDelete, notFound }
+    return { deleted, notFound, errors }
 }
 
 export function getEntryHistory(

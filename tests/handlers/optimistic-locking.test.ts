@@ -227,8 +227,8 @@ describe('Optimistic Locking Handlers', () => {
             )) as any
 
             expect(batchUpdate.success).toBe(false)
-            // Error code logic will likely halt the batch when processing the conflict
-            expect(batchUpdate.error).toContain('conflict')
+            expect(batchUpdate.code).toBe('AGGREGATE_ERROR')
+            expect(batchUpdate.aggregated_errors[0]?.message).toContain('conflict')
         })
     })
 
@@ -257,7 +257,8 @@ describe('Optimistic Locking Handlers', () => {
             )) as any
 
             expect(batchUpdate.success).toBe(false)
-            expect(batchUpdate.error).toContain('conflict')
+            expect(batchUpdate.code).toBe('AGGREGATE_ERROR')
+            expect(batchUpdate.aggregated_errors[0]?.message).toContain('conflict')
         })
     })
 })

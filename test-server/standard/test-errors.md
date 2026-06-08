@@ -48,6 +48,7 @@ Every tool must return `{success: false, error, code, category, suggestion, reco
 | **core**   | `get_entry_by_id`                      | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
 | **search** | `search_by_date_range`                 | `start_date: "2026-12-31", end_date: "2026-01-01"` | `success:false`, `code:"VALIDATION_ERROR"`, `suggestion` with date hint            |
 | **admin**  | `update_entry`                         | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
+| **admin**  | `batch_update_entries`                 | `updates: [{ entry_id: 999999, content: "x" }]`    | `success:false`, `code:"AGGREGATE_ERROR"`, `aggregated_errors` array returned      |
 | **admin**  | `merge_tags`                           | `source_tag: "x", target_tag: "x"`                 | `success:false`, same-tag error with `category:"validation"`                       |
 | **backup** | `restore_backup`                       | `filename: "nonexistent.db"`                       | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `details.resourceType`               |
 | **github** | `get_github_issue`                     | `issue_number: 999999`                             | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |

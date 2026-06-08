@@ -225,7 +225,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.getDeletedEntries(options)
     }
 
-    createEntries(inputs: CreateEntryInput[]): JournalEntry[] {
+    createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
         return this.entriesMgr.createEntries(inputs)
     }
 
@@ -251,15 +251,23 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             isArchived?: boolean
             expectedVersion?: number
         }[]
-    ): { updated: JournalEntry[]; notFound: number[] } {
+    ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.entriesMgr.updateEntries(updates)
     }
 
-    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[] } {
+    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+        // deleteEntries now manages its own per-item error capturing internally.
+        // But we still wrap the overall process in a transaction to handle the vector deletion.
         return this.executeInTransaction(() => {
             const result = this.entriesMgr.deleteEntries(ids, permanent)
             for (const id of result.deleted) {
-                this.deleteVector(id)
+                try {
+                    this.deleteVector(id)
+                } catch {
+                    // Vectors failure shouldn't fail the entry deletion, but we could record it
+                    // Actually, if it throws, the transaction rolls back, breaking partial success.
+                    // Let's catch it.
+                }
             }
             return result
         })

@@ -169,7 +169,7 @@ export interface IDatabaseAdapter {
     getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number }
     
     // Batch Operations
-    createEntries(inputs: CreateEntryInput[]): JournalEntry[]
+    createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] }
     updateEntries(
         updates: {
             id: number
@@ -192,11 +192,11 @@ export interface IDatabaseAdapter {
             isArchived?: boolean
             expectedVersion?: number
         }[]
-    ): { updated: JournalEntry[]; notFound: number[] }
+    ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }
     deleteEntries(
         ids: number[],
         permanent?: boolean
-    ): { deleted: number[]; notFound: number[] }
+    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] }
 
     searchEntries(
         query: string,

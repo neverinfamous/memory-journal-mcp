@@ -263,8 +263,14 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const { indexed, failed, firstError, partial } =
+                    const { indexed, failed, firstError, partial, errors } =
                         await teamVectorManager.rebuildIndex(teamDb, progress)
+                    
+                    if (errors.length > 0) {
+                        const mcpErrors = errors.map(e => new Error(`Entry ${e.entryId} failed: ${e.error.message}`));
+                        throw new AggregateError(mcpErrors, `Team vector index rebuild partially failed: ${failed} entries failed to index.`);
+                    }
+
                     const success = indexed > 0 || failed === 0
                     return {
                         success,

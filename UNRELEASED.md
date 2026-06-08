@@ -71,3 +71,5 @@
 - Fixed validation error in `mj_execute_code` by making the `code` parameter optional.
 - Fixed silent failure in Code Mode's `auto-return` transformation parsing of multiline template literals.
 - Fixed validation error for string repository names in Code Mode `project_number` arguments by auto-resolving to numeric IDs.
+- Fixed regression where batch database operations (`createEntries`, `updateEntries`, `deleteEntries`) were failing atomically. Migrated methods to process items individually and return structured `errors` arrays for partial successes.
+- Fixed batch operation handlers (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, and team equivalents) to aggregate partial failures using `AggregateMcpError`.

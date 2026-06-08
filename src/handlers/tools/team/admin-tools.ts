@@ -384,7 +384,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     })
 
-                    const results = teamDb.createEntries(inputs)
+                    const { created: results, errors } = teamDb.createEntries(inputs)
 
                     const entries = results.map((r, i) => {
                         const author = inputs[i]?.author
@@ -394,18 +394,32 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(context.progress, 1, 2, `Created ${String(entries.length)} team entries...`)
 
                     const indexStatuses: string[] = []
+                    const indexErrors: Error[] = []
                     if (input.auto_index && context.teamVectorManager) {
                         const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
                         for (let i = 0; i < entries.length; i++) {
                             const entry = entries[i]
                             if (entry) {
-                                const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
-                                if (status) indexStatuses.push(status)
+                                try {
+                                    const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
+                                    if (status) indexStatuses.push(status)
+                                } catch (err) {
+                                    indexErrors.push(new Error(`Team entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
+                                }
                             }
                             await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
                         }
                     } else {
                         await sendProgress(context.progress, 2, 2, 'Team batch create complete')
+                    }
+
+                    const allErrors = [
+                        ...errors.map(e => new Error(`Item at index ${e.index} failed: ${e.error.message}`)),
+                        ...indexErrors
+                    ]
+
+                    if (allErrors.length > 0) {
+                        throw new AggregateError(allErrors, `Team batch create partially failed: ${allErrors.length} operations failed`);
                     }
 
                     triggerTeamNotifications(context)
@@ -494,7 +508,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         })
                     }
 
-                    const { updated, notFound: updateNotFound } = teamDb.updateEntries(updates)
+                    const { updated, notFound: updateNotFound, errors } = teamDb.updateEntries(updates)
                     
                     const entries = updated.map(r => ({
                         ...r,
@@ -504,6 +518,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
 
                     const indexStatuses: string[] = []
+                    const indexErrors: Error[] = []
                     if (input.auto_index && context.teamVectorManager) {
                         const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
                         for (let i = 0; i < entries.length; i++) {
@@ -511,14 +526,27 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                             if (entry) {
                                 const originalUpdate = input.updates.find(u => u.entry_id === entry.id)
                                 if (originalUpdate?.content) {
-                                    const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
-                                    if (status) indexStatuses.push(status)
+                                    try {
+                                        const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
+                                        if (status) indexStatuses.push(status)
+                                    } catch (err) {
+                                        indexErrors.push(new Error(`Team entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
+                                    }
                                 }
                             }
                             await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
                         }
                     } else {
                         await sendProgress(context.progress, 2, 2, 'Team batch update complete')
+                    }
+
+                    const allErrors = [
+                        ...errors.map(e => new Error(`Team entry ${e.id} failed to update: ${e.error.message}`)),
+                        ...indexErrors
+                    ]
+
+                    if (allErrors.length > 0) {
+                        throw new AggregateError(allErrors, `Team batch update partially failed: ${allErrors.length} operations failed`);
                     }
 
                     triggerTeamNotifications(context)
@@ -588,27 +616,32 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         validIds.push(id)
                     }
 
-                    const result = teamDb.deleteEntries(validIds, input.permanent)
+                    const { deleted, notFound: deleteNotFound, errors } = teamDb.deleteEntries(validIds, input.permanent)
                     
-                    await sendProgress(context.progress, 1, 2, `Deleted ${String(result.deleted.length)} team entries...`)
+                    await sendProgress(context.progress, 1, 2, `Deleted ${String(deleted.length)} team entries...`)
 
                     if (context.teamVectorManager) {
-                        const reporter = createBatchProgressReporter(context.progress, result.deleted.length, 10)
-                        for (let i = 0; i < result.deleted.length; i++) {
-                            const id = result.deleted[i]
+                        const reporter = createBatchProgressReporter(context.progress, deleted.length, 10)
+                        for (let i = 0; i < deleted.length; i++) {
+                            const id = deleted[i]
                             if (id !== undefined) teamDb.deleteVector(id)
-                            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(result.deleted.length)}...`)
+                            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
                         }
                     } else {
                         await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
                     }
 
                     // Merge notFound arrays
-                    const finalNotFound = [...notFound, ...result.notFound]
+                    const finalNotFound = [...notFound, ...deleteNotFound]
+
+                    if (errors.length > 0) {
+                        const mcpErrors = errors.map(e => new Error(`Team entry ${e.id} failed to delete: ${e.error.message}`));
+                        throw new AggregateError(mcpErrors, `Team batch delete partially failed: ${errors.length} operations failed`);
+                    }
 
                     triggerTeamNotifications(context)
 
-                    return { success: true, count: result.deleted.length, deleted: result.deleted, notFound: finalNotFound, permanent: input.permanent }
+                    return { success: true, count: deleted.length, deleted, notFound: finalNotFound, permanent: input.permanent }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

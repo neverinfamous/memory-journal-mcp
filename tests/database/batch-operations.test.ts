@@ -40,7 +40,7 @@ describe('DatabaseAdapter Batch Operations', () => {
     describe('createEntries', () => {
         it('should return empty array when given no inputs', () => {
             const results = db.createEntries([])
-            expect(results).toEqual([])
+            expect(results.created).toEqual([])
         })
 
         it('should create multiple entries successfully', () => {
@@ -50,22 +50,22 @@ describe('DatabaseAdapter Batch Operations', () => {
                 { content: 'Batch 3', projectNumber: 2 }
             ]
 
-            const results = db.createEntries(inputs)
-            expect(results.length).toBe(3)
+            const { created } = db.createEntries(inputs)
+            expect(created.length).toBe(3)
             
             // Verify entries in db
-            const e1 = db.getEntryById(results[0]!.id)
+            const e1 = db.getEntryById(created[0]!.id)
             expect(e1?.content).toBe('Batch 1')
             expect(e1?.tags).toEqual(['b1', 'b2'])
             expect(e1?.projectNumber).toBe(1)
             
-            const e2 = db.getEntryById(results[1]!.id)
+            const e2 = db.getEntryById(created[1]!.id)
             expect(e2?.content).toBe('Batch 2')
             expect(e2?.tags).toEqual(['b2'])
             expect(e2?.isPersonal).toBe(false)
             expect(e2?.entryType).toBe('architecture_decision')
             
-            const e3 = db.getEntryById(results[2]!.id)
+            const e3 = db.getEntryById(created[2]!.id)
             expect(e3?.content).toBe('Batch 3')
             expect(e3?.tags).toEqual([])
             expect(e3?.projectNumber).toBe(2)
@@ -73,24 +73,25 @@ describe('DatabaseAdapter Batch Operations', () => {
 
         it('should accept valid explicit timestamps', () => {
             const explicitTime = '2025-01-01T12:00:00.000Z'
-            const results = db.createEntries([
+            const { created } = db.createEntries([
                 { content: 'Time test', timestamp: explicitTime }
             ])
-            expect(results[0]?.timestamp).toBe(explicitTime)
+            expect(created[0]?.timestamp).toBe(explicitTime)
         })
 
         it('should format YYYY-MM-DD dates to full ISO timestamp', () => {
             const dateStr = '2025-01-01'
-            const results = db.createEntries([
+            const { created } = db.createEntries([
                 { content: 'Date test', timestamp: dateStr }
             ])
-            expect(results[0]?.timestamp).toBe('2025-01-01T00:00:00.000Z')
+            expect(created[0]?.timestamp).toBe('2025-01-01T00:00:00.000Z')
         })
 
-        it('should throw error for invalid timestamp', () => {
-            expect(() => {
-                db.createEntries([{ content: 'Bad time', timestamp: 'not-a-dateT12:00:00' as any }])
-            }).toThrow('Invalid timestamp format: not-a-dateT12:00:00. Expected an ISO 8601 date or timestamp.')
+        it('should return error in array for invalid timestamp', () => {
+            const { created, errors } = db.createEntries([{ content: 'Bad time', timestamp: 'not-a-dateT12:00:00' as any }])
+            expect(created).toEqual([])
+            expect(errors.length).toBe(1)
+            expect(errors[0]?.error.message).toBe('Invalid timestamp format: not-a-dateT12:00:00. Expected an ISO 8601 date or timestamp.')
         })
     })
 
@@ -107,7 +108,7 @@ describe('DatabaseAdapter Batch Operations', () => {
 
         it('should update multiple entries and report missing ones', () => {
             // Seed entries
-            const created = db.createEntries([
+            const { created } = db.createEntries([
                 { content: 'Update me 1', tags: ['old-tag'] },
                 { content: 'Update me 2' }
             ])
@@ -135,7 +136,7 @@ describe('DatabaseAdapter Batch Operations', () => {
         })
 
         it('should handle updates where tags are not provided (keeps old tags)', () => {
-            const created = db.createEntries([{ content: 'Keep tags', tags: ['kept-tag'] }])
+            const { created } = db.createEntries([{ content: 'Keep tags', tags: ['kept-tag'] }])
             
             db.updateEntries([{ id: created[0]!.id, content: 'New content' }])
             
@@ -157,7 +158,7 @@ describe('DatabaseAdapter Batch Operations', () => {
         })
 
         it('should soft delete multiple entries and report missing', () => {
-            const created = db.createEntries([
+            const { created } = db.createEntries([
                 { content: 'Soft del 1' },
                 { content: 'Soft del 2' },
                 { content: 'Soft del 3' }
@@ -182,7 +183,7 @@ describe('DatabaseAdapter Batch Operations', () => {
         })
 
         it('should permanently delete multiple entries', () => {
-            const created = db.createEntries([
+            const { created } = db.createEntries([
                 { content: 'Hard del 1' },
                 { content: 'Hard del 2' }
             ])
@@ -198,7 +199,7 @@ describe('DatabaseAdapter Batch Operations', () => {
         })
 
         it('should handle deleting already deleted entries', () => {
-            const created = db.createEntries([{ content: 'Double del' }])
+            const { created } = db.createEntries([{ content: 'Double del' }])
             
             // Soft delete
             const r1 = db.deleteEntries([created[0]!.id])

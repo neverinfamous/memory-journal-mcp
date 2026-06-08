@@ -81,7 +81,7 @@ describe('Team Vector Tool Handlers', () => {
                 return [{ entryId: 1, score: 0.8 }]
             },
             getStats: () => ({ itemCount: 10, modelName: 'test-model', dimensions: 384 }),
-            rebuildIndex: async () => ({ indexed: 10, failed: 0 }),
+            rebuildIndex: async () => ({ indexed: 10, failed: 0, firstError: null, partial: false, errors: [] }),
             addEntry: async (id: number) => ({
                 success: id !== 999,
                 error: id === 999 ? 'Failed' : undefined,

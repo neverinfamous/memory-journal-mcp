@@ -361,7 +361,7 @@ export class VectorSearchManager {
         db: IDatabaseAdapter,
         progress?: ProgressContext,
         options?: { budget?: number; isCancelled?: () => boolean }
-    ): Promise<{ indexed: number; failed: number; firstError: string | null; partial: boolean }> {
+    ): Promise<{ indexed: number; failed: number; firstError: string | null; partial: boolean; errors: { entryId: number; error: Error }[] }> {
         if (!this.initialized) {
             try {
                 await this.initialize()
@@ -372,12 +372,13 @@ export class VectorSearchManager {
                     failed: 0,
                     firstError: `Vector search initialization failed: ${msg}`,
                     partial: false,
+                    errors: [{ entryId: -1, error: initError instanceof Error ? initError : new Error(msg) }]
                 }
             }
         }
 
         if (!this.db) {
-            return { indexed: 0, failed: 0, firstError: null, partial: false }
+            return { indexed: 0, failed: 0, firstError: null, partial: false, errors: [] }
         }
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
@@ -400,6 +401,7 @@ export class VectorSearchManager {
         const budget = options?.budget ?? 10000
         let firstError: string | null = null
         let partial = false
+        const errors: { entryId: number; error: Error }[] = []
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
             if (options?.isCancelled?.() || processed >= budget) {
                 partial = true
@@ -447,7 +449,12 @@ export class VectorSearchManager {
                         })
                     } else {
                         failed++
-                        if (embError !== null) firstError ??= embError
+                        if (embError !== null) {
+                            firstError ??= embError
+                            errors.push({ entryId: entry.id, error: new Error(embError) })
+                        } else {
+                            errors.push({ entryId: entry.id, error: new Error('Unknown embedding error') })
+                        }
                     }
                 }
 
@@ -459,6 +466,10 @@ export class VectorSearchManager {
                         failed += validVectors.length
                         const errorMsg = error instanceof Error ? error.message : String(error)
                         firstError ??= errorMsg
+                        const errorObj = error instanceof Error ? error : new Error(errorMsg)
+                        for (const v of validVectors) {
+                            errors.push({ entryId: v.entryId, error: errorObj })
+                        }
                         logger.error('Failed to batch insert entries into vector index', {
                             module: 'VectorSearch',
                             error: errorMsg,
@@ -522,7 +533,7 @@ export class VectorSearchManager {
             })
         }
 
-        return { indexed, failed, firstError, partial }
+        return { indexed, failed, firstError, partial, errors }
     }
 
     /**

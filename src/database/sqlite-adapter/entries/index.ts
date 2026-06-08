@@ -99,7 +99,7 @@ export class EntriesManager {
         return deleteEntry(this.sharedContext, id, permanent)
     }
 
-    createEntries(inputs: CreateEntryInput[]): JournalEntry[] {
+    createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
         return createEntries(this.sharedContext, inputs)
     }
 
@@ -124,11 +124,11 @@ export class EntriesManager {
             workflowStatus?: string | null
             expectedVersion?: number
         }[]
-    ): { updated: JournalEntry[]; notFound: number[] } {
+    ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return updateEntries(this.sharedContext, updates)
     }
 
-    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[] } {
+    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return deleteEntries(this.sharedContext, ids, permanent)
     }
 
