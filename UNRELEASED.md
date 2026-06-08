@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added `--dump-config` CLI flag to print the fully resolved configuration payload (with automatically redacted secrets) to assist in debugging configuration precedence.
 - Added configuration file support (`--config <path>`) for `.yaml` and `.json` configs to streamline setups, implementing strict `CLI > Env > Config > Default` precedence.
 - Added `--prune-dry-run` flag and `PRUNE_DRY_RUN` configuration to preview auto-prune candidates without mutating the database.
 - Added `--prune-exclude-tags` flag and `PRUNE_EXCLUDE_TAGS` configuration to exempt specific tags from being auto-pruned.
@@ -45,6 +46,7 @@
 - Added `snake_case` to `camelCase` fallback mapping for Code Mode operations.
 
 ### Changed
+- Updated CLI configuration loader to aggregate all startup validation errors and report them simultaneously, rather than crashing on the first invalid parameter.
 - Synchronized tool count references from 96 to 97 across all documentation, test scripts, and GitHub Wiki files following the addition of the `update_configuration` tool.
 - Synchronized tool count references from 95 to 96 across all documentation, test scripts, and GitHub Wiki files following the addition of the `search_audit_log` tool.
 - Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support.

@@ -235,20 +235,36 @@ program
         'Comma-separated flag vocabulary for Hush Protocol (env: FLAG_VOCABULARY, default: blocker,needs_review,help_requested,fyi)'
     )
     .option('--config <path>', 'Path to configuration file (.yaml, .yml, .json) (env: MEMORY_JOURNAL_CONFIG)')
+    .option('--dump-config', 'Print effective configuration and exit')
     .action(
         async (options: Record<string, unknown>, command: Command) => {
             let resolver: ConfigResolver;
             const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG'];
+            const configErrors: string[] = [];
+
             try {
                 resolver = new ConfigResolver(command, options, configPath);
             } catch (err) {
-                console.error(err instanceof Error ? err.message : String(err));
-                process.exit(1);
+                configErrors.push(err instanceof Error ? err.message : String(err));
+                // We cannot continue without a resolver, so create a dummy one that just returns defaults
+                resolver = new ConfigResolver(command, {}, undefined);
             }
 
+            // Wrapper to catch errors and aggregate them
+            const catchConfig = <T>(fn: () => T, fallback: T): T => {
+                try {
+                    return fn();
+                } catch (e) {
+                    configErrors.push(e instanceof Error ? e.message : String(e));
+                    return fallback;
+                }
+            };
+
             // Set log level
-            const logLevel = resolver.resolve<string>('logLevel', 'LOG_LEVEL') ?? 'info';
-            logger.setLevel(logLevel as 'debug' | 'info' | 'warning' | 'error');
+            const logLevel = catchConfig(() => resolver.resolve<string>('logLevel', 'LOG_LEVEL') ?? 'info', 'info');
+            if (options['dumpConfig'] !== true) {
+                logger.setLevel(logLevel as 'debug' | 'info' | 'warning' | 'error');
+            }
 
             // Validate against default placeholder secrets
             const sensitiveEnvVars = [
@@ -258,20 +274,230 @@ program
                 'OAUTH_JWKS_URI',
             ];
             for (const envVar of sensitiveEnvVars) {
-                if (process.env[envVar]?.startsWith('CHANGEME_')) {
-                    logger.error(
-                        `FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`,
-                        { module: 'CLI' }
-                    );
-                    process.exit(1);
+                const envValue = process.env[envVar];
+                if (typeof envValue === 'string' && envValue.startsWith('CHANGEME_')) {
+                    configErrors.push(`FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`);
                 }
             }
 
-            const host = resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined;
-            const transport = resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio';
-            const stateless = resolver.resolveBool('stateless', 'STATELESS') ?? false;
-            const db = resolver.resolve<string>('db', 'DB_PATH') ?? defaultDbPath;
-            const teamDb = resolver.resolve<string>('teamDb', 'TEAM_DB_PATH') ?? defaultTeamDbPath;
+            const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined);
+            const transport = catchConfig(() => resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio', 'stdio');
+            const stateless = catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false);
+            const db = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH') ?? defaultDbPath, defaultDbPath);
+            const teamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH') ?? defaultTeamDbPath, defaultTeamDbPath);
+
+            const codemodeMaxResultSize = catchConfig(() => resolver.resolve<string>('codemodeMaxResultSize', 'CODE_MODE_MAX_RESULT_SIZE'), undefined);
+            if (codemodeMaxResultSize) {
+                process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize;
+            }
+
+            const auditLogPath = catchConfig(() => resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH'), undefined);
+            const auditConfig: AuditConfig | undefined = auditLogPath
+                ? {
+                      enabled: true,
+                      logPath: auditLogPath,
+                      redact: catchConfig(() => resolver.resolveBool('auditRedact', 'AUDIT_REDACT') ?? true, true),
+                      auditReads: catchConfig(() => resolver.resolveBool('auditReads', 'AUDIT_READS') ?? false, false),
+                      maxSizeBytes: catchConfig(() => resolver.resolveIntRequired('auditLogMaxSize', 'AUDIT_LOG_MAX_SIZE', 1024), 10485760),
+                  }
+                : undefined;
+
+            const serverOptions = {
+                transport: transport as 'stdio' | 'http',
+                port: catchConfig(() => resolver.resolveIntRequired('port', 'PORT', 1, 65535), 3000),
+                host,
+                statelessHttp: stateless,
+                dbPath: db,
+                teamDbPath: teamDb,
+                teamDefaultRole: catchConfig(() => (resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied') as 'admin' | 'member' | 'viewer' | 'denied', 'denied'),
+                teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
+                toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'TOOL_FILTER'), undefined),
+                defaultProjectNumber: catchConfig(() => {
+                    const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
+                    return val ? parseInt(val, 10) : undefined;
+                }, undefined),
+                autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
+                corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
+                enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
+                authToken: catchConfig(() => resolver.resolve<string>('authToken', 'MCP_AUTH_TOKEN'), undefined),
+                scheduler: {
+                    backupIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('backupInterval', 'BACKUP_INTERVAL', 0), 0),
+                    keepBackups: catchConfig(() => resolver.resolveIntRequired('keepBackups', 'KEEP_BACKUPS', 1, 100), 5),
+                    vacuumIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('vacuumInterval', 'VACUUM_INTERVAL', 0), 0),
+                    rebuildIndexIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0), 0),
+                    digestIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('digestInterval', 'DIGEST_INTERVAL', 0), 0),
+                },
+                oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
+                oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),
+                oauthAudience: catchConfig(() => resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
+                oauthJwksUri: catchConfig(() => resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
+                oauthClockTolerance: catchConfig(() => resolver.resolveIntRequired('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0, 3600), 60),
+                allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
+                trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
+                publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
+                codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
+                
+                projectRegistry: catchConfig(() => {
+                    const raw = resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY');
+                    if (raw === undefined || raw === null || raw === '') return undefined;
+                    if (typeof raw === 'string' && raw.length > 51200) throw new Error('PROJECT_REGISTRY environment variable exceeds size limit (50KB)');
+                    try {
+                        const registrySchema = z.record(z.string(), z.object({ path: z.string().min(1), project_number: z.number().nullable().optional() }).strict());
+                        const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
+                        const safeParsed = JSON.parse(JSON.stringify(parsed)) as unknown; // Deep clean
+                        const validated = registrySchema.parse(safeParsed) as Record<string, ProjectRegistryEntry>;
+                        for (const key of Object.keys(validated)) {
+                            const entry = validated[key];
+                            if (!entry?.path) continue;
+                            if (!path.isAbsolute(entry.path)) throw new Error(`Project registry path must be an absolute path: ${entry.path}`);
+                            const resolvedPath = path.resolve(entry.path);
+                            try {
+                                const stat = fs.lstatSync(resolvedPath);
+                                if (stat.isSymbolicLink()) throw new Error(`Project registry path cannot be a symlink: ${resolvedPath}`);
+                                if (!stat.isDirectory()) throw new Error(`Project registry path is not a directory: ${resolvedPath}`);
+                            } catch (e) {
+                                throw new Error(`Project registry path error: ${resolvedPath}`, { cause: e });
+                            }
+                            entry.path = resolvedPath;
+                        }
+                        return validated;
+                    } catch (e: unknown) {
+                        throw new Error(`Failed to parse PROJECT_REGISTRY: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                    }
+                }, undefined),
+                
+                additionalTeamDbs: catchConfig(() => {
+                    const raw = resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS');
+                    if (raw === undefined || raw === null || raw === '') return undefined;
+                    if (typeof raw === 'string' && raw.length > 51200) throw new Error('ADDITIONAL_TEAM_DBS exceeds size limit');
+                    try {
+                        const dbSchema = z.record(z.string().min(1), z.string().min(1));
+                        const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
+                        const validated = dbSchema.parse(JSON.parse(JSON.stringify(parsed)) as unknown);
+                        for (const [label, dbPath] of Object.entries(validated)) {
+                            if (!path.isAbsolute(dbPath)) throw new Error(`Additional team DB path must be absolute: ${dbPath}`);
+                            const resolvedPath = path.resolve(dbPath);
+                            try {
+                                if (fs.existsSync(resolvedPath)) {
+                                    const stat = fs.lstatSync(resolvedPath);
+                                    if (stat.isSymbolicLink()) throw new Error(`Additional team DB path cannot be a symlink: ${resolvedPath}`);
+                                }
+                            } catch {
+                                // ignore
+                            }
+                            validated[label] = resolvedPath;
+                        }
+                        return validated;
+                    } catch (e) {
+                        throw new Error(`Failed to parse ADDITIONAL_TEAM_DBS: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                    }
+                }, undefined),
+
+                allowedIoRoots: catchConfig(() => {
+                    const raw = resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS');
+                    if (raw === undefined || raw === null || raw === '') return undefined;
+                    if (typeof raw === 'string' && raw.length > 51200) throw new Error('ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)');
+                    try {
+                        let parsed: unknown = raw;
+                        if (typeof raw === 'string') {
+                            if (raw.trim().startsWith('[')) {
+                                parsed = JSON.parse(raw) as unknown;
+                            } else {
+                                parsed = raw.split(',').map((s) => s.trim()).filter(Boolean);
+                            }
+                        }
+                        if (Array.isArray(parsed) && parsed.every((p) => typeof p === 'string' && path.isAbsolute(p))) {
+                            return parsed as string[];
+                        }
+                        if (Array.isArray(parsed)) {
+                            throw new Error('All paths must be absolute');
+                        }
+                        throw new Error('Must be an array of absolute paths');
+                    } catch (e: unknown) {
+                        throw new Error(`Invalid ALLOWED_IO_ROOTS configuration: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                    }
+                }, undefined),
+
+                briefingConfig: {
+                    entryCount: catchConfig(() => resolver.resolveIntRequired('briefingEntries', 'BRIEFING_ENTRY_COUNT'), 3),
+                    summaryCount: catchConfig(() => resolver.resolveIntRequired('briefingSummaries', 'BRIEFING_SUMMARY_COUNT'), 1),
+                    includeTeam: catchConfig(() => resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false, false),
+                    issueCount: catchConfig(() => resolver.resolveIntRequired('briefingIssues', 'BRIEFING_ISSUE_COUNT'), 0),
+                    prCount: catchConfig(() => resolver.resolveIntRequired('briefingPrs', 'BRIEFING_PR_COUNT'), 0),
+                    prStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false, false),
+                    milestoneCount: catchConfig(() => resolver.resolveIntRequired('briefingMilestones', 'BRIEFING_MILESTONE_COUNT'), 3),
+                    rulesFilePath: catchConfig(() => {
+                        const val = resolver.resolve<string>('rulesFile', 'RULES_FILE_PATH');
+                        return val ? path.resolve(process.cwd(), val) : undefined;
+                    }, undefined),
+                    skillsDirPath: catchConfig(() => {
+                        const val = resolver.resolve<string>('skillsDir', 'SKILLS_DIR_PATH');
+                        return val ? path.resolve(process.cwd(), val) : undefined;
+                    }, undefined),
+                    workflowCount: catchConfig(() => resolver.resolveIntRequired('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT'), 0),
+                    workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
+                    copilotReviews: catchConfig(() => resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false, false),
+                    workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
+                    defaultProjectNumber: catchConfig(() => {
+                        const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
+                        return val ? parseInt(val, 10) : undefined;
+                    }, undefined),
+                },
+                instructionLevel: catchConfig(() => (resolver.resolve<string>('instructionLevel', 'INSTRUCTION_LEVEL') ?? 'standard') as 'essential' | 'standard' | 'full', 'standard'),
+                auditConfig,
+                flagVocabulary: catchConfig(() => resolver.resolveStringArray('flagVocabulary', 'FLAG_VOCABULARY'), undefined),
+                archiveOlderThanDays: catchConfig(() => resolver.resolveIntRequired('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0), 0),
+                pruneOlderThanDays: catchConfig(() => resolver.resolveIntRequired('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0), 0),
+                hardDeleteOlderThanDays: catchConfig(() => resolver.resolveIntRequired('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0), 0),
+                pruneImportanceThreshold: catchConfig(() => {
+                    const val = resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD');
+                    if (typeof val === 'number') return val;
+                    if (typeof val === 'string') return parseFloat(val);
+                    return 0.15;
+                }, 0.15),
+                pruneDryRun: catchConfig(() => resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false, false),
+                pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
+                embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
+                metricsExport: catchConfig(() => {
+                    const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT');
+                    if (raw) {
+                        if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`);
+                        if (transport !== 'http') {
+                            console.warn(`\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n`);
+                            return undefined;
+                        }
+                        return 'prometheus';
+                    }
+                    return undefined;
+                }, undefined),
+                persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
+                metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
+                configFilePath: configPath,
+            };
+
+            if (configErrors.length > 0) {
+                console.error('Startup Configuration Errors:');
+                configErrors.forEach(err => console.error(` - ${err}`));
+                process.exit(1);
+            }
+
+            if (options['dumpConfig'] === true) {
+                const redactedOptions = JSON.parse(JSON.stringify(serverOptions)) as Record<string, unknown>;
+                const maskSensitive = (obj: Record<string, unknown>): void => {
+                    for (const key of Object.keys(obj)) {
+                        const lowerKey = key.toLowerCase();
+                        if (typeof obj[key] === 'string' && (lowerKey.includes('token') || lowerKey.includes('secret') || lowerKey.includes('issuer') || lowerKey.includes('uri') || lowerKey.includes('password') || lowerKey.includes('key'))) {
+                            obj[key] = '[REDACTED]';
+                        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                            maskSensitive(obj[key] as Record<string, unknown>);
+                        }
+                    }
+                };
+                maskSensitive(redactedOptions);
+                // eslint-disable-next-line no-console
+                console.log(JSON.stringify(redactedOptions, null, 2));
+                process.exit(0);
+            }
 
             logger.info('Starting Memory Journal MCP Server', {
                 module: 'CLI',
@@ -282,194 +508,10 @@ program
                 ...(host ? { host } : {}),
             });
 
-            const codemodeMaxResultSize = resolver.resolve<string>('codemodeMaxResultSize', 'CODE_MODE_MAX_RESULT_SIZE');
-            if (codemodeMaxResultSize) {
-                process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize;
-            }
-
             try {
-                const auditLogPath = resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH');
-                const auditConfig: AuditConfig | undefined = auditLogPath
-                    ? {
-                          enabled: true,
-                          logPath: auditLogPath,
-                          redact: resolver.resolveBool('auditRedact', 'AUDIT_REDACT') ?? true,
-                          auditReads: resolver.resolveBool('auditReads', 'AUDIT_READS') ?? false,
-                          maxSizeBytes: resolver.resolveIntRequired('auditLogMaxSize', 'AUDIT_LOG_MAX_SIZE', 1024),
-                      }
-                    : undefined;
-
-                await createServer({
-                    transport: transport as 'stdio' | 'http',
-                    port: resolver.resolveIntRequired('port', 'PORT', 1, 65535),
-                    host,
-                    statelessHttp: stateless,
-                    dbPath: db,
-                    teamDbPath: teamDb,
-                    teamDefaultRole: (resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied') as 'admin' | 'member' | 'viewer' | 'denied',
-                    teamAdmin: resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'),
-                    toolFilter: resolver.resolve<string>('toolFilter', 'TOOL_FILTER'),
-                    defaultProjectNumber: (() => {
-                        const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
-                        return val ? parseInt(val, 10) : undefined;
-                    })(),
-                    autoRebuildIndex: resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false,
-                    corsOrigins: resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'),
-                    enableHSTS: resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false,
-                    authToken: resolver.resolve<string>('authToken', 'MCP_AUTH_TOKEN'),
-                    scheduler: {
-                        backupIntervalMinutes: resolver.resolveIntRequired('backupInterval', 'BACKUP_INTERVAL', 0),
-                        keepBackups: resolver.resolveIntRequired('keepBackups', 'KEEP_BACKUPS', 1, 100),
-                        vacuumIntervalMinutes: resolver.resolveIntRequired('vacuumInterval', 'VACUUM_INTERVAL', 0),
-                        rebuildIndexIntervalMinutes: resolver.resolveIntRequired('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0),
-                        digestIntervalMinutes: resolver.resolveIntRequired('digestInterval', 'DIGEST_INTERVAL', 0),
-                    },
-
-                    oauthEnabled: resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false,
-                    oauthIssuer: resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'),
-                    oauthAudience: resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'),
-                    oauthJwksUri: resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'),
-                    oauthClockTolerance: resolver.resolveIntRequired('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0, 3600),
-                    allowPlaintextLoopbackOAuth: resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false,
-                    trustProxy: resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false,
-                    publicOrigin: resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'),
-                    codemodeInternalFullAccess: resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false,
-                    
-                    projectRegistry: (() => {
-                        const raw = resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY');
-                        if (raw === undefined || raw === null || raw === '') return undefined;
-                        if (typeof raw === 'string' && raw.length > 51200) throw new Error('PROJECT_REGISTRY environment variable exceeds size limit (50KB)');
-                        try {
-                            const registrySchema = z.record(z.string(), z.object({ path: z.string().min(1), project_number: z.number().nullable().optional() }).strict());
-                            const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
-                            const safeParsed = JSON.parse(JSON.stringify(parsed)) as unknown; // Deep clean
-                            const validated = registrySchema.parse(safeParsed) as Record<string, ProjectRegistryEntry>;
-                            for (const key of Object.keys(validated)) {
-                                const entry = validated[key];
-                                if (!entry?.path) continue;
-                                if (!path.isAbsolute(entry.path)) throw new Error(`Project registry path must be an absolute path: ${entry.path}`);
-                                const resolvedPath = path.resolve(entry.path);
-                                try {
-                                    const stat = fs.lstatSync(resolvedPath);
-                                    if (stat.isSymbolicLink()) throw new Error(`Project registry path cannot be a symlink: ${resolvedPath}`);
-                                    if (!stat.isDirectory()) throw new Error(`Project registry path is not a directory: ${resolvedPath}`);
-                                } catch (e) {
-                                    throw new Error(`Project registry path error: ${resolvedPath}`, { cause: e });
-                                }
-                                entry.path = resolvedPath;
-                            }
-                            return validated;
-                        } catch (e: unknown) {
-                            throw new Error(`Failed to parse PROJECT_REGISTRY: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
-                        }
-                    })(),
-                    
-                    additionalTeamDbs: (() => {
-                        const raw = resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS');
-                        if (raw === undefined || raw === null || raw === '') return undefined;
-                        if (typeof raw === 'string' && raw.length > 51200) throw new Error('ADDITIONAL_TEAM_DBS exceeds size limit');
-                        try {
-                            const dbSchema = z.record(z.string().min(1), z.string().min(1));
-                            const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
-                            const validated = dbSchema.parse(JSON.parse(JSON.stringify(parsed)) as unknown);
-                            for (const [label, dbPath] of Object.entries(validated)) {
-                                if (!path.isAbsolute(dbPath)) throw new Error(`Additional team DB path must be absolute: ${dbPath}`);
-                                const resolvedPath = path.resolve(dbPath);
-                                try {
-                                    if (fs.existsSync(resolvedPath)) {
-                                        const stat = fs.lstatSync(resolvedPath);
-                                        if (stat.isSymbolicLink()) throw new Error(`Additional team DB path cannot be a symlink: ${resolvedPath}`);
-                                    }
-                                } catch {
-                                    // ignore
-                                }
-                                validated[label] = resolvedPath;
-                            }
-                            return validated;
-                        } catch (e) {
-                            throw new Error(`Failed to parse ADDITIONAL_TEAM_DBS: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
-                        }
-                    })(),
-
-                    allowedIoRoots: (() => {
-                        const raw = resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS');
-                        if (raw === undefined || raw === null || raw === '') return undefined;
-                        if (typeof raw === 'string' && raw.length > 51200) throw new Error('ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)');
-                        try {
-                            let parsed: unknown = raw;
-                            if (typeof raw === 'string') {
-                                if (raw.trim().startsWith('[')) {
-                                    parsed = JSON.parse(raw) as unknown;
-                                } else {
-                                    parsed = raw.split(',').map((s) => s.trim()).filter(Boolean);
-                                }
-                            }
-                            if (Array.isArray(parsed) && parsed.every((p) => typeof p === 'string' && path.isAbsolute(p))) {
-                                return parsed as string[];
-                            }
-                            if (Array.isArray(parsed)) {
-                                throw new Error('All paths must be absolute');
-                            }
-                            throw new Error('Must be an array of absolute paths');
-                        } catch (e: unknown) {
-                            throw new Error(`Invalid ALLOWED_IO_ROOTS configuration: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
-                        }
-                    })(),
-
-                    briefingConfig: {
-                        entryCount: resolver.resolveIntRequired('briefingEntries', 'BRIEFING_ENTRY_COUNT'),
-                        summaryCount: resolver.resolveIntRequired('briefingSummaries', 'BRIEFING_SUMMARY_COUNT'),
-                        includeTeam: resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false,
-                        issueCount: resolver.resolveIntRequired('briefingIssues', 'BRIEFING_ISSUE_COUNT'),
-                        prCount: resolver.resolveIntRequired('briefingPrs', 'BRIEFING_PR_COUNT'),
-                        prStatusBreakdown: resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false,
-                        milestoneCount: resolver.resolveIntRequired('briefingMilestones', 'BRIEFING_MILESTONE_COUNT'),
-                        rulesFilePath: (() => {
-                            const val = resolver.resolve<string>('rulesFile', 'RULES_FILE_PATH');
-                            return val ? path.resolve(process.cwd(), val) : undefined;
-                        })(),
-                        skillsDirPath: (() => {
-                            const val = resolver.resolve<string>('skillsDir', 'SKILLS_DIR_PATH');
-                            return val ? path.resolve(process.cwd(), val) : undefined;
-                        })(),
-                        workflowCount: resolver.resolveIntRequired('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT'),
-                        workflowStatusBreakdown: resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false,
-                        copilotReviews: resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false,
-                        workflowSummary: resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'),
-                        defaultProjectNumber: (() => {
-                            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
-                            return val ? parseInt(val, 10) : undefined;
-                        })(),
-                    },
-                    instructionLevel: (resolver.resolve<string>('instructionLevel', 'INSTRUCTION_LEVEL') ?? 'standard') as 'essential' | 'standard' | 'full',
-                    auditConfig,
-                    flagVocabulary: resolver.resolveStringArray('flagVocabulary', 'FLAG_VOCABULARY'),
-                    archiveOlderThanDays: resolver.resolveIntRequired('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0),
-                    pruneOlderThanDays: resolver.resolveIntRequired('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0),
-                    hardDeleteOlderThanDays: resolver.resolveIntRequired('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0),
-                    pruneImportanceThreshold: (() => {
-                        const val = resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD');
-                        return parseFloat(String(val));
-                    })(),
-                    pruneDryRun: resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false,
-                    pruneExcludeTags: resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'),
-                    embeddingModel: resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'),
-                    metricsExport: (() => {
-                        const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT');
-                        if (raw) {
-                            if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`);
-                            if (transport !== 'http') {
-                                console.warn(`\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n`);
-                                return undefined;
-                            }
-                            return 'prometheus';
-                        }
-                        return undefined;
-                    })(),
-                    persistMetrics: resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false,
-                    metricsPath: resolver.resolve<string>('metricsPath', 'METRICS_PATH'),
-                    configFilePath: configPath,
-                });
+                // Remove type cast when compiling as actual types will be enforced, 
+                // but any casting avoids intermediate strictness warnings inside the CLI generator
+                await createServer(serverOptions as unknown as Parameters<typeof createServer>[0]);
             } catch (error) {
                 logger.error('Failed to start server', {
                     module: 'CLI',

@@ -89,6 +89,9 @@ node test-server/scripts/test-subscribe.mjs
 # Test J — Metrics Persistence
 # Term 1: pnpm tsx test-server/scripts/test-metrics-persistence.ts
 
+# Test K — Config Dump & Validation
+node test-server/scripts/test-dump-config.mjs
+
 # Cleanup Test Artifacts
 rm test-team-prompts.db*
 rm *_metrics.json
@@ -106,6 +109,7 @@ rm *_metrics.json
 | Subscriptions       | Resources emit notifications correctly upon mutation                 |
 | Prometheus Metrics  | HTTP endpoint returns prometheus exposition format with tool metrics |
 | Metrics Persistence | Server loads/saves JSON metrics across restarts automatically        |
+| Config Validation   | Error aggregation catches multiple validation failures cleanly       |
 
 ### 1.4 GitHub Status Resource
 
