@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-85.95%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-85.93%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -347,6 +347,41 @@ pnpm run build
 
 Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
+### Configuration File (Recommended)
+
+Instead of unwieldy `env` blocks in your MCP client config, you can define all settings in a `memory-journal.config.yaml` or `memory-journal.config.json` file placed in the root of your workspace:
+
+```yaml
+# memory-journal.config.yaml
+transport: stdio
+db: /path/to/your/memory_journal.db
+teamDb: /path/to/shared/team.db
+teamDefaultRole: denied
+autoRebuildIndex: true
+toolFilter: codemode
+codemodeInternalFullAccess: true
+briefingEntries: 3
+briefingSummaries: 1
+briefingIncludeTeam: true
+briefingIssues: 3
+briefingPrs: 3
+briefingPrStatus: true
+```
+
+Load it simply via:
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "memory-journal-mcp",
+      "args": ["--config", "/path/to/memory-journal.config.yaml"]
+    }
+  }
+}
+```
+
+*Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`.*
+
 ### Basic Configuration
 
 ```json
@@ -580,6 +615,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 
 | Environment Variable              | Description                                                                                                                                           |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MEMORY_JOURNAL_CONFIG`           | Path to configuration file (.yaml, .yml, .json) (CLI: `--config`)                                                                                     |
 | `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                                                  |
 | `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                                                        |
 | `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                                                                               |

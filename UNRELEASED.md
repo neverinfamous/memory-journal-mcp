@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added configuration file support (`--config <path>`) for `.yaml` and `.json` configs to streamline setups, implementing strict `CLI > Env > Config > Default` precedence.
 - Added `--prune-dry-run` flag and `PRUNE_DRY_RUN` configuration to preview auto-prune candidates without mutating the database.
 - Added `--prune-exclude-tags` flag and `PRUNE_EXCLUDE_TAGS` configuration to exempt specific tags from being auto-pruned.
 - Added resource read frequency tracking to observability stack (`memory://metrics/resources`, `memory://metrics/summary`).
@@ -51,6 +52,7 @@
 - Migrated documentation and GitHub Actions workflows from `npm` to `pnpm`.
 
 ### Fixed
+- Fixed missing configuration references for `--config` and `MEMORY_JOURNAL_CONFIG` in `README.md`, `.env.example`, `mcp-config-example.json`, and the GitHub Wiki following a comprehensive documentation parity audit.
 - Fixed generic `ReferenceError` for `fetch()` in Code Mode sandboxes by injecting a descriptive `SandboxNetworkError` interceptor.
 - Fixed `cross_team_search` incorrectly omitting the primary team database when executing cross-database searches.
 - Fixed FTS search phrase matching to preserve balanced double-quotes for exact phrase matches.

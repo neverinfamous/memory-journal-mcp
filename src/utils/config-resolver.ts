@@ -1,0 +1,170 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { parse as parseYaml } from 'yaml'
+import type { Command } from 'commander'
+import { logger } from './logger.js'
+
+export interface ResolvedConfigValue<T> {
+    value: T
+    source: 'cli' | 'env' | 'config' | 'default'
+}
+
+export class ConfigResolver {
+    private configFileOptions: Record<string, unknown> = {}
+
+
+    constructor(
+        private command: Command,
+        private cliOptions: Record<string, unknown>,
+        configPathOverride?: string
+    ) {
+        this.loadConfigFile(configPathOverride)
+    }
+
+    private loadConfigFile(configPathOverride?: string): void {
+        const pathsToTry = configPathOverride
+            ? [path.resolve(configPathOverride)]
+            : [
+                  path.resolve(process.cwd(), 'memory-journal.config.yaml'),
+                  path.resolve(process.cwd(), 'memory-journal.config.yml'),
+                  path.resolve(process.cwd(), 'memory-journal.config.json'),
+              ]
+
+        for (const filePath of pathsToTry) {
+            if (!fs.existsSync(filePath)) {
+                if (configPathOverride) {
+                    throw new Error(`Failed to load config file ${filePath}: File does not exist`)
+                }
+                continue
+            }
+            try {
+                const content = fs.readFileSync(filePath, 'utf-8')
+                if (filePath.endsWith('.json')) {
+                    this.configFileOptions = JSON.parse(content) as Record<string, unknown>
+                } else {
+                    const parsed = (parseYaml as (text: string) => unknown)(content)
+                    this.configFileOptions = (parsed ?? {}) as Record<string, unknown>
+                }
+                // Log safely since logger might not be fully configured yet,
+                // but we can log that config was found.
+                logger.info(`Loaded configuration from ${filePath}`, { module: 'ConfigResolver' })
+                break
+            } catch (error) {
+                // If override was provided and fails, throw
+                if (configPathOverride) {
+                    throw new Error(`Failed to load config file ${filePath}: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+                }
+                // Otherwise silently continue to next default path
+            }
+        }
+    }
+
+    /**
+     * Resolves a configuration option following precedence:
+     * CLI flag > Env Var > Config File > Default
+     */
+    public resolve<T>(
+        cliKey: string,
+        envKey?: string,
+        parser?: (val: unknown) => T
+    ): T | undefined {
+        let value: unknown
+        let source: 'cli' | 'env' | 'config' | 'default' = 'default'
+
+        // 1. CLI flag (Check if it was explicitly passed vs default)
+        if (this.command.getOptionValueSource(cliKey) === 'cli') {
+            value = this.cliOptions[cliKey]
+            source = 'cli'
+        }
+        // 2. Env Var
+        else if (envKey && process.env[envKey] !== undefined) {
+            value = process.env[envKey]
+            source = 'env'
+        }
+        // 3. Config File
+        else if (this.configFileOptions[cliKey] !== undefined) {
+            value = this.configFileOptions[cliKey]
+            source = 'config'
+        }
+        // 4. Default from Commander
+        else {
+            value = this.cliOptions[cliKey]
+        }
+
+        if (value === undefined) {
+            return undefined
+        }
+
+        try {
+            return parser ? parser(value) : (value as T)
+        } catch (err) {
+            throw new Error(`Failed to parse configuration for ${cliKey} (source: ${source}): ${err instanceof Error ? err.message : String(err)}`, { cause: err })
+        }
+    }
+
+    /**
+     * Helper to resolve a required numeric value
+     */
+    public resolveIntRequired(
+        cliKey: string,
+        envKey?: string,
+        min?: number,
+        max?: number
+    ): number {
+        const val = this.resolve<unknown>(cliKey, envKey)
+        if (val === undefined || val === null) {
+            throw new Error(`Missing required numeric configuration for ${cliKey}`)
+        }
+
+        const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
+        const parsed = typeof val === 'number' ? val : parseInt(valStr, 10)
+        
+        if (Number.isNaN(parsed)) {
+            throw new Error(`Invalid required numeric configuration for ${cliKey}: ${valStr}`)
+        }
+        if (min !== undefined && parsed < min) {
+            throw new Error(`Configuration ${cliKey} must be at least ${min}`)
+        }
+        if (max !== undefined && parsed > max) {
+            throw new Error(`Configuration ${cliKey} must be at most ${max}`)
+        }
+        
+        return parsed
+    }
+
+    /**
+     * Helper to resolve boolean value
+     */
+    public resolveBool(
+        cliKey: string,
+        envKey?: string
+    ): boolean | undefined {
+        const val = this.resolve<unknown>(cliKey, envKey)
+        if (val === undefined) return undefined
+        
+        if (typeof val === 'boolean') return val
+        if (typeof val === 'string') return val.toLowerCase() === 'true'
+        return Boolean(val)
+    }
+
+    /**
+     * Helper to resolve a string array (e.g. from comma separated string or actual array)
+     */
+    public resolveStringArray(
+        cliKey: string,
+        envKey?: string
+    ): string[] | undefined {
+        const val = this.resolve<unknown>(cliKey, envKey)
+        if (val === undefined || val === '') return undefined
+
+        if (Array.isArray(val)) {
+            return val.map(String).map(s => s.trim()).filter(Boolean)
+        }
+        
+        if (typeof val === 'string') {
+            return val.split(',').map(s => s.trim()).filter(Boolean)
+        }
+
+        return [typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)]
+    }
+}

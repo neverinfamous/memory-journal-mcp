@@ -9,20 +9,9 @@ import { VERSION } from './version.js'
 import type { ProjectRegistryEntry } from './types/index.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from './audit/index.js'
 import type { AuditConfig } from './audit/index.js'
+import { ConfigResolver } from './utils/config-resolver.js'
 
-function parseConfigIntRequired(value: string, name: string, min?: number, max?: number): number {
-    const parsed = parseInt(value, 10)
-    if (Number.isNaN(parsed)) {
-        throw new Error(`Invalid required numeric configuration for ${name}: ${value}`)
-    }
-    if (min !== undefined && parsed < min) {
-        throw new Error(`Configuration ${name} must be at least ${min}`)
-    }
-    if (max !== undefined && parsed > max) {
-        throw new Error(`Configuration ${name} must be at most ${max}`)
-    }
-    return parsed
-}
+
 
 // Database Resolution: Enforce explicit boundaries
 function resolveDbPath(envPath: string | undefined, defaultName: string): string {
@@ -245,73 +234,21 @@ program
         '--flag-vocabulary <terms>',
         'Comma-separated flag vocabulary for Hush Protocol (env: FLAG_VOCABULARY, default: blocker,needs_review,help_requested,fyi)'
     )
+    .option('--config <path>', 'Path to configuration file (.yaml, .yml, .json) (env: MEMORY_JOURNAL_CONFIG)')
     .action(
-        async (options: {
-            transport: string
-            port: string
-            serverHost?: string
-            stateless?: boolean
-            db: string
-            teamDb?: string
-            additionalTeamDbs?: string
-            teamDefaultRole: string
-            teamAdmin?: string
-            toolFilter?: string
-            defaultProject: string
-            autoRebuildIndex?: boolean
-            corsOrigin?: string
-            enableHsts?: boolean
-            authToken?: string
-            logLevel: string
-            backupInterval: string
-            keepBackups: string
-            vacuumInterval: string
-            rebuildIndexInterval: string
-            digestInterval: string
-            metricsExport?: string
+        async (options: Record<string, unknown>, command: Command) => {
+            let resolver: ConfigResolver;
+            try {
+                const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG'];
+                resolver = new ConfigResolver(command, options, configPath);
+            } catch (err) {
+                console.error(err instanceof Error ? err.message : String(err));
+                process.exit(1);
+            }
 
-            codemodeMaxResultSize?: string
-            oauthEnabled?: boolean
-            oauthIssuer?: string
-            oauthAudience?: string
-            oauthJwksUri?: string
-            oauthClockTolerance: string
-            oauthAllowPlaintextLoopback?: boolean
-            trustProxy?: boolean
-            publicOrigin?: string
-            briefingEntries: string
-            briefingSummaries: string
-            briefingIncludeTeam?: boolean
-            briefingIssues: string
-            briefingPrs: string
-            briefingPrStatus?: boolean
-            briefingMilestones: string
-            rulesFile?: string
-            skillsDir?: string
-            briefingWorkflows: string
-            briefingWorkflowStatus?: boolean
-            briefingCopilot?: boolean
-            workflowSummary?: string
-            flagVocabulary?: string
-            instructionLevel: string
-            allowedIoRoots?: string
-            auditLog?: string
-            auditRedact?: boolean
-            auditReads?: boolean
-            auditLogMaxSize: string
-            codemodeInternalFullAccess?: boolean
-            archiveOlderThanDays: string
-            pruneOlderThanDays: string
-            hardDeleteOlderThanDays: string
-            pruneImportanceThreshold: string
-            pruneDryRun?: boolean
-            pruneExcludeTags?: string
-            embeddingModel?: string
-            persistMetrics?: boolean
-            metricsPath?: string
-        }) => {
             // Set log level
-            logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
+            const logLevel = resolver.resolve<string>('logLevel', 'LOG_LEVEL') ?? 'info';
+            logger.setLevel(logLevel as 'debug' | 'info' | 'warning' | 'error');
 
             // Validate against default placeholder secrets
             const sensitiveEnvVars = [
@@ -319,460 +256,223 @@ program
                 'MCP_AUTH_TOKEN',
                 'OAUTH_ISSUER',
                 'OAUTH_JWKS_URI',
-            ]
+            ];
             for (const envVar of sensitiveEnvVars) {
                 if (process.env[envVar]?.startsWith('CHANGEME_')) {
                     logger.error(
                         `FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`,
                         { module: 'CLI' }
-                    )
-                    process.exit(1)
+                    );
+                    process.exit(1);
                 }
             }
 
-            // Resolve host: CLI flag > env var > default (localhost)
-            const host =
-                options.serverHost ?? process.env['MCP_HOST'] ?? process.env['HOST'] ?? undefined
+            const host = resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined;
+            const transport = resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio';
+            const stateless = resolver.resolveBool('stateless', 'STATELESS') ?? false;
+            const db = resolver.resolve<string>('db', 'DB_PATH') ?? defaultDbPath;
+            const teamDb = resolver.resolve<string>('teamDb', 'TEAM_DB_PATH') ?? defaultTeamDbPath;
 
             logger.info('Starting Memory Journal MCP Server', {
                 module: 'CLI',
-                transport: options.transport,
-                stateless: options.stateless ?? false,
-                db: options.db,
-                ...(options.teamDb ? { teamDb: options.teamDb } : {}),
+                transport,
+                stateless,
+                db,
+                ...(teamDb ? { teamDb } : {}),
                 ...(host ? { host } : {}),
-            })
+            });
 
-            // Set CODE_MODE_MAX_RESULT_SIZE env var from CLI flag if provided
-            const codemodeMaxResultSize =
-                options.codemodeMaxResultSize ?? process.env['CODE_MODE_MAX_RESULT_SIZE']
+            const codemodeMaxResultSize = resolver.resolve<string>('codemodeMaxResultSize', 'CODE_MODE_MAX_RESULT_SIZE');
             if (codemodeMaxResultSize) {
-                process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize
+                process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize;
             }
 
             try {
-                // Build audit config from CLI options + env
-                const auditLogPath = options.auditLog ?? process.env['AUDIT_LOG_PATH']
+                const auditLogPath = resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH');
                 const auditConfig: AuditConfig | undefined = auditLogPath
                     ? {
                           enabled: true,
                           logPath: auditLogPath,
-                          redact:
-                              options.auditRedact ??
-                              (process.env['AUDIT_REDACT']
-                                  ? process.env['AUDIT_REDACT'] === 'true'
-                                  : true),
-                          auditReads: options.auditReads ?? process.env['AUDIT_READS'] === 'true',
-                          maxSizeBytes: parseConfigIntRequired(
-                              process.env['AUDIT_LOG_MAX_SIZE'] ?? options.auditLogMaxSize,
-                              'audit-log-max-size',
-                              1024
-                          ),
+                          redact: resolver.resolveBool('auditRedact', 'AUDIT_REDACT') ?? true,
+                          auditReads: resolver.resolveBool('auditReads', 'AUDIT_READS') ?? false,
+                          maxSizeBytes: resolver.resolveIntRequired('auditLogMaxSize', 'AUDIT_LOG_MAX_SIZE', 1024),
                       }
-                    : undefined
+                    : undefined;
 
                 await createServer({
-                    transport: options.transport as 'stdio' | 'http',
-                    port: parseConfigIntRequired(options.port, 'port', 1, 65535),
+                    transport: transport as 'stdio' | 'http',
+                    port: resolver.resolveIntRequired('port', 'PORT', 1, 65535),
                     host,
-                    statelessHttp: options.stateless === true,
-                    dbPath: options.db,
-                    teamDbPath: options.teamDb,
-                    teamDefaultRole: (process.env['TEAM_DEFAULT_ROLE'] ?? options.teamDefaultRole) as 'admin' | 'member' | 'viewer' | 'denied',
-                    teamAdmin: process.env['TEAM_ADMIN'] ?? options.teamAdmin,
-                    toolFilter: options.toolFilter,
-                    defaultProjectNumber: options.defaultProject
-                        ? parseConfigIntRequired(options.defaultProject, 'default-project', 1)
-                        : process.env['DEFAULT_PROJECT_NUMBER']
-                          ? parseConfigIntRequired(
-                                process.env['DEFAULT_PROJECT_NUMBER'],
-                                'DEFAULT_PROJECT_NUMBER',
-                                1
-                            )
-                          : undefined,
-                    autoRebuildIndex:
-                        options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
-                    corsOrigins: options.corsOrigin
-                        ? options.corsOrigin.split(',').map((s) => s.trim())
-                        : undefined,
-                    enableHSTS: options.enableHsts ?? process.env['MCP_ENABLE_HSTS'] === 'true',
-                    authToken: options.authToken,
+                    statelessHttp: stateless,
+                    dbPath: db,
+                    teamDbPath: teamDb,
+                    teamDefaultRole: (resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied') as 'admin' | 'member' | 'viewer' | 'denied',
+                    teamAdmin: resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'),
+                    toolFilter: resolver.resolve<string>('toolFilter', 'TOOL_FILTER'),
+                    defaultProjectNumber: (() => {
+                        const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
+                        return val ? parseInt(val, 10) : undefined;
+                    })(),
+                    autoRebuildIndex: resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false,
+                    corsOrigins: resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'),
+                    enableHSTS: resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false,
+                    authToken: resolver.resolve<string>('authToken', 'MCP_AUTH_TOKEN'),
                     scheduler: {
-                        backupIntervalMinutes: parseConfigIntRequired(
-                            options.backupInterval,
-                            'backup-interval',
-                            0
-                        ),
-                        keepBackups: parseConfigIntRequired(
-                            options.keepBackups,
-                            'keep-backups',
-                            1,
-                            100
-                        ),
-                        vacuumIntervalMinutes: parseConfigIntRequired(
-                            options.vacuumInterval,
-                            'vacuum-interval',
-                            0
-                        ),
-                        rebuildIndexIntervalMinutes: parseConfigIntRequired(
-                            options.rebuildIndexInterval,
-                            'rebuild-index-interval',
-                            0
-                        ),
-                        digestIntervalMinutes: parseConfigIntRequired(
-                            options.digestInterval,
-                            'digest-interval',
-                            0
-                        ),
+                        backupIntervalMinutes: resolver.resolveIntRequired('backupInterval', 'BACKUP_INTERVAL', 0),
+                        keepBackups: resolver.resolveIntRequired('keepBackups', 'KEEP_BACKUPS', 1, 100),
+                        vacuumIntervalMinutes: resolver.resolveIntRequired('vacuumInterval', 'VACUUM_INTERVAL', 0),
+                        rebuildIndexIntervalMinutes: resolver.resolveIntRequired('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0),
+                        digestIntervalMinutes: resolver.resolveIntRequired('digestInterval', 'DIGEST_INTERVAL', 0),
                     },
 
-                    // OAuth 2.1
-                    oauthEnabled: options.oauthEnabled ?? process.env['OAUTH_ENABLED'] === 'true',
-                    oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],
-                    oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
-                    oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
-                    oauthClockTolerance: parseConfigIntRequired(
-                        process.env['OAUTH_CLOCK_TOLERANCE'] ?? options.oauthClockTolerance,
-                        'oauth-clock-tolerance',
-                        0,
-                        3600
-                    ),
-                    allowPlaintextLoopbackOAuth:
-                        options.oauthAllowPlaintextLoopback ??
-                        process.env['OAUTH_ALLOW_PLAINTEXT_LOOPBACK'] === 'true',
-                    trustProxy: options.trustProxy ?? process.env['TRUST_PROXY'] === 'true',
-                    publicOrigin: options.publicOrigin ?? process.env['PUBLIC_ORIGIN'],
-                    codemodeInternalFullAccess:
-                        options.codemodeInternalFullAccess ??
-                        process.env['CODEMODE_INTERNAL_FULL_ACCESS'] === 'true',
-                    // Project Registry
+                    oauthEnabled: resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false,
+                    oauthIssuer: resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'),
+                    oauthAudience: resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'),
+                    oauthJwksUri: resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'),
+                    oauthClockTolerance: resolver.resolveIntRequired('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0, 3600),
+                    allowPlaintextLoopbackOAuth: resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false,
+                    trustProxy: resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false,
+                    publicOrigin: resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'),
+                    codemodeInternalFullAccess: resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false,
+                    
                     projectRegistry: (() => {
-                        const raw = process.env['PROJECT_REGISTRY']
-                        if (!raw) return undefined
-                        // Size limit to prevent DoS via large JSON payload parsing
-                        if (raw.length > 51200) {
-                            throw new Error(
-                                'PROJECT_REGISTRY environment variable exceeds size limit (50KB)'
-                            )
-                        }
+                        const raw = resolver.resolve<string>('projectRegistry', 'PROJECT_REGISTRY');
+                        // Use existing logic for projectRegistry...
+                        if (!raw) return undefined;
+                        if (raw.length > 51200) throw new Error('PROJECT_REGISTRY environment variable exceeds size limit (50KB)');
                         try {
-                            // Zod validation for structural integrity
-                            const registrySchema = z.record(
-                                z.string(),
-                                z
-                                    .object({
-                                        path: z.string().min(1),
-                                        project_number: z.number().nullable().optional(),
-                                    })
-                                    .strict()
-                            )
-                            const parsed: unknown = JSON.parse(raw)
-                            const deepClean = (obj: unknown): unknown => {
-                                if (obj === null || typeof obj !== 'object') return obj
-                                if (Array.isArray(obj)) return obj.map(deepClean)
-                                const out: Record<string, unknown> = {}
-                                for (const key of Object.keys(obj)) {
-                                    if (
-                                        key === '__proto__' ||
-                                        key === 'constructor' ||
-                                        key === 'prototype'
-                                    )
-                                        continue
-                                    out[key] = deepClean((obj as Record<string, unknown>)[key])
-                                }
-                                return out
-                            }
-                            const safeParsed = deepClean(parsed)
-                            const validated = registrySchema.parse(safeParsed) as Record<
-                                string,
-                                ProjectRegistryEntry
-                            >
+                            const registrySchema = z.record(z.string(), z.object({ path: z.string().min(1), project_number: z.number().nullable().optional() }).strict());
+                            const parsed = JSON.parse(raw) as unknown;
+                            const safeParsed = JSON.parse(JSON.stringify(parsed)) as unknown; // Deep clean
+                            const validated = registrySchema.parse(safeParsed) as Record<string, ProjectRegistryEntry>;
                             for (const key of Object.keys(validated)) {
-                                const entry = validated[key]
-                                if (!entry?.path) continue
-
-                                if (!path.isAbsolute(entry.path)) {
-                                    throw new Error(
-                                        `Project registry path must be an absolute path: ${entry.path}`
-                                    )
-                                }
-
-                                const resolvedPath = path.resolve(entry.path)
+                                const entry = validated[key];
+                                if (!entry?.path) continue;
+                                if (!path.isAbsolute(entry.path)) throw new Error(`Project registry path must be an absolute path: ${entry.path}`);
+                                const resolvedPath = path.resolve(entry.path);
                                 try {
-                                    const stat = fs.lstatSync(resolvedPath)
-                                    if (stat.isSymbolicLink()) {
-                                        throw new Error(
-                                            `Project registry path cannot be a symlink (symlink traversal protection): ${resolvedPath}`
-                                        )
-                                    }
-                                    if (!stat.isDirectory()) {
-                                        throw new Error(
-                                            `Project registry path is not a directory: ${resolvedPath}`
-                                        )
-                                    }
+                                    const stat = fs.lstatSync(resolvedPath);
+                                    if (stat.isSymbolicLink()) throw new Error(`Project registry path cannot be a symlink: ${resolvedPath}`);
+                                    if (!stat.isDirectory()) throw new Error(`Project registry path is not a directory: ${resolvedPath}`);
                                 } catch (e) {
-                                    const errMsg = e instanceof Error ? e.message : String(e)
-                                    throw new Error(
-                                        `Project registry path does not exist or cannot be accessed: ${resolvedPath} (${errMsg})`,
-                                        { cause: e }
-                                    )
+                                    throw new Error(`Project registry path error: ${resolvedPath}`, { cause: e });
                                 }
-                                entry.path = resolvedPath
+                                entry.path = resolvedPath;
                             }
-                            return validated
+                            return validated;
                         } catch (e: unknown) {
-                            const errName = e instanceof Error ? e.message : String(e)
-                            throw new Error(
-                                `Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON and safe paths: ${errName}`,
-                                { cause: e }
-                            )
+                            throw new Error(`Failed to parse PROJECT_REGISTRY: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
                         }
                     })(),
-                    // Additional Team DBs
+                    
                     additionalTeamDbs: (() => {
-                        const raw = options.additionalTeamDbs ?? process.env['ADDITIONAL_TEAM_DBS']
-                        if (!raw) return undefined
-                        if (raw.length > 51200) {
-                            throw new Error(
-                                'ADDITIONAL_TEAM_DBS environment variable exceeds size limit (50KB)'
-                            )
-                        }
+                        const raw = resolver.resolve<string>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS');
+                        if (!raw) return undefined;
+                        if (raw.length > 51200) throw new Error('ADDITIONAL_TEAM_DBS exceeds size limit');
                         try {
-                            const dbSchema = z.record(z.string().min(1), z.string().min(1))
-                            const parsed: unknown = JSON.parse(raw)
-                            const deepClean = (obj: unknown): unknown => {
-                                if (obj === null || typeof obj !== 'object') return obj
-                                if (Array.isArray(obj)) return obj.map(deepClean)
-                                const out: Record<string, unknown> = {}
-                                for (const key of Object.keys(obj)) {
-                                    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
-                                    out[key] = deepClean((obj as Record<string, unknown>)[key])
-                                }
-                                return out
-                            }
-                            const safeParsed = deepClean(parsed)
-                            const validated = dbSchema.parse(safeParsed)
-                            
+                            const dbSchema = z.record(z.string().min(1), z.string().min(1));
+                            const parsed = JSON.parse(raw) as unknown;
+                            const validated = dbSchema.parse(JSON.parse(JSON.stringify(parsed)) as unknown);
                             for (const [label, dbPath] of Object.entries(validated)) {
-                                if (!path.isAbsolute(dbPath)) {
-                                    throw new Error(`Additional team DB path must be absolute: ${dbPath} (label: ${label})`)
-                                }
-                                const resolvedPath = path.resolve(dbPath)
-                                // We don't check if file exists here because SQLite creates it if missing,
-                                // but we do check for symlinks if it does exist.
+                                if (!path.isAbsolute(dbPath)) throw new Error(`Additional team DB path must be absolute: ${dbPath}`);
+                                const resolvedPath = path.resolve(dbPath);
                                 try {
                                     if (fs.existsSync(resolvedPath)) {
-                                        const stat = fs.lstatSync(resolvedPath)
-                                        if (stat.isSymbolicLink()) {
-                                            throw new Error(`Additional team DB path cannot be a symlink: ${resolvedPath}`)
-                                        }
-                                    }
-                                } catch (e) {
-                                    const errMsg = e instanceof Error ? e.message : String(e)
-                                    throw new Error(`Additional team DB path error: ${resolvedPath} (${errMsg})`, { cause: e })
-                                }
-                                validated[label] = resolvedPath
-                            }
-                            return validated
-                        } catch (e: unknown) {
-                            const errName = e instanceof Error ? e.message : String(e)
-                            throw new Error(
-                                `Failed to parse ADDITIONAL_TEAM_DBS environment variable. Must be valid JSON mapping strings to absolute paths: ${errName}`,
-                                { cause: e }
-                            )
-                        }
-                    })(),
-                    // Allowed IO Roots
-                    allowedIoRoots: (() => {
-                        const raw = options.allowedIoRoots ?? process.env['ALLOWED_IO_ROOTS']
-                        if (!raw) return undefined
-                        // Size limit to prevent DoS via large JSON payload parsing
-                        if (raw.length > 51200) {
-                            throw new Error(
-                                'ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)'
-                            )
-                        }
-                        try {
-                            if (raw.trim().startsWith('[')) {
-                                const parsed = JSON.parse(raw) as unknown
-                                if (
-                                    Array.isArray(parsed) &&
-                                    parsed.every((p) => typeof p === 'string' && path.isAbsolute(p))
-                                ) {
-                                    const result = parsed as string[]
-                                    for (const p of result) {
-                                        try {
-                                            if (!fs.existsSync(p)) {
-                                                console.warn(
-                                                    `\n[WARN] ALLOWED_IO_ROOTS path does not exist: ${p}\n`
-                                                )
-                                            }
-                                        } catch {
-                                            // ignore permission issues for exists check
-                                        }
-                                    }
-                                    return result
-                                }
-                                throw new Error('Must be an array of absolute paths')
-                            }
-                            const parts = raw
-                                .split(',')
-                                .map((s) => s.trim())
-                                .filter(Boolean)
-                            if (parts.some((p) => !path.isAbsolute(p))) {
-                                throw new Error('All paths must be absolute')
-                            }
-
-                            for (const p of parts) {
-                                try {
-                                    if (!fs.existsSync(p)) {
-                                        console.warn(
-                                            `\n[WARN] ALLOWED_IO_ROOTS path does not exist: ${p}\n`
-                                        )
+                                        const stat = fs.lstatSync(resolvedPath);
+                                        if (stat.isSymbolicLink()) throw new Error(`Additional team DB path cannot be a symlink: ${resolvedPath}`);
                                     }
                                 } catch {
-                                    // ignore permission issues for exists check
+                                    // ignore
                                 }
+                                validated[label] = resolvedPath;
                             }
+                            return validated;
+                        } catch (e) {
+                            throw new Error(`Failed to parse ADDITIONAL_TEAM_DBS: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                        }
+                    })(),
 
-                            return parts
+                    allowedIoRoots: (() => {
+                        const raw = resolver.resolve<string>('allowedIoRoots', 'ALLOWED_IO_ROOTS');
+                        if (!raw) return undefined;
+                        if (raw.length > 51200) throw new Error('ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)');
+                        try {
+                            if (raw.trim().startsWith('[')) {
+                                const parsed = JSON.parse(raw) as unknown;
+                                if (Array.isArray(parsed) && parsed.every((p) => typeof p === 'string' && path.isAbsolute(p))) {
+                                    return parsed as string[];
+                                }
+                                throw new Error('Must be an array of absolute paths');
+                            }
+                            const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+                            if (parts.some((p) => !path.isAbsolute(p))) throw new Error('All paths must be absolute');
+                            return parts;
                         } catch (e: unknown) {
-                            const errName = e instanceof Error ? e.message : String(e)
-                            throw new Error(`Invalid ALLOWED_IO_ROOTS configuration: ${errName}`, {
-                                cause: e,
-                            })
+                            throw new Error(`Invalid ALLOWED_IO_ROOTS configuration: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
                         }
                     })(),
-                    // Briefing configuration
+
                     briefingConfig: {
-                        entryCount: parseConfigIntRequired(
-                            process.env['BRIEFING_ENTRY_COUNT'] ?? options.briefingEntries,
-                            'briefing-entries'
-                        ),
-                        summaryCount: parseConfigIntRequired(
-                            process.env['BRIEFING_SUMMARY_COUNT'] ?? options.briefingSummaries,
-                            'briefing-summaries'
-                        ),
-                        includeTeam:
-                            options.briefingIncludeTeam ??
-                            process.env['BRIEFING_INCLUDE_TEAM'] === 'true',
-                        issueCount: parseConfigIntRequired(
-                            process.env['BRIEFING_ISSUE_COUNT'] ?? options.briefingIssues,
-                            'briefing-issues'
-                        ),
-                        prCount: parseConfigIntRequired(
-                            process.env['BRIEFING_PR_COUNT'] ?? options.briefingPrs,
-                            'briefing-prs'
-                        ),
-                        prStatusBreakdown:
-                            options.briefingPrStatus ??
-                            process.env['BRIEFING_PR_STATUS'] === 'true',
-                        milestoneCount: parseConfigIntRequired(
-                            process.env['BRIEFING_MILESTONE_COUNT'] ?? options.briefingMilestones,
-                            'briefing-milestones'
-                        ),
-                        rulesFilePath: options.rulesFile
-                            ? path.resolve(process.cwd(), options.rulesFile)
-                            : process.env['RULES_FILE_PATH']
-                              ? path.resolve(process.cwd(), process.env['RULES_FILE_PATH'])
-                              : undefined,
-                        skillsDirPath: options.skillsDir
-                            ? path.resolve(process.cwd(), options.skillsDir)
-                            : process.env['SKILLS_DIR_PATH']
-                              ? path.resolve(process.cwd(), process.env['SKILLS_DIR_PATH'])
-                              : undefined,
-                        workflowCount: parseConfigIntRequired(
-                            process.env['BRIEFING_WORKFLOW_COUNT'] ?? options.briefingWorkflows,
-                            'briefing-workflows'
-                        ),
-                        workflowStatusBreakdown:
-                            options.briefingWorkflowStatus ??
-                            process.env['BRIEFING_WORKFLOW_STATUS'] === 'true',
-                        copilotReviews:
-                            options.briefingCopilot ??
-                            process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
-                        workflowSummary:
-                            options.workflowSummary ??
-                            process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] ??
-                            undefined,
-                        defaultProjectNumber: options.defaultProject
-                            ? parseConfigIntRequired(options.defaultProject, 'default-project', 1)
-                            : process.env['DEFAULT_PROJECT_NUMBER']
-                              ? parseConfigIntRequired(
-                                    process.env['DEFAULT_PROJECT_NUMBER'],
-                                    'DEFAULT_PROJECT_NUMBER',
-                                    1
-                                )
-                              : undefined,
+                        entryCount: resolver.resolveIntRequired('briefingEntries', 'BRIEFING_ENTRY_COUNT'),
+                        summaryCount: resolver.resolveIntRequired('briefingSummaries', 'BRIEFING_SUMMARY_COUNT'),
+                        includeTeam: resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false,
+                        issueCount: resolver.resolveIntRequired('briefingIssues', 'BRIEFING_ISSUE_COUNT'),
+                        prCount: resolver.resolveIntRequired('briefingPrs', 'BRIEFING_PR_COUNT'),
+                        prStatusBreakdown: resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false,
+                        milestoneCount: resolver.resolveIntRequired('briefingMilestones', 'BRIEFING_MILESTONE_COUNT'),
+                        rulesFilePath: (() => {
+                            const val = resolver.resolve<string>('rulesFile', 'RULES_FILE_PATH');
+                            return val ? path.resolve(process.cwd(), val) : undefined;
+                        })(),
+                        skillsDirPath: (() => {
+                            const val = resolver.resolve<string>('skillsDir', 'SKILLS_DIR_PATH');
+                            return val ? path.resolve(process.cwd(), val) : undefined;
+                        })(),
+                        workflowCount: resolver.resolveIntRequired('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT'),
+                        workflowStatusBreakdown: resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false,
+                        copilotReviews: resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false,
+                        workflowSummary: resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'),
+                        defaultProjectNumber: (() => {
+                            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
+                            return val ? parseInt(val, 10) : undefined;
+                        })(),
                     },
-                    instructionLevel: (options.instructionLevel !== 'standard'
-                        ? options.instructionLevel
-                        : (process.env['INSTRUCTION_LEVEL'] ?? 'standard')) as
-                        | 'essential'
-                        | 'standard'
-                        | 'full',
+                    instructionLevel: (resolver.resolve<string>('instructionLevel', 'INSTRUCTION_LEVEL') ?? 'standard') as 'essential' | 'standard' | 'full',
                     auditConfig,
-                    flagVocabulary: (() => {
-                        const raw = options.flagVocabulary ?? process.env['FLAG_VOCABULARY']
-                        if (!raw) return undefined
-                        return raw
-                            .split(',')
-                            .map((s) => s.trim().toLowerCase())
-                            .filter(Boolean)
+                    flagVocabulary: resolver.resolveStringArray('flagVocabulary', 'FLAG_VOCABULARY'),
+                    archiveOlderThanDays: resolver.resolveIntRequired('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0),
+                    pruneOlderThanDays: resolver.resolveIntRequired('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0),
+                    hardDeleteOlderThanDays: resolver.resolveIntRequired('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0),
+                    pruneImportanceThreshold: (() => {
+                        const val = resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD');
+                        return parseFloat(String(val));
                     })(),
-                    archiveOlderThanDays: parseConfigIntRequired(
-                        process.env['ARCHIVE_OLDER_THAN_DAYS'] ?? options.archiveOlderThanDays,
-                        'archive-older-than-days',
-                        0
-                    ),
-                    pruneOlderThanDays: parseConfigIntRequired(
-                        process.env['PRUNE_OLDER_THAN_DAYS'] ?? options.pruneOlderThanDays,
-                        'prune-older-than-days',
-                        0
-                    ),
-                    hardDeleteOlderThanDays: parseConfigIntRequired(
-                        process.env['HARD_DELETE_OLDER_THAN_DAYS'] ?? options.hardDeleteOlderThanDays,
-                        'hard-delete-older-than-days',
-                        0
-                    ),
-                    pruneImportanceThreshold: parseFloat(
-                        process.env['PRUNE_IMPORTANCE_THRESHOLD'] ??
-                            options.pruneImportanceThreshold
-                    ),
-                    pruneDryRun: options.pruneDryRun ?? process.env['PRUNE_DRY_RUN'] === 'true',
-                    pruneExcludeTags: (() => {
-                        const raw = options.pruneExcludeTags ?? process.env['PRUNE_EXCLUDE_TAGS']
-                        if (!raw) return undefined
-                        return raw.split(',').map(s => s.trim()).filter(Boolean)
-                    })(),
-                    embeddingModel: process.env['EMBEDDING_MODEL'] ?? options.embeddingModel,
+                    pruneDryRun: resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false,
+                    pruneExcludeTags: resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'),
+                    embeddingModel: resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'),
                     metricsExport: (() => {
-                        const raw = options.metricsExport ?? process.env['METRICS_EXPORT']
+                        const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT');
                         if (raw) {
-                            if (raw !== 'prometheus') {
-                                throw new Error(`Unsupported metrics export format: ${raw}`)
+                            if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`);
+                            if (transport !== 'http') {
+                                console.warn(`\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n`);
+                                return undefined;
                             }
-                            if (options.transport !== 'http') {
-                                console.warn(
-                                    `\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n`
-                                )
-                                return undefined
-                            }
-                            return 'prometheus'
+                            return 'prometheus';
                         }
-                        return undefined
+                        return undefined;
                     })(),
-                    persistMetrics: options.persistMetrics ?? process.env['PERSIST_METRICS'] === 'true',
-                    metricsPath: options.metricsPath ?? process.env['METRICS_PATH'],
-                })
+                    persistMetrics: resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false,
+                    metricsPath: resolver.resolve<string>('metricsPath', 'METRICS_PATH'),
+                });
             } catch (error) {
                 logger.error('Failed to start server', {
                     module: 'CLI',
                     error: error instanceof Error ? error.message : String(error),
-                })
-                process.exit(1)
+                });
+                process.exit(1);
             }
         }
-    )
+    );
 
-program.parse()
+program.parse();

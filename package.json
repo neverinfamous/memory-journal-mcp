@@ -72,6 +72,7 @@
         "jose": "^6.2.1",
         "simple-git": "^3.35.2",
         "sqlite-vec": "^0.1.7-alpha.2",
+        "yaml": "^2.9.0",
         "zod": "^4.3.6"
     },
     "devDependencies": {

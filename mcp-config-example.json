@@ -18,6 +18,7 @@
                 "1440"
             ],
             "env": {
+                "MEMORY_JOURNAL_CONFIG": "",
                 "DB_PATH": "/app/data/memory_journal.db",
                 "TEAM_DB_PATH": "/app/data/team.db",
                 "TEAM_AUTHOR": "",
