@@ -238,8 +238,8 @@ program
     .action(
         async (options: Record<string, unknown>, command: Command) => {
             let resolver: ConfigResolver;
+            const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG'];
             try {
-                const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG'];
                 resolver = new ConfigResolver(command, options, configPath);
             } catch (err) {
                 console.error(err instanceof Error ? err.message : String(err));
@@ -336,13 +336,12 @@ program
                     codemodeInternalFullAccess: resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false,
                     
                     projectRegistry: (() => {
-                        const raw = resolver.resolve<string>('projectRegistry', 'PROJECT_REGISTRY');
-                        // Use existing logic for projectRegistry...
-                        if (!raw) return undefined;
-                        if (raw.length > 51200) throw new Error('PROJECT_REGISTRY environment variable exceeds size limit (50KB)');
+                        const raw = resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY');
+                        if (raw === undefined || raw === null || raw === '') return undefined;
+                        if (typeof raw === 'string' && raw.length > 51200) throw new Error('PROJECT_REGISTRY environment variable exceeds size limit (50KB)');
                         try {
                             const registrySchema = z.record(z.string(), z.object({ path: z.string().min(1), project_number: z.number().nullable().optional() }).strict());
-                            const parsed = JSON.parse(raw) as unknown;
+                            const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
                             const safeParsed = JSON.parse(JSON.stringify(parsed)) as unknown; // Deep clean
                             const validated = registrySchema.parse(safeParsed) as Record<string, ProjectRegistryEntry>;
                             for (const key of Object.keys(validated)) {
@@ -366,12 +365,12 @@ program
                     })(),
                     
                     additionalTeamDbs: (() => {
-                        const raw = resolver.resolve<string>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS');
-                        if (!raw) return undefined;
-                        if (raw.length > 51200) throw new Error('ADDITIONAL_TEAM_DBS exceeds size limit');
+                        const raw = resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS');
+                        if (raw === undefined || raw === null || raw === '') return undefined;
+                        if (typeof raw === 'string' && raw.length > 51200) throw new Error('ADDITIONAL_TEAM_DBS exceeds size limit');
                         try {
                             const dbSchema = z.record(z.string().min(1), z.string().min(1));
-                            const parsed = JSON.parse(raw) as unknown;
+                            const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
                             const validated = dbSchema.parse(JSON.parse(JSON.stringify(parsed)) as unknown);
                             for (const [label, dbPath] of Object.entries(validated)) {
                                 if (!path.isAbsolute(dbPath)) throw new Error(`Additional team DB path must be absolute: ${dbPath}`);
@@ -393,20 +392,25 @@ program
                     })(),
 
                     allowedIoRoots: (() => {
-                        const raw = resolver.resolve<string>('allowedIoRoots', 'ALLOWED_IO_ROOTS');
-                        if (!raw) return undefined;
-                        if (raw.length > 51200) throw new Error('ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)');
+                        const raw = resolver.resolve<unknown>('allowedIoRoots', 'ALLOWED_IO_ROOTS');
+                        if (raw === undefined || raw === null || raw === '') return undefined;
+                        if (typeof raw === 'string' && raw.length > 51200) throw new Error('ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)');
                         try {
-                            if (raw.trim().startsWith('[')) {
-                                const parsed = JSON.parse(raw) as unknown;
-                                if (Array.isArray(parsed) && parsed.every((p) => typeof p === 'string' && path.isAbsolute(p))) {
-                                    return parsed as string[];
+                            let parsed: unknown = raw;
+                            if (typeof raw === 'string') {
+                                if (raw.trim().startsWith('[')) {
+                                    parsed = JSON.parse(raw) as unknown;
+                                } else {
+                                    parsed = raw.split(',').map((s) => s.trim()).filter(Boolean);
                                 }
-                                throw new Error('Must be an array of absolute paths');
                             }
-                            const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
-                            if (parts.some((p) => !path.isAbsolute(p))) throw new Error('All paths must be absolute');
-                            return parts;
+                            if (Array.isArray(parsed) && parsed.every((p) => typeof p === 'string' && path.isAbsolute(p))) {
+                                return parsed as string[];
+                            }
+                            if (Array.isArray(parsed)) {
+                                throw new Error('All paths must be absolute');
+                            }
+                            throw new Error('Must be an array of absolute paths');
                         } catch (e: unknown) {
                             throw new Error(`Invalid ALLOWED_IO_ROOTS configuration: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
                         }
@@ -464,6 +468,7 @@ program
                     })(),
                     persistMetrics: resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false,
                     metricsPath: resolver.resolve<string>('metricsPath', 'METRICS_PATH'),
+                    configFilePath: configPath,
                 });
             } catch (error) {
                 logger.error('Failed to start server', {

@@ -20,6 +20,7 @@ import {
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from './core.js'
 import { createBatchProgressReporter, sendProgress } from '../../utils/progress-utils.js'
+import { updateConfigurationSchema, handleUpdateConfiguration } from './admin/update_configuration.js'
 
 // ============================================================================
 // Input Schemas
@@ -792,5 +793,30 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                 }
             },
         },
+        {
+            name: 'update_configuration',
+            title: 'Update Server Configuration',
+            description: 'Dynamically update the MCP server configuration (instruction level, tool filters, briefing preferences) without restarting the server.',
+            group: 'admin',
+            inputSchema: updateConfigurationSchema,
+            outputSchema: z.object({ success: z.boolean(), updated: z.array(z.string()), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                if (!context.config) {
+                     return { success: false, updated: [], error: 'Configuration context missing' }
+                }
+                try {
+                    const parsed = updateConfigurationSchema.parse(params)
+                    return await handleUpdateConfiguration(parsed, context.config)
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            }
+        }
     ]
 }

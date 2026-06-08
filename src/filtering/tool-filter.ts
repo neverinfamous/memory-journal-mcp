@@ -37,6 +37,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     relationships: ['link_entries', 'visualize_relationships'],
     io: ['export_entries', 'export_markdown', 'import_markdown'],
     admin: [
+        'update_configuration',
         'update_entry',
         'delete_entry',
         'restore_entry',

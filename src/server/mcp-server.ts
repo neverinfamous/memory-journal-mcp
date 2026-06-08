@@ -40,6 +40,7 @@ import {
 } from './registration.js'
 import { VERSION } from '../version.js'
 import { ServerRuntime } from '../utils/maintenance-lock.js'
+import { ConfigManager } from '../utils/config-manager.js'
 import { AuditLogger, createAuditInterceptor } from '../audit/index.js'
 import { runAutoPrune } from './auto-prune.js'
 import { globalSubscriptionManager } from './subscription-manager.js'
@@ -103,13 +104,14 @@ export interface ServerOptions {
     // Metrics persistence
     persistMetrics?: boolean
     metricsPath?: string
+    configFilePath?: string
 }
 
 /**
  * Create and start the MCP server
  */
 export async function createServer(options: ServerOptions): Promise<void> {
-    const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
+    const { transport, dbPath, teamDbPath, defaultProjectNumber } = options
 
     // Initialize database
     const db = await DatabaseAdapterFactory.create(dbPath)
@@ -281,9 +283,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
     })
 
     // Parse tool filter
-    let filterConfig: ToolFilterConfig | null = null
-    if (toolFilter) {
-        filterConfig = parseToolFilter(toolFilter)
+    let filterConfig: ToolFilterConfig | null
+    if (options.toolFilter) {
+        filterConfig = parseToolFilter(options.toolFilter)
         logger.info('Tool filter applied', {
             module: 'McpServer',
             summary: getFilterSummary(filterConfig),
@@ -297,6 +299,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
             })
         }
     }
+
+    const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
+
+    const configManager = new ConfigManager({
+        instructionLevel: options.instructionLevel ?? 'standard',
+        rawToolFilter,
+        toolFilterConfig: filterConfig,
+        briefingConfig: options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+    }, options.configFilePath)
+
+    runtime.configManager = configManager
 
     // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
     // which captures scheduler in its closure.
@@ -398,7 +411,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     const allTools = getTools(
         db,
-        null,
+        filterConfig,
         vectorManager,
         github,
         customToolHandlerConfig,
@@ -411,37 +424,25 @@ export async function createServer(options: ServerOptions): Promise<void> {
         getRequiredScope(toolName)
     }
 
-    const enabledToolSet = filterConfig?.enabledTools ?? allToolNames
-    const enabledGroups = filterConfig ? getEnabledGroups(filterConfig.enabledTools) : undefined
-
-    const staticTools = filterConfig
-        ? getTools(
-              db,
-              filterConfig,
-              vectorManager,
-              github,
-              customToolHandlerConfig,
-              teamDb ?? undefined,
-              teamVectorManager ?? undefined
-          )
-        : allTools
-
     const createServerInstance = (): McpServer => {
-        // Generate dynamic instructions based on enabled tools and prompts
-        // (Latest DB entry is omitted here to decouple session setup from DB latency;
-        // agents get this context from the mandatory memory://briefing read instead).
-        const instructions = generateInstructions(
-            enabledToolSet,
-            prompts.map((p) => {
-                const prompt = p as { name: string; description?: string }
-                return { name: prompt.name, description: prompt.description }
-            }),
-            undefined,
-            options.instructionLevel ?? 'standard',
-            enabledGroups
-        )
+        // Generate dynamic instructions based on current config
+        const getInstructions = (): string => {
+            const currentConfig = configManager.getConfig()
+            const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
+            const groups = currentConfig.toolFilterConfig ? getEnabledGroups(currentConfig.toolFilterConfig.enabledTools) : undefined
+            return generateInstructions(
+                enabledSet,
+                prompts.map((p) => {
+                    const prompt = p as { name: string; description?: string }
+                    return { name: prompt.name, description: prompt.description }
+                }),
+                undefined,
+                currentConfig.instructionLevel,
+                groups
+            )
+        }
 
-        // Create MCP server with capabilities and instructions
+        // Create MCP server
         const server = new McpServer(
             {
                 name: 'memory-journal-mcp',
@@ -455,11 +456,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         listChanged: true,
                     },
                 },
-                instructions,
+                instructions: getInstructions(),
             }
         )
 
-        for (const tool of staticTools) {
+        for (const tool of allTools) {
             // Build tool options matching MCP SDK expectations
             const toolOptions: {
                 description?: string
@@ -561,6 +562,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         progressToken !== undefined
                             ? { server: server.server, progressToken }
                             : undefined
+
+                    // Ensure the dispatch gets the latest filter config!
+                    const currentConfig = configManager.getConfig()
+                    customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
 
                     const result = await callTool(
                         tool.name,
@@ -675,12 +680,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 annotations?: Record<string, unknown>
             }[]
         }> => {
+            const currentConfig = configManager.getConfig()
             const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
-                ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
+                ...(currentConfig.briefingConfig),
                 // Ensure defaultProjectNumber is available to resource handlers
                 // (may come via briefingConfig from CLI, or directly from server options)
                 defaultProjectNumber:
-                    options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
+                    currentConfig.briefingConfig.defaultProjectNumber ?? defaultProjectNumber,
                 projectRegistry: options.projectRegistry,
                 flagVocabulary: options.flagVocabulary,
                 allowedIoRoots: allowedIoRoots,
@@ -691,7 +697,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     uri.href,
                     db,
                     vectorManager,
-                    filterConfig,
+                    currentConfig.toolFilterConfig,
                     github,
                     scheduler,
                     teamDb ?? undefined,
@@ -744,6 +750,23 @@ export async function createServer(options: ServerOptions): Promise<void> {
             _requestHandlers: Map<string, (req: unknown, ext: unknown) => Promise<unknown>>
         }
         const requestHandlers = serverObj._requestHandlers
+        
+        // Intercept tools/list for dynamic filtering
+        const listToolsHandler = requestHandlers?.get('tools/list')
+        if (listToolsHandler) {
+            requestHandlers.set('tools/list', async (request: unknown, extra: unknown) => {
+                const currentConfig = configManager.getConfig()
+                const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
+                
+                const result = await listToolsHandler(request, extra)
+                const res = result as { tools?: { name: string }[] } | undefined
+                if (Array.isArray(res?.tools)) {
+                    res.tools = res.tools.filter((t) => enabledSet.has(t.name))
+                }
+                return result
+            })
+        }
+
         const originalHandler = requestHandlers?.get('tools/call')
         if (originalHandler) {
             requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
@@ -892,6 +915,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         return server
     }
+    
+    // Subscribe to config changes to send notifications
+    configManager.on('changed', () => {
+        // Send tool list changed notification if using SSE/HTTP
+        void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
+        // In MCP, server.server.sendNotification is available. Wait, we need an instance!
+        // We'll have to rely on clients re-fetching or polling unless we can emit the JSON-RPC directly.
+    })
 
     // Start server based on transport
     if (transport === 'stdio') {

@@ -104,6 +104,7 @@ export class ServerRuntime {
     public mappedToolsCache: ToolRegistration[] | null = null
     public cachedContextRefs: unknown = null
     public githubClientPool: Map<string, GitHubIntegration> | null = null
+    public configManager: unknown = null
 }
 
 // Legacy Fallbacks removed. Consumers MUST provide a valid ServerRuntime to use MaintenanceManager logic.

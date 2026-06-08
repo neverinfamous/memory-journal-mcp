@@ -75,3 +75,4 @@
 - Fixed validation error for string repository names in Code Mode `project_number` arguments by auto-resolving to numeric IDs.
 - Fixed regression where batch database operations (`createEntries`, `updateEntries`, `deleteEntries`) were failing atomically. Migrated methods to process items individually and return structured `errors` arrays for partial successes.
 - Fixed batch operation handlers (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, and team equivalents) to aggregate partial failures using `AggregateMcpError`.
+- Fixed `ConfigResolver` crashing with a JSON Syntax Error when loading pre-parsed `ADDITIONAL_TEAM_DBS`, `ALLOWED_IO_ROOTS`, and `PROJECT_REGISTRY` nested objects from `.json` configuration files.
