@@ -233,3 +233,33 @@ export class AuthorizationError extends MemoryJournalMcpError {
         this.name = 'AuthorizationError'
     }
 }
+
+// =============================================================================
+// Aggregation Errors
+// =============================================================================
+
+/**
+ * Aggregation of multiple errors in a multi-step operation.
+ */
+export class AggregateMcpError extends MemoryJournalMcpError {
+    readonly errors: { message: string; [key: string]: unknown }[]
+
+    constructor(
+        message: string,
+        errors: { message: string; [key: string]: unknown }[],
+        details?: Record<string, unknown>
+    ) {
+        super(message, 'AGGREGATE_ERROR', ErrorCategory.INTERNAL, {
+            recoverable: false,
+            details,
+        })
+        this.name = 'AggregateMcpError'
+        this.errors = errors
+    }
+
+    override toResponse(): ErrorResponse {
+        const response = super.toResponse()
+        response.aggregated_errors = this.errors
+        return response
+    }
+}

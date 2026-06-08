@@ -25,5 +25,9 @@ export const ErrorFieldsMixin = z.object({
         .describe('Error category (validation, query, connection, internal)'),
     recoverable: z.boolean().optional().describe('Whether the error is recoverable'),
     suggestion: z.string().optional().describe('Suggested fix for the error'),
+    aggregated_errors: z
+        .array(z.object({ message: z.string() }).catchall(z.unknown()))
+        .optional()
+        .describe('Details of individual errors in a multi-step operation'),
     details: z.record(z.string(), z.unknown()).optional().describe('Additional error context'),
 })

@@ -106,10 +106,10 @@ Only help resources for your enabled tool groups are registered.
 
 ### Auto-Prune
 
-On server startup, the auto-prune system automatically soft-deletes old entries with low significance scores.
-- **Configurable Thresholds**: Controlled via \`--prune-older-than-days\` and \`--prune-importance-threshold\`.
+On server startup, the auto-prune system implements a graduated data lifecycle (Active → Archived → Soft-Deleted → Hard-Deleted) for old entries with low significance scores.
+- **Configurable Thresholds**: Controlled via \`--archive-older-than-days\`, \`--prune-older-than-days\` (soft-delete), \`--hard-delete-older-than-days\`, and \`--prune-importance-threshold\`.
 - **Exclusion Rules**: Specific tags can be exempted from auto-pruning using \`--prune-exclude-tags <tags>\` (e.g. \`architecture\`, \`never-prune\`).
-- **Dry Run**: Server administrators can preview what would be deleted without mutating the database by using the \`--prune-dry-run\` flag.
+- **Dry Run**: Server administrators can preview what would be processed without mutating the database by using the \`--prune-dry-run\` flag.
 
 ### Real-Time Subscriptions
 
@@ -388,6 +388,7 @@ When the user has GitHub Copilot code review enabled:
 8. **Concurrent Edits**: When updating an entry (\`update_entry\`, \`team_update_entry\`), always pass \`expected_version\` if you know the current version to prevent silently overwriting concurrent changes. If you get a \`VERSION_CONFLICT\` error, re-read the latest entry state returned in the error payload, merge your changes, and retry.
 9. **Cross-Team Search**: The \`cross_team_search\` tool searches across multiple team databases configured via \`ADDITIONAL_TEAM_DBS\`. Results include a \`team_db\` label identifying the source database. This tool is read-only and uses FTS5 only (no semantic/vector search across DBs). Individual DB failures are non-fatal — the response includes \`degraded: true\` and per-DB error details.
 10. **Observability & Persistence**: If the server runs via HTTP with \`--metrics-export prometheus\` (or \`METRICS_EXPORT\`), a standard \`/metrics\` endpoint is exposed for external scrapers. Code Mode cannot natively fetch this endpoint; instead, use the \`memory://metrics/summary\`, \`memory://metrics/latency\`, and \`memory://metrics/resources\` resources to retrieve telemetry. **Metrics reset on restart** unless the \`--persist-metrics\` flag (or \`PERSIST_METRICS\` env var) is provided, which enables periodic JSON state snapshots for long-term trend analysis.
+11. **Multi-step Operations & Error Aggregation**: Tools performing batch actions (e.g., \`import_markdown\`) will return a single \`ErrorResponse\` on partial failure. This response contains an \`aggregated_errors\` array detailing individual item failures, while the top-level message summarizes total success counts (e.g., "Importing 50 entries: 47 succeeded, 3 failed.").
 ## GitHub & Kanban Sync
 
 - **Eventual Consistency**: GitHub Projects V2 read indexes are eventually consistent. If you \`add_kanban_item\` or \`move_kanban_item\`, a subsequent \`get_kanban_board\` might take up to 10 seconds to reflect the change.

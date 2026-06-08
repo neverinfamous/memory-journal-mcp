@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { AggregateMcpError } from '../../types/errors.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { logger } from '../../utils/logger.js'
 
@@ -397,6 +398,18 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         context.vectorManager,
                         allowedRoots
                     )
+
+                    if (!result.success && result.errors.length > 0) {
+                        const successCount = result.created + result.updated + result.skipped
+                        const total = successCount + result.errors.length
+                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+                        
+                        throw new AggregateMcpError(
+                            message,
+                            result.errors.map(e => ({ message: e.error, file: e.file })),
+                            { result }
+                        )
+                    }
 
                     await sendProgress(progress, 2, 2, 'Import complete')
                     return result

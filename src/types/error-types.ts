@@ -72,6 +72,9 @@ export interface ErrorResponse {
     /** Whether the operation can be retried */
     recoverable: boolean
 
+    /** Details of individual errors in a multi-step operation */
+    aggregated_errors?: { message: string; [key: string]: unknown }[]
+
     /** Additional structured context */
     details?: Record<string, unknown>
 }

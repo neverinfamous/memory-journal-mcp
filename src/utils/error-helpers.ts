@@ -52,6 +52,21 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         return err.toResponse()
     }
 
+    // Native AggregateError handling
+    if (typeof AggregateError !== 'undefined' && err instanceof AggregateError) {
+        return {
+            success: false,
+            error: err.message,
+            code: 'AGGREGATE_ERROR',
+            category: ErrorCategory.INTERNAL,
+            recoverable: false,
+            aggregated_errors: err.errors.map((e: unknown) => ({
+                message: e instanceof Error ? e.message : String(e),
+                ...(e instanceof Error && e.name ? { name: e.name } : {}),
+            })),
+        }
+    }
+
     // Zod validation errors
     if (err instanceof ZodError) {
         return {
