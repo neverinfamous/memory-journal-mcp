@@ -43,6 +43,8 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         appendInsight: 'createEntry',
         writeQuery: 'createEntry',
         getProjects: 'listProjects',
+        history: 'getEntryHistory',
+        revisions: 'getEntryHistory',
     },
     search: {
         find: 'searchEntries',
@@ -53,6 +55,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         byDate: 'searchByDateRange',
         similar: 'semanticSearch',
         stats: 'getVectorStats',
+        deleted: 'listDeletedEntries',
+        trash: 'listDeletedEntries',
+        crossSearch: 'crossTeamSearch',
     },
     analytics: {
         stats: 'getStatistics',
@@ -66,6 +71,8 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         dump: 'exportEntries',
         md: 'exportMarkdown',
         importMd: 'importMarkdown',
+        importNotion: 'importExternal',
+        importObsidian: 'importExternal',
     },
     admin: {
         edit: 'updateEntry',
@@ -91,6 +98,10 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         updateEntries: 'batchUpdateEntries',
         deleteEntries: 'batchDeleteEntries',
         batchCreateEntry: 'batchCreateEntries',
+        config: 'updateConfiguration',
+        configure: 'updateConfiguration',
+        auditLog: 'searchAuditLog',
+        audit: 'searchAuditLog',
     },
     github: {
         issues: 'getGithubIssues',
@@ -173,6 +184,12 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         searchProjects: 'teamGetCrossProjectInsights',
         listProjects: 'teamGetCrossProjectInsights',
         getProjects: 'teamGetCrossProjectInsights',
+        deleted: 'teamListDeletedEntries',
+        addMember: 'teamAddMember',
+        removeMember: 'teamRemoveMember',
+        members: 'teamListMembers',
+        listMembers: 'teamListMembers',
+        getMember: 'teamGetMember',
     },
 }
 
@@ -275,11 +292,14 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     createEntryMinimal: 'content',
     testSimple: 'message',
     writeQuery: 'content',
+    getEntryHistory: 'entry_id',
 
     // Search
     searchEntries: 'query',
     searchByDateRange: ['start_date', 'end_date'],
     semanticSearch: 'query',
+    crossTeamSearch: 'query',
+    listDeletedEntries: 'limit',
 
     // Analytics (no positional — uses empty params)
 
@@ -289,6 +309,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
 
     // Export
     exportEntries: 'format',
+    importExternal: 'source_dir',
 
     // Admin
     updateEntry: 'entry_id',
@@ -299,6 +320,8 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     batchCreateEntries: 'entries',
     batchUpdateEntries: 'updates',
     batchDeleteEntries: 'entry_ids',
+    searchAuditLog: 'tool_name',
+    updateConfiguration: 'instruction_level',
 
     // GitHub
     getGithubIssue: 'issue_number',
@@ -350,6 +373,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamListAuthorAliases: 'canonical_author',
     teamResolveAuthor: 'author',
     teamConsolidateAuthors: 'canonical_author',
+    teamImportExternal: 'source_dir',
 }
 
 // =============================================================================

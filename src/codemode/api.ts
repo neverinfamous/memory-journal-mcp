@@ -94,6 +94,18 @@ const PARAM_ALIASES: Record<string, string> = {
     assignee: 'target_user',
     msg: 'message',
     repo_name: 'repo',
+    version: 'expected_version',
+    search: 'query',
+    term: 'query',
+    keyword: 'query',
+    source: 'source_tag',
+    target: 'target_tag',
+    from: 'from_entry_id',
+    to: 'to_entry_id',
+    kind: 'entry_type',
+    filename: 'source_dir',
+    format_type: 'format',
+    webhook: 'report_webhook_url',
 }
 
 /**
@@ -107,6 +119,14 @@ function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, un
         // Handle common agent hallucination where they pass 'id' instead of 'entry_id'
         if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
             snakeKey = 'entry_id'
+        }
+
+        // Context-aware 'type' hallucination
+        if (snakeKey === 'type') {
+            if (!('entry_type' in obj) && !('flag_type' in obj) && !('entry_type' in result) && !('flag_type' in result)) {
+                // We default to entry_type since it's the most common
+                snakeKey = 'entry_type'
+            }
         }
 
         // Remap known parameter aliases (only when canonical name is absent)
@@ -391,6 +411,13 @@ export class JournalApi {
         if (updateEntryFn) this.core['updateEntry'] = updateEntryFn
         const mergeTagsFn = this.admin['mergeTags']
         if (mergeTagsFn) this.core['mergeTags'] = mergeTagsFn
+        const restoreEntryFn = this.admin['restoreEntry']
+        if (restoreEntryFn) this.core['restoreEntry'] = restoreEntryFn
+        const auditLogFn = this.admin['searchAuditLog']
+        if (auditLogFn) this.core['searchAuditLog'] = auditLogFn
+
+        const deletedFn = this.search['listDeletedEntries']
+        if (deletedFn) this.core['listDeletedEntries'] = deletedFn
 
         // Cross-group: io/backup operations commonly attempted on core
         const exportFn = this.io['exportEntries']

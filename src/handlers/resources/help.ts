@@ -386,42 +386,52 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
 
 /**
  * Infer tool group from the tool name.
- * Exhaustive map of all 70 tools — team_ and mj_ prefixes handled first,
- * then explicit lookup for the remaining 44 tools.
+ * Exhaustive map of all 99 tools — team_ and mj_ prefixes handled first,
+ * then explicit lookup for the remaining 54 tools.
  */
 function inferGroupFromName(name: string): string {
     if (name.startsWith('team_')) return 'team'
     if (name.startsWith('mj_')) return 'codemode'
 
     const groupMap: Record<string, string> = {
-        // core (6)
+        // core (7)
         create_entry: 'core',
         create_entry_minimal: 'core',
         get_entry_by_id: 'core',
         get_recent_entries: 'core',
+        get_entry_history: 'core',
         test_simple: 'core',
         list_tags: 'core',
-        // search (4)
+        // search (6)
         search_entries: 'search',
         search_by_date_range: 'search',
         semantic_search: 'search',
         get_vector_index_stats: 'search',
+        list_deleted_entries: 'search',
+        cross_team_search: 'search',
         // analytics (2)
         get_statistics: 'analytics',
         get_cross_project_insights: 'analytics',
         // relationships (2)
         link_entries: 'relationships',
         visualize_relationships: 'relationships',
-        // io (3)
+        // io (4)
         export_entries: 'io',
         export_markdown: 'io',
         import_markdown: 'io',
-        // admin (5)
+        import_external: 'io',
+        // admin (11)
+        update_configuration: 'admin',
         update_entry: 'admin',
         delete_entry: 'admin',
+        restore_entry: 'admin',
         merge_tags: 'admin',
         rebuild_vector_index: 'admin',
         add_to_vector_index: 'admin',
+        batch_create_entries: 'admin',
+        batch_update_entries: 'admin',
+        batch_delete_entries: 'admin',
+        search_audit_log: 'admin',
         // backup (4)
         backup_journal: 'backup',
         list_backups: 'backup',

@@ -253,6 +253,19 @@ async function executeCode(
     try {
         const mjApi = buildApiProxy(methodList, schemaList, readonlyMode)
 
+        const DB_TO_JOURNAL: Record<string, [string, string]> = {
+            listTables: ['analytics', 'getStatistics'],
+            describeTable: ['analytics', 'getStatistics'],
+            count: ['analytics', 'getStatistics'],
+            analyze: ['analytics', 'getStatistics'],
+            vacuum: ['analytics', 'getStatistics'],
+            integrityCheck: ['analytics', 'getStatistics'],
+            exists: ['core', 'getEntryById'],
+            upsert: ['core', 'createEntry'],
+            batchInsert: ['core', 'createEntry'],
+            readQuery: ['core', 'readQuery'],
+        }
+
         // Permissive shim to smooth out common agent hallucinations across different repos
         const shimMj: Record<string, unknown> = new Proxy(mjApi, {
             get(target: Record<string, unknown>, prop: string | symbol): unknown {
@@ -321,18 +334,6 @@ async function executeCode(
                     const camelProp = prop.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
                     if (camelProp !== prop) {
                         // Check if the camelProp is mapped in DB_TO_JOURNAL
-                        const DB_TO_JOURNAL: Record<string, [string, string]> = {
-                            listTables: ['analytics', 'getStatistics'],
-                            describeTable: ['analytics', 'getStatistics'],
-                            count: ['analytics', 'getStatistics'],
-                            analyze: ['analytics', 'getStatistics'],
-                            vacuum: ['analytics', 'getStatistics'],
-                            integrityCheck: ['analytics', 'getStatistics'],
-                            exists: ['core', 'getEntryById'],
-                            upsert: ['core', 'createEntry'],
-                            batchInsert: ['core', 'createEntry'],
-                            readQuery: ['core', 'readQuery'],
-                        }
                         const mapping = DB_TO_JOURNAL[camelProp]
                         if (mapping !== undefined) {
                             const [group, method] = mapping
@@ -344,18 +345,6 @@ async function executeCode(
 
                 // db-mcp bleedover: silently route database-specific methods to closest journal equivalents
                 if (typeof prop === 'string') {
-                    const DB_TO_JOURNAL: Record<string, [string, string]> = {
-                        listTables: ['analytics', 'getStatistics'],
-                        describeTable: ['analytics', 'getStatistics'],
-                        count: ['analytics', 'getStatistics'],
-                        analyze: ['analytics', 'getStatistics'],
-                        vacuum: ['analytics', 'getStatistics'],
-                        integrityCheck: ['analytics', 'getStatistics'],
-                        exists: ['core', 'getEntryById'],
-                        upsert: ['core', 'createEntry'],
-                        batchInsert: ['core', 'createEntry'],
-                        readQuery: ['core', 'readQuery'],
-                    }
                     const mapping = DB_TO_JOURNAL[prop]
                     if (mapping !== undefined) {
                         const [group, method] = mapping
@@ -389,7 +378,7 @@ async function executeCode(
             fetch: () =>
                 Promise.reject(
                     new Error(
-                        "SandboxNetworkError: 'fetch' is not defined in Code Mode for security. Network and HTTP modules are isolated. To retrieve internal metrics, please use the appropriate 'mj.*' tools (e.g., await mj.io.readResource({ uri: 'memory://metrics/latency' }))."
+                        "SandboxNetworkError: 'fetch' is not defined in Code Mode for security. Network and HTTP modules are isolated. To retrieve server metrics, read the appropriate MCP resources (e.g., memory://metrics/summary, memory://metrics/latency) outside of Code Mode."
                     )
                 ),
             sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5000))),
