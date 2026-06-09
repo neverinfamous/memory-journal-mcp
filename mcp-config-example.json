@@ -22,6 +22,7 @@
                 "DB_PATH": "/app/data/memory_journal.db",
                 "DB_ENCRYPTION_KEY": "",
                 "TEAM_DB_PATH": "/app/data/team.db",
+                "ADDITIONAL_TEAM_DBS": "{}",
                 "TEAM_AUTHOR": "",
                 "TEAM_DEFAULT_ROLE": "denied",
                 "TEAM_ADMIN": "",

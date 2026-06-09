@@ -42,7 +42,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**99 MCP Tools** · **19 Workflow Prompts** · **53 Resources (47 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**99 MCP Tools** · **19 Workflow Prompts** · **54 Resources (48 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -291,6 +291,7 @@ Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as
 
 - **Minimal**: Remove `-e GITHUB_TOKEN`, repo mount, and `env` block.
 - **Team**: Add `-e "TEAM_DB_PATH=/app/data/team.db"`.
+- **Cross-Team**: Add `-e "ADDITIONAL_TEAM_DBS={\"other-team\":\"/app/data/other-team.db\"}"`.
 - **Code Mode**: Add `"--tool-filter", "codemode"`.
 - **Briefing**: Add `-e "BRIEFING_ENTRY_COUNT=5"`.
 

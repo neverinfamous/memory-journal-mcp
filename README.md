@@ -623,6 +623,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                                                  |
 | `DB_ENCRYPTION_KEY`               | Encryption key for SQLCipher encrypted databases (at-rest encryption)                                                                                 |
 | `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                                                        |
+| `ADDITIONAL_TEAM_DBS`             | Additional team database mappings (label -> path) as JSON for cross-team discovery (CLI: `--additional-team-dbs`)                                     |
 | `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                                                                               |
 | `TEAM_DEFAULT_ROLE`               | Default role for unrecognized team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`; default: `denied`)                     |
 | `TEAM_ADMIN`                      | Bootstrap this author as admin if team_members table is empty (CLI: `--team-admin`)                                                                   |
