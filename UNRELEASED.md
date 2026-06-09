@@ -56,6 +56,8 @@
 - Migrated documentation and GitHub Actions workflows from `npm` to `pnpm`.
 
 ### Fixed
+- Fixed an issue where temporary backup test directories (`backups`, `test-backup-edge-cases`) and encrypted test databases (`test-*.db`) were not being properly cleaned up after `vitest` execution.
+- Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings and modernized workspace dependencies.
 - Fixed missing configuration references for `--config`, `--dump-config`, and `MEMORY_JOURNAL_CONFIG` in `README.md`, `.env.example`, `mcp-config-example.json`, and the GitHub Wiki, and corrected tool counts in `copilot-instructions.md` following a comprehensive documentation parity audit.
 - Fixed generic `ReferenceError` for `fetch()` in Code Mode sandboxes by injecting a descriptive `SandboxNetworkError` interceptor.
 - Fixed `cross_team_search` incorrectly omitting the primary team database when executing cross-database searches.

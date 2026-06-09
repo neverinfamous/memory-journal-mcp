@@ -7,6 +7,7 @@ export default defineConfig({
         env: {
             TEAM_AUTHOR: 'test-author',
         },
+        globalSetup: ['./tests/global-teardown.ts'],
         include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',
