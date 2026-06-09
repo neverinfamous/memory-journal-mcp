@@ -78,3 +78,27 @@ One of the most common mistakes agents make in Code Mode is assuming tools like 
 To smooth out this hallucination, the `wrapResult` proxy intercepts Array methods (like `.map`, `.filter`, `.find`) called directly on the returned Object. It automatically scans the Object for common array properties (e.g. `entries`, `projects`, `results`) and binds the method to that inner array. 
 
 This means `(await mj.core.getRecentEntries()).map(...)` will seamlessly work, behaving exactly as if you had correctly accessed the inner `.entries` array!
+
+## 8. Markdown & String Payload Escaping
+
+A common hallucination occurs when an agent attempts to pass large Markdown text (e.g. documentation or notes) directly into the `code` string using a template literal (backticks):
+
+```javascript
+await mj.core.createEntry({
+    content: `... prioritizing DB-aware reads over raw \`.jsonl\` files.`
+})
+```
+
+Because the MCP tool call payload is JSON, the inner `\`` gets interpreted literally and prematurely closes the Javascript template string. The remaining text (e.g., `.jsonl`) is then evaluated as a **Tagged Template Literal** or property access, resulting in:
+`TypeError: "...".jsonl is not a function`.
+
+**Solution**: ALWAYS use the `context` parameter of `mj_execute_code` for Markdown or long string payloads. The `context` object is injected securely into the sandbox and avoids all string boundary parsing issues:
+
+```json
+{
+  "code": "return await mj.core.createEntry({ content: context.myMarkdown });",
+  "context": {
+    "myMarkdown": "... prioritizing DB-aware reads over raw `.jsonl` files."
+  }
+}
+```

@@ -97,7 +97,7 @@ All test workflows in `test-server/codemode/` require the agent to track and rep
 
 **How to calculate:**
 
-- Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values.
+- Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values. (Estimates use a content-type-aware heuristic: prose=4.0, json=2.8, code=3.2 bytes/token).
 - _Alternatively_, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
 - Always provide this **Total Token Estimate** clearly in your final test report summary so the user can track context window consumption. The tokens tracked should only count the estimated tokens that actually entered the context window.
 

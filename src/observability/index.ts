@@ -8,7 +8,14 @@
  *   - latency-tracker: per-tool sliding-window percentile tracker
  */
 
-export { estimateTokens, estimatePayloadTokens, injectTokenEstimate } from './token-estimator.js'
+export {
+    estimateTokens,
+    estimatePayloadTokens,
+    injectTokenEstimate,
+    detectContentType,
+} from './token-estimator.js'
+
+export type { ContentType } from './token-estimator.js'
 
 export { MetricsAccumulator } from './metrics.js'
 

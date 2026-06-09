@@ -215,6 +215,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 'Methods accept camelCase or snake_case parameters. ' +
                 'All mj.* methods return Promises (always await). ' +
                 'Result shape: { success: boolean, error?: string, ...data }.\n\n' +
+                '⚠️ CRITICAL: When passing Markdown or multi-line strings, NEVER embed them directly in the `code` string using backticks (template literals). Unescaped backticks will prematurely end the string and cause Tagged Template Literal TypeErrors (e.g., "...".jsonl is not a function) or SyntaxErrors. ALWAYS pass them safely via the `context` parameter and reference them as `context.myParam` inside the code.\n\n' +
                 '### TypeScript Declarations\n```typescript\n' +
                 typeDeclarations +
                 '\n```',

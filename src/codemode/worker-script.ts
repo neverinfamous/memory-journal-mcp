@@ -482,13 +482,16 @@ async function executeCode(
         const endCpu = process.cpuUsage(startCpu)
         const error = err instanceof Error ? err : new Error(String(err))
 
-        // Add tip for syntax errors
+        const errString = String(err)
+        // Add tip for syntax or tagged template errors caused by unescaped backticks
+        // Checking error string directly because VM sandbox errors fail cross-realm `instanceof` checks
         if (
-            error instanceof SyntaxError &&
-            error.message.includes('missing ) after argument list')
+            errString.includes('missing ) after argument list') ||
+            errString.includes('is not a function') ||
+            errString.includes('Invalid or unexpected token')
         ) {
             error.message +=
-                '\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes, use template literals (backticks `) instead of single/double quotes to avoid escaping SyntaxErrors.'
+                '\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes/backticks, NEVER use template literals (backticks `) in the code string as they will prematurely evaluate and cause SyntaxErrors or Tagged Template TypeErrors. ALWAYS pass them safely via the `context` parameter and reference them as `context.myParam`.'
         }
 
         return {

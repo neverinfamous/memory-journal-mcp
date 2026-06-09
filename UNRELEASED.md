@@ -51,6 +51,7 @@
 - Added `snake_case` to `camelCase` fallback mapping for Code Mode operations.
 
 ### Changed
+- Upgraded token estimation from flat `bytes/4` heuristic to content-type-aware ratios (prose: 4.0, JSON: 2.8, code: 3.2 bytes/token) for improved accuracy across structured data, code snippets, and natural language.
 - Updated CLI configuration loader to aggregate all startup validation errors and report them simultaneously, rather than crashing on the first invalid parameter.
 - Synchronized tool count references from 97 to 99 across all documentation, test scripts, and GitHub Wiki files following the addition of the `import_external` and `team_import_external` tools.
 - Synchronized tool count references from 96 to 97 across all documentation, test scripts, and GitHub Wiki files following the addition of the `update_configuration` tool.
@@ -58,7 +59,7 @@
 - Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support.
 - Updated agent server instructions for Team RBAC and Optimistic Locking.
 - Synchronized configuration templates (`.env.example`, `mcp-config-example.json`) and Wiki Configuration documentation with new Auto-Prune flags (`--prune-dry-run`, `--prune-exclude-tags`) and Observability metrics flags (`--persist-metrics`, `--metrics-path`).
-- Migrated documentation and GitHub Actions workflows from `npm` to `pnpm`.
+- Updated `mj_execute_code` schema description, `SKILL.md`, and Code Mode `SyntaxError`/`TypeError` catch blocks to explicitly instruct agents to use the `context` parameter for Markdown and large strings, preventing Tagged Template Literal escaping bugs.
 
 ### Fixed
 - Fixed a security gap where `resources/subscribe` requests bypassed scope boundaries, allowing unauthorized clients to receive real-time notifications for restricted resources (e.g., `memory://audit` or team namespaces).
@@ -91,3 +92,4 @@
 - Fixed batch operation handlers (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, and team equivalents) to aggregate partial failures using `AggregateMcpError`.
 - Fixed `ConfigResolver` crashing with a JSON Syntax Error when loading pre-parsed `ADDITIONAL_TEAM_DBS`, `ALLOWED_IO_ROOTS`, and `PROJECT_REGISTRY` nested objects from `.json` configuration files.
 - Fixed silent and confusing `TypeError` failures in Code Mode by proxying successful non-array object results to explicitly intercept hallucinated Array method calls (`find`, `map`, `filter`, etc.) and throw descriptive errors containing the actual available keys.
+- Fixed duplicated token estimation logic in the audit interceptor that bypassed the centralized `estimateTokens()` function.
