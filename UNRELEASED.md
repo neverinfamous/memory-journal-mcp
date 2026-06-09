@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added `DB_ENCRYPTION_KEY` environment variable configuration to support SQLCipher-encrypted databases at rest (applies to both main and team databases automatically).
 - Added `--dump-config` CLI flag to print the fully resolved configuration payload (with automatically redacted secrets) to assist in debugging configuration precedence.
 - Added configuration file support (`--config <path>`) for `.yaml` and `.json` configs to streamline setups, implementing strict `CLI > Env > Config > Default` precedence.
 - Added `--prune-dry-run` flag and `PRUNE_DRY_RUN` configuration to preview auto-prune candidates without mutating the database.

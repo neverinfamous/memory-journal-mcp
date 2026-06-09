@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-85.49%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-85.47%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -619,6 +619,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MEMORY_JOURNAL_CONFIG`           | Path to configuration file (.yaml, .yml, .json) (CLI: `--config`)                                                                                     |
 | `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                                                  |
+| `DB_ENCRYPTION_KEY`               | Encryption key for SQLCipher encrypted databases (at-rest encryption)                                                                                 |
 | `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                                                        |
 | `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                                                                               |
 | `TEAM_DEFAULT_ROLE`               | Default role for unrecognized team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`; default: `denied`)                     |
