@@ -3,94 +3,67 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
-- Added `import_external` and `team_import_external` tools to support seamless ingestion of knowledge management exports (Notion, Obsidian, Logseq) with automated normalization of wikilinks, metadata, and block hierarchies.
-- Added scheduled digest report delivery via `--report-interval`, `--report-webhook-url`, `--report-webhook-auth`, and `--report-content-type` (HTTP transport only).
-- Added `memory://insights/reports` resource to view the last 5 generated report snapshots and their delivery status.
-- Added Capacity Planning Guide to the documentation to provide database size growth rates, vector index footprints, and archiving recommendations.
-- Added `DB_ENCRYPTION_KEY` environment variable configuration to support SQLCipher-encrypted databases at rest (applies to both main and team databases automatically).
-- Added `--dump-config` CLI flag to print the fully resolved configuration payload (with automatically redacted secrets) to assist in debugging configuration precedence.
-- Added configuration file support (`--config <path>`) for `.yaml` and `.json` configs to streamline setups, implementing strict `CLI > Env > Config > Default` precedence.
-- Added `--prune-dry-run` flag and `PRUNE_DRY_RUN` configuration to preview auto-prune candidates without mutating the database.
-- Added `--prune-exclude-tags` flag and `PRUNE_EXCLUDE_TAGS` configuration to exempt specific tags from being auto-pruned.
-- Added resource read frequency tracking to observability stack (`memory://metrics/resources`, `memory://metrics/summary`).
-- Added Prometheus metrics export via `/metrics` endpoint (`--metrics-export prometheus` flag or `METRICS_EXPORT` env var).
-- Added per-tool latency percentile tracking (p50/p95/p99) via `memory://metrics/latency` resource.
+- Added `import_external` and `team_import_external` tools to support ingestion of knowledge management exports (Notion, Obsidian, Logseq) with automated normalization.
+- Added scheduled digest report delivery via `--report-interval` and related webhook flags, accessible via `memory://insights/reports` resource.
+- Added `DB_ENCRYPTION_KEY` environment variable and `db-encrypt` migration script to support SQLCipher-encrypted databases at rest.
+- Added `--dump-config` CLI flag to print the fully resolved configuration payload with automatically redacted secrets.
+- Added configuration file support (`--config <path>`) for `.yaml` and `.json` configs to streamline setups.
+- Added `update_configuration` tool and hot-reload functionality for runtime configuration changes without server restarts.
+- Added graduated data lifecycle management, including `--archive-older-than-days` and `--hard-delete-older-than-days` flags for automatic archiving and permanent deletion of aged entries.
+- Added `--prune-dry-run` and `--prune-exclude-tags` flags to preview and filter auto-prune candidates.
+- Added Prometheus metrics export via `/metrics` endpoint (`--metrics-export prometheus` flag).
+- Added metrics persistence across server restarts using `--persist-metrics` and `--metrics-path`.
+- Added observability enhancements: per-tool latency percentiles (p50/p95/p99) and resource read frequency tracking via MCP resources.
+- Added `search_audit_log` tool for querying server audit logs with filters.
 - Added `mj-mcp-optimize` skill for debugging Code Mode execution pipeline.
-- Added optimistic concurrency control for entry updates via `version` and `expected_version`.
-- Added Team Role-Based Access Control (RBAC) supporting `admin`, `member`, and `viewer` roles.
-- Added Team member management tools (`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`).
-- Added Team alias management tools (`team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`).
-- Added `TEAM_DEFAULT_ROLE` environment variable to configure fallback role for unrecognized team authors.
-- Added `TEAM_ADMIN` environment variable for headless RBAC bootstrapping.
-- Added GitHub rate limit resource (`memory://github/rate-limit`) for proactive API throttling awareness.
-- Added passive rate limit header capture from GitHub API responses.
+- Added optimistic concurrency control for entry updates using `version` and `expected_version`.
+- Added Team Role-Based Access Control (RBAC) with `admin`, `member`, and `viewer` roles, including configuration fallbacks and member management tools.
+- Added Team Identity Layer with author aliases and management tools (`team_add_author_alias`, etc.).
+- Added GitHub rate limit resource (`memory://github/rate-limit`) with passive rate limit header capture from API responses.
 - Added fuzzy search fallback for search queries (typo tolerance) using Levenshtein distance on entry tags and types.
-- Added support for swappable vector embedding models (`--embedding-model` flag or `EMBEDDING_MODEL` env var).
-- Added `cross_team_search` tool to perform read-only, FTS5-only searches across multiple team databases simultaneously.
-- Added `--additional-team-dbs` CLI argument and `ADDITIONAL_TEAM_DBS` environment variable to configure dynamic sets of auxiliary team databases.
+- Added support for swappable vector embedding models via `--embedding-model`.
+- Added `cross_team_search` tool to perform read-only searches across multiple team databases simultaneously.
 - Added `resources/subscribe` capability and real-time subscription manager for targeted notifications.
-- Added support for returning FTS5 highlight snippets via `include_highlights` parameter in `search_entries` and `team_search`.
-- Added faceted search capability via `include_facets` parameter in `search_entries` and `team_search`.
-- Added dynamic weighting for hybrid searches via `fts_weight` and `semantic_weight` parameters in `search_entries` and `team_search`.
-- Added explicit `mode` parameter (`auto`, `fts`, `semantic`, `hybrid`) to `search_entries` and `team_search` to control search strategy.
-- Added database schema migration framework.
-- Added composite and partial performance indexes for query optimization.
-- Added soft-delete recovery via new `restore_entry` and `team_restore_entry` tools.
-- Added `list_deleted_entries` and `team_list_deleted_entries` tools for discovery of deleted entries prior to permanent deletion.
-- Added archiving capabilities with an `is_archived` status to exclude historical entries from default search results.
-- Added `include_archived` filter option to `search_entries`, `get_recent_entries`, `search_by_date_range` and their team equivalents.
-- Added O(1) keyset cursor pagination to `get_recent_entries`, `search_entries`, `search_by_date_range`, and their team equivalents.
-- Added batch operation tools to the admin group (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`).
-- Added team batch operation tools to the team admin group (`team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`).
-- Added missing tool aliases (`team.delete`, `team.update`, `team.create`) to the Code Mode API.
-- Added support for all batch operations via Code Mode API with method aliases.
-- Added Code Mode fallback mapping for `listProjects` agent hallucinations to return project statistics.
-- Added Code Mode method aliases (`searchProjects`, `listProjects`, `getProjects`) routed to `teamGetCrossProjectInsights`.
-- Added safe `sleep(ms)` and `setTimeout` global aliases to the Code Mode VM sandbox.
-- Added entry versioning/history tracking in an `entry_revisions` table and a new `get_entry_history` tool.
-- Added `snake_case` to `camelCase` fallback mapping for Code Mode operations.
+- Added FTS5 highlight snippets and faceted search capabilities to FTS search and hybrid search.
+- Added dynamic weighting (`fts_weight`, `semantic_weight`) and explicit `mode` parameter for hybrid search strategies.
+- Added database schema migration framework with sequential migrations.
+- Added composite and partial performance indexes to optimize active entries and recent page queries.
+- Added soft-delete recovery via `restore_entry` tools, and `list_deleted_entries` for discovery prior to permanent deletion.
+- Added archiving capabilities with `is_archived` status and `include_archived` filter options to exclude historical entries from default search results.
+- Added O(1) keyset cursor pagination to listing and search tools.
+- Added batch operation tools to the core and team admin groups (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`).
+- Added entry versioning/history tracking in an `entry_revisions` table, accessible via `get_entry_history`.
+- Added Code Mode API enhancements: support for all batch operations, missing team aliases, project insight fallbacks, `sleep(ms)`/`setTimeout` global aliases, and `snake_case` to `camelCase` parameter mapping.
+- Added a Capacity Planning Guide to the documentation.
 
 ### Changed
-- Upgraded token estimation from flat `bytes/4` heuristic to content-type-aware ratios (prose: 4.0, JSON: 2.8, code: 3.2 bytes/token) for improved accuracy across structured data, code snippets, and natural language.
+- Upgraded token estimation from a flat heuristic to content-type-aware ratios for improved accuracy across structured data, code snippets, and natural language.
 - Updated CLI configuration loader to aggregate all startup validation errors and report them simultaneously, rather than crashing on the first invalid parameter.
-- Synchronized tool count references from 97 to 99 across all documentation, test scripts, and GitHub Wiki files following the addition of the `import_external` and `team_import_external` tools.
-- Synchronized tool count references from 96 to 97 across all documentation, test scripts, and GitHub Wiki files following the addition of the `update_configuration` tool.
-- Synchronized tool count references from 95 to 96 across all documentation, test scripts, and GitHub Wiki files following the addition of the `search_audit_log` tool.
-- Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support.
-- Updated agent server instructions for Team RBAC and Optimistic Locking.
-- Updated server instructions (`gotchas.md` and `overview.md`) to explicitly document content-type-aware token estimation heuristics.
-- Synchronized configuration templates (`.env.example`, `mcp-config-example.json`) and Wiki Configuration documentation with new Auto-Prune flags (`--prune-dry-run`, `--prune-exclude-tags`) and Observability metrics flags (`--persist-metrics`, `--metrics-path`).
-- Updated `mj_execute_code` schema description, `SKILL.md`, and Code Mode `SyntaxError`/`TypeError` catch blocks to explicitly instruct agents to use the `context` parameter for Markdown and large strings, preventing Tagged Template Literal escaping bugs.
+- Updated server instructions, wiki documentation, testing prompts, and configuration templates to comprehensively reflect new features, capabilities, and correct tool counts.
+- Updated `mj_execute_code` schema description and internal Code Mode catch blocks to explicitly instruct agents to use the `context` parameter for Markdown and large strings, preventing Tagged Template Literal escaping bugs.
 
 ### Fixed
-- Fixed a security gap where `resources/subscribe` requests bypassed scope boundaries, allowing unauthorized clients to receive real-time notifications for restricted resources (e.g., `memory://audit` or team namespaces).
-- Fixed an issue where temporary backup test directories (`backups`, `test-backup-edge-cases`) and encrypted test databases (`test-*.db`) were not being properly cleaned up after `vitest` execution.
-- Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings and modernized workspace dependencies.
-- Fixed missing configuration references for `--config`, `--dump-config`, and `MEMORY_JOURNAL_CONFIG` in `README.md`, `.env.example`, `mcp-config-example.json`, and the GitHub Wiki, and corrected tool counts in `copilot-instructions.md` following a comprehensive documentation parity audit.
-- Fixed generic `ReferenceError` for `fetch()` in Code Mode sandboxes by injecting a descriptive `SandboxNetworkError` interceptor.
-- Fixed `cross_team_search` incorrectly omitting the primary team database when executing cross-database searches.
+- Fixed a security gap where `resources/subscribe` requests bypassed scope boundaries, allowing unauthorized clients to receive real-time notifications for restricted resources.
 - Fixed FTS search phrase matching to preserve balanced double-quotes for exact phrase matches.
-- Fixed `ReferenceError` crash in batch operations by importing `sendProgress`.
-- Fixed Docker Hub repository description not updating during deployments.
-- Fixed potential null runtime errors in semantic search and vector indexing.
-- Fixed entry revision eviction logic to correctly preserve the 10 newest snapshots.
-- Fixed test artifact pollution by properly unlinking `.sqlite`, `-shm`, and `-wal` files generated by the Audit Subsystem and SystemDb during End-to-End test suite teardown.
-- Fixed a silent type failure in Code Mode where agents calling `mj.listProjects()` or `mj.core.listProjects()` without an active `PROJECT_REGISTRY` received an un-iterable `stats` object instead of an array, triggering an `Attempted to call Array method` proxy error. `listProjectsFn` now unwraps `projectBreakdown` gracefully, and `shimMj` natively intercepts the top-level aliases.
-- Fixed restrictive `project_number` checks to allow moving team entries to different projects.
-- Fixed error codes in team search handlers to consistently return `VALIDATION_ERROR` for missing `project_number`.
-- Fixed missing `project_number` validation and fallback logic in team flag tools.
-- Fixed team admin tools failing to check the `codemodeInternalFullAccess` configuration flag.
-- Fixed Windows-specific race condition in `restoreFromFile` where lingering empty lock directories caused restores to abort.
-- Fixed Zod schema validation error during hybrid search by correctly casting the internal `isArchived` flag.
-- Fixed Code Mode execution errors for `read_query` alias by wrapping `searchEntries` and matching the `db-mcp` contract.
-- Fixed Code Mode failures for `searchProjects` and `listProjects` aliases by mapping namespaces and returning native Arrays.
-- Fixed Code Mode failures for `mj.core.getProjects` by mapping alias to `listProjects`.
-- Fixed obsolete tool counts in documentation and configuration templates.
-- Fixed validation error in `mj_execute_code` by making the `code` parameter optional.
+- Fixed regression where batch database operations failed atomically by returning structured `errors` arrays for partial successes and aggregating them using `AggregateMcpError`.
+- Fixed silent type failures in Code Mode where agents calling project methods without an active registry received an un-iterable `stats` object instead of an array.
+- Fixed silent and confusing `TypeError` failures in Code Mode by proxying successful non-array object results to explicitly intercept hallucinated Array method calls.
+- Fixed generic `ReferenceError` for `fetch()` in Code Mode sandboxes by injecting a descriptive `SandboxNetworkError` interceptor.
 - Fixed silent failure in Code Mode's `auto-return` transformation parsing of multiline template literals.
 - Fixed validation error for string repository names in Code Mode `project_number` arguments by auto-resolving to numeric IDs.
-- Fixed regression where batch database operations (`createEntries`, `updateEntries`, `deleteEntries`) were failing atomically. Migrated methods to process items individually and return structured `errors` arrays for partial successes.
-- Fixed batch operation handlers (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, and team equivalents) to aggregate partial failures using `AggregateMcpError`.
-- Fixed `ConfigResolver` crashing with a JSON Syntax Error when loading pre-parsed `ADDITIONAL_TEAM_DBS`, `ALLOWED_IO_ROOTS`, and `PROJECT_REGISTRY` nested objects from `.json` configuration files.
-- Fixed silent and confusing `TypeError` failures in Code Mode by proxying successful non-array object results to explicitly intercept hallucinated Array method calls (`find`, `map`, `filter`, etc.) and throw descriptive errors containing the actual available keys.
+- Fixed validation error in `mj_execute_code` by making the `code` parameter optional.
+- Fixed Code Mode execution errors for `read_query` alias by wrapping `searchEntries`.
+- Fixed `ConfigResolver` crashing with a JSON Syntax Error when loading pre-parsed nested objects from `.json` configuration files.
+- Fixed Windows-specific race condition in `restoreFromFile` where lingering empty lock directories caused restores to abort.
+- Fixed Zod schema validation error during hybrid search by correctly casting the internal `isArchived` flag.
+- Fixed missing or inconsistent `project_number` validation and fallback logic in team search and team flag tools.
+- Fixed restrictive `project_number` checks to allow moving team entries to different projects.
+- Fixed team admin tools failing to check the `codemodeInternalFullAccess` configuration flag.
+- Fixed `cross_team_search` incorrectly omitting the primary team database when executing cross-database searches.
 - Fixed duplicated token estimation logic in the audit interceptor that bypassed the centralized `estimateTokens()` function.
+- Fixed potential null runtime errors in semantic search and vector indexing.
+- Fixed entry revision eviction logic to correctly preserve the 10 newest snapshots.
+- Fixed an issue where temporary backup test directories, encrypted test databases, and `.sqlite` files generated by the End-to-End test suite were not properly cleaned up after execution.
+- Fixed Docker Hub repository description not updating during deployments.
+- Fixed `ReferenceError` crash in batch operations by importing `sendProgress`.
+- Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
