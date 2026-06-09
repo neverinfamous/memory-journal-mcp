@@ -5,7 +5,7 @@
  * and close-during-initialization branches.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import fs from 'node:fs'
 import { NativeConnectionManager } from '../../src/database/sqlite-adapter/native-connection.js'
@@ -45,6 +45,48 @@ afterAll(() => {
 })
 
 describe('NativeConnectionManager', () => {
+    let originalEnv: NodeJS.ProcessEnv
+
+    beforeAll(() => {
+        originalEnv = { ...process.env }
+    })
+
+    afterAll(() => {
+        process.env = { ...originalEnv }
+    })
+
+    // =========================================================================
+    // Encryption
+    // =========================================================================
+
+    describe('encryption', () => {
+        const ENCRYPTED_DB_PATH = './test-native-encrypted.db'
+        afterEach(() => {
+            delete process.env['DB_ENCRYPTION_KEY']
+            try {
+                if (fs.existsSync(ENCRYPTED_DB_PATH)) fs.unlinkSync(ENCRYPTED_DB_PATH)
+            } catch {}
+        })
+
+        it('should apply encryption key when DB_ENCRYPTION_KEY is set', async () => {
+            process.env['DB_ENCRYPTION_KEY'] = 'test-key-123'
+            const mgr = new NativeConnectionManager(ENCRYPTED_DB_PATH)
+            
+            await mgr.initialize()
+            const db = mgr.getNativeDb() as Database
+            
+            // Should be usable
+            const result = db.prepare('SELECT 1 as n').get() as { n: number }
+            expect(result.n).toBe(1)
+            
+            mgr.close()
+
+            // Verify that without the key, it fails to open
+            delete process.env['DB_ENCRYPTION_KEY']
+            const mgrFail = new NativeConnectionManager(ENCRYPTED_DB_PATH)
+            await expect(mgrFail.initialize()).rejects.toThrow(/file is not a database/)
+        })
+    })
     // =========================================================================
     // Basic initialization
     // =========================================================================
