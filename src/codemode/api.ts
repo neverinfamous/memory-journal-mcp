@@ -428,16 +428,21 @@ export class JournalApi {
         }
 
         // Implement listProjects hallucination gracefully across groups
-        const listProjectsFn = (): Promise<unknown> => {
+        const listProjectsFn = async (): Promise<unknown> => {
             try {
                 const registry = parseProjectRegistry()
-                if (registry !== undefined) return Promise.resolve(registry)
+                if (registry !== undefined) return registry
             } catch {
                 // Ignore parse errors and fallback to analytics
             }
             const statsFn = this.analytics['getStatistics']
             if (!statsFn) return Promise.reject(new Error('getStatistics is not available'))
-            return statsFn({ group_by: 'month', project_breakdown: true })
+            
+            const stats = await statsFn({ group_by: 'month', project_breakdown: true })
+            if (stats !== null && stats !== undefined && typeof stats === 'object' && 'projectBreakdown' in stats) {
+                return (stats as Record<string, unknown>)['projectBreakdown']
+            }
+            return []
         }
         this.core['listProjects'] = listProjectsFn
         this.core['searchProjects'] = listProjectsFn

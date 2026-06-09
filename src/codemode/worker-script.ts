@@ -271,8 +271,8 @@ async function executeCode(
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['createEntry']
                 }
-                // Handle `mj.core.getProjects` hallucination via proxy intercept
-                if (prop === 'getProjects') {
+                // Handle get/list/searchProjects hallucination via proxy intercept
+                if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
                     if ('core' in target) return (target['core'] as Record<string, unknown>)['listProjects']
                 }
                 // Handle `memory.append(tags, content, metadata)` natural hallucination
