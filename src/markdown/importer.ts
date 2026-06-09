@@ -118,6 +118,18 @@ function toEntryType(value: string | undefined): EntryType | undefined {
  * @param vectorManager - Optional vector search manager for re-indexing
  * @returns Import result with counts and errors
  */
+
+export interface ParsedFile {
+    filename: string
+    body: string
+    metadata: {
+        mj_id?: number
+        entry_type?: string
+        tags?: string[]
+        significance?: string
+        relationships?: { type: string; target_id: number }[]
+    }
+}
 export async function importMarkdownEntries(
     sourceDir: string,
     db: IDatabaseAdapter,
@@ -125,7 +137,7 @@ export async function importMarkdownEntries(
     vectorManager: VectorSearchManager | undefined,
     allowedRoots: string[]
 ): Promise<ImportResult> {
-    const { dry_run = false, limit = 100, author, project_number } = options
+    const { dry_run = false, limit = 100 } = options
 
     // Dynamically enforce bounded root
     assertSafeDirectoryPath(sourceDir, allowedRoots)
@@ -152,17 +164,6 @@ export async function importMarkdownEntries(
     }
 
     // Phase 1: Read files and parse asynchronously
-    interface ParsedFile {
-        filename: string
-        body: string
-        metadata: {
-            mj_id?: number
-            entry_type?: string
-            tags?: string[]
-            significance?: string
-            relationships?: { type: string; target_id: number }[]
-        }
-    }
     const parsedFiles: ParsedFile[] = []
 
     for (const filename of mdFiles) {
@@ -222,6 +223,47 @@ export async function importMarkdownEntries(
                 await handle.close()
             }
         }
+    }
+
+    const batchResult = await processImportBatch(parsedFiles, db, options, vectorManager)
+    
+    // Merge batch results into our initial result tracking
+    result.success = result.success && batchResult.success
+    result.created += batchResult.created
+    result.updated += batchResult.updated
+    result.relationshipsLinked += batchResult.relationshipsLinked
+    result.vectorsIndexed += batchResult.vectorsIndexed
+    result.errors.push(...batchResult.errors)
+
+    return result
+}
+
+/**
+ * Process a batch of parsed markdown files and upsert them into the database.
+ * 
+ * @param parsedFiles Files to import
+ * @param db Database adapter
+ * @param options Import options
+ * @param vectorManager Optional vector search manager
+ * @returns Import result with counts and errors
+ */
+export async function processImportBatch(
+    parsedFiles: ParsedFile[],
+    db: IDatabaseAdapter,
+    options: ImportOptions = {},
+    vectorManager: VectorSearchManager | undefined
+): Promise<ImportResult> {
+    const { dry_run = false, author, project_number } = options
+
+    const result: ImportResult = {
+        success: true,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        relationshipsLinked: 0,
+        vectorsIndexed: 0,
+        errors: [],
+        dry_run,
     }
 
     // Phase 2: Perform DB operations in a transaction

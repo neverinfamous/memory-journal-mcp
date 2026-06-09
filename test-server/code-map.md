@@ -150,7 +150,7 @@ src/
 │       └── types.ts                # GitHub integration internal types
 │
 └── handlers/
-    ├── tools/                      # 97 tools across 10 groups — see § Handler Map below
+    ├── tools/                      # 99 tools across 10 groups — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
@@ -164,11 +164,11 @@ src/
     │   │   └── hybrid.ts           # RRF (Reciprocal Rank Fusion) hybrid logic
     │   ├── analytics.ts            # Analytics tool group (2 tools)
     │   ├── relationships.ts        # Relationships tool group (2 tools)
-    │   ├── io.ts                   # IO tool group (3 tools)
+    │   ├── io.ts                   # IO tool group (4 tools)
     │   ├── admin.ts                # Admin tool group (9 tools)
     │   ├── backup.ts               # Backup tool group (4 tools)
     │   ├── codemode.ts             # Code Mode tool group (1 tool)
-    │   ├── team/                   # Team tool group (38 tools)
+    │   ├── team/                   # Team tool group (44 tools)
     │   │   ├── index.ts            # Barrel — composes all team sub-modules
     │   │   ├── helpers.ts          # Shared team helpers (author batch-fetch, constants)
     │   │   ├── schemas.ts          # Team Zod input/output schemas (all 31 tools)
@@ -247,7 +247,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **search**        | `search/index.ts`              | 6     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`, `list_deleted_entries`, `cross_team_search`                                                              |
 | **analytics**     | `analytics.ts`                 | 2     | `get_statistics`, `get_cross_project_insights`                                                                                                     |
 | **relationships** | `relationships.ts`             | 2     | `link_entries`, `visualize_relationships`                                                                                                          |
-| **io**            | `io.ts`                        | 3     | `export_entries`, `export_markdown`, `import_markdown`                                                                                             |
+| **io**            | `io.ts`                        | 4     | `export_entries`, `export_markdown`, `import_markdown`, `import_external`                                                                                             |
 | **admin**         | `admin.ts`                     | 11    | `update_configuration`, `update_entry`, `delete_entry`, `restore_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `search_audit_log` |
 | **github**        | `github/read-tools.ts`         | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue` (truncate_body, include_comments), `get_github_pr` (truncate_body), `get_github_context` |
 |                   | `github/issue-tools.ts`        | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                                  |
@@ -262,7 +262,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 |                   | `team/analytics-tools.ts`      | 3     | `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`                                                          |
 |                   | `team/relationship-tools.ts`   | 2     | `team_link_entries`, `team_visualize_relationships`                                                                                                |
 |                   | `team/export-tools.ts`         | 1     | `team_export_entries`                                                                                                                              |
-|                   | `team/io-tools.ts`             | 2     | `team_export_markdown`, `team_import_markdown`                                                                                                     |
+|                   | `team/io-tools.ts`             | 3     | `team_export_markdown`, `team_import_markdown`, `team_import_external`                                                                                                     |
 |                   | `team/backup-tools.ts`         | 2     | `team_backup`, `team_list_backups`                                                                                                                 |
 |                   | `team/flag-tools.ts`           | 2     | `team_pass_flag`, `team_resolve_flag`                                                                                                              |
 |                   | `team/flag-extension-tools.ts` | 3     | `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`                                                                                   |

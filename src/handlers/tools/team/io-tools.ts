@@ -14,8 +14,8 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
-import { importMarkdownEntries } from '../../../markdown/index.js'
-import type { ExportableEntry } from '../../../markdown/index.js'
+import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
+import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { batchFetchAuthors, triggerTeamNotifications } from './helpers.js'
 import {
@@ -24,6 +24,8 @@ import {
     DATE_MIN_SENTINEL,
     DATE_MAX_SENTINEL,
     relaxedNumber,
+    ENTRY_TYPES,
+    SOURCE_FORMATS,
 } from '../schemas.js'
 
 // ============================================================================
@@ -94,6 +96,40 @@ const TeamImportMarkdownOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
+// Team Import External Schemas
+// ============================================================================
+
+const TeamImportExternalSchema = z.object({
+    source_dir: z.string().min(1),
+    source_format: z.enum(SOURCE_FORMATS),
+    dry_run: z.boolean().optional().default(false),
+    project_number: z.number(),
+    limit: z.number().max(500).optional().default(100),
+    default_entry_type: z.enum(ENTRY_TYPES).optional(),
+})
+
+const TeamImportExternalSchemaMcp = z.object({
+    source_dir: z.string().describe('Directory containing files to import'),
+    source_format: z.enum(SOURCE_FORMATS).describe('Source format (notion, obsidian, logseq)'),
+    dry_run: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Parse and validate without writing to database'),
+    project_number: relaxedNumber().optional(),
+    limit: relaxedNumber()
+        .optional()
+        .default(100)
+        .describe('Max files to process (default: 100, max: 500)'),
+    default_entry_type: z
+        .string()
+        .optional()
+        .describe('Fallback entry type if heuristics cannot determine one'),
+})
+
+const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
+
+// ============================================================================
 // Tool Definitions
 // ============================================================================
 
@@ -127,6 +163,24 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 group: 'team',
                 inputSchema: TeamImportMarkdownSchemaMcp,
                 outputSchema: TeamImportMarkdownOutputSchema,
+                annotations: {
+                    readOnlyHint: false,
+                    destructiveHint: false,
+                    idempotentHint: false,
+                    openWorldHint: true,
+                },
+                handler: () => ({
+                    success: false,
+                    error: 'Team collaboration is not configured. Set TEAM_DB_PATH to enable.',
+                }),
+            },
+            {
+                name: 'team_import_external',
+                title: 'Team Import from External Tools',
+                description: 'Import knowledge management exports into the team journal',
+                group: 'team',
+                inputSchema: TeamImportExternalSchemaMcp,
+                outputSchema: TeamImportExternalOutputSchema,
                 annotations: {
                     readOnlyHint: false,
                     destructiveHint: false,
@@ -283,6 +337,126 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     await sendProgress(progress, 2, 2, 'Team import complete')
+                    return result
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_import_external',
+            title: 'Team Import from External Tools',
+            description:
+                'Import knowledge management exports (Notion, Obsidian, Logseq) into the team journal. ' +
+                'Normalizes wikilinks, YAML frontmatter, and block hierarchies automatically. ' +
+                'Author is set from authenticated user identity. Use dry_run: true to preview without writing.',
+            group: 'team',
+            inputSchema: TeamImportExternalSchemaMcp,
+            outputSchema: TeamImportExternalOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: true,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    const input = TeamImportExternalSchema.parse(params)
+
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
+
+                    await sendProgress(progress, 0, 3, 'Reading files...')
+
+                    const fs = await import('node:fs/promises')
+                    const path = await import('node:path')
+                    const { constants } = await import('node:fs')
+                    const { assertSafeDirectoryPath, assertSafeFilePath } = await import('../../../utils/security-utils.js')
+
+                    assertSafeDirectoryPath(input.source_dir, allowedRoots)
+
+                    const mdFiles: string[] = []
+                    const dir = await fs.opendir(input.source_dir)
+                    for await (const dirent of dir) {
+                        if (dirent.isFile() && dirent.name.endsWith('.md')) {
+                            mdFiles.push(dirent.name)
+                            if (mdFiles.length >= input.limit) break
+                        }
+                    }
+
+                    await sendProgress(progress, 1, 3, 'Converting external formats...')
+
+                    const parsedFiles: ParsedFile[] = []
+                    const errors: { file: string; error: string }[] = []
+
+                    for (const filename of mdFiles) {
+                        let handle
+                        try {
+                            const filepath = path.join(input.source_dir, filename)
+                            assertSafeFilePath(filepath, allowedRoots)
+
+                            handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+                            const stats = await handle.stat()
+                            if (stats.size > 5 * 1024 * 1024) {
+                                throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
+                            }
+
+                            const content = await handle.readFile('utf-8')
+                            const converted = convertFile(content, filename, input.source_format, input.default_entry_type)
+
+                            if (!converted.body.trim()) {
+                                continue
+                            }
+
+                            parsedFiles.push({
+                                filename,
+                                body: converted.body,
+                                metadata: converted.metadata,
+                            })
+                        } catch (err) {
+                            errors.push({
+                                file: filename,
+                                error: err instanceof Error ? err.message : String(err),
+                            })
+                        } finally {
+                            if (handle) {
+                                await handle.close()
+                            }
+                        }
+                    }
+
+                    await sendProgress(progress, 2, 3, 'Importing entries...')
+
+                    const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
+                    const result = await processImportBatch(parsedFiles, teamDb, {
+                        dry_run: input.dry_run,
+                        limit: input.limit,
+                        author,
+                        project_number: input.project_number,
+                    }, context.teamVectorManager)
+
+                    if (errors.length > 0) {
+                        result.success = false
+                        result.errors.push(...errors)
+                    }
+
+                    if (!result.success && result.errors.length > 0) {
+                        const successCount = result.created + result.updated + result.skipped
+                        const total = successCount + result.errors.length
+                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+                        
+                        const { AggregateMcpError } = await import('../../../types/errors.js')
+                        throw new AggregateMcpError(
+                            message,
+                            result.errors.map(e => ({ message: e.error, file: e.file })),
+                            { result }
+                        )
+                    }
+
+                    if (!input.dry_run) {
+                        triggerTeamNotifications(context)
+                    }
+
+                    await sendProgress(progress, 3, 3, 'Team import complete')
                     return result
                 } catch (err) {
                     return formatHandlerError(err)

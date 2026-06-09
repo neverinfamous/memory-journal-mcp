@@ -49,6 +49,8 @@ export const ENTRY_TYPES = [
     'other',
 ] as const
 
+export const SOURCE_FORMATS = ['notion', 'obsidian', 'logseq'] as const
+
 /**
  * Valid significance types (matches SignificanceType union in types/index.ts)
  */

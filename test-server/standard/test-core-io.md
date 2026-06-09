@@ -45,6 +45,14 @@
 | Import Aggregated Error| `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: false)`| Returns structured ErrorResponse with `code: AGGREGATE_ERROR` and an `aggregated_errors` array of objects (containing `message` and optionally `name`) for each item failure |
 | Path Traversal Defense | `export_markdown(output_dir: "../../etc/passwd")`                                                                          | Structured error rejecting `..` paths  |
 
+### 3. External Tool Orchestration (`import_external`)
+
+| Test                   | Command/Action                                                                                                             | Expected Result                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Import External Notion | `import_external(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", source_format: "notion", dry_run: true)` | Returns structured count of items      |
+| Import External Obsidian| `import_external(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", source_format: "obsidian", dry_run: true)` | Returns structured count of items      |
+| Import External Logseq | `import_external(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", source_format: "logseq", dry_run: true)` | Returns structured count of items      |
+
 ---
 
 ## Success Criteria
@@ -53,6 +61,7 @@
 
 - `export_markdown` reliably targets OS local directories and generates correctly named files.
 - `import_markdown` gracefully executes dry run detection parsing.
+- `import_external` gracefully handles Notion, Obsidian, and Logseq formats parsing and dry runs.
 - `import_markdown` successfully aggregates partial failures (e.g., `invalid.md`) into a structured `AGGREGATE_ERROR` response with an `aggregated_errors` array of specific item failures (e.g., `[{ "message": "..." }]`).
 - IO tooling throws structured path traversal errors `..` on local directory injections or when missing `ALLOWED_IO_ROOTS`.
 - Large JSON exports return `truncated: true` to prevent memory exhaustion when the payload exceeds 5MB.

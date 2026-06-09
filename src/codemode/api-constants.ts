@@ -149,6 +149,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         export: 'teamExportEntries',
         exportMarkdown: 'teamExportMarkdown',
         importMarkdown: 'teamImportMarkdown',
+        importExternal: 'teamImportExternal',
         backup: 'teamBackup',
         listBackups: 'teamListBackups',
         semanticSearch: 'teamSemanticSearch',
@@ -207,6 +208,7 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.io.exportEntries({ format: "json" })',
         'mj.io.exportMarkdown({ output_dir: "./export" })',
         'mj.io.importMarkdown({ source_dir: "./import" })',
+        'mj.io.importExternal({ source_dir: "./import", source_format: "notion" })',
     ],
     admin: [
         'mj.admin.updateEntry({ entry_id: 1, content: "Updated content" })',

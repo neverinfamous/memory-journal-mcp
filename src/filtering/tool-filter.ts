@@ -35,7 +35,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     ],
     analytics: ['get_statistics', 'get_cross_project_insights'],
     relationships: ['link_entries', 'visualize_relationships'],
-    io: ['export_entries', 'export_markdown', 'import_markdown'],
+    io: ['export_entries', 'export_markdown', 'import_markdown', 'import_external'],
     admin: [
         'update_configuration',
         'update_entry',
@@ -91,6 +91,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_export_entries',
         'team_export_markdown',
         'team_import_markdown',
+        'team_import_external',
         'team_backup',
         'team_list_backups',
         'team_semantic_search',

@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added `import_external` and `team_import_external` tools to support seamless ingestion of knowledge management exports (Notion, Obsidian, Logseq) with automated normalization of wikilinks, metadata, and block hierarchies.
 - Added scheduled digest report delivery via `--report-interval`, `--report-webhook-url`, `--report-webhook-auth`, and `--report-content-type` (HTTP transport only).
 - Added `memory://insights/reports` resource to view the last 5 generated report snapshots and their delivery status.
 - Added Capacity Planning Guide to the documentation to provide database size growth rates, vector index footprints, and archiving recommendations.
@@ -51,6 +52,7 @@
 
 ### Changed
 - Updated CLI configuration loader to aggregate all startup validation errors and report them simultaneously, rather than crashing on the first invalid parameter.
+- Synchronized tool count references from 97 to 99 across all documentation, test scripts, and GitHub Wiki files following the addition of the `import_external` and `team_import_external` tools.
 - Synchronized tool count references from 96 to 97 across all documentation, test scripts, and GitHub Wiki files following the addition of the `update_configuration` tool.
 - Synchronized tool count references from 95 to 96 across all documentation, test scripts, and GitHub Wiki files following the addition of the `search_audit_log` tool.
 - Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support.

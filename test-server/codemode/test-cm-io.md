@@ -2,7 +2,7 @@
 
 Test the unified IO namespace, testing both legacy `exportEntries` formats and the new filesystem-bound `.md` orchestration tools over Code Mode's `mj.io.*` binding.
 
-**Scope:** 4 tools (`export_entries`, `export_markdown`, `import_markdown` inside Code Mode namespace `mj.io.*`).
+**Scope:** 4 tools (`export_entries`, `export_markdown`, `import_markdown`, `import_external` inside Code Mode namespace `mj.io.*`).
 
 **Prerequisites:**
 
@@ -101,14 +101,40 @@ return {
 | `simulatedUpdates` | `true`   |
 | `traversalBlocked` | `true`   |
 
+### 26.3 External Imports (`importExternal`)
+
+```javascript
+// Test code:
+const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_test_export'
+
+// Note: Test depends on some files existing in the mock dir
+const externalResult = await mj.io.importExternal({
+  source_dir: MOCK_DIR,
+  source_format: 'notion',
+  dry_run: true,
+})
+
+return {
+  externalSuccess: externalResult.success,
+  isDryRun: externalResult.dry_run === true,
+  simulatedCreated: typeof externalResult.created === 'number',
+}
+```
+
+| Check              | Expected |
+| ------------------ | -------- |
+| `externalSuccess`  | `true`   |
+| `isDryRun`         | `true`   |
+| `simulatedCreated` | `true`   |
+
 ---
 
 ## Success Criteria
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- `mj.io.exportEntries` provides JSON lists and raw markdown contents.
-- JSON exports that exceed size limits return `truncated: true`.
-- `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
-- `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
+- `mj.io.exportEntries` handles the JSON size boundary efficiently without sandbox memory crashes.
+- `mj.io.exportMarkdown` securely sanitizes output paths and rejects `../` traversal attempts.
+- `mj.io.importMarkdown` successfully identifies `.md` files and provides simulated dry-run statistics.
+- `mj.io.importExternal` gracefully parses external `.md` files with dry-run support.
 - `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal or lacking `ALLOWED_IO_ROOTS` permission.

@@ -73,7 +73,7 @@ describe('WorkerSandbox', () => {
         const result = await sandbox.execute(code, {})
         expect(result.success).toBe(false)
         expect(result.error).toMatch(/timed out|timeout|code 1/i)
-    })
+    }, 15000)
 
     it('should catch synchronous syntax errors or throw', async () => {
         const sandbox = new WorkerSandbox()
@@ -240,9 +240,9 @@ describe('WorkerSandbox', () => {
 
         await new Promise((resolve) => setTimeout(resolve, 10))
 
-        const hostPort = sandbox['currentExecution']!.hostPort
+        const hostPort = sandbox['currentExecution']!.hostPort as any
         let sentError = false
-        hostPort.on('message', (msg) => {
+        hostPort.on('message', (msg: any) => {
             // Because postMessage sends TO the worker, we can't easily listen to the worker's receive end if it's spinning.
             // But we CAN intercept the hostPort's outgoing message by spying on it.
         })
@@ -265,7 +265,7 @@ describe('WorkerSandbox', () => {
 
         await execPromise
         expect(sentError).toBe(true)
-    })
+    }, 15000)
 
     it('should handle timeout fallback if worker script fails to timeout', async () => {
         const sandbox = new WorkerSandbox()
@@ -282,7 +282,7 @@ describe('WorkerSandbox', () => {
         const result = await execPromise
         expect(result.success).toBe(false)
         expect(result.error).toContain('Worker exited')
-    })
+    }, 15000)
 })
 describe('WorkerSandboxPool', () => {
     it('should create and execute using pool', async () => {

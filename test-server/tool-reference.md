@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **97 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **99 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -71,7 +71,7 @@ Link entries and visualize knowledge graphs.
 
 ---
 
-## io (3 tools + Code Mode)
+## io (4 tools + Code Mode)
 
 Export and import journal data in multiple formats, including Markdown roundtripping.
 
@@ -80,6 +80,7 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 | `export_entries`  | Export journal entries to JSON or Markdown format.                         |
 | `export_markdown` | Export the entire journal to a structured directory of Markdown files.     |
 | `import_markdown` | Import a structured directory of Markdown files into the journal database. |
+| `import_external` | Import knowledge management exports (Notion, Obsidian, Logseq) into the journal. normalizes wikilinks, YAML frontmatter, and block hierarchies. |
 
 ---
 
@@ -143,7 +144,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (43 tools + Code Mode)
+## team (44 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -198,6 +199,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_export_entries`  | Export team entries in JSON or Markdown format with optional date range, type, and tag filters. |
 | `team_export_markdown` | Export team journal to a structured directory of Markdown files.                                |
 | `team_import_markdown` | Import team entries from a structured directory of Markdown files.                              |
+| `team_import_external` | Import knowledge management exports (Notion, Obsidian, Logseq) into the team journal.           |
 
 ### Backup
 
@@ -253,7 +255,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 97    | All tools (default)      |
+| `full`               | 99    | All tools (default)      |
 | `starter`            | ~13   | Core + search + codemode |
 | `essential`          | ~8    | Minimal footprint        |
 | `readonly`           | 20    | Disable all mutations    |

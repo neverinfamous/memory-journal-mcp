@@ -10,7 +10,7 @@
 | [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 20 phase-aligned Code Mode test prompts. See `codemode/README.md` for full list.                   | After standard tests  |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
-| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 97 tools across 10 groups + codemode | Reference |
+| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 99 tools across 10 groups + codemode | Reference |
 | [`code-map.md`](code-map.md) | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns | When debugging source code or making changes |
 
 ## Integration Test Scripts
@@ -26,7 +26,7 @@ These scripts test features that require separate server processes — they **ca
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
 | `scripts/test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
 | `scripts/test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
-| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts — 97 tools verified                                                                      | stdio         | ~5s      |
+| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts — 99 tools verified                                                                      | stdio         | ~5s      |
 | `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 19 prompts (shape + errors)                                                                    | stdio         | ~10s     |
 | `scripts/test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 
@@ -95,7 +95,7 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 ### Tool Annotations (Phase 1.3C)
 
-- [ ] 97 tools returned, all with `annotations` object
+- [ ] 99 tools returned, all with `annotations` object
 - [ ] Tools correctly categorized by `openWorldHint` with 0 missing
 
 ### Scheduler (Phase 9)
