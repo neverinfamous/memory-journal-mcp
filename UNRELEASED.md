@@ -76,6 +76,7 @@
 - Fixed Docker Hub repository description not updating during deployments.
 - Fixed `ReferenceError` crash in batch operations by importing `sendProgress`.
 - Fixed `memory://help` generating incorrect tool group summaries by mapping all 10 unmapped tools directly to their explicit groups in `inferGroupFromName`.
+- Fixed strict schema validation error in `list_deleted_entries` handler by allowing `limit` and `offset` to be properly optional with defaults.
 
 ### Removed
 - Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.

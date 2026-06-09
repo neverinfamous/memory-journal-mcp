@@ -812,7 +812,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { limit, offset } = z.object({ limit: z.number(), offset: z.number() }).parse(params)
+                    const { limit, offset } = z.object({ limit: z.number().optional().default(50), offset: z.number().optional().default(0) }).parse(params)
                     const result = db.getDeletedEntries({ limit, offset })
                     return {
                         success: true,
