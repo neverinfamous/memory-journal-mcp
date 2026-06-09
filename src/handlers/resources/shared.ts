@@ -108,7 +108,16 @@ export async function resolveGitHubRepo(
 
         // Fallback to the first VALID registered project if no targetRepo was specified
         if (!targetRepo && hasRegistry) {
-            for (const key of Object.keys(registry)) {
+            let fallbackKeys = Object.keys(registry)
+            
+            if (config?.defaultProjectNumber !== undefined) {
+                const defaultKey = fallbackKeys.find(key => registry[key]?.project_number === config?.defaultProjectNumber)
+                if (defaultKey) {
+                    fallbackKeys = [defaultKey, ...fallbackKeys.filter(k => k !== defaultKey)]
+                }
+            }
+
+            for (const key of fallbackKeys) {
                 const project = registry[key]
                 if (project) {
                     const fallbackGithub = getGitHubIntegration(project.path, runtime)

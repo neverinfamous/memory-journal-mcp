@@ -368,6 +368,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         name: string,
                         args: Record<string, unknown>
                     ): Promise<unknown> => {
+                        // Typo tolerance alias
+                        if (args['exact_match'] === true) {
+                            args['fuzzy_match'] = false
+                            delete args['exact_match']
+                        }
+
                         // Inject defaultProjectNumber into args to propagate repo context across the dispatcher boundary
                         if (
                             sessionContext.config?.defaultProjectNumber !== undefined &&
@@ -381,11 +387,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             args['project_number'] = sessionContext.config.defaultProjectNumber
                         }
 
-                        // Inject repo into args to propagate GitHub context across the dispatcher boundary
-                        if (repo && !('repo' in args)) {
-                            args['repo'] = repo
-                        }
-
                         // Seamlessly resolve string-based project_number (e.g. 'db-mcp') to its numeric ID
                         if (typeof args['project_number'] === 'string') {
                             const pnStr = args['project_number']
@@ -393,6 +394,33 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             if (registryEntry?.project_number !== undefined) {
                                 args['project_number'] = registryEntry.project_number
                             }
+                        }
+
+                        // Auto-resolve project_number from repo if missing
+                        if (args['repo'] !== undefined && typeof args['repo'] === 'string' && args['project_number'] === undefined) {
+                            const registryEntry = sessionContext.config?.projectRegistry?.[args['repo']]
+                            if (registryEntry?.project_number !== undefined) {
+                                args['project_number'] = registryEntry.project_number
+                            }
+                        }
+
+                        // Auto-resolve repo from project_number if missing
+                        if (args['project_number'] !== undefined && args['repo'] === undefined) {
+                            const pn = args['project_number']
+                            const registry = sessionContext.config?.projectRegistry
+                            if (registry !== undefined) {
+                                const matchingEntry = Object.entries(registry).find(
+                                    ([_, val]) => val.project_number === pn
+                                )
+                                if (matchingEntry !== undefined) {
+                                    args['repo'] = matchingEntry[0]
+                                }
+                            }
+                        }
+
+                        // Inject repo into args to propagate GitHub context across the dispatcher boundary
+                        if (repo && !('repo' in args)) {
+                            args['repo'] = repo
                         }
 
                         const executeAuth = (): Promise<unknown> => {

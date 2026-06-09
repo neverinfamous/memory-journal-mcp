@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added `exact_match: true` alias to automatically translate to `fuzzy_match: false` in Code Mode, improving typo tolerance discoverability.
+- Added new parameter aliases (`user`/`assignee` -> `target_user`, `msg` -> `message`, `repo_name` -> `repo`) to Code Mode to gracefully handle common agent hallucinations.
 - Added `import_external` and `team_import_external` tools to support ingestion of knowledge management exports (Notion, Obsidian, Logseq) with automated normalization.
 - Added scheduled digest report delivery via `--report-interval` and related webhook flags, accessible via `memory://insights/reports` resource.
 - Added `DB_ENCRYPTION_KEY` environment variable and `db-encrypt` migration script to support SQLCipher-encrypted databases at rest.
@@ -37,6 +39,9 @@
 - Added a Capacity Planning Guide to the documentation.
 
 ### Changed
+- Improved GitHub resource routing in multi-project environments by safely falling back to the configured `DEFAULT_PROJECT_NUMBER` when `{repo}` is omitted from the resource URI.
+- Enhanced the `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa), eliminating the strict requirement for agents to pass both arguments in multi-project setups.
+- Updated `github.md` and `gotchas.md` server instructions to reflect the new auto-resolution capabilities and reduced operational friction.
 - Upgraded token estimation from a flat heuristic to content-type-aware ratios for improved accuracy across structured data, code snippets, and natural language.
 - Updated CLI configuration loader to aggregate all startup validation errors and report them simultaneously, rather than crashing on the first invalid parameter.
 - Updated server instructions, wiki documentation, testing prompts, and configuration templates to comprehensively reflect new features, capabilities, and correct tool counts.

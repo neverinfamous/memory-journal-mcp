@@ -373,8 +373,8 @@ export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
 - Rate Limits: Before expensive API operations, check \`memory://github/rate-limit\` (or \`memory://github/rate-limit/{repo}\`) to proactively throttle.
 - **Project Initialization**: To register a new project workspace, create an entry with \`project_number: N\`. Instruct the user to manually update their \`PROJECT_REGISTRY\` config, as agents cannot directly edit protected IDE config files.
 - **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces":
-  - **Tools**: Pass a \`repo\` parameter to ALL GitHub tools (including \`get_github_context\`) to explicitly target a specific project.
-  - **Resources**: You MUST use the dynamic \`{repo}\` variants for resources (e.g., \`memory://github/status/{repo}\`, \`memory://github/insights/{repo}\`) rather than the base URI (\`memory://github/status\`), which will fail with a detection error.
+  - **Tools**: The \`repo\` parameter automatically resolves from \`project_number\`. If you omit both, they default to the primary project.
+  - **Resources**: Resource URIs like \`memory://github/status\` will fallback to the default project. To explicitly target another project, use the \`{repo}\` variant (e.g., \`memory://github/status/{repo}\`).
   - **Dynamic Briefings**: You can explicitly request the briefing for a specific project by reading \`memory://briefing/{repo}\` instead of the global \`memory://briefing\` resource.
 
 ## Copilot Review Patterns
@@ -388,12 +388,12 @@ When the user has GitHub Copilot code review enabled:
 
 ## Tool Usage Pitfalls
 
-1. **Missing \`project_number\`**: The single most common failure reason. Always pass \`project_number: <N>\` or ensure \`DEFAULT_PROJECT_NUMBER\` is configured on the server. Omitting both triggers a \`VALIDATION_ERROR\`.
+1. **Missing \`project_number\`**: If you omit \`project_number\`, the server will automatically inject the \`DEFAULT_PROJECT_NUMBER\` or attempt to infer it from the \`repo\` parameter. If neither can be resolved, you will receive a \`VALIDATION_ERROR\`.
 2. **Result Limits**: The \`MAX_QUERY_LIMIT\` is strictly 500 for most search tools. Use the optional \`cursor\` parameter and \`next_cursor\` output for O(1) keyset pagination on large datasets. Batch operations are strictly limited to \`MAX_BATCH_SIZE\` (50) per transaction.
 3. **Code Mode Restrictions**: The \`mj_execute_code\` sandbox cannot make network requests (calling \`fetch()\` throws a \`SandboxNetworkError\` and Node network modules are stripped). Use it strictly for orchestrating \`mj.*\` API calls. If you need to hit external/HTTP endpoints, you must use native OS tools outside of Code Mode. Note: \`setTimeout\` and \`sleep(ms)\` are available for minor delays, but avoid long-running operations.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the \`memory://help\` resource. If a tool doesn't exist, use \`mj_execute_code\` to combine existing tools.
 5. **Phrase Matching**: The \`query\` parameter in search tools supports true phrase matching. Wrap exact strings in double quotes (e.g., \`"error handling"\`) when word order and adjacency are critical.
-6. **Typo Tolerance**: FTS5 search operations automatically fall back to Levenshtein distance matching on tags and entry types if no results are found. To disable this when strict exact matching is needed, explicitly set \`fuzzy_match: false\`.
+6. **Typo Tolerance**: FTS5 search operations automatically fall back to Levenshtein distance matching on tags and entry types if no results are found. To disable this when strict exact matching is needed, explicitly set \`exact_match: true\` (or \`fuzzy_match: false\`).
 7. **Team RBAC**: If the team database has at least one member registered, RBAC is active. Unregistered authors fall back to the \`TEAM_DEFAULT_ROLE\` (which denies access by default). Non-admin members can only modify or resolve entries/flags they originally authored.
 8. **Concurrent Edits**: When updating an entry (\`update_entry\`, \`team_update_entry\`), always pass \`expected_version\` if you know the current version to prevent silently overwriting concurrent changes. If you get a \`VERSION_CONFLICT\` error, re-read the latest entry state returned in the error payload, merge your changes, and retry.
 9. **Cross-Team Search**: The \`cross_team_search\` tool searches across multiple team databases configured via \`ADDITIONAL_TEAM_DBS\`. Results include a \`team_db\` label identifying the source database. This tool is read-only and uses FTS5 only (no semantic/vector search across DBs). Individual DB failures are non-fatal — the response includes \`degraded: true\` and per-DB error details.
