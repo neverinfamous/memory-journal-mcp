@@ -38,6 +38,12 @@ export class NativeConnectionManager implements IDatabaseConnection {
             this.db = new DatabaseAdapter(this.dbPath)
             const db = this.db
 
+            // Decrypt if key is provided (must be done before any other PRAGMAs or queries)
+            if (process.env['DB_ENCRYPTION_KEY']) {
+                db.pragma(`key = '${process.env['DB_ENCRYPTION_KEY']}'`)
+                logger.info('Database encryption key applied', { module: 'NativeConnectionManager' })
+            }
+
             // Native-only PRAGMAs for performance and safety
             db.pragma('journal_mode = WAL')
             db.pragma('synchronous = NORMAL')

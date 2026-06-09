@@ -30,6 +30,7 @@
         "test:scheduler": "node test-server/scripts/test-scheduler.mjs",
         "generate:instructions": "node scripts/generate-server-instructions.ts",
         "backfill:metadata": "tsx scripts/backfill-metadata.ts",
+        "encrypt-db": "tsx scripts/encrypt-db.ts",
         "prepublishOnly": "pnpm run check && pnpm run test && pnpm run build"
     },
     "keywords": [
@@ -66,7 +67,7 @@
         "@modelcontextprotocol/sdk": "^1.27.1",
         "@octokit/graphql": "^9.0.3",
         "@octokit/rest": "^22.0.1",
-        "better-sqlite3": "^12.8.0",
+        "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.10.0",
         "commander": "^15.0.0",
         "express": "^5.2.1",
         "jose": "^6.2.1",
@@ -104,5 +105,11 @@
         "tmp": "^0.2.5",
         "vite": "^8.0.5",
         "ip-address": "10.2.0"
+    },
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "better-sqlite3-multiple-ciphers",
+            "esbuild"
+        ]
     }
 }

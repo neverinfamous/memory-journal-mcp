@@ -283,8 +283,14 @@ program
             const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined);
             const transport = catchConfig(() => resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio', 'stdio');
             const stateless = catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false);
-            const db = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH') ?? defaultDbPath, defaultDbPath);
-            const teamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH') ?? defaultTeamDbPath, defaultTeamDbPath);
+            // Allow 'dbPath' as fallback for 'db' since memory-journal.config.json uses dbPath
+            const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined);
+            const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath);
+            const db = (rawDb === defaultDbPath && configDbPath) ? configDbPath : rawDb;
+            
+            const configTeamDbPath = catchConfig(() => resolver.resolve<string>('teamDbPath'), undefined);
+            const rawTeamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH'), defaultTeamDbPath);
+            const teamDb = (rawTeamDb === defaultTeamDbPath && configTeamDbPath) ? configTeamDbPath : rawTeamDb;
 
             const codemodeMaxResultSize = catchConfig(() => resolver.resolve<string>('codemodeMaxResultSize', 'CODE_MODE_MAX_RESULT_SIZE'), undefined);
             if (codemodeMaxResultSize) {

@@ -72,7 +72,15 @@ export class ConfigResolver {
         let source: 'cli' | 'env' | 'config' | 'default' = 'default'
 
         // 1. CLI flag (Check if it was explicitly passed vs default)
-        if (this.command.getOptionValueSource(cliKey) === 'cli') {
+        let isCliSource: boolean
+        try {
+            isCliSource = this.command.getOptionValueSource(cliKey) === 'cli'
+        } catch {
+            // Key not registered in Commander
+            isCliSource = false
+        }
+        
+        if (isCliSource) {
             value = this.cliOptions[cliKey]
             source = 'cli'
         }

@@ -71,6 +71,7 @@ Certain boundary tests (e.g., massive payload execution) exceed typical token co
 | `test-long-mcp.mjs`  | Verifies the maximum `content` length capacity limits (50k/100k boundaries)                                  | `test-integrity.md` |
 | `verify-schemas.mjs` | Programmatically verifies that all output schemas are strictly defined for `structuredContent` compatibility | `test-schemas.md`   |
 | `test-subscribe.mjs` | Validates MCP real-time resource subscriptions (`notifications/resources/updated`) during mutations          | `test-core-infra.md`|
+| `test-encryption.mjs`| Validates SQLCipher encryption-at-rest functionality, ensuring proper decryption with DB_ENCRYPTION_KEY        | Independent Tool    |
 
 ## Tool Group Requirements
 
