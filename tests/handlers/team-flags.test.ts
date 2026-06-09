@@ -189,7 +189,7 @@ describe('Team Flag Tool Handlers', () => {
             expect(result.code).toBe('VALIDATION_ERROR')
         })
 
-        it('should fallback to defaultProjectNumber when project_number is omitted', async () => {
+        it('should return validation error if project_number is missing even if defaultProjectNumber is configured', async () => {
             const mockConfig = {
                 defaultProjectNumber: 1,
                 runtime: {
@@ -216,8 +216,8 @@ describe('Team Flag Tool Handlers', () => {
                 teamDb
             )) as any
 
-            expect(result.success).toBe(true)
-            expect(result.entry.projectNumber).toBe(1)
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
         })
     })
 

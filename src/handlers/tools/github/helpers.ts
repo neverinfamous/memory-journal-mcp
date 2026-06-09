@@ -22,7 +22,7 @@ export function resolveProjectNumber(
             return entry.project_number
         }
     }
-    return context.config?.defaultProjectNumber ?? undefined
+    return undefined
 }
 
 /**

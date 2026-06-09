@@ -142,7 +142,7 @@ describe('Team Search Tool Handlers', () => {
             expect(result.error).toContain('not configured')
         })
 
-        it('should return error if project_number is missing and tags contain non-flags', async () => {
+        it('should successfully search globally without project_number when tags contain non-flags', async () => {
             const result = (await callTool(
                 'team_search',
                 {
@@ -156,8 +156,7 @@ describe('Team Search Tool Handlers', () => {
                 undefined,
                 teamDb
             )) as any
-            expect(result.success).toBe(false)
-            expect(result.code).toBe('VALIDATION_ERROR')
+            expect(result.success).toBe(true)
         })
 
         it('should successfully search without project_number for pure flag queries', async () => {
@@ -247,7 +246,7 @@ describe('Team Search Tool Handlers', () => {
             expect(result.success).toBe(false)
         })
 
-        it('should return error if project_number is missing and entry_type is not flag', async () => {
+        it('should successfully search globally without project_number when entry_type is not flag', async () => {
             const result = (await callTool(
                 'team_search_by_date_range',
                 {
@@ -262,8 +261,7 @@ describe('Team Search Tool Handlers', () => {
                 undefined,
                 teamDb
             )) as any
-            expect(result.success).toBe(false)
-            expect(result.code).toBe('VALIDATION_ERROR')
+            expect(result.success).toBe(true)
         })
 
         it('should successfully search by date range without project_number for flag entry_type queries', async () => {

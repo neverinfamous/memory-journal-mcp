@@ -65,7 +65,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     const input = PassTeamFlagSchema.parse(params)
 
-                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    const projectNumber = input.project_number
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,

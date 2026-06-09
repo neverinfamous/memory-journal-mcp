@@ -41,6 +41,7 @@
 - Added a Capacity Planning Guide to the documentation.
 
 ### Changed
+- Restored strict `project_number` requirement for team mutation handlers to maintain strict project boundaries, while keeping read/search operations permissive for global cross-project queries.
 - Improved GitHub resource routing in multi-project environments by safely falling back to the configured `DEFAULT_PROJECT_NUMBER` when `{repo}` is omitted from the resource URI.
 - Enhanced the `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa), eliminating the strict requirement for agents to pass both arguments in multi-project setups.
 - Updated `github.md` and `gotchas.md` server instructions to reflect the new auto-resolution capabilities and reduced operational friction.

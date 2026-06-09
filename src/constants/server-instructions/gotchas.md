@@ -2,7 +2,7 @@
 
 ## Tool Usage Pitfalls
 
-1. **Missing `project_number`**: If you omit `project_number`, the server will automatically inject the `DEFAULT_PROJECT_NUMBER` or attempt to infer it from the `repo` parameter. If neither can be resolved, you will receive a `VALIDATION_ERROR`.
+1. **Missing `project_number`**: The `project_number` parameter is strictly required for all mutation operations (Create, Update, Delete) to prevent accidental miscategorization. You must always explicitly provide it. Omitting it will result in a validation error.
 2. **Result Limits**: The `MAX_QUERY_LIMIT` is strictly 500 for most search tools. Use the optional `cursor` parameter and `next_cursor` output for O(1) keyset pagination on large datasets. Batch operations are strictly limited to `MAX_BATCH_SIZE` (50) per transaction.
 3. **Code Mode Restrictions**: The `mj_execute_code` sandbox cannot make network requests (calling `fetch()` throws a `SandboxNetworkError` and Node network modules are stripped). Use it strictly for orchestrating `mj.*` API calls. If you need to hit external/HTTP endpoints, you must use native OS tools outside of Code Mode. Note: `setTimeout` and `sleep(ms)` are available for minor delays, but avoid long-running operations.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the `memory://help` resource. If a tool doesn't exist, use `mj_execute_code` to combine existing tools.

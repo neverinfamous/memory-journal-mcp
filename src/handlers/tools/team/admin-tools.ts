@@ -80,7 +80,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const projectNumber = input.project_number ?? existing.projectNumber ?? context.config?.defaultProjectNumber
+                    const projectNumber = input.project_number ?? existing.projectNumber
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
@@ -162,7 +162,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, project_number } = TeamDeleteEntrySchema.parse(params)
 
-                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+                    const projectNumber = project_number
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
@@ -240,7 +240,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     
                     const { entry_id, project_number } = TeamRestoreEntrySchema.parse(params)
                     
-                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
+                    const projectNumber = project_number
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
@@ -350,7 +350,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     
                     // Validate all entries first
                     for (const e of input.entries) {
-                        const projectNumber = e.project_number ?? context.config?.defaultProjectNumber
+                        const projectNumber = e.project_number
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,
@@ -364,7 +364,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const inputs = input.entries.map((e) => {
-                        const projectNumber = e.project_number ?? context.config?.defaultProjectNumber
+                        const projectNumber = e.project_number
                         if (projectNumber === undefined || projectNumber === null) {
                             throw new Error('projectNumber is required')
                         }
@@ -459,7 +459,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     for (const u of input.updates) {
                         const existing = teamDb.getEntryById(u.entry_id)
                         
-                        const projectNumber = u.project_number ?? existing?.projectNumber ?? context.config?.defaultProjectNumber
+                        const projectNumber = u.project_number ?? existing?.projectNumber
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,
@@ -579,7 +579,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     const currentUser = resolveAuthenticatedAuthor()
                     const codemodeBypass = context.config?.codemodeInternalFullAccess === true
                     
-                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    const projectNumber = input.project_number
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,

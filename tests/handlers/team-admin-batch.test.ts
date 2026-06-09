@@ -118,7 +118,7 @@ describe('Team Admin Batch Tool Handlers', () => {
             expect(result.error).toContain('Missing project_number')
         })
 
-        it('should successfully fallback to defaultProjectNumber if project_number is missing', async () => {
+        it('should return validation error if project_number is missing even if defaultProjectNumber is configured', async () => {
             const customConfig = {
                 defaultProjectNumber: 42,
                 runtime: {
@@ -142,8 +142,8 @@ describe('Team Admin Batch Tool Handlers', () => {
                 teamVector
             )) as any
 
-            expect(result.success).toBe(true)
-            expect(result.entries[0].projectNumber).toBe(42)
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
         })
 
         it('should successfully create multiple team entries with author injection', async () => {
@@ -175,7 +175,7 @@ describe('Team Admin Batch Tool Handlers', () => {
             const authorMap = teamDb.getAuthorsForEntries([result.entries[0].id])
             expect(authorMap.get(result.entries[0].id)).toBe('test-user')
 
-            expect(teamVector.addEntry).toHaveBeenCalledTimes(3) // 2 from here, 1 from fallback test
+            expect(teamVector.addEntry).toHaveBeenCalledTimes(2) // 2 from here
         })
     })
 

@@ -79,7 +79,7 @@ export const CreateEntrySchemaMcp = z.object({
         .describe(
             'Mark milestone completions, architecture decisions, and releases with a significance_type.'
         ),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
@@ -223,7 +223,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const input = CreateEntrySchema.parse(params)
 
-                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    const projectNumber = input.project_number
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,

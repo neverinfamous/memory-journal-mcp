@@ -56,7 +56,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.string().optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
@@ -223,7 +223,7 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber().nullable().optional(),
+    project_number: relaxedNumber().nullable(),
     significance_type: z.string().nullable().optional(),
     project_owner: z.string().nullable().optional(),
     issue_number: relaxedNumber().nullable().optional(),
@@ -247,7 +247,7 @@ export const TeamDeleteEntrySchema = z.object({
 /** team_delete_entry — relaxed */
 export const TeamDeleteEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
 })
 
 /** team_restore_entry — strict */
@@ -259,7 +259,7 @@ export const TeamRestoreEntrySchema = z.object({
 /** team_restore_entry — relaxed */
 export const TeamRestoreEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
 })
 
 /** team_merge_tags — strict */
@@ -304,7 +304,7 @@ export const TeamBatchDeleteEntriesSchema = z.object({
 
 export const TeamBatchDeleteEntriesSchemaMcp = z.object({
     entry_ids: z.array(relaxedNumber()),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
     permanent: z.boolean().optional().default(false),
 })
 

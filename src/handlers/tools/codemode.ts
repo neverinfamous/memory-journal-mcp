@@ -374,18 +374,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             delete args['exact_match']
                         }
 
-                        // Inject defaultProjectNumber into args to propagate repo context across the dispatcher boundary
-                        if (
-                            sessionContext.config?.defaultProjectNumber !== undefined &&
-                            !('project_number' in args) &&
-                            (name === 'create_entry' ||
-                                name === 'update_entry' ||
-                                name === 'delete_entry' ||
-                                name.startsWith('team_') ||
-                                name === 'pass_flag')
-                        ) {
-                            args['project_number'] = sessionContext.config.defaultProjectNumber
-                        }
+
 
                         // Seamlessly resolve string-based project_number (e.g. 'db-mcp') to its numeric ID
                         if (typeof args['project_number'] === 'string') {

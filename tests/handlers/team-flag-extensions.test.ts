@@ -159,10 +159,9 @@ describe('Team Flag Extensions Tool Handlers', () => {
             expect(result.error).toContain('Team database not configured')
         })
 
-        it('should return error if project_number is missing and no default is set', async () => {
+        it('should succeed globally if project_number is missing and no default is set', async () => {
             const result = (await callTool('team_list_flags', {}, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
-            expect(result.success).toBe(false)
-            expect(result.code).toBe('VALIDATION_ERROR')
+            expect(result.success).toBe(true)
         })
 
         it('should fallback to defaultProjectNumber when project_number is omitted', async () => {
@@ -360,7 +359,7 @@ describe('Team Flag Extensions Tool Handlers', () => {
             expect(result.error).toContain('Team database not configured')
         })
 
-        it('should return error if project_number is missing and no default is set', async () => {
+        it('should succeed globally if project_number is missing and no default is set', async () => {
             const result = (await callTool(
                 'team_get_flag_analytics',
                 { period: 'week' },
@@ -371,8 +370,7 @@ describe('Team Flag Extensions Tool Handlers', () => {
                 undefined,
                 teamDb
             )) as any
-            expect(result.success).toBe(false)
-            expect(result.code).toBe('VALIDATION_ERROR')
+            expect(result.success).toBe(true)
         })
 
         it('should fallback to defaultProjectNumber when project_number is omitted', async () => {

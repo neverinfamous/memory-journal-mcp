@@ -49,29 +49,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct } =
                         TeamSearchSchema.parse(params)
 
-                    // Security: To bypass project_number, the search must explicitly be for flags only.
-                    // Prevent mixed tag arrays (e.g. ['flag:blocker', 'frontend']) from leaking non-flag entries
-                    // because tag filtering is an OR/IN operation.
-                    const isGlobalFlagSearch =
-                        tags !== undefined &&
-                        tags.length > 0 &&
-                        tags.every((t) => t.startsWith('flag:'))
 
-                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
-
-                    if (projectNumber == null && !isGlobalFlagSearch) {
-                        return {
-                            success: false,
-                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide a valid project_number in the tool parameters.',
-                            recoverable: true,
-                            entries: [],
-                            count: 0,
-                            degraded: false,
-                        }
-                    }
+                    const projectNumber = project_number
 
                     const searchLimit =
                         tags && tags.length > 0
@@ -164,28 +143,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         include_archived,
                     } = TeamSearchByDateRangeSchema.parse(params)
 
-                    // Security: To bypass project_number, the search must explicitly be for flags only.
-                    const isGlobalFlagSearch =
-                        entry_type === 'flag' ||
-                        (tags !== undefined &&
-                            tags.length > 0 &&
-                            tags.every((t) => t.startsWith('flag:')))
 
-                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
-
-                    if (projectNumber == null && !isGlobalFlagSearch) {
-                        return {
-                            success: false,
-                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide a valid project_number in the tool parameters.',
-                            recoverable: true,
-                            entries: [],
-                            count: 0,
-                            degraded: false,
-                        }
-                    }
+                    const projectNumber = project_number
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
                     if (start_date > end_date) {
@@ -250,21 +209,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     const { limit, offset, project_number } = TeamListDeletedEntriesSchema.parse(params)
-                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
-                    }
-                    
+                    const projectNumber = project_number
                     const result = teamDb.getDeletedEntries({ limit, offset })
                     let entries = result.entries
-                    entries = entries.filter((e) => e.projectNumber === projectNumber)
+                    if (projectNumber != null) {
+                        entries = entries.filter((e) => e.projectNumber === projectNumber)
+                    }
                     const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
                     const enriched = entries.map((e) => ({
                         ...e,

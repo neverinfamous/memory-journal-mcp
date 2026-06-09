@@ -36,7 +36,7 @@ Only help resources for your enabled tool groups are registered.
 
 ### Journal Behaviors
 
-- **Strict Validation**: The `project_number` parameter is resolved at runtime (checking tool inputs, workspace registry mappings, and `DEFAULT_PROJECT_NUMBER` fallbacks). You will receive a `VALIDATION_ERROR` if no project number can be resolved for core or team tool operations.
+- **Strict Validation**: The `project_number` parameter is STRICTLY REQUIRED for all mutation operations (Create, Update, Delete). You must always explicitly provide it to prevent accidental miscategorization. You will receive a `VALIDATION_ERROR` if it is omitted.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., `create_entry`) by default. ONLY save to the team journal (e.g., `team_create_entry`) if the user explicitly requests it.
 - **Entry History**: Every modification to an entry creates a revision. Use `get_entry_history` to view past versions and changes of an entry. When updating entries, consider passing `expected_version` to use optimistic locking and avoid overwriting concurrent edits.
 - **Soft-Delete & Recovery**: Entries can be soft-deleted and restored via `restore_entry` or `team_restore_entry`. Use `list_deleted_entries` or `team_list_deleted_entries` to discover soft-deleted entries. Entries can also be archived (`is_archived = 1`) to preserve them in history while excluding them from normal search queries.

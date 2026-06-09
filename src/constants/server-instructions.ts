@@ -95,7 +95,7 @@ Only help resources for your enabled tool groups are registered.
 
 ### Journal Behaviors
 
-- **Strict Validation**: The \`project_number\` parameter is resolved at runtime (checking tool inputs, workspace registry mappings, and \`DEFAULT_PROJECT_NUMBER\` fallbacks). You will receive a \`VALIDATION_ERROR\` if no project number can be resolved for core or team tool operations.
+- **Strict Validation**: The \`project_number\` parameter is STRICTLY REQUIRED for all mutation operations (Create, Update, Delete). You must always explicitly provide it to prevent accidental miscategorization. You will receive a \`VALIDATION_ERROR\` if it is omitted.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Entry History**: Every modification to an entry creates a revision. Use \`get_entry_history\` to view past versions and changes of an entry. When updating entries, consider passing \`expected_version\` to use optimistic locking and avoid overwriting concurrent edits.
 - **Soft-Delete & Recovery**: Entries can be soft-deleted and restored via \`restore_entry\` or \`team_restore_entry\`. Use \`list_deleted_entries\` or \`team_list_deleted_entries\` to discover soft-deleted entries. Entries can also be archived (\`is_archived = 1\`) to preserve them in history while excluding them from normal search queries.
@@ -388,7 +388,7 @@ When the user has GitHub Copilot code review enabled:
 
 ## Tool Usage Pitfalls
 
-1. **Missing \`project_number\`**: If you omit \`project_number\`, the server will automatically inject the \`DEFAULT_PROJECT_NUMBER\` or attempt to infer it from the \`repo\` parameter. If neither can be resolved, you will receive a \`VALIDATION_ERROR\`.
+1. **Missing \`project_number\`**: The \`project_number\` parameter is strictly required for all mutation operations (Create, Update, Delete) to prevent accidental miscategorization. You must always explicitly provide it. Omitting it will result in a validation error.
 2. **Result Limits**: The \`MAX_QUERY_LIMIT\` is strictly 500 for most search tools. Use the optional \`cursor\` parameter and \`next_cursor\` output for O(1) keyset pagination on large datasets. Batch operations are strictly limited to \`MAX_BATCH_SIZE\` (50) per transaction.
 3. **Code Mode Restrictions**: The \`mj_execute_code\` sandbox cannot make network requests (calling \`fetch()\` throws a \`SandboxNetworkError\` and Node network modules are stripped). Use it strictly for orchestrating \`mj.*\` API calls. If you need to hit external/HTTP endpoints, you must use native OS tools outside of Code Mode. Note: \`setTimeout\` and \`sleep(ms)\` are available for minor delays, but avoid long-running operations.
 4. **Tool Hallucinations**: Do NOT attempt to use tools that are not listed in the \`memory://help\` resource. If a tool doesn't exist, use \`mj_execute_code\` to combine existing tools.

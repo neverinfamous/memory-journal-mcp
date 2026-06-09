@@ -58,7 +58,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const input = TeamCreateEntrySchema.parse(params)
 
-                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    const projectNumber = input.project_number
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
@@ -185,17 +185,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number } =
                         TeamGetEntryByIdSchema.parse(params)
-                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
-                    }
+                    const projectNumber = project_number
                     const entry = teamDb.getEntryById(entry_id)
 
                     if (
@@ -257,17 +247,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const { limit, cursor, sort_by, project_number } = TeamGetRecentSchema.parse(params)
-                    const projectNumber = project_number ?? context.config?.defaultProjectNumber
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
-                    }
+                    const projectNumber = project_number
                     const result = teamDb.searchEntries('', {
                         limit,
                         cursor,

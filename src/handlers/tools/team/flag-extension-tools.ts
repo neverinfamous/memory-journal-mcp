@@ -142,21 +142,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
 
                     const input = ListTeamFlagsSchema.parse(params)
 
-                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST specify a project_number to isolate results.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide a valid project_number in the tool parameters, or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            recoverable: true,
-                            flags: [],
-                            count: 0,
-                            active_count: 0,
-                            resolved_count: 0,
-                        }
-                    }
+                    const projectNumber = input.project_number
 
                     const { entries: flagEntries } = teamDb.searchEntries('', {
                         entryType: 'flag',
@@ -173,7 +159,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
                         if (!ctx) continue
 
                         // Project boundary filter
-                        if (entry.projectNumber !== projectNumber) continue
+                        if (projectNumber !== undefined && projectNumber !== null && entry.projectNumber !== projectNumber) continue
 
                         // Status filter
                         if (input.status === 'active' && ctx.resolved) continue
@@ -467,17 +453,7 @@ export function getTeamFlagExtensionTools(context: ToolContext): ToolDefinition[
 
                     const input = FlagAnalyticsSchema.parse(params)
 
-                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST specify a project_number to isolate results.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide a valid project_number in the tool parameters, or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            recoverable: true,
-                        }
-                    }
+                    const projectNumber = input.project_number
 
                     const now = Date.now()
                     const periodMs = getPeriodMs(input.period)
