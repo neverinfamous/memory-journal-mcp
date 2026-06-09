@@ -1,8 +1,8 @@
 /**
  * Payload Contract Tests: Team Isolation
  *
- * Validates that Team DB search tools strictly enforce project_number
- * parameter to prevent cross-tenant data leakage.
+ * Validates that Team DB mutation tools strictly enforce project_number
+ * parameter to prevent cross-tenant data leakage, while read/search tools remain permissive.
  */
 
 import { test, expect } from '@playwright/test'
@@ -22,23 +22,21 @@ test.describe('Payload Contracts: Team Isolation', () => {
         await client.close()
     })
 
-    test('team_search MUST reject queries without project_number', async () => {
+    test('team_search MUST accept queries without project_number for global search', async () => {
         const payload = await callToolAndParse(client, 'team_search', {
             query: 'test',
         })
 
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
+        expect(payload.success).toBe(true)
     })
 
-    test('team_search_by_date_range MUST reject queries without project_number', async () => {
+    test('team_search_by_date_range MUST accept queries without project_number for global search', async () => {
         const payload = await callToolAndParse(client, 'team_search_by_date_range', {
             start_date: '2020-01-01',
             end_date: '2030-12-31',
         })
 
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
+        expect(payload.success).toBe(true)
     })
 
     test('team_search MUST bypass project_number constraint for pure flag searches', async () => {
@@ -50,14 +48,13 @@ test.describe('Payload Contracts: Team Isolation', () => {
         expect(payload.success).toBe(true)
     })
 
-    test('team_search MUST reject queries without project_number if tags contain non-flags', async () => {
+    test('team_search MUST accept queries without project_number even if tags contain non-flags', async () => {
         const payload = await callToolAndParse(client, 'team_search', {
             query: 'test',
             tags: ['flag:blocker', 'frontend'],
         })
 
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
+        expect(payload.success).toBe(true)
     })
 
     test('team_search_by_date_range MUST bypass project_number constraint for flag entry_type', async () => {
