@@ -285,9 +285,9 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ---
 
-## Resources (48 total)
+## Resources (49 total)
 
-> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 54, though they map to the 48 capabilities listed below.
+> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 55, though they map to the 49 capabilities listed below.
 
 ### Static Resources
 
@@ -301,7 +301,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `graph.ts`                 | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                  |
 | `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`, `memory://flags/history`                                                   |
 | `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)                                                                                          |
-| `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY), `memory://metrics/latency` (MEDIUM_PRIORITY) |
+| `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/resources` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY), `memory://metrics/latency` (MEDIUM_PRIORITY) |
 | `audit/audit-resource.ts`  | `memory://audit` (ASSISTANT_FOCUSED) — last 50 write/admin audit entries from JSONL log; returns `audit: not configured` when `AUDIT_LOG_PATH` unset                          |
 
 ### Template Resources
