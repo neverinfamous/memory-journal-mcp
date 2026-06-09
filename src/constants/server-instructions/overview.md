@@ -10,6 +10,7 @@
 | Metrics/Summary | `memory://metrics/summary`  |
 | Metrics/Latency | `memory://metrics/latency`  |
 | Resource reads  | `memory://metrics/resources`|
+| Report history  | `memory://insights/reports` |
 | Full context    | `get-context-bundle` prompt |
 
 ## Help Resources
@@ -51,6 +52,14 @@ On server startup, the auto-prune system implements a graduated data lifecycle (
 - **Configurable Thresholds**: Controlled via `--archive-older-than-days`, `--prune-older-than-days` (soft-delete), `--hard-delete-older-than-days`, and `--prune-importance-threshold`.
 - **Exclusion Rules**: Specific tags can be exempted from auto-pruning using `--prune-exclude-tags <tags>` (e.g. `architecture`, `never-prune`).
 - **Dry Run**: Server administrators can preview what would be processed without mutating the database by using the `--prune-dry-run` flag.
+
+### Scheduled Reports
+
+When deployed in HTTP mode with `--report-interval <minutes>` and `--report-webhook-url <url>`, the server periodically generates digest reports and delivers them to the configured webhook. Reports include activity trends, significance highlights, stale project warnings, and top-importance entries.
+
+- **Formats**: `slack` (default, `{"text":"<markdown>"}`), `discord` (`{"content":"<markdown>"}`), or `json` (raw DigestSnapshot payload).
+- **Report history**: Read `memory://insights/reports` to view the last 5 generated reports and their delivery status.
+- **Independent from digest**: The `report` job is separate from the `digest` analytics job. You can run one without the other.
 
 ### Real-Time Subscriptions
 

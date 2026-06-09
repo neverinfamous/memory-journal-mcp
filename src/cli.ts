@@ -78,6 +78,24 @@ program
         'Analytics digest interval in minutes, HTTP only (0 = disabled; recommended: 1440 for daily)',
         '0'
     )
+    .option(
+        '--report-interval <minutes>',
+        'Scheduled report generation interval in minutes, HTTP only (0 = disabled)',
+        '0'
+    )
+    .option(
+        '--report-webhook-url <url>',
+        'Webhook URL for report delivery (POST) (env: REPORT_WEBHOOK_URL)'
+    )
+    .option(
+        '--report-webhook-auth <token>',
+        'Optional Authorization header value for the report webhook (env: REPORT_WEBHOOK_AUTH)'
+    )
+    .option(
+        '--report-content-type <type>',
+        'Webhook payload format: slack, discord, or json (env: REPORT_CONTENT_TYPE)',
+        'slack'
+    )
 
     .option(
         '--codemode-max-result-size <bytes>',
@@ -332,6 +350,12 @@ program
                     vacuumIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('vacuumInterval', 'VACUUM_INTERVAL', 0), 0),
                     rebuildIndexIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0), 0),
                     digestIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('digestInterval', 'DIGEST_INTERVAL', 0), 0),
+                    reportIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('reportInterval', 'REPORT_INTERVAL', 0), 0),
+                    reportDeliveryOptions: {
+                        webhookUrl: catchConfig(() => resolver.resolve<string>('reportWebhookUrl', 'REPORT_WEBHOOK_URL') ?? '', ''),
+                        webhookAuth: catchConfig(() => resolver.resolve<string>('reportWebhookAuth', 'REPORT_WEBHOOK_AUTH'), undefined),
+                        contentType: catchConfig(() => (resolver.resolve<string>('reportContentType', 'REPORT_CONTENT_TYPE') ?? 'slack') as 'slack' | 'discord' | 'json', 'slack'),
+                    }
                 },
                 oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
                 oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),

@@ -67,6 +67,15 @@ describe('Backup Manager Edge Cases', () => {
     })
 
     it('should rollback on restore failure', async () => {
+        const lockDir = `${testDbPath}.lock.d`
+        if (fs.existsSync(lockDir)) {
+            try {
+                fs.rmSync(lockDir, { recursive: true, force: true })
+            } catch {
+                // ignore cleanup errors in test
+            }
+        }
+
         const backup = await db.exportToFile('rollback-test')
 
         // Let's force an error during restore by mocking fs.promises.rename

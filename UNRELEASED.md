@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Added scheduled digest report delivery via `--report-interval`, `--report-webhook-url`, `--report-webhook-auth`, and `--report-content-type` (HTTP transport only).
+- Added `memory://insights/reports` resource to view the last 5 generated report snapshots and their delivery status.
 - Added Capacity Planning Guide to the documentation to provide database size growth rates, vector index footprints, and archiving recommendations.
 - Added `DB_ENCRYPTION_KEY` environment variable configuration to support SQLCipher-encrypted databases at rest (applies to both main and team databases automatically).
 - Added `--dump-config` CLI flag to print the fully resolved configuration payload (with automatically redacted secrets) to assist in debugging configuration precedence.

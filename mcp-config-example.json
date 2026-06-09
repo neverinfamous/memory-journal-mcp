@@ -84,7 +84,11 @@
                 "TRUST_PROXY": "false",
                 "PUBLIC_ORIGIN": "",
                 "OAUTH_CLOCK_TOLERANCE": "60",
-                "ALLOWED_IO_ROOTS": "/app/data"
+                "ALLOWED_IO_ROOTS": "/app/data",
+                "REPORT_INTERVAL": "0",
+                "REPORT_WEBHOOK_URL": "",
+                "REPORT_WEBHOOK_AUTH": "",
+                "REPORT_CONTENT_TYPE": "slack"
             }
         }
     }

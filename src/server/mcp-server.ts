@@ -319,7 +319,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             options.scheduler.backupIntervalMinutes > 0 ||
             options.scheduler.vacuumIntervalMinutes > 0 ||
             options.scheduler.rebuildIndexIntervalMinutes > 0 ||
-            options.scheduler.digestIntervalMinutes > 0
+            options.scheduler.digestIntervalMinutes > 0 ||
+            options.scheduler.reportIntervalMinutes > 0
 
         if (hasAnyJob && transport === 'stdio') {
             logger.warning(

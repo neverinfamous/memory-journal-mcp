@@ -69,6 +69,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 | Metrics/Summary | \`memory://metrics/summary\`  |
 | Metrics/Latency | \`memory://metrics/latency\`  |
 | Resource reads  | \`memory://metrics/resources\`|
+| Report history  | \`memory://insights/reports\` |
 | Full context    | \`get-context-bundle\` prompt |
 
 ## Help Resources
@@ -110,6 +111,14 @@ On server startup, the auto-prune system implements a graduated data lifecycle (
 - **Configurable Thresholds**: Controlled via \`--archive-older-than-days\`, \`--prune-older-than-days\` (soft-delete), \`--hard-delete-older-than-days\`, and \`--prune-importance-threshold\`.
 - **Exclusion Rules**: Specific tags can be exempted from auto-pruning using \`--prune-exclude-tags <tags>\` (e.g. \`architecture\`, \`never-prune\`).
 - **Dry Run**: Server administrators can preview what would be processed without mutating the database by using the \`--prune-dry-run\` flag.
+
+### Scheduled Reports
+
+When deployed in HTTP mode with \`--report-interval <minutes>\` and \`--report-webhook-url <url>\`, the server periodically generates digest reports and delivers them to the configured webhook. Reports include activity trends, significance highlights, stale project warnings, and top-importance entries.
+
+- **Formats**: \`slack\` (default, \`{"text":"<markdown>"}\`), \`discord\` (\`{"content":"<markdown>"}\`), or \`json\` (raw DigestSnapshot payload).
+- **Report history**: Read \`memory://insights/reports\` to view the last 5 generated reports and their delivery status.
+- **Independent from digest**: The \`report\` job is separate from the \`digest\` analytics job. You can run one without the other.
 
 ### Real-Time Subscriptions
 
@@ -392,6 +401,7 @@ When the user has GitHub Copilot code review enabled:
 12. **Configuration Precedence & Debugging**: Server settings are resolved using strict precedence: CLI flags override Environment Variables, which override the Config File (\`memory-journal.config.yaml\` / \`.yml\` / \`.json\`), which overrides Defaults. If you encounter unexpected settings, you can run the server with the \`--dump-config\` flag. This command aggregates any startup configuration validation errors (printing them all at once rather than failing on the first one) or, if valid, prints the fully resolved configuration tree (with secrets automatically redacted as \`[REDACTED]\`) and exits cleanly. This is the primary method for diagnosing overriding issues.
 13. **Runtime Configuration Hot-Reloading**: You can use the \`update_configuration\` tool to dynamically change the \`instruction_level\`, \`tool_filter\`, or briefing variables on the fly without a server restart. This instantly modifies the configuration file and triggers a hot-reload, emitting a \`notifications/tools/list_changed\` event to the MCP client to refresh available tools and instructions immediately.
 14. **Database Encryption**: If the database requires SQLCipher encryption at rest, you must set the \`DB_ENCRYPTION_KEY\` environment variable when starting the server. If this key is missing or incorrect for an encrypted database, any operations will fail with a "not a database" error.
+15. **Scheduled Reports**: The \`--report-interval\` scheduler job is HTTP-only and requires \`--report-webhook-url\` to actually deliver reports. Without a webhook URL, the job still generates and persists report snapshots (viewable via \`memory://insights/reports\`) but skips delivery. Report delivery failures are logged but never crash the server.
 
 ## GitHub & Kanban Sync
 

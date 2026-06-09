@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Resources
 
-**Scope:** All 39 resources — 31 static resources, 8 template resources (happy path + error paths).
+**Scope:** All 40 resources — 32 static resources, 8 template resources (happy path + error paths).
 
 **Prerequisites:**
 
@@ -59,6 +59,7 @@
 | Audit log         | `memory://audit`                       | Last 50 audit entries with tool name, timestamp, and result                                                                         |
 | Insights digest   | `memory://insights/digest`             | Cross-project digest snapshot (graceful empty if no digest available)                                                               |
 | Insights team     | `memory://insights/team-collaboration` | Team collaboration matrix with `authorActivity` and `impactFactor` (graceful if team DB not configured)                             |
+| Insights reports  | `memory://insights/reports`            | Last 5 scheduled digest report snapshots and previews                                                                               |
 
 ### 1.2 Template Resources — Happy Path
 
@@ -94,7 +95,7 @@
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- All 31 static resources return valid data
+- All 32 static resources return valid data
 - All 8 template resources work with valid parameters
 - All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
@@ -114,3 +115,4 @@
 - `memory://audit` returns last 50 audit entries
 - `memory://insights/digest` handles empty digest gracefully
 - `memory://insights/team-collaboration` returns collaboration matrix or graceful empty
+- `memory://insights/reports` returns list of report snapshots or graceful empty

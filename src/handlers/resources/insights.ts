@@ -131,6 +131,52 @@ export const teamCollaborationResource: InternalResourceDef = {
 }
 
 // ============================================================================
+// memory://insights/reports
+// ============================================================================
+
+export const reportHistoryResource: InternalResourceDef = {
+    uri: 'memory://insights/reports',
+    name: 'Report History',
+    title: 'Recent Scheduled Digest Reports',
+    description:
+        'The last 5 generated digest report snapshots. Updated by the scheduled report job.',
+    mimeType: 'application/json',
+    icons: [ICON_ANALYTICS],
+    annotations: {
+        ...withPriority(0.3, ASSISTANT_FOCUSED),
+    },
+    handler: (_uri: string, context: ResourceContext): ResourceResult => {
+        const lastModified = new Date().toISOString()
+
+        try {
+            const snapshots = context.db.getAnalyticsSnapshots?.('report', 5) ?? []
+            
+            const reports = snapshots.map(snapshot => {
+                const data = snapshot.data
+                const topEntries = data['topImportanceEntries'] as { preview?: string }[] | undefined
+                return {
+                    computedAt: snapshot.createdAt,
+                    preview: (data['preview'] as string | undefined) ?? topEntries?.[0]?.preview?.substring(0, 200) ?? 'No preview available'
+                }
+            })
+
+            return {
+                data: { success: true, reports },
+                annotations: { lastModified: reports[0]?.computedAt ?? lastModified },
+            }
+        } catch (error) {
+            return {
+                data: {
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error),
+                },
+                annotations: { lastModified },
+            }
+        }
+    },
+}
+
+// ============================================================================
 
 // Removed computeTeamCollaborationMatrix (migrated to SQLite adapter)
 
@@ -138,5 +184,5 @@ export const teamCollaborationResource: InternalResourceDef = {
  * Get all insight resource definitions
  */
 export function getInsightResourceDefinitions(): InternalResourceDef[] {
-    return [digestInsightsResource, teamCollaborationResource]
+    return [digestInsightsResource, teamCollaborationResource, reportHistoryResource]
 }

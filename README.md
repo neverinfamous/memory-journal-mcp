@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-85.47%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-85.41%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**97 MCP Tools** · **19 Workflow Prompts** · **53 Resources (47 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**97 MCP Tools** · **19 Workflow Prompts** · **54 Resources (48 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -211,9 +211,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **47 Resources** (30 Static + 17 Template)
+### 📡 **48 Resources** (31 Static + 17 Template)
 
-**30 Static Resources** (appear in resource lists):
+**31 Static Resources** (appear in resource lists):
 
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
@@ -245,6 +245,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://flags/history` - Recently resolved flags with resolution details and avg time-to-resolution (last 7 days)
 - `memory://insights/digest` - Aggregate insights digest
 - `memory://insights/team-collaboration` - Team collaboration metrics
+- `memory://insights/reports` - Generated scheduled report snapshots and delivery statuses
 
 **17 Template Resources** (9 base templates + 8 dynamic `{repo}` variants):
 
@@ -608,6 +609,7 @@ memory-journal-mcp --transport http --port 3000 \
 | `--keep-backups <count>`         | 5       | Max backups retained during automated cleanup                        |
 | `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
 | `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
+| `--report-interval <min>`        | 0 (off) | Scheduled report generation interval in minutes                      |
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
@@ -647,6 +649,10 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                                                        |
 | `OAUTH_ALLOW_PLAINTEXT_LOOPBACK`  | Allow plaintext HTTP loopback redirect URIs for local OAuth clients (CLI: `--oauth-allow-plaintext-loopback`; default: `false`)                       |
 | `OAUTH_CLOCK_TOLERANCE`           | Allowed clock skew tolerance in seconds for JWT verification (default: `5`)                                                                           |
+| `REPORT_INTERVAL`                 | Scheduled report generation interval in minutes, HTTP only (CLI: `--report-interval`; default: `0`)                                                   |
+| `REPORT_WEBHOOK_URL`              | Webhook URL for report delivery (POST) (CLI: `--report-webhook-url`)                                                                                  |
+| `REPORT_WEBHOOK_AUTH`             | Optional Authorization header value for the report webhook (CLI: `--report-webhook-auth`)                                                             |
+| `REPORT_CONTENT_TYPE`             | Webhook payload format: `slack`, `discord`, or `json` (CLI: `--report-content-type`; default: `slack`)                                                |
 | `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`)                                       |
 | `CODEMODE_INTERNAL_FULL_ACCESS`   | Bypass tool filter constraints within the Code Mode sandbox (CLI: `--codemode-internal-full-access`; default: `false`)                                |
 | `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                                                                 |

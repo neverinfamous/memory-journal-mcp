@@ -19,7 +19,8 @@ src/
 │   ├── subscription-manager.ts     # Real-time resource subscriptions and state management
 │   ├── auto-prune.ts               # Importance-based data lifecycle on startup (archive → soft-delete → hard-delete)
 │   ├── registration.ts             # Tool/resource/prompt registration logic
-│   └── scheduler.ts                # HTTP-only automated scheduling (backup, vacuum, rebuild-index)
+│   ├── scheduler.ts                # HTTP-only automated scheduling (backup, vacuum, rebuild-index, digest, report)
+│   └── digest-reporter.ts          # Scheduled report formatting and webhook delivery
 │
 ├── types/                          # Core TypeScript types (barrel: types/index.ts)
 │   ├── entities.ts                 # EntryType, SignificanceType, RelationshipType, JournalEntry, Tag, Relationship, Embedding
@@ -284,11 +285,9 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ---
 
-## Resources (`src/handlers/resources/`)
+## Resources (48 total)
 
-47 resources total — 30 static + 17 template.
-
-> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 53, though they map to the 47 capabilities listed below.
+> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 54, though they map to the 48 capabilities listed below.
 
 ### Static Resources
 

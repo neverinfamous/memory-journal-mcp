@@ -11,6 +11,8 @@ import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { logger } from '../utils/logger.js'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
+import { VERSION } from '../version.js'
 
 // ============================================================================
 // Types
@@ -28,6 +30,10 @@ export interface SchedulerOptions {
     rebuildIndexIntervalMinutes: number
     /** Analytics digest interval in minutes (0 = disabled; recommended: 1440 for daily) */
     digestIntervalMinutes: number
+    /** Scheduled report generation interval in minutes (0 = disabled; recommended: 10080 for weekly) */
+    reportIntervalMinutes: number
+    /** Webhook options for report delivery */
+    reportDeliveryOptions?: ReportDeliveryOptions
 }
 
 /** Status of a single scheduled job */
@@ -139,6 +145,13 @@ export class Scheduler {
         if (this.options.digestIntervalMinutes > 0) {
             this.scheduleJob('digest', this.options.digestIntervalMinutes, () => {
                 this.runDigest()
+                return Promise.resolve()
+            })
+        }
+
+        if (this.options.reportIntervalMinutes > 0) {
+            this.scheduleJob('report', this.options.reportIntervalMinutes, () => {
+                this.runReport()
                 return Promise.resolve()
             })
         }
@@ -348,6 +361,30 @@ export class Scheduler {
                 topImportanceCount: snapshot.topImportanceEntries.length,
             },
         })
+    }
+
+    // ========================================================================
+    // Private — Report job
+    // ========================================================================
+
+    /**
+     * Report job: compute analytics snapshot, persist, and deliver via webhook.
+     */
+    private runReport(): void {
+        const snapshot = this.db.computeDigest() as unknown as DigestSnapshot
+        this.db.saveAnalyticsSnapshot('report', snapshot as unknown as Record<string, unknown>)
+        logger.info('Scheduled analytics report computed', {
+            module: 'Scheduler',
+            operation: 'report',
+            context: {
+                currentPeriodEntries: snapshot.currentPeriodEntries,
+            },
+        })
+
+        if (this.options.reportDeliveryOptions?.webhookUrl) {
+            const report = formatDigestReport(snapshot, VERSION)
+            void deliverReport(report, snapshot, this.options.reportDeliveryOptions)
+        }
     }
 
     // ========================================================================
