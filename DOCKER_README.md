@@ -298,19 +298,14 @@ Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as
 
 Restart Cursor or your MCP client and start journaling!
 
-### GitHub Integration Configuration
+### 🔧 Configuration Highlights
 
-The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
+- **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
+- **`DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
+- **`PROJECT_REGISTRY`**: Maps repo names to paths for seamless multi-project GitHub context routing.
+- **`PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS`**: Test or constrain auto-prune garbage collection rules safely.
 
-For a complete list of all 30+ environment variables (including remote HTTP scheduling, payload truncations, context injection parameters, flag vocabulary, and audit logging), please refer to the **[Official Configuration Resource](https://github.com/neverinfamous/memory-journal-mcp/wiki/)** in our Wiki.
-
-**Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
-
-#### Context Resolution & Project Routing
-
-**Context resolution order**: Dynamic `PROJECT_REGISTRY` routing → explicit `owner`/`repo` → blocks with `{requiresUserInput: true}`. Kanban/issue project numbers resolve via passed argument → `PROJECT_REGISTRY` lookup → global `DEFAULT_PROJECT_NUMBER`.
-
-**[Full routing & auto-detection docs →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
+For a complete list of all 30+ environment variables and detailed routing docs, see the **[Configuration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**.
 
 ### 🔄 Session Management
 
