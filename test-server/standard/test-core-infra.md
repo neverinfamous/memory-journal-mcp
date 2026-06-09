@@ -106,7 +106,7 @@ rm *_metrics.json
 | Progress            | Both native and code-mode progress APIs successfully complete        |
 | Team DB Fallback    | Graceful rejection when TEAM_DB_PATH is missing                      |
 | Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
-| Subscriptions       | Resources emit notifications correctly upon mutation                 |
+| Subscriptions       | Subscriptions are authorized via scope checks and emit notifications upon mutation |
 | Prometheus Metrics  | HTTP endpoint returns prometheus exposition format with tool metrics |
 | Metrics Persistence | Server loads/saves JSON metrics across restarts automatically        |
 | Config Validation   | Error aggregation catches multiple validation failures cleanly       |

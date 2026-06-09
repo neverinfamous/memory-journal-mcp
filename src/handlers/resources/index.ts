@@ -59,7 +59,7 @@ function isResourceResult(result: unknown): result is ResourceResult {
 /**
  * Extract base URI without query parameters for matching
  */
-function getBaseUri(uri: string): string {
+export function getBaseUri(uri: string): string {
     // Handle memory:// URIs specially since URL parser treats the path as host
     if (uri.startsWith('memory://')) {
         const withoutScheme = uri.slice('memory://'.length)
@@ -213,4 +213,45 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]
     return [...coreResources, ...generateResourceAliases(coreResources)]
+}
+
+/**
+ * Validates whether the current request is authorized to subscribe to a resource.
+ * Throws an error if the URI is not found or the user lacks the required scope.
+ */
+export function validateResourceSubscription(uri: string, runtime?: ServerRuntime): void {
+    const resources = getAllResourceDefinitions(runtime)
+    const baseUri = getBaseUri(uri)
+
+    const exactMatch = resources.find((r) => r.uri === baseUri)
+    if (exactMatch) {
+        enforceAccessBoundary(baseUri, 'resource', exactMatch.capabilities, runtime?.auditLogger)
+        return
+    }
+
+    // Check for template matches
+    for (const resource of resources) {
+        if (resource.uri.includes('{')) {
+            const escapedUri = resource.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const pattern = escapedUri.replace(
+                /\\{([^}]+)\\}/g,
+                (_match: string, paramName: string) => {
+                    const cleanParam = paramName.replace(/^\\?\+/, '')
+                    return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
+                }
+            )
+            const regex = new RegExp(`^${pattern}$`)
+            if (regex.test(baseUri)) {
+                enforceAccessBoundary(
+                    baseUri,
+                    'resource',
+                    resource.capabilities,
+                    runtime?.auditLogger
+                )
+                return
+            }
+        }
+    }
+
+    throw new ResourceNotFoundError('Resource', uri)
 }

@@ -113,7 +113,7 @@ On server startup, the auto-prune system implements a graduated data lifecycle (
 
 ### Real-Time Subscriptions
 
-The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data.
+The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data. Note that subscriptions are scope-authorized; your session must possess the required scope (e.g., \`team\` or \`admin\`) for the target resource, or the subscription will be rejected with a \`PermissionError\`.
 
 ### Team RBAC & Access Control
 
@@ -424,7 +424,7 @@ Flags are machine-actionable signals stored in the team database. They replace S
 
 **Briefing integration**: The \`memory://briefing\` payload includes \`activeFlags\` when unresolved flags exist. The user's agent rules may instruct you to render these prominently. Always check for and acknowledge active flags at session start.
 
-**Dashboard**: Read \`memory://flags\` to see all active (unresolved) flags. Read \`memory://flags/history\` for recently resolved flags with resolution details. Read \`memory://flags/vocabulary\` to see the configured flag types. Clients can also subscribe to \`memory://flags\` using MCP \`resources/subscribe\` to receive real-time notifications when flags change.
+**Dashboard**: Read \`memory://flags\` to see all active (unresolved) flags. Read \`memory://flags/history\` for recently resolved flags with resolution details. Read \`memory://flags/vocabulary\` to see the configured flag types. Clients can also subscribe to \`memory://flags\` using MCP \`resources/subscribe\` to receive real-time notifications when flags change (requires \`team\` scope).
 
 **Triage prompt**: Use the \`flag-dashboard\` prompt to triage active flags with priority assessment, staleness detection, analytics summary, and resolution guidance.
 

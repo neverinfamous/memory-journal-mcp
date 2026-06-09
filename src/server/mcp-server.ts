@@ -23,7 +23,7 @@ import {
 } from '../filtering/tool-filter.js'
 import { getTools, callTool } from '../handlers/tools/index.js'
 import { getRequiredScope } from '../auth/scope-map.js'
-import { getResources, readResource } from '../handlers/resources/index.js'
+import { getResources, readResource, validateResourceSubscription } from '../handlers/resources/index.js'
 import { getPrompts } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/server-instructions.js'
 import { Scheduler, type SchedulerOptions } from './scheduler.js'
@@ -731,6 +731,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // Register subscribe/unsubscribe handlers on the underlying server
         server.server.setRequestHandler(SubscribeRequestSchema, (request, extra) => {
             const transportSessionId = (extra as { sessionId?: string })?.sessionId || 'stdio'
+            
+            // Validate that the current session has authorization to subscribe to this resource
+            validateResourceSubscription(request.params.uri, runtime)
+            
             globalSubscriptionManager.registerServer(transportSessionId, server)
             globalSubscriptionManager.subscribe(request.params.uri, transportSessionId)
             return {}
