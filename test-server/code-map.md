@@ -123,6 +123,13 @@ src/
 ├── vector/
 │   └── vector-search-manager.ts    # VectorSearchManager — sqlite-vec + @huggingface/transformers integration
 │
+├── markdown/                       # Markdown import/export (round-trip frontmatter parsing)
+│   ├── converters/                 # Markdown converter utilities
+│   ├── exporter.ts                 # Export entries to Markdown
+│   ├── frontmatter.ts              # YAML frontmatter utilities
+│   ├── importer.ts                 # Import entries from Markdown
+│   └── index.ts                    # Barrel
+│
 ├── observability/                  # Phase 2: in-memory tool call metrics accumulation
 │   ├── index.ts                    # Barrel — exports globalMetrics singleton + helpers
 │   ├── metrics.ts                  # MetricsAccumulator — per-tool call counts, durations, token estimates, latency percentiles
@@ -251,7 +258,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **admin**         | `admin.ts`                     | 11    | `update_configuration`, `update_entry`, `delete_entry`, `restore_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `search_audit_log` |
 | **github**        | `github/read-tools.ts`         | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue` (truncate_body, include_comments), `get_github_pr` (truncate_body), `get_github_context` |
 |                   | `github/issue-tools.ts`        | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                                  |
-|                   | `github/kanban-tools.ts`       | 4     | `get_kanban_board` (summary_only, item_limit), `move_kanban_item`, `addKanbanItem`, `deleteKanbanItem`                                             |
+|                   | `github/kanban-tools.ts`       | 4     | `get_kanban_board` (summary_only, item_limit), `move_kanban_item`, `add_kanban_item`, `delete_kanban_item`                                             |
 |                   | `github/milestone-tools.ts`    | 5     | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`                   |
 |                   | `github/insights-tools.ts`     | 1     | `get_repo_insights`                                                                                                                                |
 |                   | `github/copilot-tools.ts`      | 1     | `get_copilot_reviews`                                                                                                                              |

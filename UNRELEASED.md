@@ -43,6 +43,7 @@
 - Updated `mj_execute_code` schema description and internal Code Mode catch blocks to explicitly instruct agents to use the `context` parameter for Markdown and large strings, preventing Tagged Template Literal escaping bugs.
 
 ### Fixed
+- Fixed documentation typos in `test-server/code-map.md` regarding Kanban tools and missing markdown directory.
 - Fixed a security gap where `resources/subscribe` requests bypassed scope boundaries, allowing unauthorized clients to receive real-time notifications for restricted resources.
 - Fixed FTS search phrase matching to preserve balanced double-quotes for exact phrase matches.
 - Fixed regression where batch database operations failed atomically by returning structured `errors` arrays for partial successes and aggregating them using `AggregateMcpError`.
