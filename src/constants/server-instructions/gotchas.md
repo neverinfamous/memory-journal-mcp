@@ -17,6 +17,7 @@
 13. **Runtime Configuration Hot-Reloading**: You can use the `update_configuration` tool to dynamically change the `instruction_level`, `tool_filter`, or briefing variables on the fly without a server restart. This instantly modifies the configuration file and triggers a hot-reload, emitting a `notifications/tools/list_changed` event to the MCP client to refresh available tools and instructions immediately.
 14. **Database Encryption**: If the database requires SQLCipher encryption at rest, you must set the `DB_ENCRYPTION_KEY` environment variable when starting the server. If this key is missing or incorrect for an encrypted database, any operations will fail with a "not a database" error.
 15. **Scheduled Reports**: The `--report-interval` scheduler job is HTTP-only and requires `--report-webhook-url` to actually deliver reports. Without a webhook URL, the job still generates and persists report snapshots (viewable via `memory://insights/reports`) but skips delivery. Report delivery failures are logged but never crash the server.
+16. **Token Estimation & Content-Type Heuristics**: To assist you in optimizing your context window consumption, every tool execution result includes a `_meta.tokenEstimate` field. This value uses dynamic, content-type-aware heuristics to closely estimate real token costs (Prose defaults to 4.0 bytes/token; JSON payloads to 2.8 bytes/token; Code blocks to 3.2 bytes/token). Leverage this telemetry to govern your batch sizes or fallback to paginated/throttled endpoints if usage spikes.
 
 ## GitHub & Kanban Sync
 

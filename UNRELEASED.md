@@ -58,6 +58,7 @@
 - Synchronized tool count references from 95 to 96 across all documentation, test scripts, and GitHub Wiki files following the addition of the `search_audit_log` tool.
 - Updated server instructions, wiki documentation, and testing prompts to reflect new cursor pagination support.
 - Updated agent server instructions for Team RBAC and Optimistic Locking.
+- Updated server instructions (`gotchas.md` and `overview.md`) to explicitly document content-type-aware token estimation heuristics.
 - Synchronized configuration templates (`.env.example`, `mcp-config-example.json`) and Wiki Configuration documentation with new Auto-Prune flags (`--prune-dry-run`, `--prune-exclude-tags`) and Observability metrics flags (`--persist-metrics`, `--metrics-path`).
 - Updated `mj_execute_code` schema description, `SKILL.md`, and Code Mode `SyntaxError`/`TypeError` catch blocks to explicitly instruct agents to use the `context` parameter for Markdown and large strings, preventing Tagged Template Literal escaping bugs.
 
