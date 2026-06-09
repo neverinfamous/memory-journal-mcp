@@ -85,11 +85,25 @@ function wrapResult(result: unknown): unknown {
                     if (prop in target) return target[prop]
                     if (
                         typeof prop === 'string' &&
-                        ['find', 'map', 'filter', 'reduce', 'forEach', 'some', 'every', 'flatMap', 'push', 'pop'].includes(prop)
+                        ['find', 'map', 'filter', 'reduce', 'forEach', 'some', 'every', 'flatMap', 'push', 'pop', 'slice', 'splice', 'sort'].includes(prop)
                     ) {
+                        const arrayKeys = Object.keys(target).filter(k => Array.isArray(target[k]))
+                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags'].includes(k)) || arrayKeys[0]
+
+                        if (targetKey !== undefined) {
+                            const arr = target[targetKey] as unknown[]
+                            const method = (arr as unknown as Record<string, unknown>)[prop]
+                            if (typeof method === 'function') {
+                                return (...args: unknown[]) => {
+                                    const fn = method as (...a: unknown[]) => unknown
+                                    return fn.apply(arr, args)
+                                }
+                            }
+                        }
+
                         const keys = Object.keys(target).join(', ') || 'none'
                         throw new TypeError(
-                            `Attempted to call Array method '${prop}' on an Object. The returned result is not an Array. Keys available: ${keys}`
+                            `Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Keys available: ${keys}`
                         )
                     }
                     return undefined

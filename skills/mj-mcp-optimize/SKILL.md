@@ -69,17 +69,12 @@ To prevent silent failures, `wrapResult` converts failed results into a Proxy. I
 
 Code Mode inherently operates over `memory-journal-mcp`'s tool layer. Operations that deal with raw resources (like `memory://briefing`) are handled via the host server's standard Resource hooks, exposed to the agent via tools like `mj.io.readResource`. 
 
-## 7. Common Pitfall: Methods Return Objects, NOT Arrays
+## 7. Array Method Interception
 
 One of the most common mistakes agents make in Code Mode is assuming tools like `getRecentEntries`, `searchEntries`, or `listProjects` return Arrays directly.
 
 **All MCP tools return Objects.** For example, `getRecentEntries` returns `{ success: true, entries: [...] }`.
 
-If you do `(await mj.core.getRecentEntries()).map(...)`, the `wrapResult` Proxy will immediately throw a helpful error:
-`Attempted to call Array method 'map' on an Object. The returned result is not an Array. Keys available: success, entries...`
+To smooth out this hallucination, the `wrapResult` proxy intercepts Array methods (like `.map`, `.filter`, `.find`) called directly on the returned Object. It automatically scans the Object for common array properties (e.g. `entries`, `projects`, `results`) and binds the method to that inner array. 
 
-Always extract the array from the returned object before mapping or filtering:
-```javascript
-const { entries } = await mj.core.getRecentEntries({ limit: 5 });
-return entries.map(e => e.content);
-```
+This means `(await mj.core.getRecentEntries()).map(...)` will seamlessly work, behaving exactly as if you had correctly accessed the inner `.entries` array!
