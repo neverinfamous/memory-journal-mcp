@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ToolDefinition } from '../types/index.js'
-import { toolNameToMethodName } from './api.js'
+import { toolNameToMethodName } from './api/index.js'
 
 /**
  * Converts a single Zod schema type into a TypeScript string representation.

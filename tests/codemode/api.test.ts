@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { JournalApi, toolNameToMethodName, createJournalApi } from '../../src/codemode/api.js'
+import { JournalApi, toolNameToMethodName, createJournalApi } from '../../src/codemode/api/index.js'
 import type { ToolDefinition } from '../../src/types/index.js'
 
 // =============================================================================

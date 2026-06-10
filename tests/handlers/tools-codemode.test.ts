@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { getCodeModeTools } from '../../src/handlers/tools/codemode.js'
-import * as api from '../../src/codemode/api.js'
+import * as api from '../../src/codemode/api/index.js'
 import * as sandboxFactory from '../../src/codemode/sandbox-factory.js'
 
 describe('Code Mode Tools Coverage', () => {
