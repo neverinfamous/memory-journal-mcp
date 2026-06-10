@@ -86,6 +86,7 @@ const ExecuteCodeSchema = z.object({
     readonly: z.boolean().optional().default(false),
     repo: z.string().optional(),
     project_number: z.number().optional(),
+    auto_version: z.boolean().optional().default(false),
     context: z.record(z.string(), z.unknown()).optional(),
 })
 
@@ -111,6 +112,13 @@ const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .describe(
             'CRITICAL: The project number to use for all mutation operations in this script. Providing this here will automatically inject it into all mj.* API calls so you do not have to specify it repeatedly.'
+        ),
+    auto_version: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+            'If true, the sandbox will automatically fetch and inject expected_version for update_entry and delete_entry operations to prevent concurrent modification errors.'
         ),
     context: z
         .record(z.string(), z.unknown())
@@ -327,8 +335,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const timeout = parsedArgs.data.timeout
                     const readonlyMode = parsedArgs.data.readonly
                     const repo = parsedArgs.data.repo
-                    const providedProjectNumber = parsedArgs.data.project_number
+                    const autoVersion = parsedArgs.data.auto_version
                     const contextPayload = parsedArgs.data.context
+                    const providedProjectNumber = parsedArgs.data.project_number ?? (contextPayload?.['project_number'] as number | undefined)
 
                     // Context extraction for rate limiting and tenant isolation
                     const reqCtx = getRequestContext()
@@ -494,6 +503,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Prevents silent overwrites by fetching the current version before forwarding.
                         // Intentionally skipped for batch operations to avoid N+1 queries.
                         if (
+                            autoVersion &&
                             args['expected_version'] === undefined &&
                             args['entry_id'] !== undefined &&
                             typeof args['entry_id'] === 'number' &&

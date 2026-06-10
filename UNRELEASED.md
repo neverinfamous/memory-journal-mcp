@@ -45,7 +45,7 @@
 - Added cross-group Constructor Wiring for `semanticSearch`, `getVectorIndexStats`, `vectorStats`, `rebuildVectorIndex`, and `addToVectorIndex` from search/admin groups to core, matching the existing hallucination-smoothing pattern.
 - Added `hasMore` convenience boolean to Code Mode result objects when `next_cursor` pagination cursor is present, making pagination state immediately obvious to agents.
 - Added URI-aware `readResource` error handler in Code Mode sandbox that suggests specific `mj.*` API alternatives based on the requested URI pattern (e.g., `memory://recent` → `mj.core.getRecentEntries()`).
-- Added automatic `expected_version` injection for single-entry `update_entry`/`delete_entry` calls in Code Mode, preventing silent overwrites by pre-fetching the current entry version before forwarding. Batch operations are intentionally excluded to avoid N+1 lookups.
+- Added automatic `expected_version` injection for single-entry `update_entry`/`delete_entry` calls in Code Mode via the `auto_version: true` opt-in flag. This prevents silent overwrites by pre-fetching the current entry version before forwarding, while keeping batch operations fast.
 - Added automatic `project_number` injection in single-project environments for mutation tools via the `secureDispatcher`, eliminating the #1 error source while maintaining strict boundaries in multi-project setups.
 
 ### Changed
