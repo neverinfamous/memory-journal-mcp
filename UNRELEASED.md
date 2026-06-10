@@ -36,6 +36,7 @@
 ### Changed
 - Documentation: Synchronized resource counts and undocumented configuration variables across `README.md`, `DOCKER_README.md`, `.env.example`, and `mcp-config-example.json`.
 - Documentation: Updated `README.md` and `copilot-instructions.md` to reflect the correct count of 57 resources.
+- Documentation: Ran full repository `/doc-audit`. Verified 83.81% coverage metrics and synchronized `DOCKER_README.md` and `README.md`.
 - Wiki Documentation: Added missing tools and updated team tool counts.
 - Wiki Documentation: Completed exhaustive documentation parity audit verifying 57 resources, 19 prompts, schema versioning, and eliminating duplicate tool listings.
 - Restored strict `project_number` requirement for team mutation handlers.
