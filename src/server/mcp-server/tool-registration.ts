@@ -1,431 +1,31 @@
-/**
- * Memory Journal MCP Server - Main Server
- *
- * MCP server implementation with tools, resources, and prompts.
- */
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { z } from 'zod'
-
-import type { IDatabaseAdapter } from '../database/core/interfaces.js'
-import { DatabaseAdapterFactory } from '../database/adapter-factory.js'
-import { VectorSearchManager } from '../vector/vector-search-manager.js'
-import { getGitHubIntegration } from '../github/github-integration/index.js'
-import { logger } from '../utils/logger.js'
-import {
-    parseToolFilter,
-    getToolFilterFromEnv,
-    getFilterSummary,
-    getEnabledGroups,
-    type ToolFilterConfig,
-} from '../filtering/tool-filter.js'
-import { getTools, callTool } from '../handlers/tools/index.js'
-import { getRequiredScope } from '../auth/scope-map.js'
-import { getResources, readResource, validateResourceSubscription } from '../handlers/resources/index.js'
-import { getPrompts } from '../handlers/prompts/index.js'
-import { generateInstructions } from '../constants/server-instructions.js'
-import { Scheduler, type SchedulerOptions } from './scheduler.js'
-import { HttpTransport } from '../transports/http/index.js'
-
-import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
-import type { ProjectRegistryEntry, ToolHandlerConfig } from '../types/index.js'
-import type { AuditConfig } from '../audit/index.js'
-import {
-    registerResources,
-    registerPrompts,
-    type ResourceDefinition,
-    type PromptDefinition,
-} from './registration.js'
-import { VERSION } from '../version.js'
-import { ServerRuntime } from '../utils/maintenance-lock.js'
-import { ConfigManager } from '../utils/config-manager.js'
-import { AuditLogger, createAuditInterceptor } from '../audit/index.js'
-import { runAutoPrune } from './auto-prune.js'
-import { globalSubscriptionManager } from './subscription-manager.js'
+import { getEnabledGroups } from '../../filtering/tool-filter.js'
+import { callTool } from '../../handlers/tools/index.js'
+import { readResource, validateResourceSubscription } from '../../handlers/resources/index.js'
+import { generateInstructions } from '../../constants/server-instructions.js'
+import { type DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
+import { registerResources, registerPrompts } from '../registration.js'
+import type { ResourceDefinition, PromptDefinition } from '../registration.js'
+import { VERSION } from '../../version.js'
+import { globalSubscriptionManager } from '../subscription-manager.js'
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
-export type McpServerFactory = () => McpServer
+import type { ServerContext, ServerOptions } from './types.js'
+import type { ToolRegistration, ToolHandlerConfig } from '../../types/index.js'
 
-export interface ServerOptions {
-    transport: 'stdio' | 'http'
-    port?: number
-    host?: string
-    dbPath: string
-    teamDbPath?: string
-    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
-    teamAdmin?: string
-    toolFilter?: string
-    defaultProjectNumber?: number
-    autoRebuildIndex?: boolean
-    statelessHttp?: boolean
-    corsOrigins?: string[]
-    authToken?: string
-    enableHSTS?: boolean
-    scheduler?: SchedulerOptions
+export function createServerInstance(
+    context: ServerContext,
+    options: ServerOptions,
+    prompts: PromptDefinition[],
+    resources: ResourceDefinition[],
+    allTools: ToolRegistration[],
+    allToolNames: Set<string>,
+    customToolHandlerConfig: ToolHandlerConfig
+): McpServer {
+    const { configManager, db, teamDb, vectorManager, teamVectorManager, github, scheduler, allowedIoRoots, runtime } = context;
+    const { defaultProjectNumber } = options;
 
-    // OAuth 2.1 options
-    oauthEnabled?: boolean
-    oauthIssuer?: string
-    oauthAudience?: string
-    oauthJwksUri?: string
-    oauthClockTolerance?: number
-    allowPlaintextLoopbackOAuth?: boolean
-    trustProxy?: boolean
-    publicOrigin?: string
-    // Briefing configuration
-    briefingConfig?: BriefingConfig
-    // Project Registry
-    projectRegistry?: Record<string, ProjectRegistryEntry>
-    // Additional team database mappings (label -> path)
-    additionalTeamDbs?: Record<string, string>
-    // Instruction level
-    instructionLevel?: 'essential' | 'standard' | 'full'
-    // Audit configuration
-    auditConfig?: AuditConfig
-    // Hush Protocol flag vocabulary
-    flagVocabulary?: string[]
-    // Allowlisted roots for file IO
-    allowedIoRoots?: string[]
-    // Admin override for Code Mode
-    codemodeInternalFullAccess?: boolean
-    // Auto-prune
-    archiveOlderThanDays?: number
-    pruneOlderThanDays?: number
-    hardDeleteOlderThanDays?: number
-    pruneImportanceThreshold?: number
-    pruneDryRun?: boolean
-    pruneExcludeTags?: string[]
-    // Embedding model
-    embeddingModel?: string
-    // Metrics export
-    metricsExport?: 'prometheus'
-    // Metrics persistence
-    persistMetrics?: boolean
-    metricsPath?: string
-    configFilePath?: string
-}
-
-/**
- * Create and start the MCP server
- */
-export async function createServer(options: ServerOptions): Promise<void> {
-    const { transport, dbPath, teamDbPath, defaultProjectNumber } = options
-
-    // Initialize database
-    const db = await DatabaseAdapterFactory.create(dbPath)
-    await db.initialize()
-    logger.info('Database initialized', { module: 'McpServer', dbPath })
-
-    // Auto-prune low-importance old entries if configured
-    const hasAutoPrune = ((options.archiveOlderThanDays ?? 0) > 0) ||
-                         ((options.pruneOlderThanDays ?? 0) > 0) ||
-                         ((options.hardDeleteOlderThanDays ?? 0) > 0)
-
-    if (hasAutoPrune) {
-        const pruneResult = await runAutoPrune(db, {
-            archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
-            pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
-            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
-            importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
-            dryRun: options.pruneDryRun,
-            excludeTags: options.pruneExcludeTags,
-        })
-        logger.info('Auto-prune completed', {
-            module: 'McpServer',
-            archivedCount: pruneResult.archivedCount,
-            prunedCount: pruneResult.prunedCount,
-            hardDeletedCount: pruneResult.hardDeletedCount,
-            backupFile: pruneResult.backupFile,
-        })
-    }
-
-    // Initialize ServerRuntime (handles instance-scoped globals)
-    const runtime = new ServerRuntime()
-
-    // Initialize audit logging if configured
-    if (options.auditConfig?.enabled) {
-        runtime.auditLogger = new AuditLogger(options.auditConfig)
-        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
-        logger.info('Audit logging enabled', {
-            module: 'McpServer',
-            path: options.auditConfig.logPath,
-            redact: options.auditConfig.redact,
-            auditReads: options.auditConfig.auditReads,
-        })
-    }
-
-    // Configure metrics persistence path
-    let activeMetricsPath: string | undefined
-    if (options.persistMetrics) {
-        const configuredPath = options.metricsPath ?? (dbPath.replace(/\.db$/, '') + '_metrics.json')
-        activeMetricsPath = configuredPath
-        
-        await runtime.metrics.loadFromFile(configuredPath)
-        
-        // Periodic save every 5 minutes
-        setInterval(() => {
-            void runtime.metrics.saveToFile(configuredPath)
-        }, 5 * 60 * 1000).unref()
-    }
-
-    // Initialize team database if configured
-    let teamDb: IDatabaseAdapter | undefined
-    if (teamDbPath) {
-        teamDb = await DatabaseAdapterFactory.create(teamDbPath)
-        await teamDb.initialize()
-        teamDb.applyTeamSchema()
-        logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
-
-        // Bootstrap team admin if configured and RBAC is not yet active (empty table)
-        if (options.teamAdmin && teamDb.getTeamMemberCount !== undefined && teamDb.addTeamMember !== undefined) {
-            if (!teamDb.isTeamRbacActive?.()) {
-                teamDb.addTeamMember(options.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
-                logger.info('Bootstrapped initial team admin', { module: 'McpServer', admin: options.teamAdmin })
-            }
-        }
-    }
-
-    // Initialize vector search manager (lazy loading - model loads on first use)
-    const vectorManager = new VectorSearchManager(db, options.embeddingModel)
-
-    // Initialize team vector search manager if team DB is configured
-    let teamVectorManager: VectorSearchManager | undefined
-    if (teamDb) {
-        teamVectorManager = new VectorSearchManager(teamDb, options.embeddingModel)
-        logger.info('Team vector search manager created', { module: 'McpServer' })
-    }
-
-    // Auto-rebuild vector index if enabled (non-blocking)
-    if (options.autoRebuildIndex) {
-        logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
-        vectorManager
-            .initialize()
-            .then(async () => {
-                const { indexed: count } = await vectorManager.rebuildIndex(db)
-                logger.info('Vector index rebuilt in background', {
-                    module: 'McpServer',
-                    entriesIndexed: count,
-                })
-            })
-            .catch((err: unknown) => {
-                logger.error('Background vector init/rebuild failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-
-        if (teamVectorManager) {
-            teamVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background team vector init failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-            logger.info('Team vector search manager eager initialization started in background', {
-                module: 'McpServer',
-            })
-        }
-    } else {
-        // Otherwise, eager-load the model in the background so the first request isn't blocked
-        logger.info('Vector search manager eager initialization started in background', {
-            module: 'McpServer',
-        })
-        vectorManager
-            .initialize()
-            .then(async () => {
-                // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
-                if (teamVectorManager) {
-                    logger.info(
-                        'Team vector search manager eager initialization started in background',
-                        { module: 'McpServer' }
-                    )
-                    await teamVectorManager.initialize()
-                }
-            })
-            .catch((err: unknown) => {
-                logger.error('Background vector init failed', { module: 'McpServer', error: err })
-            })
-    }
-
-    // Initialize GitHub integration
-    let githubPath = '.'
-    if (options.projectRegistry && Object.keys(options.projectRegistry).length > 0) {
-        if (options.defaultProjectNumber !== undefined) {
-            const defaultEntry = Object.values(options.projectRegistry).find(
-                (r) => r.project_number === options.defaultProjectNumber
-            )
-            if (defaultEntry?.path) {
-                githubPath = defaultEntry.path
-            }
-        }
-
-        // Removed implicit fallback to the first registry entry.
-        // Mutating operations without an explicit owner/repo will throw or request clarification
-        // rather than guessing the wrong project boundary.
-    }
-    const github = getGitHubIntegration(githubPath, runtime)
-    try {
-        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
-        await github.getRepoInfo()
-    } catch (error: unknown) {
-        logger.warning('Failed to pre-populate GitHub repository cache', {
-            module: 'McpServer',
-            path: githubPath,
-            error: error instanceof Error ? error.message : 'Unknown error',
-        })
-    }
-
-    logger.info('GitHub integration initialized', {
-        module: 'McpServer',
-        hasToken: github.isApiAvailable(),
-    })
-
-    // Parse tool filter
-    let filterConfig: ToolFilterConfig | null
-    if (options.toolFilter) {
-        filterConfig = parseToolFilter(options.toolFilter)
-        logger.info('Tool filter applied', {
-            module: 'McpServer',
-            summary: getFilterSummary(filterConfig),
-        })
-    } else {
-        filterConfig = getToolFilterFromEnv()
-        if (filterConfig) {
-            logger.info('Tool filter from env', {
-                module: 'McpServer',
-                summary: getFilterSummary(filterConfig),
-            })
-        }
-    }
-
-    const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
-
-    const configManager = new ConfigManager({
-        instructionLevel: options.instructionLevel ?? 'standard',
-        rawToolFilter,
-        toolFilterConfig: filterConfig,
-        briefingConfig: options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
-    }, options.configFilePath)
-
-    runtime.configManager = configManager
-
-    // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
-    // which captures scheduler in its closure.
-    let scheduler: Scheduler | null = null
-    if (options.scheduler) {
-        const hasAnyJob =
-            options.scheduler.backupIntervalMinutes > 0 ||
-            options.scheduler.vacuumIntervalMinutes > 0 ||
-            options.scheduler.rebuildIndexIntervalMinutes > 0 ||
-            options.scheduler.digestIntervalMinutes > 0 ||
-            options.scheduler.reportIntervalMinutes > 0
-
-        if (hasAnyJob && transport === 'stdio') {
-            logger.warning(
-                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
-                    'Use HTTP/SSE transport for automated scheduling.',
-                { module: 'Scheduler' }
-            )
-        } else if (hasAnyJob) {
-            scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
-        }
-    }
-
-    // Seed initial digest snapshot so first briefing read has analytics.
-    // Runs for both stdio and HTTP transports. Skip if a snapshot already exists
-    // (e.g., from a previous server session or prior scheduler run).
-    try {
-        const existingSnapshot = db.getLatestAnalyticsSnapshot('digest')
-        if (!existingSnapshot) {
-            const digest = db.computeDigest()
-            db.saveAnalyticsSnapshot('digest', digest)
-            logger.info('Initial analytics digest seeded', { module: 'McpServer' })
-        }
-    } catch (error: unknown) {
-        logger.debug('Failed to seed initial digest (non-critical)', {
-            module: 'McpServer',
-            error: error instanceof Error ? error.message : String(error),
-        })
-    }
-
-    // ========================================================================
-    // CACHED SESSION-INVARIANT STATE
-    // Extracting heavy initialization out of createServerInstance improves
-    // stateful HTTP/SSE connection time by bypassing redundant iterations.
-    // ========================================================================
-    const resources = getResources()
-    const prompts = getPrompts()
-    // Resolve dynamic roots for explicit isolation if not explicitly provided
-    let allowedIoRoots = options.allowedIoRoots
-    if (!allowedIoRoots) {
-        if (transport === 'http') {
-            const errorMsg = `FATAL: Refusing to bind HTTP transport without explicit ALLOWED_IO_ROOTS. You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to prevent ambient filesystem authority.`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-        allowedIoRoots = [] // Empty array means NO filesystem access
-        logger.warning(
-            '⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.',
-            {
-                module: 'McpServer',
-            }
-        )
-    }
-
-    logger.info('IO sandbox configured', {
-        module: 'McpServer',
-        allowedRoots: allowedIoRoots,
-    })
-
-    const baseConfig: ToolHandlerConfig = {
-        defaultProjectNumber,
-        projectRegistry: options.projectRegistry,
-        additionalTeamDbs: options.additionalTeamDbs,
-        flagVocabulary: options.flagVocabulary,
-        allowedIoRoots,
-        filterConfig,
-        authEnabled: Boolean(options.authToken ?? process.env['MCP_AUTH_TOKEN']),
-        oauthEnabled: options.oauthEnabled,
-        codemodeInternalFullAccess: options.codemodeInternalFullAccess,
-        teamDefaultRole: options.teamDefaultRole,
-        teamAdmin: options.teamAdmin,
-        runtime,
-        subscriptionManager: globalSubscriptionManager,
-    }
-
-    const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
-        callTool(
-            name,
-            args,
-            db,
-            vectorManager,
-            github,
-            baseConfig,
-            undefined,
-            teamDb ?? undefined,
-            teamVectorManager ?? undefined
-        )
-
-    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
-
-    const allTools = getTools(
-        db,
-        filterConfig,
-        vectorManager,
-        github,
-        customToolHandlerConfig,
-        teamDb ?? undefined,
-        teamVectorManager ?? undefined
-    )
-    const allToolNames = new Set(allTools.map((t) => t.name))
-
-    for (const toolName of allToolNames) {
-        getRequiredScope(toolName)
-    }
-
-    const createServerInstance = (): McpServer => {
         // Generate dynamic instructions based on current config
         const getInstructions = (): string => {
             const currentConfig = configManager.getConfig()
@@ -509,14 +109,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         const relaxed = (
                             schema as { partial: () => { passthrough?: () => z.ZodType } }
                         ).partial()
-                        toolOptions.inputSchema = (typeof relaxed.passthrough === 'function'
+                        toolOptions.inputSchema = typeof relaxed.passthrough === 'function'
                             ? relaxed.passthrough()
-                            : schema) as unknown as z.ZodType
+                            : schema
                     } catch {
-                        toolOptions.inputSchema = schema as unknown as z.ZodType
+                        toolOptions.inputSchema = schema
                     }
                 } else {
-                    toolOptions.inputSchema = schema as unknown as z.ZodType
+                    toolOptions.inputSchema = schema
                 }
             }
 
@@ -534,10 +134,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
                             outSchema as { passthrough: () => z.ZodType }
                         ).passthrough()
                     } catch {
-                        toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                        toolOptions.outputSchema = outSchema
                     }
                 } else {
-                    toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                    toolOptions.outputSchema = outSchema
                 }
             }
 
@@ -553,7 +153,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             // Capture whether this tool has outputSchema for response handling
             const hasOutputSchema = Boolean(tool.outputSchema)
 
-            server.registerTool(tool.name, toolOptions, async (args, extra) => {
+            server.registerTool(tool.name, toolOptions, async (args, extra): Promise<unknown> => {
                 try {
                     // Build progress context for progress notifications
                     // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
@@ -570,7 +170,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
                     const result = await callTool(
                         tool.name,
-                        args as Record<string, unknown>,
+                        args,
                         db,
                         vectorManager,
                         github,
@@ -727,7 +327,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
 
         // Register resources (reusing resources from instruction generation)
-        registerResources(server, resources as ResourceDefinition[], handleResourceRead, runtime)
+        registerResources(server, resources, handleResourceRead, runtime)
 
         // Register subscribe/unsubscribe handlers on the underlying server
         server.server.setRequestHandler(SubscribeRequestSchema, (request, extra) => {
@@ -748,7 +348,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         })
 
         // Register prompts (reusing prompts from instruction generation)
-        registerPrompts(server, prompts as PromptDefinition[], db, teamDb ?? undefined, runtime)
+        registerPrompts(server, prompts, db, teamDb ?? undefined, runtime)
 
         // Intercept SDK-level Zod validation errors to return structured error responses
         const serverObj = server.server as unknown as {
@@ -919,97 +519,4 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
 
         return server
-    }
-    
-    // Subscribe to config changes to send notifications
-    configManager.on('changed', () => {
-        // Send tool list changed notification if using SSE/HTTP
-        void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
-        try {
-            // Notify MCP clients that tools might have changed (e.g. tool filter updated)
-            void globalSubscriptionManager.broadcastNotification('notifications/tools/list_changed')
-            // Also notify that resources might have changed (for good measure)
-            void globalSubscriptionManager.broadcastNotification('notifications/resources/list_changed')
-        } catch (error: unknown) {
-            logger.debug('Failed to send list_changed notifications to MCP client', {
-                module: 'McpServer',
-                error: error instanceof Error ? error.message : String(error)
-            })
-        }
-    })
-
-    // Start server based on transport
-    if (transport === 'stdio') {
-        const stdioTransport = new StdioServerTransport()
-        const server = createServerInstance()
-        await server.connect(stdioTransport)
-        logger.info('MCP server started on stdio', { module: 'McpServer' })
-
-        // Handle shutdown for stdio
-        process.on('SIGINT', () => {
-            logger.info('Shutting down...', { module: 'McpServer' })
-            // Flush audit log before exit
-            if (runtime.auditLogger) {
-                void runtime.auditLogger.close()
-            }
-            if (activeMetricsPath) {
-                void runtime.metrics.saveToFile(activeMetricsPath).then(() => {
-                    db.close()
-                    teamDb?.close()
-                    process.exit(0)
-                })
-            } else {
-                db.close()
-                teamDb?.close()
-                process.exit(0)
-            }
-        })
-    } else {
-        // HTTP transport
-        const port = options.port ?? 3000
-        const host = options.host ?? 'localhost'
-        const corsRaw = process.env['MCP_CORS_ORIGIN']
-        const corsOrigins =
-            options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()) : [])
-        const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
-
-        const httpTransport = new HttpTransport({
-            port,
-            host,
-            corsOrigins,
-            stateless: options.statelessHttp === true,
-            authToken,
-            enableHSTS: options.enableHSTS,
-            oauthEnabled: options.oauthEnabled,
-            oauthIssuer: options.oauthIssuer,
-            oauthAudience: options.oauthAudience,
-            oauthJwksUri: options.oauthJwksUri,
-            oauthClockTolerance: options.oauthClockTolerance,
-            allowPlaintextLoopbackOAuth: options.allowPlaintextLoopbackOAuth,
-            trustProxy: options.trustProxy,
-            publicOrigin: options.publicOrigin,
-            metricsExport: options.metricsExport,
-        })
-
-        await httpTransport.start(createServerInstance, scheduler, runtime)
-
-        // Handle shutdown
-        process.on('SIGINT', () => {
-            void (async () => {
-                await httpTransport.stop(scheduler)
-                // Flush audit log before exit
-                if (runtime.auditLogger) {
-                    await runtime.auditLogger.close()
-                }
-                if (activeMetricsPath) {
-                    await runtime.metrics.saveToFile(activeMetricsPath)
-                }
-                db.close()
-                teamDb?.close()
-                process.exit(0)
-            })()
-        })
-    }
 }
-
-export type { IDatabaseAdapter as SqliteAdapter }
