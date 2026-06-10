@@ -38,6 +38,7 @@
 
 - Modularized Tier 1 monolith `src/server/mcp-server.ts` into a `src/server/mcp-server/` directory using the barrel export pattern (`core.ts`, `initialization.ts`, `tool-registration.ts`, `types.ts`).
 - Modularized Tier 1 monolith `src/database/sqlite-adapter/index.ts` to logical sub-modules with a barrel export.
+- Modularized Tier 1 monolith `src/handlers/tools/admin.ts` into a `src/handlers/tools/admin/` directory using the barrel export pattern.
 - Restored strict `project_number` requirement for team mutation handlers.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Enhanced `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa).
