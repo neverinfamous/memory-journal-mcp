@@ -50,6 +50,8 @@
 
 ### Fixed
 
+- Fixed `project_number` validation failures in `mj_execute_code` by widening the outer Zod schema from `z.number()` to `relaxedNumber()`.
+- Added `owner/repo` string-splitting fallback to `secureDispatcher` to ensure project IDs like `neverinfamous/memory-journal-mcp` resolve correctly.
 - FTS search phrase matching to preserve balanced double-quotes.
 - Batch operations failing atomically instead of returning structured partial errors.
 - Code Mode execution stability issues:

@@ -85,7 +85,7 @@ const ExecuteCodeSchema = z.object({
     timeout: z.number().max(30000).optional().default(30000),
     readonly: z.boolean().optional().default(false),
     repo: z.string().optional(),
-    project_number: z.number().optional(),
+    project_number: relaxedNumber().optional(),
     auto_version: z.boolean().optional().default(false),
     context: z.record(z.string(), z.unknown()).optional(),
 })
@@ -107,8 +107,7 @@ const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
         ),
-    project_number: z
-        .number()
+    project_number: relaxedNumber()
         .optional()
         .describe(
             'CRITICAL: The project number to use for all mutation operations in this script. Providing this here will automatically inject it into all mj.* API calls so you do not have to specify it repeatedly.'
@@ -337,7 +336,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const repo = parsedArgs.data.repo
                     const autoVersion = parsedArgs.data.auto_version
                     const contextPayload = parsedArgs.data.context
-                    const providedProjectNumber = parsedArgs.data.project_number ?? (contextPayload?.['project_number'] as number | undefined)
+                    let providedProjectNumber = parsedArgs.data.project_number ?? (contextPayload?.['project_number'] as number | string | undefined)
 
                     // Context extraction for rate limiting and tenant isolation
                     const reqCtx = getRequestContext()
@@ -345,6 +344,20 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
 
                     let sessionContext = { ...context }
+
+                    // Resolve string-based providedProjectNumber (e.g. 'owner/repo') to numeric ID early so auto-injection works
+                    if (typeof providedProjectNumber === 'string') {
+                        let registryEntry = sessionContext.config?.projectRegistry?.[providedProjectNumber]
+                        if (!registryEntry && providedProjectNumber.includes('/')) {
+                            const shortName = providedProjectNumber.split('/').pop()
+                            if (shortName) {
+                                registryEntry = sessionContext.config?.projectRegistry?.[shortName]
+                            }
+                        }
+                        if (registryEntry?.project_number !== undefined) {
+                            providedProjectNumber = registryEntry.project_number
+                        }
+                    }
 
                     // Security validation
                     const security = getSecurityManager(clientId)
@@ -449,7 +462,13 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Seamlessly resolve string-based project_number (e.g. 'db-mcp') to its numeric ID
                         if (typeof args['project_number'] === 'string') {
                             const pnStr = args['project_number']
-                            const registryEntry = sessionContext.config?.projectRegistry?.[pnStr]
+                            let registryEntry = sessionContext.config?.projectRegistry?.[pnStr]
+                            if (!registryEntry && pnStr.includes('/')) {
+                                const shortName = pnStr.split('/').pop()
+                                if (shortName) {
+                                    registryEntry = sessionContext.config?.projectRegistry?.[shortName]
+                                }
+                            }
                             if (registryEntry?.project_number !== undefined) {
                                 args['project_number'] = registryEntry.project_number
                             }
