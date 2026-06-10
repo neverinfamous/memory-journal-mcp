@@ -61,7 +61,7 @@ export class VectorSearchManager {
             }
 
             // Load model
-            logger.info(\`Loading embedding model: \${this.modelName}\`)
+            logger.info(`Loading embedding model: ${this.modelName}`)
             this.pipeline = await this.transformers.pipeline('feature-extraction', this.modelName, {
                 dtype: 'fp32',
             })
@@ -71,7 +71,7 @@ export class VectorSearchManager {
             logger.info('Detecting embedding dimensions...')
             const testResult = await this.pipeline('test', { pooling: 'mean', normalize: true })
             this.dimensions = testResult.data.length
-            logger.info(\`Detected \${this.dimensions} dimensions for \${this.modelName}\`)
+            logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
 
             // Create/verify table structure
             this.verifyAndCreateVecTable()
@@ -126,7 +126,7 @@ export class VectorSearchManager {
                         const existingDim = parseInt(match[1], 10)
                         if (existingDim !== this.dimensions) {
                             needsRecreation = true
-                            logger.info(\`Vector model or dimensions changed, dropping old index\`, {
+                            logger.info(`Vector model or dimensions changed, dropping old index`, {
                                 oldModel: 'unknown',
                                 newModel: this.modelName,
                                 oldDimensions: existingDim,
@@ -147,11 +147,11 @@ export class VectorSearchManager {
             try {
                 db.exec('BEGIN IMMEDIATE')
                 db.exec('DROP TABLE IF EXISTS vec_journal_entries')
-                db.exec(\`
+                db.exec(`
                     CREATE VIRTUAL TABLE vec_journal_entries USING vec0(
-                        embedding float[\${this.dimensions}]
+                        embedding float[${this.dimensions}]
                     )
-                \`)
+                `)
                 db.exec('COMMIT')
                 logger.info('Vector index table created/recreated successfully')
             } catch (err) {
@@ -190,15 +190,15 @@ export class VectorSearchManager {
         
         try {
             // Text to embed - include entry type and tags for better semantic matching
-            const tagsText = entry.tags && entry.tags.length > 0 ? \` [Tags: \${entry.tags.join(', ')}]\` : ''
-            const text = \`[\${entry.entryType}]\${tagsText} \${entry.content}\`
+            const tagsText = entry.tags && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
+            const text = `[${entry.entryType}]${tagsText} ${entry.content}`
             
             const embedding = await this.generateEmbedding(text)
             
             const stmt = db.prepare('INSERT OR REPLACE INTO vec_journal_entries(rowid, embedding) VALUES (?, ?)')
             stmt.run(entry.id, embedding)
         } catch (error) {
-            logger.error(\`Failed to add entry \${entry.id} to vector index\`, {
+            logger.error(`Failed to add entry ${entry.id} to vector index`, {
                 error: error instanceof Error ? error.message : String(error)
             })
             throw error
@@ -220,7 +220,7 @@ export class VectorSearchManager {
             const stmt = db.prepare('DELETE FROM vec_journal_entries WHERE rowid = ?')
             stmt.run(entryId)
         } catch (error) {
-            logger.warning(\`Failed to remove entry \${entryId} from vector index\`, {
+            logger.warning(`Failed to remove entry ${entryId} from vector index`, {
                 error: error instanceof Error ? error.message : String(error)
             })
             // Non-fatal
@@ -241,7 +241,7 @@ export class VectorSearchManager {
             // sqlite-vec distance function uses cosine distance (1.0 - cosine_similarity)
             // L2 distance is available via vec_distance_L2
             // We use cosine distance as it's standard for semantic embeddings
-            const stmt = db.prepare(\`
+            const stmt = db.prepare(`
                 SELECT 
                     rowid,
                     distance
@@ -249,7 +249,7 @@ export class VectorSearchManager {
                 WHERE embedding MATCH ?
                 ORDER BY distance
                 LIMIT ?
-            \`)
+            `)
             
             // We need to convert distance to similarity score
             // sqlite-vec returns cosine distance (0 to 2)
@@ -307,11 +307,11 @@ export class VectorSearchManager {
                 // If not in index, fetch the entry and generate embedding
                 const entry = this.dbAdapter.getEntryById(entryId)
                 if (!entry) {
-                    throw new Error(\`Entry \${entryId} not found\`)
+                    throw new Error(`Entry ${entryId} not found`)
                 }
                 
-                const tagsText = entry.tags && entry.tags.length > 0 ? \` [Tags: \${entry.tags.join(', ')}]\` : ''
-                const text = \`[\${entry.entryType}]\${tagsText} \${entry.content}\`
+                const tagsText = entry.tags && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
+                const text = `[${entry.entryType}]${tagsText} ${entry.content}`
                 queryEmbedding = await this.generateEmbedding(text)
                 
                 // Add it to the index while we're at it
@@ -320,7 +320,7 @@ export class VectorSearchManager {
             }
             
             // Search excluding the entry itself
-            const stmt = db.prepare(\`
+            const stmt = db.prepare(`
                 SELECT 
                     rowid,
                     distance
@@ -328,7 +328,7 @@ export class VectorSearchManager {
                 WHERE embedding MATCH ? AND rowid != ?
                 ORDER BY distance
                 LIMIT ?
-            \`)
+            `)
             
             const results = stmt.all(queryEmbedding, entryId, limit) as { rowid: number, distance: number }[]
             
@@ -347,7 +347,7 @@ export class VectorSearchManager {
             
             return searchResults
         } catch (error) {
-            logger.error(\`Semantic search by entry ID \${entryId} failed\`, {
+            logger.error(`Semantic search by entry ID ${entryId} failed`, {
                 error: error instanceof Error ? error.message : String(error)
             })
             throw error

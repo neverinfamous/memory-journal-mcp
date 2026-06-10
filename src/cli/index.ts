@@ -52,7 +52,7 @@ program.action(async (options: Record<string, unknown>, command: typeof program)
 
     if (configErrors.length > 0) {
         process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(\` - \${err}\n\`))
+        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
         process.exit(1)
     }
 
