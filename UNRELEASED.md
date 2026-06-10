@@ -35,7 +35,7 @@
 - Entry versioning and history tracking via `get_entry_history`.
 
 ### Changed
-- Documentation: Synchronized resource counts (55 total) and undocumented configuration variables across `README.md`, `DOCKER_README.md`, and `mcp-config-example.json`.
+- Documentation: Synchronized resource counts (55 total) and undocumented configuration variables (including auto-prune lifecycle flags) across `README.md`, `DOCKER_README.md`, `.env.example`, and `mcp-config-example.json`.
 - Wiki Documentation: Added documentation for missing tools (`search_audit_log`, `cross_team_search`) and updated team tool counts.
 - Restored strict `project_number` requirement for team mutation handlers to maintain project boundaries.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER` when `{repo}` is omitted.

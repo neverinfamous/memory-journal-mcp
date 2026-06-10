@@ -634,7 +634,9 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                                                          |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                                                               |
 | `EMBEDDING_MODEL`                 | Swappable HuggingFace feature extraction model for semantic search embeddings (CLI: `--embedding-model`; default: `Xenova/all-MiniLM-L6-v2`)          |
+| `ARCHIVE_OLDER_THAN_DAYS`         | Archive active entries older than N days with importance below threshold (CLI: `--archive-older-than-days`; `0` = disabled)         |
 | `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold (CLI: `--prune-older-than-days`; `0` = disabled)                                |
+| `HARD_DELETE_OLDER_THAN_DAYS`     | Permanently delete soft-deleted entries that have been dead for N days (CLI: `--hard-delete-older-than-days`; `0` = disabled)         |
 | `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold for pruning (CLI: `--prune-importance-threshold`; default: `0.15`)                                                         |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
@@ -688,7 +690,9 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `AUDIT_LOG_MAX_SIZE`              | Maximum operational telemetry file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)                                   |
 | `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)                                                                  |
 | `FLAG_VOCABULARY`                 | Comma-separated flag types for Hush Protocol (CLI: `--flag-vocabulary`; default: `blocker,needs_review,help_requested,fyi`)                           |
+| `ARCHIVE_OLDER_THAN_DAYS`         | Archive active entries older than N days with importance below threshold; `0` = disabled (CLI: `--archive-older-than-days`; default: `0`)             |
 | `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold on startup; `0` = disabled (CLI: `--prune-older-than-days`; default: `0`)       |
+| `HARD_DELETE_OLDER_THAN_DAYS`     | Permanently delete soft-deleted entries that have been dead for N days; `0` = disabled (CLI: `--hard-delete-older-than-days`; default: `0`)           |
 | `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold (0.0–1.0) — entries scoring below this are pruned (CLI: `--prune-importance-threshold`; default: `0.15`)                   |
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
