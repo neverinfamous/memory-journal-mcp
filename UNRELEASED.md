@@ -37,6 +37,7 @@
 - Documentation: Synchronized resource counts and undocumented configuration variables across `README.md`, `DOCKER_README.md`, `.env.example`, and `mcp-config-example.json`.
 - Documentation: Updated `README.md` and `copilot-instructions.md` to reflect the correct count of 57 resources.
 - Wiki Documentation: Added missing tools and updated team tool counts.
+- Wiki Documentation: Completed exhaustive documentation parity audit verifying 57 resources, 19 prompts, schema versioning, and eliminating duplicate tool listings.
 - Restored strict `project_number` requirement for team mutation handlers.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Enhanced `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa).
@@ -75,6 +76,8 @@
 - Missing `project_number` validation in core `batch_create_entries`.
 - Test timeout in coverage runs due to dynamic import deadlocks.
 - Missing resources and incorrect counts in `test-server/code-map.md`.
+- `parseProjectRegistry` not receiving injected `process.env.PROJECT_REGISTRY` from configuration loading.
+- Missing project name metadata extraction from GitHub URLs in the `getStatistics` analytics fallback.
 
 ### Security
 - Gap in `resources/subscribe` where unauthorized clients could bypass scope boundaries.

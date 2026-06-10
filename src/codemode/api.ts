@@ -132,7 +132,12 @@ function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, un
 
         // Context-aware 'type' hallucination
         if (snakeKey === 'type') {
-            if (!('entry_type' in obj) && !('flag_type' in obj) && !('entry_type' in result) && !('flag_type' in result)) {
+            if (
+                !('entry_type' in obj) &&
+                !('flag_type' in obj) &&
+                !('entry_type' in result) &&
+                !('flag_type' in result)
+            ) {
                 // We default to entry_type since it's the most common
                 snakeKey = 'entry_type'
             }
@@ -455,12 +460,12 @@ export class JournalApi {
         if (restoreFn) this.admin['restoreBackup'] = restoreFn
 
         // Smooth out getConfig hallucination via Constructor Wiring
-        const getConfigFn = (): Promise<{ PROJECT_REGISTRY: unknown[] | undefined }> => Promise.resolve({
-            PROJECT_REGISTRY: parseProjectRegistry(),
-        })
+        const getConfigFn = (): Promise<{ PROJECT_REGISTRY: unknown[] | undefined }> =>
+            Promise.resolve({
+                PROJECT_REGISTRY: parseProjectRegistry(),
+            })
         this.admin['getConfig'] = getConfigFn
         this.core['getConfig'] = getConfigFn
-
 
         // db-mcp bleedover: database operations → closest journal equivalents
         const statsFn = this.analytics['getStatistics']
@@ -500,47 +505,59 @@ export class JournalApi {
             }
             const statsFn = this.analytics['getStatistics']
             if (!statsFn) return Promise.reject(new Error('getStatistics is not available'))
-            
+
             const stats = await statsFn({ group_by: 'month', project_breakdown: true })
-            if (stats !== null && stats !== undefined && typeof stats === 'object' && 'projectBreakdown' in stats) {
+            if (
+                stats !== null &&
+                stats !== undefined &&
+                typeof stats === 'object' &&
+                'projectBreakdown' in stats
+            ) {
                 return (stats as Record<string, unknown>)['projectBreakdown']
             }
             return []
         }
 
-        const getProjectFn = (params?: unknown): Promise<unknown> => {
+        const getProjectFn = async (params?: unknown): Promise<unknown> => {
             try {
-                const registry = parseProjectRegistry()
-                if (registry !== undefined) {
-                    let searchVal: string | number | undefined;
-                    if (typeof params === 'number') searchVal = params;
-                    else if (typeof params === 'string') searchVal = params;
-                    else if (typeof params === 'object' && params !== null) {
-                        const obj = params as Record<string, unknown>;
-                        if (typeof obj['project_number'] === 'number') searchVal = obj['project_number'];
-                        else if (typeof obj['projectNumber'] === 'number') searchVal = obj['projectNumber'];
-                        else if (typeof obj['name'] === 'string') searchVal = obj['name'];
-                        else if (typeof obj['query'] === 'string') searchVal = obj['query'];
-                    }
-                    
-                    if (searchVal !== undefined) {
-                        const isNum = typeof searchVal === 'number' || !Number.isNaN(Number(searchVal));
-                        const numVal = isNum ? Number(searchVal) : undefined;
-                        const strVal = String(searchVal).toLowerCase();
+                let searchVal: string | number | undefined
+                if (typeof params === 'number') searchVal = params
+                else if (typeof params === 'string') searchVal = params
+                else if (typeof params === 'object' && params !== null) {
+                    const obj = params as Record<string, unknown>
+                    if (typeof obj['project_number'] === 'number') searchVal = obj['project_number']
+                    else if (typeof obj['projectNumber'] === 'number')
+                        searchVal = obj['projectNumber']
+                    else if (typeof obj['name'] === 'string') searchVal = obj['name']
+                    else if (typeof obj['query'] === 'string') searchVal = obj['query']
+                }
 
-                        const found = (registry as ProjectArrayItem[]).find((p) => {
-                            if (p.projectNumber === numVal) return true;
-                            if (typeof p.name === 'string' && p.name.toLowerCase() === strVal) return true;
-                            if (typeof p.name === 'string' && p.name.toLowerCase().includes(strVal)) return true;
-                            return false;
-                        });
-                        if (found !== undefined) return Promise.resolve(found);
+                if (searchVal !== undefined) {
+                    const isNum = typeof searchVal === 'number' || !Number.isNaN(Number(searchVal))
+                    const numVal = isNum ? Number(searchVal) : undefined
+                    const strVal = String(searchVal).toLowerCase()
+
+                    const projects = await listProjectsFn()
+                    if (Array.isArray(projects)) {
+                        const projArray = projects as unknown[]
+                        const found = projArray.find((p: unknown) => {
+                            if (typeof p !== 'object' || p === null) return false
+                            const proj = p as Record<string, unknown>
+                            if (numVal !== undefined && (proj['project_number'] === numVal || proj['projectNumber'] === numVal))
+                                return true
+                            if (strVal !== undefined && typeof proj['name'] === 'string') {
+                                const projName = proj['name'].toLowerCase()
+                                if (projName === strVal || projName.includes(strVal)) return true
+                            }
+                            return false
+                        })
+                        if (found !== undefined) return found
                     }
                 }
             } catch {
                 // Ignore error
             }
-            return Promise.reject(new Error(`Project not found: ${JSON.stringify(params)}`));
+            throw new Error(`Project not found: ${JSON.stringify(params)}`)
         }
 
         this.core['listProjects'] = listProjectsFn

@@ -390,6 +390,7 @@ program
                             }
                             entry.path = resolvedPath;
                         }
+                        process.env['PROJECT_REGISTRY'] = JSON.stringify(validated);
                         return validated;
                     } catch (e: unknown) {
                         throw new Error(`Failed to parse PROJECT_REGISTRY: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
