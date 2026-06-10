@@ -111,8 +111,20 @@ Because the MCP tool call payload is JSON, the inner `\`` gets interpreted liter
 
 Agents commonly extrapolate method names based on patterns (e.g., trying to call `mj.listEntries()` instead of `mj.searchEntries()` because they are used to `mj.listProjects()`). 
 
-To transparently intercept these hallucinations without breaking the workflow:
-1. **Group-Level Aliasing**: Add the hallucinated method name to the corresponding group inside `METHOD_ALIASES` in `src/codemode/api-constants.ts` (e.g., `listEntries: 'searchEntries'`). This intercepts calls like `mj.search.listEntries()`.
-2. **Top-Level Aliasing**: If the hallucination might be called at the root `mj.` level (e.g., `mj.listEntries()`), you must **also** manually expose the backend handler in `createSandboxBindings` within `src/codemode/api.ts` (e.g., `listEntries: this.search['searchEntries']`).
+There are **three layers** that can intercept hallucinated method names. All three must be kept in sync:
 
-The `worker-script.ts` API proxy will then seamlessly map the invalid calls to the correct native handlers behind the scenes.
+1. **`METHOD_ALIASES`** (in `src/codemode/api-constants.ts`): Maps alias → canonical method within a group. The worker-side `shimMj` proxy resolves these **first**, before checking constructor bindings. Example: `listEntries: 'searchEntries'` in the `search` group intercepts `mj.search.listEntries()`.
+
+2. **Constructor Cross-Group Wiring** (in `src/codemode/api/journal-api.ts`): Assigns handler functions from one group onto another group's API object. Example: `this.core['listProjects'] = listProjectsFn` lets `mj.core.listProjects()` work even though `listProjects` is not a core tool.
+
+3. **Top-Level Bindings** (in `createSandboxBindings()` within `src/codemode/api/journal-api.ts`): Exposes methods at the `mj.*` root level. Example: `listProjects: this.core['listProjects']` enables `mj.listProjects()`.
+
+> **⚠️ CRITICAL: Alias Shadowing Bug Pattern**
+> 
+> `METHOD_ALIASES` resolve in the worker-side proxy **before** the constructor-wired bindings are checked. If a `METHOD_ALIASES` entry maps to a method name that doesn't exist as an actual *tool* in that group, it will **shadow** a correctly wired constructor binding and silently fail.
+>
+> Example of the bug: `core: { getProjects: 'listProjects' }` — the alias resolves `getProjects` → `listProjects`, but `listProjects` is not a registered tool in the `core` group. Even though the constructor correctly wired `this.core['listProjects'] = listProjectsFn`, the alias resolution short-circuits before reaching it.
+>
+> **Rule**: `METHOD_ALIASES` entries must point to either (a) a real tool method in the same group, or (b) another alias that eventually resolves to a real tool in the same group. Never alias to a constructor-wired-only method.
+
+Also update `GROUP_EXAMPLES` in `api-constants.ts` so that `help()` output directs agents to the correct group for each method.
