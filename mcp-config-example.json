@@ -13,6 +13,10 @@
                 "/tmp:rw,noexec,nosuid,nodev",
                 "-v",
                 "./data:/app/data:rw,noexec,nosuid,nodev",
+                "-v",
+                "./data/team.db:/app/data/team.db:rw",
+                "-v",
+                "./data/mcp-audit.jsonl:/app/data/mcp-audit.jsonl:rw",
                 "writenotenow/memory-journal-mcp:latest",
                 "--digest-interval",
                 "1440"

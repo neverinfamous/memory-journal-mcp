@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**99 MCP Tools** · **19 Workflow Prompts** · **54 Resources (48 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**99 MCP Tools** · **19 Workflow Prompts** · **55 Resources (49 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -179,11 +179,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `search`        | 6     | Text search, date range, semantic, vector stats, cross-team                                                                                               |
 | `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                        |
 | `relationships` | 2     | Link entries, visualize graphs                                                                                                                                            |
-| `io`            | 4     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                            |
+| `io`            | 4     | JSON/Markdown export, Markdown directory roundtripping, and external knowledge base imports (`import_external`)                                                                            |
 | `admin`         | 11    | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                          |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                      |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                            |
-| `team`          | 44    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags**, RBAC member management (requires `TEAM_DB_PATH`) |
+| `team`          | 44    | CRUD, search, cross-team search, stats, relationships, IO (imports/exports), backup, vector search, cross-project insights, matrix, **Hush Protocol flags**, RBAC (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -211,9 +211,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **48 Resources** (31 Static + 17 Template)
+### 📡 **49 Resources** (32 Static + 17 Template)
 
-**31 Static Resources** (appear in resource lists):
+**32 Static Resources** (appear in resource lists):
 
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
@@ -236,6 +236,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://help` - Tool group index with descriptions and tool counts
 - `memory://metrics/summary` - Aggregate tool call metrics since server start (calls, errors, token estimates, duration) — HIGH priority
 - `memory://metrics/tokens` - Per-tool token usage breakdown sorted by output token cost — MEDIUM priority
+- `memory://metrics/resources` - Per-resource usage counters (read frequency and recency) — MEDIUM priority
 - `memory://metrics/system` - Process-level metrics: memory (MB), uptime (s), Node.js version, platform — MEDIUM priority
 - `memory://metrics/users` - Per-user call counts (populated when OAuth user identifiers are present) — LOW priority
 - `memory://metrics/latency` - Per-tool latency percentiles (p50/p95/p99) with min/max bounds — MEDIUM priority
@@ -756,6 +757,28 @@ memory-journal-mcp --transport http --port 3000
 3. Next session's briefing includes the previous summary — context flows seamlessly
 
 ## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description |
+|---|---|
+| `DB_PATH` | Path to the personal journal SQLite database |
+| `TEAM_DB_PATH` | Path to the shared team SQLite database |
+| `GITHUB_TOKEN` | Personal access token for GitHub integrations |
+| `PROJECT_REGISTRY` | JSON map of repo names to local paths and project numbers |
+| `ALLOWED_IO_ROOTS` | Comma-separated paths for Code Mode filesystem boundaries |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control exposed tools (e.g. `starter`, `full`, `readonly`) |
+| `INSTRUCTION_LEVEL` | Instruction depth (`essential`, `standard`, `full`) |
+| `AUDIT_LOG_PATH` | File path for JSONL tool call audit logs |
+| `AUDIT_REDACT` | Redact tool arguments from audit entries |
+| `AUDIT_READS` | Log read-scoped tool calls |
+| `AUDIT_LOG_MAX_SIZE` | Max audit log size (bytes) before rotation |
+| `MCP_METRICS_ENABLED` | Enable in-memory metrics |
+| `PERSIST_METRICS` / `METRICS_PATH` | Persist metrics state |
+| `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings |
+| `PROJECT_LINT_CMD` / `PROJECT_TEST_CMD` | Validation commands |
+| `COMMANDER_HITL_FILE_THRESHOLD` | Threshold for human-in-the-loop checkpoints |
+| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` | Scheduled HTTP reports |
 
 ### GitHub Integration (Optional)
 
