@@ -5,12 +5,17 @@
  * unreleased summary, test health, and localTime for the briefing.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
     parseUnreleasedSummary,
     parseTestHealth,
     buildSystemContext,
 } from '../../src/handlers/resources/core/briefing/system-section.js'
+
+// Mock the index module to avoid circular dependency / dynamic import deadlocks during coverage tests
+vi.mock('../../src/handlers/index.js', () => ({
+    getResources: () => new Array(42),
+}))
 
 // ============================================================================
 // parseUnreleasedSummary
