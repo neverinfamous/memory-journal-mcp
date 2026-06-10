@@ -41,6 +41,7 @@
 - Modularized Tier 1 monolith `src/database/sqlite-adapter/index.ts` to logical sub-modules with a barrel export.
 - Modularized Tier 1 monolith `src/handlers/tools/admin.ts` into a `src/handlers/tools/admin/` directory using the barrel export pattern.
 - Modularized Tier 1 monolith `src/handlers/tools/search/index.ts` into a `src/handlers/tools/search/` directory using the barrel export pattern.
+- Modularized Tier 2 file `src/database/sqlite-adapter/entries/search.ts` (802 lines) into a `search/` directory with sub-modules (`cursor.ts`, `fts-sanitizer.ts`, `query.ts`) and a barrel `index.ts`.
 - Restored strict `project_number` requirement for team mutation handlers.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Enhanced `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa).

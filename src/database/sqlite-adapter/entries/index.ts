@@ -26,7 +26,7 @@ import {
     getSearchFacets,
     searchByDateRange,
     type SortBy,
-} from './search.js'
+} from './search/index.js'
 export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
 import { calculateImportance, getEntriesByIdsWithImportance } from './importance.js'
 import { getStatistics } from './statistics.js'

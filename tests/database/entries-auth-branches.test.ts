@@ -17,7 +17,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 
 import { TokenValidator, createTokenValidator } from '../../src/auth/token-validator.js'
 import { AUTH_ERROR_CODES } from '../../src/auth/errors.js'
-import { searchByDateRange } from '../../src/database/sqlite-adapter/entries/search.js'
+import { searchByDateRange } from '../../src/database/sqlite-adapter/entries/search/index.js'
 import { getStatistics } from '../../src/database/sqlite-adapter/entries/statistics.js'
 import { calculateImportance } from '../../src/database/sqlite-adapter/entries/importance.js'
 

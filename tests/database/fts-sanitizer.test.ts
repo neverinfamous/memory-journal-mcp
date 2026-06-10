@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizeFtsQuery } from '../../src/database/sqlite-adapter/entries/search.js'
+import { sanitizeFtsQuery } from '../../src/database/sqlite-adapter/entries/search/index.js'
 
 describe('sanitizeFtsQuery', () => {
     it('preserves balanced double quotes for exact phrases', () => {
