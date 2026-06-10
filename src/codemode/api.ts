@@ -508,7 +508,7 @@ export class JournalApi {
             return []
         }
 
-        const getProjectFn = async (params?: unknown): Promise<unknown> => {
+        const getProjectFn = (params?: unknown): Promise<unknown> => {
             try {
                 const registry = parseProjectRegistry()
                 if (registry !== undefined) {
@@ -516,24 +516,31 @@ export class JournalApi {
                     if (typeof params === 'number') searchVal = params;
                     else if (typeof params === 'string') searchVal = params;
                     else if (typeof params === 'object' && params !== null) {
-                        searchVal = (params as any).project_number ?? (params as any).projectNumber ?? (params as any).name ?? (params as any).query;
+                        const obj = params as Record<string, unknown>;
+                        if (typeof obj['project_number'] === 'number') searchVal = obj['project_number'];
+                        else if (typeof obj['projectNumber'] === 'number') searchVal = obj['projectNumber'];
+                        else if (typeof obj['name'] === 'string') searchVal = obj['name'];
+                        else if (typeof obj['query'] === 'string') searchVal = obj['query'];
                     }
                     
                     if (searchVal !== undefined) {
-                        const isNum = typeof searchVal === 'number' || !isNaN(Number(searchVal));
+                        const isNum = typeof searchVal === 'number' || !Number.isNaN(Number(searchVal));
                         const numVal = isNum ? Number(searchVal) : undefined;
                         const strVal = String(searchVal).toLowerCase();
 
-                        const found = (registry as ProjectArrayItem[]).find(p => 
-                            p.projectNumber === numVal || 
-                            (p.name && p.name.toLowerCase() === strVal) || 
-                            (p.name && p.name.toLowerCase().includes(strVal))
-                        );
-                        if (found) return found;
+                        const found = (registry as ProjectArrayItem[]).find((p) => {
+                            if (p.projectNumber === numVal) return true;
+                            if (typeof p.name === 'string' && p.name.toLowerCase() === strVal) return true;
+                            if (typeof p.name === 'string' && p.name.toLowerCase().includes(strVal)) return true;
+                            return false;
+                        });
+                        if (found !== undefined) return Promise.resolve(found);
                     }
                 }
-            } catch {}
-            throw new Error(`Project not found: ${JSON.stringify(params)}`);
+            } catch {
+                // Ignore error
+            }
+            return Promise.reject(new Error(`Project not found: ${JSON.stringify(params)}`));
         }
 
         this.core['listProjects'] = listProjectsFn
