@@ -97,7 +97,7 @@ src/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
 │   ├── tools/                  # 99 tool handlers (10 groups)
-│   ├── resources/              # 55 resource handlers (49 core + 6 aliases)
+│   ├── resources/              # 57 resource handlers (51 core + 6 aliases)
 │   └── prompts/                # 19 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
