@@ -16,7 +16,7 @@
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 
-import type { McpServerFactory } from '../../../server/mcp-server.js'
+import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler, NextFunction } from 'express'
 import { logger } from '../../../utils/logger.js'

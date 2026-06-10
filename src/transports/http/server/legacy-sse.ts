@@ -1,5 +1,5 @@
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
-import type { McpServerFactory } from '../../../server/mcp-server.js'
+import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AuthRequest } from '../../../auth/middleware.js'

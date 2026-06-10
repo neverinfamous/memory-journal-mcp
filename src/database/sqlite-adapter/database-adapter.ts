@@ -10,7 +10,6 @@ import type {
 import type { CreateEntryInput } from '../core/schema.js'
 import type {
     IDatabaseAdapter,
-    QueryResult,
     TeamMember,
     TeamRole,
     AuthorAlias,
@@ -24,7 +23,6 @@ import { RelationshipsManager } from './relationships.js'
 import { BackupManager } from './backup.js'
 import { MembersManager } from './members.js'
 import { HealthOperations } from './health-operations.js'
-import { VectorOperations } from './vector-operations.js'
 import { LifecycleOperations } from './lifecycle-operations.js'
 import { InsightsOperations } from './insights-operations.js'
 
@@ -40,7 +38,6 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     private membersMgr: MembersManager
     private aliasMgr: AliasManager
     private healthOps: HealthOperations
-    private vectorOps: VectorOperations
     private lifecycleOps: LifecycleOperations
     private insightsOps: InsightsOperations
 
@@ -53,7 +50,6 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.membersMgr = new MembersManager(this.connection)
         this.aliasMgr = new AliasManager(this.connection)
         this.healthOps = new HealthOperations(this.connection, this.backupMgr)
-        this.vectorOps = new VectorOperations(this.connection)
         this.lifecycleOps = new LifecycleOperations(this.connection)
         this.insightsOps = new InsightsOperations(this.connection)
     }
@@ -562,7 +558,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         }
     }
 
-    executeDataLifecycle(options: any): any {
+    executeDataLifecycle(options: { archiveOlderThanDays: number; pruneOlderThanDays: number; hardDeleteOlderThanDays: number; importanceThreshold: number; dryRun?: boolean; excludeTags?: string[]; }): ReturnType<IDatabaseAdapter["executeDataLifecycle"]> {
         return this.lifecycleOps.executeDataLifecycle(options)
     }
 
@@ -617,15 +613,15 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.insightsOps.computeDigest()
     }
 
-    getCrossProjectInsights(options: any): any {
+    getCrossProjectInsights(options:  { startDate?: string; endDate?: string; minEntries: number; inactiveThresholdDays: number; }): ReturnType<IDatabaseAdapter["getCrossProjectInsights"]> {
         return this.insightsOps.getCrossProjectInsights(options)
     }
 
-    visualizeRelationships(options: any): any {
+    visualizeRelationships(options:  { entryId?: number; tags?: string[]; relationshipType?: string; depth: number; limit: number; }): ReturnType<IDatabaseAdapter["visualizeRelationships"]> {
         return this.insightsOps.visualizeRelationships(options)
     }
 
-    getTeamCollaborationMatrix(options: any): any {
+    getTeamCollaborationMatrix(options:  { period: string; limit: number; }): ReturnType<IDatabaseAdapter["getTeamCollaborationMatrix"]> {
         return this.insightsOps.getTeamCollaborationMatrix(options)
     }
 }

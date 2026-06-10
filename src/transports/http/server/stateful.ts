@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
-import type { McpServerFactory } from '../../../server/mcp-server.js'
+import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import { randomUUID } from 'node:crypto'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'

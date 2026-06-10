@@ -9,7 +9,7 @@ import { registerResources, registerPrompts } from '../registration.js'
 import type { ResourceDefinition, PromptDefinition } from '../registration.js'
 import { VERSION } from '../../version.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
-import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { SubscribeRequestSchema, UnsubscribeRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
 import type { ServerContext, ServerOptions } from './types.js'
 import type { ToolRegistration, ToolHandlerConfig } from '../../types/index.js'
@@ -109,14 +109,14 @@ export function createServerInstance(
                         const relaxed = (
                             schema as { partial: () => { passthrough?: () => z.ZodType } }
                         ).partial()
-                        toolOptions.inputSchema = typeof relaxed.passthrough === 'function'
+                        toolOptions.inputSchema = (typeof relaxed.passthrough === 'function'
                             ? relaxed.passthrough()
-                            : schema
+                            : schema) as unknown as z.ZodType
                     } catch {
-                        toolOptions.inputSchema = schema
+                        toolOptions.inputSchema = schema as unknown as z.ZodType
                     }
                 } else {
-                    toolOptions.inputSchema = schema
+                    toolOptions.inputSchema = schema as unknown as z.ZodType
                 }
             }
 
@@ -130,14 +130,12 @@ export function createServerInstance(
                     typeof outSchema.passthrough === 'function'
                 ) {
                     try {
-                        toolOptions.outputSchema = (
-                            outSchema as { passthrough: () => z.ZodType }
-                        ).passthrough()
+                        toolOptions.outputSchema = (outSchema as { passthrough: () => z.ZodType }).passthrough()
                     } catch {
-                        toolOptions.outputSchema = outSchema
+                        toolOptions.outputSchema = outSchema as unknown as z.ZodType
                     }
                 } else {
-                    toolOptions.outputSchema = outSchema
+                    toolOptions.outputSchema = outSchema as unknown as z.ZodType
                 }
             }
 
@@ -153,7 +151,7 @@ export function createServerInstance(
             // Capture whether this tool has outputSchema for response handling
             const hasOutputSchema = Boolean(tool.outputSchema)
 
-            server.registerTool(tool.name, toolOptions, async (args, extra): Promise<unknown> => {
+            server.registerTool(tool.name, toolOptions, async (args, extra): Promise<CallToolResult> => {
                 try {
                     // Build progress context for progress notifications
                     // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
@@ -170,7 +168,7 @@ export function createServerInstance(
 
                     const result = await callTool(
                         tool.name,
-                        args,
+                        args as Record<string, unknown>,
                         db,
                         vectorManager,
                         github,

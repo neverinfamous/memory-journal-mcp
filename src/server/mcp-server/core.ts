@@ -171,4 +171,4 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 }
 
-export type { IDatabaseAdapter as SqliteAdapter }
+

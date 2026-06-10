@@ -292,7 +292,7 @@ vi.spyOn(process, 'exit').mockImplementation(function () {} as never)
 // Import after mocks
 // ============================================================================
 
-import { createServer, type ServerOptions } from '../../src/server/mcp-server.js'
+import { createServer, type ServerOptions } from '../../src/server/mcp-server/index.js'
 import * as toolsModule from '../../src/handlers/tools/index.js'
 
 describe('McpServer', function () {

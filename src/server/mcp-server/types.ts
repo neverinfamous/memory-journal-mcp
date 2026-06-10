@@ -62,6 +62,9 @@ export interface ServerOptions {
     configFilePath?: string
 }
 
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+export type McpServerFactory = () => McpServer
+
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
