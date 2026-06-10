@@ -74,6 +74,7 @@
 - `ConfigResolver` syntax crash when loading pre-parsed nested objects.
 - Missing `project_number` validation in core `batch_create_entries`.
 - Test timeout in coverage runs due to dynamic import deadlocks.
+- Missing resources and incorrect counts in `test-server/code-map.md`.
 
 ### Security
 - Gap in `resources/subscribe` where unauthorized clients could bypass scope boundaries.
