@@ -106,6 +106,15 @@ const PARAM_ALIASES: Record<string, string> = {
     filename: 'source_dir',
     format_type: 'format',
     webhook: 'report_webhook_url',
+    // §1.3: Flag resolution comment aliases
+    comment: 'resolution_comment',
+    resolution: 'resolution_comment',
+    // §1.3: Severity escalation alias (agents say "escalate severity")
+    severity: 'flag_type',
+    // §1.5: Sort/order aliases
+    sort: 'sort_by',
+    order_by: 'sort_by',
+    order: 'sort_by',
 }
 
 /**
@@ -418,6 +427,21 @@ export class JournalApi {
 
         const deletedFn = this.search['listDeletedEntries']
         if (deletedFn) this.core['listDeletedEntries'] = deletedFn
+
+        // §2.2: Cross-group — agents commonly attempt mj.core.semanticSearch()
+        const semanticFn = this.search['semanticSearch']
+        if (semanticFn) this.core['semanticSearch'] = semanticFn
+
+        // §2.1: Cross-group — agents commonly attempt mj.core.vectorStats() / mj.core.rebuildVectorIndex()
+        const vectorStatsFn = this.search['getVectorIndexStats']
+        if (vectorStatsFn) {
+            this.core['getVectorIndexStats'] = vectorStatsFn
+            this.core['vectorStats'] = vectorStatsFn
+        }
+        const rebuildVectorFn = this.admin['rebuildVectorIndex']
+        if (rebuildVectorFn) this.core['rebuildVectorIndex'] = rebuildVectorFn
+        const addToVectorFn = this.admin['addToVectorIndex']
+        if (addToVectorFn) this.core['addToVectorIndex'] = addToVectorFn
 
         // Cross-group: io/backup operations commonly attempted on core
         const exportFn = this.io['exportEntries']

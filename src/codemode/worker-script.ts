@@ -80,6 +80,16 @@ function wrapResult(result: unknown): unknown {
 
         if (!Array.isArray(result)) {
             const successResult = result as Record<string | symbol, unknown>
+
+            // §2.4: Inject `hasMore` convenience boolean when pagination cursor is present
+            if ('next_cursor' in successResult && successResult['next_cursor'] !== null && successResult['next_cursor'] !== undefined) {
+                successResult['hasMore'] = true
+            } else if (
+                ('entries' in successResult || 'results' in successResult || 'items' in successResult) &&
+                !('hasMore' in successResult)
+            ) {
+                successResult['hasMore'] = false
+            }
             return new Proxy(successResult, {
                 get(target, prop) {
                     if (prop in target) return target[prop]
@@ -176,9 +186,27 @@ function buildApiProxy(
                 }
 
                 if (key === 'readResource') {
-                    return () => Promise.reject(new Error(
-                        "Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource(). Please use the appropriate mj.* tools (e.g., mj.core.getRecentEntries) to query data, or read the resource via standard MCP client requests outside of Code Mode."
-                    ))
+                    // §2.3: URI-aware suggestions for common readResource hallucinations
+                    return (uri?: string) => {
+                        const suggestions: Record<string, string> = {
+                            'memory://recent': 'mj.core.getRecentEntries()',
+                            'memory://statistics': 'mj.analytics.getStatistics()',
+                            'memory://tags': 'mj.core.listTags()',
+                            'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
+                            'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
+                            'memory://insights': 'mj.analytics.getCrossProjectInsights()',
+                        }
+                        let hint = ''
+                        if (typeof uri === 'string') {
+                            const match = Object.entries(suggestions).find(([k]) => uri.startsWith(k))
+                            if (match !== undefined) {
+                                hint = ` Try: ${match[1]}`
+                            }
+                        }
+                        return Promise.reject(new Error(
+                            `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
+                        ))
+                    }
                 }
 
                 if (key === 'then') return undefined

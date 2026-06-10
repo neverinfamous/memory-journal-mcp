@@ -30,6 +30,53 @@ import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { generateTypescriptDeclarations } from '../../codemode/type-generator.js'
 
 // =============================================================================
+// §3.1 + §3.2: Tool Classification Sets for secureDispatcher
+// =============================================================================
+
+/**
+ * Mutation tools that require project_number.
+ * Used by §3.1 auto-injection in single-project environments.
+ */
+const MUTATION_TOOL_NAMES = new Set([
+    'create_entry',
+    'create_entry_minimal',
+    'update_entry',
+    'delete_entry',
+    'restore_entry',
+    'batch_create_entries',
+    'batch_update_entries',
+    'batch_delete_entries',
+    'link_entries',
+    'merge_tags',
+    'import_markdown',
+    'import_external',
+    'team_create_entry',
+    'team_update_entry',
+    'team_delete_entry',
+    'team_restore_entry',
+    'team_batch_create_entries',
+    'team_batch_update_entries',
+    'team_batch_delete_entries',
+    'team_link_entries',
+    'team_merge_tags',
+    'team_import_markdown',
+    'team_import_external',
+    'team_pass_flag',
+])
+
+/**
+ * Tools that accept expected_version for optimistic locking.
+ * Intentionally excludes batch operations to avoid N+1 version lookups.
+ * Used by §3.2 auto-version population.
+ */
+const VERSION_AWARE_TOOL_NAMES = new Set([
+    'update_entry',
+    'delete_entry',
+    'team_update_entry',
+    'team_delete_entry',
+])
+
+// =============================================================================
 // Input / Output Schemas
 // =============================================================================
 
@@ -368,9 +415,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         name: string,
                         args: Record<string, unknown>
                     ): Promise<unknown> => {
-                        // Typo tolerance alias
+                        // §1.4: Bidirectional exact_match ↔ fuzzy_match normalization
                         if (args['exact_match'] === true) {
                             args['fuzzy_match'] = false
+                            delete args['exact_match']
+                        } else if (args['exact_match'] === false) {
+                            args['fuzzy_match'] = true
                             delete args['exact_match']
                         }
 
@@ -404,6 +454,51 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 if (matchingEntry !== undefined) {
                                     args['repo'] = matchingEntry[0]
                                 }
+                            }
+                        }
+
+                        // §3.1: Auto-inject project_number in single-project environments
+                        // Only for mutation tools, and only when exactly one project is registered
+                        // (multi-project environments continue to strictly fail for safety)
+                        if (args['project_number'] === undefined) {
+                            const registry = sessionContext.config?.projectRegistry
+                            const registryKeys = registry ? Object.keys(registry) : []
+                            const defaultPn = sessionContext.config?.defaultProjectNumber
+                            const isMutation = MUTATION_TOOL_NAMES.has(name)
+
+                            if (isMutation && registryKeys.length === 1 && defaultPn !== undefined) {
+                                args['project_number'] = defaultPn
+                            }
+                        }
+
+                        // §3.2: Auto-populate expected_version on single-entry update/delete
+                        // Prevents silent overwrites by fetching the current version before forwarding.
+                        // Intentionally skipped for batch operations to avoid N+1 queries.
+                        if (
+                            args['expected_version'] === undefined &&
+                            args['entry_id'] !== undefined &&
+                            typeof args['entry_id'] === 'number' &&
+                            VERSION_AWARE_TOOL_NAMES.has(name)
+                        ) {
+                            try {
+                                const lookupName = name.startsWith('team_')
+                                    ? 'team_get_entry_by_id'
+                                    : 'get_entry_by_id'
+                                const entry = await dispatcher(lookupName, {
+                                    entry_id: args['entry_id'],
+                                })
+                                if (
+                                    entry !== null &&
+                                    entry !== undefined &&
+                                    typeof entry === 'object' &&
+                                    'version' in entry &&
+                                    typeof (entry as Record<string, unknown>)['version'] === 'number'
+                                ) {
+                                    args['expected_version'] = (entry as Record<string, unknown>)['version']
+                                }
+                            } catch {
+                                // Silently skip auto-version if lookup fails —
+                                // the operation will still proceed without optimistic locking
                             }
                         }
 

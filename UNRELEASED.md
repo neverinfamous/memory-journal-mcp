@@ -39,7 +39,13 @@
 - Added batch operation tools to the core and team admin groups (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`).
 - Added entry versioning/history tracking in an `entry_revisions` table, accessible via `get_entry_history`.
 - Added Code Mode API enhancements: support for all batch operations, missing team aliases, project insight fallbacks, `sleep(ms)`/`setTimeout` global aliases, and `snake_case` to `camelCase` parameter mapping.
-- Added a Capacity Planning Guide to the documentation.
+- Added missing team member/alias `METHOD_ALIASES` (`updateRole`, `changeRole`, `setRole`, `addAlias`, `removeAlias`, `aliases`, `listAliases`, `resolveAuthor`, `consolidate`, `consolidateAuthors`) and `POSITIONAL_PARAM_MAP` entries for team member management tools in Code Mode.
+- Added `PARAM_ALIASES` for flag resolution comments (`comment`/`resolution` → `resolution_comment`), severity escalation (`severity` → `flag_type`), and sort order (`sort`/`order_by`/`order` → `sort_by`) to smooth common agent hallucinations.
+- Added cross-group Constructor Wiring for `semanticSearch`, `getVectorIndexStats`, `vectorStats`, `rebuildVectorIndex`, and `addToVectorIndex` from search/admin groups to core, matching the existing hallucination-smoothing pattern.
+- Added `hasMore` convenience boolean to Code Mode result objects when `next_cursor` pagination cursor is present, making pagination state immediately obvious to agents.
+- Added URI-aware `readResource` error handler in Code Mode sandbox that suggests specific `mj.*` API alternatives based on the requested URI pattern (e.g., `memory://recent` → `mj.core.getRecentEntries()`).
+- Added automatic `expected_version` injection for single-entry `update_entry`/`delete_entry` calls in Code Mode, preventing silent overwrites by pre-fetching the current entry version before forwarding. Batch operations are intentionally excluded to avoid N+1 lookups.
+- Added automatic `project_number` injection in single-project environments for mutation tools via the `secureDispatcher`, eliminating the #1 error source while maintaining strict boundaries in multi-project setups.
 
 ### Changed
 
@@ -50,6 +56,7 @@
 - Updated CLI configuration loader to aggregate all startup validation errors and report them simultaneously, rather than crashing on the first invalid parameter.
 - Updated `mj_execute_code` schema description and internal Code Mode catch blocks to explicitly instruct agents to use the `context` parameter for Markdown and large strings, preventing Tagged Template Literal escaping bugs.
 - Wired Code Mode `JournalApi` constructor to map cross-group hallucinated operations (`mj.core.restoreEntry`, `mj.core.searchAuditLog`, `mj.core.listDeletedEntries`) silently to their correct handlers.
+- Changed `exact_match` ↔ `fuzzy_match` normalization in the `secureDispatcher` to be bidirectional (`exact_match: false` now correctly sets `fuzzy_match: true`), improving consistency for typo tolerance control.
 
 ### Fixed
 

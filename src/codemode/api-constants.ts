@@ -190,6 +190,16 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         members: 'teamListMembers',
         listMembers: 'teamListMembers',
         getMember: 'teamGetMember',
+        updateRole: 'teamUpdateMemberRole',
+        changeRole: 'teamUpdateMemberRole',
+        setRole: 'teamUpdateMemberRole',
+        addAlias: 'teamAddAuthorAlias',
+        removeAlias: 'teamRemoveAuthorAlias',
+        aliases: 'teamListAuthorAliases',
+        listAliases: 'teamListAuthorAliases',
+        resolveAuthor: 'teamResolveAuthor',
+        consolidate: 'teamConsolidateAuthors',
+        consolidateAuthors: 'teamConsolidateAuthors',
     },
 }
 
@@ -374,6 +384,12 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamResolveAuthor: 'author',
     teamConsolidateAuthors: 'canonical_author',
     teamImportExternal: 'source_dir',
+
+    // Team Members
+    teamAddMember: ['author', 'role'],
+    teamRemoveMember: 'author',
+    teamUpdateMemberRole: ['author', 'role'],
+    teamGetMember: 'author',
 }
 
 // =============================================================================
