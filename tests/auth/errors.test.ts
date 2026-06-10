@@ -17,7 +17,6 @@ import {
     getWWWAuthenticateHeader,
 } from '../../src/auth/errors.js'
 import { MemoryJournalMcpError } from '../../src/types/errors.js'
-import { ErrorCategory } from '../../src/types/error-types.js'
 
 describe('OAuthError hierarchy', () => {
     it('should extend MemoryJournalMcpError and Error', () => {
@@ -29,12 +28,12 @@ describe('OAuthError hierarchy', () => {
 
     it('should have correct category for 401 errors', () => {
         const error = new TokenMissingError()
-        expect(error.category).toBe(ErrorCategory.AUTHENTICATION)
+        expect(error.category).toBe('authentication')
     })
 
     it('should have correct category for 403 errors', () => {
         const error = new InsufficientScopeError('admin')
-        expect(error.category).toBe(ErrorCategory.AUTHORIZATION)
+        expect(error.category).toBe('authorization')
     })
 
     it('should produce valid ErrorResponse via toResponse()', () => {
@@ -42,7 +41,7 @@ describe('OAuthError hierarchy', () => {
         const response = error.toResponse()
         expect(response.success).toBe(false)
         expect(response.code).toBe('AUTH_TOKEN_MISSING')
-        expect(response.category).toBe(ErrorCategory.AUTHENTICATION)
+        expect(response.category).toBe('authentication')
         expect(response.recoverable).toBe(true)
     })
 })

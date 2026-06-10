@@ -7,7 +7,6 @@
  */
 
 import { MemoryJournalMcpError } from '../types/errors.js'
-import { ErrorCategory } from '../types/error-types.js'
 
 // =============================================================================
 // Error Codes
@@ -50,7 +49,7 @@ export class OAuthError extends MemoryJournalMcpError {
         wwwAuthenticate?: string
     ) {
         const category =
-            httpStatus === 403 ? ErrorCategory.AUTHORIZATION : ErrorCategory.AUTHENTICATION
+            httpStatus === 403 ? 'authorization' : 'authentication'
         super(message, code, category, {
             suggestion:
                 httpStatus === 403

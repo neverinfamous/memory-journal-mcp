@@ -5,7 +5,7 @@
  * and toResponse() for structured error handling.
  */
 
-import { ErrorCategory, type ErrorResponse } from './error-types.js'
+import type { ErrorCategory, ErrorResponse } from './error-types.js'
 import { matchSuggestion, GENERIC_CODES } from '../utils/errors/suggestions.js'
 
 // =============================================================================
@@ -99,7 +99,7 @@ export class MemoryJournalMcpError extends Error {
  */
 export class ConnectionError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
-        super(message, 'CONNECTION_FAILED', ErrorCategory.CONNECTION, {
+        super(message, 'CONNECTION_FAILED', 'connection', {
             suggestion: 'Check database path and file permissions',
             recoverable: true,
             details,
@@ -113,7 +113,7 @@ export class ConnectionError extends MemoryJournalMcpError {
  */
 export class QueryError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
-        super(message, 'QUERY_FAILED', ErrorCategory.QUERY, {
+        super(message, 'QUERY_FAILED', 'query', {
             suggestion: 'Check query parameters and database state',
             recoverable: false,
             details,
@@ -131,7 +131,7 @@ export class QueryError extends MemoryJournalMcpError {
  */
 export class ValidationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
-        super(message, 'VALIDATION_ERROR', ErrorCategory.VALIDATION, {
+        super(message, 'VALIDATION_ERROR', 'validation', {
             suggestion: 'Check input parameters against the tool schema',
             recoverable: false,
             details,
@@ -151,7 +151,7 @@ export class ConflictError extends MemoryJournalMcpError {
     readonly currentState: Record<string, unknown>
 
     constructor(message: string, currentState: Record<string, unknown>) {
-        super(message, 'VERSION_CONFLICT', ErrorCategory.CONFLICT, {
+        super(message, 'VERSION_CONFLICT', 'conflict', {
             suggestion: 'Re-read the entry to get the current version, then retry your update with the new expected_version',
             recoverable: true,
             details: currentState,
@@ -173,7 +173,7 @@ export class ResourceNotFoundError extends MemoryJournalMcpError {
         super(
             `${resourceType} not found: ${identifier}`,
             'RESOURCE_NOT_FOUND',
-            ErrorCategory.RESOURCE,
+            'resource',
             {
                 suggestion: `Verify the ${resourceType.toLowerCase()} identifier and try again`,
                 recoverable: false,
@@ -193,7 +193,7 @@ export class ResourceNotFoundError extends MemoryJournalMcpError {
  */
 export class ConfigurationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
-        super(message, 'CONFIGURATION_ERROR', ErrorCategory.CONFIGURATION, {
+        super(message, 'CONFIGURATION_ERROR', 'configuration', {
             suggestion: 'Check server configuration and environment variables',
             recoverable: false,
             details,
@@ -211,7 +211,7 @@ export class ConfigurationError extends MemoryJournalMcpError {
  */
 export class PermissionError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
-        super(message, 'PERMISSION_DENIED', ErrorCategory.PERMISSION, {
+        super(message, 'PERMISSION_DENIED', 'permission', {
             suggestion: 'Check file permissions and database access rights',
             recoverable: false,
             details,
@@ -225,7 +225,7 @@ export class PermissionError extends MemoryJournalMcpError {
  */
 export class AuthorizationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
-        super(message, 'AUTHORIZATION_FAILED', ErrorCategory.AUTHORIZATION, {
+        super(message, 'AUTHORIZATION_FAILED', 'authorization', {
             suggestion: 'Check your team role and permissions',
             recoverable: false,
             details,
@@ -249,7 +249,7 @@ export class AggregateMcpError extends MemoryJournalMcpError {
         errors: { message: string; [key: string]: unknown }[],
         details?: Record<string, unknown>
     ) {
-        super(message, 'AGGREGATE_ERROR', ErrorCategory.INTERNAL, {
+        super(message, 'AGGREGATE_ERROR', 'internal', {
             recoverable: false,
             details,
         })

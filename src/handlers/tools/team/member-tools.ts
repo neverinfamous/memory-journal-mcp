@@ -48,7 +48,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: TeamAddMemberSchema,
             outputSchema: z.object({
                 success: z.boolean(),
-                member: z.any().optional(),
+                member: z.unknown().optional(),
                 message: z.string().optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
@@ -132,7 +132,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: TeamUpdateMemberRoleSchema,
             outputSchema: z.object({
                 success: z.boolean(),
-                member: z.any().optional(),
+                member: z.unknown().optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
             annotations: {
@@ -169,7 +169,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({}).strict(),
             outputSchema: z.object({
                 success: z.boolean(),
-                members: z.array(z.any()).optional(),
+                members: z.array(z.unknown()).optional(),
                 count: z.number().optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
@@ -199,7 +199,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             inputSchema: TeamGetMemberSchema,
             outputSchema: z.object({
                 success: z.boolean(),
-                member: z.any().optional(),
+                member: z.unknown().optional(),
                 error: z.string().optional(),
             }).extend(ErrorFieldsMixin.shape),
             annotations: {

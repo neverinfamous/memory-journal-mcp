@@ -30,7 +30,6 @@ import { GitHubClient } from '../../src/github/github-integration/client.js'
 import { IssuesManager } from '../../src/github/github-integration/issues.js'
 import { formatZodError, formatHandlerError } from '../../src/utils/error-helpers.js'
 import { MemoryJournalMcpError } from '../../src/types/errors.js'
-import { ErrorCategory } from '../../src/types/error-types.js'
 
 // ============================================================================
 // GitHubClient Branch Coverage
@@ -395,7 +394,7 @@ describe('Error helpers — branch coverage', () => {
 
     describe('formatHandlerError', () => {
         it('should handle MemoryJournalMcpError', () => {
-            const err = new MemoryJournalMcpError('test error', 'TEST_CODE', ErrorCategory.INTERNAL)
+            const err = new MemoryJournalMcpError('test error', 'TEST_CODE', 'internal')
             const result = formatHandlerError(err)
             expect(result.success).toBe(false)
             expect(result.code).toBe('TEST_CODE')
@@ -414,7 +413,7 @@ describe('Error helpers — branch coverage', () => {
             const result = formatHandlerError(err)
             expect(result.success).toBe(false)
             expect(result.code).toBe('VALIDATION_ERROR')
-            expect(result.category).toBe(ErrorCategory.VALIDATION)
+            expect(result.category).toBe('validation')
         })
 
         it('should handle plain Error', () => {

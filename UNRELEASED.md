@@ -45,6 +45,9 @@
 - Wired Code Mode `JournalApi` constructor to silently map cross-group operations.
 - Normalized `exact_match` ↔ `fuzzy_match` bidirectionally in `secureDispatcher`.
 
+- Refactored `ErrorCategory` enum to a string literal union for optimized runtime footprint.
+- Standardized Error Handling: replaced raw generic `Error` throws with structured `ConfigurationError` and `MemoryJournalMcpError` inside `config-resolver.ts` and `maintenance-lock.ts`.
+
 ### Fixed
 
 - FTS search phrase matching to preserve balanced double-quotes.
@@ -77,6 +80,9 @@
 - `parseProjectRegistry` not receiving injected `process.env.PROJECT_REGISTRY` from configuration loading.
 - Missing project name metadata extraction from GitHub URLs in the `getStatistics` analytics fallback.
 - Added `listEntries` to CodeMode `METHOD_ALIASES` to transparently handle agent hallucinations mapping to `searchEntries`.
+- Type Safety & Boundary Validation fixes: replaced `any` with `unknown` across `member-tools.ts`, `worker-script.ts`, and `type-generator.ts`.
+- Replaced `eslint-disable no-control-regex` by using modern Unicode property escapes (`\\p{Cc}`) for author sanitization in `security-utils.ts`.
+- Replaced non-compliant `console.log/warn/error` usages with `process.stdout.write` and `process.stderr.write` in `cli.ts`.
 
 ### Security
 

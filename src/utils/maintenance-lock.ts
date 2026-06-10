@@ -8,6 +8,7 @@ import type { AuditLogger, AuditInterceptor } from '../audit/index.js'
 import type { ToolRegistration, ToolDefinition } from '../types/index.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
 import { MetricsAccumulator } from '../observability/metrics.js'
+import { MemoryJournalMcpError } from '../types/errors.js'
 
 export class MaintenanceManager {
     private activeJobs = 0
@@ -16,8 +17,11 @@ export class MaintenanceManager {
 
     async withActiveJob<T>(fn: () => Promise<T>, bypass = false): Promise<T> {
         if (this.inMaintenanceMode && !bypass) {
-            throw new Error(
-                'Maintenance Mode: The server is experiencing downtime for an internal maintenance operation. Please try again later.'
+            throw new MemoryJournalMcpError(
+                'Maintenance Mode: The server is experiencing downtime for an internal maintenance operation. Please try again later.',
+                'MAINTENANCE_MODE',
+                'resource',
+                { recoverable: true }
             )
         }
 
@@ -53,7 +57,7 @@ export class MaintenanceManager {
 
     async acquireMaintenanceLock(): Promise<void> {
         if (this.inMaintenanceMode) {
-            throw new Error('Maintenance lock is already acquired.')
+            throw new MemoryJournalMcpError('Maintenance lock is already acquired.', 'LOCK_ACQUIRED', 'internal')
         }
         this.inMaintenanceMode = true
 
@@ -84,8 +88,11 @@ export class MaintenanceManager {
 
     assertNotInMaintenanceMode(): void {
         if (this.inMaintenanceMode) {
-            throw new Error(
-                'Maintenance Mode: The server is experiencing downtime for an internal maintenance operation. Please try again later.'
+            throw new MemoryJournalMcpError(
+                'Maintenance Mode: The server is experiencing downtime for an internal maintenance operation. Please try again later.',
+                'MAINTENANCE_MODE',
+                'resource',
+                { recoverable: true }
             )
         }
     }

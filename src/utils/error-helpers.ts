@@ -8,7 +8,7 @@
 
 import { ZodError } from 'zod'
 import { MemoryJournalMcpError } from '../types/errors.js'
-import { ErrorCategory, type ErrorResponse } from '../types/error-types.js'
+import type { ErrorResponse } from '../types/error-types.js'
 import { matchSuggestion } from './errors/suggestions.js'
 
 /**
@@ -58,7 +58,7 @@ export function formatHandlerError(err: unknown): ErrorResponse {
             success: false,
             error: err.message,
             code: 'AGGREGATE_ERROR',
-            category: ErrorCategory.INTERNAL,
+            category: 'internal',
             recoverable: false,
             aggregated_errors: err.errors.map((e: unknown) => ({
                 message: e instanceof Error ? e.message : String(e),
@@ -73,7 +73,7 @@ export function formatHandlerError(err: unknown): ErrorResponse {
             success: false,
             error: formatZodError(err),
             code: 'VALIDATION_ERROR',
-            category: ErrorCategory.VALIDATION,
+            category: 'validation',
             suggestion: 'Check input parameters against the tool schema',
             recoverable: false,
         }
@@ -91,7 +91,7 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         success: false,
         error: 'An internal error occurred during tool execution. Please check the server logs for more details.',
         code: matched?.code ?? 'INTERNAL_ERROR',
-        category: ErrorCategory.INTERNAL,
+        category: 'internal',
         recoverable: false,
         ...(matched?.suggestion ? { suggestion: matched.suggestion } : {}),
         ...(process.env['DEBUG'] === 'true'

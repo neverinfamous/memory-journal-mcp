@@ -140,7 +140,7 @@ function buildApiProxy(
                 }
                 Object.assign(proxyFn, {
                     schema: (): Promise<string> =>
-                        Promise.resolve(schemas?.['_topLevel']?.[methodName] ?? 'any'),
+                        Promise.resolve(schemas?.['_topLevel']?.[methodName] ?? 'unknown'),
                 })
                 api[methodName] = proxyFn
             }
@@ -156,7 +156,7 @@ function buildApiProxy(
             }
             Object.assign(proxyFn, {
                 schema: (): Promise<string> =>
-                    Promise.resolve(schemas?.[group]?.[methodName] ?? 'any'),
+                    Promise.resolve(schemas?.[group]?.[methodName] ?? 'unknown'),
             })
             groupProxy[methodName] = proxyFn
         }

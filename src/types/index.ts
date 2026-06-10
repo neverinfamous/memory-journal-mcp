@@ -12,8 +12,7 @@ import type { ProgressContext } from '../utils/progress-utils.js'
 
 // Re-export sub-module types
 export type { ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig } from './filtering.js'
-export { ErrorCategory } from './error-types.js'
-export type { ErrorResponse, ErrorContext } from './error-types.js'
+export type { ErrorCategory, ErrorResponse, ErrorContext } from './error-types.js'
 export {
     MemoryJournalMcpError,
     ConnectionError,

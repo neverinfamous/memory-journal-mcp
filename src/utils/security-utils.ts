@@ -1,6 +1,5 @@
 import { getAuthContext } from '../auth/auth-context.js'
 import { MemoryJournalMcpError } from '../types/errors.js'
-import { ErrorCategory } from '../types/error-types.js'
 
 // ============================================================================
 // Typed Security Errors
@@ -12,7 +11,7 @@ import { ErrorCategory } from '../types/error-types.js'
  */
 export class SecurityError extends MemoryJournalMcpError {
     constructor(message: string, code: string) {
-        super(message, code, ErrorCategory.VALIDATION, {
+        super(message, code, 'validation', {
             suggestion: 'Check input for security violations',
             recoverable: false,
         })
@@ -312,8 +311,7 @@ export function markUntrustedContentInline(content: string | undefined | null): 
  * @returns Sanitized string with control characters removed and length capped at 100
  */
 export function sanitizeAuthor(raw: string): string {
-    // eslint-disable-next-line no-control-regex
-    return raw.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100)
+    return raw.replace(/\p{Cc}/gu, '').slice(0, 100)
 }
 
 // ============================================================================

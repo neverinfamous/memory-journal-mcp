@@ -494,7 +494,7 @@ program
                     if (raw) {
                         if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`);
                         if (transport !== 'http') {
-                            console.warn(`\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n`);
+                            process.stderr.write(`\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n\n`);
                             return undefined;
                         }
                         return 'prometheus';
@@ -507,8 +507,8 @@ program
             };
 
             if (configErrors.length > 0) {
-                console.error('Startup Configuration Errors:');
-                configErrors.forEach(err => console.error(` - ${err}`));
+                process.stderr.write('Startup Configuration Errors:\n');
+                configErrors.forEach(err => process.stderr.write(` - ${err}\n`));
                 process.exit(1);
             }
 
@@ -525,8 +525,7 @@ program
                     }
                 };
                 maskSensitive(redactedOptions);
-                // eslint-disable-next-line no-console
-                console.log(JSON.stringify(redactedOptions, null, 2));
+                process.stdout.write(JSON.stringify(redactedOptions, null, 2) + '\n');
                 process.exit(0);
             }
 

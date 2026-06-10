@@ -46,7 +46,7 @@ export function getZodTypeString(schema: unknown): string {
         return `{ ${props.join(', ')} }`
     }
 
-    return 'any'
+    return 'unknown'
 }
 
 /**
@@ -78,18 +78,18 @@ export function generateTypescriptDeclarations(tools: ToolDefinition[]): string 
                 const comment = tool.description.split('\\n')[0]
                 dts += `    /** ${comment} */\n`
             }
-            dts += `    function ${methodName}(args?: ${paramType}): Promise<any>;\n`
+            dts += `    function ${methodName}(args?: ${paramType}): Promise<unknown>;\n`
         }
 
         // Add group-level help
         dts += `    /** Get method list and examples for ${groupName} */\n`
-        dts += `    function help(): Promise<any>;\n`
+        dts += `    function help(): Promise<unknown>;\n`
         dts += `  }\n`
     }
 
     // Top-level help
     dts += `  /** Get top-level method list and usage */\n`
-    dts += `  function help(): Promise<any>;\n`
+    dts += `  function help(): Promise<unknown>;\n`
     dts += `}\n`
 
     return dts
