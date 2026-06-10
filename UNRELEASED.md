@@ -35,6 +35,7 @@
 
 ### Changed
 - Documentation: Synchronized resource counts and undocumented configuration variables across `README.md`, `DOCKER_README.md`, `.env.example`, and `mcp-config-example.json`.
+- Documentation: Updated `README.md` and `copilot-instructions.md` to reflect the correct count of 57 resources.
 - Wiki Documentation: Added missing tools and updated team tool counts.
 - Restored strict `project_number` requirement for team mutation handlers.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
@@ -46,6 +47,7 @@
 - Normalized `exact_match` ↔ `fuzzy_match` bidirectionally in `secureDispatcher`.
 
 ### Fixed
+- Fixed `README.md` referencing `MCP_CORS_ORIGIN` instead of the correct `CORS_ORIGIN` environment variable.
 - FTS search phrase matching to preserve balanced double-quotes.
 - Batch operations failing atomically instead of returning structured partial errors.
 - Code Mode execution stability issues:

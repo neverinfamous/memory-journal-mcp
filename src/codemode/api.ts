@@ -507,14 +507,46 @@ export class JournalApi {
             }
             return []
         }
+
+        const getProjectFn = async (params?: unknown): Promise<unknown> => {
+            try {
+                const registry = parseProjectRegistry()
+                if (registry !== undefined) {
+                    let searchVal: string | number | undefined;
+                    if (typeof params === 'number') searchVal = params;
+                    else if (typeof params === 'string') searchVal = params;
+                    else if (typeof params === 'object' && params !== null) {
+                        searchVal = (params as any).project_number ?? (params as any).projectNumber ?? (params as any).name ?? (params as any).query;
+                    }
+                    
+                    if (searchVal !== undefined) {
+                        const isNum = typeof searchVal === 'number' || !isNaN(Number(searchVal));
+                        const numVal = isNum ? Number(searchVal) : undefined;
+                        const strVal = String(searchVal).toLowerCase();
+
+                        const found = (registry as ProjectArrayItem[]).find(p => 
+                            p.projectNumber === numVal || 
+                            (p.name && p.name.toLowerCase() === strVal) || 
+                            (p.name && p.name.toLowerCase().includes(strVal))
+                        );
+                        if (found) return found;
+                    }
+                }
+            } catch {}
+            throw new Error(`Project not found: ${JSON.stringify(params)}`);
+        }
+
         this.core['listProjects'] = listProjectsFn
         this.core['searchProjects'] = listProjectsFn
         this.core['getProjects'] = listProjectsFn
+        this.core['getProject'] = getProjectFn
         this.search['listProjects'] = listProjectsFn
         this.search['searchProjects'] = listProjectsFn
         this.search['getProjects'] = listProjectsFn
+        this.search['getProject'] = getProjectFn
         this.admin['listProjects'] = listProjectsFn
         this.admin['getProjects'] = listProjectsFn
+        this.admin['getProject'] = getProjectFn
     }
 
     /**
@@ -564,6 +596,7 @@ export class JournalApi {
             listProjects: this.core['listProjects'],
             searchProjects: this.core['listProjects'],
             getProjects: this.core['listProjects'],
+            getProject: this.core['getProject'],
 
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
             getConfig: this.core['getConfig'],

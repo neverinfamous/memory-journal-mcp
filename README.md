@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**99 MCP Tools** · **19 Workflow Prompts** · **56 Resources (50 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**99 MCP Tools** · **19 Workflow Prompts** · **57 Resources (51 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -211,7 +211,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **50 Resources** (33 Static + 17 Template)
+### 📡 **51 Resources** (33 Static + 18 Template)
 
 **33 Static Resources** (appear in resource lists):
 
@@ -249,7 +249,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://insights/team-collaboration` - Team collaboration metrics
 - `memory://insights/reports` - Generated scheduled report snapshots and delivery statuses
 
-**17 Template Resources** (9 base templates + 8 dynamic `{repo}` variants):
+**18 Template Resources** (10 base templates + 8 dynamic `{repo}` variants):
 
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
@@ -641,7 +641,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
 | `ALLOWED_IO_ROOTS`                | **Critical Security Boundary**: Comma-separated absolute paths granting filesystem access to Code Mode and export tools (default: none / fail-closed) |
-| `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: blank, strict opt-in)                                                              |
+| `CORS_ORIGIN`                     | Allowed CORS origins for HTTP transport, comma-separated (default: blank, strict opt-in)                                                              |
 | `TRUST_PROXY`                     | Trust proxy headers for rate limiting and origin checks (CLI: `--trust-proxy`; default: `false`)                                                      |
 | `PUBLIC_ORIGIN`                   | Public origin URL for OAuth redirect URIs (CLI: `--public-origin`)                                                                                    |
 | `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                                                                     |

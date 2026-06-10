@@ -303,6 +303,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     testSimple: 'message',
     writeQuery: 'content',
     getEntryHistory: 'entry_id',
+    getProject: 'project_number',
 
     // Search
     searchEntries: 'query',
