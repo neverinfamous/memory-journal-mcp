@@ -85,6 +85,7 @@ const ExecuteCodeSchema = z.object({
     timeout: z.number().max(30000).optional().default(30000),
     readonly: z.boolean().optional().default(false),
     repo: z.string().optional(),
+    project_number: z.number().optional(),
     context: z.record(z.string(), z.unknown()).optional(),
 })
 
@@ -104,6 +105,12 @@ const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .describe(
             'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
+        ),
+    project_number: z
+        .number()
+        .optional()
+        .describe(
+            'CRITICAL: The project number to use for all mutation operations in this script. Providing this here will automatically inject it into all mj.* API calls so you do not have to specify it repeatedly.'
         ),
     context: z
         .record(z.string(), z.unknown())
@@ -311,19 +318,24 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const {
-                        code,
-                        timeout,
-                        readonly: readonlyMode,
-                        repo,
-                        context: contextObj,
-                    } = ExecuteCodeSchema.parse(params)
+                    const parsedArgs = ExecuteCodeSchema.safeParse(params)
+                    if (!parsedArgs.success) {
+                        return { success: false, error: parsedArgs.error.message }
+                    }
+
+                    const code = parsedArgs.data.code
+                    const timeout = parsedArgs.data.timeout
+                    const readonlyMode = parsedArgs.data.readonly
+                    const repo = parsedArgs.data.repo
+                    const providedProjectNumber = parsedArgs.data.project_number
+                    const contextPayload = parsedArgs.data.context
 
                     // Context extraction for rate limiting and tenant isolation
                     const reqCtx = getRequestContext()
                     const authCtx = getAuthContext()
-                    const clientId =
-                        authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
+                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
+
+                    let sessionContext = { ...context }
 
                     // Security validation
                     const security = getSecurityManager(clientId)
@@ -344,7 +356,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Context injection for GitHub / Kanban routing
-                    let sessionContext = context
                     if (repo) {
                         if (!context.config?.codemodeInternalFullAccess) {
                             return {
@@ -457,17 +468,25 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        // §3.1: Auto-inject project_number in single-project environments
-                        // Only for mutation tools, and only when exactly one project is registered
-                        // (multi-project environments continue to strictly fail for safety)
+                        // §3.1: Auto-inject project_number
+                        // Injects the project_number for mutation tools if it was provided at the sandbox wrapper level,
+                        // or if we are in a strictly single-project environment.
                         if (args['project_number'] === undefined) {
                             const registry = sessionContext.config?.projectRegistry
                             const registryKeys = registry ? Object.keys(registry) : []
                             const defaultPn = sessionContext.config?.defaultProjectNumber
                             const isMutation = MUTATION_TOOL_NAMES.has(name)
 
-                            if (isMutation && registryKeys.length === 1 && defaultPn !== undefined) {
-                                args['project_number'] = defaultPn
+                            if (isMutation) {
+                                if (providedProjectNumber !== undefined) {
+                                    args['project_number'] = providedProjectNumber
+                                } else if (repo !== undefined && defaultPn !== undefined) {
+                                    // If outer repo was provided and resolved to a valid defaultPn, inject it
+                                    args['project_number'] = defaultPn
+                                } else if (registryKeys.length === 1 && defaultPn !== undefined) {
+                                    // Fallback for single-project environments
+                                    args['project_number'] = defaultPn
+                                }
                             }
                         }
 
@@ -554,7 +573,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         bindings,
                         schemas,
                         timeout,
-                        contextObj,
+                        contextPayload,
                         readonlyMode
                     )
                     // Result size is validated internally by the worker pool

@@ -39,6 +39,7 @@
 - Added batch operation tools to the core and team admin groups (`batch_create_entries`, `batch_update_entries`, `batch_delete_entries`).
 - Added entry versioning/history tracking in an `entry_revisions` table, accessible via `get_entry_history`.
 - Added Code Mode API enhancements: support for all batch operations, missing team aliases, project insight fallbacks, `sleep(ms)`/`setTimeout` global aliases, and `snake_case` to `camelCase` parameter mapping.
+- Added `project_number` to `mj_execute_code` schema (Sandbox Wrapper Pattern) to permanently solve the issue of LLMs forgetting to supply the project number inside Code Mode strings. The dispatcher now extracts this outer argument and automatically injects it into all `mj.*` mutation calls executed by the sandbox.
 - Added missing team member/alias `METHOD_ALIASES` (`updateRole`, `changeRole`, `setRole`, `addAlias`, `removeAlias`, `aliases`, `listAliases`, `resolveAuthor`, `consolidate`, `consolidateAuthors`) and `POSITIONAL_PARAM_MAP` entries for team member management tools in Code Mode.
 - Added `PARAM_ALIASES` for flag resolution comments (`comment`/`resolution` → `resolution_comment`), severity escalation (`severity` → `flag_type`), and sort order (`sort`/`order_by`/`order` → `sort_by`) to smooth common agent hallucinations.
 - Added cross-group Constructor Wiring for `semanticSearch`, `getVectorIndexStats`, `vectorStats`, `rebuildVectorIndex`, and `addToVectorIndex` from search/admin groups to core, matching the existing hallucination-smoothing pattern.
