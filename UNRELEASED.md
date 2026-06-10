@@ -54,6 +54,7 @@
 - Standardized Error Handling: replaced raw generic `Error` throws with structured `ConfigurationError` and `MemoryJournalMcpError` inside `config-resolver.ts` and `maintenance-lock.ts`.
 
 ### Fixed
+- Fixed internal `TypeError` in `get_briefing` tool where valid string payloads triggered an `'error' in` object check, preventing the tool from surfacing the briefing.
 - Intercepted `getBriefing` and `readResource` calls inside the Code Mode Sandbox (`worker-script.ts`) to return explicit, actionable error messages rather than confusing "Operation not found" errors, steering agents to use their native Resource APIs instead.
 
 - Fixed `project_number` validation failures in `mj_execute_code` by widening the outer Zod schema from `z.number()` to `relaxedNumber()`.

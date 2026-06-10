@@ -555,10 +555,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { buildBriefingData } = await import('../resources/core/briefing/index.js')
                     const result = await buildBriefingData(resourceContext, input.repo_name)
-                    
-                    if ('error' in (result.data as Record<string, unknown>)) {
-                        return { success: false, error: String((result.data as Record<string, unknown>)['error']) }
-                    }
 
                     return { success: true, markdown: String(result.data) }
                 } catch (err) {

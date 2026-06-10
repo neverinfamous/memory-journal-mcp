@@ -500,8 +500,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Injects the project_number for mutation tools if it was provided at the sandbox wrapper level,
                         // or if we are in a strictly single-project environment.
                         if (args['project_number'] === undefined) {
-                            const registry = sessionContext.config?.projectRegistry
-                            const registryKeys = registry ? Object.keys(registry) : []
+
                             const defaultPn = sessionContext.config?.defaultProjectNumber
                             const isMutation = MUTATION_TOOL_NAMES.has(name)
 
@@ -511,8 +510,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 } else if (repo !== undefined && defaultPn !== undefined) {
                                     // If outer repo was provided and resolved to a valid defaultPn, inject it
                                     args['project_number'] = defaultPn
-                                } else if (registryKeys.length === 1 && defaultPn !== undefined) {
-                                    // Fallback for single-project environments
+                                } else if (defaultPn !== undefined) {
+                                    // Fallback to default project number if available
                                     args['project_number'] = defaultPn
                                 }
                             }
