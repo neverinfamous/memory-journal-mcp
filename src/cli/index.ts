@@ -38,7 +38,7 @@ program.action(async (options: Record<string, unknown>, command: typeof program)
         const envValue = process.env[envVar]
         if (typeof envValue === 'string' && envValue.startsWith('CHANGEME_')) {
             configErrors.push(
-                \`FATAL: Insecure configuration detected. \${envVar} contains default placeholder value. Please update your environment variables.\`
+                `FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`
             )
         }
     }

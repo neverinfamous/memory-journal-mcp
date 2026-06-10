@@ -1,5 +1,5 @@
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
-import { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { logger } from '../../utils/logger.js'
 import { parseToolFilter, getToolFilterFromEnv, getFilterSummary } from '../../filtering/tool-filter.js'

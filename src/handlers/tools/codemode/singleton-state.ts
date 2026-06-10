@@ -13,7 +13,7 @@ import { getAdminTools } from '../admin/index.js'
 import { getGitHubTools } from '../github.js'
 import { getBackupTools } from '../backup.js'
 import { getTeamTools } from '../team/index.js'
-import { getCopilotTools } from '../github/index.js'
+import { getCopilotTools } from '../github.js'
 
 // ============================================================================
 // Singleton State & Caching

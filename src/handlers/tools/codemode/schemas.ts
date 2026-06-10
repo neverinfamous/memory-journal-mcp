@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import { relaxedNumber } from './schemas.js'
+
+import { relaxedNumber } from '../core/schemas.js'
 
 // ============================================================================
 // Tool Classification Sets
