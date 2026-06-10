@@ -221,7 +221,6 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.core.getRecentEntries({ limit: 10 })',
         'mj.core.createEntryMinimal({ content: "Quick note" })',
         'mj.core.listTags()',
-        'mj.core.listProjects()',
     ],
     search: [
         'mj.search.searchEntries({ query: "performance" })',
@@ -230,7 +229,11 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.search.semanticSearch({ query: "authentication patterns" })',
         'mj.search.semanticSearch({ entry_id: 42 })',
     ],
-    analytics: ['mj.analytics.getStatistics()', 'mj.analytics.getCrossProjectInsights()'],
+    analytics: [
+        'mj.analytics.getStatistics()',
+        'mj.analytics.getCrossProjectInsights()',
+        'mj.analytics.getProjects()',
+    ],
     relationships: [
         'mj.relationships.linkEntries({ from_entry_id: 1, to_entry_id: 2, relationship_type: "implements" })',
         'mj.relationships.visualizeRelationships({ entry_id: 1 })',
