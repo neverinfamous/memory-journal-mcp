@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+
 - Code Mode execution enhancements:
   - Alias mappings for parameters/methods to handle agent hallucinations.
   - Added missing `POSITIONAL_PARAM_MAP` and `METHOD_ALIASES`.
@@ -34,11 +35,7 @@
 - Entry versioning and history tracking via `get_entry_history`.
 
 ### Changed
-- Documentation: Synchronized resource counts and undocumented configuration variables across `README.md`, `DOCKER_README.md`, `.env.example`, and `mcp-config-example.json`.
-- Documentation: Updated `README.md` and `copilot-instructions.md` to reflect the correct count of 57 resources.
-- Documentation: Ran full repository `/doc-audit`. Verified 83.81% coverage metrics and synchronized `DOCKER_README.md` and `README.md`.
-- Wiki Documentation: Added missing tools and updated team tool counts.
-- Wiki Documentation: Completed exhaustive documentation parity audit verifying 57 resources, 19 prompts, schema versioning, and eliminating duplicate tool listings.
+
 - Restored strict `project_number` requirement for team mutation handlers.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Enhanced `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa).
@@ -49,7 +46,7 @@
 - Normalized `exact_match` ↔ `fuzzy_match` bidirectionally in `secureDispatcher`.
 
 ### Fixed
-- Fixed `README.md` referencing `MCP_CORS_ORIGIN` instead of the correct `CORS_ORIGIN` environment variable.
+
 - FTS search phrase matching to preserve balanced double-quotes.
 - Batch operations failing atomically instead of returning structured partial errors.
 - Code Mode execution stability issues:
@@ -79,9 +76,12 @@
 - Missing resources and incorrect counts in `test-server/code-map.md`.
 - `parseProjectRegistry` not receiving injected `process.env.PROJECT_REGISTRY` from configuration loading.
 - Missing project name metadata extraction from GitHub URLs in the `getStatistics` analytics fallback.
+- Added `listEntries` to CodeMode `METHOD_ALIASES` to transparently handle agent hallucinations mapping to `searchEntries`.
 
 ### Security
+
 - Gap in `resources/subscribe` where unauthorized clients could bypass scope boundaries.
 
 ### Removed
+
 - Deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.

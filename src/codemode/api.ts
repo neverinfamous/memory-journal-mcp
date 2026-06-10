@@ -403,6 +403,7 @@ export class JournalApi {
         if (searchEntriesFn) {
             this.core['searchEntries'] = searchEntriesFn
             this.core['search'] = searchEntriesFn
+            this.core['listEntries'] = searchEntriesFn
             this.core['readQuery'] = async (...args: unknown[]) => {
                 const res = await searchEntriesFn(...args)
                 if (res !== null && typeof res === 'object' && 'entries' in res) {
@@ -639,6 +640,7 @@ export class JournalApi {
 
             // Extended top-level convenience aliases for common hallucinations
             find: this.search['searchEntries'],
+            listEntries: this.search['searchEntries'],
             recent: this.core['getRecentEntries'],
             listTags: this.core['listTags'],
             semanticSearch: this.search['semanticSearch'],

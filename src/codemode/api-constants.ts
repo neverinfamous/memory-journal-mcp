@@ -45,6 +45,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         getProjects: 'listProjects',
         history: 'getEntryHistory',
         revisions: 'getEntryHistory',
+        listEntries: 'searchEntries',
     },
     search: {
         find: 'searchEntries',
@@ -52,6 +53,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         query: 'searchEntries',
         lookup: 'searchEntries',
         findEntries: 'searchEntries',
+        listEntries: 'searchEntries',
         byDate: 'searchByDateRange',
         similar: 'semanticSearch',
         stats: 'getVectorStats',
