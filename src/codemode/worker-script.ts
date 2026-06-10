@@ -169,6 +169,18 @@ function buildApiProxy(
                     if (camelKey in target) return target[camelKey]
                 }
 
+                if (key === 'getConfig') {
+                    return () => Promise.reject(new Error(
+                        "Code Mode cannot directly read configuration via getConfig(). Use mj.core.listProjects() to discover active projects, or updateConfiguration() to change settings."
+                    ))
+                }
+
+                if (key === 'readResource') {
+                    return () => Promise.reject(new Error(
+                        "Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource(). Please use the appropriate mj.* tools (e.g., mj.core.getRecentEntries) to query data, or read the resource via standard MCP client requests outside of Code Mode."
+                    ))
+                }
+
                 if (key === 'then') return undefined
                 const available = methodNames.join(', ') || 'none'
                 const reason = readonlyMode

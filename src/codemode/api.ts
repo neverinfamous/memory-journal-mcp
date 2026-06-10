@@ -428,7 +428,15 @@ export class JournalApi {
         // Cross-group: db-mcp admin operations mapping to backup
         const restoreFn = this.backup['restoreBackup']
         if (backupFn) this.admin['backup'] = backupFn
-        if (restoreFn) this.admin['restore'] = restoreFn
+        if (restoreFn) this.admin['restoreBackup'] = restoreFn
+
+        // Smooth out getConfig hallucination via Constructor Wiring
+        const getConfigFn = (): Promise<{ PROJECT_REGISTRY: unknown[] | undefined }> => Promise.resolve({
+            PROJECT_REGISTRY: parseProjectRegistry(),
+        })
+        this.admin['getConfig'] = getConfigFn
+        this.core['getConfig'] = getConfigFn
+
 
         // db-mcp bleedover: database operations → closest journal equivalents
         const statsFn = this.analytics['getStatistics']
@@ -534,6 +542,7 @@ export class JournalApi {
             getProjects: this.core['listProjects'],
 
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
+            getConfig: this.core['getConfig'],
             addEntry: this.core['createEntry'],
             sqlite_journal_add_entry: this.core['createEntry'],
             entries: this.core,
