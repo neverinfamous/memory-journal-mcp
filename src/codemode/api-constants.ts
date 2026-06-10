@@ -42,7 +42,6 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         tags: 'listTags',
         appendInsight: 'createEntry',
         writeQuery: 'createEntry',
-        getProjects: 'listProjects',
         history: 'getEntryHistory',
         revisions: 'getEntryHistory',
         listEntries: 'searchEntries',
@@ -64,6 +63,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     analytics: {
         stats: 'getStatistics',
         insights: 'getCrossProjectInsights',
+        getProjects: 'getCrossProjectInsights',
+        listProjects: 'getCrossProjectInsights',
+        projects: 'getCrossProjectInsights',
     },
     relationships: {
         link: 'linkEntries',
