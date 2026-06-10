@@ -175,6 +175,7 @@ export interface ProjectRegistryEntry {
  */
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import type { SubscriptionManager } from '../server/subscription-manager.js'
+import type { BriefingConfig } from '../handlers/resources/shared.js'
 
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
@@ -219,6 +220,10 @@ export interface ToolHandlerConfig {
      * Optional subscription manager for triggering real-time MCP notifications.
      */
     subscriptionManager?: SubscriptionManager
+    /**
+     * Optional briefing configuration for Code Mode dynamic resolution.
+     */
+    briefingConfig?: BriefingConfig
 }
 
 /**

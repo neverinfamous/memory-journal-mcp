@@ -165,6 +165,7 @@ export function createServerInstance(
                     // Ensure the dispatch gets the latest filter config!
                     const currentConfig = configManager.getConfig()
                     customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
+                    customToolHandlerConfig.briefingConfig = currentConfig.briefingConfig
 
                     const result = await callTool(
                         tool.name,

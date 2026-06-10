@@ -63,7 +63,7 @@ export const dynamicBriefingResource: InternalResourceDef = {
     },
 }
 
-async function buildBriefingData(
+export async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string
 ): Promise<ResourceResult> {

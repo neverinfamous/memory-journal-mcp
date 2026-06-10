@@ -622,6 +622,7 @@ export class JournalApi {
             searchProjects: this.core['listProjects'],
             getProjects: this.core['listProjects'],
             getProject: this.core['getProject'],
+            getBriefing: this.core['getBriefing'],
 
             // Common hallucinated aliases mapped to correct endpoints to smooth out agent executions
             getConfig: this.core['getConfig'],

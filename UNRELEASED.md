@@ -14,6 +14,7 @@
   - URI-aware `readResource` error handler suggesting `mj.*` alternatives.
   - `hasMore` boolean in results for pagination.
   - `mj-mcp-optimize` debugging skill.
+  - `get_briefing` tool to surface the `memory://briefing` resource directly inside Code Mode.
 - Auto-prune lifecycle management flags (`--archive-older-than-days`, `--prune-dry-run`, etc.).
 - Database schema migration framework with composite/partial performance indexes.
 - External import tools (`import_external`, `team_import_external`) for Notion/Obsidian/Logseq.
@@ -53,6 +54,7 @@
 - Standardized Error Handling: replaced raw generic `Error` throws with structured `ConfigurationError` and `MemoryJournalMcpError` inside `config-resolver.ts` and `maintenance-lock.ts`.
 
 ### Fixed
+- Intercepted `getBriefing` and `readResource` calls inside the Code Mode Sandbox (`worker-script.ts`) to return explicit, actionable error messages rather than confusing "Operation not found" errors, steering agents to use their native Resource APIs instead.
 
 - Fixed `project_number` validation failures in `mj_execute_code` by widening the outer Zod schema from `z.number()` to `relaxedNumber()`.
 - Added `owner/repo` string-splitting fallback to `secureDispatcher` to ensure project IDs like `neverinfamous/memory-journal-mcp` resolve correctly.

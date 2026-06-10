@@ -209,12 +209,6 @@ function buildApiProxy(
                     }
                 }
 
-                if (key === 'getBriefing') {
-                    return () => Promise.reject(new Error(
-                        "Code Mode cannot directly read the briefing via getBriefing(). The briefing is an MCP Resource, not a tool. Read the resource (memory://briefing/{repo_name}) using your native read_resource tool outside of Code Mode."
-                    ))
-                }
-
                 if (key === 'then') return undefined
                 const available = methodNames.join(', ') || 'none'
                 const reason = readonlyMode
@@ -336,15 +330,6 @@ async function executeCode(
                         Promise.reject(
                             new Error(
                                 'Code Mode cannot directly read MCP resources using mj.readResource(). Please use the appropriate mj.* tools (e.g., mj.team.teamListFlags) to query data, or read the resource via standard MCP resource requests outside of Code Mode.'
-                            )
-                        )
-                }
-                // Handle mj.getBriefing hallucination
-                if (prop === 'getBriefing') {
-                    return () =>
-                        Promise.reject(
-                            new Error(
-                                'Code Mode cannot directly read the briefing using mj.getBriefing(). The briefing is an MCP Resource, not a tool. Read the resource (memory://briefing/{repo_name}) using your native read_resource tool outside of Code Mode.'
                             )
                         )
                 }

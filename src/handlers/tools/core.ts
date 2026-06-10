@@ -520,6 +520,53 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
         },
         {
+            name: 'get_briefing',
+            title: 'Get Briefing',
+            description: 'Get the exact markdown string for the session briefing. Same as reading memory://briefing resource.',
+            group: 'core',
+            inputSchema: z.object({
+                 repo_name: z.string().optional().describe('Optional repository name')
+            }),
+            outputSchema: z.object({
+                 success: z.boolean().optional(),
+                 markdown: z.string().optional(),
+                 error: z.string().optional()
+            }).extend(ErrorFieldsMixin.shape),
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    const input = z.object({ repo_name: z.string().optional() }).parse(params)
+                    
+                    const resourceContext = {
+                        db: context.db,
+                        teamDb: context.teamDb,
+                        vectorManager: context.vectorManager,
+                        filterConfig: context.config?.filterConfig,
+                        github: context.github ?? null,
+                        scheduler: null,
+                        briefingConfig: context.config?.briefingConfig,
+                        runtime: context.config?.runtime
+                    }
+
+                    const { buildBriefingData } = await import('../resources/core/briefing/index.js')
+                    const result = await buildBriefingData(resourceContext, input.repo_name)
+                    
+                    if ('error' in (result.data as Record<string, unknown>)) {
+                        return { success: false, error: String((result.data as Record<string, unknown>)['error']) }
+                    }
+
+                    return { success: true, markdown: String(result.data) }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            }
+        },
+        {
             name: 'list_tags',
             title: 'List Tags',
             description:
