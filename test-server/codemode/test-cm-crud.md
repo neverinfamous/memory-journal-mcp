@@ -160,6 +160,7 @@ return {
 | ------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Nonexistent ID     | `return await mj.admin.updateEntry({ entry_id: 999999, content: "fail" });`  | `{ success: false, error: "Entry 999999 not found" }` |
 | Invalid entry_type | `return await mj.admin.updateEntry({ entry_id: 1, entry_type: "invalid" });` | `{ success: false, error: "..." }`                    |
+| Expect Version Error | `return await mj.admin.updateEntry({ entry_id: 1, expected_version: 0 });` | `true` (throws VALIDATION_ERROR) |
 
 ### 20.7 Delete Entry
 
@@ -355,6 +356,114 @@ return {
 | `versionIncremented` | `true`   |
 | `conflictCaught`     | `true`   |
 
+### 20.16 Sandbox Wrapper Pattern & Auto-Injection
+
+```javascript
+// Test code:
+// NOTE: To test this properly, you must provide `project_number: 5` as a parameter
+// to the OUTER `mj_execute_code` schema, NOT inside this javascript payload.
+
+const injected = await mj.core.createEntry({
+  // Deliberately omitting project_number here to test auto-injection from the wrapper
+  content: 'Sandbox wrapper injection test'
+})
+
+// Cleanup
+await mj.core.deleteEntry({ entry_id: injected.id, permanent: true })
+
+return {
+  injectedSuccess: injected.success,
+  injectedProjectNumber: injected.projectNumber === 5
+}
+```
+
+| Check                   | Expected |
+| ----------------------- | -------- |
+| `injectedSuccess`       | `true`   |
+| `injectedProjectNumber` | `true`   |
+
+### 20.17 Pagination Convenience (hasMore)
+
+```javascript
+// Test code:
+// Create some entries
+const b = await mj.admin.batchCreateEntries({
+  entries: [
+    { project_number: 5, content: 'Pagination 1' },
+    { project_number: 5, content: 'Pagination 2' }
+  ]
+})
+
+// Page 1 (limit 1)
+const page1 = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
+// Page 2 (limit 10)
+const page2 = await mj.core.getRecentEntries({ project_number: 5, cursor: page1.next_cursor, limit: 10 })
+
+// Cleanup
+await mj.admin.batchDeleteEntries({ entry_ids: b.entryIds })
+
+return {
+  page1HasMore: page1.hasMore,
+  page2HasMore: page2.hasMore
+}
+```
+
+| Check          | Expected |
+| -------------- | -------- |
+| `page1HasMore` | `true` (because next_cursor exists) |
+| `page2HasMore` | `false` (end of list) |
+
+### 20.18 Auto Version Opt-In
+
+```javascript
+// Test code:
+// NOTE: To test this properly, you must provide `auto_version: true` as a parameter
+// to the OUTER `mj_execute_code` schema.
+
+const entry = await mj.core.createEntry({ project_number: 5, content: 'Auto version test' })
+
+// Update WITHOUT providing expected_version - should succeed because of outer `auto_version: true`
+const updated = await mj.core.updateEntry({
+  entry_id: entry.id,
+  content: 'Auto version updated'
+})
+
+// Cleanup
+await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
+
+return {
+  updatedSuccess: updated.success
+}
+```
+
+| Check            | Expected |
+| ---------------- | -------- |
+| `updatedSuccess` | `true`   |
+
+### 20.19 String project_number Auto-Resolve
+
+```javascript
+// Test code:
+// Provide project_number as a string instead of a number
+const entry = await mj.core.createEntry({
+  project_number: '5',
+  content: 'String resolve test'
+})
+
+// Cleanup
+await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
+
+return {
+  stringResolveSuccess: entry.success,
+  resolvedProjectNumber: entry.projectNumber === 5
+}
+```
+
+| Check                   | Expected |
+| ----------------------- | -------- |
+| `stringResolveSuccess`  | `true`   |
+| `resolvedProjectNumber` | `true`   |
+
 ---
 
 ## Cleanup
@@ -371,7 +480,7 @@ After testing, remove test entries created during Phase 20:
 | Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
 | Delete history test entry| `delete_entry(entry_id: <history_test_id>, permanent: true)`|
 | Delete recovery test entry| `delete_entry(entry_id: <recovery_test_id>, permanent: true)`|
-| Delete locking test entry| `delete_entry(entry_id: <locking_test_id>, permanent: true)`|
+| Delete locking test entry| `mj.core.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
 
 ---
 
@@ -399,3 +508,7 @@ After testing, remove test entries created during Phase 20:
 - `test_simple` callable via Code Mode
 - `restore_entry` and `list_deleted_entries` are functional and callable via Code Mode scripts
 - Keyset cursor pagination and `is_archived` status filters execute successfully via Code Mode scripts
+- `mj_execute_code` outer `project_number` parameter automatically injects into mutation tools inside the sandbox (Sandbox Wrapper Pattern)
+- `get_recent_entries` pagination exposes a correct `hasMore` convenience boolean
+- `mj_execute_code` outer `auto_version: true` parameter automatically prefetches and injects `expected_version` for updates
+- String-based `project_number` parameters (`"5"`) auto-resolve to numeric safely without throwing VALIDATION_ERROR

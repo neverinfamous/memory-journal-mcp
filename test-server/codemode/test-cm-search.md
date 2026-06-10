@@ -485,6 +485,11 @@ return {
 
 - `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
 - `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
+- FTS correctly parses standard keyword/phrase syntax (OR, NOT, "phrases")
+- FTS detects unsafe queries (like `test's`) and seamlessly drops to `LIKE` fallback without crashing
+- Hybrid search utilizes RRF mode automatically when heuristics warrant it
+- `exact_match: true` successfully maps to `fuzzy_match: false` resulting in exact matching
+- `exact_match: false` successfully maps to `fuzzy_match: true` resulting in Levenshtein matching
 - FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
 - FTS5 LIKE fallback works for special characters (`test's`, `100%`)
 - `search_entries` gracefully falls back to fuzzy Levenshtein matching via Code Mode when `fuzzy_match` is true and FTS yields zero results

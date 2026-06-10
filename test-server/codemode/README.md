@@ -45,9 +45,11 @@ This directory contains agent-optimized test prompts specifically designed to va
 | `test-cm-team-crud.md`          |  28.1–28.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
 | `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, batch operations, recovery, archiving, pagination, analytics, relationships, IO logic, backup | After Team CRUD    |
 | `test-cm-team-vector-errors.md` | 28.10–28.11 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
-| `test-cm-team-flags.md`         | 28.12–28.15 | Hush Protocol flags: create, vocabulary, resolve lifecycle, cleanup   | After Team Admin   |
+| `test-cm-team-flags-core.md`    |    28.12    | Flag creation, vocabulary, error paths, and resolution lifecycle      | After Team Admin   |
+| `test-cm-team-flags-advanced.md`|    28.13    | Flag search, metadata mutation, reopen, analytics, resources, and cleanup | After Team Flags Core |
 | `test-cm-team-rbac.md`          | 28.16       | Team member management tools and RBAC enforcement                     | After Team Admin   |
 | `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches across all `mj.*` groups | After Phases 16–19 |
+| `test-cm-hallucination-smoothing.md` |  31     | Hallucination smoothing, cross-group wiring, sandbox aliases, and `context` param | After Phases 16–19 |
 
 ### Cross-Cutting Optimization Tests
 
@@ -75,10 +77,12 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
          ├── Phase 27 (Admin/Backup) ──────── independent
          ├── Phase 29 (Error Matrix) ─────── independent
          ├── Phase 30 (Payload Optimization)─ independent
+         ├── Phase 31 (Hallucination Smoothing)─ independent
          └── Phase 28.1-3 (Team CRUD) ─────── sequential
               └── Phase 28.4-9 (Team Admin)
                    ├── Phase 28.10-11 (Team Vector/Errors + cleanup)
-                   ├── Phase 28.12-15 (Team Flags)
+                   ├── Phase 28.12 (Team Flags Core)
+                   │    └── Phase 28.13-15 (Team Flags Advanced)
                    └── Phase 28.16 (Team RBAC)
 ```
 

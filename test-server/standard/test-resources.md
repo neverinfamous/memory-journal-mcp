@@ -109,6 +109,8 @@
 - `memory://flags/history` returns resolved flags with resolution details or empty array when none recent
 - `memory://briefing` includes local time for chronological grounding
 - `memory://briefing/<repo>` returns repo-scoped briefing
+- `memory://help/[group]` resources exist for all 10 API groups (`core`, `search`, `analytics`, `relationships`, `io`, `export`, `admin`, `github`, `backup`, `team`).
+- `memory://github/rate-limit` returns valid rate limit telemetry.
 - `memory://metrics/summary` returns session-level metrics
 - `memory://metrics/latency` returns per-tool latency percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields (or a graceful empty message if no tool calls have been made)
 - `memory://metrics/resources` returns read access counts and error counts for all accessed URIs, or a graceful empty message if no reads have occurred

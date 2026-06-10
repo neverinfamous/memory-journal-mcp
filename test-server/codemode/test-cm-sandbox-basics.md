@@ -34,6 +34,7 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 | Null return     | `return null;`                     | `{ success: true, result: null }`                           |
 | No return value | `const x = 1;`                     | `{ success: true, result: undefined }` (implicit undefined) |
 | Boolean return  | `return true;`                     | `{ success: true, result: true }`                           |
+| Optional `code` | Call `mj_execute_code({})` without a `code` parameter | Valid response object, not a raw crash |
 
 ### 16.2 Async & Built-ins
 
@@ -96,6 +97,7 @@ After the preceding test phases have executed several tool calls, verify that th
 - Async/await resolves correctly inside sandbox
 - Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
 - `fetch` is explicitly `undefined` (Code Mode cannot scrape `/metrics` directly)
+- `mj_execute_code` gracefully handles omitting the `code` parameter without a raw error
 - `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
 - Custom `timeout` parameter accepted and enforced
 - Infinite loop terminated with structured error (not hang or crash)
