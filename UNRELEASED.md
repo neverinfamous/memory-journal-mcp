@@ -80,5 +80,6 @@
 - Fixed strict schema validation error in `list_deleted_entries` handler by allowing `limit` and `offset` to be properly optional with defaults.
 - Fixed missing `project_number` validation in core `batch_create_entries` to explicitly enforce strict project boundaries.
 - Fixed test timeout in `briefing-system-section.test.ts` during coverage runs by mocking the handler index to prevent dynamic import deadlocks.
+- Fixed missing Code Mode API implementations for `getConfig` and `readResource` by adding explicit Sandbox Bindings and proxy interceptions to prevent unhelpful generic "not found in group" errors.
 ### Removed
 - Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
