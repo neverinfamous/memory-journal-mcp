@@ -5,7 +5,7 @@
  * handlers (create_entry, create_entry_minimal, restore_entry, etc.).
  */
 
-import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import { logger } from './logger.js'
 
 /**

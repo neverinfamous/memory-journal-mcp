@@ -1,202 +1,28 @@
-/**
- * IO Tool Group
- *
- * Tools: export_entries, export_markdown, import_markdown
- */
+import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { AggregateMcpError } from '../../../types/errors.js'
+import { sendProgress } from '../../../utils/progress-utils.js'
+import { logger } from '../../../utils/logger.js'
 
-import { z } from 'zod'
-import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
-import { AggregateMcpError } from '../../types/errors.js'
-import { sendProgress } from '../../utils/progress-utils.js'
-import { logger } from '../../utils/logger.js'
+import { exportEntriesToMarkdown } from '../../../markdown/index.js'
+import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
+import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
+import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 
-import { exportEntriesToMarkdown } from '../../markdown/index.js'
-import { importMarkdownEntries, processImportBatch, convertFile } from '../../markdown/index.js'
-import type { ExportableEntry, ParsedFile } from '../../markdown/index.js'
-import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import {
-    ENTRY_TYPES,
-    SOURCE_FORMATS,
-    DATE_FORMAT_REGEX,
-    DATE_FORMAT_MESSAGE,
-    DATE_MIN_SENTINEL,
-    DATE_MAX_SENTINEL,
-    EntryOutputSchema,
-    relaxedNumber,
+    ExportEntriesSchema,
+    ExportEntriesSchemaMcp,
+    ExportEntriesOutputSchema,
+    ExportMarkdownSchema,
+    ExportMarkdownSchemaMcp,
+    ExportMarkdownOutputSchema,
+    ImportMarkdownSchema,
+    ImportMarkdownSchemaMcp,
+    ImportMarkdownOutputSchema,
+    ImportExternalSchema,
+    ImportExternalSchemaMcp,
+    ImportExternalOutputSchema,
 } from './schemas.js'
-
-// ============================================================================
-// Input Schemas
-// ============================================================================
-
-/** Strict schema — used inside handler for structured Zod errors */
-const ExportEntriesSchema = z.object({
-    format: z.enum(['json', 'markdown']).optional().default('json'),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
-    tags: z.array(z.string()).optional(),
-    limit: z
-        .number()
-        .max(5000)
-        .optional()
-        .default(100)
-        .describe('Maximum entries to export (default: 100)'),
-})
-
-/** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
-const ExportEntriesSchemaMcp = z.object({
-    format: z.string().optional().default('json'),
-    start_date: z.string().optional(),
-    end_date: z.string().optional(),
-    entry_types: z.array(z.string()).optional(),
-    tags: z.array(z.string()).optional(),
-    limit: relaxedNumber()
-        .optional()
-        .default(100)
-        .describe('Maximum entries to export (default: 100)'),
-})
-
-// ============================================================================
-// Output Schemas
-// ============================================================================
-
-const ExportEntriesOutputSchema = z
-    .object({
-        format: z.enum(['json', 'markdown']).optional(),
-        entries: z.array(EntryOutputSchema).optional(),
-        count: z.number().optional(),
-        content: z.string().optional(),
-        truncated: z
-            .boolean()
-            .optional()
-            .describe('True if the results were truncated to fit within payload limits'),
-        success: z.boolean().optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-// ============================================================================
-// Export Markdown Schemas
-// ============================================================================
-
-/** Strict schema — handler validation */
-const ExportMarkdownSchema = z.object({
-    output_dir: z.string().min(1),
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
-    entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
-    tags: z.array(z.string()).optional(),
-    limit: z.number().max(500).optional().default(100),
-})
-
-/** Relaxed schema — MCP registration */
-const ExportMarkdownSchemaMcp = z.object({
-    output_dir: z.string().describe('Target directory for .md files'),
-    start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
-    end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
-    entry_types: z.array(z.string()).optional().describe('Filter by entry types'),
-    tags: z.array(z.string()).optional().describe('Filter by tags'),
-    limit: relaxedNumber()
-        .optional()
-        .default(100)
-        .describe('Max entries to export (default: 100, max: 500)'),
-})
-
-const ExportMarkdownOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        exported_count: z.number().optional(),
-        output_dir: z.string().optional(),
-        files: z.array(z.string()).optional(),
-        skipped: z.number().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-// ============================================================================
-// Import Markdown Schemas
-// ============================================================================
-
-/** Strict schema — handler validation */
-const ImportMarkdownSchema = z.object({
-    source_dir: z.string().min(1),
-    dry_run: z.boolean().optional().default(false),
-    limit: z.number().max(500).optional().default(100),
-})
-
-/** Relaxed schema — MCP registration */
-const ImportMarkdownSchemaMcp = z.object({
-    source_dir: z.string().describe('Directory containing .md files to import'),
-    dry_run: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Parse and validate without writing to database'),
-    limit: relaxedNumber()
-        .optional()
-        .default(100)
-        .describe('Max files to process (default: 100, max: 500)'),
-})
-
-const ImportMarkdownOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        created: z.number().optional(),
-        updated: z.number().optional(),
-        skipped: z.number().optional(),
-        relationshipsLinked: z.number().optional(),
-        vectorsIndexed: z.number().optional(),
-        errors: z
-            .array(
-                z.object({
-                    file: z.string(),
-                    error: z.string(),
-                })
-            )
-            .optional(),
-        dry_run: z.boolean().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-// ============================================================================
-// Import External Schemas
-// ============================================================================
-
-/** Strict schema — handler validation */
-const ImportExternalSchema = z.object({
-    source_dir: z.string().min(1),
-    source_format: z.enum(SOURCE_FORMATS),
-    dry_run: z.boolean().optional().default(false),
-    limit: z.number().max(500).optional().default(100),
-    default_entry_type: z.enum(ENTRY_TYPES).optional(),
-})
-
-/** Relaxed schema — MCP registration */
-const ImportExternalSchemaMcp = z.object({
-    source_dir: z.string().describe('Directory containing files to import'),
-    source_format: z.enum(SOURCE_FORMATS).describe('Source format (notion, obsidian, logseq)'),
-    dry_run: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Parse and validate without writing to database'),
-    limit: relaxedNumber()
-        .optional()
-        .default(100)
-        .describe('Max files to process (default: 100, max: 500)'),
-    default_entry_type: z
-        .string()
-        .optional()
-        .describe('Fallback entry type if heuristics cannot determine one'),
-})
-
-// Output is identical to ImportMarkdownOutputSchema
-const ImportExternalOutputSchema = ImportMarkdownOutputSchema
-
-// ============================================================================
-// Tool Definitions
-// ============================================================================
 
 export function getIoTools(context: ToolContext): ToolDefinition[] {
     const { db, progress } = context
@@ -486,7 +312,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const fs = await import('node:fs/promises')
                     const path = await import('node:path')
                     const { constants } = await import('node:fs')
-                    const { assertSafeDirectoryPath, assertSafeFilePath } = await import('../../utils/security-utils.js')
+                    const { assertSafeDirectoryPath, assertSafeFilePath } = await import('../../../utils/security-utils.js')
 
                     assertSafeDirectoryPath(input.source_dir, allowedRoots)
 
@@ -556,7 +382,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         const successCount = result.created + result.updated + result.skipped
                         const total = successCount + result.errors.length
                         const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
-                        const { AggregateMcpError } = await import('../../types/errors.js')
+                        const { AggregateMcpError } = await import('../../../types/errors.js')
                         throw new AggregateMcpError(
                             message,
                             result.errors.map(e => ({ message: e.error, file: e.file })),

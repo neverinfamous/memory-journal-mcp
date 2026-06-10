@@ -45,6 +45,12 @@
 - Modularized Tier 2 file `src/handlers/tools/team/admin-tools.ts` (652 lines) into an `admin-tools/` directory with sub-modules (`crud.ts`, `batch.ts`) and a barrel `index.ts`.
 - Modularized Tier 2 file `src/codemode/api.ts` (728 lines) into an `api/` directory with sub-modules (`types.ts`, `param-normalizer.ts`, `group-factory.ts`, `journal-api.ts`) and a barrel `index.ts`.
 - Modularized Tier 2 file `src/codemode/worker-script.ts` (661 lines) by extracting `worker-result-proxy.ts` and `worker-api-proxy.ts` as sibling modules (entry point preserved for tsup bundling).
+- Modularized Tier 3 file `src/handlers/tools/team/flag-extension-tools.ts` (633 lines) into a `flag-extension-tools/` directory with sub-modules (`helpers.ts`, `list-flags.ts`, `update-flag.ts`, `analytics.ts`) and a barrel `index.ts`.
+- Modularized Tier 3 file `src/cli.ts` (532 lines) into a `cli/` directory with sub-modules (`program-options.ts`, `server-options-builder.ts`) and a barrel `index.ts`, updating `tsup.config.ts` and `package.json` to point to the new entry.
+- Modularized Tier 3 file `src/vector/vector-search-manager.ts` (574 lines) into a `vector-search-manager/` directory with sub-modules (`types.ts`, `rebuild.ts`, `manager.ts`) and a barrel `index.ts`.
+- Modularized Tier 3 file `src/handlers/tools/codemode.ts` (616 lines) into a `codemode/` directory with sub-modules (`schemas.ts`, `singleton-state.ts`, `handler.ts`) and a barrel `index.ts`.
+- Modularized Tier 3 file `src/handlers/tools/core.ts` (591 lines) into a `core/` directory with sub-modules (`schemas.ts`, `tools.ts`) and a barrel `index.ts`.
+- Modularized Tier 3 file `src/handlers/tools/io.ts` (576 lines) into an `io/` directory with sub-modules (`schemas.ts`, `tools.ts`) and a barrel `index.ts`.
 - Restored strict `project_number` requirement for team mutation handlers.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Enhanced `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa).

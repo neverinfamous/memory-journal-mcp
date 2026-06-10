@@ -41,7 +41,7 @@ vi.mock('../../src/utils/security-utils.js', () => ({
     assertAllowedPathBoundaries: vi.fn(),
 }))
 
-import { getIoTools } from '../../src/handlers/tools/io.js'
+import { getIoTools } from '../../src/handlers/tools/io/index.js'
 
 // ============================================================================
 // Helpers

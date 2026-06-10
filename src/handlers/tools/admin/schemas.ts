@@ -8,7 +8,7 @@ import {
     BatchResultOutputSchema,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { CreateEntrySchema, CreateEntrySchemaMcp } from '../core.js'
+import { CreateEntrySchema, CreateEntrySchemaMcp } from '../core/index.js'
 
 // Input Schemas
 // ============================================================================

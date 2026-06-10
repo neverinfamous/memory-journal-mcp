@@ -37,7 +37,7 @@ import { getTeamIoTools } from './io-tools.js'
 import { getTeamBackupTools } from './backup-tools.js'
 import { getTeamVectorTools } from './vector-tools.js'
 import { getTeamFlagTools } from './flag-tools.js'
-import { getTeamFlagExtensionTools } from './flag-extension-tools.js'
+import { getTeamFlagExtensionTools } from './flag-extension-tools/index.js'
 import { getTeamMemberTools } from './member-tools.js'
 import { getTeamAliasTools } from './alias-tools.js'
 

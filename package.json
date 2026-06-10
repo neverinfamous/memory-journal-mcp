@@ -6,7 +6,7 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "bin": {
-        "memory-journal-mcp": "dist/cli.js"
+        "memory-journal-mcp": "./dist/cli/index.js"
     },
     "files": [
         "dist/",
