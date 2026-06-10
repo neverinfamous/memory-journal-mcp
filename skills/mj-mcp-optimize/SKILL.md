@@ -65,9 +65,13 @@ However, if an agent writes `const { entry_id } = await mj.core.createEntry()`, 
 
 To prevent silent failures, `wrapResult` converts failed results into a Proxy. If the agent attempts to access a missing property on a failed result, it throws immediately, forcing the LLM to see the `VALIDATION_ERROR`.
 
-## 6. Resource URIs
+## 6. Resource URIs vs Tools (`getBriefing` Failures)
 
-Code Mode inherently operates over `memory-journal-mcp`'s tool layer. Operations that deal with raw resources (like `memory://briefing`) are handled via the host server's standard Resource hooks, exposed to the agent via tools like `mj.io.readResource`. 
+Code Mode inherently operates over `memory-journal-mcp`'s **tool layer**. Operations that deal with raw resources (like `memory://briefing/{repo_name}` or `memory://metrics/summary`) are NOT tools and CANNOT be called from within Code Mode. 
+
+Attempting to call `await mj.core.getBriefing()` inside `mj_execute_code` will result in an `Operation 'getBriefing' is not found in group` error.
+
+**Solution:** ALWAYS use your native `read_resource` tool (outside of Code Mode) to fetch resources. Do NOT attempt to read resources or briefings using the `mj.*` API. 
 
 ## 7. Array Method Interception
 
