@@ -102,3 +102,13 @@ Because the MCP tool call payload is JSON, the inner `\`` gets interpreted liter
   }
 }
 ```
+
+## 9. Catching Method Hallucinations (Aliases)
+
+Agents commonly extrapolate method names based on patterns (e.g., trying to call `mj.listEntries()` instead of `mj.searchEntries()` because they are used to `mj.listProjects()`). 
+
+To transparently intercept these hallucinations without breaking the workflow:
+1. **Group-Level Aliasing**: Add the hallucinated method name to the corresponding group inside `METHOD_ALIASES` in `src/codemode/api-constants.ts` (e.g., `listEntries: 'searchEntries'`). This intercepts calls like `mj.search.listEntries()`.
+2. **Top-Level Aliasing**: If the hallucination might be called at the root `mj.` level (e.g., `mj.listEntries()`), you must **also** manually expose the backend handler in `createSandboxBindings` within `src/codemode/api.ts` (e.g., `listEntries: this.search['searchEntries']`).
+
+The `worker-script.ts` API proxy will then seamlessly map the invalid calls to the correct native handlers behind the scenes.
