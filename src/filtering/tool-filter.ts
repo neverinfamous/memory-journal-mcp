@@ -23,6 +23,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'get_entry_history',
         'create_entry_minimal',
         'test_simple',
+        'get_briefing',
         'list_tags',
     ],
     search: [
