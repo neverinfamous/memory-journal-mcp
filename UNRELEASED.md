@@ -36,6 +36,7 @@
 
 ### Changed
 
+- Refactored `src/database/sqlite-adapter/index.ts` (Tier 1 Monolith) into logical sub-modules with a barrel export.
 - Restored strict `project_number` requirement for team mutation handlers.
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Enhanced `secureDispatcher` to automatically resolve `repo` from `project_number` (and vice-versa).
