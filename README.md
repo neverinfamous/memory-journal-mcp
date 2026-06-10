@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**99 MCP Tools** · **19 Workflow Prompts** · **55 Resources (49 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**99 MCP Tools** · **19 Workflow Prompts** · **56 Resources (50 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -211,9 +211,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **49 Resources** (32 Static + 17 Template)
+### 📡 **50 Resources** (33 Static + 17 Template)
 
-**32 Static Resources** (appear in resource lists):
+**33 Static Resources** (appear in resource lists):
 
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
@@ -231,6 +231,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://github/status` - GitHub repository status overview
 - `memory://github/insights` - Repository stars, forks, and 14-day traffic summary
 - `memory://github/milestones` - Open milestones with completion percentages
+- `memory://github/rate-limit` - Current GitHub API rate limit status
 - `memory://team/recent` - Recent team entries with author attribution
 - `memory://team/statistics` - Team entry counts, types, and author breakdown
 - `memory://help` - Tool group index with descriptions and tool counts
