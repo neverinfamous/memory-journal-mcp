@@ -212,6 +212,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 const parsed = Number(paramsObj['project_number'])
                                 if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
                                     paramsObj['project_number'] = parsed
+                                } else {
+                                    return {
+                                        success: false,
+                                        error: `Invalid project_number: '${paramsObj['project_number']}'. Code Mode failed to resolve this to a known numeric ID. You can pass the exact numeric ID (e.g. 14), the repo name (e.g. 'mysql-mcp'), or simply OMIT the project_number field entirely to let the system auto-inject the current workspace's ID.`
+                                    }
                                 }
                             }
 
