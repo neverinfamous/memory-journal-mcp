@@ -42,11 +42,12 @@ When `mj_execute_code` is invoked:
 
 The `secureDispatcher` acts as the gatekeeper between the Sandbox and the Host tools. This is where we catch hallucinated parameters before they hit Zod schemas.
 
-For example, LLMs frequently hallucinate string-based project IDs (e.g. `{ project_number: 'db-mcp' }`). `secureDispatcher` resolves these for **all dispatched tools** (not just team operations) using a three-step pipeline:
+For example, LLMs frequently hallucinate string-based project IDs (e.g. `{ project_number: 'db-mcp' }`). `secureDispatcher` resolves these for **all dispatched tools** (not just team operations) using a four-step pipeline:
 
 1. **Registry Lookup**: String repo names (e.g., `"mysql-mcp"`) are matched against `config.projectRegistry` entries and replaced with their numeric `project_number`.
 2. **Owner/Repo Splitting**: Strings like `"neverinfamous/mysql-mcp"` are split and the repo part is looked up in the registry.
 3. **Numeric Coercion**: Remaining numeric strings (e.g., `"14"`) are coerced to `Number` as a final fallback.
+4. **Unresolved String Interceptor**: If the string *still* hasn't resolved (e.g., `"P154"`), `secureDispatcher` intercepts it before Zod validation and throws a highly actionable error explicitly guiding the agent to omit the field for auto-injection.
 
 ```typescript
 // Step 1: Registry lookup
@@ -54,10 +55,11 @@ const entry = sessionContext.config.projectRegistry[strVal]
 if (entry?.project_number !== undefined) {
     paramsObj['project_number'] = entry.project_number
 }
-// Step 3: Numeric coercion fallback
+// Step 3 & 4: Numeric coercion and Interceptor fallback
 if (typeof paramsObj['project_number'] === 'string') {
     const parsed = Number(paramsObj['project_number'])
     if (!Number.isNaN(parsed)) paramsObj['project_number'] = parsed
+    else throw CustomError("Invalid project_number: ... you can simply OMIT the field")
 }
 ```
 

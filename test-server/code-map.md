@@ -2,7 +2,7 @@
 
 > **Agent-optimized navigation reference.** Read this before searching the codebase. Covers directory layout, handler→tool mapping, resources, prompts, error hierarchy, and key constants.
 >
-> Last updated: April 6, 2026
+> Last updated: June 11, 2026
 
 ---
 
