@@ -23,6 +23,11 @@
 - Content templates instruction file (`memory://help/templates`) with per-entry-type markdown scaffolding for session summaries, feature implementations, bug fixes, planning, and technical notes.
 
 ### Changed
+- **Dependency Updates**:
+  - Bump `actions/checkout` from `6.0.2` to `6.0.3` in CI workflows.
+  - Bump `trufflesecurity/trufflehog` from `3.95.3` to `3.95.5` in secrets-scanning workflow.
+  - Bump `@types/node` from `25.9.1` to `25.9.2`.
+  - Bump `typescript-eslint` from `8.60.1` to `8.61.0`.
 - **Performance**: Resolved Critical N+1 SQLite Transaction bottleneck in Batch CRU operations (`src/database/sqlite-adapter/entries/crud.ts`). Refactored batch operations to wrap inner singular operations within a single top-level `db.transaction`, leveraging `better-sqlite3` nested savepoints to completely eliminate sequential `fsync` I/O stalls and drastically improve throughput.
 - Modularized Tier 1-3 monolithic files (`src/server/mcp-server.ts`, `src/database/sqlite-adapter/index.ts`, `src/handlers/tools/admin.ts`, `src/handlers/tools/search/index.ts`, `src/codemode/api.ts`, `src/codemode/worker-script.ts`) into logical sub-directories with a barrel export pattern to improve codebase maintainability.
 - Code Mode execution enhancements: implemented dynamic read-only constraint enforcement for mutation protection, and automatically injected `project_number` and `expected_version` requirements.
