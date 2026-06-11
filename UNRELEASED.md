@@ -49,6 +49,7 @@
 - Fixed `owner/repo` splitting heuristic in `secureDispatcher` to perform a registry lookup on the extracted repo name instead of passing the raw string through.
 - Fixed outer `projectId` in `mj_execute_code` handler to resolve string project names (e.g., `"mysql-mcp"` → `14`) before auto-injection into tool calls, so response `project_id` and all auto-injected values are numeric.
 - Fixed `dry_run` and simulation early returns in `secureDispatcher` to execute **after** param normalization (camelCase→snake_case, project_number resolution, numeric coercion), so simulated responses show correctly resolved parameters instead of raw hallucinated strings.
+- Fixed `project_number` hallucination loop by appending the numeric ID directly to the repository name in the Briefing's `Workspaces` table row (e.g., `mysql-mcp (#14): ...`). This prevents IDs from being hidden when the `Config` row truncates at 3 repos.
 - Fixed Code Quality Audit findings: Removed stale `as any` comment in kanban tools, fixed raw `console.error` usage in Code Mode sandbox by replacing it with centralized logger, and hardened empty `z.object({})` schemas in core tools with `.strict()` modifier.
 - Fixed `get_entry_history` schema expectations in E2E tests and handler output payloads.
 - Fixed `project_number` validation failures in `mj_execute_code` by widening the outer Zod schema from `z.number()` to `relaxedNumber()`.

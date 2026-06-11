@@ -366,7 +366,9 @@ export function formatUserMessage(opts: {
             const pathList = entries
                 .map(([name, diskPath]) => {
                     const isActive = name === repoName || name === repoName.split('/').pop()
-                    const formatted = `${escapeCell(name)}: ${escapeCell(diskPath)}`
+                    const projNum = opts.registryProjectNumbers?.[name]
+                    const nameLabel = projNum !== undefined ? `${name} (#${projNum})` : name
+                    const formatted = `${escapeCell(nameLabel)}: ${escapeCell(diskPath)}`
                     return isActive ? `**${formatted}** (active)` : formatted
                 })
                 .join('<br>')
