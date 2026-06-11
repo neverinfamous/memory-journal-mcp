@@ -254,7 +254,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'List Tags',
             description: 'List all unique tags used across all entries',
             group: 'core',
-            inputSchema: z.object({}), // No arguments required
+            inputSchema: z.object({}).strict(), // No arguments required
             outputSchema: TagsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -306,7 +306,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'Test Progress Notifications',
             description: 'Triggers a sequence of progress notifications to verify the transport layer supports them.',
             group: 'core',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: z.object({ success: z.boolean(), message: z.string() }).extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: true,

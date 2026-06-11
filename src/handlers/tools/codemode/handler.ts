@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
@@ -276,7 +277,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         project_id: projectId,
                     }
                 } catch (err) {
-                    console.error('CODEMODE_HANDLER_ERROR:', err)
+                    logger.error('CODEMODE_HANDLER_ERROR', { error: err })
                     return formatHandlerError(err)
                 }
             },

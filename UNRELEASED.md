@@ -36,6 +36,7 @@
 
 
 ### Fixed
+- Fixed Code Quality Audit findings: Removed stale `as any` comment in kanban tools, fixed raw `console.error` usage in Code Mode sandbox by replacing it with centralized logger, and hardened empty `z.object({})` schemas in core tools with `.strict()` modifier.
 - Fixed `get_entry_history` schema expectations in E2E tests and handler output payloads.
 - Fixed `project_number` validation failures in `mj_execute_code` by widening the outer Zod schema from `z.number()` to `relaxedNumber()`.
 - Fixed Code Mode sandbox mutability guard to correctly protect all admin/team structural and mutation tools via dynamic `tool.annotations.readOnlyHint` checks.
