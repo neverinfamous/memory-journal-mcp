@@ -42,6 +42,8 @@
 - Fixed `project_number` string-to-number resolution in Code Mode `secureDispatcher` to apply to **all** tools, not just team operations. Previously, `create_entry` with `project_number: "mysql-mcp"` would fail with a Zod validation error.
 - Added numeric-string coercion in `secureDispatcher` (e.g., `"14"` → `14`) as a fallback after registry lookup.
 - Fixed `owner/repo` splitting heuristic in `secureDispatcher` to perform a registry lookup on the extracted repo name instead of passing the raw string through.
+- Fixed outer `projectId` in `mj_execute_code` handler to resolve string project names (e.g., `"mysql-mcp"` → `14`) before auto-injection into tool calls, so response `project_id` and all auto-injected values are numeric.
+- Fixed `dry_run` and simulation early returns in `secureDispatcher` to execute **after** param normalization (camelCase→snake_case, project_number resolution, numeric coercion), so simulated responses show correctly resolved parameters instead of raw hallucinated strings.
 - Fixed Code Quality Audit findings: Removed stale `as any` comment in kanban tools, fixed raw `console.error` usage in Code Mode sandbox by replacing it with centralized logger, and hardened empty `z.object({})` schemas in core tools with `.strict()` modifier.
 - Fixed `get_entry_history` schema expectations in E2E tests and handler output payloads.
 - Fixed `project_number` validation failures in `mj_execute_code` by widening the outer Zod schema from `z.number()` to `relaxedNumber()`.

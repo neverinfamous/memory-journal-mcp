@@ -118,6 +118,29 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Resolve string projectId at the outer level so:
+                    // (a) auto-injection into tool calls always uses numeric values
+                    // (b) the response project_id field is numeric
+                    if (typeof projectId === 'string' && sessionContext.config?.projectRegistry) {
+                        let entry = sessionContext.config.projectRegistry[projectId]
+                        if (!entry && projectId.includes('/')) {
+                            const repoName = projectId.split('/').pop()
+                            if (repoName) {
+                                entry = sessionContext.config.projectRegistry[repoName] ?? undefined
+                            }
+                        }
+                        if (entry?.project_number !== undefined) {
+                            projectId = entry.project_number
+                        }
+                    }
+                    // Numeric string coercion for outer projectId: "14" -> 14
+                    if (typeof projectId === 'string') {
+                        const parsed = Number(projectId)
+                        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+                            projectId = parsed
+                        }
+                    }
+
                     // 2. Fetch all tools and cache them
                     const tools = collectNonCodeModeTools(sessionContext)
 
@@ -130,25 +153,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         const tool = tools.find((t) => t.name === toolName)
                         if (!tool) {
                             throw new Error(`[Security] Tool "${toolName}" is not available or registered in the environment. If you were trying to read a resource, use the proper readResource API instead.`)
-                        }
-
-                        // Mutation protection
-                        if (tool.annotations?.readOnlyHint === false && input.dry_run) {
-                            return {
-                                success: true,
-                                dry_run: true,
-                                message: `Simulated successful execution of ${toolName}`,
-                                simulatedParams: toolParams,
-                            }
-                        }
-
-                        // Optional Simulation Phase (e.g. for optimistic updates)
-                        if (isSimulation && tool.annotations?.readOnlyHint === false) {
-                            return {
-                                success: true,
-                                simulated: true,
-                                params: toolParams,
-                            }
                         }
 
                         let finalParams = toolParams
@@ -230,6 +234,25 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 }
                             }
                             finalParams = paramsObj
+                        }
+
+                        // Mutation protection (after normalization so simulated responses show resolved params)
+                        if (tool.annotations?.readOnlyHint === false && input.dry_run) {
+                            return {
+                                success: true,
+                                dry_run: true,
+                                message: `Simulated successful execution of ${toolName}`,
+                                simulatedParams: finalParams,
+                            }
+                        }
+
+                        // Optional Simulation Phase (e.g. for optimistic updates)
+                        if (isSimulation && tool.annotations?.readOnlyHint === false) {
+                            return {
+                                success: true,
+                                simulated: true,
+                                params: finalParams,
+                            }
                         }
 
                         // Execute the underlying handler directly
