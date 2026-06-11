@@ -23,28 +23,30 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@9.15.4
 
       - name: Install dependencies
-        run: npm ci || (echo "Retrying in 5s..." && sleep 5 && npm ci) || (echo "Retrying in 10s..." && sleep 10 && npm ci)
+        run: pnpm install --frozen-lockfile || (echo "Retrying in 5s..." && sleep 5 && pnpm install --frozen-lockfile) || (echo "Retrying in 10s..." && sleep 10 && pnpm install --frozen-lockfile)
 
       - name: Run ESLint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Run TypeScript check
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Run unit tests
-        run: npm run test
+        run: pnpm run test
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium
+        run: pnpm exec playwright install chromium
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: pnpm run test:e2e
 
   security-scan:
     runs-on: ubuntu-latest
@@ -56,13 +58,15 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24.x'
-          cache: 'npm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@9.15.4
 
       - name: Install dependencies
-        run: npm ci || (echo "Retrying in 5s..." && sleep 5 && npm ci) || (echo "Retrying in 10s..." && sleep 10 && npm ci)
+        run: pnpm install --frozen-lockfile || (echo "Retrying in 5s..." && sleep 5 && pnpm install --frozen-lockfile) || (echo "Retrying in 10s..." && sleep 10 && pnpm install --frozen-lockfile)
 
-      - name: Run npm audit
-        run: npm audit --audit-level=moderate
+      - name: Run pnpm audit
+        run: pnpm audit
 
   # Smoke test: verify the Docker image builds and starts successfully
   # Catches dependency resolution failures that only surface after npm prune (neverinfamous/db-mcp#149)

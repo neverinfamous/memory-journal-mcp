@@ -10,16 +10,15 @@ RUN apk add --no-cache python3 make g++ gettext git sqlite-dev && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache
 
-# Upgrade npm globally to a pinned version to ensure reproducible builds
-# Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
-RUN npm install -g npm@10.9.2 && npm cache clean --force
+# Install pnpm to ensure reproducible builds across the ecosystem
+RUN npm install -g pnpm@9.15.4 && npm cache clean --force
 
 # Copy package files first for better layer caching
-COPY package*.json .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 
 # Install all dependencies (including devDependencies for build)
 # The .npmrc has legacy-peer-deps=true to handle zod peer conflicts
-RUN npm ci
+RUN pnpm install --frozen-lockfile
 
 # Remove protobufjs CLI entirely - not needed at runtime
 # Eliminates CVE-2019-10790 (taffydb), CVE-2025-54798 (tmp), CVE-2025-5889 (brace-expansion)
@@ -30,7 +29,7 @@ COPY tsconfig.json tsconfig.build.json tsup.config.ts ./
 COPY src/ ./src/
 
 # Build TypeScript
-RUN npm run build
+RUN pnpm run build
 
 # Compile sqlite-vec native extension from source for Alpine (musl libc)
 # We use v0.1.7-alpha.2 to match the package.json version
@@ -47,11 +46,10 @@ RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.7-alpha.
 
 # Install production-only dependencies in a separate directory for clean copy
 RUN mkdir /app/prod_modules && \
-    cp package*.json .npmrc /app/prod_modules/ && \
+    cp package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc /app/prod_modules/ && \
     cd /app/prod_modules && \
-    npm ci --omit=dev && \
-    rm -rf node_modules/protobufjs/cli && \
-    npm cache clean --force
+    pnpm install --frozen-lockfile --prod && \
+    rm -rf node_modules/protobufjs/cli
 
 # Strip unnecessary ONNX runtime binaries from production dependencies:
 # - Remove onnxruntime-web entirely (browser-only, not needed in Node.js)
