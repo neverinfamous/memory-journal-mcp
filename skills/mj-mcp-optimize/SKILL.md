@@ -1,6 +1,6 @@
 ---
 name: mj-mcp-optimize
-description: Learn how the `memory-journal-mcp` Code Mode architecture connects the `mj.*` sandbox API to native MCP tools. Essential for debugging tool alias resolution, serialization errors, constructor wiring, proxy interceptions (shimMj), and Sandbox/Worker bounds. Load when contributing to `codemode.ts`, `worker-script.ts`, or tracking down missing tool parameters in `memory-journal-mcp`.
+description: Learn how the `memory-journal-mcp` Code Mode architecture connects the `mj.*` sandbox API to native MCP tools, and how the entry content template system prevents structural hallucinations. Essential for debugging tool alias resolution, serialization errors, constructor wiring, proxy interceptions (shimMj), Sandbox/Worker bounds, and entry content formatting. Load when contributing to `codemode.ts`, `worker-script.ts`, schema `.describe()` strings, or tracking down missing tool parameters in `memory-journal-mcp`.
 ---
 
 # Code Mode Internals (`memory-journal-mcp`)
@@ -128,3 +128,55 @@ There are **three layers** that can intercept hallucinated method names. All thr
 > **Rule**: `METHOD_ALIASES` entries must point to either (a) a real tool method in the same group, or (b) another alias that eventually resolves to a real tool in the same group. Never alias to a constructor-wired-only method.
 
 Also update `GROUP_EXAMPLES` in `api-constants.ts` so that `help()` output directs agents to the correct group for each method.
+
+## 10. Entry Content Templates (Anti-Hallucination)
+
+Agents frequently hallucinate content structure when creating entries — inventing arbitrary `## Summary`, `## Overview`, or `## Notes` sections instead of following the required format. The codebase enforces structural guidance through **four layers**:
+
+1. **Zod `.describe()` strings** on `CreateEntrySchemaMcp` / `UpdateEntrySchemaMcp` (and their team equivalents) in `src/handlers/tools/*/schemas.ts`. These surface directly in the JSON Schema that agents see on `tools/list`, making them the **most reliable** channel.
+
+2. **Tool `description` fields** on `create_entry`, `update_entry`, `team_create_entry`, `team_update_entry` in their respective tool definition files. These are the agent's first impression of each tool.
+
+3. **`memory://help/templates` resource** sourced from `src/constants/server-instructions/templates.md`. Contains per-type templates for: session summaries, feature implementations, bug fixes, planning, and technical notes. Auto-compiled into `HELP_CONTENT` by `scripts/generate-server-instructions.ts`.
+
+4. **Prompt hardening** in `src/handlers/prompts/workflow.ts`. The `session-summary` and `team-session-summary` prompts embed the exact required template with explicit anti-hallucination rules.
+
+### Session Summary Template (Mandatory)
+
+When creating session summaries (`entry_type: "retrospective"`, tagged `session-summary`), content **MUST** use exactly these three sections:
+
+```markdown
+## Accomplished
+- [concrete items done]
+
+## Unfinished / Blocked
+- [remaining items or "None"]
+
+## Context for Next Session
+- [entry IDs, branch names, PR numbers, pending decisions]
+```
+
+**Rules**: No extra top-level sections. No omitted sections. Use bullet points.
+
+### Code Mode Best Practice
+
+Always use the `context` parameter (see Section 8) for template-structured content to avoid escaping issues:
+
+```json
+{
+  "code": "return await mj.core.createEntry({ content: context.content, entry_type: 'retrospective', tags: ['session-summary'], project_number: 1 })",
+  "context": {
+    "content": "## Accomplished\n- Item one\n\n## Unfinished / Blocked\n- None\n\n## Context for Next Session\n- Next steps here"
+  }
+}
+```
+
+### Where Templates Are Defined
+
+| Layer | Source File | What It Controls |
+|-------|-----------|-----------------|
+| Schema `.describe()` | `src/handlers/tools/*/schemas.ts` | Field-level guidance in `tools/list` JSON Schema |
+| Tool description | `src/handlers/tools/*/tools.ts`, `core-tools.ts`, `crud.ts` | Top-level tool description |
+| Help resource | `src/constants/server-instructions/templates.md` | `memory://help/templates` on-demand reference |
+| Init instructions | `src/constants/server-instructions/overview.md` | Session summary template in MCP init payload |
+| Prompt template | `src/handlers/prompts/workflow.ts` | `session-summary` / `team-session-summary` prompts |
