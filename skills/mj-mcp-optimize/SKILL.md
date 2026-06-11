@@ -22,7 +22,7 @@ When an agent calls `await mj.core.createEntry({ content: 'test' })`:
 
 ---
 
-## 1. `shimMj` Proxy (`worker-script.ts`)
+## 1. `shimMj` Proxy (`worker-api-proxy.ts`)
 
 Inside the worker, the entire `mj` object is a nested set of JavaScript Proxies built by `buildApiProxy(methods, schemas)`.
 
@@ -52,18 +52,28 @@ if (typeof args['project_number'] === 'string') {
 }
 ```
 
+**Deep Payload Normalization:** `secureDispatcher` also includes a recursive `deepCamelToSnake` normalizer. Because Zod schemas enforce `snake_case`, if an agent hallucinates `{ projectNumber: 123, entryType: "..." }` in a batch payload, the dispatcher automatically heals these to `project_number` and `entry_type` before they reach the tool handler, preventing frictionless validation failures.
+
 ## 4. `auto-return` Transformation (`auto-return.ts`)
 
 Because Code Mode is wrapped in an `async () => { ... }` IIFE, bare expressions (like promises) would normally disappear into the void.
 
 The `transformAutoReturn` engine parses the user's code using a forward-scanning state machine, properly ignoring boundaries inside string literals (`'`, `"`, `` \` ``) and brackets (`{}`, `()`), and automatically prepends `return` to the final statement. 
 
-## 5. Result Wrapping (`worker-script.ts`)
+## 5. Result Wrapping & IPC Serialization (`worker-result-proxy.ts`)
 
 When MCP tools fail validation, they return an error object instead of throwing (for deterministic agent feedback). 
 However, if an agent writes `const { entry_id } = await mj.core.createEntry()`, and it fails, destructuring `entry_id` from the error object returns `undefined` silently.
 
 To prevent silent failures, `wrapResult` converts failed results into a Proxy. If the agent attempts to access a missing property on a failed result, it throws immediately, forcing the LLM to see the `VALIDATION_ERROR`.
+
+**Cross-Context IPC Serialization:** Node.js `worker_threads` strip out proxy functionality during IPC message transmission if the proxy lacks proper enumerability traps. We implement `ownKeys` and `getOwnPropertyDescriptor` traps inside `worker-result-proxy.ts` so `JSON.stringify` accurately serializes the error payload across the boundary.
+
+## 5.1 The `await` Hallucination Interceptor
+
+Agents frequently forget the `await` keyword in Code Mode (e.g., `const result = mj.core.getRecentEntries()`). This causes synchronous property access (`result.success`) to fail silently. 
+To catch this, the `worker-api-proxy.ts` wraps all RPC Promise returns in an additional Proxy. If you attempt to synchronously access a property on the Promise, the Proxy intercepts it and throws:
+`"Attempted to access property 'success' on a Promise object. Did you forget to 'await' the tool call?"`
 
 ## 6. Resource URIs vs Tools (`getBriefing` Failures)
 

@@ -3,6 +3,13 @@ import type { CreateEntryInput } from '../../core/schema.js'
 import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject, rowsToEntries } from './shared.js'
 import { ConflictError } from '../../../types/errors.js'
 
+class BatchTransactionError extends Error {
+    constructor(public readonly batchError: { index?: number; id?: number; error: Error }) {
+        super("Batch transaction failed");
+        this.name = "BatchTransactionError";
+    }
+}
+
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
     const { db, tagsMgr } = context
 
@@ -326,19 +333,35 @@ export function createEntries(
 ): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
     if (inputs.length === 0) return { created: [], errors: [] }
 
+    const { db } = context
     const createdIds: number[] = []
     const errors: { index: number; error: Error }[] = []
 
-    for (let i = 0; i < inputs.length; i++) {
-        const input = inputs[i]
-        if (!input) continue
-        try {
-            // createEntry inherently wraps the INSERT in a transaction and returns the entry.
-            const newEntry = createEntry(context, input)
-            createdIds.push(newEntry.id)
-        } catch (err) {
-            errors.push({ index: i, error: err instanceof Error ? err : new Error(String(err)) })
+    const txn = db.transaction(() => {
+        for (let i = 0; i < inputs.length; i++) {
+            const input = inputs[i]
+            if (!input) continue
+            try {
+                // Nested transactions are implemented as savepoints by better-sqlite3.
+                // This ensures all creations share a single top-level transaction and fsync.
+                const newEntry = createEntry(context, input)
+                createdIds.push(newEntry.id)
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                throw new BatchTransactionError({ index: i, error });
+            }
         }
+    })
+
+    try {
+        txn()
+    } catch (err: unknown) {
+        if (err instanceof BatchTransactionError && err.batchError.index !== undefined) {
+            errors.push({ index: err.batchError.index, error: err.batchError.error });
+        } else {
+            errors.push({ index: -1, error: err instanceof Error ? err : new Error(String(err)) });
+        }
+        return { created: [], errors };
     }
 
     const resultsMap = getEntriesByIds(context, createdIds)
@@ -373,21 +396,36 @@ export function updateEntries(
 ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
     if (updates.length === 0) return { updated: [], notFound: [], errors: [] }
 
+    const { db } = context
     const notFound: number[] = []
     const updatedIds: number[] = []
     const errors: { id: number; error: Error }[] = []
 
-    for (const input of updates) {
-        try {
-            const entry = updateEntry(context, input.id, input)
-            if (entry) {
-                updatedIds.push(input.id)
-            } else {
-                notFound.push(input.id)
+    const txn = db.transaction(() => {
+        for (const input of updates) {
+            try {
+                const entry = updateEntry(context, input.id, input)
+                if (entry) {
+                    updatedIds.push(input.id)
+                } else {
+                    notFound.push(input.id)
+                }
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                throw new BatchTransactionError({ id: input.id, error });
             }
-        } catch (err) {
-            errors.push({ id: input.id, error: err instanceof Error ? err : new Error(String(err)) })
         }
+    })
+
+    try {
+        txn()
+    } catch (err: unknown) {
+        if (err instanceof BatchTransactionError && err.batchError.id !== undefined) {
+            errors.push({ id: err.batchError.id, error: err.batchError.error });
+        } else {
+            errors.push({ id: -1, error: err instanceof Error ? err : new Error(String(err)) });
+        }
+        return { updated: [], notFound: [], errors };
     }
 
     const resultsMap = getEntriesByIds(context, updatedIds)
@@ -414,15 +452,29 @@ export function deleteEntries(
     const deleted: number[] = []
     const errors: { id: number; error: Error }[] = []
 
-    for (const id of toDelete) {
-        try {
-            const success = deleteEntry(context, id, permanent)
-            if (success) {
-                deleted.push(id)
+    const txn = db.transaction(() => {
+        for (const id of toDelete) {
+            try {
+                const success = deleteEntry(context, id, permanent)
+                if (success) {
+                    deleted.push(id)
+                }
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                throw new BatchTransactionError({ id, error });
             }
-        } catch (err) {
-            errors.push({ id, error: err instanceof Error ? err : new Error(String(err)) })
         }
+    })
+
+    try {
+        txn()
+    } catch (err: unknown) {
+        if (err instanceof BatchTransactionError && err.batchError.id !== undefined) {
+            errors.push({ id: err.batchError.id, error: err.batchError.error });
+        } else {
+            errors.push({ id: -1, error: err instanceof Error ? err : new Error(String(err)) });
+        }
+        return { deleted: [], notFound, errors };
     }
 
     return { deleted, notFound, errors }

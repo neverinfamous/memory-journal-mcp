@@ -20,6 +20,8 @@ export function wrapResult(result: unknown): unknown {
         if (isFailed) {
             const failedResult = result as Record<string | symbol, unknown>
             return new Proxy(failedResult, {
+                ownKeys(target) { return Reflect.ownKeys(target) },
+                getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
                 get(target, prop) {
                     if (prop in target) return target[prop]
                     if (
@@ -55,6 +57,8 @@ export function wrapResult(result: unknown): unknown {
                 successResult['hasMore'] = false
             }
             return new Proxy(successResult, {
+                ownKeys(target) { return Reflect.ownKeys(target) },
+                getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
                 get(target, prop) {
                     if (prop in target) return target[prop]
                     if (

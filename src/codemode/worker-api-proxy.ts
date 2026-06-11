@@ -25,12 +25,27 @@ export function buildApiProxy(
 ): Record<string, unknown> {
     const api: Record<string, unknown> = {}
 
+    function wrapPromise(promise: Promise<unknown>, methodName: string): Promise<unknown> {
+        return new Proxy(promise, {
+            get(target, prop) {
+                if (prop === 'then') return target.then.bind(target)
+                if (prop === 'catch') return target.catch.bind(target)
+                if (prop === 'finally') return target.finally.bind(target)
+                if (typeof prop === 'string' && prop !== 'constructor' && prop !== 'toString' && prop !== 'valueOf' && prop !== 'toJSON') {
+                    throw new Error(`Attempted to access property '${prop}' on a Promise object. Did you forget to 'await' the tool call? (e.g. const result = await mj.group.${methodName}(...))`)
+                }
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+                return Reflect.get(target, prop)
+            }
+        })
+    }
+
     for (const [group, methodNames] of Object.entries(methods)) {
         if (group === '_topLevel') {
             for (const methodName of methodNames) {
-                const proxyFn = async (...args: unknown[]): Promise<unknown> => {
-                    const result = await rpcCall('_topLevel', methodName, args)
-                    return wrapResult(result)
+                const proxyFn = (...args: unknown[]): Promise<unknown> => {
+                    const resultPromise = rpcCall('_topLevel', methodName, args).then(wrapResult)
+                    return wrapPromise(resultPromise, methodName)
                 }
                 Object.assign(proxyFn, {
                     schema: (): Promise<string> =>
@@ -44,9 +59,9 @@ export function buildApiProxy(
         const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
 
         for (const methodName of methodNames) {
-            const proxyFn = async (...args: unknown[]): Promise<unknown> => {
-                const result = await rpcCall(group, methodName, args)
-                return wrapResult(result)
+            const proxyFn = (...args: unknown[]): Promise<unknown> => {
+                const resultPromise = rpcCall(group, methodName, args).then(wrapResult)
+                return wrapPromise(resultPromise, methodName)
             }
             Object.assign(proxyFn, {
                 schema: (): Promise<string> =>

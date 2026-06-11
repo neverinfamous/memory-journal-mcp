@@ -85,7 +85,9 @@ src/
 │   ├── sandbox-factory.ts          # Sandbox creation factory (engine-level restrictions: codeGeneration disabled, frozen prototypes, Proxy nullified)
 │   ├── auto-return.ts              # Last-expression auto-return transform (IIFE helper)
 │   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge)
-│   ├── worker-script.ts            # Worker thread entry point — builds mj.* API proxy (and `journal` alias); Proxy trap returns structured errors for readonly mode
+│   ├── worker-script.ts            # Worker thread entry point — initializes shimMj and proxy API
+│   ├── worker-api-proxy.ts         # Worker API Proxy Builder (builds mj.* API, handles missing await interceptions)
+│   ├── worker-result-proxy.ts      # Result Wrapping Proxy (prevents silent failures, explicit IPC serialization traps)
 │   ├── api.ts                      # mj.* API bridge (exposes tools to sandbox)
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
 │   ├── security.ts                 # Code validation (18 blocked patterns, 50KB code size limit, injection prevention)

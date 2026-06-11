@@ -153,6 +153,23 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                         let finalParams = toolParams
 
+                        // Helper to deep convert camelCase to snake_case for top-level code mode payloads
+                        const deepCamelToSnake = (obj: unknown): unknown => {
+                            if (Array.isArray(obj)) return obj.map(deepCamelToSnake)
+                            if (obj !== null && typeof obj === 'object') {
+                                const newObj: Record<string, unknown> = {}
+                                for (const [k, v] of Object.entries(obj)) {
+                                    const snakeKey = k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+                                    newObj[snakeKey] = deepCamelToSnake(v)
+                                }
+                                return newObj
+                            }
+                            return obj
+                        }
+                        
+                        // Apply deep camelCase normalization to prevent basic hallucinations (e.g. projectNumber -> project_number)
+                        finalParams = deepCamelToSnake(finalParams)
+
                         // Inject project_number for team operations
                         if (
                             toolName.startsWith('team_') ||

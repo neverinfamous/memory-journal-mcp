@@ -23,6 +23,7 @@
 - Content templates instruction file (`memory://help/templates`) with per-entry-type markdown scaffolding for session summaries, feature implementations, bug fixes, planning, and technical notes.
 
 ### Changed
+- **Performance**: Resolved Critical N+1 SQLite Transaction bottleneck in Batch CRU operations (`src/database/sqlite-adapter/entries/crud.ts`). Refactored batch operations to wrap inner singular operations within a single top-level `db.transaction`, leveraging `better-sqlite3` nested savepoints to completely eliminate sequential `fsync` I/O stalls and drastically improve throughput.
 - Modularized Tier 1-3 monolithic files (`src/server/mcp-server.ts`, `src/database/sqlite-adapter/index.ts`, `src/handlers/tools/admin.ts`, `src/handlers/tools/search/index.ts`, `src/codemode/api.ts`, `src/codemode/worker-script.ts`) into logical sub-directories with a barrel export pattern to improve codebase maintainability.
 - Code Mode execution enhancements: implemented dynamic read-only constraint enforcement for mutation protection, and automatically injected `project_number` and `expected_version` requirements.
 - Replaced legacy hardcoded alias intercepts inside the Code Mode proxy with dynamic `METHOD_ALIASES` injection into the Sandbox group bindings, permanently resolving missing alias errors (e.g., `mj.analytics.getProjects`).
@@ -45,6 +46,9 @@
 - Added balanced double-quotes preservation to FTS search phrase matching.
 - Fixed batch operations to fail atomically instead of returning structured partial errors.
 - Fixed Code Mode execution stability issues including `ReferenceError` for `fetch()`, array method failures, and `read_query` aliases.
+- Fixed Code Mode async/await hallucinations by wrapping Promise returns in a Proxy that intercepts synchronous property accesses and throws clear instructional errors instead of generating silent downstream `undefined.map` failures.
+- Fixed cross-context IPC error serialization in Code Mode sandbox by implementing explicit `ownKeys` and `getOwnPropertyDescriptor` enumerability traps on `wrapResult` proxies, preventing `Error: {}` outputs.
+- Fixed deep camelCase hallucinations in Code Mode batch payloads (e.g., `projectNumber` to `project_number`) via a recursive `deepCamelToSnake` normalizer in the secure dispatcher.
 - Fixed Zod schema validation errors during hybrid search for the `isArchived` flag.
 - Fixed eviction logic to correctly preserve the 10 newest snapshot revisions.
 - Fixed `ConfigResolver` syntax crash when loading pre-parsed nested objects.
