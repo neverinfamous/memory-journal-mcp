@@ -38,7 +38,12 @@ export const UpdateEntrySchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 export const UpdateEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
-    content: z.string().optional(),
+    content: z.string().optional().describe(
+        'Updated markdown content. Preserve the existing ## section header structure. ' +
+        'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
+        '## Context for Next Session structure intact. ' +
+        'Do NOT restructure or add new top-level sections unless explicitly requested.'
+    ),
     entry_type: z.string().optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),

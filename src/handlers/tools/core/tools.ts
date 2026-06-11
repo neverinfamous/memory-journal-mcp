@@ -30,7 +30,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'create_entry',
             title: 'Create Entry',
-            description: 'Create a new journal entry',
+            description:
+                'Create a new journal entry. Content must be well-structured markdown ' +
+                'using ## section headers. For session summaries, use entry_type "retrospective" ' +
+                'with tag "session-summary" and structure content as: ' +
+                '## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+                'Always provide project_number.',
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,

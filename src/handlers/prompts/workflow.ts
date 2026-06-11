@@ -387,15 +387,33 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Create a session summary journal entry based on this context:
+                                text: `Create a session summary journal entry using EXACTLY this template:
 
-**Instructions:**
-1. Summarize what was accomplished in this session (key changes, decisions, files modified)
-2. Note what's unfinished or blocked (pending items, open questions)
-3. Include context for the next session (relevant entry IDs, branch names, PR numbers)
-4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\` (If in Code Mode, use \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`)
+**Required Parameters:**
+- \`entry_type: "retrospective"\`
+- \`tags: ["session-summary"]\` (plus relevant domain tags)
+- \`project_number\`: from your briefing context
 
-**Recent Entries:**
+**Required Content Structure (use EXACTLY these section headers):**
+\`\`\`
+## Accomplished
+- [List concrete items: changes made, decisions taken, files modified, PRs submitted]
+
+## Unfinished / Blocked
+- [List pending items, blockers, open questions — or "None" if everything is complete]
+
+## Context for Next Session
+- [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+\`\`\`
+
+**Rules:**
+- Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
+- Do NOT omit any of the three required sections
+- Use bullet points within each section
+- Reference specific entry IDs, file names, and PR numbers where relevant
+- If in Code Mode, use \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`
+
+**Recent Entries (for context):**
 ${markUntrustedContent(entrySummary)}`,
                             },
                         },
@@ -436,16 +454,34 @@ ${markUntrustedContent(entrySummary)}`,
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Create a team session summary journal entry based on this context:
+                                text: `Create a team session summary journal entry using EXACTLY this template:
 
-**Instructions:**
-1. Summarize what the team accomplished in this session (key changes, decisions, files modified)
-2. Note what's unfinished or blocked for the team (pending items, open questions)
-3. Include context for the next team session (relevant entry IDs, branch names, PR numbers)
-4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\` (If in Code Mode, use \`await mj.team.teamCreateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`)
-5. YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
+**Required Parameters:**
+- \`entry_type: "retrospective"\`
+- \`tags: ["session-summary"]\` (plus relevant domain tags)
+- \`project_number\`: from your briefing context
+- YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
 
-**Recent Team Entries:**
+**Required Content Structure (use EXACTLY these section headers):**
+\`\`\`
+## Accomplished
+- [List concrete items: changes made, decisions taken, files modified, PRs submitted]
+
+## Unfinished / Blocked
+- [List pending items, blockers, open questions — or "None" if everything is complete]
+
+## Context for Next Session
+- [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+\`\`\`
+
+**Rules:**
+- Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
+- Do NOT omit any of the three required sections
+- Use bullet points within each section
+- Reference specific entry IDs, file names, and PR numbers where relevant
+- If in Code Mode, use \`await mj.team.teamCreateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`
+
+**Recent Team Entries (for context):**
 ${markUntrustedContent(entrySummary)}`,
                             },
                         },

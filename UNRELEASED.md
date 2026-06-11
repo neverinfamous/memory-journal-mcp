@@ -20,6 +20,7 @@
 - Soft-delete recovery and archiving capabilities.
 - Keyset cursor pagination for listing and search tools.
 - Entry versioning and history tracking via `get_entry_history`.
+- Content templates instruction file (`memory://help/templates`) with per-entry-type markdown scaffolding for session summaries, feature implementations, bug fixes, planning, and technical notes.
 
 ### Changed
 - Modularized Tier 1-3 monolithic files (`src/server/mcp-server.ts`, `src/database/sqlite-adapter/index.ts`, `src/handlers/tools/admin.ts`, `src/handlers/tools/search/index.ts`, `src/codemode/api.ts`, `src/codemode/worker-script.ts`) into logical sub-directories with a barrel export pattern to improve codebase maintainability.
@@ -29,6 +30,10 @@
 - Upgraded token estimation to use content-type-aware ratios.
 - Updated CLI configuration loader to aggregate all startup validation errors simultaneously.
 - Standardized Error Handling: replaced raw generic `Error` throws with structured `ConfigurationError` and `MemoryJournalMcpError`.
+- Enriched `create_entry`, `update_entry`, `team_create_entry`, and `team_update_entry` tool descriptions and Zod schema `.describe()` strings with inline structural templates and anti-hallucination guidance for entry content, type, and tags.
+- Hardened `session-summary` and `team-session-summary` prompts with exact required template structure and explicit anti-hallucination rules (no extra sections, no omissions).
+- Expanded `overview.md` Session Summaries section with inline code-block template and explicit structural constraints.
+
 
 ### Fixed
 - Fixed `get_entry_history` schema expectations in E2E tests and handler output payloads.

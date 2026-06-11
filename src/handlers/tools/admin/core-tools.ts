@@ -21,7 +21,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             name: 'update_entry',
             title: 'Update Entry',
             description:
-                'Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass null to clear a field.',
+                'Update an existing journal entry. When updating content, preserve the ' +
+                'existing markdown structure (## section headers). Do NOT restructure or ' +
+                'add new top-level sections unless explicitly requested. ' +
+                'Pass null to clear a metadata field. Supports content, type, tags, and ' +
+                '11 metadata fields including significance, project, issue, PR, and workflow.',
             group: 'admin',
             inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,

@@ -145,11 +145,21 @@ Use \`create_entry\` to record session summaries. Required fields:
 - \`tags: ["session-summary"]\` (plus relevant domain/activity tags)
 - \`project_number\` from the briefing
 
-Structure content with these sections:
+Content MUST follow this EXACT structure (no extra top-level sections):
 
-- \`## Accomplished\` — What was done this session
-- \`## Unfinished / Blocked\` — What remains or what's blocked
-- \`## Context for Next Session\` — Key context the next agent needs
+\`\`\`
+## Accomplished
+- [concrete items done this session]
+
+## Unfinished / Blocked
+- [remaining items or "None"]
+
+## Context for Next Session
+- [entry IDs, branch names, PR numbers, pending decisions]
+\`\`\`
+
+Do NOT add sections like "## Summary", "## Overview", "## Notes", or any other
+top-level headers. Do NOT omit any of the three required sections.
 
 Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
 
@@ -242,7 +252,7 @@ Read \`memory://help/codemode\` for full namespace table, examples, and patterns
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["github","hush-protocol","skills"]
+const HELP_GROUP_KEYS: readonly string[] = ["github","hush-protocol","skills","templates"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -484,4 +494,89 @@ This server leverages the \`neverinfamous-agent-skills\` package. If the user's 
 
 - The user can distribute or update these skills across their repositories by running \`npx neverinfamous-agent-skills@latest\`.
 - If you need to create a new skill, reference the bundled \`skill-builder\` instructions!`],
+  ["templates", `# Content Templates
+
+These templates define the REQUIRED structure for journal entry content by type. Do NOT invent additional top-level sections. Do NOT omit required sections.
+
+## Session Summary (entry\\_type: "retrospective", tag: "session-summary")
+
+\`\`\`
+## Accomplished
+- [Concrete item: what was done, key files/PRs/entry IDs]
+- [Another concrete item]
+
+## Unfinished / Blocked
+- [Item: why it's blocked or what remains — or "None" if complete]
+
+## Context for Next Session
+- [Key context the next agent/session needs: branch names, PR numbers, entry IDs, pending decisions]
+\`\`\`
+
+Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes").
+Do NOT omit any of the three required sections.
+
+## Feature Implementation (entry\\_type: "feature\\_implementation")
+
+\`\`\`
+## Summary
+[1-2 sentence description of the feature]
+
+## Changes
+- [File/module]: [what changed]
+
+## Testing
+- [How it was tested, results]
+
+## Notes
+- [Any gotchas, follow-ups, or related entries]
+\`\`\`
+
+## Bug Fix (entry\\_type: "bug\\_fix")
+
+\`\`\`
+## Problem
+[What was broken and how it manifested]
+
+## Root Cause
+[Why it happened]
+
+## Fix
+- [What was changed to fix it]
+
+## Verification
+- [How the fix was verified]
+\`\`\`
+
+## Planning (entry\\_type: "planning")
+
+\`\`\`
+## Goal
+[What this plan aims to achieve]
+
+## Approach
+- [Step or phase]: [description]
+
+## Open Questions
+- [Unresolved decisions or dependencies]
+\`\`\`
+
+## Technical Note (entry\\_type: "technical\\_note")
+
+\`\`\`
+## Topic
+[What this note documents]
+
+## Details
+[Technical explanation, code patterns, configuration]
+
+## References
+- [Related entries, docs, or external links]
+\`\`\`
+
+## General Rule
+
+For any entry type not listed above, structure content with:
+1. A clear \`##\` heading describing the main topic
+2. Bullet points for discrete items
+3. No invented sections beyond what the content actually covers`],
 ])

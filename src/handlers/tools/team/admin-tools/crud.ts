@@ -36,7 +36,11 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             name: 'team_update_entry',
             title: 'Update Team Entry',
             description:
-                'Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass expected_version for optimistic locking. Pass null to clear a field. Requires TEAM_DB_PATH.',
+                'Update a team entry. When updating content, preserve the existing markdown ' +
+                'structure (## section headers). Do NOT restructure or add new top-level sections ' +
+                'unless explicitly requested. Pass expected_version for optimistic locking. ' +
+                'Pass null to clear a metadata field. Supports content, type, tags, and ' +
+                '11 metadata fields. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,

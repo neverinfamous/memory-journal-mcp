@@ -86,11 +86,21 @@ Use `create_entry` to record session summaries. Required fields:
 - `tags: ["session-summary"]` (plus relevant domain/activity tags)
 - `project_number` from the briefing
 
-Structure content with these sections:
+Content MUST follow this EXACT structure (no extra top-level sections):
 
-- `## Accomplished` — What was done this session
-- `## Unfinished / Blocked` — What remains or what's blocked
-- `## Context for Next Session` — Key context the next agent needs
+```
+## Accomplished
+- [concrete items done this session]
+
+## Unfinished / Blocked
+- [remaining items or "None"]
+
+## Context for Next Session
+- [entry IDs, branch names, PR numbers, pending decisions]
+```
+
+Do NOT add sections like "## Summary", "## Overview", "## Notes", or any other
+top-level headers. Do NOT omit any of the three required sections.
 
 Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
 

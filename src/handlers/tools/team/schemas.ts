@@ -52,9 +52,22 @@ export const TeamCreateEntrySchema = z.object({
 
 /** team_create_entry — relaxed for MCP SDK */
 export const TeamCreateEntrySchemaMcp = z.object({
-    content: z.string().optional(),
-    entry_type: z.string().optional().default('personal_reflection'),
-    tags: z.array(z.string()).optional().default([]),
+    content: z.string().optional().describe(
+        'Markdown-formatted entry content. Use ## section headers to organize content. ' +
+        'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
+        'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+        'Do NOT invent extra top-level sections for session summaries.'
+    ),
+    entry_type: z.string().optional().default('personal_reflection').describe(
+        'Entry type. Use "retrospective" for session summaries, "bug_fix" for bugs, ' +
+        '"feature_implementation" for features, "planning" for roadmaps, ' +
+        '"technical_note" for implementation notes. Do NOT default to "personal_reflection" ' +
+        'unless the entry is genuinely a personal note.'
+    ),
+    tags: z.array(z.string()).optional().default([]).describe(
+        'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
+        'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
+    ),
     significance_type: z.string().optional(),
     project_number: relaxedNumber(),
     project_owner: z.string().optional(),
@@ -220,7 +233,12 @@ export const TeamUpdateEntrySchema = z.object({
 /** team_update_entry — relaxed */
 export const TeamUpdateEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
-    content: z.string().optional(),
+    content: z.string().optional().describe(
+        'Updated markdown content. Preserve the existing ## section header structure. ' +
+        'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
+        '## Context for Next Session structure intact. ' +
+        'Do NOT restructure or add new top-level sections unless explicitly requested.'
+    ),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     project_number: relaxedNumber().nullable(),

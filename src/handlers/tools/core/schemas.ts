@@ -31,9 +31,22 @@ export const CreateEntrySchema = z.object({
 })
 
 export const CreateEntrySchemaMcp = z.object({
-    entry_type: z.string().optional().default('personal_reflection'),
-    content: z.string().min(1),
-    tags: z.array(z.string()).optional(),
+    entry_type: z.string().optional().default('personal_reflection').describe(
+        'Entry type. Use "retrospective" for session summaries, "bug_fix" for bugs, ' +
+        '"feature_implementation" for features, "planning" for roadmaps, ' +
+        '"technical_note" for implementation notes. Do NOT default to "personal_reflection" ' +
+        'unless the entry is genuinely a personal note.'
+    ),
+    content: z.string().min(1).describe(
+        'Markdown-formatted entry content. Use ## section headers to organize content. ' +
+        'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
+        'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+        'Do NOT invent extra top-level sections for session summaries.'
+    ),
+    tags: z.array(z.string()).optional().describe(
+        'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
+        'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
+    ),
     is_personal: z.boolean().optional().default(true),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
     project_number: relaxedNumber().optional(),
