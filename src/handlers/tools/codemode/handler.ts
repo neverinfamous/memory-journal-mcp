@@ -170,42 +170,48 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Apply deep camelCase normalization to prevent basic hallucinations (e.g. projectNumber -> project_number)
                         finalParams = deepCamelToSnake(finalParams)
 
-                        // Inject project_number for team operations
-                        if (
-                            toolName.startsWith('team_') ||
-                            toolName === 'cross_team_search' ||
-                            toolName === 'create_relationship'
-                        ) {
-                            if (typeof finalParams === 'object' && finalParams !== null) {
-                                const paramsObj = { ...(finalParams as Record<string, unknown>) }
-                                
-                                // Auto-inject project_number if not present but available from context
-                                if (paramsObj['project_number'] === undefined && projectId !== undefined) {
-                                    paramsObj['project_number'] = projectId
-                                }
-                                
-                                // Try string -> number resolution if registry is available
-                                if (
-                                    typeof paramsObj['project_number'] === 'string' && 
-                                    sessionContext.config?.projectRegistry
-                                ) {
-                                    // 1. Check if the string matches an explicit ID -> numeric ID resolution
-                                    const strVal = paramsObj['project_number']
-                                    const entry = sessionContext.config.projectRegistry[strVal]
-                                    if (entry?.project_number !== undefined) {
-                                        paramsObj['project_number'] = entry.project_number
-                                    } else {
-                                        // 2. Attempt 'owner/repo' splitting heuristic if no exact match
-                                        if (strVal.includes('/')) {
-                                            const parts = strVal.split('/')
-                                            if (parts.length === 2 && typeof parts[1] === 'string') {
-                                                paramsObj['project_number'] = parts[1]
+                        // Inject and resolve project_number for ALL tools (not just team operations)
+                        if (typeof finalParams === 'object' && finalParams !== null) {
+                            const paramsObj = { ...(finalParams as Record<string, unknown>) }
+                            
+                            // Auto-inject project_number if not present but available from context
+                            if (paramsObj['project_number'] === undefined && projectId !== undefined) {
+                                paramsObj['project_number'] = projectId
+                            }
+                            
+                            // Try string -> number resolution if registry is available
+                            if (
+                                typeof paramsObj['project_number'] === 'string' && 
+                                sessionContext.config?.projectRegistry
+                            ) {
+                                // 1. Check if the string matches an explicit registry key -> numeric ID
+                                const strVal = paramsObj['project_number']
+                                const entry = sessionContext.config.projectRegistry[strVal]
+                                if (entry?.project_number !== undefined) {
+                                    paramsObj['project_number'] = entry.project_number
+                                } else {
+                                    // 2. Attempt 'owner/repo' splitting heuristic if no exact match
+                                    if (strVal.includes('/')) {
+                                        const repoName = strVal.split('/').pop()
+                                        if (repoName) {
+                                            const splitEntry = sessionContext.config.projectRegistry[repoName]
+                                            if (splitEntry?.project_number !== undefined) {
+                                                paramsObj['project_number'] = splitEntry.project_number
                                             }
                                         }
                                     }
                                 }
-                                finalParams = paramsObj
                             }
+
+                            // Numeric string coercion: "14" -> 14
+                            if (typeof paramsObj['project_number'] === 'string') {
+                                const parsed = Number(paramsObj['project_number'])
+                                if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+                                    paramsObj['project_number'] = parsed
+                                }
+                            }
+
+                            finalParams = paramsObj
                         }
 
                         // Expected Version Injection

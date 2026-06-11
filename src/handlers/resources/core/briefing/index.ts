@@ -111,6 +111,19 @@ export async function buildBriefingData(
           )
         : undefined
 
+    // Build registry project number map for briefing display
+    const registryProjectNumbers = config.projectRegistry
+        ? Object.fromEntries(
+              Object.entries(config.projectRegistry)
+                  .reduce<[string, number][]>((acc, [name, entry]) => {
+                      if (entry.project_number !== undefined) {
+                          acc.push([name, entry.project_number])
+                      }
+                      return acc
+                  }, [])
+          )
+        : undefined
+
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
         branchName: github?.branch ?? 'unknown',
@@ -144,6 +157,7 @@ export async function buildBriefingData(
         localCheck: system.localCheck ?? undefined,
         deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
         registryPaths,
+        registryProjectNumbers,
     })
 
     return {

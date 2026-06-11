@@ -38,17 +38,26 @@ When `mj_execute_code` is invoked:
 3. `api.createSandboxBindings()` outputs a map of `group -> method[]` string arrays.
 4. These bindings are injected into the worker. The worker *only* knows tool names, not their logic.
 
-## 3. Dispatcher Validations (`codemode.ts`)
+## 3. Dispatcher Validations (`handler.ts`)
 
 The `secureDispatcher` acts as the gatekeeper between the Sandbox and the Host tools. This is where we catch hallucinated parameters before they hit Zod schemas.
 
-For example, LLMs frequently hallucinate string-based project IDs (e.g. `{ project_number: 'db-mcp' }`). `secureDispatcher` safely translates these:
+For example, LLMs frequently hallucinate string-based project IDs (e.g. `{ project_number: 'db-mcp' }`). `secureDispatcher` resolves these for **all dispatched tools** (not just team operations) using a three-step pipeline:
+
+1. **Registry Lookup**: String repo names (e.g., `"mysql-mcp"`) are matched against `config.projectRegistry` entries and replaced with their numeric `project_number`.
+2. **Owner/Repo Splitting**: Strings like `"neverinfamous/mysql-mcp"` are split and the repo part is looked up in the registry.
+3. **Numeric Coercion**: Remaining numeric strings (e.g., `"14"`) are coerced to `Number` as a final fallback.
+
 ```typescript
-if (typeof args['project_number'] === 'string') {
-    const registryEntry = sessionContext.config?.projectRegistry?.[args['project_number']]
-    if (registryEntry?.project_number !== undefined) {
-        args['project_number'] = registryEntry.project_number
-    }
+// Step 1: Registry lookup
+const entry = sessionContext.config.projectRegistry[strVal]
+if (entry?.project_number !== undefined) {
+    paramsObj['project_number'] = entry.project_number
+}
+// Step 3: Numeric coercion fallback
+if (typeof paramsObj['project_number'] === 'string') {
+    const parsed = Number(paramsObj['project_number'])
+    if (!Number.isNaN(parsed)) paramsObj['project_number'] = parsed
 }
 ```
 

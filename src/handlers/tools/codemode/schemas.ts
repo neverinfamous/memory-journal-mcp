@@ -44,7 +44,9 @@ export const ExecuteCodeSchemaMcp = z.object({
     project_number: relaxedNumber()
         .optional()
         .describe(
-            'REQUIRED for team operations. The numerical ID (or owner/repo string) of the GitHub project to bind to. Falls back to DEFAULT_PROJECT_NUMBER if unspecified.'
+            'Numeric project ID to bind to all tool calls in this sandbox. ' +
+            'Repo name strings (e.g., "mysql-mcp") are auto-resolved via the project registry. ' +
+            'Falls back to DEFAULT_PROJECT_NUMBER if unspecified. Find it in the briefing Config row (registry: repoName (#N)).'
         ),
     repo: z
         .string()

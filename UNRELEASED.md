@@ -34,9 +34,14 @@
 - Enriched `create_entry`, `update_entry`, `team_create_entry`, and `team_update_entry` tool descriptions and Zod schema `.describe()` strings with inline structural templates and anti-hallucination guidance for entry content, type, and tags.
 - Hardened `session-summary` and `team-session-summary` prompts with exact required template structure and explicit anti-hallucination rules (no extra sections, no omissions).
 - Expanded `overview.md` Session Summaries section with inline code-block template and explicit structural constraints.
-
+- Briefing Config row now displays numeric project IDs alongside repo names (e.g., `registry: adamic (#1), mysql-mcp (#14)`).
+- Updated `mj_execute_code` and `create_entry` schema descriptions to clarify `project_number` format and where to find numeric IDs.
+- Expanded `overview.md` Strict Validation guidance with `project_number` format requirements and Code Mode auto-resolution note.
 
 ### Fixed
+- Fixed `project_number` string-to-number resolution in Code Mode `secureDispatcher` to apply to **all** tools, not just team operations. Previously, `create_entry` with `project_number: "mysql-mcp"` would fail with a Zod validation error.
+- Added numeric-string coercion in `secureDispatcher` (e.g., `"14"` → `14`) as a fallback after registry lookup.
+- Fixed `owner/repo` splitting heuristic in `secureDispatcher` to perform a registry lookup on the extracted repo name instead of passing the raw string through.
 - Fixed Code Quality Audit findings: Removed stale `as any` comment in kanban tools, fixed raw `console.error` usage in Code Mode sandbox by replacing it with centralized logger, and hardened empty `z.object({})` schemas in core tools with `.strict()` modifier.
 - Fixed `get_entry_history` schema expectations in E2E tests and handler output payloads.
 - Fixed `project_number` validation failures in `mj_execute_code` by widening the outer Zod schema from `z.number()` to `relaxedNumber()`.
@@ -58,3 +63,4 @@
 
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
+- Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm`, properly enforcing lockfile guarantees (`pnpm-lock.yaml`) and preventing silent dependency drift caused by legacy `npm ci` calls.

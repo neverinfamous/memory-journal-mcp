@@ -49,7 +49,10 @@ export const CreateEntrySchemaMcp = z.object({
     ),
     is_personal: z.boolean().optional().default(true),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe(
+        'REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row ' +
+        '(registry: repoName (#N)) or use get_statistics. Do NOT pass a repo name string.'
+    ),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),

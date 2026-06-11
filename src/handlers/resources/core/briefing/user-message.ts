@@ -57,6 +57,8 @@ export function formatUserMessage(opts: {
     deprecationWarnings?: string[]
     /** Registered workspace paths for non-IDE agents: { repoName: diskPath } */
     registryPaths?: Record<string, string>
+    /** Registered project numbers for display: { repoName: numericId } */
+    registryProjectNumbers?: Record<string, number>
 }): string {
     const {
         repoName,
@@ -263,7 +265,10 @@ export function formatUserMessage(opts: {
         configLine3.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
     }
     if (opts.registryRepos && opts.registryRepos.length > 0) {
-        const repoNames = opts.registryRepos.slice(0, 3).join(', ')
+        const repoNames = opts.registryRepos.slice(0, 3).map((name) => {
+            const projNum = opts.registryProjectNumbers?.[name]
+            return projNum !== undefined ? `${name} (#${String(projNum)})` : name
+        }).join(', ')
         const suffix =
             opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
         configLine3.push(`registry: ${escapeCell(repoNames)}${suffix}`)
