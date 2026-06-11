@@ -297,9 +297,9 @@ describe('parseToolFilter edge cases', () => {
     })
 
     it('should handle combined meta-group with tool exclusion', () => {
-        const config = parseToolFilter('starter,-create_entry_minimal')
+        const config = parseToolFilter('starter,-search_entries')
         expect(config.enabledTools.has('create_entry')).toBe(true)
-        expect(config.enabledTools.has('create_entry_minimal')).toBe(false)
+        expect(config.enabledTools.has('search_entries')).toBe(false)
     })
 
     it('should handle multiple exclusions', () => {

@@ -5,7 +5,7 @@
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'

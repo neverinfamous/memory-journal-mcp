@@ -32,6 +32,8 @@ const callTool = (
                 },
                 io: { allowedRoots: [process.cwd()] },
                 dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+                codemodeEnabled: true,
+                codemodeInternalFullAccess: true,
             } as any),
         progress,
         teamDb,
@@ -145,6 +147,7 @@ describe('Code Mode Tool Handlers', () => {
             },
             io: { allowedRoots: [process.cwd()] },
             dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+            codemodeEnabled: true,
         }
 
         const result = (await callTool(
@@ -190,6 +193,7 @@ describe('Code Mode Tool Handlers', () => {
             },
             io: { allowedRoots: [process.cwd()] },
             dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+            codemodeEnabled: true,
         }
 
         const result = (await callTool(

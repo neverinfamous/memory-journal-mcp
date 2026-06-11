@@ -1,9 +1,11 @@
-import type { Entry } from '../../types/index.js'
+import type { JournalEntry } from '../../types/index.js'
 
 export interface SemanticSearchResult {
-    entry: Entry
+    entryId: number
+    entry: JournalEntry
     distance: number
-    similarityScore: number // 1.0 (exact) to 0.0 (completely orthogonal/opposite)
+    score: number // 1.0 (exact) to 0.0 (completely orthogonal/opposite)
+    similarityScore: number
 }
 
 // ----------------------------------------------------------------------------

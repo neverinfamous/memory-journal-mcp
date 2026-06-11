@@ -6,6 +6,7 @@
  */
 
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { logger } from './logger.js'
 
 /**
@@ -14,19 +15,15 @@ import { logger } from './logger.js'
  */
 export async function autoIndexEntry(
     vectorManager: VectorSearchManager | undefined,
-    entryId: number,
-    content: string
+    db: IDatabaseAdapter,
+    entryId: number
 ): Promise<'success' | 'failed' | 'disabled'> {
     if (vectorManager === undefined) return 'disabled'
     try {
-        const result = await vectorManager.addEntry(entryId, content)
-        if (!result.success) {
-            logger.error(`Failed to auto-index entry #${String(entryId)}`, {
-                module: 'VectorIndex',
-                error: result.error || 'Unknown error',
-            })
-            return 'failed'
-        }
+        const entry = db.getEntryById(entryId)
+        if (!entry) return 'failed'
+        
+        await vectorManager.addEntry(entry)
         return 'success'
     } catch (error) {
         logger.error(`Failed to auto-index entry #${String(entryId)}`, {

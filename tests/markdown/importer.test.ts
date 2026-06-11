@@ -272,6 +272,7 @@ Content`
         const fileContent = `Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
+        mockDb.getEntryById.mockReturnValue({ id: 99 })
         mockVectorManager.addEntry.mockRejectedValueOnce(new Error('Vector failure'))
 
         const result = await importMarkdownEntries(

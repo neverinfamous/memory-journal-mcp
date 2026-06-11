@@ -303,7 +303,7 @@ describe('Scheduler', () => {
 
             await vi.advanceTimersByTimeAsync(60_000)
 
-            expect(vectorManager.rebuildIndex).toHaveBeenCalledWith(db)
+            expect(vectorManager.rebuildIndex).toHaveBeenCalledWith()
 
             const status = scheduler.getStatus()
             const job = status.jobs.find((j) => j.name === 'rebuild-index')

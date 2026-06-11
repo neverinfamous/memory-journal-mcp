@@ -3,7 +3,7 @@
  *
  * Validates response shapes for 6 core tools:
  * create_entry, get_recent_entries, get_entry_by_id,
- * create_entry_minimal, test_simple, list_tags.
+ * create_entry, test_simple, list_tags.
  */
 
 import { test, expect } from '@playwright/test'
@@ -47,14 +47,6 @@ test.describe('Payload Contracts: Core', () => {
         createdEntryId = entry.id as number
     })
 
-    test('create_entry_minimal returns { success, entry }', async () => {
-        const payload = await callToolAndParse(client, 'create_entry_minimal', {
-            content: 'Minimal payload test',
-        })
-        expectSuccess(payload)
-        expect(payload.success).toBe(true)
-        expect(payload.entry).toBeDefined()
-    })
 
     test('get_recent_entries returns { entries, count }', async () => {
         const payload = await callToolAndParse(client, 'get_recent_entries', {
@@ -66,24 +58,22 @@ test.describe('Payload Contracts: Core', () => {
         expect(typeof payload.count).toBe('number')
     })
 
-    test('get_entry_by_id returns { entry, importance }', async () => {
+    test('get_entry_by_id returns { entry }', async () => {
         const payload = await callToolAndParse(client, 'get_entry_by_id', {
             project_number: 1,
             entry_id: createdEntryId,
         })
         expectSuccess(payload)
         expect(payload.entry).toBeDefined()
-        expect(payload.importance).toBeDefined()
     })
 
-    test('get_entry_history returns { revisions, count }', async () => {
+    test('get_entry_history returns { current, history }', async () => {
         const payload = await callToolAndParse(client, 'get_entry_history', {
-            project_number: 1,
-            entry_id: createdEntryId,
+            id: createdEntryId,
         })
         expectSuccess(payload)
-        expect(Array.isArray(payload.revisions)).toBe(true)
-        expect(typeof payload.count).toBe('number')
+        expect(Array.isArray(payload.history)).toBe(true)
+        expect(payload.current).toBeDefined()
     })
 
     test('list_tags returns { tags, count }', async () => {

@@ -28,7 +28,7 @@ test.describe('Payload Contracts: Code Mode Abuse', () => {
             name: 'mj_execute_code',
             arguments: {
                 code: 'while(true) {}',
-                timeout: 50, // Very sharp timeout for the test
+                timeout_ms: 50, // Very sharp timeout for the test
             },
         })
 
@@ -44,7 +44,7 @@ test.describe('Payload Contracts: Code Mode Abuse', () => {
             name: 'mj_execute_code',
             arguments: {
                 code: 'await new Promise(() => {})', // Never resolves
-                timeout: 50,
+                timeout_ms: 50,
             },
         })
 

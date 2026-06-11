@@ -128,8 +128,8 @@ describe('Handler catch blocks via Zod validation errors', () => {
         expect(result.code).toBeDefined()
     })
 
-    it('create_entry_minimal: no content triggers catch', async () => {
-        const result = (await callTool('create_entry_minimal', {}, db)) as any
+    it('create_entry: no content triggers catch', async () => {
+        const result = (await callTool('create_entry', {}, db)) as any
         expect(result.success).toBe(false)
         expect(typeof result.error).toBe('string')
         expect(result.code).toBeDefined()

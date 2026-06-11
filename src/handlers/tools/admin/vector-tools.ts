@@ -6,6 +6,7 @@ import {
     AddToVectorIndexOutputSchema,
 } from './schemas.js'
 import { relaxedNumber } from '../schemas.js'
+import { logger } from '../../../utils/logger.js'
 
 export function getVectorTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager, progress } = context;
@@ -37,18 +38,15 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const { indexed, failed, firstError, partial, errors } =
-                        await vectorManager.rebuildIndex(db, progress)
+                    const { success, indexed, failed, firstError } =
+                        await vectorManager.rebuildIndex(progress)
                     
-                    if (errors.length > 0) {
-                        const mcpErrors = errors.map(e => new Error(`Entry ${e.entryId} failed: ${e.error.message}`));
-                        throw new AggregateError(mcpErrors, `Vector index rebuild partially failed: ${failed} entries failed to index.`);
+                    if (!success && firstError) {
+                        logger.warning(`Vector index rebuild had errors: ${firstError}`)
                     }
 
-                    const success = indexed > 0 || failed === 0
                     return {
                         success,
-                        partial,
                         entriesIndexed: indexed,
                         ...(failed > 0 ? { failedEntries: failed } : {}),
                         ...(!success
@@ -100,13 +98,18 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
-                    const result = await vectorManager.addEntry(entry_id, entry.content)
-                    return {
-                        success: result.success,
-                        entryId: entry_id,
-                        ...(result.success
-                            ? {}
-                            : { error: result.error ?? 'Failed to generate or store embedding' }),
+                    try {
+                        await vectorManager.addEntry(entry)
+                        return {
+                            success: true,
+                            entryId: entry_id,
+                        }
+                    } catch (err) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: err instanceof Error ? err.message : 'Failed to generate or store embedding'
+                        }
                     }
                 } catch (err) {
                     return formatHandlerError(err)

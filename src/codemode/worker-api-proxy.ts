@@ -66,11 +66,20 @@ export function buildApiProxy(
                 const key = prop
                 if (key in target) return target[key]
 
-                // Generic snake_case to camelCase fallback
-                if (typeof key === 'string' && key.includes('_')) {
-                    const camelKey = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
-                    if (camelKey in target) return target[camelKey]
+                // Generic camelCase to snake_case fallback
+                if (typeof key === 'string' && /[A-Z]/.test(key)) {
+                    const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                    if (snakeKey in target) return target[snakeKey]
                 }
+
+                // Handle legacy shorthand aliases
+                let resolvedKey: string | undefined
+                if (key === 'create') resolvedKey = 'create_entry'
+                else if (key === 'recent') resolvedKey = 'get_recent_entries'
+                else if (key === 'find') resolvedKey = 'search_entries'
+                else if (key === 'list') resolvedKey = 'list_backups'
+                
+                if (resolvedKey && resolvedKey in target) return target[resolvedKey]
 
                 if (key === 'getConfig') {
                     return () => Promise.reject(new Error(

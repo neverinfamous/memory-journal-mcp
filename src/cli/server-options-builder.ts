@@ -1,18 +1,19 @@
-import { Command } from 'commander'
+import type { Command } from 'commander'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { z } from 'zod'
 import type { ProjectRegistryEntry } from '../types/index.js'
 import type { AuditConfig } from '../audit/index.js'
-import { ConfigResolver } from '../utils/config-resolver.js'
+import type { ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath, defaultTeamDbPath } from './program-options.js'
+import type { ServerOptions } from '../server/mcp-server/types.js'
 
 export function buildServerOptions(
     resolver: ConfigResolver,
-    options: Record<string, unknown>,
-    command: Command,
+    _options: Record<string, unknown>,
+    _command: Command,
     configErrors: string[]
-) {
+): { serverOptions: ServerOptions; transport: string; db: string | undefined; teamDb?: string; host?: string } {
     // Wrapper to catch errors and aggregate them
     const catchConfig = <T>(fn: () => T, fallback: T): T => {
         try {
@@ -56,7 +57,7 @@ export function buildServerOptions(
         port: catchConfig(() => resolver.resolveIntRequired('port', 'PORT', 1, 65535), 3000),
         host,
         statelessHttp: stateless,
-        dbPath: db,
+        dbPath: db ?? defaultDbPath,
         teamDbPath: teamDb,
         teamDefaultRole: catchConfig(() => (resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied') as 'admin' | 'member' | 'viewer' | 'denied', 'denied'),
         teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
@@ -214,7 +215,7 @@ export function buildServerOptions(
         pruneDryRun: catchConfig(() => resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false, false),
         pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
         embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
-        metricsExport: catchConfig(() => {
+        metricsExport: catchConfig<'prometheus' | undefined>(() => {
             const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT');
             if (raw) {
                 if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`);

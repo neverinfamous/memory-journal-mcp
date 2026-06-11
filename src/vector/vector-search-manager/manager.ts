@@ -1,21 +1,21 @@
 import { logger } from '../../utils/logger.js'
-import type { SQLiteAdapter } from '../../database/sqlite-adapter/index.js'
-import type { Entry } from '../../types/index.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import type { JournalEntry } from '../../types/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
 import { DEFAULT_MODEL, type SemanticSearchResult } from './types.js'
 import { rebuildIndex } from './rebuild.js'
 
 export class VectorSearchManager {
-    private dbAdapter: SQLiteAdapter
+    private dbAdapter: IDatabaseAdapter
     private modelName: string
     private dimensions: number | null = null
     // Lazy-loaded dependencies
-    private pipeline: any = null
-    private transformers: any = null
+    private pipeline: unknown = null
+    private transformers: unknown = null
     private initializationPromise: Promise<void> | null = null
 
-    constructor(dbAdapter: SQLiteAdapter, options?: { modelName?: string }) {
+    constructor(dbAdapter: IDatabaseAdapter, options?: { modelName?: string }) {
         this.dbAdapter = dbAdapter
         this.modelName = options?.modelName || DEFAULT_MODEL
     }
@@ -35,10 +35,21 @@ export class VectorSearchManager {
     }
 
     /**
+     * Check if the vector search manager is initialized
+     */
+    public isInitialized(): boolean {
+        return this.initializationPromise !== null && this.pipeline !== null
+    }
+
+    /**
      * Initialize the vector search manager.
      * This loads the huggingface transformer model and creates the virtual table.
      */
     public async initialize(): Promise<void> {
+        if ((this.dbAdapter as unknown) == null) {
+            throw new Error('Vector database not available')
+        }
+
         if (this.initializationPromise) {
             return this.initializationPromise
         }
@@ -52,24 +63,27 @@ export class VectorSearchManager {
             logger.info('Initializing vector search...')
 
             // Lazy load transformers
-            if (!this.transformers) {
-                this.transformers = await import('@huggingface/transformers')
+            if (this.transformers === null) {
+                const transformersModule = await import('@huggingface/transformers')
+                this.transformers = transformersModule
                 // Configure transformers to only use local models if we're in a completely offline environment,
                 // otherwise let it download models to cache.
-                this.transformers.env.allowRemoteModels = true
-                this.transformers.env.localModelPath = '.cache/huggingface'
+                transformersModule.env.allowRemoteModels = true
+                transformersModule.env.localModelPath = '.cache/huggingface'
             }
 
             // Load model
             logger.info(`Loading embedding model: ${this.modelName}`)
-            this.pipeline = await this.transformers.pipeline('feature-extraction', this.modelName, {
+            const transformersModule = this.transformers as { pipeline: (task: string, model: string, options: unknown) => Promise<unknown> }
+            this.pipeline = await transformersModule.pipeline('feature-extraction', this.modelName, {
                 dtype: 'fp32',
             })
             logger.info('Embedding model loaded')
 
             // Detect dimensions dynamically by doing a test embedding
             logger.info('Detecting embedding dimensions...')
-            const testResult = await this.pipeline('test', { pooling: 'mean', normalize: true })
+            const pipelineFunc = this.pipeline as (text: string, options: unknown) => Promise<{ data: unknown[] }>
+            const testResult = await pipelineFunc('test', { pooling: 'mean', normalize: true })
             this.dimensions = testResult.data.length
             logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
 
@@ -90,77 +104,45 @@ export class VectorSearchManager {
      * If the model or dimensions changed, drops the old table and creates a new one.
      */
     private verifyAndCreateVecTable(): void {
-        const db = this.dbAdapter.db
-        if (!this.dimensions) {
+        const dimensions = this.dimensions
+        if (dimensions === null) {
             throw new Error('Dimensions not detected. Cannot create vector table.')
         }
 
-        // 1. Check if the table exists
-        let tableExists = false
+        let needsRecreation = false
+
         try {
-            const result = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vec_journal_entries'").get()
-            tableExists = !!result
-        } catch (err) {
-            logger.warning('Could not query sqlite_master, assuming table does not exist', { error: err })
-        }
-
-        let needsRecreation = !tableExists
-
-        // 2. If it exists, check if the dimensions and model match the metadata
-        if (tableExists) {
-            try {
-                // Try to get metadata from our app config
-                // In a robust implementation, this would be stored in a dedicated metadata table
-                // For now, we'll try to infer it from the table definition
-                
-                // Since sqlite-vec doesn't make it easy to extract dimensions after creation without parsing SQL,
-                // and we're actively tracking changes in the app layer, we'll use a pragmatic approach:
-                // We'll read the first row. If it errors because dimensions mismatch, we'll catch it.
-                // Or better, we can query sqlite_master for the exact CREATE TABLE statement.
-                
-                const masterResult = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='vec_journal_entries'").get() as { sql: string } | undefined
-                if (masterResult && masterResult.sql) {
-                    // Look for: embedding float[384]
-                    const match = masterResult.sql.match(/embedding\s+float\[(\d+)\]/i)
-                    if (match && match[1]) {
-                        const existingDim = parseInt(match[1], 10)
-                        if (existingDim !== this.dimensions) {
-                            needsRecreation = true
-                            logger.info(`Vector model or dimensions changed, dropping old index`, {
-                                oldModel: 'unknown',
-                                newModel: this.modelName,
-                                oldDimensions: existingDim,
-                                newDimensions: this.dimensions
-                            })
-                        }
-                    }
+            const existingDimStr = this.dbAdapter.getVectorMetadata('dimensions')
+            if (existingDimStr) {
+                const existingDim = parseInt(existingDimStr, 10)
+                if (existingDim !== this.dimensions) {
+                    needsRecreation = true
+                    logger.info(`Vector model or dimensions changed, dropping old index`, {
+                        oldModel: this.dbAdapter.getVectorMetadata('model_name') || 'unknown',
+                        newModel: this.modelName,
+                        oldDimensions: existingDim,
+                        newDimensions: this.dimensions
+                    })
                 }
-            } catch (err) {
-                // If anything fails during verification, recreate to be safe
+            } else {
                 needsRecreation = true
-                logger.warning('Failed to verify vector table dimensions, recreating', { error: err })
             }
+        } catch (err) {
+            needsRecreation = true
+            logger.warning('Failed to verify vector table dimensions, recreating', { error: err })
         }
 
-        // 3. Recreate if needed
         if (needsRecreation) {
             try {
-                db.exec('BEGIN IMMEDIATE')
-                db.exec('DROP TABLE IF EXISTS vec_journal_entries')
-                db.exec(`
-                    CREATE VIRTUAL TABLE vec_journal_entries USING vec0(
-                        embedding float[${this.dimensions}]
-                    )
-                `)
-                db.exec('COMMIT')
-                logger.info('Vector index table created/recreated successfully')
+                this.dbAdapter.executeInTransaction(() => {
+                    this.dbAdapter.dropVecTable()
+                    this.dbAdapter.createVecTable(dimensions)
+                    this.dbAdapter.setVectorMetadata('model_name', this.modelName)
+                    this.dbAdapter.setVectorMetadata('dimensions', dimensions.toString())
+                })
+                logger.info(`Created new vec_journal_entries table with ${this.dimensions} dimensions`)
             } catch (err) {
-                try {
-                    db.exec('ROLLBACK')
-                } catch (e) {
-                    /* ignore rollback error */
-                }
-                logger.error('Failed to create vector index table', { error: err })
+                logger.error('Failed to recreate vector table', { error: err })
                 throw err
             }
         }
@@ -172,31 +154,26 @@ export class VectorSearchManager {
     public async generateEmbedding(text: string): Promise<Float32Array> {
         await this.initialize()
 
-        if (!this.pipeline) {
-            throw new Error('Pipeline not initialized')
+        if (this.getDimensions() === null) {
+            throw new Error('Vector search not initialized properly. Cannot rebuild index.')
         }
 
-        const result = await this.pipeline(text, { pooling: 'mean', normalize: true })
+        const pipelineFunc = this.pipeline as (text: string, options: unknown) => Promise<{ data: number[] }>
+        const result = await pipelineFunc(text, { pooling: 'mean', normalize: true })
         return new Float32Array(result.data)
     }
 
-    /**
-     * Add an entry to the vector index
-     */
-    public async addEntry(entry: Entry): Promise<void> {
+    public async addEntry(entry: JournalEntry): Promise<void> {
         await this.initialize()
 
-        const db = this.dbAdapter.db
-        
         try {
             // Text to embed - include entry type and tags for better semantic matching
-            const tagsText = entry.tags && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
+            const tagsText = entry.tags !== undefined && entry.tags !== null && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
             const text = `[${entry.entryType}]${tagsText} ${entry.content}`
             
             const embedding = await this.generateEmbedding(text)
             
-            const stmt = db.prepare('INSERT OR REPLACE INTO vec_journal_entries(rowid, embedding) VALUES (?, ?)')
-            stmt.run(entry.id, embedding)
+            this.dbAdapter.upsertVector(entry.id, embedding)
         } catch (error) {
             logger.error(`Failed to add entry ${entry.id} to vector index`, {
                 error: error instanceof Error ? error.message : String(error)
@@ -208,59 +185,35 @@ export class VectorSearchManager {
     /**
      * Remove an entry from the vector index
      */
-    public removeEntry(entryId: number): void {
-        // Can be done synchronously as it doesn't require the model
+    public removeEntry(entryId: number): boolean {
+        if ((this.dbAdapter as unknown) == null) return false;
+
         try {
-            const db = this.dbAdapter.db
-            
-            // Check if table exists first (don't fail if we're not using vectors)
-            const exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vec_journal_entries'").get()
-            if (!exists) return
-            
-            const stmt = db.prepare('DELETE FROM vec_journal_entries WHERE rowid = ?')
-            stmt.run(entryId)
+            this.dbAdapter.deleteVector(entryId)
+            return true;
         } catch (error) {
-            logger.warning(`Failed to remove entry ${entryId} from vector index`, {
-                error: error instanceof Error ? error.message : String(error)
-            })
+            logger.warning(`Failed to remove entry ${entryId} from vector index`, { error })
             // Non-fatal
+            return false;
         }
     }
 
     /**
      * Search for similar entries by text query
      */
-    public async search(query: string, limit: number = 10): Promise<SemanticSearchResult[]> {
+    public async search(query: string, limit = 10, threshold = 0.0): Promise<SemanticSearchResult[]> {
         await this.initialize()
 
-        const db = this.dbAdapter.db
-        
         try {
             const queryEmbedding = await this.generateEmbedding(query)
             
-            // sqlite-vec distance function uses cosine distance (1.0 - cosine_similarity)
-            // L2 distance is available via vec_distance_L2
-            // We use cosine distance as it's standard for semantic embeddings
-            const stmt = db.prepare(`
-                SELECT 
-                    rowid,
-                    distance
-                FROM vec_journal_entries
-                WHERE embedding MATCH ?
-                ORDER BY distance
-                LIMIT ?
-            `)
-            
-            // We need to convert distance to similarity score
-            // sqlite-vec returns cosine distance (0 to 2)
-            // Similarity = 1 - (distance / 2) to normalize to 0-1 range
-            // Or roughly 1 - distance for standard normalized vectors
-            const results = stmt.all(queryEmbedding, limit) as { rowid: number, distance: number }[]
+            // searchVectors returns { entry_id: number; distance: number }[]
+            const results = this.dbAdapter.searchVectors(queryEmbedding, limit)
             
             const searchResults: SemanticSearchResult[] = []
             
             for (const result of results) {
-                const entry = this.dbAdapter.getEntryById(result.rowid)
+                const entry = this.dbAdapter.getEntryById(result.entry_id)
                 if (entry) {
                     // Cosine distance maps: 0 = exact match, 2 = opposite
                     // Standard cosine similarity: 1 = exact match, -1 = opposite
@@ -268,12 +221,17 @@ export class VectorSearchManager {
                     // So similarity = 1 - distance
                     const similarityScore = Math.max(0, 1 - result.distance)
                     
-                    searchResults.push({
-                        entry,
-                        distance: result.distance,
-                        similarityScore
-                    })
+                    if (similarityScore >= threshold) {
+                        searchResults.push({
+                            entryId: result.entry_id,
+                            entry,
+                            distance: result.distance,
+                            score: similarityScore,
+                            similarityScore
+                        })
+                    }
                 }
+                if (searchResults.length >= limit) break
             }
             
             return searchResults
@@ -289,60 +247,52 @@ export class VectorSearchManager {
     /**
      * Search for similar entries using an existing entry as the query
      */
-    public async searchByEntryId(entryId: number, limit: number = 10): Promise<SemanticSearchResult[]> {
+    public async searchByEntryId(entryId: number, limit = 10, threshold = 0.0): Promise<SemanticSearchResult[]> {
         await this.initialize()
 
-        const db = this.dbAdapter.db
-        
         try {
-            // Check if the entry exists in the vector index
-            const getEmbeddingStmt = db.prepare('SELECT embedding FROM vec_journal_entries WHERE rowid = ?')
-            const result = getEmbeddingStmt.get(entryId) as { embedding: Float32Array } | undefined
+            let queryEmbedding = this.dbAdapter.getVector(entryId)
             
-            let queryEmbedding: Float32Array
-            
-            if (result && result.embedding) {
-                queryEmbedding = result.embedding
-            } else {
+            if (!queryEmbedding) {
                 // If not in index, fetch the entry and generate embedding
                 const entry = this.dbAdapter.getEntryById(entryId)
                 if (!entry) {
                     throw new Error(`Entry ${entryId} not found`)
                 }
                 
-                const tagsText = entry.tags && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
+                const tagsText = entry.tags !== undefined && entry.tags !== null && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
                 const text = `[${entry.entryType}]${tagsText} ${entry.content}`
                 queryEmbedding = await this.generateEmbedding(text)
                 
                 // Add it to the index while we're at it
-                const stmt = db.prepare('INSERT OR REPLACE INTO vec_journal_entries(rowid, embedding) VALUES (?, ?)')
-                stmt.run(entryId, queryEmbedding)
+                this.dbAdapter.upsertVector(entryId, queryEmbedding)
             }
             
-            // Search excluding the entry itself
-            const stmt = db.prepare(`
-                SELECT 
-                    rowid,
-                    distance
-                FROM vec_journal_entries
-                WHERE embedding MATCH ? AND rowid != ?
-                ORDER BY distance
-                LIMIT ?
-            `)
-            
-            const results = stmt.all(queryEmbedding, entryId, limit) as { rowid: number, distance: number }[]
+            // Search (request limit + 1 to account for the entry itself)
+            const results = this.dbAdapter.searchVectors(queryEmbedding, limit + 1)
             
             const searchResults: SemanticSearchResult[] = []
             
             for (const result of results) {
-                const entry = this.dbAdapter.getEntryById(result.rowid)
+                // Skip the original entry
+                if (result.entry_id === entryId) continue
+                
+                const entry = this.dbAdapter.getEntryById(result.entry_id)
                 if (entry) {
-                    searchResults.push({
-                        entry,
-                        distance: result.distance,
-                        similarityScore: Math.max(0, 1 - result.distance)
-                    })
+                    const similarityScore = Math.max(0, 1 - result.distance)
+                    if (similarityScore >= threshold) {
+                        searchResults.push({
+                            entryId: result.entry_id,
+                            entry,
+                            distance: result.distance,
+                            score: similarityScore,
+                            similarityScore
+                        })
+                    }
                 }
+                
+                // Only return up to limit results
+                if (searchResults.length >= limit) break
             }
             
             return searchResults
@@ -357,40 +307,29 @@ export class VectorSearchManager {
     /**
      * Helper to get vector search statistics
      */
-    public getStats(): { indexedEntries: number; totalEntries: number; dimensions: number | null; modelName: string } {
-        const db = this.dbAdapter.db
-        
-        let indexedEntries = 0
-        let totalEntries = 0
+    public getStats(): { itemCount: number; dimensions: number; modelName: string; isReady: boolean } {
+        let itemCount = 0
+        let isReady = false
         
         try {
-            const result = db.prepare('SELECT COUNT(*) as count FROM journal_entries').get() as { count: number }
-            totalEntries = result.count
-            
-            const vecExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vec_journal_entries'").get()
-            if (vecExists) {
-                const vecResult = db.prepare('SELECT COUNT(*) as count FROM vec_journal_entries').get() as { count: number }
-                indexedEntries = vecResult.count
-            }
+            itemCount = this.dbAdapter.getVectorCount()
+            isReady = this.pipeline !== null
         } catch (error) {
             logger.warning('Failed to get vector search stats', { error })
         }
         
         return {
-            indexedEntries,
-            totalEntries,
-            dimensions: this.dimensions,
-            modelName: this.modelName
+            itemCount,
+            dimensions: this.dimensions ?? 0,
+            modelName: this.modelName,
+            isReady
         }
     }
 
-    /**
-     * Rebuild the vector index incrementally
-     */
     public async rebuildIndex(
         progress?: ProgressContext,
         options?: { force?: boolean; batchSize?: number; pageSize?: number }
-    ): Promise<{ success: boolean; indexed: number; skipped: number; errors: number }> {
+    ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null }> {
         await this.initialize()
         return rebuildIndex(this, this.dbAdapter, progress, options)
     }

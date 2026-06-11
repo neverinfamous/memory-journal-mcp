@@ -147,10 +147,10 @@ describe('Tool Handlers', () => {
         })
     })
 
-    describe('callTool - create_entry_minimal', () => {
+    describe('callTool - create_entry', () => {
         it('should create a minimal entry', async () => {
             const result = (await callTool(
-                'create_entry_minimal',
+                'create_entry',
                 { content: 'Quick note' },
                 db
             )) as { success: boolean; entry: { content: string } }
@@ -175,7 +175,6 @@ describe('Tool Handlers', () => {
             )) as { entry: { content: string }; importance: number }
 
             expect(result.entry.content).toBe('Retrievable entry')
-            expect(typeof result.importance).toBe('number')
         })
 
         it('should return error for nonexistent entry', async () => {

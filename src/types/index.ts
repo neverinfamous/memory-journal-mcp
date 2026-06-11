@@ -207,6 +207,7 @@ export interface ToolHandlerConfig {
     /** Server auth configuration passed down for strict security gates */
     authEnabled?: boolean
     oauthEnabled?: boolean
+    codemodeEnabled?: boolean
     codemodeInternalFullAccess?: boolean
     /** Default role for un-registered authors (default: denied) */
     teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'

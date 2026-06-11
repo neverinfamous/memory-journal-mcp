@@ -41,6 +41,8 @@ const callTool = (
                     },
                 },
                 io: { allowedRoots: [process.cwd()] },
+                codemodeEnabled: true,
+                codemodeInternalFullAccess: true,
             } as any),
         progress,
         teamDb,
@@ -94,7 +96,7 @@ describe('mj_execute_code Tool Handler', () => {
                 (t) => (t as { name: string }).name === 'mj_execute_code'
             ) as { description: string } | undefined
             expect(codeTool?.description).toContain('sandbox')
-            expect(codeTool?.description).toContain('mj.*')
+            expect(codeTool?.description).toContain('mj.')
         })
 
         it('should have annotations with readOnlyHint=false', () => {

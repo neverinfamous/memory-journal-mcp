@@ -25,10 +25,11 @@ const { mockEmbedderFn, mockPrepare, mockRun, mockAll, mockGet } = vi.hoisted(()
 
 vi.mock('@huggingface/transformers', () => ({
     pipeline: vi.fn().mockResolvedValue(mockEmbedderFn),
+    env: { allowRemoteModels: false, localModelPath: '' },
 }))
 
 // Import AFTER mocks are set up
-import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 import type { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
@@ -49,9 +50,11 @@ function createMockDbAdapter() {
     }
 
     const adapter = {
+        db: mockDb,
         getRawDb: vi.fn().mockReturnValue(mockDb),
         getActiveEntryCount: vi.fn().mockReturnValue(0),
         getEntriesPage: vi.fn().mockReturnValue({ entries: [] }),
+        getEntryById: vi.fn().mockImplementation((id: number) => ({ id, content: `Entry ${id}`, entryType: 'note', tags: [] })),
 
         // Proxy new adapter primitives to the original test assertions
         getVector: (entryId: number) => {
@@ -170,10 +173,6 @@ describe('VectorSearchManager', () => {
             expect(embedding).toHaveLength(384)
             expect(typeof embedding[0]).toBe('number')
         })
-
-        it('should throw if not initialized', async () => {
-            await expect(vm.generateEmbedding('test')).rejects.toThrow('not initialized')
-        })
     })
 
     // ========================================================================
@@ -186,8 +185,7 @@ describe('VectorSearchManager', () => {
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(1) })
             mockRun.mockReturnValue(undefined)
 
-            const result = await vm.addEntry(42, 'Some content')
-            expect(result.success).toBe(true)
+            await vm.addEntry({ id: 42, content: 'Some content', entryType: 'note', tags: [] } as any)
 
             // Should prepare DELETE then INSERT statements
             expect(mockPrepare).toHaveBeenCalledWith(
@@ -201,26 +199,20 @@ describe('VectorSearchManager', () => {
             expect(mockRun).toHaveBeenCalledWith(BigInt(42), expect.any(Float32Array))
         })
 
-        it('should return false on error', async () => {
+        it('should throw on error', async () => {
             await initManager(vm)
             mockEmbedderFn.mockRejectedValue(new Error('Embedding failed'))
 
-            const result = await vm.addEntry(99, 'Content')
-            expect(result.success).toBe(false)
-            expect(result.error).toBeDefined()
+            await expect(vm.addEntry({ id: 99, content: 'Content', entryType: 'note', tags: [] } as any)).rejects.toThrow('Embedding failed')
         })
 
-        it('should return initialization error if not initialized', async () => {
+        it('should throw initialization error if not initialized', async () => {
             const { pipeline: pipelineMock } = await import('@huggingface/transformers')
             ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
                 new Error('Init failed during add')
             )
             const vm2 = new VectorSearchManager(adapter)
-            const result = await vm2.addEntry(99, 'Content')
-            expect(result.success).toBe(false)
-            expect(result.error).toContain(
-                'Vector search initialization failed: Init failed during add'
-            )
+            await expect(vm2.addEntry({ id: 99, content: 'Content', entryType: 'note', tags: [] } as any)).rejects.toThrow('Init failed during add')
         })
     })
 
@@ -234,27 +226,28 @@ describe('VectorSearchManager', () => {
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
 
             // sqlite-vec returns distance (lower = more similar)
-            // score = 1 / (1 + distance)
-            // distance=0.1 -> score≈0.91, distance=1.0 -> score=0.5, distance=9.0 -> score=0.1
+            // score = max(0, 1 - distance)
             mockAll.mockReturnValue([
-                { entry_id: 1, distance: 0.1 },
-                { entry_id: 2, distance: 1.0 },
-                { entry_id: 3, distance: 9.0 },
+                { entry_id: 1, distance: 0.1 }, // score 0.9
+                { entry_id: 2, distance: 0.5 }, // score 0.5
+                { entry_id: 3, distance: 0.8 }, // score 0.2
             ])
 
             const results = await vm.search('query text', 10, 0.3)
             expect(results).toHaveLength(2)
             expect(results[0]!.entryId).toBe(1)
-            expect(results[0]!.score).toBeCloseTo(1 / 1.1, 2)
+            expect(results[0]!.score).toBeCloseTo(0.9, 2)
+            expect(results[1]!.entryId).toBe(2)
+            expect(results[1]!.score).toBeCloseTo(0.5, 2)
         })
 
         it('should limit results to limit param', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
             mockAll.mockReturnValue([
-                { entry_id: 1, distance: 0.1 },
-                { entry_id: 2, distance: 0.2 },
-                { entry_id: 3, distance: 0.3 },
+                { entry_id: 1, distance: 0.1 }, // score 0.9
+                { entry_id: 2, distance: 0.2 }, // score 0.8
+                { entry_id: 3, distance: 0.3 }, // score 0.7
             ])
 
             const results = await vm.search('query', 2, 0.3)
@@ -290,9 +283,9 @@ describe('VectorSearchManager', () => {
             mockGet.mockReturnValue({ embedding: Buffer.from(fakeEmbedding(0).buffer) })
 
             mockAll.mockReturnValue([
-                { entry_id: 1, distance: 0.1 },
-                { entry_id: 2, distance: 1.0 },
-                { entry_id: 3, distance: 9.0 },
+                { entry_id: 1, distance: 0.1 }, // excluded
+                { entry_id: 2, distance: 0.5 }, // score 0.5
+                { entry_id: 3, distance: 0.8 }, // score 0.2
             ])
 
             // Excludes entryId 1 from the results
@@ -302,12 +295,12 @@ describe('VectorSearchManager', () => {
             expect(results[0]!.score).toBeCloseTo(0.5, 2)
         })
 
-        it('should return empty if embedding not found', async () => {
+        it('should throw if embedding not found and entry not found', async () => {
             await initManager(vm)
             mockGet.mockReturnValue(undefined)
+            ;(adapter as any).getEntryById.mockReturnValue(undefined)
 
-            const results = await vm.searchByEntryId(99, 10, 0.3)
-            expect(results).toEqual([])
+            await expect(vm.searchByEntryId(99, 10, 0.3)).rejects.toThrow('Entry 99 not found')
         })
 
         it('should return empty on SQL error', async () => {
@@ -411,16 +404,13 @@ describe('VectorSearchManager', () => {
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
             mockRun.mockReturnValue(undefined)
 
-            const mockDb = {
-                getActiveEntryCount: vi.fn().mockReturnValue(2),
-                getEntriesPage: vi.fn().mockReturnValue({ entries: [
-                    { id: 1, content: 'Entry one' },
-                    { id: 2, content: 'Entry two' },
-                ]}),
-                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
-            }
+            ;(adapter as any).getActiveEntryCount.mockReturnValue(2)
+            ;(adapter as any).getEntriesPage.mockReturnValue({ entries: [
+                { id: 1, content: 'Entry one' },
+                { id: 2, content: 'Entry two' },
+            ]})
 
-            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            const result = await vm.rebuildIndex()
             expect(result.indexed).toBe(2)
             expect(result.failed).toBe(0)
             expect(result.firstError).toBeNull()
@@ -432,19 +422,16 @@ describe('VectorSearchManager', () => {
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
             mockRun.mockReturnValue(undefined)
 
-            const mockDb = {
-                getActiveEntryCount: vi.fn().mockReturnValue(1),
-                getEntriesPage: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'Active entry' }] }),
-                cleanupStaleVectors: () => {
-                    mockPrepare(
-                        'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
-                    )
-                    mockRun()
-                },
-                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
+            ;(adapter as any).getActiveEntryCount.mockReturnValue(1)
+            ;(adapter as any).getEntriesPage.mockReturnValue({ entries: [{ id: 1, content: 'Active entry' }] })
+            ;(adapter as any).cleanupStaleVectors = () => {
+                mockPrepare(
+                    'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+                )
+                mockRun()
             }
 
-            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            const result = await vm.rebuildIndex()
             expect(result.indexed).toBe(1)
 
             expect(mockPrepare).toHaveBeenCalledWith(
@@ -453,13 +440,10 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return 0 when db not available', async () => {
-            const mockDb = {
-                getActiveEntryCount: vi.fn().mockReturnValue(0),
-                getEntriesPage: vi.fn().mockReturnValue({ entries: [] }),
-                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
-            }
+            ;(adapter as any).getActiveEntryCount.mockReturnValue(0)
+            ;(adapter as any).getEntriesPage.mockReturnValue({ entries: [] })
 
-            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            const result = await vm.rebuildIndex()
             expect(result.indexed).toBe(0)
             expect(result.failed).toBe(0)
         })
@@ -472,31 +456,25 @@ describe('VectorSearchManager', () => {
                 .mockRejectedValueOnce(new Error('Embedding failed'))
             mockRun.mockReturnValue(undefined)
 
-            const mockDb = {
-                getActiveEntryCount: vi.fn().mockReturnValue(2),
-                getEntriesPage: vi.fn().mockReturnValue({ entries: [
-                    { id: 1, content: 'Good entry' },
-                    { id: 2, content: 'Will fail embedding' },
-                ]}),
-                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
-            }
+            ;(adapter as any).getActiveEntryCount.mockReturnValue(2)
+            ;(adapter as any).getEntriesPage.mockReturnValue({ entries: [
+                { id: 1, content: 'Good entry' },
+                { id: 2, content: 'Will fail embedding' },
+            ]})
 
-            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            const result = await vm.rebuildIndex()
             // Only 1 should be indexed (the other failed)
             expect(result.indexed).toBe(1)
             expect(result.failed).toBe(1)
             expect(result.firstError).toBe('Embedding failed')
         })
 
-        it('should return initialization error if initialize fails', async () => {
+        it('should throw initialization error if initialize fails', async () => {
             const { pipeline: pipelineMock } = await import('@huggingface/transformers')
             ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
                 'Pipeline broke string error'
             )
-            const result = await vm.rebuildIndex({} as any)
-            expect(result.firstError).toContain(
-                'Vector search initialization failed: Pipeline broke'
-            )
+            await expect(vm.rebuildIndex()).rejects.toThrow('Pipeline broke string error')
         })
 
         it('should handle insert statement failure during rebuild', async () => {
@@ -511,16 +489,13 @@ describe('VectorSearchManager', () => {
                     throw new Error('Insert failed!!')
                 }) // 2nd INSERT
 
-            const mockDb = {
-                getActiveEntryCount: vi.fn().mockReturnValue(2),
-                getEntriesPage: vi.fn().mockReturnValue({ entries: [
-                    { id: 1, content: 'Good entry' },
-                    { id: 2, content: 'Will fail insert' },
-                ]}),
-                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
-            }
+            ;(adapter as any).getActiveEntryCount.mockReturnValue(2)
+            ;(adapter as any).getEntriesPage.mockReturnValue({ entries: [
+                { id: 1, content: 'Good entry' },
+                { id: 2, content: 'Will fail insert' },
+            ]})
 
-            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            const result = await vm.rebuildIndex()
             // The entire batch is rolled back if any insert fails
             expect(result.indexed).toBe(0)
             expect(result.failed).toBe(2)

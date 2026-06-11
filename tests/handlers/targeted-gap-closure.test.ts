@@ -96,7 +96,7 @@ describe('Targeted Gap Closure', () => {
     describe('test_simple', () => {
         it('should return default message when no param', async () => {
             const result = (await callTool('test_simple', {}, db)) as { message: string }
-            expect(result.message).toContain('Test response: Hello')
+            expect(result.message).toContain('Echo: Hello')
         })
 
         it('should return custom message', async () => {
@@ -123,7 +123,7 @@ describe('Targeted Gap Closure', () => {
     // core.ts — create_entry with vectorManager (fire-and-forget)
     // ========================================================================
 
-    describe('create_entry_minimal with vectorManager', () => {
+    describe('create_entry with vectorManager', () => {
         it('should auto-index entry to vector store', async () => {
             const vectorManager = {
                 isInitialized: vi.fn().mockReturnValue(true),
@@ -137,7 +137,7 @@ describe('Targeted Gap Closure', () => {
             } as any
 
             const result = (await callTool(
-                'create_entry_minimal',
+                'create_entry',
                 { content: 'Minimal entry with vector indexing' },
                 db,
                 vectorManager

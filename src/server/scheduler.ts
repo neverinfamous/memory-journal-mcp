@@ -7,7 +7,7 @@
  */
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
-import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import { logger } from '../utils/logger.js'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
@@ -334,7 +334,7 @@ export class Scheduler {
             return
         }
 
-        const { indexed: count } = await this.vectorManager.rebuildIndex(this.db)
+        const { indexed: count } = await this.vectorManager.rebuildIndex()
         logger.info(`Scheduled vector index rebuild: ${String(count)} entries indexed`, {
             module: 'Scheduler',
             operation: 'rebuild-index',

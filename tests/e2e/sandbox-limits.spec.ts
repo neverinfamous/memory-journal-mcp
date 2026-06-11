@@ -27,7 +27,7 @@ test.describe('Payload Contracts: Sandbox Limits', () => {
         // Provide a timeout of 1000ms
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: 'while(true){}',
-            timeout: 1000,
+            timeout_ms: 1000,
         })
         const duration = Date.now() - start
 
@@ -38,7 +38,7 @@ test.describe('Payload Contracts: Sandbox Limits', () => {
     test('Code Mode MUST terminate long-running synchronous code', async () => {
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: 'const end = Date.now() + 5000; while(Date.now() < end) {}',
-            timeout: 1000,
+            timeout_ms: 1000,
         })
 
         expect(payload.success).toBe(false)

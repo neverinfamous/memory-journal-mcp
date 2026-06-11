@@ -10,7 +10,7 @@
 
 import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
-import type { VectorSearchManager } from '../../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import { passMetadataFilters, type ISearchFilters, type EntryWithSource } from './helpers.js'
 import { logger } from '../../../utils/logger.js'
 

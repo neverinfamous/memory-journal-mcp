@@ -10,9 +10,10 @@ const { mockEmbedderFn, mockGet, mockPrepare, mockRun, mockAll } = vi.hoisted(()
 
 vi.mock('@huggingface/transformers', () => ({
     pipeline: vi.fn().mockResolvedValue(mockEmbedderFn),
+    env: { allowRemoteModels: false, localModelPath: '' },
 }))
 
-import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 
 function createMockDbAdapter() {
@@ -24,13 +25,20 @@ function createMockDbAdapter() {
 
     const metadataStore = new Map<string, string>()
 
+    const mockDb = {
+        prepare: mockPrepare,
+        exec: vi.fn(),
+    }
+
     const adapter = {
+        db: mockDb,
         getVectorMetadata: vi.fn((key: string) => metadataStore.get(key)),
         setVectorMetadata: vi.fn((key: string, value: string) => {
             metadataStore.set(key, value)
         }),
         createVecTable: vi.fn(),
         dropVecTable: vi.fn(),
+        executeInTransaction: vi.fn().mockImplementation((cb) => cb()),
     } as unknown as IDatabaseAdapter
 
     return { adapter, metadataStore }
@@ -63,7 +71,7 @@ describe('Swappable Embedding Model', () => {
         metadataStore.set('model_name', 'Xenova/all-MiniLM-L6-v2')
         metadataStore.set('dimensions', '384')
 
-        const vm = new VectorSearchManager(adapter, 'NewModel/Tiny-v1')
+        const vm = new VectorSearchManager(adapter, { modelName: 'NewModel/Tiny-v1' })
         mockEmbedderFn.mockResolvedValue({ data: new Float32Array(128) })
         await vm.initialize()
 

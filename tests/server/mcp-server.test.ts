@@ -172,7 +172,7 @@ vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
     },
 }))
 
-vi.mock('../../src/vector/vector-search-manager.js', () => ({
+vi.mock('../../src/vector/vector-search-manager/index.js', () => ({
     VectorSearchManager: function () {
         return {
             initialize: mockVectorInitialize,

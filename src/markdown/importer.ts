@@ -10,7 +10,7 @@ import { opendir, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
-import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
@@ -356,17 +356,12 @@ export async function processImportBatch(
     // Phase 3: Perform vector indexing asynchronously (outside transaction)
     if (!dry_run && vectorManager) {
         let hasVectorErrors = false
-        for (const { entryId, body, filename } of vectorQueue) {
+        for (const { entryId, filename } of vectorQueue) {
             try {
-                const vectorResult = await vectorManager.addEntry(entryId, body)
-                if (vectorResult.success) {
+                const entry = db.getEntryById(entryId)
+                if (entry) {
+                    await vectorManager.addEntry(entry)
                     result.vectorsIndexed++
-                } else {
-                    hasVectorErrors = true
-                    result.errors.push({
-                        file: filename,
-                        error: `Vector indexing failed: ${vectorResult.error || 'Unknown error'}`,
-                    })
                 }
             } catch (err) {
                 hasVectorErrors = true

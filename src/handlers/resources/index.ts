@@ -5,7 +5,7 @@
  * Exports all MCP resources with annotations following MCP 2025-11-25 spec.
  */
 
-import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'

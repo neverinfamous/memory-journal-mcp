@@ -2,7 +2,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { passMetadataFilters } from './helpers.js'
 import { SemanticSearchSchema, SemanticSearchSchemaMcp, SemanticSearchOutputSchema } from './schemas.js'
-import type { SemanticSearchResult } from '../../../vector/vector-search-manager.js'
+import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
 
 export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager } = context;

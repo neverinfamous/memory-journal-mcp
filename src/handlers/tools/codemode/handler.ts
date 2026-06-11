@@ -1,12 +1,17 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
-import { runWithAuthContext } from '../../../auth/auth-context.js'
+import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
 
-import { ExecuteCodeSchema, ExecuteCodeSchemaMcp, MUTATION_TOOL_NAMES, VERSION_AWARE_TOOL_NAMES } from './schemas.js'
+import { getGitHubIntegration } from '../../../github/github-integration/index.js'
+import { ConfigurationError } from '../../../types/errors.js'
+
+import { ExecuteCodeSchema, ExecuteCodeSchemaMcp, VERSION_AWARE_TOOL_NAMES } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
+import type { SandboxResult } from '../../../codemode/types.js'
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
+    const securityManager = getSecurityManager()
     return [
         {
             name: 'mj_execute_code',
@@ -28,55 +33,124 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = ExecuteCodeSchema.parse(params)
 
-                    // 1. Project Injection Check
+                    // 1. Configuration Validation
+                    if (context.config?.codemodeEnabled !== true) {
+                        throw new ConfigurationError('Code Mode is disabled in the server configuration.')
+                    }
+
+                    // 1a. Security Validation
+                    const validation = securityManager.validateCode(input.code ?? '')
+                    if (!validation.valid) {
+                        return {
+                            success: false,
+                            error: `Security validation failed: ${validation.errors.join(', ')}`,
+                            project_id: undefined,
+                            executionTimeMs: 0
+                        }
+                    }
+
+                    // 1b. Rate Limiting
+                    const clientId = context.auth?.sub ?? context.auth?.subject ?? 'default'
+                    if (!securityManager.checkRateLimit(clientId)) {
+                        return {
+                            success: false,
+                            error: 'Rate limit exceeded: Maximum code executions per minute reached.',
+                            project_id: undefined,
+                            executionTimeMs: 0
+                        }
+                    }
+
+                    // 2. Project Injection Check
                     // If no explicit project is provided, check request context
                     let projectId = input.project_number
                     if (projectId === undefined || projectId === null) {
-                        const requestCtx = getRequestContext()
-                        if (requestCtx?.projectId !== undefined) {
-                            projectId = requestCtx.projectId
+                        if (context.config?.defaultProjectNumber !== undefined) {
+                            projectId = context.config.defaultProjectNumber
+                        }
+                    }
+
+                    let sessionContext = context
+
+                    // Context injection for GitHub / Kanban routing
+                    const repo = input.repo
+                    if (repo) {
+                        if (!context.config?.codemodeInternalFullAccess) {
+                            return {
+                                success: false,
+                                error: 'Repo switching is restricted to internal administrative access.',
+                                project_id: undefined,
+                                executionTimeMs: 0
+                            }
+                        }
+                        if (context.config?.projectRegistry) {
+                            let registryEntry = context.config.projectRegistry[repo]
+                            if (!registryEntry && repo.includes('/')) {
+                                const repoName = repo.split('/').pop()
+                                if (repoName) {
+                                    registryEntry = context.config.projectRegistry[repoName]
+                                }
+                            }
+
+                            if (registryEntry) {
+                                let injectedGithub
+                                try {
+                                    injectedGithub = getGitHubIntegration(
+                                        registryEntry.path,
+                                        undefined,
+                                        process.env['GITHUB_TOKEN']
+                                    )
+                                    // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
+                                    await injectedGithub.getRepoInfo()
+                                } catch (error) {
+                                    return {
+                                        success: false,
+                                        error: `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`,
+                                        project_id: undefined,
+                                        executionTimeMs: 0
+                                    }
+                                }
+                                sessionContext = {
+                                    ...context,
+                                    github: injectedGithub,
+                                }
+                            }
                         }
                     }
 
                     // 2. Fetch all tools and cache them
-                    const tools = collectNonCodeModeTools(context)
-                    const securityManager = getSecurityManager(context)
+                    const tools = collectNonCodeModeTools(sessionContext)
 
                     // 3. Create the secure dispatcher wrapper around tool handlers
                     const secureDispatcher = async (
                         toolName: string,
                         toolParams: unknown,
                         isSimulation?: boolean
-                    ) => {
+                    ): Promise<unknown> => {
                         const tool = tools.find((t) => t.name === toolName)
                         if (!tool) {
                             throw new Error(`[Security] Tool "${toolName}" is not available or registered in the environment. If you were trying to read a resource, use the proper readResource API instead.`)
                         }
 
-                        // Validate against security rules
-                        const validation = securityManager.validateToolAccess(toolName, toolParams)
-                        if (!validation.allowed) {
-                            throw new Error(`[Security] Access denied: ${validation.reason}`)
-                        }
-
                         // Mutation protection
-                        if (MUTATION_TOOL_NAMES.has(toolName) && input.dry_run) {
+                        if (tool.annotations?.readOnlyHint === false && input.dry_run) {
                             return {
                                 success: true,
                                 dry_run: true,
                                 message: `Simulated successful execution of ${toolName}`,
-                                simulatedParams: validation.sanitizedParams,
+                                simulatedParams: toolParams,
                             }
                         }
 
                         // Optional Simulation Phase (e.g. for optimistic updates)
-                        if (isSimulation && MUTATION_TOOL_NAMES.has(toolName)) {
+                        if (isSimulation && tool.annotations?.readOnlyHint === false) {
                             return {
                                 success: true,
                                 simulated: true,
-                                params: validation.sanitizedParams,
+                                params: toolParams,
                             }
                         }
+
+                        let finalParams = toolParams
 
                         // Inject project_number for team operations
                         if (
@@ -84,42 +158,35 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             toolName === 'cross_team_search' ||
                             toolName === 'create_relationship'
                         ) {
-                            if (typeof validation.sanitizedParams === 'object' && validation.sanitizedParams !== null) {
-                                const paramsObj = validation.sanitizedParams as Record<string, unknown>
+                            if (typeof finalParams === 'object' && finalParams !== null) {
+                                const paramsObj = { ...(finalParams as Record<string, unknown>) }
                                 
                                 // Auto-inject project_number if not present but available from context
-                                if (paramsObj.project_number === undefined && projectId !== undefined) {
-                                    paramsObj.project_number = projectId
+                                if (paramsObj['project_number'] === undefined && projectId !== undefined) {
+                                    paramsObj['project_number'] = projectId
                                 }
                                 
                                 // Try string -> number resolution if registry is available
                                 if (
-                                    typeof paramsObj.project_number === 'string' && 
-                                    context.config?.projectRegistry
+                                    typeof paramsObj['project_number'] === 'string' && 
+                                    sessionContext.config?.projectRegistry
                                 ) {
                                     // 1. Check if the string matches an explicit ID -> numeric ID resolution
-                                    const projects = context.config.projectRegistry.projects || []
-                                    const match = projects.find(p => p.id === paramsObj.project_number)
-                                    
-                                    if (match) {
-                                        paramsObj.project_number = match.id
+                                    const strVal = paramsObj['project_number']
+                                    const entry = sessionContext.config.projectRegistry[strVal]
+                                    if (entry?.project_number !== undefined) {
+                                        paramsObj['project_number'] = entry.project_number
                                     } else {
                                         // 2. Attempt 'owner/repo' splitting heuristic if no exact match
-                                        const strVal = String(paramsObj.project_number)
                                         if (strVal.includes('/')) {
                                             const parts = strVal.split('/')
                                             if (parts.length === 2 && typeof parts[1] === 'string') {
-                                                // Temporarily replace with the repo portion and see if the team mutation
-                                                // handler's internal fuzzy-matching can resolve it.
-                                                // Note: this is a weak fallback because project_number is expected to be a number.
-                                                // In future versions, the registry should strictly enforce number IDs.
-                                                // We assign the string here knowing Zod might fail it, but 'relaxedNumber' allows it
-                                                // to pass to the handler which will do a fuzzy string match.
-                                                paramsObj.project_number = parts[1]
+                                                paramsObj['project_number'] = parts[1]
                                             }
                                         }
                                     }
                                 }
+                                finalParams = paramsObj
                             }
                         }
 
@@ -127,22 +194,33 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         if (
                             input.auto_version && 
                             VERSION_AWARE_TOOL_NAMES.has(toolName) &&
-                            typeof validation.sanitizedParams === 'object' && 
-                            validation.sanitizedParams !== null
+                            typeof finalParams === 'object' && 
+                            finalParams !== null
                         ) {
-                            const paramsObj = validation.sanitizedParams as Record<string, unknown>
+                            const paramsObj = { ...(finalParams as Record<string, unknown>) }
                             // Only inject if they didn't explicitly provide it
-                            if (paramsObj.expected_version === undefined && typeof paramsObj.entry_id === 'number') {
-                                const existingEntry = context.teamDb?.getEntryById(paramsObj.entry_id)
+                            if (paramsObj['expected_version'] === undefined && typeof paramsObj['entry_id'] === 'number') {
+                                const existingEntry = sessionContext.teamDb?.getEntryById(paramsObj['entry_id'])
                                 if (existingEntry?.version !== undefined) {
-                                    paramsObj.expected_version = existingEntry.version
+                                    paramsObj['expected_version'] = existingEntry.version
                                 }
                             }
+                            finalParams = paramsObj
                         }
 
                         // Execute the underlying handler directly
-                        const result = await tool.handler(validation.sanitizedParams)
+                        const result = await tool.handler(finalParams)
                         return result
+                    }
+
+                    // Prepare api bindings
+                    const mjObj: Record<string, Record<string, (params: unknown) => Promise<unknown>>> = {}
+                    const apiBindings: Record<string, unknown> = mjObj
+                    
+                    for (const tool of tools) {
+                        const group = tool.group || 'core'
+                        mjObj[group] ??= {}
+                        mjObj[group][tool.name] = (params: unknown) => secureDispatcher(tool.name, params)
                     }
 
                     // 4. Execute Code in Sandbox Worker
@@ -156,7 +234,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // We must run the execution wrapped in the current context so the worker thread
                     // can read the identical context values via getAuthContext().
                     // (Assuming our pool implementation forwards ALS correctly via node:worker_threads)
-                    let execResult;
+                    let execResult: SandboxResult | undefined
                     
                     // Re-wrap in auth and request context to ensure propagation into the pool
                     const authCtx = getAuthContext()
@@ -165,17 +243,23 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     await requestContextStorage.run(reqCtx ?? {}, async () => {
                         if (authCtx) {
                             await runWithAuthContext(authCtx, async () => {
-                                execResult = await pool.executeWithDispatcher(
+                                execResult = await pool.execute(
                                     input.code ?? '',
-                                    secureDispatcher,
-                                    userContext
+                                    apiBindings,
+                                    undefined,
+                                    input.timeout_ms,
+                                    userContext,
+                                    input.dry_run
                                 )
                             })
                         } else {
-                            execResult = await pool.executeWithDispatcher(
+                            execResult = await pool.execute(
                                 input.code ?? '',
-                                secureDispatcher,
-                                userContext
+                                apiBindings,
+                                undefined,
+                                input.timeout_ms,
+                                userContext,
+                                input.dry_run
                             )
                         }
                     })
@@ -184,15 +268,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // 5. Format and return results
                     return {
-                        success: execResult!.success,
+                        success: Boolean(execResult?.success),
                         executionTimeMs: Math.round(executionTime * 100) / 100,
-                        result: execResult!.result,
-                        error: execResult!.error,
-                        logs: execResult!.logs,
+                        result: execResult?.result,
+                        error: execResult?.error,
                         simulated: input.dry_run ? true : undefined,
                         project_id: projectId,
                     }
                 } catch (err) {
+                    console.error('CODEMODE_HANDLER_ERROR:', err)
                     return formatHandlerError(err)
                 }
             },

@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 
 const callTool = (
     name: any,
@@ -81,7 +81,7 @@ describe('Team Vector Tool Handlers', () => {
                 return [{ entryId: 1, score: 0.8 }]
             },
             getStats: () => ({ itemCount: 10, modelName: 'test-model', dimensions: 384 }),
-            rebuildIndex: async () => ({ indexed: 10, failed: 0, firstError: null, partial: false, errors: [] }),
+            rebuildIndex: async () => ({ success: true, indexed: 10, failed: 0, firstError: null, partial: false, errors: [] }),
             addEntry: async (id: number) => ({
                 success: id !== 999,
                 error: id === 999 ? 'Failed' : undefined,

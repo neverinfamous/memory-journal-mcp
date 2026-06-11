@@ -1,41 +1,39 @@
 import { describe, it, expect, vi } from 'vitest'
-import { getCodeModeTools } from '../../src/handlers/tools/codemode.js'
+import { getCodeModeTools } from '../../src/handlers/tools/codemode/index.js'
 import * as api from '../../src/codemode/api/index.js'
 import * as sandboxFactory from '../../src/codemode/sandbox-factory.js'
+import * as singleton from '../../src/handlers/tools/codemode/singleton-state.js'
 
 describe('Code Mode Tools Coverage', () => {
-    it('should throw ConfigurationError if dispatcher is missing', async () => {
-        const tools = getCodeModeTools({} as any)
+    it('should throw ConfigurationError if codemode is disabled', async () => {
+        const tools = getCodeModeTools({ config: { codemodeEnabled: false } } as any)
         const handler = tools[0].handler
 
         const result = await handler({ code: 'mj.core.get_recent_entries()' })
         expect(result).toMatchObject({
             success: false,
-            category: 'configuration',
-            code: 'CONFIGURATION_ERROR',
-            error: expect.stringContaining('unavailable in the current configuration'),
+            error: expect.stringContaining('Code Mode is disabled'),
         })
     })
 
-    it('should capture secureDispatcher and execute correctly', async () => {
-        const mockDispatch = vi.fn().mockResolvedValue('success')
+    it('should execute sandbox and return result format correctly', async () => {
         const mm = { yieldJob: vi.fn(), resumeJob: vi.fn() }
         const context = {
             config: {
-                dispatch: mockDispatch,
                 runtime: { maintenanceManager: mm },
+                codemodeEnabled: true,
+                codemodeInternalFullAccess: true,
             },
         }
 
-        let capturedDispatcher!: any
-        vi.spyOn(api, 'createJournalApi').mockImplementationOnce((tools, dispatcher) => {
-            capturedDispatcher = dispatcher
-            return { createSandboxBindings: () => ({}), createSandboxSchemas: () => ({}) } as any
-        })
-
-        vi.spyOn(sandboxFactory, 'createSandboxPool').mockImplementationOnce(() => {
+        vi.spyOn(singleton, 'getSandboxPool').mockImplementationOnce(() => {
             return {
-                execute: vi.fn().mockResolvedValue('executed'),
+                execute: vi.fn().mockResolvedValue({
+                    success: true,
+                    result: 'executed',
+                    error: undefined,
+                    executionTimeMs: 15,
+                }),
                 warmup: vi.fn(),
                 dispose: vi.fn(),
             } as any
@@ -44,15 +42,9 @@ describe('Code Mode Tools Coverage', () => {
         const tools = getCodeModeTools(context as any)
         const handler = tools[0].handler
 
-        const result = await handler({ code: 'test' })
-        expect(result).toBe('executed')
-
-        expect(capturedDispatcher).toBeDefined()
-
-        const res = await capturedDispatcher('test_tool', { arg: 'val' })
-        expect(res).toBe('success')
-        expect(mockDispatch).toHaveBeenCalledWith('test_tool', { arg: 'val' })
-        expect(mm.yieldJob).toHaveBeenCalled()
-        expect(mm.resumeJob).toHaveBeenCalled()
+        const result = (await handler({ code: 'test' })) as any
+        expect(result.success).toBe(true)
+        expect(result.result).toBe('executed')
+        expect(result.executionTimeMs).toBeGreaterThan(0)
     })
 })

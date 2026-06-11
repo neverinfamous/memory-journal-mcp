@@ -1,6 +1,8 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
+import { resolveAuthor } from '../../../utils/security-utils.js'
+import { getAuthContext } from '../../../auth/auth-context.js'
 
 import {
     CreateEntrySchema,
@@ -18,6 +20,8 @@ import {
     TestSimpleSchema,
     TestSimpleOutputSchema,
 } from './schemas.js'
+import { EntryOutputSchema } from '../schemas.js'
+import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
     const { db, progress } = context
@@ -43,7 +47,24 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
 
-                    const id = db.addEntry(input.content, input.entry_type, input.tags)
+                    const createdEntry = db.createEntry({
+                        content: input.content,
+                        entryType: input.entry_type,
+                        tags: input.tags,
+                        isPersonal: input.is_personal,
+                        significanceType: input.significance_type,
+                        projectNumber: input.project_number,
+                        projectOwner: input.project_owner,
+                        issueNumber: input.issue_number,
+                        issueUrl: input.issue_url,
+                        prNumber: input.pr_number,
+                        prUrl: input.pr_url,
+                        prStatus: input.pr_status,
+                        workflowRunId: input.workflow_run_id,
+                        workflowName: input.workflow_name,
+                        workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                    })
+                    const id = createdEntry.id
 
                     // Vectorize entry
                     try {
@@ -76,7 +97,48 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         )
                     }
 
-                    return { success: true, id }
+                    const finalEntry = db.getEntryById(id) ?? undefined
+
+                    let sharedWithTeam = false
+                    let author: string | undefined
+
+                    if (input.share_with_team && context.teamDb) {
+                        const authCtx = getAuthContext()
+                        if (authCtx?.authenticated) {
+                            const claims = authCtx.claims
+                            const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
+                            const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
+                            const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
+                            author = claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
+                        } else {
+                            author = resolveAuthor()
+                        }
+
+                        if (author && author !== 'unknown') {
+                            context.teamDb.createEntry({
+                                content: input.content,
+                                entryType: input.entry_type,
+                                tags: input.tags,
+                                isPersonal: false,
+                                significanceType: input.significance_type,
+                                projectNumber: input.project_number,
+                                projectOwner: input.project_owner,
+                                issueNumber: input.issue_number,
+                                issueUrl: input.issue_url,
+                                prNumber: input.pr_number,
+                                prUrl: input.pr_url,
+                                prStatus: input.pr_status,
+                                workflowRunId: input.workflow_run_id,
+                                workflowName: input.workflow_name,
+                                workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                                author: author,
+                            })
+                            context.teamDb.flushSave()
+                            sharedWithTeam = true
+                        }
+                    }
+
+                    return { success: true, id, entry: finalEntry, ...(sharedWithTeam ? { sharedWithTeam, author } : {}) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -98,11 +160,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
-                    const entry = db.getEntryById(input.id)
+                    const entry = db.getEntryById(input.entry_id)
                     if (!entry) {
                         return {
                             success: false,
-                            error: `Entry ${String(input.id)} not found`,
+                            error: `Entry ${String(input.entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion: 'Verify the entry ID exists and you have access to it',
@@ -121,7 +183,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description: 'Get the most recent journal entries',
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
-            outputSchema: z.object({ entries: z.array(EntryOutputSchema), count: z.number() }), // Output schema inline for array wrap
+            outputSchema: z.object({ entries: z.array(EntryOutputSchema), count: z.number() }).extend(ErrorFieldsMixin.shape), // Output schema inline for array wrap
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -131,7 +193,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
-                    return db.getRecentEntries(input.limit)
+                    const result = db.getRecentEntries(input.limit, undefined, input.sort_by)
+                    return {
+                        success: true,
+                        entries: result.entries,
+                        count: result.entries.length,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -178,8 +245,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
         },
         {
-            name: 'get_tags',
-            title: 'Get Tags',
+            name: 'list_tags',
+            title: 'List Tags',
             description: 'List all unique tags used across all entries',
             group: 'core',
             inputSchema: z.object({}), // No arguments required
@@ -192,7 +259,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: () => {
                 try {
-                    const tags = db.getUniqueTags()
+                    const tags = db.listTags().map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -221,7 +288,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const input = TestSimpleSchema.parse(params)
                     return {
                         success: true,
-                        message: `Echo: ${input.echo}`,
+                        message: `Echo: ${input.message}`,
                         timestamp: new Date().toISOString(),
                     }
                 } catch (err) {
@@ -235,7 +302,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description: 'Triggers a sequence of progress notifications to verify the transport layer supports them.',
             group: 'core',
             inputSchema: z.object({}),
-            outputSchema: z.object({ success: z.boolean(), message: z.string() }),
+            outputSchema: z.object({ success: z.boolean(), message: z.string() }).extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -263,7 +330,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
                 message: z.string().optional().default('Test error message'),
             }),
-            outputSchema: z.object({}), // Note: Error will bypass normal schema and be formatted
+            outputSchema: z.object({}).extend(ErrorFieldsMixin.shape), // Note: Error will bypass normal schema and be formatted
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -276,7 +343,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 // Helper to simulate database errors which SQLite often throws as raw Error objects
                 if (input.error_type === 'database') {
                     const err = new Error(`SQLITE_CONSTRAINT: ${input.message}`)
-                    ;(err as any).code = 'SQLITE_CONSTRAINT'
+                    Object.defineProperty(err, 'code', { value: 'SQLITE_CONSTRAINT', enumerable: true })
                     throw err
                 }
                 

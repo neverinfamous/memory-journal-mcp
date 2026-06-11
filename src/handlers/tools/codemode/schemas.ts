@@ -1,35 +1,11 @@
 import { z } from 'zod'
 
-import { relaxedNumber } from '../core/schemas.js'
+import { relaxedNumber } from '../schemas.js'
 
 // ============================================================================
 // Tool Classification Sets
 // ============================================================================
 
-/**
- * Tools that modify state and should be blocked in dry runs
- */
-export const MUTATION_TOOL_NAMES = new Set([
-    // Core
-    'create_entry',
-    'batch_create_entries',
-    // Team
-    'team_pass_flag',
-    'team_update_flag',
-    'team_batch_create_entries',
-    'team_update_entry',
-    'team_delete_entry',
-    // Aliases
-    'team_create_alias',
-    'team_update_alias',
-    'team_delete_alias',
-    // Relationships
-    'create_relationship',
-    // IO
-    'export_markdown',
-    'import_markdown',
-    'import_external',
-])
 
 /**
  * Tools that require version awareness (expected_version logic)
@@ -47,8 +23,10 @@ export const ExecuteCodeSchema = z.object({
     code: z.string().optional(),
     auto_version: z.boolean().optional().default(true),
     project_number: z.number().optional(),
+    repo: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
-    context: z.record(z.unknown()).optional(),
+    context: z.record(z.string(), z.unknown()).optional(),
+    timeout_ms: z.number().optional(),
 })
 
 export const ExecuteCodeSchemaMcp = z.object({
@@ -68,6 +46,12 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'REQUIRED for team operations. The numerical ID (or owner/repo string) of the GitHub project to bind to. Falls back to DEFAULT_PROJECT_NUMBER if unspecified.'
         ),
+    repo: z
+        .string()
+        .optional()
+        .describe(
+            'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
+        ),
     dry_run: z
         .boolean()
         .optional()
@@ -76,7 +60,7 @@ export const ExecuteCodeSchemaMcp = z.object({
             'If true, state-modifying API calls (create_entry, update_entry, etc.) will be skipped, returning simulated success.'
         ),
     context: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .optional()
         .describe(
             'A JSON object to pass variables directly into the sandbox (accessible via `context`). Use this for large strings or complex data to avoid string-escaping issues in the code parameter.'

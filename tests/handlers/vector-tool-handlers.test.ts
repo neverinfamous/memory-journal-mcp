@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 
 const callTool = (
     name: any,
@@ -53,7 +53,7 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
         search: vi.fn().mockResolvedValue([]),
         addEntry: vi.fn().mockResolvedValue({ success: true }),
         removeEntry: vi.fn().mockReturnValue(true),
-        rebuildIndex: vi.fn().mockResolvedValue({ indexed: 5, failed: 0, firstError: null, partial: false, errors: [] }),
+        rebuildIndex: vi.fn().mockResolvedValue({ success: true, indexed: 5, failed: 0, firstError: null, partial: false, errors: [] }),
         getStats: vi.fn().mockReturnValue({
             itemCount: 10,
             modelName: 'Xenova/all-MiniLM-L6-v2',

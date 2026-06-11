@@ -21,9 +21,9 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'get_entry_by_id',
         'get_recent_entries',
         'get_entry_history',
-        'create_entry_minimal',
         'test_simple',
-        'get_briefing',
+        'test_error_handling',
+        'trigger_progress',
         'list_tags',
     ],
     search: [

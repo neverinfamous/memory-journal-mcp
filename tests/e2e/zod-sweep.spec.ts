@@ -71,7 +71,7 @@ async function assertZodHandlerError(toolName: string) {
 // =============================================================================
 
 test.describe('Zod Sweep: Core', () => {
-    const tools = ['create_entry', 'get_entry_by_id', 'create_entry_minimal']
+    const tools = ['create_entry', 'get_entry_by_id']
 
     for (const tool of tools) {
         test(`${tool}({}) → handler error`, async () => {

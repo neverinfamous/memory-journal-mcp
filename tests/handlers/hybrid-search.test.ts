@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { computeRRFScores, hybridSearch } from '../../src/handlers/tools/search/hybrid.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
-import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 import type { JournalEntry } from '../../src/types/index.js'
 
 describe('Hybrid Search', () => {

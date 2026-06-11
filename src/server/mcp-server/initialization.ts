@@ -91,12 +91,12 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     }
 
     // Initialize vector search manager (lazy loading - model loads on first use)
-    const vectorManager = new VectorSearchManager(db, options.embeddingModel)
+    const vectorManager = new VectorSearchManager(db, { modelName: options.embeddingModel })
 
     // Initialize team vector search manager if team DB is configured
     let teamVectorManager: VectorSearchManager | undefined
     if (teamDb) {
-        teamVectorManager = new VectorSearchManager(teamDb, options.embeddingModel)
+        teamVectorManager = new VectorSearchManager(teamDb, { modelName: options.embeddingModel })
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
@@ -106,7 +106,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         vectorManager
             .initialize()
             .then(async () => {
-                const { indexed: count } = await vectorManager.rebuildIndex(db)
+                const { indexed: count } = await vectorManager.rebuildIndex()
                 logger.info('Vector index rebuilt in background', {
                     module: 'McpServer',
                     entriesIndexed: count,

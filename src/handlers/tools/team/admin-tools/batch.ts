@@ -104,7 +104,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             const entry = entries[i]
                             if (entry) {
                                 try {
-                                    const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
+                                    const status = await autoIndexEntry(context.teamVectorManager, teamDb, entry.id)
                                     if (status) indexStatuses.push(status)
                                 } catch (err) {
                                     indexErrors.push(new Error(`Team entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
@@ -230,7 +230,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 const originalUpdate = input.updates.find(u => u.entry_id === entry.id)
                                 if (originalUpdate?.content) {
                                     try {
-                                        const status = await autoIndexEntry(context.teamVectorManager, entry.id, entry.content)
+                                        const status = await autoIndexEntry(context.teamVectorManager, teamDb, entry.id)
                                         if (status) indexStatuses.push(status)
                                     } catch (err) {
                                         indexErrors.push(new Error(`Team entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))

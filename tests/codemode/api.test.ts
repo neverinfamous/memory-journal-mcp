@@ -39,7 +39,7 @@ function createMockTool(
 function createMinimalToolSet(): ToolDefinition[] {
     return [
         createMockTool('create_entry', 'core'),
-        createMockTool('create_entry_minimal', 'core'),
+        createMockTool('create_entry', 'core'),
         createMockTool('get_entry_by_id', 'core'),
         createMockTool('get_recent_entries', 'core'),
         createMockTool('search_entries', 'search'),

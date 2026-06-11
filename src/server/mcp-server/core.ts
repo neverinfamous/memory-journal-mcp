@@ -30,6 +30,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         filterConfig,
         authEnabled: Boolean(options.authToken ?? process.env['MCP_AUTH_TOKEN']),
         oauthEnabled: options.oauthEnabled,
+        codemodeEnabled: true,
         codemodeInternalFullAccess: options.codemodeInternalFullAccess,
         teamDefaultRole: options.teamDefaultRole,
         teamAdmin: options.teamAdmin,

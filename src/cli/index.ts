@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { logger } from '../utils/logger.js'
 import { createServer } from '../server/mcp-server/index.js'
 import { ConfigResolver } from '../utils/config-resolver.js'
@@ -94,7 +95,7 @@ program.action(async (options: Record<string, unknown>, command: typeof program)
     })
 
     try {
-        await createServer(serverOptions as unknown as Parameters<typeof createServer>[0])
+        await createServer(serverOptions)
     } catch (error) {
         logger.error('Failed to start server', {
             module: 'CLI',

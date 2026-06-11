@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 
 const callTool = (
     name: any,

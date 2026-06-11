@@ -67,7 +67,7 @@ export type McpServerFactory = () => McpServer
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
-import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ConfigManager } from '../../utils/config-manager.js'
 import type { Scheduler } from '../scheduler.js'

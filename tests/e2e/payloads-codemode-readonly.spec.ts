@@ -33,7 +33,7 @@ test.describe('Code Mode Readonly Enforcement', () => {
                     const recent = await mj.core.getRecentEntries({ limit: 1 });
                     return recent;
                 `,
-                readonly: true,
+                dry_run: true,
             },
         })
 
@@ -47,18 +47,18 @@ test.describe('Code Mode Readonly Enforcement', () => {
         expect(payload.success).not.toBe(false)
     })
 
-    test('mj.core.createEntry raises structured error via readonly=true param', async () => {
+    test('mj.core.createEntry simulates successful execution via dry_run=true param', async () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
                 code: `
-                    const result = await mj.core.createEntry({
+                    const result = await mj.core.create_entry({
                         content: 'Should not be created',
                         entry_type: 'test_entry',
                     });
                     return result;
                 `,
-                readonly: true,
+                dry_run: true,
             },
         })
 
@@ -66,24 +66,22 @@ test.describe('Code Mode Readonly Enforcement', () => {
         const content = response.content as Array<{ type: string; text?: string }>
         const payload = JSON.parse(content[0]!.text!) as Record<string, unknown>
 
-        // Should be a structured error, not a TypeError
-        expect(payload.success).toBe(false)
-        expect(typeof payload.error).toBe('string')
-        // Error message mentions either "not available", "not found in group", or "read-only"
-        expect((payload.error as string).toLowerCase()).toMatch(
-            /not available|not found in group|readonly|read.only/i
-        )
+        // Should simulate success for mutation in dry_run mode
+        const result = payload.result as Record<string, unknown>
+        expect(result.success).toBe(true)
+        expect(result.dry_run).toBe(true)
+        expect((result.message as string)).toContain('Simulated')
     })
 
-    test('mj.admin.deleteEntry raises structured error via readonly=true param', async () => {
+    test('mj.admin.deleteEntry simulates successful execution via dry_run=true param', async () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
                 code: `
-                    const result = await mj.admin.deleteEntry({ entry_id: 1 });
+                    const result = await mj.admin.delete_entry({ entry_id: 1 });
                     return result;
                 `,
-                readonly: true,
+                dry_run: true,
             },
         })
 
@@ -91,11 +89,13 @@ test.describe('Code Mode Readonly Enforcement', () => {
         const content = response.content as Array<{ type: string; text?: string }>
         const payload = JSON.parse(content[0]!.text!) as Record<string, unknown>
 
-        expect(payload.success).toBe(false)
-        expect(typeof payload.error).toBe('string')
+        const result = payload.result as Record<string, unknown>
+        expect(result.success).toBe(true)
+        expect(result.dry_run).toBe(true)
+        expect((result.message as string)).toContain('Simulated')
     })
 
-    test('mj.help() works correctly via readonly=true param', async () => {
+    test('mj.help() works correctly via dry_run=true param', async () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
@@ -103,7 +103,7 @@ test.describe('Code Mode Readonly Enforcement', () => {
                     const help = mj.help();
                     return help;
                 `,
-                readonly: true,
+                dry_run: true,
             },
         })
 

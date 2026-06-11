@@ -56,7 +56,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         tags: e.tags,
                         isPersonal: e.is_personal,
                         significanceType: e.significance_type,
-                        autoContext: e.auto_context ? undefined : undefined, // Ignore deprecated auto_context
+                        autoContext: undefined, // Ignore deprecated auto_context
                         projectNumber: e.project_number,
                         projectOwner: e.project_owner,
                         issueNumber: e.issue_number,
@@ -66,7 +66,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         prStatus: e.pr_status,
                         workflowRunId: e.workflow_run_id,
                         workflowName: e.workflow_name,
-                        workflowStatus: e.workflow_status,
+                        workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
                     })))
                     
                     await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
@@ -79,7 +79,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             const entry = results[i]
                             if (entry) {
                                 try {
-                                    const status = await autoIndexEntry(vectorManager, entry.id, entry.content)
+                                    const status = await autoIndexEntry(vectorManager, db, entry.id)
                                     if (status) indexStatuses.push(status)
                                 } catch (err) {
                                     indexErrors.push(new Error(`Entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
@@ -159,7 +159,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                                 const originalUpdate = input.updates.find(u => u.entry_id === entry.id)
                                 if (originalUpdate?.content) {
                                     try {
-                                        const status = await autoIndexEntry(vectorManager, entry.id, entry.content)
+                                        const status = await autoIndexEntry(vectorManager, db, entry.id)
                                         if (status) indexStatuses.push(status)
                                     } catch (err) {
                                         indexErrors.push(new Error(`Entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
