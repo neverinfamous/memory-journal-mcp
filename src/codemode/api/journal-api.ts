@@ -242,6 +242,22 @@ export class JournalApi {
         this.admin['listProjects'] = listProjectsFn
         this.admin['getProjects'] = listProjectsFn
         this.admin['getProject'] = getProjectFn
+
+        // Automatically map all METHOD_ALIASES into the group proxies to ensure the sandbox
+        // worker proxy seamlessly inherits aliases without needing duplicate hardcoding.
+        for (const [groupName, aliases] of Object.entries(METHOD_ALIASES)) {
+            const groupApi = this[groupName as keyof JournalApi] as GroupApiRecord | undefined
+            if (!groupApi) continue
+
+            for (const [aliasName, canonicalMethod] of Object.entries(aliases)) {
+                // Only wire up the alias if the canonical method actually exists in this group
+                // (which protects against shadow aliasing bugs).
+                if (typeof groupApi[canonicalMethod] === 'function') {
+                    // Do not overwrite existing explicitly-wired methods or native tools
+                    groupApi[aliasName] ??= groupApi[canonicalMethod]
+                }
+            }
+        }
     }
 
     /**

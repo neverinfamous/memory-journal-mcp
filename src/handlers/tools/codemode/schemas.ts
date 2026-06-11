@@ -22,7 +22,7 @@ export const VERSION_AWARE_TOOL_NAMES = new Set([
 export const ExecuteCodeSchema = z.object({
     code: z.string().optional(),
     auto_version: z.boolean().optional().default(true),
-    project_number: z.number().optional(),
+    project_number: relaxedNumber().optional(),
     repo: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
     context: z.record(z.string(), z.unknown()).optional(),

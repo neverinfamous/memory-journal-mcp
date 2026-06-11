@@ -23,7 +23,8 @@
 
 ### Changed
 - Modularized Tier 1-3 monolithic files (`src/server/mcp-server.ts`, `src/database/sqlite-adapter/index.ts`, `src/handlers/tools/admin.ts`, `src/handlers/tools/search/index.ts`, `src/codemode/api.ts`, `src/codemode/worker-script.ts`) into logical sub-directories with a barrel export pattern to improve codebase maintainability.
-- Code Mode execution enhancements: added alias mappings to handle agent hallucinations (e.g. `listEntries` mapped to `searchEntries`), implemented dynamic read-only constraint enforcement for mutation protection, and automatically injected `project_number` and `expected_version` requirements.
+- Code Mode execution enhancements: implemented dynamic read-only constraint enforcement for mutation protection, and automatically injected `project_number` and `expected_version` requirements.
+- Replaced legacy hardcoded alias intercepts inside the Code Mode proxy with dynamic `METHOD_ALIASES` injection into the Sandbox group bindings, permanently resolving missing alias errors (e.g., `mj.analytics.getProjects`).
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Upgraded token estimation to use content-type-aware ratios.
 - Updated CLI configuration loader to aggregate all startup validation errors simultaneously.

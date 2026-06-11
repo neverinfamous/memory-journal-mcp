@@ -91,7 +91,7 @@ async function executeCode(
                             )
                         )
                 }
-                // Handle mj.readResource hallucination
+                // Handle `mj.readResource` hallucination
                 if (prop === 'readResource') {
                     return () =>
                         Promise.reject(
@@ -103,11 +103,14 @@ async function executeCode(
                 // Handle `memory.journal.addEntry` natural hallucination
                 if (prop === 'addEntry' && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
-                    return coreGroup['createEntry']
+                    return coreGroup['create_entry'] ?? coreGroup['createEntry']
                 }
                 // Handle get/list/searchProjects hallucination via proxy intercept
                 if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
-                    if ('core' in target) return (target['core'] as Record<string, unknown>)['listProjects']
+                    if ('analytics' in target) {
+                        const analyticsGroup = target['analytics'] as Record<string, unknown>
+                        return analyticsGroup['get_cross_project_insights'] ?? analyticsGroup['getCrossProjectInsights']
+                    }
                 }
                 // Handle `memory.append(tags, content, metadata)` natural hallucination
                 if (prop === 'append' && 'core' in target) {

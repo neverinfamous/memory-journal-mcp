@@ -7,6 +7,7 @@
  */
 
 import { wrapResult } from './worker-result-proxy.js'
+import { METHOD_ALIASES } from './api-constants.js'
 
 /**
  * Build the mj.* API proxy from method and schema lists.
@@ -72,14 +73,15 @@ export function buildApiProxy(
                     if (snakeKey in target) return target[snakeKey]
                 }
 
-                // Handle legacy shorthand aliases
-                let resolvedKey: string | undefined
-                if (key === 'create') resolvedKey = 'create_entry'
-                else if (key === 'recent') resolvedKey = 'get_recent_entries'
-                else if (key === 'find') resolvedKey = 'search_entries'
-                else if (key === 'list') resolvedKey = 'list_backups'
-                
-                if (resolvedKey && resolvedKey in target) return target[resolvedKey]
+                // Resolve using unified METHOD_ALIASES map
+                const aliases = METHOD_ALIASES[group]
+                if (aliases && typeof key === 'string' && aliases[key]) {
+                    const canonicalCamel = aliases[key]
+                    // Convert the canonical camelCase to the target's snake_case keys
+                    const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
+                    if (canonicalSnake in target) return target[canonicalSnake]
+                    if (canonicalCamel in target) return target[canonicalCamel]
+                }
 
                 if (key === 'getConfig') {
                     return () => Promise.reject(new Error(
