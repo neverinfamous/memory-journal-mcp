@@ -49,6 +49,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'batch_update_entries',
         'batch_delete_entries',
         'search_audit_log',
+        '_execute_raw_query_unsafe',
     ],
     github: [
         'get_github_issues',

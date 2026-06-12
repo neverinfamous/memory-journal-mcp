@@ -473,6 +473,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.connection.pragma(command)
     }
 
+    _executeRawQueryUnsafe(query: string, params?: unknown[]): QueryResult[] {
+        return this.connection.exec(query, params)
+    }
+
     // ========================================================================
     // Vector Search Primitives
     // ========================================================================

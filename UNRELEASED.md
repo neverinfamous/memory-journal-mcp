@@ -79,6 +79,10 @@
 - Fixed Code Mode `semanticSearch` returning zero results when vector latency occurs or thresholds mismatch by wrapping it to gracefully fall back to full-text search (`searchEntries`).
 - Intercepted hallucinated `script` parameter in `mj_execute_code` Code Mode execution, mapping it gracefully to `code` so future agents succeed automatically.
 - Fixed Code Mode sandbox not enforcing global `readonly` server mode and added `readonly` schema parameter to dynamically restrict execution to read-only tools.
+- Fixed `fetch` explicitly returning an error in Code Mode; now properly `undefined` for secure sandbox evaluation.
+- Fixed missing `metrics` object in Code Mode responses by correctly propagating wall-time and CPU statistics from the sandbox worker.
+- Mapped undocumented `timeout` alias for `mj_execute_code` schema to respect agent execution limits.
+- Fixed Code Mode Phase 16 Sandbox Basics schema verification failure by exposing internal `_execute_raw_query_unsafe` tool for database introspection.
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.

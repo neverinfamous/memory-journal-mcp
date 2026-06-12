@@ -28,6 +28,7 @@ export const ExecuteCodeSchema = z.object({
     dry_run: z.boolean().optional().default(false),
     context: z.any().optional(),
     timeout_ms: z.number().optional(),
+    timeout: z.number().optional(),
     readonly: z.boolean().optional(),
 })
 
@@ -73,5 +74,11 @@ export const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .describe(
             'If true, execution is restricted to read-only operations. Write tools will be filtered out of the API bridge.'
+        ),
+    timeout: z
+        .number()
+        .optional()
+        .describe(
+            'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
         ),
 })

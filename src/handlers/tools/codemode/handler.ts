@@ -351,7 +351,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     executionCode ?? '',
                                     apiBindings,
                                     schemas,
-                                    input.timeout_ms,
+                                    input.timeout ?? input.timeout_ms,
                                     userContext,
                                     input.dry_run
                                 )
@@ -361,7 +361,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     executionCode ?? '',
                                     apiBindings,
                                     schemas,
-                                    input.timeout_ms,
+                                    input.timeout ?? input.timeout_ms,
                                     userContext,
                                     input.dry_run
                             )
@@ -376,6 +376,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         executionTimeMs: Math.round(executionTime * 100) / 100,
                         result: execResult?.result,
                         error: execResult?.error,
+                        metrics: execResult?.metrics,
                         simulated: input.dry_run ? true : undefined,
                         project_id: projectId,
                     }

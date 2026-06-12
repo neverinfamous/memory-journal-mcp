@@ -10,6 +10,7 @@ import type {
 import type { CreateEntryInput } from '../core/schema.js'
 import type {
     IDatabaseAdapter,
+    QueryResult,
     TeamMember,
     TeamRole,
     AuthorAlias,
@@ -421,6 +422,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
 
     pragma(command: string): void {
         this.connection.pragma(command)
+    }
+
+    _executeRawQueryUnsafe(query: string, params?: unknown[]): QueryResult[] {
+        return this.connection.exec(query, params)
     }
 
     // ========================================================================

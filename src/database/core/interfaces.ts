@@ -408,4 +408,6 @@ export interface IDatabaseAdapter {
     }
 
     executeInTransaction<T>(cb: () => T): T
+    
+    _executeRawQueryUnsafe(query: string, params?: unknown[]): QueryResult[]
 }
