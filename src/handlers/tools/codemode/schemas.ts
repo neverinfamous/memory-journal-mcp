@@ -21,6 +21,7 @@ export const VERSION_AWARE_TOOL_NAMES = new Set([
 
 export const ExecuteCodeSchema = z.object({
     code: z.string().optional(),
+    script: z.string().optional(),
     auto_version: z.boolean().optional().default(true),
     project_number: relaxedNumber().optional(),
     repo: z.string().optional(),

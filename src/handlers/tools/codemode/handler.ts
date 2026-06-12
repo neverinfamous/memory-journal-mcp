@@ -33,6 +33,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 
                 try {
                     const input = ExecuteCodeSchema.parse(params)
+                    const executionCode = input.code || input.script
 
                     // 1. Configuration Validation
                     if (context.config?.codemodeEnabled !== true) {
@@ -40,7 +41,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // 1a. Missing Payload Interceptor
-                    if (!input.code || input.code.trim() === '') {
+                    if (!executionCode || executionCode.trim() === '') {
                         return {
                             success: false,
                             error: 'Missing required `code` parameter. This tool executes JavaScript in a secure sandbox.\n\nAvailable parameters:\n- code (string, required): The JavaScript code to execute\n- project_number (number, optional): The project ID to operate on\n- repo (string, optional): A GitHub repository to inject (e.g. "neverinfamous/adamic")\n- expected_version (string, optional): The expected journal version for optimistic concurrency\n- dry_run (boolean, optional): If true, simulates the execution without making changes\n\nTo discover available API methods and their schemas, read the `memory://help` resource, or invoke schema introspection directly in your script (e.g., `const schema = await mj.core.create_entry.schema()`).',
@@ -50,7 +51,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // 1b. Security Validation
-                    const validation = securityManager.validateCode(input.code)
+                    const validation = securityManager.validateCode(executionCode)
                     if (!validation.valid) {
                         return {
                             success: false,
@@ -335,7 +336,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         if (authCtx) {
                             await runWithAuthContext(authCtx, async () => {
                                 execResult = await pool.execute(
-                                    input.code ?? '',
+                                    executionCode ?? '',
                                     apiBindings,
                                     schemas,
                                     input.timeout_ms,
@@ -345,7 +346,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             })
                         } else {
                             execResult = await pool.execute(
-                                    input.code ?? '',
+                                    executionCode ?? '',
                                     apiBindings,
                                     schemas,
                                     input.timeout_ms,
