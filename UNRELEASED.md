@@ -21,6 +21,7 @@
 - Keyset cursor pagination for listing and search tools.
 - Entry versioning and history tracking via `get_entry_history`.
 - Content templates instruction file (`memory://help/templates`) with per-entry-type markdown scaffolding.
+- Added context bloat warning to server initialization when registering more than 50 tools without a tool filter, suggesting token-saving strategies like `--tool-filter codemode`.
 
 ### Changed
 - Removed mandatory journaling requirement from the `adversarial-performance` skill to support purely analytical runs.
@@ -35,6 +36,8 @@
 - Replaced raw generic errors with structured `ConfigurationError` and `MemoryJournalMcpError`.
 - Enriched schema descriptions, prompts, and documentation with explicit templates to reduce agent hallucinations.
 - Added numeric project IDs alongside repository names in the Briefing Config row.
+- Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
+- Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
 ### Fixed
 - Fixed `restore_backup` tool throwing `INTERNAL_ERROR` when used in environments with encryption (`DB_ENCRYPTION_KEY`) by correctly passing the key to the `better-sqlite3` instance during `PRAGMA integrity_check`.
@@ -52,11 +55,7 @@
 - Fixed `project_number` hallucination loop by appending the numeric ID directly to the repository name in the Briefing's `Workspaces` table row (e.g., `mysql-mcp (#14): ...`). This prevents IDs from being hidden when the `Config` row truncates at 3 repos.
 - Fixed `ConfigResolver` syntax crash when loading pre-parsed nested objects.
 - Fixed markdown table alignment in `README.md` and `DOCKER_README.md`.
-
-### Added
-- Added context bloat warning to server initialization when registering more than 50 tools without a tool filter, suggesting token-saving strategies like `--tool-filter codemode`.
-- Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
-- Replaced disabled lint rules with modern Unicode property escapes in security utilities.
+- Fixed `worker-script.js` resolution during `vitest` execution by dynamically pointing `WorkerSandbox` to the `dist/` directory when running tests from `src/codemode`.
 
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
