@@ -53,12 +53,16 @@
 - Fixed `dry_run` and simulation early returns in `secureDispatcher` to execute **after** param normalization (camelCase→snake_case, project_number resolution, numeric coercion), so simulated responses show correctly resolved parameters instead of raw hallucinated strings.
 - Fixed unhelpful Zod errors when agents hallucinate a string `project_number` (e.g., `"P154"`) by intercepting unresolved strings in `secureDispatcher` and returning a highly actionable custom error instructing them to omit the field for auto-injection.
 - Fixed agents failing when calling tools from the wrong API group (e.g. `mj.core.searchEntries`) by adding a cross-group search fallback to the sandbox proxy that throws a highly specific error directing them to the correct group (e.g. `mj.search.searchEntries`).
+- Fixed Code Mode agents attempting to dynamically probe `mj_execute_code` by intercepting empty payloads (`{}`) and throwing a highly descriptive schema error instead of triggering a hard security failure (`"Code cannot be empty"`).
 - Fixed `project_number` hallucination loop by appending the numeric ID directly to the repository name in the Briefing's `Workspaces` table row (e.g., `mysql-mcp (#14): ...`). This prevents IDs from being hidden when the `Config` row truncates at 3 repos.
 - Fixed `ConfigResolver` syntax crash when loading pre-parsed nested objects.
 - Fixed markdown table alignment in `README.md` and `DOCKER_README.md`.
 - Fixed Code Mode `mj.help()` returning incomplete group lists, and method names in `snake_case` instead of `camelCase`, by properly using `createJournalApi` in the `mj_execute_code` handler instead of a manually constructed bindings object.
 - Fixed `mj.*` positional argument processing (e.g. `mj.core.recent(2)`) and empty parameter invocations (e.g. `mj.analytics.stats()`) throwing errors in Code Mode due to the manual bindings object bypassing `normalizeParams`.
 - Fixed `worker-script.js` resolution during `vitest` execution by dynamically pointing `WorkerSandbox` to the `dist/` directory when running tests from `src/codemode`.
+- Fixed Code Mode `get_recent_entries` and `get_entry_history` API signature mismatches that broke cursor-based pagination and parameter validation.
+- Added `issue_url` and `pr_url` auto-population in Code Mode proxy when GitHub context is available and `issue_number`/`pr_number` is provided.
+- Fixed `createEntryMinimal` hallucination in Code Mode aliases.
 
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

@@ -39,8 +39,18 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         throw new ConfigurationError('Code Mode is disabled in the server configuration.')
                     }
 
-                    // 1a. Security Validation
-                    const validation = securityManager.validateCode(input.code ?? '')
+                    // 1a. Missing Payload Interceptor
+                    if (!input.code || input.code.trim() === '') {
+                        return {
+                            success: false,
+                            error: 'Missing required `code` parameter. This tool executes JavaScript in a secure sandbox.\n\nAvailable parameters:\n- code (string, required): The JavaScript code to execute\n- project_number (number, optional): The project ID to operate on\n- repo (string, optional): A GitHub repository to inject (e.g. "neverinfamous/adamic")\n- expected_version (string, optional): The expected journal version for optimistic concurrency\n- dry_run (boolean, optional): If true, simulates the execution without making changes\n\nTo discover available API methods and their schemas, read the `memory://help` resource, or invoke schema introspection directly in your script (e.g., `const schema = await mj.core.create_entry.schema()`).',
+                            project_id: undefined,
+                            executionTimeMs: 0
+                        }
+                    }
+
+                    // 1b. Security Validation
+                    const validation = securityManager.validateCode(input.code)
                     if (!validation.valid) {
                         return {
                             success: false,
@@ -182,6 +192,38 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             if (paramsObj['project_number'] === undefined && projectId !== undefined) {
                                 paramsObj['project_number'] = projectId
                             }
+
+                            // Auto-inject issue_url if issue_number is present and we have GitHub context
+                            if (
+                                paramsObj['issue_number'] !== undefined && 
+                                paramsObj['issue_url'] === undefined && 
+                                sessionContext.github
+                            ) {
+                                try {
+                                    const repoInfo = await sessionContext.github.getRepoInfo()
+                                    if (repoInfo?.owner && repoInfo?.repo) {
+                                        paramsObj['issue_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(Number(paramsObj['issue_number']))}`
+                                    }
+                                } catch {
+                                    // Ignore errors and proceed without issue_url
+                                }
+                            }
+
+                            // Auto-inject pr_url if pr_number is present and we have GitHub context
+                            if (
+                                paramsObj['pr_number'] !== undefined && 
+                                paramsObj['pr_url'] === undefined && 
+                                sessionContext.github
+                            ) {
+                                try {
+                                    const repoInfo = await sessionContext.github.getRepoInfo()
+                                    if (repoInfo?.owner && repoInfo?.repo) {
+                                        paramsObj['pr_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/${String(Number(paramsObj['pr_number']))}`
+                                    }
+                                } catch {
+                                    // Ignore errors and proceed without pr_url
+                                }
+                            }                          
                             
                             // Try string -> number resolution if registry is available
                             if (

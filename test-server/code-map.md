@@ -88,7 +88,9 @@ src/
 │   ├── worker-script.ts            # Worker thread entry point — initializes shimMj and proxy API
 │   ├── worker-api-proxy.ts         # Worker API Proxy Builder (builds mj.* API, handles missing await interceptions)
 │   ├── worker-result-proxy.ts      # Result Wrapping Proxy (prevents silent failures, explicit IPC serialization traps)
-│   ├── api.ts                      # mj.* API bridge (exposes tools to sandbox)
+│   ├── api/                        # Unified mj.* API bridge factory
+│   │   ├── journal-api.ts          # Unified API builder (creates Sandbox bindings and schema descriptors)
+│   │   └── group-factory.ts        # Group proxy factory (handles camelCase aliases, normalizes positional params)
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
 │   ├── security.ts                 # Code validation (18 blocked patterns, 50KB code size limit, injection prevention)
 │   ├── type-generator.ts           # Zod schema-to-TypeScript declaration generator
