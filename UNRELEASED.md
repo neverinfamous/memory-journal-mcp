@@ -23,6 +23,7 @@
 - Content templates instruction file (`memory://help/templates`) with per-entry-type markdown scaffolding for session summaries, feature implementations, bug fixes, planning, and technical notes.
 
 ### Changed
+- **Skills**: Removed mandatory journaling requirement from the `adversarial-performance` skill to support purely analytical runs without side effects.
 - **Dependency Updates**:
   - Bump `actions/checkout` from `6.0.2` to `6.0.3` in CI workflows.
   - Bump `trufflesecurity/trufflehog` from `3.95.3` to `3.95.5` in secrets-scanning workflow.

@@ -93,15 +93,6 @@ Initial hypotheses about where the biggest gains are. These are
 preliminary — Agent B will validate or refute them with stress scenarios.
 ```
 
-### Journal
-
-```
-create_entry({
-  content: "<full profiling output>",
-  entry_type: "perf_profile",
-  tags: ["adversarial-performance", "profile"],
-  project_number: <project number>
-})
 ```
 
 ---
@@ -206,15 +197,6 @@ For each critical/high finding, describe the stress scenario that reveals it:
 - **Breaking point**: [At what scale does this become unacceptable]
 ```
 
-### Journal
-
-```
-create_entry({
-  content: "<full stress test critique>",
-  entry_type: "perf_stress_test",
-  tags: ["adversarial-performance", "stress-test"],
-  project_number: <project number>
-})
 ```
 
 ---
@@ -297,15 +279,6 @@ After optimization planning, check: has `MAX_AUDIT_PASSES` been reached?
   performance effects?)
 - **Yes** → proceed to Phase 4
 
-### Journal
-
-```
-create_entry({
-  content: "<optimization plan with dispositions>",
-  entry_type: "perf_optimization",
-  tags: ["adversarial-performance", "optimization"],
-  project_number: <project number>
-})
 ```
 
 ---
@@ -328,15 +301,6 @@ If Copilot CLI is not available, skip this phase gracefully:
 > internal adversarial review only (Phases 1–3).
 ```
 
-### Journal
-
-```
-create_entry({
-  content: "<copilot findings + final dispositions>",
-  entry_type: "perf_copilot",
-  tags: ["adversarial-performance", "copilot"],
-  project_number: <project number>
-})
 ```
 
 ---

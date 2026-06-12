@@ -85,19 +85,6 @@ is not available, skip Phase 4 gracefully and note the skip in the journal entry
 
 Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
 
-## Feedback Loop & Documentation
-
-Every phase creates a journal entry with structured tags and entry types.
-This builds a searchable audit trail that tracks performance evolution
-across releases.
-
-For journal templates, tag conventions, and retrospective templates, read
-[references/feedback-loop.md](references/feedback-loop.md).
-
-### Journal Opt-Out
-
-See [references/journal-opt-out.md](references/journal-opt-out.md) for instructions on how to handle explicit opt-outs from journaling.
-
 ### Consolidated Report
 
 The final deliverable is a **single consolidated artifact** merging all four
