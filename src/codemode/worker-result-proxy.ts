@@ -79,6 +79,11 @@ export function wrapResult(result: unknown): unknown {
                     if (prop === 'deletedIds' && 'deleted' in targetRecord && Array.isArray(targetRecord['deleted'])) {
                         return targetRecord['deleted'] as unknown[]
                     }
+                    
+                    // Hallucination Intercept: deletedCount vs count
+                    if (prop === 'deletedCount' && 'count' in targetRecord && typeof targetRecord['count'] === 'number') {
+                        return targetRecord['count']
+                    }
 
                     // Native Iteration fallback: If an agent tries to destructure the result object directly:
                     // `const [id1] = bCreated` or `const [e1] = bCreated`, we can iterate over the primary array

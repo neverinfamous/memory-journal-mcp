@@ -40,6 +40,7 @@
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
 ### Fixed
+- Fixed `deletedCount` proxy hallucination in Code Mode to map correctly to `count` for batch operations.
 - Fixed `restore_backup` tool throwing `INTERNAL_ERROR` when used in environments with encryption (`DB_ENCRYPTION_KEY`) by correctly passing the key to the `better-sqlite3` instance during `PRAGMA integrity_check`.
 - Fixed `entryIds` and `deletedIds` destructuring hallucination in Code Mode by adding proxy fallbacks to gracefully convert `entries` and `updated`/`deleted` arrays to match expected signatures.
 - Fixed `search_audit_log` returning validation errors when called in environments where audit logging is not configured (e.g., Code Mode tests), instead returning a graceful empty result.
