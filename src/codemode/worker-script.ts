@@ -91,14 +91,29 @@ async function executeCode(
                             )
                         )
                 }
-                // Handle `mj.readResource` hallucination
                 if (prop === 'readResource') {
-                    return () =>
-                        Promise.reject(
+                    return (uri?: string) => {
+                        const suggestions: Record<string, string> = {
+                            'memory://recent': 'mj.core.getRecentEntries()',
+                            'memory://statistics': 'mj.analytics.getStatistics()',
+                            'memory://tags': 'mj.core.listTags()',
+                            'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
+                            'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
+                            'memory://insights': 'mj.analytics.getCrossProjectInsights()',
+                        }
+                        let hint = ''
+                        if (typeof uri === 'string') {
+                            const match = Object.entries(suggestions).find(([k]) => uri.startsWith(k))
+                            if (match !== undefined) {
+                                hint = ` Try: ${match[1]}`
+                            }
+                        }
+                        return Promise.reject(
                             new Error(
-                                'Code Mode cannot directly read MCP resources using mj.readResource(). Please use the appropriate mj.* tools (e.g., mj.team.teamListFlags) to query data, or read the resource via standard MCP resource requests outside of Code Mode.'
+                                `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
                             )
                         )
+                    }
                 }
                 // Handle `memory.journal.addEntry` natural hallucination
                 if (prop === 'addEntry' && 'core' in target) {
