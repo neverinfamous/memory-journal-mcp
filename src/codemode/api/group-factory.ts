@@ -68,6 +68,11 @@ export function createGroupApi(
             }
             return Promise.resolve(tool.handler(normalizedParams))
         }
+
+        // Attach original snake_case tool name for backward compatibility with tests and agents
+        if (tool.name !== methodName) {
+            api[tool.name] = api[methodName]
+        }
     }
 
     // Add method aliases

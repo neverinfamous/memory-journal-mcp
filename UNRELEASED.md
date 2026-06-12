@@ -56,6 +56,8 @@
 - Fixed `project_number` hallucination loop by appending the numeric ID directly to the repository name in the Briefing's `Workspaces` table row (e.g., `mysql-mcp (#14): ...`). This prevents IDs from being hidden when the `Config` row truncates at 3 repos.
 - Fixed `ConfigResolver` syntax crash when loading pre-parsed nested objects.
 - Fixed markdown table alignment in `README.md` and `DOCKER_README.md`.
+- Fixed Code Mode `mj.help()` returning incomplete group lists, and method names in `snake_case` instead of `camelCase`, by properly using `createJournalApi` in the `mj_execute_code` handler instead of a manually constructed bindings object.
+- Fixed `mj.*` positional argument processing (e.g. `mj.core.recent(2)`) and empty parameter invocations (e.g. `mj.analytics.stats()`) throwing errors in Code Mode due to the manual bindings object bypassing `normalizeParams`.
 - Fixed `worker-script.js` resolution during `vitest` execution by dynamically pointing `WorkerSandbox` to the `dist/` directory when running tests from `src/codemode`.
 
 ### Security

@@ -265,15 +265,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         return result
                     }
 
-                    // Prepare api bindings
-                    const mjObj: Record<string, Record<string, (params: unknown) => Promise<unknown>>> = {}
-                    const apiBindings: Record<string, unknown> = mjObj
-                    
-                    for (const tool of tools) {
-                        const group = tool.group || 'core'
-                        mjObj[group] ??= {}
-                        mjObj[group][tool.name] = (params: unknown) => secureDispatcher(tool.name, params)
-                    }
+                    // Prepare api bindings using the unified JournalApi factory
+                    const { createJournalApi } = await import('../../../codemode/api/journal-api.js')
+                    const journalApi = createJournalApi(tools, secureDispatcher)
+                    const apiBindings = journalApi.createSandboxBindings()
+                    const schemas = journalApi.createSandboxSchemas()
 
                     // 4. Execute Code in Sandbox Worker
                     const pool = getSandboxPool()
@@ -298,7 +294,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 execResult = await pool.execute(
                                     input.code ?? '',
                                     apiBindings,
-                                    undefined,
+                                    schemas,
                                     input.timeout_ms,
                                     userContext,
                                     input.dry_run
@@ -308,7 +304,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             execResult = await pool.execute(
                                 input.code ?? '',
                                 apiBindings,
-                                undefined,
+                                schemas,
                                 input.timeout_ms,
                                 userContext,
                                 input.dry_run
