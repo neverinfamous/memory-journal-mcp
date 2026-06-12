@@ -44,6 +44,7 @@ const ListAuthorAliasesSchema = z.object({
 })
 
 const ListAuthorAliasesOutputSchema = z.object({
+    success: z.boolean().default(true),
     aliases: z.array(z.object({
         id: z.number(),
         alias: z.string(),
@@ -145,6 +146,7 @@ function handleListAuthorAliases(context: ToolContext) {
             const aliases = teamDb.listAuthorAliases(canonical_author)
             
             return {
+                success: true,
                 aliases,
             }
         } catch (error) {

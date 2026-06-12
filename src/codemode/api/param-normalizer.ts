@@ -27,6 +27,7 @@ const PARAM_ALIASES: Record<string, string> = {
     pr: 'pr_number',
     project: 'project_number',
     user: 'target_user',
+    target_user: 'author',
     assignee: 'target_user',
     msg: 'message',
     repo_name: 'repo',
@@ -95,6 +96,12 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<str
         const alias = PARAM_ALIASES[snakeKey]
         if (alias !== undefined && !(alias in obj) && !(alias in result)) {
             snakeKey = alias
+        }
+
+        // Coerce hallucinated role values
+        if (snakeKey === 'role' && typeof value === 'string' && value.toLowerCase() === 'contributor') {
+            result[snakeKey] = 'member'
+            continue
         }
 
         result[snakeKey] = value

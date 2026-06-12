@@ -73,6 +73,8 @@
 - Fixed Code Mode sandbox mapping `comment` to `resolution_comment` instead of `resolution` for `resolve_team_flag`, and added missing `readQuery` search aliases.
 - Fixed `getConfig()` and `readResource()` global built-ins returning invalid types or failing to throw informative errors when accessed directly from the sandbox.
 - Fixed Code Mode non-array proxy error message string mismatch in `worker-result-proxy.ts` to improve test compliance.
+- Fixed Code Mode alias smoothing failure for `mj.team.setRole` by mapping hallucinated `target_user` to `author` and coercing hallucinated `contributor` role to `member` in `param-normalizer.ts`.
+- Fixed Code Mode test failures for `mj.team.aliases` by adding `success: true` to the `teamListAuthorAliases` output schema and response payload.
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.
