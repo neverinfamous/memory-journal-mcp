@@ -39,7 +39,6 @@ const PARAM_ALIASES: Record<string, string> = {
     from: 'from_entry_id',
     to: 'to_entry_id',
     kind: 'entry_type',
-    filename: 'source_dir',
     format_type: 'format',
     webhook: 'report_webhook_url',
     // §1.3: Flag resolution comment aliases
@@ -76,6 +75,19 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<str
             ) {
                 // We default to entry_type since it's the most common
                 snakeKey = 'entry_type'
+            }
+        }
+
+        // Context-aware 'filename' hallucination
+        if (snakeKey === 'filename') {
+            // 'filename' is the canonical parameter for restoreBackup
+            // but agents often hallucinate it for import_markdown's 'source_dir'
+            if (!('source_dir' in obj) && !('source_dir' in result)) {
+                // If the object has import-specific fields like 'project_number' or 'tags', 
+                // it's likely import_markdown. Otherwise, we leave it as 'filename'.
+                if ('project_number' in obj || 'tags' in obj || 'dry_run' in obj) {
+                    snakeKey = 'source_dir'
+                }
             }
         }
 

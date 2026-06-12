@@ -63,6 +63,7 @@
 - Fixed Code Mode `get_recent_entries` and `get_entry_history` API signature mismatches that broke cursor-based pagination and parameter validation.
 - Added `issue_url` and `pr_url` auto-population in Code Mode proxy when GitHub context is available and `issue_number`/`pr_number` is provided.
 - Fixed `createEntryMinimal` hallucination in Code Mode aliases.
+- Fixed `filename` parameter hallucination logic in Code Mode `param-normalizer` to prevent overwriting the canonical `filename` argument during backup restore operations.
 
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
