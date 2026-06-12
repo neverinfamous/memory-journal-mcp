@@ -171,9 +171,14 @@ export class BackupManager {
         }
 
         try {
-            // Dynamically import better-sqlite3 to avoid top-level require errors if mocked
             const Database = (await import('better-sqlite3')).default
             const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
+            
+            // Apply encryption key if present
+            if (process.env['DB_ENCRYPTION_KEY']) {
+                tempDb.pragma(`key = '${process.env['DB_ENCRYPTION_KEY']}'`)
+            }
+            
             const tempStmt = tempDb.prepare('PRAGMA integrity_check')
             const result = tempStmt.get() as Record<string, unknown>
             const integrityResult = Object.values(result ?? {})[0]

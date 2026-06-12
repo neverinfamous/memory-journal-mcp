@@ -37,6 +37,9 @@
 - Added numeric project IDs alongside repository names in the Briefing Config row.
 
 ### Fixed
+- Fixed `restore_backup` tool throwing `INTERNAL_ERROR` when used in environments with encryption (`DB_ENCRYPTION_KEY`) by correctly passing the key to the `better-sqlite3` instance during `PRAGMA integrity_check`.
+- Fixed `entryIds` and `deletedIds` destructuring hallucination in Code Mode by adding proxy fallbacks to gracefully convert `entries` and `updated`/`deleted` arrays to match expected signatures.
+- Fixed `search_audit_log` returning validation errors when called in environments where audit logging is not configured (e.g., Code Mode tests), instead returning a graceful empty result.
 - Fixed multiple `project_number` validation and resolution issues in the Code Mode dispatcher, including numeric coercion, repository name lookups, and more actionable errors.
 - Fixed Code Mode stability issues related to async/await handling, cross-context error serialization, and `fetch()` references.
 - Fixed code quality findings by removing unsafe types, using centralized loggers, and hardening schemas.

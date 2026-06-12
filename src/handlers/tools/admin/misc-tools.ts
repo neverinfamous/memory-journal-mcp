@@ -115,14 +115,10 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                     
                     if (!context.config?.runtime?.auditLogger) {
                         return {
-                            success: false,
+                            success: true, // Graceful fallback
                             results: [],
                             count: 0,
-                            error: 'Audit logging is disabled or not configured on this server.',
-                            code: 'CONFIGURATION_ERROR',
-                            category: 'configuration',
-                            suggestion: 'Enable audit logging via AUDIT_LOG_PATH in the environment.',
-                            recoverable: false,
+                            warning: 'Audit logging is disabled or not configured on this server.',
                         }
                     }
 

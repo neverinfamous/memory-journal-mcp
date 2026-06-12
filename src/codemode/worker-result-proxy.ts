@@ -61,11 +61,44 @@ export function wrapResult(result: unknown): unknown {
                 getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
                 get(target, prop) {
                     if (prop in target) return target[prop]
+                    
+                    // Helper to safely check and cast arrays
+                    const isObject = (val: unknown): val is Record<string, unknown> => typeof val === 'object' && val !== null;
+                    const hasNumberId = (val: unknown): val is { id: number } => isObject(val) && typeof val['id'] === 'number';
+
+                    // Hallucination Intercept: Agents frequently expect batchCreateEntries to return `entryIds` array
+                    // instead of the actual `entries` array. Expose it gracefully as an iterable array of numbers.
+                    const targetRecord = target as Record<string, unknown>
+                    if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
+                        return targetRecord['entries'].filter(hasNumberId).map((e) => e.id)
+                    }
+                    if (prop === 'entryIds' && 'updated' in targetRecord && Array.isArray(targetRecord['updated'])) {
+                        return targetRecord['updated'].filter(hasNumberId).map((e) => e.id)
+                    }
+                    // Hallucination Intercept: deletedIds vs deleted
+                    if (prop === 'deletedIds' && 'deleted' in targetRecord && Array.isArray(targetRecord['deleted'])) {
+                        return targetRecord['deleted'] as unknown[]
+                    }
+
+                    // Native Iteration fallback: If an agent tries to destructure the result object directly:
+                    // `const [id1] = bCreated` or `const [e1] = bCreated`, we can iterate over the primary array
+                    if (prop === Symbol.iterator) {
+                        const targetRecord = target as Record<string, unknown>
+                        const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
+                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items'].includes(k)) || arrayKeys[0]
+                        if (targetKey !== undefined) {
+                            return function* () {
+                                yield* (targetRecord[targetKey] as unknown[])
+                            }
+                        }
+                    }
+
                     if (
                         typeof prop === 'string' &&
                         ['find', 'map', 'filter', 'reduce', 'forEach', 'some', 'every', 'flatMap', 'push', 'pop', 'slice', 'splice', 'sort'].includes(prop)
                     ) {
-                        const arrayKeys = Object.keys(target).filter(k => Array.isArray(target[k]))
+                        const targetRecord = target as Record<string, unknown>
+                        const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
                         const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags'].includes(k)) || arrayKeys[0]
 
                         if (targetKey !== undefined) {
