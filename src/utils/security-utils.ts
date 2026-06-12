@@ -359,5 +359,10 @@ export function resolveAuthor(): string {
         return sanitizeAuthor(authCtx.claims.sub)
     }
 
+    const localUser = process.env['USERNAME'] || process.env['USER']
+    if (localUser) {
+        return sanitizeAuthor(localUser.toLowerCase())
+    }
+
     return 'unknown'
 }

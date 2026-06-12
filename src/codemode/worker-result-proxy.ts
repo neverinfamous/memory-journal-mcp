@@ -85,6 +85,11 @@ export function wrapResult(result: unknown): unknown {
                         return targetRecord['count']
                     }
 
+                    // Hallucination Intercept: revisions vs history
+                    if (prop === 'revisions' && 'history' in targetRecord && Array.isArray(targetRecord['history'])) {
+                        return targetRecord['history'] as unknown[]
+                    }
+
                     // Native Iteration fallback: If an agent tries to destructure the result object directly:
                     // `const [id1] = bCreated` or `const [e1] = bCreated`, we can iterate over the primary array
                     if (prop === Symbol.iterator) {
