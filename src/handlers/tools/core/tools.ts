@@ -188,7 +188,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description: 'Get the most recent journal entries',
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
-            outputSchema: z.object({ entries: z.array(EntryOutputSchema), count: z.number() }).extend(ErrorFieldsMixin.shape), // Output schema inline for array wrap
+            outputSchema: z.object({ entries: z.array(EntryOutputSchema), count: z.number(), next_cursor: z.string().optional(), hasMore: z.boolean().optional() }).extend(ErrorFieldsMixin.shape), // Output schema inline for array wrap
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -198,11 +198,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
-                    const result = db.getRecentEntries(input.limit, undefined, input.sort_by)
+                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived)
                     return {
                         success: true,
                         entries: result.entries,
                         count: result.entries.length,
+                        next_cursor: result.nextCursor,
+                        hasMore: !!result.nextCursor,
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -225,22 +227,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryHistorySchema.parse(params)
-                    const current = db.getEntryById(input.id)
+                    const current = db.getEntryById(input.entry_id)
                     if (!current) {
                         return {
                             success: false,
-                            error: `Entry ${String(input.id)} not found`,
+                            error: `Entry ${String(input.entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             recoverable: true,
                         }
                     }
 
-                    const history = db.getEntryHistory(input.id)
+                    const history = db.getEntryHistory(input.entry_id)
 
                     return {
                         success: true,
-                        id: input.id,
+                        id: input.entry_id,
                         current,
                         history,
                     }

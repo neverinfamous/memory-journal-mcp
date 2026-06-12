@@ -94,11 +94,14 @@ export const EntryByIdOutputSchema = z
 
 export const GetRecentEntriesSchema = z.object({
     limit: z.number().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
+    is_personal: z.boolean().optional(),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    cursor: z.string().optional(),
+    include_archived: z.boolean().optional().default(false),
 })
 
 export const GetRecentEntriesSchemaMcp = z.object({
@@ -106,11 +109,14 @@ export const GetRecentEntriesSchemaMcp = z.object({
         .optional()
         .default(10)
         .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),
+    is_personal: z.boolean().optional(),
     sort_by: z
         .string()
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    cursor: z.string().optional(),
+    include_archived: z.boolean().optional().default(false),
 })
 
 // ============================================================================
@@ -118,11 +124,11 @@ export const GetRecentEntriesSchemaMcp = z.object({
 // ============================================================================
 
 export const GetEntryHistorySchema = z.object({
-    id: z.number(),
+    entry_id: z.number(),
 })
 
 export const GetEntryHistorySchemaMcp = z.object({
-    id: relaxedNumber().describe('The numeric ID of the entry'),
+    entry_id: relaxedNumber().describe('The numeric ID of the entry'),
 })
 
 export const GetEntryHistoryOutputSchema = z

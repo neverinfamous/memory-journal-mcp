@@ -69,7 +69,7 @@ test.describe('Payload Contracts: Core', () => {
 
     test('get_entry_history returns { current, history }', async () => {
         const payload = await callToolAndParse(client, 'get_entry_history', {
-            id: createdEntryId,
+            entry_id: createdEntryId,
         })
         expectSuccess(payload)
         expect(Array.isArray(payload.history)).toBe(true)
