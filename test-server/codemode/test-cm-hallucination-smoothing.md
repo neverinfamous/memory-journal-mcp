@@ -40,7 +40,7 @@ const listFlags = await mj.team.teamListFlags({
   sort: 'priority'
 })
 
-// 2. comment -> resolution_comment
+// 2. comment -> resolution
 const resolved = await mj.team.resolveTeamFlag({
   flag_id: aliasFlag.entry?.id,
   comment: 'Resolved via alias'
@@ -188,7 +188,7 @@ const result = await (async () => {
   await new Promise(r => setTimeout(r, 10))
   
   // 3. getConfig()
-  const cfg = getConfig()
+  const cfg = await getConfig()
   
   // 4. readResource URI handler
   let uriError = false
@@ -237,11 +237,11 @@ return result
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- Parameter aliases map successfully (`user` → `target_user`, `msg` → `message`, `severity` → `flag_type`, `comment` → `resolution_comment`, `sort` → `sort_by`, `version` → `expected_version`, `search` → `query`, `filename` → `source_dir`)
+- Parameter aliases map successfully (`user` → `target_user`, `msg` → `message`, `severity` → `flag_type`, `comment` → `resolution`, `sort` → `sort_by`, `version` → `expected_version`, `search` → `query`, `filename` → `source_dir`)
 - Method aliases map successfully (`mj.admin.config`, `mj.core.history`, `mj.team.setRole`, `mj.team.aliases`, `mj.search.read_query`)
 - Cross-group constructor wiring works (`mj.core.semanticSearch`, `mj.core.vectorStats`, `mj.core.searchAuditLog`, `mj.core.listDeletedEntries`)
 - `sleep()` and `setTimeout` globals exist and resolve in Sandbox
-- `getConfig()` returns server configuration inside Sandbox
+- `await getConfig()` returns server configuration inside Sandbox
 - `readResource("memory://...")` throws a structured guidance error pointing to tools
 - Calling `.forEach()` on a tool response object throws a specific `CodeMode Non-Array Proxy Error`
 - The outer `context` parameter value is accessible inside the Sandbox via the `context` variable

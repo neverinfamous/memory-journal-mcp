@@ -88,9 +88,11 @@ To catch this, the `worker-api-proxy.ts` wraps all RPC Promise returns in an add
 
 ## 6. Resource URIs vs Tools (`getBriefing` Failures)
 
-Code Mode inherently operates over `memory-journal-mcp`'s **tool layer**. Operations that deal with raw resources (like `memory://briefing/{repo_name}` or `memory://metrics/summary`) are NOT tools and CANNOT be called from within Code Mode. 
+Code Mode inherently operates over `memory-journal-mcp`'s **tool layer**. Operations that deal with raw resources (like `memory://briefing/{repo_name}` or `memory://metrics/summary`) are NOT tools and CANNOT be called natively from within Code Mode. 
 
 Attempting to call `await mj.core.getBriefing()` inside `mj_execute_code` will result in an `Operation 'getBriefing' is not found in group` error.
+
+Additionally, to help steer agents away from trying to use the native MCP `readResource` built-in, calling `await readResource('memory://recent')` inside the Sandbox triggers a custom interceptor that throws a highly actionable error, directly suggesting the correct equivalent tool (e.g., `mj.core.getRecentEntries()`).
 
 **Solution:** ALWAYS use your native `read_resource` tool (outside of Code Mode) to fetch resources. Do NOT attempt to read resources or briefings using the `mj.*` API. 
 
