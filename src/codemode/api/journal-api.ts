@@ -106,7 +106,30 @@ export class JournalApi {
 
         // §2.2: Cross-group — agents commonly attempt mj.core.semanticSearch()
         const semanticFn = this.search['semanticSearch']
-        if (semanticFn) this.core['semanticSearch'] = semanticFn
+        const searchEntriesFallbackFn = this.search['searchEntries']
+        if (semanticFn) {
+            const wrappedSemanticFn = async (...args: unknown[]): Promise<unknown> => {
+                const res = await semanticFn(...args)
+                if (res !== null && typeof res === 'object' && 'entries' in res) {
+                    const entries = (res as Record<string, unknown>)['entries']
+                    if (Array.isArray(entries) && entries.length === 0 && searchEntriesFallbackFn) {
+                        const params = args[0] as Record<string, unknown> | undefined
+                        if (params && typeof params['query'] === 'string') {
+                            const fallback = await searchEntriesFallbackFn(...args)
+                            if (fallback !== null && typeof fallback === 'object' && 'entries' in fallback) {
+                                const fallbackEntries = (fallback as Record<string, unknown>)['entries']
+                                if (Array.isArray(fallbackEntries) && fallbackEntries.length > 0) {
+                                    return fallback
+                                }
+                            }
+                        }
+                    }
+                }
+                return res
+            }
+            this.search['semanticSearch'] = wrappedSemanticFn
+            this.core['semanticSearch'] = wrappedSemanticFn
+        }
 
         // §2.1: Cross-group — agents commonly attempt mj.core.vectorStats() / mj.core.rebuildVectorIndex()
         const vectorStatsFn = this.search['getVectorIndexStats']
