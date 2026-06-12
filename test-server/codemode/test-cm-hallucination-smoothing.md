@@ -62,10 +62,9 @@ const searched = await mj.core.searchEntries({
 
 // 5. filename -> source_dir (for io import)
 let ioError = false;
-try {
-  await mj.io.importExternal({ project_number: 5, filename: '/fake/dir' })
-} catch (e) {
-  ioError = true; // Expect error but not validation error about missing source_dir
+const ioRes = await mj.io.importExternal({ project_number: 5, filename: '/fake/dir' });
+if (!ioRes.success && !ioRes.error.includes('source_dir')) {
+  ioError = true; // Expect structured error but not validation error about missing source_dir
 }
 
 // Cleanup
@@ -199,13 +198,16 @@ const result = await (async () => {
   }
   
   // 5. Array proxy interception
-  const searchResult = await mj.core.searchEntries({ project_number: 5, query: 'x' })
+  // Use createEntry instead of searchEntries to correctly test Non-Array Proxy Error
+  const createResult = await mj.core.createEntry({ project_number: 5, content: 'x' })
   let proxyError = false
   try {
-    searchResult.forEach(item => console.log(item))
+    createResult.forEach(item => console.log(item))
   } catch (e) {
     proxyError = e.message.includes('CodeMode Non-Array Proxy Error')
   }
+  // cleanup the test entry
+  await mj.core.deleteEntry({ entry_id: createResult.id, permanent: true })
   
   // 6. Context parameter
   // Call mj_execute_code explicitly with context="Large context string" before running this
