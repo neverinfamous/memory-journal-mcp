@@ -60,6 +60,8 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         deleted: 'listDeletedEntries',
         trash: 'listDeletedEntries',
         crossSearch: 'crossTeamSearch',
+        readQuery: 'searchEntries',
+        read_query: 'searchEntries',
     },
     analytics: {
         stats: 'getStatistics',

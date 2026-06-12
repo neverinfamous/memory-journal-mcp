@@ -13,7 +13,7 @@ import {
 } from '../../src/handlers/resources/core/briefing/system-section.js'
 
 // Mock the index module to avoid circular dependency / dynamic import deadlocks during coverage tests
-vi.mock('../../src/handlers/index.js', () => ({
+vi.mock('../../src/handlers/resources/index.js', () => ({
     getResources: () => new Array(42),
 }))
 

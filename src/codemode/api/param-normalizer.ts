@@ -42,8 +42,8 @@ const PARAM_ALIASES: Record<string, string> = {
     format_type: 'format',
     webhook: 'report_webhook_url',
     // §1.3: Flag resolution comment aliases
-    comment: 'resolution_comment',
-    resolution: 'resolution_comment',
+    comment: 'resolution',
+    resolution_comment: 'resolution',
     // §1.3: Severity escalation alias (agents say "escalate severity")
     severity: 'flag_type',
     // §1.5: Sort/order aliases

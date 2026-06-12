@@ -231,8 +231,13 @@ export function getCrossTeamTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CrossTeamSearchSchema,
             outputSchema: CrossTeamSearchOutputSchema,
             handler: async (args: unknown) => {
-                const parsed = CrossTeamSearchSchema.parse(args)
-                return handleCrossTeamSearch(parsed, context)
+                try {
+                    const parsed = CrossTeamSearchSchema.parse(args)
+                    return await handleCrossTeamSearch(parsed, context)
+                } catch (error) {
+                    const { formatHandlerError } = await import('../../../utils/error-helpers.js');
+                    return formatHandlerError(error);
+                }
             },
             annotations: {
                 openWorldHint: false,

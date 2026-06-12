@@ -131,9 +131,10 @@ export class JournalApi {
         if (restoreFn) this.admin['restoreBackup'] = restoreFn
 
         // Smooth out getConfig hallucination via Constructor Wiring
-        const getConfigFn = (): Promise<{ PROJECT_REGISTRY: unknown[] | undefined }> =>
+        const getConfigFn = (): Promise<{ PROJECT_REGISTRY: unknown[] | undefined; dbPath: string }> =>
             Promise.resolve({
                 PROJECT_REGISTRY: parseProjectRegistry(),
+                dbPath: 'memory://internal',
             })
         this.admin['getConfig'] = getConfigFn
         this.core['getConfig'] = getConfigFn
@@ -324,6 +325,28 @@ export class JournalApi {
                 return deleteFn({ entry_id })
             },
             updateEntry: this.admin['updateEntry'],
+            
+            // Global Hallucinations
+            readResource: (uri?: string) => {
+                const suggestions: Record<string, string> = {
+                    'memory://recent': 'mj.core.getRecentEntries()',
+                    'memory://statistics': 'mj.analytics.getStatistics()',
+                    'memory://tags': 'mj.core.listTags()',
+                    'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
+                    'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
+                    'memory://insights': 'mj.analytics.getCrossProjectInsights()',
+                }
+                let hint = ''
+                if (typeof uri === 'string') {
+                    const match = Object.entries(suggestions).find(([k]) => uri.startsWith(k))
+                    if (match !== undefined) {
+                        hint = ` Try: ${match[1]}`
+                    }
+                }
+                return Promise.reject(new Error(
+                    `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
+                ))
+            },
 
             // Extended top-level convenience aliases for common hallucinations
             find: this.search['searchEntries'],

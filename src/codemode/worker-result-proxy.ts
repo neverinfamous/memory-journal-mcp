@@ -124,7 +124,7 @@ export function wrapResult(result: unknown): unknown {
 
                         const keys = Object.keys(target).join(', ') || 'none'
                         throw new TypeError(
-                            `Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Keys available: ${keys}`
+                            `CodeMode Non-Array Proxy Error: Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Keys available: ${keys}`
                         )
                     }
                     return undefined

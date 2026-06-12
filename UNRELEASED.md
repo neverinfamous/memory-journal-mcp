@@ -68,7 +68,11 @@
 - Fixed `createEntryMinimal` hallucination in Code Mode aliases.
 - Fixed Code Mode sandbox execution failing to map test authors on environments missing `TEAM_AUTHOR` by adding a fallback to the local system username in `resolveAuthor`.
 - Fixed Code Mode proxy hallucination where agents requested `revisions` instead of `history` on `mj.core.getEntryHistory` by adding a proxy alias fallback.
-
+- Fixed `search_audit_log` schema allowing negative limits, which bypassed early warning boundaries.
+- Fixed `cross_team_search` handler throwing raw Zod errors instead of returning structured `{ success: false, error: ... }` responses.
+- Fixed Code Mode sandbox mapping `comment` to `resolution_comment` instead of `resolution` for `resolve_team_flag`, and added missing `readQuery` search aliases.
+- Fixed `getConfig()` and `readResource()` global built-ins returning invalid types or failing to throw informative errors when accessed directly from the sandbox.
+- Fixed Code Mode non-array proxy error message string mismatch in `worker-result-proxy.ts` to improve test compliance.
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.
