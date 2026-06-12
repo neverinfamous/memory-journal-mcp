@@ -1,12 +1,24 @@
-import { test, expect } from 'vitest'
+import { test, expect, afterAll } from 'vitest'
 import { getCodeModeTools } from '../../src/handlers/tools/codemode/handler.js'
 import { getBackupTools } from '../../src/handlers/tools/backup.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/database-adapter.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import * as path from 'path'
+import * as fs from 'fs'
+
+const dbDir = path.resolve('./.test-output/codemode-restore')
+const dbPath = path.join(dbDir, 'journal-test-codemode.db')
+let db: DatabaseAdapter
+
+afterAll(async () => {
+    if (db) {
+        await db.close()
+    }
+    fs.rmSync(dbDir, { recursive: true, force: true })
+})
 
 test('mj_execute_code with restore_backup', async () => {
-    const db = new DatabaseAdapter(path.resolve('./test-db/journal-test-codemode.db'))
+    db = new DatabaseAdapter(dbPath)
     await db.initialize()
     const runtime = new ServerRuntime()
     const config = { runtime, codemodeEnabled: true }
@@ -26,6 +38,5 @@ test('mj_execute_code with restore_backup', async () => {
     const { callTool } = await import('../../src/handlers/tools/index.js')
     
     const result = await callTool('mj_execute_code', { code, timeout_ms: 5000, context: {} }, db, undefined, undefined, config, undefined)
-    console.log(JSON.stringify(result, null, 2))
     expect((result as any).success).toBe(true)
 })

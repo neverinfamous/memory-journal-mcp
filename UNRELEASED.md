@@ -40,6 +40,7 @@
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
 ### Fixed
+- Fixed `codemode-restore.test.ts` polluting the project root with a `test-db` directory by relocating it to `.test-output` and adding automatic teardown.
 - Fixed `create_entry` missing auto-population of GitHub `issueUrl` when `issue_number` is provided.
 - Fixed `get_entry_by_id` missing `relationships`, `importance`, and `importanceBreakdown` in the return object, and added `include_relationships` to its schema.
 - Fixed `deletedCount` proxy hallucination in Code Mode to map correctly to `count` for batch operations.
