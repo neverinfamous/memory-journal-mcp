@@ -3,6 +3,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
+import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 
 import {
     CreateEntrySchema,
@@ -52,6 +53,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
 
+                    const resolvedIssueUrl = await resolveIssueUrl(
+                        context,
+                        input.project_number,
+                        input.issue_number,
+                        input.issue_url
+                    )
+
                     const createdEntry = db.createEntry({
                         content: input.content,
                         entryType: input.entry_type,
@@ -61,7 +69,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         projectNumber: input.project_number,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
-                        issueUrl: input.issue_url,
+                        issueUrl: resolvedIssueUrl,
                         prNumber: input.pr_number,
                         prUrl: input.pr_url,
                         prStatus: input.pr_status,
@@ -176,7 +184,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
-                    return { success: true, entry }
+
+                    const result: Record<string, unknown> = {
+                        success: true,
+                        entry,
+                    }
+
+                    if (input.include_relationships) {
+                        const relationships = db.getRelationships(input.entry_id)
+                        result['relationships'] = relationships
+                    }
+
+                    const importance = db.calculateImportance(input.entry_id)
+                    result['importance'] = importance.score
+                    result['importanceBreakdown'] = importance.breakdown
+
+                    return result
                 } catch (err) {
                     return formatHandlerError(err)
                 }

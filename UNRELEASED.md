@@ -40,6 +40,8 @@
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
 ### Fixed
+- Fixed `create_entry` missing auto-population of GitHub `issueUrl` when `issue_number` is provided.
+- Fixed `get_entry_by_id` missing `relationships`, `importance`, and `importanceBreakdown` in the return object, and added `include_relationships` to its schema.
 - Fixed `deletedCount` proxy hallucination in Code Mode to map correctly to `count` for batch operations.
 - Fixed `restore_backup` tool throwing `INTERNAL_ERROR` when used in environments with encryption (`DB_ENCRYPTION_KEY`) by correctly passing the key to the `better-sqlite3` instance during `PRAGMA integrity_check`.
 - Fixed `entryIds` and `deletedIds` destructuring hallucination in Code Mode by adding proxy fallbacks to gracefully convert `entries` and `updated`/`deleted` arrays to match expected signatures.

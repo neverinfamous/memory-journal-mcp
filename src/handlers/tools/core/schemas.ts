@@ -78,16 +78,21 @@ export const CreateEntryOutputSchema = z
 
 export const GetEntryByIdSchema = z.object({
     entry_id: z.number(),
+    include_relationships: z.boolean().optional().default(true),
 })
 
 export const GetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().describe('The numeric ID of the entry to retrieve'),
+    include_relationships: z.boolean().optional().default(true).describe('If true, includes all linked relationships (causal, related) in the response'),
 })
 
 export const EntryByIdOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entry: EntryOutputSchema.optional(),
+        relationships: z.any().optional(),
+        importance: z.number().optional(),
+        importanceBreakdown: z.any().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
