@@ -40,6 +40,7 @@
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
 ### Fixed
+- **Codemode Security Scanner:** Fixed a false-positive mitigation in the static security scanner where stripping all string literals inadvertently bypassed validation for bracket-notation AST escapes (like `x["constructor"]`). The scanner now correctly strips only template literals (`` ` ``) to safely allow Markdown prose while enforcing strict policies on single and double quotes.
 - **Codemode Paradox:** Fixed an issue where running `--tool-filter codemode` inadvertently disabled all mutating tool proxy bindings inside the codemode sandbox by misidentifying the server state as "readonly". Code mode sandboxes now correctly expose all tool bindings unless `--tool-filter readonly` is explicitly passed.
 - Fixed `codemode-restore.test.ts` polluting the project root with a `test-db` directory by relocating it to `.test-output` and adding automatic teardown.
 - Fixed `create_entry` missing auto-population of GitHub `issueUrl` when `issue_number` is provided.

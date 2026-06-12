@@ -65,9 +65,17 @@ export class CodeModeSecurityManager {
             errors.push('Code cannot be empty')
         }
 
+        // Normalize and strip comments/template literals before pattern matching
+        // (e.g., the word "process." in a Markdown string triggering the process.env block).
+        const strippedCode = code
+            .normalize('NFKC')
+            .replace(/\/\*[\s\S]*?\*\//g, ' ') // Block comments
+            .replace(/\/\/[^\n]*/g, ' ') // Line comments
+            .replace(/`(?:[^`\\]|\\.)*`/g, '``') // Template literals
+
         // Blocked pattern scan
         for (const pattern of this.config.blockedPatterns) {
-            if (pattern.test(code)) {
+            if (pattern.test(strippedCode)) {
                 errors.push(`Code contains blocked pattern: ${pattern.source}`)
             }
         }
