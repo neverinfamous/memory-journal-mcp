@@ -153,7 +153,19 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // 2. Fetch all tools and cache them
-                    const tools = collectNonCodeModeTools(sessionContext)
+                    let tools = collectNonCodeModeTools(sessionContext)
+
+                    // 2b. Enforce Readonly Mode
+                    // If the sandbox is explicitly requested as readonly, OR the server itself is in readonly mode
+                    // and the user didn't explicitly override it with readonly: false, filter out mutating tools.
+                    const isGlobalReadonly = context.config?.filterConfig?.enabledTools !== undefined 
+                        ? !context.config.filterConfig.enabledTools.has('create_entry')
+                        : false;
+                    const isSandboxReadonly = input.readonly ?? isGlobalReadonly;
+
+                    if (isSandboxReadonly) {
+                        tools = tools.filter((t) => t.annotations?.readOnlyHint === true)
+                    }
 
                     // 3. Create the secure dispatcher wrapper around tool handlers
                     const secureDispatcher = async (

@@ -28,6 +28,7 @@ export const ExecuteCodeSchema = z.object({
     dry_run: z.boolean().optional().default(false),
     context: z.any().optional(),
     timeout_ms: z.number().optional(),
+    readonly: z.boolean().optional(),
 })
 
 export const ExecuteCodeSchemaMcp = z.object({
@@ -66,5 +67,11 @@ export const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .describe(
             'A JSON object, string, or array to pass variables directly into the sandbox (accessible via `context`). Use this for large strings or complex data to avoid string-escaping issues in the code parameter.'
+        ),
+    readonly: z
+        .boolean()
+        .optional()
+        .describe(
+            'If true, execution is restricted to read-only operations. Write tools will be filtered out of the API bridge.'
         ),
 })

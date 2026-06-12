@@ -78,6 +78,7 @@
 - Relaxed the Code Mode `context` schema to `z.any()` to allow agents to pass non-object values like strings or arrays without triggering Zod validation failures.
 - Fixed Code Mode `semanticSearch` returning zero results when vector latency occurs or thresholds mismatch by wrapping it to gracefully fall back to full-text search (`searchEntries`).
 - Intercepted hallucinated `script` parameter in `mj_execute_code` Code Mode execution, mapping it gracefully to `code` so future agents succeed automatically.
+- Fixed Code Mode sandbox not enforcing global `readonly` server mode and added `readonly` schema parameter to dynamically restrict execution to read-only tools.
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.
