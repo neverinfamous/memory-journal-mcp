@@ -155,6 +155,52 @@ return matches.entries.map((e) => ({
 }))
 ```
 
+## Workflow 6: Test Artifact Cleanup
+
+**Identify and execute soft-delete on test artifacts:**
+
+```javascript
+const backup = await mj.backup.backupJournal()
+if (!backup.success) return { error: 'Backup failed — aborting' }
+
+// Note: Use loop with offset if > 500 entries
+const p1 = await mj.core.getRecentEntries({ limit: 500 }) 
+const allEntries = p1.entries || []
+const targetIds = []
+
+for (const e of allEntries) {
+  const contentLC = (e.content || '').toLowerCase()
+  const titleLC = (e.title || '').toLowerCase()
+  if (e.entryType === 'test_entry') {
+    targetIds.push(e.id)
+  } else if (
+    (contentLC.includes('codemode') || contentLC.includes('test entry') || e.tags?.includes('test')) 
+    && e.entryType !== 'retrospective' 
+    && e.entryType !== 'bug_fix' 
+    && e.entryType !== 'technical_note'
+  ) {
+    targetIds.push(e.id)
+  }
+}
+
+const results = { ok: 0, fail: 0 }
+for (const id of targetIds) {
+  const r = await mj.admin.deleteEntry({ entry_id: id })
+  if (r.success) results.ok++
+  else results.fail++
+}
+
+if (results.ok > 0) {
+  await mj.core.createEntry({
+    content: `Database optimization: soft-deleted ${results.ok} test artifacts. Backup: ${backup.filename}`,
+    entry_type: 'maintenance',
+    tags: ['database-optimizer', 'cleanup']
+  })
+}
+
+return { targetFound: targetIds.length, deleted: results.ok, failed: results.fail }
+```
+
 ## Revert Guide
 
 **Find and restore backup:**
