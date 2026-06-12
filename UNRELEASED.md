@@ -75,6 +75,7 @@
 - Fixed Code Mode non-array proxy error message string mismatch in `worker-result-proxy.ts` to improve test compliance.
 - Fixed Code Mode alias smoothing failure for `mj.team.setRole` by mapping hallucinated `target_user` to `author` and coercing hallucinated `contributor` role to `member` in `param-normalizer.ts`.
 - Fixed Code Mode test failures for `mj.team.aliases` by adding `success: true` to the `teamListAuthorAliases` output schema and response payload.
+- Relaxed the Code Mode `context` schema to `z.any()` to allow agents to pass non-object values like strings or arrays without triggering Zod validation failures.
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.

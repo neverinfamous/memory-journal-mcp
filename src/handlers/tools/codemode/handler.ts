@@ -318,7 +318,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     
                     // Prepare sandbox payload
                     // If context was provided in the schema, use it. Otherwise empty object.
-                    const userContext = input.context ?? {}
+                    // We cast it to satisfy TypeScript since schemas.ts allows z.any() for flexibility
+                    const userContext = (input.context as Record<string, unknown> | undefined) ?? {}
                     
                     // IMPORTANT: The worker relies on capturing the AuthContext from AsyncLocalStorage.
                     // We must run the execution wrapped in the current context so the worker thread
@@ -344,12 +345,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             })
                         } else {
                             execResult = await pool.execute(
-                                input.code ?? '',
-                                apiBindings,
-                                schemas,
-                                input.timeout_ms,
-                                userContext,
-                                input.dry_run
+                                    input.code ?? '',
+                                    apiBindings,
+                                    schemas,
+                                    input.timeout_ms,
+                                    userContext,
+                                    input.dry_run
                             )
                         }
                     })

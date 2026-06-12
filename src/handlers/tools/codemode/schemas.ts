@@ -25,7 +25,7 @@ export const ExecuteCodeSchema = z.object({
     project_number: relaxedNumber().optional(),
     repo: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
-    context: z.record(z.string(), z.unknown()).optional(),
+    context: z.any().optional(),
     timeout_ms: z.number().optional(),
 })
 
@@ -61,10 +61,9 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'If true, state-modifying API calls (create_entry, update_entry, etc.) will be skipped, returning simulated success.'
         ),
-    context: z
-        .record(z.string(), z.unknown())
+    context: z.any()
         .optional()
         .describe(
-            'A JSON object to pass variables directly into the sandbox (accessible via `context`). Use this for large strings or complex data to avoid string-escaping issues in the code parameter.'
+            'A JSON object, string, or array to pass variables directly into the sandbox (accessible via `context`). Use this for large strings or complex data to avoid string-escaping issues in the code parameter.'
         ),
 })
