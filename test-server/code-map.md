@@ -159,7 +159,7 @@ src/
 │       └── types.ts                # GitHub integration internal types
 │
 └── handlers/
-    ├── tools/                      # 99 tools across 10 groups — see § Handler Map below
+    ├── tools/                      # 100 tools across 10 groups — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
@@ -252,7 +252,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | Group             | Handler File(s)                | Tools | Key Exports                                                                                                                                        |
 | ----------------- | ------------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **codemode**      | `codemode.ts`                  | 1     | `mj_execute_code`                                                                                                                                  |
-| **core**          | `core.ts`                      | 7     | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `create_entry_minimal`, `test_simple`, `list_tags`                                        |
+| **core**          | `core.ts`                      | 8     | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `test_simple`, `test_error_handling`, `trigger_progress`, `list_tags`                                        |
 | **search**        | `search/index.ts`              | 6     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`, `list_deleted_entries`, `cross_team_search`                                                              |
 | **analytics**     | `analytics.ts`                 | 2     | `get_statistics`, `get_cross_project_insights`                                                                                                     |
 | **relationships** | `relationships.ts`             | 2     | `link_entries`, `visualize_relationships`                                                                                                          |

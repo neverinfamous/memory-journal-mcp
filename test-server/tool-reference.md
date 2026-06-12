@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **99 tools** organized by 10 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **100 tools** organized by 10 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -18,7 +18,7 @@ Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*
 
 ---
 
-## core (7 tools + Code Mode)
+## core (8 tools + Code Mode)
 
 Entry lifecycle — create, retrieve, tags, and test.
 
@@ -28,8 +28,9 @@ Entry lifecycle — create, retrieve, tags, and test.
 | `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
 | `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance) and cursor pagination.          |
 | `get_entry_history`    | Get the revision history of a specific journal entry (capped at 10 revisions).     |
-| `create_entry_minimal` | Minimal entry creation without context or tags.                                    |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
+| `test_error_handling`  | Test tool for validating error handler responses.                                  |
+| `trigger_progress`     | Test tool to trigger an MCP progress notification sequence.                        |
 | `list_tags`            | List all available tags.                                                           |
 
 ---
