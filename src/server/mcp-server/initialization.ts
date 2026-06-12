@@ -2,7 +2,7 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { logger } from '../../utils/logger.js'
-import { parseToolFilter, getToolFilterFromEnv, getFilterSummary } from '../../filtering/tool-filter.js'
+import { parseToolFilter, getToolFilterFromEnv, getFilterSummary, getAllToolNames } from '../../filtering/tool-filter.js'
 import { Scheduler } from '../scheduler.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { ServerRuntime } from '../../utils/maintenance-lock.js'
@@ -200,6 +200,14 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
                 module: 'McpServer',
                 summary: getFilterSummary(filterConfig),
             })
+        }
+    }
+
+    if (!filterConfig) {
+        const totalTools = getAllToolNames().length
+        if (totalTools > 50) {
+            logger.warning(`CONTEXT BLOAT WARNING: ${totalTools} tools are being registered without a tool filter.`)
+            logger.warning(`  This may consume excessive context window in the LLM. Consider using '--tool-filter codemode' or '--tool-filter starter' to save tokens.`)
         }
     }
 

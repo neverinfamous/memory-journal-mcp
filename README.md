@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-77.4%25-yellowgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-77.36%25-yellowgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -54,26 +54,26 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 **99 MCP Tools** · **19 Workflow Prompts** · **57 Resources (51 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
-| Feature                       | Description                                                                                                                                                                                         |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                           |
-| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                     |
-| **Dynamic Project Routing**   | Seamlessly switch contexts and access CI/Issue tracking across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                          |
-| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                       |
-| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5 keywords, semantic vector similarity, auto-heuristics, and date-range filters                                                                                 |
-| **Code Mode**                 | Execute multi-step operations in a trusted-admin execution environment — up to 90% token savings via `mj.*` API                                                                                     |
-| **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens |
-| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                            |
-| **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                  |
-| **Team Collaboration**        | 44 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics), RBAC, and member management  |
-| **Data Interoperability**     | Bidirectional Markdown roundtripping, unified IO namespace, and schema-safe JSON exports with hard bounds-checked path traversal defenses                                                           |
-| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                               |
-| **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                     |
-| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                  |
-| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                           |
-| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                        |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules       |
-| **GitHub Commander**          | Pipeline skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                             |
+| Feature                       | Description                                                                                                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                            |
+| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                      |
+| **Dynamic Project Routing**   | Seamlessly switch contexts and access CI/Issue tracking across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                           |
+| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                        |
+| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5 keywords, semantic vector similarity, auto-heuristics, and date-range filters                                                                                  |
+| **Code Mode**                 | Execute multi-step operations in a trusted-admin execution environment — up to 90% token savings via `mj.*` API                                                                                      |
+| **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens  |
+| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                             |
+| **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                   |
+| **Team Collaboration**        | 44 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics), RBAC, and member management |
+| **Data Interoperability**     | Bidirectional Markdown roundtripping, unified IO namespace, and schema-safe JSON exports with hard bounds-checked path traversal defenses                                                            |
+| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                |
+| **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                      |
+| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                   |
+| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                            |
+| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                         |
+| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules        |
+| **GitHub Commander**          | Pipeline skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                              |
 
 ---
 
@@ -124,20 +124,16 @@ _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 <details>
 <summary><strong>View Mandatory Session Start Routine</strong></summary>
 
-🛑 MANDATORY SESSION START ROUTINE
+🛑 Mandatory Session Start Routine
 
-Before addressing the user's first request in a session/thread, complete these steps:
+Before addressing the user's first request:
 
-1. Read the briefing using the `read_resource` tool: `memory://briefing/{repo_name}`.
-   - Infer `repo_name` from context of user's prompt. Use `memory://briefing` as fallback only if necessary.
-2. Your first response MUST begin with the entire briefing content. Use this format:
-
+1. Load context: `read_resource` -> `memory://briefing/{repo_name}` (infer repo_name or fallback to `memory://briefing`).
+2. Prepend response EXACTLY as:
    > **📋 Briefing loaded** — `{repo_name}`
-   >
-   > _{paste **ENTIRE** briefing here}_ (It isn't always easy for users to access in IDEs)
-
-3. Then address the user's request below the briefing.
-4. Do NOT autonomously resume work on issues mentioned in the briefing.
+   > _{paste ENTIRE briefing here}_
+3. Address the user's request below the briefing.
+4. NEVER autonomously execute tasks listed in the briefing.
 </details>
 
 ---
@@ -172,17 +168,17 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🛠️ **99 MCP Tools** (10 Groups)
 
-| Group           | Tools | Description                                                                                                                                                               |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                   |
-| `core`          | 7     | Entry CRUD, tags, test                                                                                                                                                    |
-| `search`        | 6     | Text search, date range, semantic, vector stats, cross-team                                                                                               |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                        |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                                                                            |
-| `io`            | 4     | JSON/Markdown export, Markdown directory roundtripping, and external knowledge base imports (`import_external`)                                                                            |
-| `admin`         | 11    | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                          |
-| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                      |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                            |
+| Group           | Tools | Description                                                                                                                                                                                 |
+| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                     |
+| `core`          | 7     | Entry CRUD, tags, test                                                                                                                                                                      |
+| `search`        | 6     | Text search, date range, semantic, vector stats, cross-team                                                                                                                                 |
+| `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                                          |
+| `relationships` | 2     | Link entries, visualize graphs                                                                                                                                                              |
+| `io`            | 4     | JSON/Markdown export, Markdown directory roundtripping, and external knowledge base imports (`import_external`)                                                                             |
+| `admin`         | 11    | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                      |
+| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                        |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                                              |
 | `team`          | 44    | CRUD, search, cross-team search, stats, relationships, IO (imports/exports), backup, vector search, cross-project insights, matrix, **Hush Protocol flags**, RBAC (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
@@ -372,6 +368,7 @@ briefingPrStatus: true
 ```
 
 Load it simply via:
+
 ```json
 {
   "mcpServers": {
@@ -383,7 +380,7 @@ Load it simply via:
 }
 ```
 
-*Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`.*
+_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`._
 
 > 🛠️ **Debugging Configuration:** Run `memory-journal-mcp --dump-config` (or pass `--dump-config` as an arg) to print the fully resolved configuration payload with automatically redacted secrets. This is the primary method for diagnosing overriding issues.
 
@@ -634,9 +631,9 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                                                          |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                                                               |
 | `EMBEDDING_MODEL`                 | Swappable HuggingFace feature extraction model for semantic search embeddings (CLI: `--embedding-model`; default: `Xenova/all-MiniLM-L6-v2`)          |
-| `ARCHIVE_OLDER_THAN_DAYS`         | Archive active entries older than N days with importance below threshold (CLI: `--archive-older-than-days`; `0` = disabled)         |
+| `ARCHIVE_OLDER_THAN_DAYS`         | Archive active entries older than N days with importance below threshold (CLI: `--archive-older-than-days`; `0` = disabled)                           |
 | `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold (CLI: `--prune-older-than-days`; `0` = disabled)                                |
-| `HARD_DELETE_OLDER_THAN_DAYS`     | Permanently delete soft-deleted entries that have been dead for N days (CLI: `--hard-delete-older-than-days`; `0` = disabled)         |
+| `HARD_DELETE_OLDER_THAN_DAYS`     | Permanently delete soft-deleted entries that have been dead for N days (CLI: `--hard-delete-older-than-days`; `0` = disabled)                         |
 | `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold for pruning (CLI: `--prune-importance-threshold`; default: `0.15`)                                                         |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
@@ -674,10 +671,10 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                                                    |
 | `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                                                                       |
 | `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)                                                     |
-| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `pnpm run lint`)                                                                  |
-| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `pnpm run typecheck`; empty = skip)                                                                                |
-| `PROJECT_BUILD_CMD`               | Project build command (default: `pnpm run build`; empty = skip)                                                                                        |
-| `PROJECT_TEST_CMD`                | Project test command (default: `pnpm run test`)                                                                                                        |
+| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `pnpm run lint`)                                                                 |
+| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `pnpm run typecheck`; empty = skip)                                                                               |
+| `PROJECT_BUILD_CMD`               | Project build command (default: `pnpm run build`; empty = skip)                                                                                       |
+| `PROJECT_TEST_CMD`                | Project test command (default: `pnpm run test`)                                                                                                       |
 | `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                                                                      |
 | `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)                                                           |
 | `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                                                                      |
@@ -765,25 +762,25 @@ memory-journal-mcp --transport http --port 3000
 
 ### Environment Variables
 
-| Variable | Description |
-|---|---|
-| `DB_PATH` | Path to the personal journal SQLite database |
-| `TEAM_DB_PATH` | Path to the shared team SQLite database |
-| `GITHUB_TOKEN` | Personal access token for GitHub integrations |
-| `PROJECT_REGISTRY` | JSON map of repo names to local paths and project numbers |
-| `ALLOWED_IO_ROOTS` | Comma-separated paths for Code Mode filesystem boundaries |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control exposed tools (e.g. `starter`, `full`, `readonly`) |
-| `INSTRUCTION_LEVEL` | Instruction depth (`essential`, `standard`, `full`) |
-| `AUDIT_LOG_PATH` | File path for JSONL tool call audit logs |
-| `AUDIT_REDACT` | Redact tool arguments from audit entries |
-| `AUDIT_READS` | Log read-scoped tool calls |
-| `AUDIT_LOG_MAX_SIZE` | Max audit log size (bytes) before rotation |
-| `MCP_METRICS_ENABLED` | Enable in-memory metrics |
-| `PERSIST_METRICS` / `METRICS_PATH` | Persist metrics state |
-| `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings |
-| `PROJECT_LINT_CMD` / `PROJECT_TEST_CMD` | Validation commands |
-| `COMMANDER_HITL_FILE_THRESHOLD` | Threshold for human-in-the-loop checkpoints |
-| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` | Scheduled HTTP reports |
+| Variable                                       | Description                                                |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| `DB_PATH`                                      | Path to the personal journal SQLite database               |
+| `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
+| `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
+| `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
+| `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode filesystem boundaries  |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control exposed tools (e.g. `starter`, `full`, `readonly`) |
+| `INSTRUCTION_LEVEL`                            | Instruction depth (`essential`, `standard`, `full`)        |
+| `AUDIT_LOG_PATH`                               | File path for JSONL tool call audit logs                   |
+| `AUDIT_REDACT`                                 | Redact tool arguments from audit entries                   |
+| `AUDIT_READS`                                  | Log read-scoped tool calls                                 |
+| `AUDIT_LOG_MAX_SIZE`                           | Max audit log size (bytes) before rotation                 |
+| `MCP_METRICS_ENABLED`                          | Enable in-memory metrics                                   |
+| `PERSIST_METRICS` / `METRICS_PATH`             | Persist metrics state                                      |
+| `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings                                        |
+| `PROJECT_LINT_CMD` / `PROJECT_TEST_CMD`        | Validation commands                                        |
+| `COMMANDER_HITL_FILE_THRESHOLD`                | Threshold for human-in-the-loop checkpoints                |
+| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
 
 ### GitHub Integration (Optional)
 
@@ -905,8 +902,8 @@ pnpm run bench
 
 Extensively tested across two frameworks:
 
-| Suite                     | Command            | Covers                                                                          |
-| ------------------------- | ------------------ | ------------------------------------------------------------------------------- |
+| Suite                     | Command             | Covers                                                                          |
+| ------------------------- | ------------------- | ------------------------------------------------------------------------------- |
 | Vitest (unit/integration) | `pnpm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
 | Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
 

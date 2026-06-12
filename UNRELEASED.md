@@ -48,6 +48,10 @@
 - Fixed agents failing when calling tools from the wrong API group (e.g. `mj.core.searchEntries`) by adding a cross-group search fallback to the sandbox proxy that throws a highly specific error directing them to the correct group (e.g. `mj.search.searchEntries`).
 - Fixed `project_number` hallucination loop by appending the numeric ID directly to the repository name in the Briefing's `Workspaces` table row (e.g., `mysql-mcp (#14): ...`). This prevents IDs from being hidden when the `Config` row truncates at 3 repos.
 - Fixed `ConfigResolver` syntax crash when loading pre-parsed nested objects.
+- Fixed markdown table alignment in `README.md` and `DOCKER_README.md`.
+
+### Added
+- Added context bloat warning to server initialization when registering more than 50 tools without a tool filter, suggesting token-saving strategies like `--tool-filter codemode`.
 - Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
