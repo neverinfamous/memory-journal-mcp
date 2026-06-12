@@ -30,6 +30,10 @@ import {
  */
 function getWorkerScriptPath(): string {
     const currentDir = path.dirname(fileURLToPath(import.meta.url))
+    // If we're executing directly from src/ (e.g. during vitest runs), point to the built dist/ version
+    if (currentDir.endsWith('src\\codemode') || currentDir.endsWith('src/codemode')) {
+        return path.resolve(process.cwd(), 'dist/worker-script.js')
+    }
     return path.join(currentDir, 'worker-script.js')
 }
 
