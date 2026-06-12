@@ -40,6 +40,7 @@
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
 ### Fixed
+- **Codemode Paradox:** Fixed an issue where running `--tool-filter codemode` inadvertently disabled all mutating tool proxy bindings inside the codemode sandbox by misidentifying the server state as "readonly". Code mode sandboxes now correctly expose all tool bindings unless `--tool-filter readonly` is explicitly passed.
 - Fixed `codemode-restore.test.ts` polluting the project root with a `test-db` directory by relocating it to `.test-output` and adding automatic teardown.
 - Fixed `create_entry` missing auto-population of GitHub `issueUrl` when `issue_number` is provided.
 - Fixed `get_entry_by_id` missing `relationships`, `importance`, and `importanceBreakdown` in the return object, and added `include_relationships` to its schema.

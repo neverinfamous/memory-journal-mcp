@@ -158,9 +158,17 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // 2b. Enforce Readonly Mode
                     // If the sandbox is explicitly requested as readonly, OR the server itself is in readonly mode
                     // and the user didn't explicitly override it with readonly: false, filter out mutating tools.
-                    const isGlobalReadonly = context.config?.filterConfig?.enabledTools !== undefined 
-                        ? !context.config.filterConfig.enabledTools.has('create_entry')
-                        : false;
+                    let isGlobalReadonly = false;
+                    if (context.config?.filterConfig?.raw) {
+                        const rawFilter = context.config.filterConfig.raw;
+                        // Determine if server is explicitly configured with a readonly filter.
+                        // We check for the 'readonly' meta-group explicitly, rather than checking if 
+                        // create_entry is missing, because '--tool-filter codemode' strips create_entry 
+                        // from the top-level but shouldn't inherently force codemode into readonly mode.
+                        if (rawFilter.includes('readonly') && !rawFilter.includes('-readonly')) {
+                            isGlobalReadonly = true;
+                        }
+                    }
                     const isSandboxReadonly = input.readonly ?? isGlobalReadonly;
 
                     if (isSandboxReadonly) {
