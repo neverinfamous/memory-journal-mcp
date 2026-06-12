@@ -129,12 +129,24 @@ export function buildApiProxy(
                 }
 
                 if (key === 'then') return undefined
+                
+                // Cross-group search: if they called the wrong group (e.g. mj.core.searchEntries instead of mj.search.searchEntries)
+                if (typeof key === 'string') {
+                    const snakeKey = /[A-Z]/.test(key) ? key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`) : key;
+                    const foundGroup = Object.keys(methods).find(g => methods[g]?.includes(snakeKey));
+                    if (foundGroup) {
+                        return (..._args: unknown[]) => {
+                            throw new Error(`Operation '${key}' is not found in the '${group}' group. However, it DOES exist in the '${foundGroup}' group! Please update your script to call: mj.${foundGroup}.${key}(...)`);
+                        }
+                    }
+                }
+
                 const available = methodNames.join(', ') || 'none'
                 const reason = readonlyMode
                     ? `Operation '${key}' is blocked in readonly mode. Read operations only.`
                     : methodNames.length === 0
                       ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
-                      : `Operation '${key}' is not found in group. Available: ${available}.`
+                      : `Operation '${key}' is not found in group '${group}'. Available: ${available}.`
                 return (..._args: unknown[]) => {
                     throw new Error(reason)
                 }

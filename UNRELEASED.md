@@ -43,12 +43,10 @@
 - Fixed Code Mode sandbox mutability guard to correctly protect all admin/team structural and mutation tools.
 - Fixed deep camelCase hallucinations in Code Mode batch payloads via recursive normalization.
 - Intercepted `getBriefing` and `readResource` calls inside the Code Mode Sandbox to return actionable error messages.
-- Fixed `dry_run` and simulation early returns to execute after parameter normalization in the dispatcher.
-- Fixed `get_entry_history` schema expectations in E2E tests and handler output payloads.
-- Added balanced double-quotes preservation to FTS search phrase matching.
-- Fixed batch operations to fail atomically instead of returning structured partial errors.
-- Fixed Zod schema validation errors during hybrid search for the `isArchived` flag.
-- Fixed eviction logic to correctly preserve the 10 newest snapshot revisions.
+- Fixed `dry_run` and simulation early returns in `secureDispatcher` to execute **after** param normalization (camelCase→snake_case, project_number resolution, numeric coercion), so simulated responses show correctly resolved parameters instead of raw hallucinated strings.
+- Fixed unhelpful Zod errors when agents hallucinate a string `project_number` (e.g., `"P154"`) by intercepting unresolved strings in `secureDispatcher` and returning a highly actionable custom error instructing them to omit the field for auto-injection.
+- Fixed agents failing when calling tools from the wrong API group (e.g. `mj.core.searchEntries`) by adding a cross-group search fallback to the sandbox proxy that throws a highly specific error directing them to the correct group (e.g. `mj.search.searchEntries`).
+- Fixed `project_number` hallucination loop by appending the numeric ID directly to the repository name in the Briefing's `Workspaces` table row (e.g., `mysql-mcp (#14): ...`). This prevents IDs from being hidden when the `Config` row truncates at 3 repos.
 - Fixed `ConfigResolver` syntax crash when loading pre-parsed nested objects.
 - Removed deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
