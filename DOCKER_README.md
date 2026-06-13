@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-77.09%25-yellowgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-77.13%25-yellowgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -94,11 +94,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
 | `full`               | 100   | All tools (default)      |
-| `starter`            | ~14   | Core + search + codemode |
-| `essential`          | ~8    | Minimal footprint        |
-| `readonly`           | 21    | Disable all mutations    |
-| `-github`            | 79    | Exclude a group          |
-| `-github,-analytics` | 77    | Exclude multiple groups  |
+| `starter`            | 15    | Core + search + codemode |
+| `essential`          | 9     | Minimal footprint        |
+| `readonly`           | 23    | Disable all mutations    |
+| `-github`            | 82    | Exclude a group          |
+| `-github,-analytics` | 80    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

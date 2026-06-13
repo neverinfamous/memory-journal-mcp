@@ -213,7 +213,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 
 ```
 src/
-├── cli.ts                      # CLI entry point (Commander)
+├── cli/                        # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication

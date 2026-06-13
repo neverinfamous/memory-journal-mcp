@@ -10,7 +10,10 @@
 
 ```
 src/
-├── cli.ts                          # CLI entry point (arg parsing, transport selection)
+├── cli/                            # CLI entry point
+│   ├── index.ts                    # Main CLI execution and command logic
+│   ├── program-options.ts          # Commander.js CLI option definitions
+│   └── server-options-builder.ts   # Maps CLI options/env vars to ServerConfig
 ├── index.ts                        # Barrel re-export for library consumers
 ├── version.ts                      # Version SSoT — reads package.json, exports VERSION
 │

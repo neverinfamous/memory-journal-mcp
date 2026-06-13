@@ -53,7 +53,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     
                     // Validate all entries first
                     for (const e of input.entries) {
-                        const projectNumber = e.project_number
+                        const projectNumber = e.project_number ?? input.project_number
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,
@@ -67,7 +67,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const inputs = input.entries.map((e) => {
-                        const projectNumber = e.project_number
+                        const projectNumber = e.project_number ?? input.project_number
                         if (projectNumber === undefined || projectNumber === null) {
                             throw new Error('projectNumber is required')
                         }
@@ -162,7 +162,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     for (const u of input.updates) {
                         const existing = teamDb.getEntryById(u.entry_id)
                         
-                        const projectNumber = u.project_number ?? existing?.projectNumber
+                        const projectNumber = u.project_number ?? input.project_number ?? existing?.projectNumber
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,

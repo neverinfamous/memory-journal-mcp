@@ -78,7 +78,7 @@ All tool handlers return structured error responses — never raw exceptions:
 
 ```
 src/
-├── cli.ts                      # CLI entry point (Commander)
+├── cli/                        # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
@@ -131,7 +131,7 @@ When reviewing PRs, check for:
 - [ ] `@ts-ignore` or `as any` — always forbidden
 - [ ] Raw exceptions from tool handlers — must use `formatHandlerErrorResponse()`
 - [ ] Files approaching 500 lines — flag for splitting
-- [ ] New tools missing from `src/filtering/ToolFilter.ts` TOOL_GROUPS
+- [ ] New tools missing from `src/filtering/tool-filter.ts` TOOL_GROUPS
 - [ ] Missing Zod output schemas on new tools
 - [ ] Kebab-case violations in new filenames
 - [ ] `continue-on-error: true` in workflow files — forbidden per project standards
