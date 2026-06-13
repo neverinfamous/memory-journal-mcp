@@ -178,10 +178,10 @@ describe('Admin Batch Tool Handlers', () => {
                 progress
             )) as any
 
-            expect(result.success).toBe(true)
-            expect(result.updated.length).toBe(2)
-            expect(result.notFound.length).toBe(1)
-            expect(result.notFound).toContain(99999)
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('AGGREGATE_ERROR')
+            expect(result.error).toContain('Batch update partially failed: 1 operations failed')
+            expect(result.aggregated_errors[0].message).toContain('Entry 99999 not found')
             expect(progressCalls).toBeGreaterThan(0)
             
             const e1 = db.getEntryById(createRes.entries[0].id)
@@ -230,9 +230,10 @@ describe('Admin Batch Tool Handlers', () => {
                 progress
             )) as any
 
-            expect(result.success).toBe(true)
-            expect(result.deleted.length).toBe(2)
-            expect(result.notFound.length).toBe(1)
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('AGGREGATE_ERROR')
+            expect(result.error).toContain('Batch delete partially failed: 1 failed')
+            expect(result.aggregated_errors[0].message).toContain('Entry 99998 not found')
             
             expect(db.getEntryById(entry_ids[0])).toBeNull()
             expect(db.getEntryById(entry_ids[1])).toBeNull()

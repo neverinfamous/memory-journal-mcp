@@ -173,6 +173,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const allErrors = [
+                        ...notFound.map(id => new Error(`Entry ${id} not found`)),
                         ...errors.map(e => new Error(`Entry ${e.id} failed to update: ${e.error.message}`)),
                         ...indexErrors
                     ]
@@ -219,9 +220,12 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         await sendProgress(progress, 2, 2, 'Batch delete complete')
                     }
 
-                    if (errors.length > 0) {
-                        const mcpErrors = errors.map(e => new Error(`Entry ${e.id} failed to delete: ${e.error.message}`));
-                        throw new AggregateError(mcpErrors, `Batch delete partially failed: ${errors.length} failed`);
+                    if (errors.length > 0 || notFound.length > 0) {
+                        const mcpErrors = [
+                            ...notFound.map(id => new Error(`Entry ${id} not found`)),
+                            ...errors.map(e => new Error(`Entry ${e.id} failed to delete: ${e.error.message}`))
+                        ];
+                        throw new AggregateError(mcpErrors, `Batch delete partially failed: ${mcpErrors.length} failed`);
                     }
 
                     return { success: true, count: deleted.length, deleted, notFound, permanent: input.permanent }

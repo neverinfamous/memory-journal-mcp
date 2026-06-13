@@ -243,7 +243,10 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         await sendProgress(context.progress, 2, 2, 'Team batch update complete')
                     }
 
+                    const finalNotFound = [...notFound, ...updateNotFound]
+
                     const allErrors = [
+                        ...finalNotFound.map(id => new Error(`Team entry ${id} not found`)),
                         ...errors.map(e => new Error(`Team entry ${e.id} failed to update: ${e.error.message}`)),
                         ...indexErrors
                     ]
@@ -337,9 +340,12 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     // Merge notFound arrays
                     const finalNotFound = [...notFound, ...deleteNotFound]
 
-                    if (errors.length > 0) {
-                        const mcpErrors = errors.map(e => new Error(`Team entry ${e.id} failed to delete: ${e.error.message}`));
-                        throw new AggregateError(mcpErrors, `Team batch delete partially failed: ${errors.length} operations failed`);
+                    if (errors.length > 0 || finalNotFound.length > 0) {
+                        const mcpErrors = [
+                            ...finalNotFound.map(id => new Error(`Team entry ${id} not found`)),
+                            ...errors.map(e => new Error(`Team entry ${e.id} failed to delete: ${e.error.message}`))
+                        ];
+                        throw new AggregateError(mcpErrors, `Team batch delete partially failed: ${mcpErrors.length} operations failed`);
                     }
 
                     triggerTeamNotifications(context)

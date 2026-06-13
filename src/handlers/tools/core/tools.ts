@@ -217,7 +217,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description: 'Get the most recent journal entries',
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
-            outputSchema: z.object({ entries: z.array(EntryOutputSchema), count: z.number(), next_cursor: z.string().optional(), hasMore: z.boolean().optional() }).extend(ErrorFieldsMixin.shape), // Output schema inline for array wrap
+            outputSchema: z.object({ success: z.boolean().optional(), entries: z.array(EntryOutputSchema).optional(), count: z.number().optional(), next_cursor: z.string().optional(), hasMore: z.boolean().optional() }).extend(ErrorFieldsMixin.shape), // Output schema inline for array wrap
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
