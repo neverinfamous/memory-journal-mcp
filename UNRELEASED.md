@@ -39,7 +39,7 @@
 - Added numeric project IDs alongside repository names in the Briefing Config row.
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 - Relaxed the Code Mode `context` schema to `z.any()` to allow non-object values without validation failures.
-- Promoted string-to-number coercion and repo name resolution for `project_number` globally to the top-level SDK proxy, optimizing native MCP calls to prevent Zod validation errors.
+- Promoted string-to-number coercion, repo name resolution, and `deepCamelToSnake` payload normalization globally to the top-level SDK proxy, optimizing native MCP calls to completely prevent validation failures from hallucinated camelCase keys.
 
 ### Removed
 - Deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
@@ -110,6 +110,7 @@
 - `get_entry_history` returning raw `EntryRevision` database objects instead of mapping to the expected `GetEntryHistoryOutputSchema` shape.
 - E2E testing suite lacking `DEFAULT_PROJECT_NUMBER` environment injection, preventing full tool coverage.
 - Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP `notifications/progress` events due to missing progress context in sandbox bindings.
+- Stale "99 tools" documentation references across README, code-map, copilot-instructions, and tool-filter.ts, accurately syncing them to reflect the 100-tool inventory.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.

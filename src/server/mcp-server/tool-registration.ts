@@ -382,6 +382,21 @@ export function createServerInstance(
                     // Intercept hallucinated string project_numbers BEFORE SDK Zod validation
                     const req = request as { params?: { arguments?: Record<string, unknown> } }
                     if (req?.params?.arguments) {
+                        // Deep camelToSnake normalization for Native MCP tool calls
+                        const deepCamelToSnake = (obj: unknown): unknown => {
+                            if (Array.isArray(obj)) return obj.map(deepCamelToSnake)
+                            if (obj !== null && typeof obj === 'object') {
+                                const newObj: Record<string, unknown> = {}
+                                for (const [k, v] of Object.entries(obj)) {
+                                    const snakeKey = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                                    newObj[snakeKey] = deepCamelToSnake(v)
+                                }
+                                return newObj
+                            }
+                            return obj
+                        }
+                        req.params.arguments = deepCamelToSnake(req.params.arguments) as Record<string, unknown>
+                        
                         const toolArgs = req.params.arguments
                         
                         // Check repo/project aliases first

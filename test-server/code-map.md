@@ -161,7 +161,7 @@ src/
 │       └── types.ts                # GitHub integration internal types
 │
 └── handlers/
-    ├── tools/                      # 100 tools across 10 groups — see § Handler Map below
+    ├── tools/                      # 100 tool handlers (10 groups) — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
@@ -513,7 +513,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | File / Directory                                       | Purpose                                                                                                                                              |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `test-server/README.md`                                | Agent testing orchestration doc                                                                                                                      |
-| `test-server/tool-reference.md`                        | Complete 84-tool inventory with descriptions                                                                                                         |
+| `test-server/tool-reference.md`                        | Categorized 100-tool inventory                                                                                                                       |
 | `test-server/code-map.md`                              | This file — agent-optimized codebase navigation                                                                                                      |
 | `test-server/test-preflight.md`                        | Pre-test verification checklist                                                                                                                      |
 | `test-server/standard/test-seed.md`                    | Seed data creation (S1–S17) — must run first                                                                                                         |
