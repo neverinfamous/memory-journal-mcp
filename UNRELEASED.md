@@ -84,6 +84,7 @@
 - Fixed Code Mode `semanticSearch` returning zero results when vector latency occurs or thresholds mismatch by wrapping it to gracefully fall back to full-text search (`searchEntries`).
 - Intercepted hallucinated `exact_match` parameter for search tools in Code Mode, mapping it gracefully to `fuzzy_match` so future agents succeed automatically.
 - Fixed Code Mode proxy hallucination intercepts not triggering for camelCase method aliases (e.g. `searchEntries`, `teamSearch`) by expanding the method name matching conditions in `worker-api-proxy.ts`.
+- Fixed Code Mode Paradox where agents hallucinate cross-group or team-prefixed methods (e.g., `mj.search.semanticSearch` instead of `mj.team.teamSemanticSearch`) by adding transparent cross-group routing to the sandbox proxy, allowing future agents to succeed automatically.
 - Intercepted hallucinated `script` parameter in `mj_execute_code` Code Mode execution, mapping it gracefully to `code` so future agents succeed automatically.
 - Fixed Code Mode sandbox not enforcing global `readonly` server mode and added `readonly` schema parameter to dynamically restrict execution to read-only tools.
 - Fixed `fetch` explicitly returning an error in Code Mode; now properly `undefined` for secure sandbox evaluation.

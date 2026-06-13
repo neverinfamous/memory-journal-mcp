@@ -9,6 +9,35 @@
 import { wrapResult } from './worker-result-proxy.js'
 import { METHOD_ALIASES } from './api-constants.js'
 
+function applyArgInterceptions(methodName: string, args: unknown[]): unknown[] {
+    // Hallucination intercept for _executeRawQueryUnsafe string arguments
+    if (methodName === '_executeRawQueryUnsafe' && args.length === 1 && typeof args[0] === 'string') {
+        args[0] = { query: args[0] }
+    }
+    // Hallucination intercept for search exact_match
+    if (
+        (methodName === 'search_entries' || methodName === 'searchEntries' || methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
+        args.length === 1 &&
+        typeof args[0] === 'object' &&
+        args[0] !== null
+    ) {
+        const obj = args[0] as Record<string, unknown>
+        if ('exact_match' in obj) {
+            const isFuzzy = obj['exact_match'] === false;
+            obj['fuzzy_match'] = isFuzzy;
+            obj['auto_correct'] = isFuzzy;
+            delete obj['exact_match']
+        } else if (obj['fuzzy_match'] === true && !('auto_correct' in obj)) {
+            obj['auto_correct'] = true;
+        }
+        
+        if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
+            obj['end_date'] = new Date().toISOString().split('T')[0];
+        }
+    }
+    return args;
+}
+
 /**
  * Build the mj.* API proxy from method and schema lists.
  *
@@ -60,32 +89,8 @@ export function buildApiProxy(
 
         for (const methodName of methodNames) {
             const proxyFn = (...args: unknown[]): Promise<unknown> => {
-                // Hallucination intercept for _executeRawQueryUnsafe string arguments
-                if (methodName === '_executeRawQueryUnsafe' && args.length === 1 && typeof args[0] === 'string') {
-                    args[0] = { query: args[0] }
-                }
-                // Hallucination intercept for search exact_match
-                if (
-                    (methodName === 'search_entries' || methodName === 'searchEntries' || methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
-                    args.length === 1 &&
-                    typeof args[0] === 'object' &&
-                    args[0] !== null
-                ) {
-                    const obj = args[0] as Record<string, unknown>
-                    if ('exact_match' in obj) {
-                        const isFuzzy = obj['exact_match'] === false;
-                        obj['fuzzy_match'] = isFuzzy;
-                        obj['auto_correct'] = isFuzzy;
-                        delete obj['exact_match']
-                    } else if (obj['fuzzy_match'] === true && !('auto_correct' in obj)) {
-                        obj['auto_correct'] = true;
-                    }
-                    
-                    if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
-                        obj['end_date'] = new Date().toISOString().split('T')[0];
-                    }
-                }
-                const resultPromise = rpcCall(group, methodName, args).then(wrapResult)
+                const processedArgs = applyArgInterceptions(methodName, args)
+                const resultPromise = rpcCall(group, methodName, processedArgs).then(wrapResult)
                 return wrapPromise(resultPromise, methodName)
             }
             Object.assign(proxyFn, {
@@ -155,13 +160,28 @@ export function buildApiProxy(
 
                 if (key === 'then') return undefined
                 
-                // Cross-group search: if they called the wrong group (e.g. mj.core.searchEntries instead of mj.search.searchEntries)
+                // Cross-group search and Team tool transparent routing
                 if (typeof key === 'string') {
                     const snakeKey = /[A-Z]/.test(key) ? key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`) : key;
+                    
+                    // 1. Check for team prefix hallucination (e.g. semanticSearch -> team_semantic_search)
+                    const teamSnakeKey = `team_${snakeKey}`;
+                    const teamGroup = Object.keys(methods).find(g => methods[g]?.includes(teamSnakeKey));
+                    if (teamGroup && !Object.keys(methods).some(g => methods[g]?.includes(snakeKey))) {
+                        return (...args: unknown[]): Promise<unknown> => {
+                            const processedArgs = applyArgInterceptions(teamSnakeKey, args);
+                            const resultPromise = rpcCall(teamGroup, teamSnakeKey, processedArgs).then(wrapResult);
+                            return wrapPromise(resultPromise, teamSnakeKey);
+                        }
+                    }
+
+                    // 2. Check for cross-group hallucination (e.g. mj.core.searchEntries -> mj.search.searchEntries)
                     const foundGroup = Object.keys(methods).find(g => methods[g]?.includes(snakeKey));
                     if (foundGroup) {
-                        return (..._args: unknown[]) => {
-                            throw new Error(`Operation '${key}' is not found in the '${group}' group. However, it DOES exist in the '${foundGroup}' group! Please update your script to call: mj.${foundGroup}.${key}(...)`);
+                        return (...args: unknown[]): Promise<unknown> => {
+                            const processedArgs = applyArgInterceptions(snakeKey, args);
+                            const resultPromise = rpcCall(foundGroup, snakeKey, processedArgs).then(wrapResult);
+                            return wrapPromise(resultPromise, snakeKey);
                         }
                     }
                 }
