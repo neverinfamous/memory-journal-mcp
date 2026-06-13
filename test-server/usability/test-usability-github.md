@@ -39,3 +39,7 @@ Once the server is refreshed (or if no codebase changes were needed):
 1. Re-run your Code Mode script to verify that the guardrail successfully intercepts the hallucination and provides actionable feedback (or seamlessly heals it).
 2. If successful, run `git add .` and `git commit -m "Optimize github tool usage"` to save your changes locally.
 3. Conclude the test and report your findings.
+
+## 5. Continuous Improvement
+
+If during this test you discover a blind spot, a new hallucination vector, or a way to make this very testing prompt more effective, you are encouraged to edit this markdown file directly to permanently improve the testing apparatus. Commit any prompt improvements alongside your codebase fixes.

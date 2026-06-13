@@ -35,3 +35,7 @@ Once the server is refreshed:
 1. Re-run your Code Mode script to verify the fix works.
 2. If successful, run `git add .` and `git commit -m "Optimize codemode mechanics"`.
 3. Report your findings.
+
+## 5. Continuous Improvement
+
+If during this test you discover a blind spot, a new hallucination vector, or a way to make this very testing prompt more effective, you are encouraged to edit this markdown file directly to permanently improve the testing apparatus. Commit any prompt improvements alongside your codebase fixes.
