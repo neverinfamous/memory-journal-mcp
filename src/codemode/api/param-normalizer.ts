@@ -27,7 +27,6 @@ const PARAM_ALIASES: Record<string, string> = {
     pr: 'pr_number',
     project: 'project_number',
     user: 'target_user',
-    target_user: 'author',
     assignee: 'target_user',
     msg: 'message',
     repo_name: 'repo',

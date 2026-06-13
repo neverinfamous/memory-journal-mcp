@@ -97,6 +97,7 @@
   - `script` (maps to `code` for `mj_execute_code`).
   - string parameter for `_executeRawQueryUnsafe`.
   - camelCase method aliases.
+- Code Mode `param-normalizer` improperly overriding `target_user` to `author` causing flag assignment test failures.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
