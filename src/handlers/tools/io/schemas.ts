@@ -72,7 +72,7 @@ export const ExportMarkdownSchema = z.object({
 
 /** Relaxed schema — MCP registration */
 export const ExportMarkdownSchemaMcp = z.object({
-    output_dir: z.string().describe('Target directory for .md files'),
+    output_dir: z.string().optional().describe('Target directory for .md files'),
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     entry_types: z.array(z.string()).optional().describe('Filter by entry types'),
@@ -106,7 +106,7 @@ export const ImportMarkdownSchema = z.object({
 
 /** Relaxed schema — MCP registration */
 export const ImportMarkdownSchemaMcp = z.object({
-    source_dir: z.string().describe('Directory containing .md files to import'),
+    source_dir: z.string().optional().describe('Directory containing .md files to import'),
     dry_run: z
         .boolean()
         .optional()
@@ -153,8 +153,8 @@ export const ImportExternalSchema = z.object({
 
 /** Relaxed schema — MCP registration */
 export const ImportExternalSchemaMcp = z.object({
-    source_dir: z.string().describe('Directory containing files to import'),
-    source_format: z.enum(SOURCE_FORMATS).describe('Source format (notion, obsidian, logseq)'),
+    source_dir: z.string().optional().describe('Directory containing files to import'),
+    source_format: z.string().optional().describe('Source format (notion, obsidian, logseq)'),
     dry_run: z
         .boolean()
         .optional()

@@ -37,7 +37,7 @@ export const CreateEntrySchemaMcp = z.object({
         '"technical_note" for implementation notes. Do NOT default to "personal_reflection" ' +
         'unless the entry is genuinely a personal note.'
     ),
-    content: z.string().min(1).describe(
+    content: z.string().optional().describe(
         'Markdown-formatted entry content. Use ## section headers to organize content. ' +
         'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
         'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
@@ -77,12 +77,12 @@ export const CreateEntryOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 export const GetEntryByIdSchema = z.object({
-    entry_id: z.number(),
+    entry_id: z.number().int(),
     include_relationships: z.boolean().optional().default(true),
 })
 
 export const GetEntryByIdSchemaMcp = z.object({
-    entry_id: relaxedNumber().describe('The numeric ID of the entry to retrieve'),
+    entry_id: relaxedNumber().optional().describe('The numeric ID of the entry to retrieve'),
     include_relationships: z.boolean().optional().default(true).describe('If true, includes all linked relationships (causal, related) in the response'),
 })
 
@@ -129,11 +129,11 @@ export const GetRecentEntriesSchemaMcp = z.object({
 // ============================================================================
 
 export const GetEntryHistorySchema = z.object({
-    entry_id: z.number(),
+    entry_id: z.number().int(),
 })
 
 export const GetEntryHistorySchemaMcp = z.object({
-    entry_id: relaxedNumber().describe('The numeric ID of the entry'),
+    entry_id: relaxedNumber().optional().describe('The numeric ID of the entry'),
 })
 
 export const GetEntryHistoryOutputSchema = z

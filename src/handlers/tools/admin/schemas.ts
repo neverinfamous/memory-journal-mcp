@@ -79,7 +79,7 @@ export const BatchCreateEntriesSchema = z.object({
 })
 
 export const BatchCreateEntriesSchemaMcp = z.object({
-    entries: z.array(CreateEntrySchemaMcp),
+    entries: z.array(CreateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
 })
 
@@ -89,7 +89,7 @@ export const BatchUpdateEntriesSchema = z.object({
 })
 
 export const BatchUpdateEntriesSchemaMcp = z.object({
-    updates: z.array(UpdateEntrySchemaMcp),
+    updates: z.array(UpdateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
 })
 
@@ -99,7 +99,7 @@ export const BatchDeleteEntriesSchema = z.object({
 })
 
 export const BatchDeleteEntriesSchemaMcp = z.object({
-    entry_ids: z.array(relaxedNumber()),
+    entry_ids: z.array(relaxedNumber()).optional(),
     permanent: z.boolean().optional().default(false),
 })
 

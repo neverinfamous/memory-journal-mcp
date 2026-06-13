@@ -42,7 +42,7 @@ const TeamExportMarkdownSchema = z.object({
 })
 
 const TeamExportMarkdownSchemaMcp = z.object({
-    output_dir: z.string().describe('Target directory for .md files'),
+    output_dir: z.string().optional().describe('Target directory for .md files'),
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
@@ -71,7 +71,7 @@ const TeamImportMarkdownSchema = z.object({
 })
 
 const TeamImportMarkdownSchemaMcp = z.object({
-    source_dir: z.string().describe('Directory containing .md files to import'),
+    source_dir: z.string().optional().describe('Directory containing .md files to import'),
     dry_run: z
         .boolean()
         .optional()
@@ -109,8 +109,8 @@ const TeamImportExternalSchema = z.object({
 })
 
 const TeamImportExternalSchemaMcp = z.object({
-    source_dir: z.string().describe('Directory containing files to import'),
-    source_format: z.enum(SOURCE_FORMATS).describe('Source format (notion, obsidian, logseq)'),
+    source_dir: z.string().optional().describe('Directory containing files to import'),
+    source_format: z.string().optional().describe('Source format (notion, obsidian, logseq)'),
     dry_run: z
         .boolean()
         .optional()

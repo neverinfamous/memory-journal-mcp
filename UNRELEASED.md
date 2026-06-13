@@ -114,6 +114,11 @@
 - Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP `notifications/progress` events due to missing progress context in sandbox bindings.
 - Stale "99 tools" documentation references across README, code-map, copilot-instructions, and tool-filter.ts, accurately syncing them to reflect the 100-tool inventory.
 
+- Handlers failing to wrap `-32602` Zod validation errors as structured `VALIDATION_ERROR`s due to strict MCP SDK input schemas violating the `.optional()` relaxed schema pattern.
+- `get_entry_by_id` and `get_entry_history` strict schemas missing `.int()` constraints on `entry_id`, allowing floats to bypass initial validation.
+- `batch_update_entries` and `team_batch_update_entries` returning `success: true` when updates target non-existent entries, instead of aggregating them into an `AggregateError`.
+- `TeamExportMarkdownSchemaMcp`, `TeamImportMarkdownSchemaMcp`, `ImportExternalSchemaMcp`, and `ExportMarkdownSchemaMcp` strict enum and non-optional violations.
+
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

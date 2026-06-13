@@ -155,7 +155,7 @@ export const TeamListDeletedEntriesSchemaMcp = z.object({
 
 /** team_get_entry_by_id — strict */
 export const TeamGetEntryByIdSchema = z.object({
-    entry_id: z.number(),
+    entry_id: z.number().int(),
     include_relationships: z.boolean().optional().default(true),
     project_number: StrictProjectNumberSchema,
 })
@@ -300,7 +300,7 @@ export const TeamBatchCreateEntriesSchema = z.object({
 })
 
 export const TeamBatchCreateEntriesSchemaMcp = z.object({
-    entries: z.array(TeamCreateEntrySchemaMcp),
+    entries: z.array(TeamCreateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
 })
 
@@ -310,7 +310,7 @@ export const TeamBatchUpdateEntriesSchema = z.object({
 })
 
 export const TeamBatchUpdateEntriesSchemaMcp = z.object({
-    updates: z.array(TeamUpdateEntrySchemaMcp),
+    updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
 })
 
@@ -321,8 +321,8 @@ export const TeamBatchDeleteEntriesSchema = z.object({
 })
 
 export const TeamBatchDeleteEntriesSchemaMcp = z.object({
-    entry_ids: z.array(relaxedNumber()),
-    project_number: relaxedNumber(),
+    entry_ids: z.array(relaxedNumber()).optional(),
+    project_number: relaxedNumber().optional(),
     permanent: z.boolean().optional().default(false),
 })
 

@@ -56,7 +56,7 @@ export const SearchEntriesSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 export const SearchEntriesSchemaMcp = z.object({
-    query: z.string().max(250).optional(),
+    query: z.string().optional(),
     cursor: z.string().optional().describe('Cursor for pagination'),
     mode: z
         .string()
@@ -187,7 +187,7 @@ export const SemanticSearchSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 export const SemanticSearchSchemaMcp = z.object({
-    query: z.string().max(250).optional(),
+    query: z.string().optional(),
     entry_id: relaxedNumber()
         .optional()
         .describe(
