@@ -146,7 +146,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
-                idempotentHint: false,
+                idempotentHint: true,
                 openWorldHint: false,
             },
             handler: (params: unknown) => {

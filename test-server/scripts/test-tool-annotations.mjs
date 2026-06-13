@@ -32,8 +32,8 @@ import { spawn } from 'child_process'
 
 const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
 
-/** Expected total tool count: 96 (10 groups + codemode) */
-const EXPECTED_TOOL_COUNT = 96
+/** Expected total tool count: 101 (10 groups + codemode) */
+const EXPECTED_TOOL_COUNT = 101
 
 /**
  * Exact allowlist of tools that legitimately need openWorldHint=true.
@@ -43,6 +43,7 @@ const OPEN_WORLD_ALLOWLIST = new Set([
     // IO tools — filesystem interaction
     'export_markdown', // Writes .md files to filesystem
     'import_markdown', // Reads .md files from filesystem
+    'import_external',
     // GitHub read tools — external API
     'get_github_issues', // GitHub REST API
     'get_github_prs', // GitHub REST API
@@ -70,6 +71,9 @@ const OPEN_WORLD_ALLOWLIST = new Set([
     // Team IO tools — filesystem interaction
     'team_export_markdown', // Writes .md files to filesystem
     'team_import_markdown', // Reads .md files from filesystem
+    'team_import_external',
+    // Code execution
+    'mj_execute_code',
 ])
 
 /**
@@ -99,6 +103,9 @@ const READ_ONLY_ALLOWLIST = new Set([
     'get_entry_history',
     'test_simple',
     'list_tags',
+    'trigger_progress',
+    'test_error_handling',
+    '_execute_raw_query_unsafe',
     // Search reads
     'search_entries',
     'search_by_date_range',

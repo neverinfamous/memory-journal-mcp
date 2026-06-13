@@ -60,8 +60,9 @@
 - Code Mode sandbox mutability guard failing to protect admin/team structural tools.
 - Deep camelCase hallucinations in Code Mode batch payloads via recursive normalization.
 - `dry_run` early returns executing before parameter normalization.
+- Code Mode `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode.
+- `idempotentHint` values for `_execute_raw_query_unsafe`, `team_consolidate_authors`, and `team_remove_author_alias` tools not reflecting their actual destructiveness.
 - `project_number` hallucination loop by appending numeric IDs to repository names in the Briefing `Workspaces` row.
-- `ConfigResolver` syntax crash when loading pre-parsed nested objects.
 - Markdown table alignment in `README.md` and `DOCKER_README.md`.
 - Code Mode `mj.help()` returning incomplete group lists and snake_case method names.
 - `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode.

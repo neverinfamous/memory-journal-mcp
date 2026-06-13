@@ -231,7 +231,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: true,
-                idempotentHint: true,
+                idempotentHint: false,
                 openWorldHint: false,
             },
             handler: handleRemoveAuthorAlias(context),
@@ -279,7 +279,7 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: true,
-                idempotentHint: true,
+                idempotentHint: false,
                 openWorldHint: false,
             },
             handler: handleConsolidateAuthors(context),
