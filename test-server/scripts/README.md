@@ -24,6 +24,9 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-http.mjs`                | Tests large payloads (50k/100k chars) via HTTP/fetch to ensure they don't break the HTTP transport boundary.                              | HTTP          | ~1s      |
 | `test-long-mcp.mjs`            | Tests large payloads (50k/100k chars) via standard stdio client transport.                                                                | stdio         | ~1s      |
 | `test-subscribe.mjs`           | Validates MCP real-time resource subscriptions, ensuring that mutating tools emit `notifications/resources/updated` via transport.        | stdio         | ~2s      |
+| `test-config-reload.mjs`       | Tests hot-reloading and persistence of server configuration files (`json`/`yaml`) via the `update_configuration` tool.                    | stdio         | ~5s      |
+| `test-dump-config.mjs`         | Tests the `--dump-config` CLI option to ensure sensitive environment variables are properly redacted and config resolution succeeds.      | pipe          | ~1s      |
+| `test-metrics-persistence.ts`  | Integration test for the `MetricsAccumulator`, verifying `--persist-metrics` file persistence and reload logic.                           | internal      | ~1s      |
 
 ## Scheduler Notes
 
