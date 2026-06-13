@@ -12,6 +12,7 @@ export interface ResolvedConfigValue<T> {
 
 export class ConfigResolver {
     private configFileOptions: Record<string, unknown> = {}
+    public loadedConfigPath?: string
 
 
     constructor(
@@ -40,16 +41,17 @@ export class ConfigResolver {
             }
             try {
                 const content = fs.readFileSync(filePath, 'utf-8')
-                if (filePath.endsWith('.json')) {
-                    this.configFileOptions = JSON.parse(content) as Record<string, unknown>
+                if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
+                    this.configFileOptions = (parseYaml(content) as Record<string, unknown>) ?? {}
                 } else {
-                    const parsed = (parseYaml as (text: string) => unknown)(content)
-                    this.configFileOptions = (parsed ?? {}) as Record<string, unknown>
+                    this.configFileOptions = (JSON.parse(content) as Record<string, unknown>) ?? {}
                 }
-                // Log safely since logger might not be fully configured yet,
-                // but we can log that config was found.
-                logger.info(`Loaded configuration from ${filePath}`, { module: 'ConfigResolver' })
-                break
+                this.loadedConfigPath = filePath
+                logger.info('Loaded configuration from file', {
+                    module: 'ConfigResolver',
+                    path: filePath,
+                })
+                return
             } catch (error) {
                 // If override was provided and fails, throw
                 if (configPathOverride) {

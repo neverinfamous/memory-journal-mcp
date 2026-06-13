@@ -361,7 +361,8 @@ function loadCachedLastReleaseDaysAgo(): number | null {
  */
 export async function buildSystemContext(
     config?: BriefingConfig,
-    filterConfig?: ToolFilterConfig | null
+    filterConfig?: ToolFilterConfig | null,
+    instructionLevel = 'standard'
 ): Promise<SystemContext> {
     const now = new Date()
 
@@ -441,7 +442,7 @@ export async function buildSystemContext(
         testHealth: loadCachedTestHealth(),
         filterSummary,
         isReadonly,
-        instructionLevel: 'standard',
+        instructionLevel,
         registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,

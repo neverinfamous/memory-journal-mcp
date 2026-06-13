@@ -229,6 +229,7 @@ export function buildServerOptions(
         }, undefined),
         persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
         metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
+        configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
     };
 
     return { serverOptions, transport, db, teamDb, host }

@@ -11,6 +11,7 @@ import {
     withSessionInit,
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
+import type { ConfigManager } from '../../../../utils/config-manager.js'
 
 import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
@@ -102,7 +103,9 @@ export async function buildBriefingData(
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
-    const system = await buildSystemContext(config, context.filterConfig)
+    const configManager = context.runtime?.configManager as ConfigManager | undefined
+    const instructionLevel = configManager?.getConfig()?.instructionLevel || 'standard'
+    const system = await buildSystemContext(config, context.filterConfig, instructionLevel)
 
     // Build registry paths map for non-IDE agent context
     const registryPaths = config.projectRegistry
