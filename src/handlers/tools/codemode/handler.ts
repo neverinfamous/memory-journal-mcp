@@ -331,7 +331,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Prepare api bindings using the unified JournalApi factory
                     const { createJournalApi } = await import('../../../codemode/api/journal-api.js')
                     const journalApi = createJournalApi(tools, secureDispatcher)
-                    const apiBindings = journalApi.createSandboxBindings()
+                    const apiBindings = journalApi.createSandboxBindings(sessionContext.progress)
                     const schemas = journalApi.createSandboxSchemas()
 
                     // 4. Execute Code in Sandbox Worker

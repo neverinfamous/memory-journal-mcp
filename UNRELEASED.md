@@ -107,6 +107,7 @@
 - `create_entry` and `team_create_entry` natively bypassing `defaultProjectNumber` auto-injection, causing entries to save with `null` project numbers.
 - `get_entry_history` returning raw `EntryRevision` database objects instead of mapping to the expected `GetEntryHistoryOutputSchema` shape.
 - E2E testing suite lacking `DEFAULT_PROJECT_NUMBER` environment injection, preventing full tool coverage.
+- Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP `notifications/progress` events due to missing progress context in sandbox bindings.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
