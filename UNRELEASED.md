@@ -45,6 +45,7 @@
 - Deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
 
 ### Fixed
+- `_execute_raw_query_unsafe` failing with a Zod error in the MCP client due to the use of `z.any()` in its output schema.
 - Native MCP tools failing to auto-resolve hallucinated `repo` or `project` string parameters to numeric `project_number`s.
 - Code Mode sandbox explicitly exposing the `setTimeout` and `getConfig` globals.
 - `semanticSearch` returning artificially low similarity scores by converting L2 distance to Cosine Similarity.
