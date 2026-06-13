@@ -32,10 +32,11 @@ const added = await mj.team.teamAddAuthorAlias({
 
 let duplicateCaught = false;
 try {
-  await mj.team.teamAddAuthorAlias({
+  const dup = await mj.team.teamAddAuthorAlias({
     alias: 'cm_alias',
     canonical_author: 'cm_canon'
   })
+  const __ = dup.alias
 } catch (error) {
   duplicateCaught = true;
 }
@@ -60,9 +61,10 @@ const removed = await mj.team.teamRemoveAuthorAlias({
 
 let notFoundCaught = false;
 try {
-  await mj.team.teamRemoveAuthorAlias({
+  const nf = await mj.team.teamRemoveAuthorAlias({
     alias: 'cm_alias'
   })
+  const __ = nf.success
 } catch (error) {
   notFoundCaught = true;
 }

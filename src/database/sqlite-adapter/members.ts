@@ -44,16 +44,14 @@ export class MembersManager {
 
     addMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember {
         try {
-            // NOCASE constraint handles the duplicate checks at the DB level,
-            // but we'll do an upsert or let it fail if the schema is strictly UNIQUE
+            const existing = this.getMember(author)
+            if (existing) {
+                throw new QueryError(`Failed to add team member: Member already exists (${author})`)
+            }
+
             this.db.run(
                 `INSERT INTO team_members (author, role, added_by, display_name)
-                 VALUES (?, ?, ?, ?)
-                 ON CONFLICT(author) DO UPDATE SET
-                    role = excluded.role,
-                    added_by = excluded.added_by,
-                    display_name = excluded.display_name,
-                    updated_at = datetime('now')`,
+                 VALUES (?, ?, ?, ?)`,
                 [author, role, addedBy ?? null, displayName ?? null]
             )
 

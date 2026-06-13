@@ -32,10 +32,11 @@ const added = await mj.team.teamAddMember({
 
 let duplicateCaught = false;
 try {
-  await mj.team.teamAddMember({
+  const dup = await mj.team.teamAddMember({
     author: 'cm_test_viewer',
     role: 'member'
   })
+  const __ = dup.member
 } catch (error) {
   duplicateCaught = true;
 }
@@ -57,9 +58,10 @@ const removed = await mj.team.teamRemoveMember({
 
 let notFoundCaught = false;
 try {
-  await mj.team.teamGetMember({
+  const nf = await mj.team.teamGetMember({
     author: 'cm_test_viewer'
   })
+  const __ = nf.member
 } catch (error) {
   notFoundCaught = true;
 }
