@@ -151,7 +151,7 @@ describe('Tool Handlers', () => {
         it('should create a minimal entry', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Quick note' },
+                { content: 'Quick note', project_number: 1 },
                 db
             )) as { success: boolean; entry: { content: string } }
 

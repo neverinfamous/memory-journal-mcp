@@ -102,6 +102,9 @@
 - `Code Mode` proxy error masking where test assertions expecting specific error string contents failed due to missing error codes.
 - `update_configuration` failing to persist changes to disk because `ConfigManager` was instantiated without `configFilePath` in `buildServerOptions`.
 - `instructionLevel` in `memory://briefing` returning a hardcoded `'standard'` value instead of the runtime configuration value.
+- `create_entry` and `team_create_entry` natively bypassing `defaultProjectNumber` auto-injection, causing entries to save with `null` project numbers.
+- `get_entry_history` returning raw `EntryRevision` database objects instead of mapping to the expected `GetEntryHistoryOutputSchema` shape.
+- E2E testing suite lacking `DEFAULT_PROJECT_NUMBER` environment injection, preventing full tool coverage.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.

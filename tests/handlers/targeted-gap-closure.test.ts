@@ -138,7 +138,7 @@ describe('Targeted Gap Closure', () => {
 
             const result = (await callTool(
                 'create_entry',
-                { content: 'Minimal entry with vector indexing' },
+                { content: 'Minimal entry with vector indexing', project_number: 1 },
                 db,
                 vectorManager
             )) as { success: boolean }

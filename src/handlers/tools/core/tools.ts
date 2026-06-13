@@ -23,6 +23,7 @@ import {
 } from './schemas.js'
 import { EntryOutputSchema } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { ValidationError } from '../../../types/index.js'
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
     const { db, progress } = context
@@ -50,12 +51,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
+                    const effectiveProjectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if (effectiveProjectNumber === undefined) {
+                        throw new ValidationError("Missing project_number. You MUST include it. Please retry your tool call. You can find the correct project_number in your Briefing under the Workspaces section (e.g., 'adamic (#16)' means project_number: 16).")
+                    }
+
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
 
                     const resolvedIssueUrl = await resolveIssueUrl(
                         context,
-                        input.project_number,
+                        effectiveProjectNumber,
                         input.issue_number,
                         input.issue_url
                     )
@@ -66,7 +72,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         significanceType: input.significance_type,
-                        projectNumber: input.project_number,
+                        projectNumber: effectiveProjectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: resolvedIssueUrl,
@@ -134,7 +140,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 tags: input.tags,
                                 isPersonal: false,
                                 significanceType: input.significance_type,
-                                projectNumber: input.project_number,
+                                projectNumber: effectiveProjectNumber,
                                 projectOwner: input.project_owner,
                                 issueNumber: input.issue_number,
                                 issueUrl: input.issue_url,
@@ -261,7 +267,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const history = db.getEntryHistory(input.entry_id)
+                    const rawHistory = db.getEntryHistory(input.entry_id)
+                    const history = rawHistory.map(rev => ({
+                        revisionId: rev.revisionNumber,
+                        entryId: rev.entryId,
+                        content: rev.contentSnapshot,
+                        createdAt: rev.changedAt,
+                    }))
 
                     return {
                         success: true,

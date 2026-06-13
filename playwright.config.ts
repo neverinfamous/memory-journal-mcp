@@ -28,6 +28,7 @@ export default defineConfig({
             // Enable team DB so team tools get functional E2E coverage
             TEAM_DB_PATH: './.test-output/e2e/test-e2e-team.db',
             TEAM_AUTHOR: 'Alice',
+            DEFAULT_PROJECT_NUMBER: '1',
             ALLOWED_IO_ROOTS: process.cwd() + '/.test-output/e2e',
             METRICS_EXPORT: 'prometheus',
         },

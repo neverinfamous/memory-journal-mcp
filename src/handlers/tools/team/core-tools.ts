@@ -63,11 +63,11 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const input = TeamCreateEntrySchema.parse(params)
 
-                    const projectNumber = input.project_number
+                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            error: "Missing project_number. You MUST include it. Please retry your tool call. You can find the correct project_number in your Briefing under the Workspaces section (e.g., 'adamic (#16)' means project_number: 16).",
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',

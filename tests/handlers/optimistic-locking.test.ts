@@ -87,7 +87,7 @@ describe('Optimistic Locking Handlers', () => {
         it('should successfully update with matching expected_version', async () => {
             const createResult = (await callTool(
                 'create_entry',
-                { content: 'v1' },
+                { content: 'v1', project_number: 1 },
                 personalDb
             )) as any
             expect(createResult.success).toBe(true)
@@ -113,7 +113,7 @@ describe('Optimistic Locking Handlers', () => {
         it('should fail with VERSION_CONFLICT if expected_version is stale', async () => {
             const createResult = (await callTool(
                 'create_entry',
-                { content: 'v1' },
+                { content: 'v1', project_number: 1 },
                 personalDb
             )) as any
             const entryId = createResult.entry.id
@@ -209,8 +209,8 @@ describe('Optimistic Locking Handlers', () => {
 
     describe('batch_update_entries', () => {
         it('should fail batch update if any expected_version is stale', async () => {
-            const c1 = (await callTool('create_entry', { content: 'b1' }, personalDb)) as any
-            const c2 = (await callTool('create_entry', { content: 'b2' }, personalDb)) as any
+            const c1 = (await callTool('create_entry', { content: 'b1', project_number: 1 }, personalDb)) as any
+            const c2 = (await callTool('create_entry', { content: 'b2', project_number: 1 }, personalDb)) as any
 
             // Update c2 independently
             await callTool('update_entry', { entry_id: c2.entry.id, content: 'b2 updated' }, personalDb)
