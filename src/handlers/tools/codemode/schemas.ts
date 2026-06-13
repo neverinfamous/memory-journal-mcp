@@ -37,7 +37,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .string()
         .optional()
         .describe(
-            'The JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access.'
+            'The JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access. Anti-Hallucination Hint: Introspect groups (e.g. `Object.keys(mj.team)`) or inspect returned data structures (`return res[0]`) instead of guessing method names or schemas.'
         ),
     auto_version: z
         .boolean()

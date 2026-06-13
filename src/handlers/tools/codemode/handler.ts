@@ -18,7 +18,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             name: 'mj_execute_code',
             title: 'Execute JS Code (Sandbox)',
             description:
-                'Run arbitrary JavaScript to automate tasks. The code executes in a secure sandbox with access to all Memory Journal capabilities via the `mj` object. Use this for batch operations, cross-group workflows, complex filtering, or when standard tools require too many sequential MCP calls. Execution limit is 30s. IMPORTANT: Network access (`fetch`) is disabled. Example: `const res = await mj.searchEntries("test"); return res;`',
+                'Run arbitrary JavaScript to automate tasks. The code executes in a secure sandbox with access to all Memory Journal capabilities via the `mj` object. Use this for batch operations, cross-group workflows, complex filtering, or when standard tools require too many sequential MCP calls. Execution limit is 30s. IMPORTANT: Network access (`fetch`) is disabled. Anti-Hallucination Hint: Introspect groups (e.g. `Object.keys(mj.team)`) or inspect returned data structures (`return res[0]`) instead of guessing method names or property schemas. Example: `const res = await mj.searchEntries("test"); return res;`',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,
             outputSchema: undefined,

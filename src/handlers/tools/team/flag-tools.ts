@@ -47,7 +47,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
             name: 'team_pass_flag',
             title: 'Pass Team Flag',
             description:
-                'Create a machine-actionable flag in the team database. Flags replace communication noise with structured, searchable signals. Vocabulary: blocker, needs_review, help_requested, fyi (configurable via FLAG_VOCABULARY).',
+                'Create a machine-actionable flag in the team database. Flags replace communication noise with structured, searchable signals. Vocabulary: blocker, needs_review, help_requested, fyi (configurable via FLAG_VOCABULARY). Note: The primary text is stored in the `message` property (not `title` or `content`).',
             group: 'team',
             inputSchema: PassTeamFlagSchemaMcp,
             outputSchema: FlagOutputSchema,

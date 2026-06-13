@@ -203,3 +203,26 @@ Always use the `context` parameter (see Section 8) for template-structured conte
 | Help resource | `src/constants/server-instructions/templates.md` | `memory://help/templates` on-demand reference |
 | Init instructions | `src/constants/server-instructions/overview.md` | Session summary template in MCP init payload |
 | Prompt template | `src/handlers/prompts/workflow.ts` | `session-summary` / `team-session-summary` prompts |
+
+## 11. Introspection and Troubleshooting
+
+Agents often attempt to write complex scratch scripts in the terminal (e.g., using Python or Node.js) to manipulate the database or check state when they get stuck. These external scripts frequently fail due to:
+- **Module Resolution Issues:** Scratch directories lack the workspace `node_modules`.
+- **Hardcoded Paths:** Guessing database paths (e.g., `data/team.db` vs `data/memory-journal-team.db`) without reading the environment.
+
+**Optimization:** ALWAYS use `mj_execute_code` as your primary introspection and scripting tool instead of writing terminal scripts. It executes within the correct environment with robust access to the API and data.
+
+When using Code Mode, avoid these common pitfalls:
+
+1. **Don't guess method names:** If you are unsure of an `mj.*` method, do not guess (e.g., guessing `mj.team.deleteTeamFlag` instead of `mj.team.deleteEntry`). Instead, dynamically introspect the available methods:
+   ```javascript
+   return Object.keys(mj.team);
+   ```
+
+2. **Don't guess data shapes:** If you are unsure of the returned JSON structure (e.g., assuming flags have a `title` property when they actually use `message`), fetch and return a single item first to inspect its schema:
+   ```javascript
+   const flags = await mj.team.listFlags({ status: 'active' });
+   return flags.flags[0];
+   ```
+
+3. **Avoid Raw SQL Fallbacks:** Do not try to bypass the API using `mj.admin._execute_raw_query_unsafe`. It is blocked in Code Mode by default for security. Always find and use the appropriate native `mj.*` methods (e.g., using `listFlags` and `deleteEntry` to manage flags).

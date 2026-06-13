@@ -13,7 +13,7 @@ export function getListFlagsTool(context: ToolContext): ToolDefinition[] {
             name: 'team_list_flags',
             title: 'List Team Flags',
             description:
-                'List and filter Hush Protocol flags with structured metadata. Filter by status (active/resolved/all), flag_type, target_user, or author. Returns enriched flag objects — no manual auto_context parsing needed.',
+                'List and filter Hush Protocol flags with structured metadata. Filter by status (active/resolved/all), flag_type, target_user, or author. Returns enriched flag objects — no manual auto_context parsing needed. Note: The flag body is in the `message` property (not `title` or `content`).',
             group: 'team',
             inputSchema: ListTeamFlagsSchemaMcp,
             outputSchema: ListFlagsOutputSchema,
