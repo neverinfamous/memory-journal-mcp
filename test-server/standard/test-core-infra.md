@@ -85,10 +85,10 @@ node test-server/scripts/test-subscribe.mjs
 
 # Test I — Prometheus Metrics (Requires background server)
 # Term 1: $env:ALLOWED_IO_ROOTS="$PWD"; node dist/cli.js --transport http --port 3100 --metrics-export prometheus --stateless
-# Term 2: Invoke-RestMethod -Uri http://localhost:3100/metrics | Select-String "memory_journal_mcp_tool_calls_total"
+# Term 2: Invoke-RestMethod -Uri http://localhost:3100/metrics | Select-String "mcp_tool_calls_total"
 
 # Test J — Metrics Persistence
-# Term 1: pnpm tsx test-server/scripts/test-metrics-persistence.ts
+# Term 1: node test-server/scripts/test-metrics-persistence.mjs
 
 # Test K — Config Dump & Validation
 node test-server/scripts/test-dump-config.mjs
@@ -101,7 +101,7 @@ rm *_metrics.json
 | Check               | Expected                                                             |
 | ------------------- | -------------------------------------------------------------------- |
 | Instruction levels  | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations    | 99 tools, all with `annotations`, 77 `false` + 22 `true` = 0 missing |
+| Tool annotations    | 101 tools, all with `annotations`, 76 `false` + 25 `true` = 0 missing |
 | Filter instructions | Output confirms correct filtering of config sections                 |
 | Prompts API         | Successfully fetches and parses all 16 prompts                       |
 | Progress            | Both native and code-mode progress APIs successfully complete        |
@@ -130,7 +130,7 @@ rm *_metrics.json
 - `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
-- 77 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (99 total, 0 missing)
+- 76 core/local tools have `openWorldHint: false`; 25 GitHub/filesystem tools have `openWorldHint: true` (101 total, 0 missing)
 - `get_statistics` returns all 4 enhanced analytics metrics
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
 - Verified that all composite and partial performance indexes exist and are valid in the database schema
