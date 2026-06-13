@@ -79,6 +79,7 @@
 - Fixed Code Mode test failures for `mj.team.aliases` by adding `success: true` to the `teamListAuthorAliases` output schema and response payload.
 - Relaxed the Code Mode `context` schema to `z.any()` to allow agents to pass non-object values like strings or arrays without triggering Zod validation failures.
 - Fixed Code Mode `semanticSearch` returning zero results when vector latency occurs or thresholds mismatch by wrapping it to gracefully fall back to full-text search (`searchEntries`).
+- Intercepted hallucinated `exact_match` parameter for search tools in Code Mode, mapping it gracefully to `fuzzy_match` so future agents succeed automatically.
 - Intercepted hallucinated `script` parameter in `mj_execute_code` Code Mode execution, mapping it gracefully to `code` so future agents succeed automatically.
 - Fixed Code Mode sandbox not enforcing global `readonly` server mode and added `readonly` schema parameter to dynamically restrict execution to read-only tools.
 - Fixed `fetch` explicitly returning an error in Code Mode; now properly `undefined` for secure sandbox evaluation.

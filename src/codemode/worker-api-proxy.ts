@@ -64,6 +64,19 @@ export function buildApiProxy(
                 if (methodName === '_executeRawQueryUnsafe' && args.length === 1 && typeof args[0] === 'string') {
                     args[0] = { query: args[0] }
                 }
+                // Hallucination intercept for search exact_match
+                if (
+                    (methodName === 'searchEntries' || methodName === 'teamSearch' || methodName === 'searchByDateRange' || methodName === 'teamSearchByDateRange') &&
+                    args.length === 1 &&
+                    typeof args[0] === 'object' &&
+                    args[0] !== null
+                ) {
+                    const obj = args[0] as Record<string, unknown>
+                    if ('exact_match' in obj) {
+                        obj['fuzzy_match'] = obj['exact_match'] === false
+                        delete obj['exact_match']
+                    }
+                }
                 const resultPromise = rpcCall(group, methodName, args).then(wrapResult)
                 return wrapPromise(resultPromise, methodName)
             }
