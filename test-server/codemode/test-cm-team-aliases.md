@@ -64,7 +64,7 @@ try {
   const nf = await mj.team.teamRemoveAuthorAlias({
     alias: 'cm_alias'
   })
-  const __ = nf.success
+  const __ = nf.alias
 } catch (error) {
   notFoundCaught = true;
 }
