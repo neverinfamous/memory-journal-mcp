@@ -5,6 +5,7 @@ import {
     MergeTagsOutputSchema,
     SearchAuditLogSchema,
     SearchAuditLogOutputSchema,
+    ExecuteRawQueryUnsafeOutputSchema,
 } from './schemas.js'
 
 export function getMiscTools(context: ToolContext): ToolDefinition[] {
@@ -142,10 +143,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 query: z.string().describe('The raw SQL query to execute'),
             }),
-            outputSchema: z.object({
-                success: z.boolean(),
-                result: z.unknown().optional()
-            }).describe('The raw query execution result array'),
+            outputSchema: ExecuteRawQueryUnsafeOutputSchema.describe('The raw query execution result array'),
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
