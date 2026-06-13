@@ -11,7 +11,7 @@ This document provides a guided walkthrough for testing the dynamic configuratio
 Use `mj_execute_code` to call `update_configuration` programmatically:
 
 ```javascript
-const result = await mcp.callTool('update_configuration', {
+const result = await mj.admin.updateConfiguration({
   instruction_level: 'full',
   tool_filter: 'core,search',
   briefing_entries: 5
@@ -26,20 +26,12 @@ return result;
 
 ## Step 2: Verify Internal Configuration Changes
 
-Execute another script to read `memory://briefing` and verify the output reflects the updated instruction level and entries.
-
-```javascript
-const briefing = await mcp.readResource('memory://briefing');
-return briefing.contents[0].text;
-```
+Read the `memory://briefing` resource natively using the host MCP client (outside of Code Mode, as Code Mode properly restricts direct resource reads) and verify the output reflects the updated instruction level and entries.
 
 ## Step 3: Verify Persistence
 
-Use `mcp.readResource` or standard `read_file` to read the configuration file (e.g. `./mcp-config.json`) and assert that the values were correctly persisted by `ConfigManager`.
+Use the standard `read_file` tool from your host environment to read the configuration file (e.g. `./mcp-config.json`) and assert that the values were correctly persisted by `ConfigManager`.
 
-```javascript
-const fs = require('fs');
-return fs.readFileSync('./mcp-config.json', 'utf-8');
-```
+*(Note: `require('fs')` is correctly blocked by the Code Mode sandbox security policies, so persistence verification must be performed by the host client natively).*
 
 Verify the JSON payload matches the requested updates.
