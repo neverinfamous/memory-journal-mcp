@@ -41,6 +41,7 @@
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 
 ### Fixed
+- Fixed Code Mode sandbox explicitly exposing the `setTimeout` global instead of `undefined` by removing it from the VM sandbox context.
 - Fixed `semanticSearch` returning artificially low similarity scores by correctly converting `sqlite-vec`'s L2 distance metric to Cosine Similarity for normalized unit vectors.
 - Intercepted hallucinated `start_date` (without `end_date`) parameter for search tools in Code Mode, mapping it gracefully to today's date so future agents succeed automatically.
 - **Codemode Security Scanner:** Fixed a false-positive mitigation in the static security scanner where stripping all string literals inadvertently bypassed validation for bracket-notation AST escapes (like `x["constructor"]`). The scanner now correctly strips only template literals (`` ` ``) to safely allow Markdown prose while enforcing strict policies on single and double quotes.
