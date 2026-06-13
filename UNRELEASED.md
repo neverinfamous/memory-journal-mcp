@@ -99,6 +99,7 @@
   - camelCase method aliases.
 - `teamAddMember` inappropriately performing upserts on duplicate authors instead of failing with a `QueryError`.
 - `Code Mode` RBAC and Alias test assertions silently failing to catch `success: false` proxies by forcing property access evaluation.
+- Code Mode proxy error masking where test assertions expecting specific error string contents failed due to missing error codes.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.

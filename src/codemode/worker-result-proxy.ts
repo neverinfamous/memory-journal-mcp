@@ -23,6 +23,9 @@ export function wrapResult(result: unknown): unknown {
                 ownKeys(target) { return Reflect.ownKeys(target) },
                 getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
                 get(target, prop) {
+                    if (prop === 'error' && typeof target['error'] === 'string' && typeof target['code'] === 'string') {
+                        return `[${target['code']}] ${target['error']}`
+                    }
                     if (prop in target) return target[prop]
                     if (
                         typeof prop === 'string' &&
