@@ -24,6 +24,7 @@
 - Added context bloat warning to server initialization when registering more than 50 tools without a tool filter, suggesting token-saving strategies like `--tool-filter codemode`.
 
 ### Changed
+- **Dependency Updates**: Updated `@types/node` to 25.9.3 and `tsup` to the latest version. Pinned transitive `esbuild` dependency to 0.28.1 to resolve high/low severity vulnerabilities.
 - Removed mandatory journaling requirement from the `adversarial-performance` skill to support purely analytical runs.
 - Updated dependencies (`actions/checkout`, `trufflesecurity/trufflehog`, `@types/node`, `typescript-eslint`).
 - Improved throughput for batch operations by wrapping them in a single database transaction.
@@ -91,5 +92,6 @@
 - Fixed FTS5 search bug where `include_archived` flag was ignored during query options passing.
 - Fixed Semantic/Auto search bug where `include_archived` flag was ignored during post-fetch metadata filtering, preventing archived entries from being correctly excluded.
 ### Security
+- Fixed arbitrary file read and missing binary integrity vulnerabilities in development server by overriding `esbuild` to 0.28.1 via `package.json` overrides.
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.

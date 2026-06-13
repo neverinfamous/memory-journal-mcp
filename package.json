@@ -81,9 +81,9 @@
         "@playwright/test": "^1.60.0",
         "@types/better-sqlite3": "^7.6.13",
         "@types/express": "^5.0.6",
-        "@types/node": "^25.9.2",
+        "@types/node": "^25.9.3",
         "@vitest/coverage-v8": "^4.1.8",
-        "esbuild": "^0.28.0",
+        "esbuild": "^0.28.1",
         "eslint": "^10.4.1",
         "globals": "^17.6.0",
         "tsup": "^8.5.1",
@@ -104,6 +104,9 @@
         "tar": "7.5.13",
         "tmp": "^0.2.5",
         "vite": "^8.0.5",
-        "ip-address": "10.2.0"
+        "ip-address": "10.2.0",
+        "esbuild": "0.28.1",
+        "tsup>esbuild": "0.28.1",
+        "bundle-require>esbuild": "0.28.1"
     }
 }
