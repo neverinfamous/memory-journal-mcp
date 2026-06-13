@@ -58,6 +58,7 @@
 - Fixed code quality findings by removing unsafe types, using centralized loggers, and hardening schemas.
 - Fixed Code Mode sandbox mutability guard to correctly protect all admin/team structural and mutation tools.
 - Fixed deep camelCase hallucinations in Code Mode batch payloads via recursive normalization.
+- Intercepted missing `project_number` hallucination in Code Mode batch operations (`batchCreateEntries`, `teamBatchCreateEntries`, etc.) by dynamically propagating the top-level `project_number` argument to all nested elements in the `entries` or `updates` arrays so future agents succeed automatically.
 - Intercepted `getBriefing` and `readResource` calls inside the Code Mode Sandbox to return actionable error messages.
 - Fixed `dry_run` and simulation early returns in `secureDispatcher` to execute **after** param normalization (camelCase→snake_case, project_number resolution, numeric coercion), so simulated responses show correctly resolved parameters instead of raw hallucinated strings.
 - Fixed unhelpful Zod errors when agents hallucinate a string `project_number` (e.g., `"P154"`) by intercepting unresolved strings in `secureDispatcher` and returning a highly actionable custom error instructing them to omit the field for auto-injection.

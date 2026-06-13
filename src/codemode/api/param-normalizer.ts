@@ -114,6 +114,20 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<str
         delete result['tag']
     }
 
+    // Propagate top-level project_number to batch elements
+    if (typeof result['project_number'] === 'number') {
+        const pn = result['project_number'];
+        ['entries', 'updates', 'entry_ids'].forEach(key => {
+            if (Array.isArray(result[key])) {
+                for (const item of result[key]) {
+                    if (typeof item === 'object' && item !== null && item['project_number'] === undefined) {
+                        item['project_number'] = pn;
+                    }
+                }
+            }
+        });
+    }
+
     return result
 }
 
