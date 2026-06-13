@@ -69,8 +69,12 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
 
                     // Intercept hallucinated exact_match
                     let effectiveFuzzyMatch = input.fuzzy_match;
+                    let effectiveAutoCorrect = input.auto_correct;
                     if (input.exact_match !== undefined) {
                         effectiveFuzzyMatch = !input.exact_match;
+                        if (!input.exact_match) {
+                            effectiveAutoCorrect = true;
+                        }
                     }
 
                     const searchOptions = {
@@ -91,7 +95,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         includeArchived: input.include_archived,
                         includeHighlights: input.include_highlights,
                         fuzzy_match: effectiveFuzzyMatch,
-                        auto_correct: input.auto_correct,
+                        auto_correct: effectiveAutoCorrect,
                     }
 
                     let facets: { tags: {name: string; count: number}[]; entryTypes: {name: string; count: number}[] } | undefined
