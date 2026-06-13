@@ -35,7 +35,7 @@ are safely handled by the database layer and do not pose injection risks.
 
 ### **SQL Injection Prevention**
 
-- ✅ **No Raw SQL Execution** — All raw SQL methods (`_executeRawQueryUnsafe`) have been removed. All handlers must use strict, parameterized methods defined by `IDatabaseAdapter`.
+- ✅ **Raw SQL Restrictions** — Standard handlers must strictly use parameterized methods defined by `IDatabaseAdapter`. The `_executeRawQueryUnsafe` method is retained purely as an internal, hidden administrative tool for index maintenance and debugging, and is explicitly restricted from Code Mode or standard user interaction.
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** via Zod schemas before database operations
 - ✅ **Warning system** for potentially dangerous content patterns
@@ -483,7 +483,7 @@ chmod 700 /shared/team-data
 If you discover a security vulnerability, please:
 
 1. **Do not** open a public GitHub issue
-2. **Contact** the maintainers privately
+2. **Report** via the [GitHub Security Advisories](https://github.com/neverinfamous/memory-journal-mcp/security/advisories/new) private reporting feature.
 3. **Provide** detailed information about the vulnerability
 4. **Allow** time for the issue to be addressed before public disclosure
 
