@@ -66,7 +66,7 @@ export function buildApiProxy(
                 }
                 // Hallucination intercept for search exact_match
                 if (
-                    (methodName === 'search_entries' || methodName === 'team_search' || methodName === 'search_by_date_range' || methodName === 'team_search_by_date_range') &&
+                    (methodName === 'search_entries' || methodName === 'searchEntries' || methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
                     args.length === 1 &&
                     typeof args[0] === 'object' &&
                     args[0] !== null
