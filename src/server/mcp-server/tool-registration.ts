@@ -167,9 +167,31 @@ export function createServerInstance(
                     customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
                     customToolHandlerConfig.briefingConfig = currentConfig.briefingConfig
 
+                    const toolArgs = args as Record<string, unknown>
+                    
+                    // Intercept hallucinated 'repo' or 'project' strings and map to project_number
+                    if (typeof toolArgs?.['project_number'] === 'undefined') {
+                        let repoStr: string | undefined
+                        if (typeof toolArgs?.['repo'] === 'string') repoStr = toolArgs['repo']
+                        else if (typeof toolArgs?.['project'] === 'string') repoStr = toolArgs['project']
+                        
+                        if (repoStr && options.projectRegistry) {
+                            let entry = options.projectRegistry[repoStr]
+                            if (!entry && repoStr.includes('/')) {
+                                const repoName = repoStr.split('/').pop()
+                                if (repoName) {
+                                    entry = options.projectRegistry[repoName]
+                                }
+                            }
+                            if (entry?.project_number !== undefined) {
+                                toolArgs['project_number'] = entry.project_number
+                            }
+                        }
+                    }
+
                     const result = await callTool(
                         tool.name,
-                        args as Record<string, unknown>,
+                        toolArgs,
                         db,
                         vectorManager,
                         github,
