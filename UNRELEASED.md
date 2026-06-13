@@ -44,7 +44,7 @@
 - Deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.
 
 ### Fixed
-- Code Mode sandbox explicitly exposing the `setTimeout` global.
+- Code Mode sandbox explicitly exposing the `setTimeout` and `getConfig` globals.
 - `semanticSearch` returning artificially low similarity scores by converting L2 distance to Cosine Similarity.
 - False-positive in the static security scanner where stripping string literals bypassed bracket-notation AST escapes validation.
 - Issue where `--tool-filter codemode` inadvertently disabled mutating tool bindings.

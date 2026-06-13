@@ -91,6 +91,15 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<str
             }
         }
 
+        // Context-aware 'target_user' hallucination for team member tools
+        if (snakeKey === 'target_user') {
+            if (!('author' in obj) && !('author' in result)) {
+                if ('role' in obj || 'role' in result) {
+                    snakeKey = 'author'
+                }
+            }
+        }
+
         // Remap known parameter aliases (only when canonical name is absent)
         const alias = PARAM_ALIASES[snakeKey]
         if (alias !== undefined && !(alias in obj) && !(alias in result)) {
