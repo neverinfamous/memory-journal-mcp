@@ -39,6 +39,7 @@
 - Added numeric project IDs alongside repository names in the Briefing Config row.
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 - Relaxed the Code Mode `context` schema to `z.any()` to allow non-object values without validation failures.
+- Promoted string-to-number coercion and repo name resolution for `project_number` globally to the top-level SDK proxy, optimizing native MCP calls to prevent Zod validation errors.
 
 ### Removed
 - Deprecated `pnpm` configuration block from `package.json` to eliminate startup warnings.

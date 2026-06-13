@@ -169,25 +169,7 @@ export function createServerInstance(
 
                     const toolArgs = args as Record<string, unknown>
                     
-                    // Intercept hallucinated 'repo' or 'project' strings and map to project_number
-                    if (typeof toolArgs?.['project_number'] === 'undefined') {
-                        let repoStr: string | undefined
-                        if (typeof toolArgs?.['repo'] === 'string') repoStr = toolArgs['repo']
-                        else if (typeof toolArgs?.['project'] === 'string') repoStr = toolArgs['project']
-                        
-                        if (repoStr && options.projectRegistry) {
-                            let entry = options.projectRegistry[repoStr]
-                            if (!entry && repoStr.includes('/')) {
-                                const repoName = repoStr.split('/').pop()
-                                if (repoName) {
-                                    entry = options.projectRegistry[repoName]
-                                }
-                            }
-                            if (entry?.project_number !== undefined) {
-                                toolArgs['project_number'] = entry.project_number
-                            }
-                        }
-                    }
+                    // (Global normalization is now handled in the tools/call interceptor)
 
                     const result = await callTool(
                         tool.name,
@@ -397,6 +379,45 @@ export function createServerInstance(
         if (originalHandler) {
             requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
                 try {
+                    // Intercept hallucinated string project_numbers BEFORE SDK Zod validation
+                    const req = request as { params?: { arguments?: Record<string, unknown> } }
+                    if (req?.params?.arguments) {
+                        const toolArgs = req.params.arguments
+                        
+                        // Check repo/project aliases first
+                        if (typeof toolArgs['project_number'] === 'undefined') {
+                            let repoStr: string | undefined
+                            if (typeof toolArgs['repo'] === 'string') repoStr = toolArgs['repo']
+                            else if (typeof toolArgs['project'] === 'string') repoStr = toolArgs['project']
+                            
+                            if (repoStr) {
+                                toolArgs['project_number'] = repoStr
+                            }
+                        }
+                        
+                        // Normalize string project_number
+                        if (typeof toolArgs['project_number'] === 'string') {
+                            const strVal = toolArgs['project_number']
+                            const parsed = Number(strVal)
+                            if (!Number.isNaN(parsed)) {
+                                toolArgs['project_number'] = parsed
+                            } else if (options.projectRegistry) {
+                                let entry = options.projectRegistry[strVal]
+                                if (!entry && strVal.includes('/')) {
+                                    const repoName = strVal.split('/').pop()
+                                    if (repoName) {
+                                        entry = options.projectRegistry[repoName]
+                                    }
+                                }
+                                if (entry?.project_number !== undefined) {
+                                    toolArgs['project_number'] = entry.project_number
+                                }
+                                // If it STILL doesn't resolve, we let it pass through as a string so Zod 
+                                // catches it and throws a strict validation error.
+                            }
+                        }
+                    }
+
                     const result = await originalHandler(request, extra)
 
                     // Intercept JSON-RPC success responses that carry SDK Zod validation errors
