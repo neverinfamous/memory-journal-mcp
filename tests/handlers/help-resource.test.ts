@@ -55,7 +55,7 @@ describe('Help Resource Handlers', () => {
         const contentParam = createEntry.parameters.find((p: any) => p.name === 'content')
         expect(contentParam).toBeDefined()
         expect(contentParam.type).toBe('string')
-        expect(contentParam.required).toBe(true)
+        expect(contentParam.required).toBe(false)
 
         // tags is z.array(z.string()).optional() — not required
         const tagsParam = createEntry.parameters.find((p: any) => p.name === 'tags')

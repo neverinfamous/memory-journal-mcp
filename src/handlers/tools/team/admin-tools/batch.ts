@@ -245,8 +245,6 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     const allErrors = [
                         ...errors.map(e => new Error(`Team entry ${e.id} failed to update: ${e.error.message}`)),
-                        ...notFound.map(id => new Error(`Team entry ${id} not found`)),
-                        ...updateNotFound.map(id => new Error(`Team entry ${id} not found`)),
                         ...indexErrors
                     ]
 

@@ -174,7 +174,6 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
 
                     const allErrors = [
                         ...errors.map(e => new Error(`Entry ${e.id} failed to update: ${e.error.message}`)),
-                        ...notFound.map(id => new Error(`Entry ${id} not found`)),
                         ...indexErrors
                     ]
 

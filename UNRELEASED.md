@@ -116,7 +116,6 @@
 
 - Handlers failing to wrap `-32602` Zod validation errors as structured `VALIDATION_ERROR`s due to strict MCP SDK input schemas violating the `.optional()` relaxed schema pattern.
 - `get_entry_by_id` and `get_entry_history` strict schemas missing `.int()` constraints on `entry_id`, allowing floats to bypass initial validation.
-- `batch_update_entries` and `team_batch_update_entries` returning `success: true` when updates target non-existent entries, instead of aggregating them into an `AggregateError`.
 - `TeamExportMarkdownSchemaMcp`, `TeamImportMarkdownSchemaMcp`, `ImportExternalSchemaMcp`, and `ExportMarkdownSchemaMcp` strict enum and non-optional violations.
 
 ### Security
