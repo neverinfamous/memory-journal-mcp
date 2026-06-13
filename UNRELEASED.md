@@ -116,6 +116,7 @@
 - Stale "99 tools" documentation references across README, code-map, copilot-instructions, and tool-filter.ts, accurately syncing them to reflect the 100-tool inventory.
 
 - Handlers failing to wrap `-32602` Zod validation errors as structured `VALIDATION_ERROR`s due to strict MCP SDK input schemas violating the `.optional()` relaxed schema pattern.
+- Strict `TEAM_AUTHOR` requirement causing hard `PermissionError` failures when reading team resources locally via MCP IDE clients without OAuth, now safely falling back to `resolveAuthor`'s local environment check.
 - `get_entry_by_id` and `get_entry_history` strict schemas missing `.int()` constraints on `entry_id`, allowing floats to bypass initial validation.
 - `TeamExportMarkdownSchemaMcp`, `TeamImportMarkdownSchemaMcp`, `ImportExternalSchemaMcp`, and `ExportMarkdownSchemaMcp` strict enum and non-optional violations.
 - `get_recent_entries` output schema blocking validation errors due to strict required fields `entries` and `count`.
