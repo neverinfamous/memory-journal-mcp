@@ -87,6 +87,8 @@
 - Fixed Code Mode Phase 16 Sandbox Basics schema verification failure by exposing internal `_execute_raw_query_unsafe` tool for database introspection.
 - Intercepted hallucinated string parameter for `_executeRawQueryUnsafe` in Code Mode, mapping it gracefully to `{ query: ... }` so future agents succeed automatically.
 - Fixed hallucinated test code in `test-cm-sandbox-basics.md` by awaiting the raw query Promise and indexing the `result` property.
+- Fixed FTS5 search bug where `include_archived` flag was ignored during query options passing.
+- Fixed Semantic/Auto search bug where `include_archived` flag was ignored during post-fetch metadata filtering, preventing archived entries from being correctly excluded.
 ### Security
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.

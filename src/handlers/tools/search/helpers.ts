@@ -39,6 +39,7 @@ export interface ISearchFilters {
     startDate?: string
     endDate?: string
     includeTeam?: boolean
+    includeArchived?: boolean
 }
 
 // ============================================================================
@@ -142,5 +143,6 @@ export function passMetadataFilters(
             : db.getTagsForEntry(entry.id)
         if (!options.tags.some((t: string) => entryTags.includes(t))) return false
     }
+    if (!options.includeArchived && entry.isArchived) return false
     return true
 }

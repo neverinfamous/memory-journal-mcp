@@ -46,6 +46,7 @@ export function ftsSearch(
         endDate?: string
         sortBy?: 'timestamp' | 'importance'
         includeTeam?: boolean
+        includeArchived?: boolean
         includeHighlights?: boolean
         fuzzy_match?: boolean
         auto_correct?: boolean
@@ -84,7 +85,7 @@ export function ftsSearch(
 
     let personalResult
     if (!query && !hasFilters) {
-        personalResult = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy, personalCursor)
+        personalResult = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy, personalCursor, options.includeArchived)
     } else {
         personalResult = db.searchEntries(query || '', {
             limit: perDbLimit,
@@ -103,6 +104,7 @@ export function ftsSearch(
             includeHighlights: options.includeHighlights,
             fuzzy_match: options.fuzzy_match,
             auto_correct: options.auto_correct,
+            includeArchived: options.includeArchived,
         })
     }
 
@@ -112,7 +114,7 @@ export function ftsSearch(
     if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
         let teamResult
         if (!query && !hasFilters) {
-            teamResult = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy, teamCursor)
+            teamResult = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy, teamCursor, options.includeArchived)
         } else {
             teamResult = teamDb.searchEntries(query || '', {
                 limit: perDbLimit,
@@ -130,6 +132,7 @@ export function ftsSearch(
                 includeHighlights: options.includeHighlights,
                 fuzzy_match: options.fuzzy_match,
                 auto_correct: options.auto_correct,
+                includeArchived: options.includeArchived,
             })
         }
         
