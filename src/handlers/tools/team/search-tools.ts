@@ -70,16 +70,6 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     // Security: Enforce entryType constraint for cross-tenant searches
                     if (projectNumber == null) {
-                        if (tags && tags.length > 0 && tags.some(t => !t.startsWith('flag:'))) {
-                            return {
-                                success: false,
-                                error: 'Cross-project team searches are only permitted for flags. Provide a project_number or use flag:* tags.',
-                                code: 'VALIDATION_ERROR',
-                                category: 'validation',
-                                suggestion: 'Provide a project_number, or use tags starting with "flag:"',
-                                recoverable: true,
-                            }
-                        }
                         entries = entries.filter((e) => e.entryType === 'flag')
                     }
 
@@ -164,17 +154,6 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'Ensure start_date is before or equal to end_date',
-                            recoverable: true,
-                        }
-                    }
-
-                    if (projectNumber == null && entry_type && entry_type !== 'flag') {
-                        return {
-                            success: false,
-                            error: 'Cross-project team date range searches are only permitted for flags. Provide a project_number or use entry_type="flag".',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide a project_number, or set entry_type to "flag"',
                             recoverable: true,
                         }
                     }

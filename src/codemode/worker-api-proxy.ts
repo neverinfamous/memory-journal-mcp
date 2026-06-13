@@ -9,7 +9,7 @@
 import { wrapResult } from './worker-result-proxy.js'
 import { METHOD_ALIASES } from './api-constants.js'
 
-function applyArgInterceptions(methodName: string, args: unknown[]): unknown[] {
+function applyArgInterceptions(methodName: string, args: unknown[]): { args: unknown[] } | { error: Record<string, unknown> } {
     // Hallucination intercept for _executeRawQueryUnsafe string arguments
     if (methodName === '_executeRawQueryUnsafe' && args.length === 1 && typeof args[0] === 'string') {
         args[0] = { query: args[0] }
@@ -34,8 +34,36 @@ function applyArgInterceptions(methodName: string, args: unknown[]): unknown[] {
         if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
             obj['end_date'] = new Date().toISOString().split('T')[0];
         }
+
+        if ((methodName === 'team_search' || methodName === 'teamSearch') && obj['project_number'] == null) {
+            const tags = obj['tags'] as string[] | undefined;
+            if (tags && tags.length > 0 && tags.some(t => !t.startsWith('flag:'))) {
+                return { error: {
+                    success: false,
+                    error: 'Cross-project team searches are only permitted for flags. Provide a project_number or use flag:* tags.',
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Provide a project_number, or use tags starting with "flag:"',
+                    recoverable: true
+                }};
+            }
+        }
+
+        if ((methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') && obj['project_number'] == null) {
+            const entryType = obj['entry_type'] as string | undefined;
+            if (entryType && entryType !== 'flag') {
+                return { error: {
+                    success: false,
+                    error: 'Cross-project team date range searches are only permitted for flags. Provide a project_number or use entry_type="flag".',
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Provide a project_number, or set entry_type to "flag"',
+                    recoverable: true
+                }};
+            }
+        }
     }
-    return args;
+    return { args };
 }
 
 /**
@@ -89,8 +117,11 @@ export function buildApiProxy(
 
         for (const methodName of methodNames) {
             const proxyFn = (...args: unknown[]): Promise<unknown> => {
-                const processedArgs = applyArgInterceptions(methodName, args)
-                const resultPromise = rpcCall(group, methodName, processedArgs).then(wrapResult)
+                const intercept = applyArgInterceptions(methodName, args)
+                if ('error' in intercept) {
+                    return wrapPromise(Promise.resolve(wrapResult(intercept.error)), methodName)
+                }
+                const resultPromise = rpcCall(group, methodName, intercept.args).then(wrapResult)
                 return wrapPromise(resultPromise, methodName)
             }
             Object.assign(proxyFn, {
@@ -169,8 +200,11 @@ export function buildApiProxy(
                     const teamGroup = Object.keys(methods).find(g => methods[g]?.includes(teamSnakeKey));
                     if (teamGroup && !Object.keys(methods).some(g => methods[g]?.includes(snakeKey))) {
                         return (...args: unknown[]): Promise<unknown> => {
-                            const processedArgs = applyArgInterceptions(teamSnakeKey, args);
-                            const resultPromise = rpcCall(teamGroup, teamSnakeKey, processedArgs).then(wrapResult);
+                            const intercept = applyArgInterceptions(teamSnakeKey, args);
+                            if ('error' in intercept) {
+                                return wrapPromise(Promise.resolve(wrapResult(intercept.error)), teamSnakeKey);
+                            }
+                            const resultPromise = rpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, teamSnakeKey);
                         }
                     }
@@ -179,8 +213,11 @@ export function buildApiProxy(
                     const foundGroup = Object.keys(methods).find(g => methods[g]?.includes(snakeKey));
                     if (foundGroup) {
                         return (...args: unknown[]): Promise<unknown> => {
-                            const processedArgs = applyArgInterceptions(snakeKey, args);
-                            const resultPromise = rpcCall(foundGroup, snakeKey, processedArgs).then(wrapResult);
+                            const intercept = applyArgInterceptions(snakeKey, args);
+                            if ('error' in intercept) {
+                                return wrapPromise(Promise.resolve(wrapResult(intercept.error)), snakeKey);
+                            }
+                            const resultPromise = rpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, snakeKey);
                         }
                     }

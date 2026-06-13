@@ -88,6 +88,7 @@
 - Fixed Code Mode proxy hallucination intercepts not triggering for camelCase method aliases (e.g. `searchEntries`, `teamSearch`) by expanding the method name matching conditions in `worker-api-proxy.ts`.
 - Fixed Code Mode Paradox where agents hallucinate cross-group or team-prefixed methods (e.g., `mj.search.semanticSearch` instead of `mj.team.teamSemanticSearch`) by adding transparent cross-group routing to the sandbox proxy, allowing future agents to succeed automatically.
 - Intercepted hallucinated `script` parameter in `mj_execute_code` Code Mode execution, mapping it gracefully to `code` so future agents succeed automatically.
+- Fixed Code Mode transparent cross-group routing discarding security validation errors by properly unwrapping intercepted error payloads before executing the remote proxy call.
 - Fixed Code Mode sandbox not enforcing global `readonly` server mode and added `readonly` schema parameter to dynamically restrict execution to read-only tools.
 - Fixed `fetch` explicitly returning an error in Code Mode; now properly `undefined` for secure sandbox evaluation.
 - Fixed missing `metrics` object in Code Mode responses by correctly propagating wall-time and CPU statistics from the sandbox worker.
@@ -97,7 +98,6 @@
 - Fixed hallucinated test code in `test-cm-sandbox-basics.md` by awaiting the raw query Promise and indexing the `result` property.
 - Fixed FTS5 search bug where `include_archived` flag was ignored during query options passing.
 - Fixed Semantic/Auto search bug where `include_archived` flag was ignored during post-fetch metadata filtering, preventing archived entries from being correctly excluded.
-- Fixed `team_search` and `team_search_by_date_range` not throwing a `VALIDATION_ERROR` when a cross-project search (without `project_number`) is attempted using non-flag tags or entry types.
 ### Security
 - Fixed arbitrary file read and missing binary integrity vulnerabilities in development server by overriding `esbuild` to 0.28.1 via `package.json` overrides.
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
