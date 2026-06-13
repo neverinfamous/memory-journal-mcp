@@ -97,6 +97,7 @@
 - Fixed hallucinated test code in `test-cm-sandbox-basics.md` by awaiting the raw query Promise and indexing the `result` property.
 - Fixed FTS5 search bug where `include_archived` flag was ignored during query options passing.
 - Fixed Semantic/Auto search bug where `include_archived` flag was ignored during post-fetch metadata filtering, preventing archived entries from being correctly excluded.
+- Fixed `team_search` and `team_search_by_date_range` not throwing a `VALIDATION_ERROR` when a cross-project search (without `project_number`) is attempted using non-flag tags or entry types.
 ### Security
 - Fixed arbitrary file read and missing binary integrity vulnerabilities in development server by overriding `esbuild` to 0.28.1 via `package.json` overrides.
 - Patched scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
