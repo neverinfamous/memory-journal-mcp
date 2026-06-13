@@ -120,8 +120,12 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<str
         ['entries', 'updates', 'entry_ids'].forEach(key => {
             if (Array.isArray(result[key])) {
                 for (const item of result[key]) {
-                    if (typeof item === 'object' && item !== null && (item as Record<string, unknown>).project_number === undefined) {
-                        (item as Record<string, unknown>).project_number = pn;
+                    interface BatchItem {
+                        project_number?: number;
+                        [key: string]: unknown;
+                    }
+                    if (typeof item === 'object' && item !== null && (item as BatchItem).project_number === undefined) {
+                        (item as BatchItem).project_number = pn;
                     }
                 }
             }
