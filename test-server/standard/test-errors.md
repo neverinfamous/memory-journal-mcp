@@ -55,6 +55,8 @@ Every tool must return `{success: false, error, code, category, suggestion, reco
 | **team**   | `team_create_entry(project_number: 5)` | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
 | **team**   | `team_update_entry(project_number: 5)` | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
 
+*Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified by executing `node test-server/scripts/test-sdk-boundaries.mjs`.*
+
 ### 11.3 Numeric Coercion Boundaries
 
 The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify that type mismatches either coerce gracefully or return structured errors — **never raw `-32602`**.
@@ -74,7 +76,7 @@ The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify th
 | Array where string    | `create_entry(project_number: 5, content: ["array"])`         | ⚠️ SDK coerces to `'["array"]'` — accepted (expected SDK behavior)   |
 
 > [!NOTE]
-> The two ⚠️ findings (boolean and array coercion) are MCP SDK-layer behavior. The SDK serializes all JSON values to strings before Zod sees them when the schema type is `string`. **No action required** — this is expected protocol-layer coercion and does not pose a security or data integrity risk for `content`.
+> Under MCP SDK 1.29+ with strict Zod integration, the two ⚠️ findings (boolean and array coercion) now properly throw `VALIDATION_ERROR` rather than silently coercing. The new strict behavior, along with team-scoped permission rejections, is verified directly via the `test-server/scripts/test-sdk-boundaries.mjs` script.
 
 ### 11.4 Empty Parameter (`{}`) Sweep — Critical Tools
 

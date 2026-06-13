@@ -23,6 +23,7 @@
 - Content templates instruction file (`memory://help/templates`) with per-entry-type markdown scaffolding.
 - Context bloat warning during initialization when registering >50 tools without filters.
 - `issue_url` and `pr_url` auto-population in Code Mode proxy when GitHub context is available.
+- `test-sdk-boundaries.mjs` integration test script to validate strict MCP SDK protocol-layer validation boundaries (Zod rejections) and environment dependencies (e.g. `TEAM_AUTHOR`).
 
 ### Changed
 - Rewrote the `mj-mcp-optimize` developer skill document to strictly focus on anti-hallucination guardrails and instructing agents on how to optimize the server codebase instead of using technical workarounds.
