@@ -1,34 +1,29 @@
-import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /**
- * Tests the --persist-metrics flag.
- * - Starts server with persistence enabled.
- * - Runs a mock test.
- * - Stops server.
- * - Restarts server.
- * - Checks if metrics were restored correctly.
+ * Tests the --persist-metrics flag integration logic.
+ * - Simulates the metrics accumulator.
+ * - Verifies the file save and restore logic.
  */
 
 async function main() {
     console.log('Testing metrics persistence...')
     
-    const dbPath = path.resolve('test-metrics-persistence.db')
-    const metricsPath = path.resolve('test-metrics-persistence_metrics.json')
+    const dbPath = path.resolve('.test-output/test-metrics-persistence.db')
+    const metricsPath = path.resolve('.test-output/test-metrics-persistence_metrics.json')
 
     // Ensure clean state
+    await fs.mkdir(path.resolve('.test-output'), { recursive: true })
     await fs.rm(dbPath, { force: true })
     await fs.rm(metricsPath, { force: true })
     
-    // We'll run `node dist/cli.js --db test-metrics-persistence.db --persist-metrics`
-    // And simulate a tool call, then exit, then restart and read the file.
+    // Dynamically import the typescript file natively using strip-types or fallback to TSX
+    const __dirname = path.dirname(fileURLToPath(import.meta.url))
+    const metricsModulePath = path.resolve(__dirname, '../../src/observability/metrics.ts')
     
-    // However, to keep this script simple and robust, we can just instantiate the metrics directly
-    // and verify the load/save logic since testing a full server lifecycle via Stdio requires MCP SDK clients.
-    // Instead, we will directly test the MetricsAccumulator as an integration test.
-    
-    const { MetricsAccumulator } = await import('../../src/observability/metrics.js')
+    const { MetricsAccumulator } = await import(`file://${metricsModulePath}`)
     
     console.log('1. Creating accumulator and recording metrics...')
     const acc1 = new MetricsAccumulator()
