@@ -198,6 +198,7 @@ const filtered = await mj.search.semanticSearch({
 const noHint = await mj.search.semanticSearch({
   query: 'xyznonexistent',
   hint_on_empty: false,
+  similarity_threshold: 0.0,
 })
 const stats = await mj.search.getVectorIndexStats({})
 return {
@@ -271,7 +272,7 @@ return {
 
 | Test                  | Code                                                                                                                                                | Expected Result                                    |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Rebuild index         | `return await mj.admin.rebuildVectorIndex({});`                                                                                                     | `{ success: true, entriesIndexed: N }` where N > 0 |
+| Rebuild index         | `await mj.admin.batchCreateEntries({ entries: [{ content: "test", project_number: 5 }], auto_index: false }); return await mj.admin.rebuildVectorIndex({});` | `{ success: true, entriesIndexed: N }` where N > 0 |
 | Add existing to index | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
 | Add nonexistent       | `return await mj.admin.addToVectorIndex({ entry_id: 999999 });`                                                                                     | `{ success: false, error: "..." }`                 |
 
@@ -420,7 +421,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntryMinimal({ content: 'CM3 search archiving pagination test' })
+const created = await mj.core.createEntry({ project_number: 5, content: 'CM3 search archiving pagination test' })
 const id = created.entry.id
 await mj.admin.updateEntry({ entry_id: id, is_archived: true })
 
