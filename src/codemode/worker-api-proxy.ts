@@ -60,6 +60,10 @@ export function buildApiProxy(
 
         for (const methodName of methodNames) {
             const proxyFn = (...args: unknown[]): Promise<unknown> => {
+                // Hallucination intercept for _executeRawQueryUnsafe string arguments
+                if (methodName === '_executeRawQueryUnsafe' && args.length === 1 && typeof args[0] === 'string') {
+                    args[0] = { query: args[0] }
+                }
                 const resultPromise = rpcCall(group, methodName, args).then(wrapResult)
                 return wrapPromise(resultPromise, methodName)
             }
