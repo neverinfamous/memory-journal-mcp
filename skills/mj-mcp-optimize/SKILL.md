@@ -1,228 +1,43 @@
 ---
 name: mj-mcp-optimize
-description: Learn how the `memory-journal-mcp` Code Mode architecture connects the `mj.*` sandbox API to native MCP tools, and how the entry content template system prevents structural hallucinations. Essential for debugging tool alias resolution, serialization errors, constructor wiring, proxy interceptions (shimMj), Sandbox/Worker bounds, and entry content formatting. Load when contributing to `codemode.ts`, `worker-script.ts`, schema `.describe()` strings, or tracking down missing tool parameters in `memory-journal-mcp`.
+description: Guide for modifying the `memory-journal-mcp` codebase (schemas, server instructions, proxy interceptors) to proactively prevent, mitigate, and heal LLM hallucinations for all future agents.
 ---
 
-# Code Mode Internals (`memory-journal-mcp`)
+# Codebase Optimization & Anti-Hallucination Guardrails
 
-The `mj_execute_code` (Code Mode) tool provides an isolated V8/Worker sandbox where LLMs can execute multi-step logic. Inside the sandbox, native MCP tools are exposed via the asynchronous `mj.*` API. 
+The primary philosophy of this skill is: **When you (the agent) encounter a hallucination, confusion, or are forced to use introspection to figure out an API, DO NOT just work around it.** 
 
-Understanding how an `mj.*` call makes its way from the sandbox out to the host process is critical for debugging serialization, alias, and validation bugs.
+You must modify the server codebase to ensure future agents never face the same issue. This document details the 4 specific layers of the `memory-journal-mcp` architecture where you can implement these permanent fixes.
 
-## The Execution Pipeline
+## Layer 1: Schema & Instruction Hardening (The First Line of Defense)
 
-When an agent calls `await mj.core.createEntry({ content: 'test' })`:
+The most robust way to prevent a hallucination is to explicitly instruct the agent via the tools list or initialization payload.
 
-1. **`shimMj` Proxy (Sandbox)**: The call is intercepted by a dynamic Proxy.
-2. **Method & Param Aliases (Sandbox)**: The Proxy converts JavaScript-friendly syntax into MCP tool names (e.g., `createEntry` -> `create_entry`).
-3. **RPC Serialization (Sandbox -> Host)**: The arguments are serialized and sent over `node:worker_threads` MessagePort.
-4. **Dispatcher (Host)**: `secureDispatcher` in `codemode.ts` receives the RPC request and routes it to the native tool logic.
-5. **Validation (Host)**: Tool parameters (like `project_number`) are validated and sometimes dynamically resolved.
-6. **Result Serialization (Host -> Sandbox)**: The JSON result is sent back, where `wrapResult` reconstructs it. If the tool threw a `VALIDATION_ERROR`, it's converted back into a Proxy that throws on access to missing properties.
+* **Schema `.describe()` Tags:** When an agent hallucinates a property (e.g. inventing a `title` field instead of using `message`), update the Zod schema in `src/handlers/tools/*/schemas.ts`. Add an explicit "Anti-Hallucination Hint" in the `.describe()` string. These surface directly in the JSON Schema that agents see on `tools/list`.
+    * *Example:* `.describe('Note: The primary text is stored in the `message` property (not `title` or `content`).')`
+* **Tool Descriptions:** Update the `description` fields on tool definition files (e.g., `src/handlers/tools/*/tools.ts`). This is the agent's first impression of each tool.
+* **Server Instructions:** If a structural hallucination persists (e.g. inventing `## Summary` sections instead of `## Accomplished`), update the `src/constants/server-instructions/overview.md` or `templates.md` files. These alter the context payload for all agents upon connection.
 
----
+## Layer 2: Dispatcher Healing (Frictionless Recovery)
 
-## 1. `shimMj` Proxy (`worker-api-proxy.ts`)
+If agents consistently hallucinate inputs that can be logically inferred or normalized, heal them silently in the `secureDispatcher` (`src/codemode/api/handler.ts`) before they reach Zod validation.
 
-Inside the worker, the entire `mj` object is a nested set of JavaScript Proxies built by `buildApiProxy(methods, schemas)`.
+* **Type Coercion:** If agents pass strings (e.g., `{ project_number: 'db-mcp' }`) instead of numbers, use the `projectRegistry` to auto-resolve string repo names into numeric IDs.
+* **Case Normalization:** Because Zod schemas enforce `snake_case`, if an agent hallucinates `{ projectNumber: 123 }` in a batch payload, ensure the `deepCamelToSnake` normalizer in the dispatcher catches and heals it automatically to `project_number`.
+* **Explicit Interception:** If a string cannot be coerced (e.g., `"P154"`), intercept it before validation and throw a highly actionable custom error explicitly guiding the agent to omit the field.
 
-- **Group Proxy**: Handles `mj.core`, `mj.search`, etc. If a group doesn't exist, it throws a helpful error listing available groups.
-- **Method Proxy**: Handles `mj.core.createEntry`. It intercepts method calls and forwards them to `rpcCall()`.
-- **Snake_case Fallback**: If an agent calls `mj.core.create_entry`, the Proxy seamlessly supports it by routing it identically to the camelCase `createEntry`.
+## Layer 3: Sandbox Proxy Interceptors (Actionable Errors)
 
-## 2. Constructor Wiring & Sandbox Bindings (`codemode.ts`)
+When agents execute code in Code Mode (`mj_execute_code`), they often make standard Javascript mistakes. Instead of cryptic V8 runtime failures, add Proxy interceptors in `worker-api-proxy.ts` and `worker-result-proxy.ts` to throw explicit guidance.
 
-When `mj_execute_code` is invoked:
-1. `collectNonCodeModeTools(context)` gathers all 180+ tools.
-2. `createJournalApi(tools, secureDispatcher)` groups them by prefix (`core_`, `search_`, etc.).
-3. `api.createSandboxBindings()` outputs a map of `group -> method[]` string arrays.
-4. These bindings are injected into the worker. The worker *only* knows tool names, not their logic.
+* **Missing `await` Catching:** Agents frequently forget the `await` keyword. Wrap all RPC Promise returns in an additional Proxy. If the agent attempts to synchronously access a property (e.g. `result.success`), intercept it and throw: `"Attempted to access property 'success' on a Promise object. Did you forget to 'await' the tool call?"`
+* **Array Method Healing:** Agents often assume tools like `searchEntries` return Arrays instead of Objects (e.g., `{ success: true, entries: [...] }`). The `wrapResult` proxy intercepts Array methods (like `.map`, `.filter`) called directly on the returned Object and binds them dynamically to the inner array (e.g. `.entries`).
+* **Resource Hallucinations:** Agents often try to call raw resources like `await mj.core.getBriefing()`. Implement a custom interceptor that throws a highly actionable error suggesting the correct equivalent tool (e.g. `mj.core.getRecentEntries()`).
 
-## 3. Dispatcher Validations (`handler.ts`)
+## Layer 4: Alias Management (The Shadowing Trap)
 
-The `secureDispatcher` acts as the gatekeeper between the Sandbox and the Host tools. This is where we catch hallucinated parameters before they hit Zod schemas.
+Agents commonly extrapolate method names based on patterns (e.g., trying to call `mj.listEntries()` instead of `mj.searchEntries()`). You can add aliases to gracefully handle these hallucinations.
 
-For example, LLMs frequently hallucinate string-based project IDs (e.g. `{ project_number: 'db-mcp' }`). `secureDispatcher` resolves these for **all dispatched tools** (not just team operations) using a four-step pipeline:
-
-1. **Registry Lookup**: String repo names (e.g., `"mysql-mcp"`) are matched against `config.projectRegistry` entries and replaced with their numeric `project_number`.
-2. **Owner/Repo Splitting**: Strings like `"neverinfamous/mysql-mcp"` are split and the repo part is looked up in the registry.
-3. **Numeric Coercion**: Remaining numeric strings (e.g., `"14"`) are coerced to `Number` as a final fallback.
-4. **Unresolved String Interceptor**: If the string *still* hasn't resolved (e.g., `"P154"`), `secureDispatcher` intercepts it before Zod validation and throws a highly actionable error explicitly guiding the agent to omit the field for auto-injection.
-
-```typescript
-// Step 1: Registry lookup
-const entry = sessionContext.config.projectRegistry[strVal]
-if (entry?.project_number !== undefined) {
-    paramsObj['project_number'] = entry.project_number
-}
-// Step 3 & 4: Numeric coercion and Interceptor fallback
-if (typeof paramsObj['project_number'] === 'string') {
-    const parsed = Number(paramsObj['project_number'])
-    if (!Number.isNaN(parsed)) paramsObj['project_number'] = parsed
-    else throw CustomError("Invalid project_number: ... you can simply OMIT the field")
-}
-```
-
-**Deep Payload Normalization:** `secureDispatcher` also includes a recursive `deepCamelToSnake` normalizer. Because Zod schemas enforce `snake_case`, if an agent hallucinates `{ projectNumber: 123, entryType: "..." }` in a batch payload, the dispatcher automatically heals these to `project_number` and `entry_type` before they reach the tool handler, preventing frictionless validation failures.
-
-## 4. `auto-return` Transformation (`auto-return.ts`)
-
-Because Code Mode is wrapped in an `async () => { ... }` IIFE, bare expressions (like promises) would normally disappear into the void.
-
-The `transformAutoReturn` engine parses the user's code using a forward-scanning state machine, properly ignoring boundaries inside string literals (`'`, `"`, `` \` ``) and brackets (`{}`, `()`), and automatically prepends `return` to the final statement. 
-
-## 5. Result Wrapping & IPC Serialization (`worker-result-proxy.ts`)
-
-When MCP tools fail validation, they return an error object instead of throwing (for deterministic agent feedback). 
-However, if an agent writes `const { entry_id } = await mj.core.createEntry()`, and it fails, destructuring `entry_id` from the error object returns `undefined` silently.
-
-To prevent silent failures, `wrapResult` converts failed results into a Proxy. If the agent attempts to access a missing property on a failed result, it throws immediately, forcing the LLM to see the `VALIDATION_ERROR`.
-
-**Cross-Context IPC Serialization:** Node.js `worker_threads` strip out proxy functionality during IPC message transmission if the proxy lacks proper enumerability traps. We implement `ownKeys` and `getOwnPropertyDescriptor` traps inside `worker-result-proxy.ts` so `JSON.stringify` accurately serializes the error payload across the boundary.
-
-## 5.1 The `await` Hallucination Interceptor
-
-Agents frequently forget the `await` keyword in Code Mode (e.g., `const result = mj.core.getRecentEntries()`). This causes synchronous property access (`result.success`) to fail silently. 
-To catch this, the `worker-api-proxy.ts` wraps all RPC Promise returns in an additional Proxy. If you attempt to synchronously access a property on the Promise, the Proxy intercepts it and throws:
-`"Attempted to access property 'success' on a Promise object. Did you forget to 'await' the tool call?"`
-
-## 6. Resource URIs vs Tools (`getBriefing` Failures)
-
-Code Mode inherently operates over `memory-journal-mcp`'s **tool layer**. Operations that deal with raw resources (like `memory://briefing/{repo_name}` or `memory://metrics/summary`) are NOT tools and CANNOT be called natively from within Code Mode. 
-
-Attempting to call `await mj.core.getBriefing()` inside `mj_execute_code` will result in an `Operation 'getBriefing' is not found in group` error.
-
-Additionally, to help steer agents away from trying to use the native MCP `readResource` built-in, calling `await readResource('memory://recent')` inside the Sandbox triggers a custom interceptor that throws a highly actionable error, directly suggesting the correct equivalent tool (e.g., `mj.core.getRecentEntries()`).
-
-**Solution:** ALWAYS use your native `read_resource` tool (outside of Code Mode) to fetch resources. Do NOT attempt to read resources or briefings using the `mj.*` API. 
-
-## 7. Array Method Interception
-
-One of the most common mistakes agents make in Code Mode is assuming tools like `getRecentEntries`, `searchEntries`, or `listProjects` return Arrays directly.
-
-**All MCP tools return Objects.** For example, `getRecentEntries` returns `{ success: true, entries: [...] }`.
-
-To smooth out this hallucination, the `wrapResult` proxy intercepts Array methods (like `.map`, `.filter`, `.find`) called directly on the returned Object. It automatically scans the Object for common array properties (e.g. `entries`, `projects`, `results`) and binds the method to that inner array. 
-
-This means `(await mj.core.getRecentEntries()).map(...)` will seamlessly work, behaving exactly as if you had correctly accessed the inner `.entries` array!
-
-## 8. Markdown & String Payload Escaping
-
-A common hallucination occurs when an agent attempts to pass large Markdown text (e.g. documentation or notes) directly into the `code` string using a template literal (backticks):
-
-```javascript
-await mj.core.createEntry({
-    content: `... prioritizing DB-aware reads over raw \`.jsonl\` files.`
-})
-```
-
-Because the MCP tool call payload is JSON, the inner `\`` gets interpreted literally and prematurely closes the Javascript template string. The remaining text (e.g., `.jsonl`) is then evaluated as a **Tagged Template Literal** or property access, resulting in:
-`TypeError: "...".jsonl is not a function`.
-
-**Solution**: ALWAYS use the `context` parameter of `mj_execute_code` for Markdown or long string payloads. The `context` object is injected securely into the sandbox and avoids all string boundary parsing issues:
-
-```json
-{
-  "code": "return await mj.core.createEntry({ content: context.myMarkdown });",
-  "context": {
-    "myMarkdown": "... prioritizing DB-aware reads over raw `.jsonl` files."
-  }
-}
-```
-
-## 9. Catching Method Hallucinations (Aliases)
-
-Agents commonly extrapolate method names based on patterns (e.g., trying to call `mj.listEntries()` instead of `mj.searchEntries()` because they are used to `mj.listProjects()`). 
-
-There are **three layers** that can intercept hallucinated method names. All three must be kept in sync:
-
-1. **`METHOD_ALIASES`** (in `src/codemode/api-constants.ts`): Maps alias → canonical method within a group. The worker-side `shimMj` proxy resolves these **first**, before checking constructor bindings. Example: `listEntries: 'searchEntries'` in the `search` group intercepts `mj.search.listEntries()`.
-
-2. **Constructor Cross-Group Wiring** (in `src/codemode/api/journal-api.ts`): Assigns handler functions from one group onto another group's API object. Example: `this.core['listProjects'] = listProjectsFn` lets `mj.core.listProjects()` work even though `listProjects` is not a core tool.
-
-3. **Top-Level Bindings** (in `createSandboxBindings()` within `src/codemode/api/journal-api.ts`): Exposes methods at the `mj.*` root level. Example: `listProjects: this.core['listProjects']` enables `mj.listProjects()`.
-
-> **⚠️ CRITICAL: Alias Shadowing Bug Pattern**
-> 
-> `METHOD_ALIASES` resolve in the worker-side proxy **before** the constructor-wired bindings are checked. If a `METHOD_ALIASES` entry maps to a method name that doesn't exist as an actual *tool* in that group, it will **shadow** a correctly wired constructor binding and silently fail.
->
-> Example of the bug: `core: { getProjects: 'listProjects' }` — the alias resolves `getProjects` → `listProjects`, but `listProjects` is not a registered tool in the `core` group. Even though the constructor correctly wired `this.core['listProjects'] = listProjectsFn`, the alias resolution short-circuits before reaching it.
->
-> **Rule**: `METHOD_ALIASES` entries must point to either (a) a real tool method in the same group, or (b) another alias that eventually resolves to a real tool in the same group. Never alias to a constructor-wired-only method.
-
-Also update `GROUP_EXAMPLES` in `api-constants.ts` so that `help()` output directs agents to the correct group for each method.
-
-## 10. Entry Content Templates (Anti-Hallucination)
-
-Agents frequently hallucinate content structure when creating entries — inventing arbitrary `## Summary`, `## Overview`, or `## Notes` sections instead of following the required format. The codebase enforces structural guidance through **four layers**:
-
-1. **Zod `.describe()` strings** on `CreateEntrySchemaMcp` / `UpdateEntrySchemaMcp` (and their team equivalents) in `src/handlers/tools/*/schemas.ts`. These surface directly in the JSON Schema that agents see on `tools/list`, making them the **most reliable** channel.
-
-2. **Tool `description` fields** on `create_entry`, `update_entry`, `team_create_entry`, `team_update_entry` in their respective tool definition files. These are the agent's first impression of each tool.
-
-3. **`memory://help/templates` resource** sourced from `src/constants/server-instructions/templates.md`. Contains per-type templates for: session summaries, feature implementations, bug fixes, planning, and technical notes. Auto-compiled into `HELP_CONTENT` by `scripts/generate-server-instructions.ts`.
-
-4. **Prompt hardening** in `src/handlers/prompts/workflow.ts`. The `session-summary` and `team-session-summary` prompts embed the exact required template with explicit anti-hallucination rules.
-
-### Session Summary Template (Mandatory)
-
-When creating session summaries (`entry_type: "retrospective"`, tagged `session-summary`), content **MUST** use exactly these three sections:
-
-```markdown
-## Accomplished
-- [concrete items done]
-
-## Unfinished / Blocked
-- [remaining items or "None"]
-
-## Context for Next Session
-- [entry IDs, branch names, PR numbers, pending decisions]
-```
-
-**Rules**: No extra top-level sections. No omitted sections. Use bullet points.
-
-### Code Mode Best Practice
-
-Always use the `context` parameter (see Section 8) for template-structured content to avoid escaping issues:
-
-```json
-{
-  "code": "return await mj.core.createEntry({ content: context.content, entry_type: 'retrospective', tags: ['session-summary'], project_number: 1 })",
-  "context": {
-    "content": "## Accomplished\n- Item one\n\n## Unfinished / Blocked\n- None\n\n## Context for Next Session\n- Next steps here"
-  }
-}
-```
-
-### Where Templates Are Defined
-
-| Layer | Source File | What It Controls |
-|-------|-----------|-----------------|
-| Schema `.describe()` | `src/handlers/tools/*/schemas.ts` | Field-level guidance in `tools/list` JSON Schema |
-| Tool description | `src/handlers/tools/*/tools.ts`, `core-tools.ts`, `crud.ts` | Top-level tool description |
-| Help resource | `src/constants/server-instructions/templates.md` | `memory://help/templates` on-demand reference |
-| Init instructions | `src/constants/server-instructions/overview.md` | Session summary template in MCP init payload |
-| Prompt template | `src/handlers/prompts/workflow.ts` | `session-summary` / `team-session-summary` prompts |
-
-## 11. Introspection and Troubleshooting
-
-Agents often attempt to write complex scratch scripts in the terminal (e.g., using Python or Node.js) to manipulate the database or check state when they get stuck. These external scripts frequently fail due to:
-- **Module Resolution Issues:** Scratch directories lack the workspace `node_modules`.
-- **Hardcoded Paths:** Guessing database paths (e.g., `data/team.db` vs `data/memory-journal-team.db`) without reading the environment.
-
-**Optimization:** ALWAYS use `mj_execute_code` as your primary introspection and scripting tool instead of writing terminal scripts. It executes within the correct environment with robust access to the API and data.
-
-When using Code Mode, avoid these common pitfalls:
-
-1. **Don't guess method names:** If you are unsure of an `mj.*` method, do not guess (e.g., guessing `mj.team.deleteTeamFlag` instead of `mj.team.deleteEntry`). Instead, dynamically introspect the available methods:
-   ```javascript
-   return Object.keys(mj.team);
-   ```
-
-2. **Don't guess data shapes:** If you are unsure of the returned JSON structure (e.g., assuming flags have a `title` property when they actually use `message`), fetch and return a single item first to inspect its schema:
-   ```javascript
-   const flags = await mj.team.listFlags({ status: 'active' });
-   return flags.flags[0];
-   ```
-
-3. **Avoid Raw SQL Fallbacks:** Do not try to bypass the API using `mj.admin._execute_raw_query_unsafe`. It is blocked in Code Mode by default for security. Always find and use the appropriate native `mj.*` methods (e.g., using `listFlags` and `deleteEntry` to manage flags).
+* **Adding Aliases:** Add entries to the `METHOD_ALIASES` constant in `src/codemode/api-constants.ts` (e.g. `listEntries: 'searchEntries'`). The worker-side `shimMj` proxy resolves these seamlessly.
+* **CRITICAL: The Alias Shadowing Bug Pattern:** `METHOD_ALIASES` resolve in the worker-side proxy **before** constructor-wired bindings are checked. If a `METHOD_ALIASES` entry maps to a method name that doesn't exist as an actual tool in that group, it will **shadow** a correctly wired constructor binding and silently fail. 
+    * *Rule:* `METHOD_ALIASES` entries must point to either (a) a real tool method in the same group, or (b) another alias that eventually resolves to a real tool in the same group.

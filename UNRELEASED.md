@@ -25,6 +25,7 @@
 - `issue_url` and `pr_url` auto-population in Code Mode proxy when GitHub context is available.
 
 ### Changed
+- Rewrote the `mj-mcp-optimize` developer skill document to strictly focus on anti-hallucination guardrails and instructing agents on how to optimize the server codebase instead of using technical workarounds.
 - Consolidated dependency updates (`@types/node`, `tsup`, `actions/checkout`, `trufflesecurity/trufflehog`, `typescript-eslint`).
 - Removed mandatory journaling requirement from `adversarial-performance` skill to support purely analytical runs.
 - Wrapped batch operations in a single database transaction for improved throughput.
