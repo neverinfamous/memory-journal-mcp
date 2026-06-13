@@ -51,6 +51,7 @@ export const SearchEntriesSchema = z.object({
     semantic_weight: z.number().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
+    exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -92,6 +93,7 @@ export const SearchEntriesSchemaMcp = z.object({
     semantic_weight: relaxedNumber().optional().default(1.0).describe('Weight multiplier for semantic results in hybrid search (default: 1.0)'),
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
+    exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */

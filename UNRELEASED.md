@@ -101,6 +101,7 @@
   - `script` (maps to `code` for `mj_execute_code`).
   - string parameter for `_executeRawQueryUnsafe`.
   - camelCase method aliases.
+- Intercepted `exact_match` hallucinated parameter in `search_entries` schemas to map it correctly to `fuzzy_match` for exact matching control.
 - `teamAddMember` inappropriately performing upserts on duplicate authors instead of failing with a `QueryError`.
 - `Code Mode` RBAC and Alias test assertions silently failing to catch `success: false` proxies by forcing property access evaluation.
 - `Code Mode` proxy error masking where test assertions expecting specific error string contents failed due to missing error codes.

@@ -67,6 +67,12 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
 
                     const effectiveMode = resolvedMode
 
+                    // Intercept hallucinated exact_match
+                    let effectiveFuzzyMatch = input.fuzzy_match;
+                    if (input.exact_match !== undefined) {
+                        effectiveFuzzyMatch = !input.exact_match;
+                    }
+
                     const searchOptions = {
                         limit: input.limit,
                         cursor: input.cursor,
@@ -84,7 +90,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         includeTeam: input.include_team,
                         includeArchived: input.include_archived,
                         includeHighlights: input.include_highlights,
-                        fuzzy_match: input.fuzzy_match,
+                        fuzzy_match: effectiveFuzzyMatch,
                         auto_correct: input.auto_correct,
                     }
 
