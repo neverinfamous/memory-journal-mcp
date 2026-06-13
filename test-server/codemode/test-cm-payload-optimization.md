@@ -93,7 +93,7 @@ return {
 const failures = []
 
 // Get a known issue for testing
-const issues = await mj.github.getGithubIssues({ limit: 3 })
+const issues = await mj.github.getGithubIssues({ state: 'all', limit: 3 })
 const issueNum = issues.issues?.[0]?.number
 if (!issueNum)
   return { success: false, error: 'No issues found for testing', failures: ['no_issues'] }
@@ -135,7 +135,7 @@ if (noComments.comments && Array.isArray(noComments.comments)) {
 }
 
 // PR truncation
-const prs = await mj.github.getGithubPrs({ limit: 3 })
+const prs = await mj.github.getGithubPrs({ state: 'all', limit: 3 })
 const prNum = prs.pullRequests?.[0]?.number
 let prChecked = false
 if (prNum) {
