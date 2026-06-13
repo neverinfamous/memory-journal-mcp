@@ -215,11 +215,10 @@ export class VectorSearchManager {
             for (const result of results) {
                 const entry = this.dbAdapter.getEntryById(result.entry_id)
                 if (entry) {
-                    // Cosine distance maps: 0 = exact match, 2 = opposite
-                    // Standard cosine similarity: 1 = exact match, -1 = opposite
-                    // Standard normalized vectors: distance = 1 - similarity
-                    // So similarity = 1 - distance
-                    const similarityScore = Math.max(0, 1 - result.distance)
+                    // sqlite-vec MATCH computes L2 distance by default.
+                    // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
+                    // Therefore: cosine_similarity = 1 - (L2_distance^2 / 2)
+                    const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
                     
                     if (similarityScore >= threshold) {
                         searchResults.push({
@@ -279,7 +278,8 @@ export class VectorSearchManager {
                 
                 const entry = this.dbAdapter.getEntryById(result.entry_id)
                 if (entry) {
-                    const similarityScore = Math.max(0, 1 - result.distance)
+                    // Same mathematical conversion as above
+                    const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
                     if (similarityScore >= threshold) {
                         searchResults.push({
                             entryId: result.entry_id,

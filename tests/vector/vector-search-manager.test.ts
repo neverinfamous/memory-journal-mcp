@@ -225,12 +225,12 @@ describe('VectorSearchManager', () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
 
-            // sqlite-vec returns distance (lower = more similar)
-            // score = max(0, 1 - distance)
+            // sqlite-vec returns L2 distance.
+            // score = 1 - (distance^2)/2
             mockAll.mockReturnValue([
-                { entry_id: 1, distance: 0.1 }, // score 0.9
-                { entry_id: 2, distance: 0.5 }, // score 0.5
-                { entry_id: 3, distance: 0.8 }, // score 0.2
+                { entry_id: 1, distance: 0.44721359 }, // score 0.9
+                { entry_id: 2, distance: 1.0 },        // score 0.5
+                { entry_id: 3, distance: 1.2 },        // score 0.28
             ])
 
             const results = await vm.search('query text', 10, 0.3)
@@ -245,9 +245,9 @@ describe('VectorSearchManager', () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
             mockAll.mockReturnValue([
-                { entry_id: 1, distance: 0.1 }, // score 0.9
-                { entry_id: 2, distance: 0.2 }, // score 0.8
-                { entry_id: 3, distance: 0.3 }, // score 0.7
+                { entry_id: 1, distance: 0.44721359 }, // score 0.9
+                { entry_id: 2, distance: 0.63245553 }, // score 0.8
+                { entry_id: 3, distance: 0.77459667 }, // score 0.7
             ])
 
             const results = await vm.search('query', 2, 0.3)
@@ -284,8 +284,8 @@ describe('VectorSearchManager', () => {
 
             mockAll.mockReturnValue([
                 { entry_id: 1, distance: 0.1 }, // excluded
-                { entry_id: 2, distance: 0.5 }, // score 0.5
-                { entry_id: 3, distance: 0.8 }, // score 0.2
+                { entry_id: 2, distance: 1.0 }, // score 0.5
+                { entry_id: 3, distance: 1.2 }, // score 0.28
             ])
 
             // Excludes entryId 1 from the results

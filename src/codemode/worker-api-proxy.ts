@@ -66,15 +66,23 @@ export function buildApiProxy(
                 }
                 // Hallucination intercept for search exact_match
                 if (
-                    (methodName === 'searchEntries' || methodName === 'teamSearch' || methodName === 'searchByDateRange' || methodName === 'teamSearchByDateRange') &&
+                    (methodName === 'search_entries' || methodName === 'team_search' || methodName === 'search_by_date_range' || methodName === 'team_search_by_date_range') &&
                     args.length === 1 &&
                     typeof args[0] === 'object' &&
                     args[0] !== null
                 ) {
                     const obj = args[0] as Record<string, unknown>
                     if ('exact_match' in obj) {
-                        obj['fuzzy_match'] = obj['exact_match'] === false
+                        const isFuzzy = obj['exact_match'] === false;
+                        obj['fuzzy_match'] = isFuzzy;
+                        obj['auto_correct'] = isFuzzy;
                         delete obj['exact_match']
+                    } else if (obj['fuzzy_match'] === true && !('auto_correct' in obj)) {
+                        obj['auto_correct'] = true;
+                    }
+                    
+                    if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
+                        obj['end_date'] = new Date().toISOString().split('T')[0];
                     }
                 }
                 const resultPromise = rpcCall(group, methodName, args).then(wrapResult)
