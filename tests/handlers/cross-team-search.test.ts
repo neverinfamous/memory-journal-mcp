@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { handleCrossTeamSearch, resetCrossTeamCacheForTests, CrossTeamSearchSchema } from '../../src/handlers/tools/search/cross-team.js'
 import type { ToolContext } from '../../src/types/index.js'
-import { ConfigurationError } from '../../src/types/errors.js'
+import { ConfigurationError, ValidationError } from '../../src/types/errors.js'
 import { DatabaseAdapterFactory } from '../../src/database/adapter-factory.js'
 
 // Mock the DatabaseAdapterFactory
@@ -52,15 +52,13 @@ describe('Cross-Team Search Handler', () => {
         ).rejects.toThrow(ConfigurationError)
     })
 
-    it('returns degraded result if requested team DB is not configured', async () => {
-        const result = await handleCrossTeamSearch(
-            CrossTeamSearchSchema.parse({ query: 'test', team_dbs: ['nonexistent'], limit: 10 }),
-            mockContext
-        )
-        expect(result.success).toBe(true)
-        expect(result.entries).toHaveLength(0)
-        expect(result.degraded).toBe(true)
-        expect(result.errors?.[0]?.error).toContain('None of the requested team DBs')
+    it('throws ValidationError if requested team DB is not configured', async () => {
+        await expect(
+            handleCrossTeamSearch(
+                CrossTeamSearchSchema.parse({ query: 'test', team_dbs: ['nonexistent'], limit: 10 }),
+                mockContext
+            )
+        ).rejects.toThrow(ValidationError)
     })
 
     it('searches all configured DBs and merges results', async () => {
