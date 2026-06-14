@@ -63,7 +63,18 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             title: 'Add Entry to Vector Index',
             description: 'Add a specific entry to the semantic search vector index',
             group: 'admin',
-            inputSchema: z.object({ entry_id: relaxedNumber().optional() }),
+            inputSchema: z.preprocess(
+                (val: unknown) => {
+                    if (typeof val === 'object' && val !== null) {
+                        const obj = val as Record<string, unknown>;
+                        if ('id' in obj && !('entry_id' in obj)) {
+                            return { ...obj, entry_id: obj['id'] };
+                        }
+                    }
+                    return val;
+                },
+                z.object({ entry_id: relaxedNumber().optional() })
+            ),
             outputSchema: AddToVectorIndexOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -73,7 +84,18 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const { entry_id } = z.object({ entry_id: z.number() }).parse(params)
+                    const { entry_id } = z.preprocess(
+                        (val: unknown) => {
+                            if (typeof val === 'object' && val !== null) {
+                                const obj = val as Record<string, unknown>;
+                                if ('id' in obj && !('entry_id' in obj)) {
+                                    return { ...obj, entry_id: obj['id'] };
+                                }
+                            }
+                            return val;
+                        },
+                        z.object({ entry_id: z.number() })
+                    ).parse(params)
                     if (!vectorManager) {
                         return {
                             success: false,

@@ -147,7 +147,18 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'Restore Entry',
             description: 'Restore a soft-deleted journal entry.',
             group: 'admin',
-            inputSchema: z.object({ entry_id: relaxedNumber().optional() }),
+            inputSchema: z.preprocess(
+                (val: unknown) => {
+                    if (typeof val === 'object' && val !== null) {
+                        const obj = val as Record<string, unknown>;
+                        if ('id' in obj && !('entry_id' in obj)) {
+                            return { ...obj, entry_id: obj['id'] };
+                        }
+                    }
+                    return val;
+                },
+                z.object({ entry_id: relaxedNumber().optional() })
+            ),
             outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: false,
@@ -157,7 +168,18 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { entry_id } = z.object({ entry_id: z.number() }).parse(params)
+                    const { entry_id } = z.preprocess(
+                        (val: unknown) => {
+                            if (typeof val === 'object' && val !== null) {
+                                const obj = val as Record<string, unknown>;
+                                if ('id' in obj && !('entry_id' in obj)) {
+                                    return { ...obj, entry_id: obj['id'] };
+                                }
+                            }
+                            return val;
+                        },
+                        z.object({ entry_id: z.number() })
+                    ).parse(params)
                     const success = db.restoreEntry(entry_id)
                     if (!success) {
                         return {

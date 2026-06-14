@@ -195,6 +195,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 const newObj: Record<string, unknown> = {}
                                 for (const [k, v] of Object.entries(obj)) {
                                     const snakeKey = k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+                                    if (snakeKey === 'id' && !('entry_id' in obj)) {
+                                        newObj['entry_id'] = deepCamelToSnake(v)
+                                    }
+                                    if (snakeKey === 'ids' && !('entry_ids' in obj)) {
+                                        newObj['entry_ids'] = deepCamelToSnake(v)
+                                    }
                                     newObj[snakeKey] = deepCamelToSnake(v)
                                 }
                                 return newObj
