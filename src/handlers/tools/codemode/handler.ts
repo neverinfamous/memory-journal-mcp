@@ -3,6 +3,7 @@ import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
+import { injectProjectNames } from '../index.js'
 
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
 import { ConfigurationError } from '../../../types/errors.js'
@@ -331,6 +332,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                         // Execute the underlying handler directly
                         const result = await tool.handler(finalParams)
+                        injectProjectNames(result, sessionContext.config?.projectRegistry)
                         return result
                     }
 

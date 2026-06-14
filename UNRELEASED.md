@@ -125,6 +125,7 @@
 - Intercepted array and primitive parameter hallucinations in the `worker-api-proxy` for Code Mode to automatically heal `delete_entry`, `restore_entry`, `add_to_vector_index`, and batch endpoints.
 - Fixed rigid `project_number` validations across `update_entry` and `update_entry_mcp` schemas to permit partial updates, and healed `text`-to-`content` property hallucinations globally.
 - Extended Code Mode array hallucination interceptors to `team_batch` functions.
+- Injected `projectName` dynamically into all API outputs recursively inside `callTool` and the Code Mode `secureDispatcher` to enrich tool results.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
