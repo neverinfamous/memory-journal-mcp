@@ -30,7 +30,6 @@ const PARAM_ALIASES: Record<string, string> = {
     user: 'target_user',
     assignee: 'target_user',
     msg: 'content',
-    message: 'content',
     repo_name: 'repo',
     version: 'expected_version',
     search: 'query',
