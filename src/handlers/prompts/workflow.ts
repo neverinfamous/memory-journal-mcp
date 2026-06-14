@@ -392,7 +392,7 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
 **Required Parameters:**
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain tags)
-- \`project_number\`: from your briefing context
+- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
 
 **Required Content Structure (use EXACTLY these section headers):**
 \`\`\`
@@ -459,7 +459,7 @@ ${markUntrustedContent(entrySummary)}`,
 **Required Parameters:**
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain tags)
-- \`project_number\`: from your briefing context
+- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
 - YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
 
 **Required Content Structure (use EXACTLY these section headers):**

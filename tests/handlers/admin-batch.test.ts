@@ -135,7 +135,7 @@ describe('Admin Batch Tool Handlers', () => {
 
     describe('batch_update_entries', () => {
         it('should return error if batch exceeds MAX_BATCH_SIZE', async () => {
-            const updates = Array(51).fill({ entry_id: 1, content: 'Too many' })
+            const updates = Array(51).fill({ entry_id: 1, project_number: 1, content: 'Too many' })
             const result = (await callTool(
                 'batch_update_entries',
                 { updates },
@@ -163,9 +163,9 @@ describe('Admin Batch Tool Handlers', () => {
             }
 
             const updates = [
-                { entry_id: createRes.entries[0].id, content: 'New 1' },
-                { entry_id: createRes.entries[1].id, content: 'New 2' },
-                { entry_id: 99999, content: 'Missing' }
+                { entry_id: createRes.entries[0].id, project_number: 1, content: 'New 1' },
+                { entry_id: createRes.entries[1].id, project_number: 1, content: 'New 2' },
+                { entry_id: 99999, project_number: 1, content: 'Missing' }
             ]
 
             const result = (await callTool(

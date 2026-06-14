@@ -23,7 +23,7 @@ import {
 } from './schemas.js'
 import { EntryOutputSchema } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { ValidationError } from '../../../types/index.js'
+
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
     const { db, progress } = context
@@ -37,7 +37,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 'using ## section headers. For session summaries, use entry_type "retrospective" ' +
                 'with tag "session-summary" and structure content as: ' +
                 '## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
-                'Always provide project_number.',
+                'REQUIRED: You MUST include project_number. Extract this from the Workspaces section of your session briefing.',
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
@@ -51,17 +51,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
-                    const effectiveProjectNumber = input.project_number ?? context.config?.defaultProjectNumber
-                    if (effectiveProjectNumber === undefined) {
-                        throw new ValidationError("Missing project_number. You MUST include it. Please retry your tool call. You can find the correct project_number in your Briefing under the Workspaces section (e.g., 'adamic (#16)' means project_number: 16).")
-                    }
 
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
 
                     const resolvedIssueUrl = await resolveIssueUrl(
                         context,
-                        effectiveProjectNumber,
+                        input.project_number,
                         input.issue_number,
                         input.issue_url
                     )
@@ -72,7 +68,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         significanceType: input.significance_type,
-                        projectNumber: effectiveProjectNumber,
+                        projectNumber: input.project_number,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: resolvedIssueUrl,
@@ -140,7 +136,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 tags: input.tags,
                                 isPersonal: false,
                                 significanceType: input.significance_type,
-                                projectNumber: effectiveProjectNumber,
+                                projectNumber: input.project_number,
                                 projectOwner: input.project_owner,
                                 issueNumber: input.issue_number,
                                 issueUrl: input.issue_url,

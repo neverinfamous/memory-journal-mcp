@@ -119,7 +119,7 @@ describe('Targeted Gap Closure — Batch 2', () => {
         it('update_entry should return not found for invalid ID', async () => {
             const result = (await callTool(
                 'update_entry',
-                { entry_id: 99999, content: 'Updated content' },
+                { entry_id: 99999, project_number: 1, content: 'Updated content' },
                 db
             )) as { success: boolean; error: string }
 

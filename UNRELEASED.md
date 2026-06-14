@@ -24,6 +24,7 @@
 - Context bloat warning during initialization when registering >50 tools without filters.
 - Auto-population of `issue_url` and `pr_url` in Code Mode proxy when GitHub context is available.
 - `test-sdk-boundaries.mjs` integration test script to validate strict MCP SDK boundaries.
+- `scripts/README.md` containing an agent-optimized script inventory and execution guidelines.
 
 ### Changed
 - Updated `mj-mcp-optimize` developer skill document to focus on anti-hallucination guardrails and native optimization.
@@ -41,11 +42,14 @@
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
 - Relaxed the Code Mode `context` schema to allow non-object values without validation failures.
 - Promoted parameter normalization and coercion to the top-level SDK proxy to prevent validation failures from hallucinated keys.
+- Converted `scripts/check-orphans.ts` to a portable, zero-configuration `scripts/check-orphans.mjs` Node script.
 
 ### Removed
 - `pnpm` configuration block from `package.json` to eliminate startup warnings.
 
 ### Fixed
+- Zod validation errors in test suite caused by strict enforcement of `project_number`.
+- Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation.
 - `_execute_raw_query_unsafe` returning validation errors in the MCP client.
 - Native MCP tools failing to auto-resolve hallucinated repository or project string parameters.
 - Code Mode sandbox explicitly exposing `setTimeout` and `getConfig` globals.

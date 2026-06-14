@@ -99,6 +99,7 @@ describe('Optimistic Locking Handlers', () => {
                 'update_entry',
                 {
                     entry_id: entryId,
+                    project_number: 1,
                     expected_version: v1,
                     content: 'v2',
                 },
@@ -124,6 +125,7 @@ describe('Optimistic Locking Handlers', () => {
                 'update_entry',
                 {
                     entry_id: entryId,
+                    project_number: 1,
                     expected_version: v1,
                     content: 'v2',
                 },
@@ -137,6 +139,7 @@ describe('Optimistic Locking Handlers', () => {
                 'update_entry',
                 {
                     entry_id: entryId,
+                    project_number: 1,
                     expected_version: v1,
                     content: 'v3 (conflict)',
                 },
@@ -213,14 +216,14 @@ describe('Optimistic Locking Handlers', () => {
             const c2 = (await callTool('create_entry', { content: 'b2', project_number: 1 }, personalDb)) as any
 
             // Update c2 independently
-            await callTool('update_entry', { entry_id: c2.entry.id, content: 'b2 updated' }, personalDb)
+            await callTool('update_entry', { entry_id: c2.entry.id, project_number: 1, content: 'b2 updated' }, personalDb)
 
             const batchUpdate = (await callTool(
                 'batch_update_entries',
                 {
                     updates: [
-                        { entry_id: c1.entry.id, expected_version: c1.entry.version, content: 'b1 new' },
-                        { entry_id: c2.entry.id, expected_version: c2.entry.version, content: 'b2 new (stale)' },
+                        { entry_id: c1.entry.id, project_number: 1, expected_version: c1.entry.version, content: 'b1 new' },
+                        { entry_id: c2.entry.id, project_number: 1, expected_version: c2.entry.version, content: 'b2 new (stale)' },
                     ],
                 },
                 personalDb

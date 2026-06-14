@@ -353,7 +353,7 @@ describe('Tool Handlers', () => {
 
             const result = (await callTool(
                 'update_entry',
-                { entry_id: created.entry.id, content: 'Updated content' },
+                { entry_id: created.entry.id, project_number: 1, content: 'Updated content' },
                 db
             )) as { success: boolean; entry: { content: string } }
 
@@ -420,20 +420,20 @@ describe('Tool Handlers', () => {
         it('should clear a metadata field when null is passed', async () => {
             const created = (await callTool(
                 'create_entry',
-                { content: 'Clear test', project_number: 99 },
+                { content: 'Clear test', project_number: 99, issue_number: 123 },
                 db
-            )) as { entry: { id: number; projectNumber: number } }
+            )) as { entry: { id: number; projectNumber: number; issueNumber: number | null } }
 
-            expect(created.entry.projectNumber).toBe(99)
+            expect(created.entry.issueNumber).toBe(123)
 
             const result = (await callTool(
                 'update_entry',
-                { entry_id: created.entry.id, project_number: null },
+                { entry_id: created.entry.id, project_number: 99, issue_number: null },
                 db
-            )) as { success: boolean; entry: { projectNumber: number | null } }
+            )) as { success: boolean; entry: { issueNumber: number | null } }
 
             expect(result.success).toBe(true)
-            expect(result.entry.projectNumber).toBeNull()
+            expect(result.entry.issueNumber).toBeNull()
         })
     })
 

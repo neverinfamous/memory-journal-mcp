@@ -55,7 +55,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
     test('should execute create_entry and get structured response', async () => {
         const response = await client.callTool({
             name: 'create_entry',
-            arguments: { content: 'Playwright e2e test entry' },
+            arguments: { project_number: 1, content: 'Playwright e2e test entry' },
         })
 
         expect(response.isError).toBeUndefined()

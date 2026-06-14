@@ -40,7 +40,7 @@ export const TeamCreateEntrySchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: StrictProjectNumberSchema.optional(),
+    project_number: StrictProjectNumberSchema,
     project_owner: z.string().optional(),
     issue_number: z.number().optional(),
     issue_url: z.string().optional(),
@@ -69,7 +69,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
         'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
     ),
     significance_type: z.string().optional(),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
     project_owner: z.string().optional(),
     issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
@@ -215,7 +215,7 @@ export const TeamUpdateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: StrictProjectNumberSchema.optional(),
+    project_number: StrictProjectNumberSchema,
     significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
     project_owner: z.string().nullable().optional(),
     issue_number: z.number().nullable().optional(),
@@ -241,7 +241,7 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     ),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber().optional().nullable(),
+    project_number: relaxedNumber(),
     significance_type: z.string().nullable().optional(),
     project_owner: z.string().nullable().optional(),
     issue_number: relaxedNumber().nullable().optional(),
@@ -297,25 +297,25 @@ export const TeamMergeTagsSchemaMcp = z.object({
 export const TeamBatchCreateEntriesSchema = z.object({
     entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
     auto_index: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema.optional(),
+    project_number: StrictProjectNumberSchema,
 })
 
 export const TeamBatchCreateEntriesSchemaMcp = z.object({
     entries: z.array(TeamCreateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
 })
 
 export const TeamBatchUpdateEntriesSchema = z.object({
     updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
     auto_index: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema.optional(),
+    project_number: StrictProjectNumberSchema,
 })
 
 export const TeamBatchUpdateEntriesSchemaMcp = z.object({
     updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
 })
 
 export const TeamBatchDeleteEntriesSchema = z.object({

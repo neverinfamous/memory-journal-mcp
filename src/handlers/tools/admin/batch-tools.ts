@@ -20,7 +20,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'batch_create_entries',
             title: 'Batch Create Entries',
-            description: 'Create multiple journal entries at once. Max 50 per batch. Use this for imports or bulk creation.',
+            description: 'Create multiple journal entries at once. Max 50 per batch. Use this for imports or bulk creation. REQUIRED: You MUST include project_number. Extract this from the Workspaces section of your session briefing.',
             group: 'admin',
             inputSchema: BatchCreateEntriesSchemaMcp,
             outputSchema: BatchCreateEntriesOutputSchema,
@@ -35,20 +35,6 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     const input = BatchCreateEntriesSchema.parse(params)
                     await sendProgress(progress, 0, 2, 'Creating entries...')
 
-                    // Validate all entries first
-                    for (const e of input.entries) {
-                        const projectNumber = e.project_number
-                        if (projectNumber === undefined || projectNumber === null) {
-                            return {
-                                success: false,
-                                error: 'Missing project_number. Each entry in the batch MUST provide a valid project_number or configure DEFAULT_PROJECT_NUMBER on the server.',
-                                code: 'VALIDATION_ERROR',
-                                category: 'validation',
-                                suggestion: 'Specify the project_number for all entries in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                                recoverable: true,
-                            }
-                        }
-                    }
 
                     const { created: results, errors } = db.createEntries(input.entries.map((e) => ({
                         content: e.content,
@@ -109,7 +95,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'batch_update_entries',
             title: 'Batch Update Entries',
-            description: 'Update multiple existing journal entries in a single transaction. Max 50 per batch.',
+            description: 'Update multiple existing journal entries in a single transaction. Max 50 per batch. REQUIRED: You MUST include project_number. Extract this from the Workspaces section of your session briefing.',
             group: 'admin',
             inputSchema: BatchUpdateEntriesSchemaMcp,
             outputSchema: BatchUpdateEntriesOutputSchema,

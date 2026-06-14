@@ -100,7 +100,7 @@ describe('Tool Handler Coverage', () => {
         it('should return error for nonexistent entry', async () => {
             const result = (await callTool(
                 'update_entry',
-                { entry_id: 99999, content: 'Updated' },
+                { entry_id: 99999, project_number: 1, content: 'Updated' },
                 db
             )) as { success: boolean; error: string }
 
@@ -114,7 +114,7 @@ describe('Tool Handler Coverage', () => {
 
             const result = (await callTool(
                 'update_entry',
-                { entry_id: entry.id, content: 'Updated content with vector' },
+                { entry_id: entry.id, project_number: 1, content: 'Updated content with vector' },
                 db,
                 vectorManager
             )) as { success: boolean; entry: { content: string } }
@@ -129,7 +129,7 @@ describe('Tool Handler Coverage', () => {
             const entry = db.createEntry({ content: 'For invalid type test' })
             const result = (await callTool(
                 'update_entry',
-                { entry_id: entry.id, entry_type: 'completely_invalid_type' },
+                { entry_id: entry.id, project_number: 1, entry_type: 'completely_invalid_type' },
                 db
             )) as { error: string }
 
