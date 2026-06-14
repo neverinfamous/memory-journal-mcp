@@ -88,7 +88,7 @@ node test-server/scripts/test-subscribe.mjs
 # Term 2: Invoke-RestMethod -Uri http://localhost:3100/metrics | Select-String "mcp_tool_calls_total"
 
 # Test J — Metrics Persistence
-# Term 1: node test-server/scripts/test-metrics-persistence.mjs
+# Term 1: npx tsx test-server/scripts/test-metrics-persistence.mjs
 
 # Test K — Config Dump & Validation
 node test-server/scripts/test-dump-config.mjs
