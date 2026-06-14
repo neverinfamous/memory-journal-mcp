@@ -94,7 +94,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         input.entry_type !== undefined ||
                         input.start_date !== undefined ||
                         input.end_date !== undefined ||
-                        input.project_number !== undefined
+                        input.project_number !== undefined ||
+                        input.issue_number !== undefined ||
+                        input.pr_number !== undefined ||
+                        input.workflow_run_id !== undefined
 
                     const internalLimit = hasFilters
                         ? Math.min(Math.max(input.limit * 10, 100), 1000)
@@ -149,6 +152,9 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                                         entryType: input.entry_type,
                                         startDate: input.start_date,
                                         endDate: input.end_date,
+                                        issueNumber: input.issue_number,
+                                        prNumber: input.pr_number,
+                                        workflowRunId: input.workflow_run_id,
                                     },
                                     teamDb
                                 )

@@ -640,6 +640,9 @@ export const TeamSemanticSearchSchema = z.object({
         .default(true)
         .describe('Include hint when no results found (default: true)'),
     project_number: StrictProjectNumberSchema,
+    issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
+    pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
+    workflow_run_id: z.number().optional().describe('Filter results by GitHub Actions workflow run ID'),
     include_archived: z.boolean().optional().default(false),
 })
 
@@ -659,6 +662,9 @@ export const TeamSemanticSearchSchemaMcp = z.object({
         .default(true)
         .describe('Include hint when no results found (default: true)'),
     project_number: relaxedNumber().optional(),
+    issue_number: relaxedNumber().optional().describe('Filter results by GitHub issue number'),
+    pr_number: relaxedNumber().optional().describe('Filter results by GitHub PR number'),
+    workflow_run_id: relaxedNumber().optional().describe('Filter results by GitHub Actions workflow run ID'),
     include_archived: z.boolean().optional().default(false),
 })
 

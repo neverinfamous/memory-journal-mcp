@@ -62,7 +62,11 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         input.tags !== undefined ||
                         input.entry_type !== undefined ||
                         input.start_date !== undefined ||
-                        input.end_date !== undefined
+                        input.end_date !== undefined ||
+                        input.project_number !== undefined ||
+                        input.issue_number !== undefined ||
+                        input.pr_number !== undefined ||
+                        input.workflow_run_id !== undefined
 
                     const internalLimit = hasFilters
                         ? Math.min(Math.max(input.limit * 10, 100), 1000)
@@ -92,6 +96,10 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                     // Pre-hydrate tags to avoid N+1 queries during metadata filtering
                     const filterOptions = {
                         isPersonal: input.is_personal,
+                        projectNumber: input.project_number,
+                        issueNumber: input.issue_number,
+                        prNumber: input.pr_number,
+                        workflowRunId: input.workflow_run_id,
                         tags: input.tags,
                         entryType: input.entry_type,
                         startDate: input.start_date,
