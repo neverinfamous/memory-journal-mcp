@@ -1,4 +1,4 @@
-# Usability & Hallucination Test: Core
+# memory-journal-mcp Usability & Hallucination Test: Core
 
 > **This test is optimized for an autonomous agent.**
 
@@ -10,6 +10,7 @@ Use the `mj_execute_code` tool to interact with the following tools in the `core
 `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `test_error_handling`, `trigger_progress`
 
 **Instructions:**
+
 - Do not perfectly structure your initial calls. Act intuitively as an agent.
 - Try natural, ambiguous scripting (e.g., guessing property names, forgetting `await`, assuming incorrect return types like arrays instead of objects).
 - Do not try to bypass the sandbox, simply test the API surface.
@@ -18,6 +19,7 @@ Use the `mj_execute_code` tool to interact with the following tools in the `core
 ## 2. Heal Phase
 
 If you encounter any failures, errors, or hallucinations:
+
 1. STOP. Do not just work around the issue in your script.
 2. Read the hardening guidelines in `skills/mj-mcp-optimize/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/core/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
@@ -29,6 +31,7 @@ If you made any codebase changes in the Heal Phase, the changes will not take ef
 **You cannot restart the server yourself.**
 
 Output the following message to the user:
+
 > "Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."
 
 **DO NOT PROCEED** to the verification phase until the user confirms the server has been refreshed.
@@ -36,6 +39,7 @@ Output the following message to the user:
 ## 4. Verification & Commit
 
 Once the server is refreshed (or if no codebase changes were needed):
+
 1. Re-run your Code Mode script to verify that the guardrail successfully intercepts the hallucination and provides actionable feedback (or seamlessly heals it).
 2. If successful, run `git add .` and `git commit -m "Optimize core tool usage"` to save your changes locally.
 3. Conclude the test and report your findings.

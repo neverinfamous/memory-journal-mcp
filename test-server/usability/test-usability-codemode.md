@@ -1,4 +1,4 @@
-# Usability & Hallucination Test: Code Mode Mechanics
+# memory-journal-mcp Usability & Hallucination Test: Code Mode Mechanics
 
 > **This test is optimized for an autonomous agent.**
 
@@ -7,6 +7,7 @@ This prompt instructs you to organically test the core sandboxing and execution 
 ## 1. Fuzz Phase
 
 Focus purely on the mechanics of Code Mode itself, ignoring specific tool data. Try to:
+
 - Access `Promise` objects synchronously (forgetting `await`).
 - Try to call raw resources instead of tools (e.g. `await mj.core.getBriefing()`).
 - Test standard Javascript array methods like `.map()` or `.filter()` on what you intuitively assume is an array.
@@ -15,6 +16,7 @@ Focus purely on the mechanics of Code Mode itself, ignoring specific tool data. 
 ## 2. Heal Phase
 
 If you encounter confusing V8 errors or unhandled edge cases instead of actionable errors:
+
 1. STOP. Do not just work around the issue.
 2. Read the hardening guidelines in `skills/mj-mcp-optimize/SKILL.md`.
 3. Modify `src/codemode/worker-api-proxy.ts`, `worker-result-proxy.ts`, or the main dispatcher.
@@ -25,6 +27,7 @@ If you encounter confusing V8 errors or unhandled edge cases instead of actionab
 If you made any codebase changes, the server must be restarted. **You cannot restart it.**
 
 Output the following message to the user:
+
 > "Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."
 
 **DO NOT PROCEED** until the user confirms the server has been refreshed.
@@ -32,6 +35,7 @@ Output the following message to the user:
 ## 4. Verification & Commit
 
 Once the server is refreshed:
+
 1. Re-run your Code Mode script to verify the fix works.
 2. If successful, run `git add .` and `git commit -m "Optimize codemode mechanics"`.
 3. Report your findings.
