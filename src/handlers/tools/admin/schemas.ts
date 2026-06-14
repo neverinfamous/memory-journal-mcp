@@ -17,13 +17,19 @@ import { CreateEntrySchema, CreateEntrySchemaMcp } from '../core/index.js'
 export const UpdateEntrySchema = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
-                return { ...obj, entry_id: obj['id'] };
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
             }
             if ('text' in obj && !('content' in obj)) {
-                return { ...obj, content: obj['text'] };
+                obj['content'] = obj['text'];
+                delete obj['text'];
+                modified = true;
             }
+            return modified ? obj : val;
         }
         return val;
     },
@@ -53,13 +59,19 @@ export const UpdateEntrySchema = z.preprocess(
 export const UpdateEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
-                return { ...obj, entry_id: obj['id'] };
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
             }
             if ('text' in obj && !('content' in obj)) {
-                return { ...obj, content: obj['text'] };
+                obj['content'] = obj['text'];
+                delete obj['text'];
+                modified = true;
             }
+            return modified ? obj : val;
         }
         return val;
     },
@@ -93,9 +105,11 @@ export const UpdateEntrySchemaMcp = z.preprocess(
 export const DeleteEntrySchema = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
             if ('id' in obj && !('entry_id' in obj)) {
-                return { ...obj, entry_id: obj['id'] };
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                return obj;
             }
         }
         return val;
@@ -111,9 +125,11 @@ export const DeleteEntrySchema = z.preprocess(
 export const DeleteEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
             if ('id' in obj && !('entry_id' in obj)) {
-                return { ...obj, entry_id: obj['id'] };
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                return obj;
             }
         }
         return val;
@@ -138,23 +154,27 @@ export const BatchCreateEntriesSchemaMcp = z.object({
 export const BatchUpdateEntriesSchema = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
             let updatesArr = obj['updates'];
             if (updatesArr === undefined && Array.isArray(obj['items'])) {
                 updatesArr = obj['items'];
                 obj['updates'] = updatesArr;
+                delete obj['items'];
             }
             if (updatesArr === undefined && Array.isArray(obj['entries'])) {
                 updatesArr = obj['entries'];
                 obj['updates'] = updatesArr;
+                delete obj['entries'];
             }
             if (Array.isArray(updatesArr)) {
                 const newUpdates = updatesArr.map((u: unknown) => {
                     if (typeof u === 'object' && u !== null) {
-                        const uObj = u as Record<string, unknown>;
+                        const uObj = { ...(u as Record<string, unknown>) };
                         if ('id' in uObj && !('entry_id' in uObj)) {
-                            return { ...uObj, entry_id: uObj['id'] };
+                            uObj['entry_id'] = uObj['id'];
+                            delete uObj['id'];
                         }
+                        return uObj;
                     }
                     return u;
                 });
@@ -173,23 +193,27 @@ export const BatchUpdateEntriesSchema = z.preprocess(
 export const BatchUpdateEntriesSchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
             let updatesArr = obj['updates'];
             if (updatesArr === undefined && Array.isArray(obj['items'])) {
                 updatesArr = obj['items'];
                 obj['updates'] = updatesArr;
+                delete obj['items'];
             }
             if (updatesArr === undefined && Array.isArray(obj['entries'])) {
                 updatesArr = obj['entries'];
                 obj['updates'] = updatesArr;
+                delete obj['entries'];
             }
             if (Array.isArray(updatesArr)) {
                 const newUpdates = updatesArr.map((u: unknown) => {
                     if (typeof u === 'object' && u !== null) {
-                        const uObj = u as Record<string, unknown>;
+                        const uObj = { ...(u as Record<string, unknown>) };
                         if ('id' in uObj && !('entry_id' in uObj)) {
-                            return { ...uObj, entry_id: uObj['id'] };
+                            uObj['entry_id'] = uObj['id'];
+                            delete uObj['id'];
                         }
+                        return uObj;
                     }
                     return u;
                 });
@@ -207,13 +231,19 @@ export const BatchUpdateEntriesSchemaMcp = z.preprocess(
 export const BatchDeleteEntriesSchema = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
             if ('ids' in obj && !('entry_ids' in obj)) {
-                return { ...obj, entry_ids: obj['ids'] };
+                obj['entry_ids'] = obj['ids'];
+                delete obj['ids'];
+                modified = true;
             }
             if ('id' in obj && !('entry_ids' in obj)) {
-                return { ...obj, entry_ids: Array.isArray(obj['id']) ? obj['id'] : [obj['id']] };
+                obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
+                delete obj['id'];
+                modified = true;
             }
+            return modified ? obj : val;
         }
         return val;
     },
@@ -227,13 +257,19 @@ export const BatchDeleteEntriesSchema = z.preprocess(
 export const BatchDeleteEntriesSchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
             if ('ids' in obj && !('entry_ids' in obj)) {
-                return { ...obj, entry_ids: obj['ids'] };
+                obj['entry_ids'] = obj['ids'];
+                delete obj['ids'];
+                modified = true;
             }
             if ('id' in obj && !('entry_ids' in obj)) {
-                return { ...obj, entry_ids: Array.isArray(obj['id']) ? obj['id'] : [obj['id']] };
+                obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
+                delete obj['id'];
+                modified = true;
             }
+            return modified ? obj : val;
         }
         return val;
     },

@@ -67,9 +67,11 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.preprocess(
                 (val: unknown) => {
                     if (typeof val === 'object' && val !== null) {
-                        const obj = val as Record<string, unknown>;
+                        const obj = { ...(val as Record<string, unknown>) };
                         if ('id' in obj && !('entry_id' in obj)) {
-                            return { ...obj, entry_id: obj['id'] };
+                            obj['entry_id'] = obj['id'];
+                            delete obj['id'];
+                            return obj;
                         }
                     }
                     return val;
@@ -88,9 +90,11 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                     const { entry_id } = z.preprocess(
                         (val: unknown) => {
                             if (typeof val === 'object' && val !== null) {
-                                const obj = val as Record<string, unknown>;
+                                const obj = { ...(val as Record<string, unknown>) };
                                 if ('id' in obj && !('entry_id' in obj)) {
-                                    return { ...obj, entry_id: obj['id'] };
+                                    obj['entry_id'] = obj['id'];
+                                    delete obj['id'];
+                                    return obj;
                                 }
                             }
                             return val;

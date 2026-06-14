@@ -136,6 +136,7 @@
 - Fixed TypeScript compilation errors caused by `relaxedNumber` returning a union type in strict internal schemas by reverting to `z.number()` and moving string-to-number coercion into Code Mode's `param-normalizer`.
 - Resolved `[VALIDATION_ERROR] Unrecognized key: "project_number"` in Code Mode batch endpoints by adding `project_number: z.number().int().optional()` to strict internal admin schemas.
 - Healed the `title` property hallucination for `update_entry` and the `msg` property alias by automatically mapping them to `content` within the Code Mode parameter normalizer.
+- Healed `id`/`ids` to `entry_id`/`entry_ids` parameter hallucinations across all strict internal Team schemas using `z.preprocess`, matching the admin hardening pass to prevent `Unrecognized key` validation failures in Code Mode.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

@@ -210,75 +210,167 @@ export const TeamSearchByDateRangeSchemaMcp = z.object({
 // ============================================================================
 
 /** team_update_entry — strict */
-export const TeamUpdateEntrySchema = z.object({
-    entry_id: z.number(),
-    content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
-    entry_type: z.enum(ENTRY_TYPES).optional(),
-    tags: z.array(z.string()).optional(),
-    project_number: StrictProjectNumberSchema,
-    significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
-    project_owner: z.string().nullable().optional(),
-    issue_number: z.number().nullable().optional(),
-    issue_url: z.string().nullable().optional(),
-    pr_number: z.number().nullable().optional(),
-    pr_url: z.string().nullable().optional(),
-    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
-    workflow_run_id: z.number().nullable().optional(),
-    workflow_name: z.string().nullable().optional(),
-    workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
-    is_archived: z.boolean().optional(),
-    expected_version: z.number().optional(),
-})
+export const TeamUpdateEntrySchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('id' in obj && !('entry_id' in obj)) {
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
+            }
+            if ('text' in obj && !('content' in obj)) {
+                obj['content'] = obj['text'];
+                delete obj['text'];
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
+        entry_id: z.number(),
+        content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
+        entry_type: z.enum(ENTRY_TYPES).optional(),
+        tags: z.array(z.string()).optional(),
+        project_number: StrictProjectNumberSchema,
+        significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
+        project_owner: z.string().nullable().optional(),
+        issue_number: z.number().nullable().optional(),
+        issue_url: z.string().nullable().optional(),
+        pr_number: z.number().nullable().optional(),
+        pr_url: z.string().nullable().optional(),
+        pr_status: z.enum(['draft', 'open', 'merged', 'closed']).nullable().optional(),
+        workflow_run_id: z.number().nullable().optional(),
+        workflow_name: z.string().nullable().optional(),
+        workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
+        is_archived: z.boolean().optional(),
+        expected_version: z.number().optional(),
+    }).strict()
+)
 
 /** team_update_entry — relaxed */
-export const TeamUpdateEntrySchemaMcp = z.object({
-    entry_id: relaxedNumber().optional(),
-    content: z.string().optional().describe(
-        'Updated markdown content. Preserve the existing ## section header structure. ' +
-        'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
-        '## Context for Next Session structure intact. ' +
-        'Do NOT restructure or add new top-level sections unless explicitly requested.'
-    ),
-    entry_type: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber(),
-    significance_type: z.string().nullable().optional(),
-    project_owner: z.string().nullable().optional(),
-    issue_number: relaxedNumber().nullable().optional(),
-    issue_url: z.string().nullable().optional(),
-    pr_number: relaxedNumber().nullable().optional(),
-    pr_url: z.string().nullable().optional(),
-    pr_status: z.string().nullable().optional(),
-    workflow_run_id: relaxedNumber().nullable().optional(),
-    workflow_name: z.string().nullable().optional(),
-    workflow_status: z.string().nullable().optional(),
-    is_archived: z.boolean().optional(),
-    expected_version: relaxedNumber().optional(),
-})
+export const TeamUpdateEntrySchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('id' in obj && !('entry_id' in obj)) {
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
+            }
+            if ('text' in obj && !('content' in obj)) {
+                obj['content'] = obj['text'];
+                delete obj['text'];
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
+        entry_id: relaxedNumber().optional(),
+        content: z.string().optional().describe(
+            'Updated markdown content. Preserve the existing ## section header structure. ' +
+            'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
+            '## Context for Next Session structure intact. ' +
+            'Do NOT restructure or add new top-level sections unless explicitly requested.'
+        ),
+        entry_type: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        project_number: relaxedNumber(),
+        significance_type: z.string().nullable().optional(),
+        project_owner: z.string().nullable().optional(),
+        issue_number: relaxedNumber().nullable().optional(),
+        issue_url: z.string().nullable().optional(),
+        pr_number: relaxedNumber().nullable().optional(),
+        pr_url: z.string().nullable().optional(),
+        pr_status: z.string().nullable().optional(),
+        workflow_run_id: relaxedNumber().nullable().optional(),
+        workflow_name: z.string().nullable().optional(),
+        workflow_status: z.string().nullable().optional(),
+        is_archived: z.boolean().optional(),
+        expected_version: relaxedNumber().optional(),
+    }).strict()
+)
 
 /** team_delete_entry — strict */
-export const TeamDeleteEntrySchema = z.object({
-    entry_id: z.number(),
-    project_number: StrictProjectNumberSchema.optional(),
-})
+export const TeamDeleteEntrySchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            if ('id' in obj && !('entry_id' in obj)) {
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                return obj;
+            }
+        }
+        return val;
+    },
+    z.object({
+        entry_id: z.number(),
+        project_number: StrictProjectNumberSchema.optional(),
+    }).strict()
+)
 
 /** team_delete_entry — relaxed */
-export const TeamDeleteEntrySchemaMcp = z.object({
-    entry_id: relaxedNumber().optional(),
-    project_number: relaxedNumber().optional(),
-})
+export const TeamDeleteEntrySchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            if ('id' in obj && !('entry_id' in obj)) {
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                return obj;
+            }
+        }
+        return val;
+    },
+    z.object({
+        entry_id: relaxedNumber().optional(),
+        project_number: relaxedNumber().optional(),
+    }).strict()
+)
 
 /** team_restore_entry — strict */
-export const TeamRestoreEntrySchema = z.object({
-    entry_id: z.number(),
-    project_number: StrictProjectNumberSchema.optional(),
-})
+export const TeamRestoreEntrySchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            if ('id' in obj && !('entry_id' in obj)) {
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                return obj;
+            }
+        }
+        return val;
+    },
+    z.object({
+        entry_id: z.number(),
+        project_number: StrictProjectNumberSchema.optional(),
+    }).strict()
+)
 
 /** team_restore_entry — relaxed */
-export const TeamRestoreEntrySchemaMcp = z.object({
-    entry_id: relaxedNumber().optional(),
-    project_number: relaxedNumber().optional(),
-})
+export const TeamRestoreEntrySchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            if ('id' in obj && !('entry_id' in obj)) {
+                obj['entry_id'] = obj['id'];
+                delete obj['id'];
+                return obj;
+            }
+        }
+        return val;
+    },
+    z.object({
+        entry_id: relaxedNumber().optional(),
+        project_number: relaxedNumber().optional(),
+    }).strict()
+)
 
 /** team_merge_tags — strict */
 export const TeamMergeTagsSchema = z.object({
@@ -306,29 +398,135 @@ export const TeamBatchCreateEntriesSchemaMcp = z.object({
     project_number: relaxedNumber(),
 })
 
-export const TeamBatchUpdateEntriesSchema = z.object({
-    updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
-    auto_index: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema,
-})
+export const TeamBatchUpdateEntriesSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let updatesArr = obj['updates'];
+            if (updatesArr === undefined && Array.isArray(obj['items'])) {
+                updatesArr = obj['items'];
+                obj['updates'] = updatesArr;
+                delete obj['items'];
+            }
+            if (updatesArr === undefined && Array.isArray(obj['entries'])) {
+                updatesArr = obj['entries'];
+                obj['updates'] = updatesArr;
+                delete obj['entries'];
+            }
+            if (Array.isArray(updatesArr)) {
+                const newUpdates = updatesArr.map((u: unknown) => {
+                    if (typeof u === 'object' && u !== null) {
+                        const uObj = { ...(u as Record<string, unknown>) };
+                        if ('id' in uObj && !('entry_id' in uObj)) {
+                            uObj['entry_id'] = uObj['id'];
+                            delete uObj['id'];
+                        }
+                        return uObj;
+                    }
+                    return u;
+                });
+                return { ...obj, updates: newUpdates };
+            }
+        }
+        return val;
+    },
+    z.object({
+        updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+        auto_index: z.boolean().optional().default(true),
+        project_number: StrictProjectNumberSchema,
+    }).strict()
+)
 
-export const TeamBatchUpdateEntriesSchemaMcp = z.object({
-    updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
-    auto_index: z.boolean().optional().default(true),
-    project_number: relaxedNumber(),
-})
+export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let updatesArr = obj['updates'];
+            if (updatesArr === undefined && Array.isArray(obj['items'])) {
+                updatesArr = obj['items'];
+                obj['updates'] = updatesArr;
+                delete obj['items'];
+            }
+            if (updatesArr === undefined && Array.isArray(obj['entries'])) {
+                updatesArr = obj['entries'];
+                obj['updates'] = updatesArr;
+                delete obj['entries'];
+            }
+            if (Array.isArray(updatesArr)) {
+                const newUpdates = updatesArr.map((u: unknown) => {
+                    if (typeof u === 'object' && u !== null) {
+                        const uObj = { ...(u as Record<string, unknown>) };
+                        if ('id' in uObj && !('entry_id' in uObj)) {
+                            uObj['entry_id'] = uObj['id'];
+                            delete uObj['id'];
+                        }
+                        return uObj;
+                    }
+                    return u;
+                });
+                return { ...obj, updates: newUpdates };
+            }
+        }
+        return val;
+    },
+    z.object({
+        updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
+        auto_index: z.boolean().optional().default(true),
+        project_number: relaxedNumber(),
+    }).strict()
+)
 
-export const TeamBatchDeleteEntriesSchema = z.object({
-    entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
-    project_number: StrictProjectNumberSchema.optional(),
-    permanent: z.boolean().optional().default(false),
-})
+export const TeamBatchDeleteEntriesSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('ids' in obj && !('entry_ids' in obj)) {
+                obj['entry_ids'] = obj['ids'];
+                delete obj['ids'];
+                modified = true;
+            }
+            if ('id' in obj && !('entry_ids' in obj)) {
+                obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
+                delete obj['id'];
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
+        entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
+        project_number: StrictProjectNumberSchema.optional(),
+        permanent: z.boolean().optional().default(false),
+    }).strict()
+)
 
-export const TeamBatchDeleteEntriesSchemaMcp = z.object({
-    entry_ids: z.array(relaxedNumber()).optional(),
-    project_number: relaxedNumber().optional(),
-    permanent: z.boolean().optional().default(false),
-})
+export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('ids' in obj && !('entry_ids' in obj)) {
+                obj['entry_ids'] = obj['ids'];
+                delete obj['ids'];
+                modified = true;
+            }
+            if ('id' in obj && !('entry_ids' in obj)) {
+                obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
+                delete obj['id'];
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
+        entry_ids: z.array(relaxedNumber()).optional(),
+        project_number: relaxedNumber().optional(),
+        permanent: z.boolean().optional().default(false),
+    }).strict()
+)
 
 // ============================================================================
 // Analytics Tool Schemas
