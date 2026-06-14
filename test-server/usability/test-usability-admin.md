@@ -15,6 +15,7 @@ Use the `mj_execute_code` tool to interact with the following tools in the `admi
 - Try natural, ambiguous scripting (e.g., guessing property names, forgetting `await`, assuming incorrect return types like arrays instead of objects).
 - Explicitly test top-level flat tool calls (e.g., `mj.update_configuration(...)` instead of `mj.admin.update_configuration(...)`) to verify cross-group routing.
 - Explicitly test aliases across groups (e.g., `mj.config(...)`) to ensure proper resolution.
+- Explicitly test passing primitives (like `true` or `"string"`) to parameter-less functions (like `rebuild_vector_index`) to ensure the proxy correctly maps them to empty objects instead of causing Zod strict failures.
 - Do not try to bypass the sandbox, simply test the API surface.
 - Note any errors, exceptions, or unexpected behavior.
 

@@ -81,9 +81,14 @@ For Copilot-specific prompt templates, read
 [references/copilot-performance-prompts.md](references/copilot-performance-prompts.md).
 
 **Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
-is not available, skip Phase 4 gracefully and note the skip in the journal entry.
+fails (e.g., due to an empty quota allowance) or is not available, skip Phase 4 gracefully and proceed with the rest of the workflow.
 
 Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
+
+## Execution Rules
+
+1. **Continuous Prompt Improvement**: Whenever you see an opportunity to improve this skill's prompt or instructions, proactively update the prompt itself.
+2. **No Journal Entries**: Do NOT instruct the agent to create entries in `memory-journal-mcp`.
 
 ### Consolidated Report
 

@@ -220,9 +220,9 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
-    // rebuild_vector_index hallucination: passing a boolean instead of object
+    // rebuild_vector_index hallucination: passing a boolean or string instead of object
     if (methodName === 'rebuild_vector_index' || methodName === 'rebuildVectorIndex') {
-        if (args.length === 1 && typeof args[0] === 'boolean') {
+        if (args.length === 1 && (typeof args[0] === 'boolean' || typeof args[0] === 'string')) {
             args[0] = {};
         }
     }

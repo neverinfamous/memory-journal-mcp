@@ -38,8 +38,8 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { source_tag, target_tag } = z
                         .object({
-                            source_tag: z.string().min(1),
-                            target_tag: z.string().min(1),
+                            source_tag: z.preprocess((v) => String(v), z.string().min(1)),
+                            target_tag: z.preprocess((v) => String(v), z.string().min(1)),
                         }).strict()
                         .parse(params)
 

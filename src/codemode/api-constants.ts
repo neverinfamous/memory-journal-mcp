@@ -56,7 +56,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         listEntries: 'searchEntries',
         byDate: 'searchByDateRange',
         similar: 'semanticSearch',
-        stats: 'getVectorStats',
+        stats: 'getVectorIndexStats',
         deleted: 'listDeletedEntries',
         trash: 'listDeletedEntries',
         crossSearch: 'crossTeamSearch',
