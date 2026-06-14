@@ -235,6 +235,9 @@ export function buildApiProxy(
                 if (typeof prop === 'string' && prop !== 'constructor' && prop !== 'toString' && prop !== 'valueOf' && prop !== 'toJSON') {
                     throw new Error(`Attempted to access property '${prop}' on a Promise object. Did you forget to 'await' the tool call? (e.g. const result = await mj.group.${methodName}(...))`)
                 }
+                if (prop === Symbol.iterator) {
+                    throw new Error(`Attempted to iterate over a Promise object. Did you forget to 'await' the tool call? (e.g. const [item] = await mj.group.${methodName}(...))`)
+                }
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-return
                 return Reflect.get(target, prop)
             }
@@ -310,6 +313,12 @@ export function buildApiProxy(
                 if (key === 'getConfig') {
                     return () => Promise.reject(new Error(
                         "Code Mode cannot directly read configuration via getConfig(). Use mj.core.listProjects() to discover active projects, or updateConfiguration() to change settings."
+                    ))
+                }
+
+                if (key === 'getBriefing') {
+                    return () => Promise.reject(new Error(
+                        "Code Mode cannot directly read the briefing resource via getBriefing(). Use mj.core.getRecentEntries() instead, or read the memory://briefing resource via standard MCP client requests outside of Code Mode."
                     ))
                 }
 
