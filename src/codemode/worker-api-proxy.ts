@@ -213,7 +213,11 @@ export function buildApiProxy(
         if (group === '_topLevel') {
             for (const methodName of methodNames) {
                 const proxyFn = (...args: unknown[]): Promise<unknown> => {
-                    const resultPromise = rpcCall('_topLevel', methodName, args).then(wrapResult)
+                    const intercept = applyArgInterceptions(methodName, args)
+                    if ('error' in intercept) {
+                        return wrapPromise(Promise.resolve(wrapResult(intercept.error)), methodName)
+                    }
+                    const resultPromise = rpcCall('_topLevel', methodName, intercept.args).then(wrapResult)
                     return wrapPromise(resultPromise, methodName)
                 }
                 Object.assign(proxyFn, {
