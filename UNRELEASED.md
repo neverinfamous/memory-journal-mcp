@@ -132,6 +132,7 @@
 - Fixed an architectural sandbox bypass where top-level convenience methods (e.g., `delete_entry`, `update_entry`, `merge_tags`) skipped array/primitive parameter interception entirely due to missing handler wraps in `worker-api-proxy.js`.
 - Fortified Code Mode sandbox proxy interceptors to explicitly trap and reject array-of-strings hallucinations in `batch_delete_entries` and comma-separated tags in `merge_tags`, returning structured, actionable validation errors.
 - Added silent type coercion for hallucinated string `limit` inputs in `search_audit_log` within the Code Mode proxy.
+- Hardened all Admin tool Zod schemas (internal and external) with `.strict()` to perfectly intercept parameter hallucinations and return structured `[VALIDATION_ERROR]` objects, addressing an architectural blind spot where Code Mode's `secureDispatcher` directly invoked the handler.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
