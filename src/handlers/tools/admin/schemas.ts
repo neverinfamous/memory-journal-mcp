@@ -21,6 +21,9 @@ export const UpdateEntrySchema = z.preprocess(
             if ('id' in obj && !('entry_id' in obj)) {
                 return { ...obj, entry_id: obj['id'] };
             }
+            if ('text' in obj && !('content' in obj)) {
+                return { ...obj, content: obj['text'] };
+            }
         }
         return val;
     },
@@ -31,7 +34,7 @@ export const UpdateEntrySchema = z.preprocess(
         is_personal: z.boolean().optional(),
         tags: z.array(z.string()).optional(),
         significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
-        project_number: z.number().int(),
+        project_number: z.number().int().optional(),
         project_owner: z.string().nullable().optional(),
         issue_number: z.number().nullable().optional(),
         issue_url: z.string().nullable().optional(),
@@ -54,6 +57,9 @@ export const UpdateEntrySchemaMcp = z.preprocess(
             if ('id' in obj && !('entry_id' in obj)) {
                 return { ...obj, entry_id: obj['id'] };
             }
+            if ('text' in obj && !('content' in obj)) {
+                return { ...obj, content: obj['text'] };
+            }
         }
         return val;
     },
@@ -69,7 +75,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         is_personal: z.boolean().optional(),
         tags: z.array(z.string()).optional(),
         significance_type: z.string().nullable().optional(),
-        project_number: relaxedNumber(),
+        project_number: relaxedNumber().optional(),
         project_owner: z.string().nullable().optional(),
         issue_number: relaxedNumber().nullable().optional(),
         issue_url: z.string().nullable().optional(),

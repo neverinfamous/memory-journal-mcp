@@ -96,13 +96,18 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // batch_create_entries hallucination: passing array directly
+    if ((methodName === 'batch_create_entries' || methodName === 'batchCreateEntries' || methodName === 'team_batch_create_entries' || methodName === 'teamBatchCreateEntries') && args.length === 1 && Array.isArray(args[0])) {
+        args[0] = { entries: args[0] };
+    }
+
     // batch_update_entries hallucination: passing array directly
-    if ((methodName === 'batch_update_entries' || methodName === 'batchUpdateEntries') && args.length === 1 && Array.isArray(args[0])) {
+    if ((methodName === 'batch_update_entries' || methodName === 'batchUpdateEntries' || methodName === 'team_batch_update_entries' || methodName === 'teamBatchUpdateEntries') && args.length === 1 && Array.isArray(args[0])) {
         args[0] = { updates: args[0] };
     }
 
     // batch_delete_entries hallucination: passing comma-separated string or multiple args or direct array
-    if (methodName === 'batch_delete_entries' || methodName === 'batchDeleteEntries') {
+    if (methodName === 'batch_delete_entries' || methodName === 'batchDeleteEntries' || methodName === 'team_batch_delete_entries' || methodName === 'teamBatchDeleteEntries') {
         if (args.length === 1 && typeof args[0] === 'string') {
             const ids = args[0].split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
             args[0] = { entry_ids: ids };

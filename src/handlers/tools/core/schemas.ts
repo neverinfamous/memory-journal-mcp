@@ -11,59 +11,81 @@ const MAX_SEARCH_LIMIT = 500
 // Core Schemas
 // ============================================================================
 
-export const CreateEntrySchema = z.object({
-    entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-    content: z.string().min(1),
-    tags: z.array(z.string()).optional(),
-    is_personal: z.boolean().optional().default(true),
-    significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: z.number().int(),
-    project_owner: z.string().optional(),
-    issue_number: z.number().optional(),
-    issue_url: z.string().optional(),
-    pr_number: z.number().optional(),
-    pr_url: z.string().optional(),
-    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-    workflow_run_id: z.number().optional(),
-    workflow_name: z.string().optional(),
-    workflow_status: z.string().optional(),
-    share_with_team: z.boolean().optional().default(false),
-})
+export const CreateEntrySchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = val as Record<string, unknown>;
+            if ('text' in obj && !('content' in obj)) {
+                return { ...obj, content: obj['text'] };
+            }
+        }
+        return val;
+    },
+    z.object({
+        entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
+        content: z.string().min(1),
+        tags: z.array(z.string()).optional(),
+        is_personal: z.boolean().optional().default(true),
+        significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
+        project_number: z.number().int(),
+        project_owner: z.string().optional(),
+        issue_number: z.number().optional(),
+        issue_url: z.string().optional(),
+        pr_number: z.number().optional(),
+        pr_url: z.string().optional(),
+        pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
+        workflow_run_id: z.number().optional(),
+        workflow_name: z.string().optional(),
+        workflow_status: z.string().optional(),
+        share_with_team: z.boolean().optional().default(false),
+    })
+)
 
-export const CreateEntrySchemaMcp = z.object({
-    entry_type: z.string().optional().default('personal_reflection').describe(
-        'Entry type. Use "retrospective" for session summaries, "bug_fix" for bugs, ' +
-        '"feature_implementation" for features, "planning" for roadmaps, ' +
-        '"technical_note" for implementation notes. Do NOT default to "personal_reflection" ' +
-        'unless the entry is genuinely a personal note.'
-    ),
-    content: z.string().optional().describe(
-        'Markdown-formatted entry content. Use ## section headers to organize content. ' +
-        'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
-        'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
-        'Do NOT invent extra top-level sections for session summaries.'
-    ),
-    tags: z.array(z.string()).optional().describe(
-        'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
-        'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
-    ),
-    is_personal: z.boolean().optional().default(true),
-    significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: relaxedNumber().describe(
-        'REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row ' +
-        '(registry: repoName (#N)) or use get_statistics. Do NOT pass a repo name string.'
-    ),
-    project_owner: z.string().optional(),
-    issue_number: relaxedNumber().optional(),
-    issue_url: z.string().optional(),
-    pr_number: relaxedNumber().optional(),
-    pr_url: z.string().optional(),
-    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-    workflow_run_id: relaxedNumber().optional(),
-    workflow_name: z.string().optional(),
-    workflow_status: z.string().optional(),
-    share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
-})
+export const CreateEntrySchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = val as Record<string, unknown>;
+            if ('text' in obj && !('content' in obj)) {
+                return { ...obj, content: obj['text'] };
+            }
+        }
+        return val;
+    },
+    z.object({
+        entry_type: z.string().optional().default('personal_reflection').describe(
+            'Entry type. Use "retrospective" for session summaries, "bug_fix" for bugs, ' +
+            '"feature_implementation" for features, "planning" for roadmaps, ' +
+            '"technical_note" for implementation notes. Do NOT default to "personal_reflection" ' +
+            'unless the entry is genuinely a personal note.'
+        ),
+        content: z.string().optional().describe(
+            'Markdown-formatted entry content. Use ## section headers to organize content. ' +
+            'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
+            'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+            'Do NOT invent extra top-level sections for session summaries.'
+        ),
+        tags: z.array(z.string()).optional().describe(
+            'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
+            'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
+        ),
+        is_personal: z.boolean().optional().default(true),
+        significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
+        project_number: relaxedNumber().describe(
+            'REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row ' +
+            '(registry: repoName (#N)) or use get_statistics. Do NOT pass a repo name string.'
+        ),
+        project_owner: z.string().optional(),
+        issue_number: relaxedNumber().optional(),
+        issue_url: z.string().optional(),
+        pr_number: relaxedNumber().optional(),
+        pr_url: z.string().optional(),
+        pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
+        workflow_run_id: relaxedNumber().optional(),
+        workflow_name: z.string().optional(),
+        workflow_status: z.string().optional(),
+        share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
+    })
+)
 
 export const CreateEntryOutputSchema = z
     .object({

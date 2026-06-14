@@ -123,6 +123,8 @@
 - Fixed `cross_team_search` returning success instead of `VALIDATION_ERROR` when no configured team DBs matched the request.
 - Fixed `update_configuration` and `rebuild_vector_index` silently succeeding with invalid inputs by enforcing strict schema parsing.
 - Intercepted array and primitive parameter hallucinations in the `worker-api-proxy` for Code Mode to automatically heal `delete_entry`, `restore_entry`, `add_to_vector_index`, and batch endpoints.
+- Fixed rigid `project_number` validations across `update_entry` and `update_entry_mcp` schemas to permit partial updates, and healed `text`-to-`content` property hallucinations globally.
+- Extended Code Mode array hallucination interceptors to `team_batch` functions.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
