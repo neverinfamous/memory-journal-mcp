@@ -78,7 +78,6 @@
   - string parameter for `_executeRawQueryUnsafe`.
   - camelCase method aliases.
 - Intercepted parameter hallucinations (`id` to `entry_id` and `ids` to `entry_ids`) across all standard Admin MCP schemas and the Code Mode handler to automatically self-heal common agent validation failures.
-- Agent tool hallucination of `create_entry_minimal` by natively registering it as a minimal alias in the Core tools group to ensure structured `{success: false, error}` responses and graceful interception.
 - Schema extraction in `memory://help` failing on Zod pipelines.
 - `dry_run` early returns executing before parameter normalization.
 - `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode.

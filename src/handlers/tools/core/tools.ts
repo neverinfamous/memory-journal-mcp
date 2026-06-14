@@ -164,37 +164,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
         },
         {
-            name: 'create_entry_minimal',
-            title: 'Create Entry Minimal',
-            description: 'Minimal helper to create a basic entry (often hallucinated by agents). Automatically redirects to create_entry.',
-            group: 'core',
-            inputSchema: z.object({
-                content: z.string().optional().describe('Entry content')
-            }),
-            // Use same output schema as create_entry
-            outputSchema: CreateEntryOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
-                try {
-                    // Strict validation
-                    z.object({
-                        content: z.string().min(1)
-                    }).parse(params)
-
-                    // We can't use a default project number because it causes information to be saved to the wrong project.
-                    // Instead, we explicitly guide the agent to use the correct tool.
-                    throw new ValidationError("The 'create_entry_minimal' tool is deprecated and does not support project routing. You MUST use 'create_entry' instead and explicitly provide the 'project_number' parameter. You can find your current workspace's project_number in your Briefing (e.g., 'adamic (#16)' means project_number: 16).")
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
-        {
             name: 'get_entry_by_id',
             title: 'Get Entry by ID',
             description: 'Retrieve a specific entry by its ID',
