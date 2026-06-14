@@ -161,6 +161,7 @@ export const EntryOutputSchema = z
         deletedAt: z.string().nullable().optional(),
         isArchived: z.boolean().optional(),
         projectNumber: z.number().nullable().optional(),
+        projectName: z.string().optional().describe('Injected repository or project name resolved from projectRegistry'),
         projectOwner: z.string().nullable().optional(),
         issueNumber: z.number().nullable().optional(),
         issueUrl: z.string().nullable().optional(),

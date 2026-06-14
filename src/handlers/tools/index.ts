@@ -22,6 +22,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
+import type { ProjectRegistryEntry } from '../../types/index.js'
 
 import { getCoreTools } from './core/index.js'
 import { getSearchTools } from './search/index.js'
@@ -41,6 +42,33 @@ import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
+
+// ============================================================================
+// Project Name Injection
+// ============================================================================
+
+function injectProjectNames(obj: unknown, registry?: Record<string, ProjectRegistryEntry>): void {
+    if (obj === undefined || obj === null || typeof obj !== 'object' || registry === undefined) return
+    
+    if (Array.isArray(obj)) {
+        obj.forEach(item => injectProjectNames(item, registry))
+    } else {
+        const record = obj as Record<string, unknown>
+        if (typeof record['projectNumber'] === 'number' && typeof record['projectName'] === 'undefined') {
+            const entry = Object.entries(registry).find(
+                ([_, r]) => r.project_number === record['projectNumber']
+            )
+            if (entry) {
+                record['projectName'] = entry[0]
+            }
+        }
+        for (const key in record) {
+            if (typeof record[key] === 'object' && record[key] !== null) {
+                injectProjectNames(record[key], registry)
+            }
+        }
+    }
+}
 
 // Global audit singletons removed per CRIT-1
 // Callers must provide ServerRuntime.
@@ -384,10 +412,12 @@ export async function callTool(
                     () => wrappedHandler(args),
                     name === 'restore_backup'
                 )
+                injectProjectNames(freshResult, config?.projectRegistry)
                 return injectTokenEstimate(freshResult)
             }
 
             const freshResult = await wrappedHandler(args)
+            injectProjectNames(freshResult, config?.projectRegistry)
             return injectTokenEstimate(freshResult)
         }
     }
@@ -400,10 +430,12 @@ export async function callTool(
             () => Promise.resolve(tool.handler(args)),
             name === 'restore_backup' // restore bypasses lock since it acquires exclusive
         )
+        injectProjectNames(result, config?.projectRegistry)
         return injectTokenEstimate(result)
     }
 
     const result = await Promise.resolve(tool.handler(args))
+    injectProjectNames(result, config?.projectRegistry)
     return injectTokenEstimate(result)
 }
 

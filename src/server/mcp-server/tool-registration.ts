@@ -184,6 +184,7 @@ export function createServerInstance(
                     )
 
                     const isSuccess = typeof result === 'object' && result !== null && (result as Record<string, unknown>)['success'] === true
+
                     if (isSuccess) {
                         const mutatingTools = [
                             'create_entry', 'update_entry', 'delete_entry', 'restore_entry',
