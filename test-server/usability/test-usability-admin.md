@@ -12,6 +12,8 @@ Use the `mj_execute_code` tool to interact with the following tools in the `admi
 **Instructions:**
 - Do not perfectly structure your initial calls. Act intuitively as an agent.
 - Try natural, ambiguous scripting (e.g., guessing property names, forgetting `await`, assuming incorrect return types like arrays instead of objects).
+- Explicitly test top-level flat tool calls (e.g., `mj.update_configuration(...)` instead of `mj.admin.update_configuration(...)`) to verify cross-group routing.
+- Explicitly test aliases across groups (e.g., `mj.config(...)`) to ensure proper resolution.
 - Do not try to bypass the sandbox, simply test the API surface.
 - Note any errors, exceptions, or unexpected behavior.
 

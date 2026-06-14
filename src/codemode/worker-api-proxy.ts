@@ -259,6 +259,55 @@ export function buildApiProxy(
             if (prop in target) return target[prop]
             if (prop === 'then') return undefined
 
+            if (typeof prop === 'string') {
+                const snakeKey = /[A-Z]/.test(prop) ? prop.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`) : prop;
+                
+                // 1. Check if the property is an alias in any group
+                for (const [g, groupAliases] of Object.entries(METHOD_ALIASES)) {
+                    if (groupAliases?.[prop] !== undefined) {
+                        const canonicalCamel = groupAliases[prop];
+                        const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
+                        if (methods[g]?.includes(canonicalSnake)) {
+                            return (...args: unknown[]): Promise<unknown> => {
+                                const intercept = applyArgInterceptions(canonicalSnake, args);
+                                if ('error' in intercept) {
+                                    return wrapPromise(Promise.resolve(wrapResult(intercept.error)), canonicalSnake);
+                                }
+                                const resultPromise = rpcCall(g, canonicalSnake, intercept.args).then(wrapResult);
+                                return wrapPromise(resultPromise, canonicalSnake);
+                            }
+                        }
+                    }
+                }
+
+                // 2. Check for team prefix hallucination (e.g. mj.semanticSearch -> mj.team.teamSemanticSearch)
+                const teamSnakeKey = `team_${snakeKey}`;
+                const teamGroup = Object.keys(methods).find(g => methods[g]?.includes(teamSnakeKey));
+                if (teamGroup && !Object.keys(methods).some(g => methods[g]?.includes(snakeKey))) {
+                    return (...args: unknown[]): Promise<unknown> => {
+                        const intercept = applyArgInterceptions(teamSnakeKey, args);
+                        if ('error' in intercept) {
+                            return wrapPromise(Promise.resolve(wrapResult(intercept.error)), teamSnakeKey);
+                        }
+                        const resultPromise = rpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
+                        return wrapPromise(resultPromise, teamSnakeKey);
+                    }
+                }
+
+                // 3. Check for cross-group hallucination (e.g. mj.update_configuration -> mj.admin.update_configuration)
+                const foundGroup = Object.keys(methods).find(g => methods[g]?.includes(snakeKey));
+                if (foundGroup) {
+                    return (...args: unknown[]): Promise<unknown> => {
+                        const intercept = applyArgInterceptions(snakeKey, args);
+                        if ('error' in intercept) {
+                            return wrapPromise(Promise.resolve(wrapResult(intercept.error)), snakeKey);
+                        }
+                        const resultPromise = rpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
+                        return wrapPromise(resultPromise, snakeKey);
+                    }
+                }
+            }
+
             const available = Object.keys(methods)
                 .filter((k) => k !== '_topLevel')
                 .join(', ')
