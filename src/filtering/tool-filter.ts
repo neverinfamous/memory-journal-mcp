@@ -18,6 +18,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
         'create_entry',
+        'create_entry_minimal',
         'get_entry_by_id',
         'get_recent_entries',
         'get_entry_history',

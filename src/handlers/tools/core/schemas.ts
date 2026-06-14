@@ -65,6 +65,16 @@ export const CreateEntrySchemaMcp = z.object({
     share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
 })
 
+export const CreateEntryMinimalSchema = z.object({
+    project_number: z.number().int(),
+    content: z.string().min(1),
+})
+
+export const CreateEntryMinimalSchemaMcp = z.object({
+    project_number: relaxedNumber().describe('REQUIRED. Numeric project ID'),
+    content: z.string().optional().describe('Entry content'),
+})
+
 export const CreateEntryOutputSchema = z
     .object({
         success: z.boolean().optional(),
