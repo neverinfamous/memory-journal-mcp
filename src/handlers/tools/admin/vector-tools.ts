@@ -16,7 +16,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             title: 'Rebuild Vector Index',
             description: 'Rebuild the semantic search vector index from all existing entries',
             group: 'admin',
-            inputSchema: z.object({}).strict(),
+            inputSchema: z.object({project_number: z.number().int().optional()}).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -26,7 +26,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    z.object({}).strict().parse(params)
+                    z.object({project_number: z.number().int().optional()}).strict().parse(params)
                     if (!vectorManager) {
                         return {
                             success: false,

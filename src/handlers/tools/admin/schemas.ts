@@ -231,7 +231,8 @@ export const SearchAuditLogSchema = z.object({
     status: z.boolean().optional(),
     category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
     limit: z.number().min(1).max(1000).optional().default(100),
-})
+    project_number: z.number().int().optional(),
+}).strict()
 // ============================================================================
 // Output Schemas
 // ============================================================================
