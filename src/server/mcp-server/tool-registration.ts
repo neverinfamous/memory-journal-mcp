@@ -379,8 +379,7 @@ export function createServerInstance(
         if (originalHandler) {
             requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
                 try {
-                    // Intercept hallucinated string project_numbers BEFORE SDK Zod validation
-                    const req = request as { params?: { arguments?: Record<string, unknown> } }
+                    const req = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
                     if (req?.params?.arguments) {
                         // Deep camelToSnake normalization for Native MCP tool calls
                         const deepCamelToSnake = (obj: unknown): unknown => {
@@ -429,6 +428,14 @@ export function createServerInstance(
                                 }
                                 // If it STILL doesn't resolve, we let it pass through as a string so Zod 
                                 // catches it and throws a strict validation error.
+                            }
+                        }
+                        
+                        // Intercept tool hallucination silently
+                        if (req.params.name === 'create_entry_minimal') {
+                            req.params.name = 'create_entry';
+                            if (typeof toolArgs['entry_type'] === 'undefined') {
+                                toolArgs['entry_type'] = 'personal_reflection';
                             }
                         }
                     }

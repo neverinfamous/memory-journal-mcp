@@ -114,7 +114,7 @@
 - Strict `TEAM_AUTHOR` requirement causing permission errors on local environments without OAuth.
 - Various schema validation issues including missing constraints, strict enum violations, and overly strict required fields blocking optimizations.
 - Batch tools returning success instead of structured aggregate errors when entries are not found.
-- Intercepted missing `create_entry_minimal` tool in the core tool group to gracefully self-heal test and agent parameter hallucinations.
+- Intercepted `create_entry_minimal` parameter hallucination at the SDK routing layer to prevent context window bloat while gracefully self-healing agent errors.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.

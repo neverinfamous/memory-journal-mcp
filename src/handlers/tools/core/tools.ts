@@ -9,8 +9,6 @@ import {
     CreateEntrySchema,
     CreateEntrySchemaMcp,
     CreateEntryOutputSchema,
-    CreateEntryMinimalSchema,
-    CreateEntryMinimalSchemaMcp,
     GetEntryByIdSchema,
     GetEntryByIdSchemaMcp,
     EntryByIdOutputSchema,
@@ -156,61 +154,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     return { success: true, id, entry: finalEntry, ...(sharedWithTeam ? { sharedWithTeam, author } : {}) }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
-        {
-            name: 'create_entry_minimal',
-            title: 'Create Entry Minimal',
-            description: 'Legacy/intercept alias for create_entry. Uses default entry type.',
-            group: 'core',
-            inputSchema: CreateEntryMinimalSchemaMcp,
-            outputSchema: CreateEntryOutputSchema,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            handler: async (params: unknown) => {
-                try {
-                    const input = CreateEntryMinimalSchema.parse(params)
-                    
-                    // Optional progress for long operations
-                    await sendProgress(progress, 0, 2, 'Creating minimal entry...')
-
-                    const createdEntry = db.createEntry({
-                        content: input.content,
-                        entryType: 'personal_reflection',
-                        projectNumber: input.project_number,
-                    })
-                    const id = createdEntry.id
-
-                    try {
-                        const entry = db.getEntryById(id)
-                        if (entry) {
-                            await sendProgress(progress, 1, 2, 'Generating embeddings...')
-                            await context.vectorManager?.addEntry(entry)
-                        }
-                    } catch (e) {
-                        await sendProgress(progress, 2, 2, 'Entry created (Vector indexing disabled)')
-                        return {
-                            success: true,
-                            id,
-                            error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
-                        }
-                    }
-
-                    await sendProgress(progress, 2, 2, 'Entry created successfully')
-
-                    if (context.config?.subscriptionManager) {
-                        void context.config.subscriptionManager.notifyResourceUpdated('memory://recent')
-                    }
-
-                    const finalEntry = db.getEntryById(id) ?? undefined
-                    return { success: true, id, entry: finalEntry }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
