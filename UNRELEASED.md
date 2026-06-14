@@ -128,6 +128,7 @@
 - Injected `projectName` dynamically into all API outputs recursively inside `callTool` and the Code Mode `secureDispatcher` to enrich tool results.
 - Fixed top-level `mj.deleteEntry` skipping parameter normalization in Code Mode bindings, and added `update_configuration` config object unpacking and string property interceptors to the worker API proxy.
 - Added explicit Anti-Hallucination `.describe()` hints to `DeleteEntrySchemaMcp` and `updateConfigurationSchema` to actively guide agents away from nested configuration property arrays and ID-type arrays.
+- Enhanced `injectProjectNames` to automatically attach `projectName` to `getCrossProjectInsights` and `getStatistics` results containing `project_number`, resolving string-matching failures in Code Mode project lookups.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

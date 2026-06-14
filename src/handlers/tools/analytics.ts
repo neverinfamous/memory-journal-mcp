@@ -73,6 +73,7 @@ const StatisticsOutputSchema = z
             .array(
                 z.object({
                     project_number: z.number(),
+                    projectName: z.string().optional(),
                     entry_count: z.number(),
                 })
             )
@@ -85,6 +86,7 @@ const StatisticsOutputSchema = z
 const ProjectSummaryOutputSchema = z
     .object({
         project_number: z.number(),
+        projectName: z.string().optional(),
         entry_count: z.number(),
         first_entry: z.string(),
         last_entry: z.string(),
@@ -102,6 +104,7 @@ const CrossProjectInsightsOutputSchema = z
             .array(
                 z.object({
                     project_number: z.number(),
+                    projectName: z.string().optional(),
                     last_entry_date: z.string(),
                 })
             )
@@ -111,6 +114,7 @@ const CrossProjectInsightsOutputSchema = z
             .array(
                 z.object({
                     project_number: z.number(),
+                    projectName: z.string().optional(),
                     percentage: z.string(),
                 })
             )

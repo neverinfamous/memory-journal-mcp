@@ -54,9 +54,12 @@ export function injectProjectNames(obj: unknown, registry?: Record<string, Proje
         obj.forEach(item => injectProjectNames(item, registry))
     } else {
         const record = obj as Record<string, unknown>
-        if (typeof record['projectNumber'] === 'number' && typeof record['projectName'] === 'undefined') {
+        const pNum = typeof record['projectNumber'] === 'number' ? record['projectNumber'] : 
+                     (typeof record['project_number'] === 'number' ? record['project_number'] : undefined)
+        
+        if (pNum !== undefined && typeof record['projectName'] === 'undefined') {
             const entry = Object.entries(registry).find(
-                ([_, r]) => r.project_number === record['projectNumber']
+                ([_, r]) => r.project_number === pNum
             )
             if (entry) {
                 record['projectName'] = entry[0]
