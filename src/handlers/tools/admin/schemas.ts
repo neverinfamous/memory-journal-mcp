@@ -137,8 +137,17 @@ export const BatchUpdateEntriesSchema = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
             const obj = val as Record<string, unknown>;
-            if (Array.isArray(obj['updates'])) {
-                const newUpdates = obj['updates'].map((u: unknown) => {
+            let updatesArr = obj['updates'];
+            if (updatesArr === undefined && Array.isArray(obj['items'])) {
+                updatesArr = obj['items'];
+                obj['updates'] = updatesArr;
+            }
+            if (updatesArr === undefined && Array.isArray(obj['entries'])) {
+                updatesArr = obj['entries'];
+                obj['updates'] = updatesArr;
+            }
+            if (Array.isArray(updatesArr)) {
+                const newUpdates = updatesArr.map((u: unknown) => {
                     if (typeof u === 'object' && u !== null) {
                         const uObj = u as Record<string, unknown>;
                         if ('id' in uObj && !('entry_id' in uObj)) {
@@ -162,8 +171,17 @@ export const BatchUpdateEntriesSchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
             const obj = val as Record<string, unknown>;
-            if (Array.isArray(obj['updates'])) {
-                const newUpdates = obj['updates'].map((u: unknown) => {
+            let updatesArr = obj['updates'];
+            if (updatesArr === undefined && Array.isArray(obj['items'])) {
+                updatesArr = obj['items'];
+                obj['updates'] = updatesArr;
+            }
+            if (updatesArr === undefined && Array.isArray(obj['entries'])) {
+                updatesArr = obj['entries'];
+                obj['updates'] = updatesArr;
+            }
+            if (Array.isArray(updatesArr)) {
+                const newUpdates = updatesArr.map((u: unknown) => {
                     if (typeof u === 'object' && u !== null) {
                         const uObj = u as Record<string, unknown>;
                         if ('id' in uObj && !('entry_id' in uObj)) {
@@ -221,18 +239,39 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
     })
 )
 
-export const SearchAuditLogSchema = z.object({
-    tool_name: z.string().optional(),
-    user: z.string().optional(),
-    date_range: z.object({
-        start: z.string().optional(),
-        end: z.string().optional(),
-    }).optional(),
-    status: z.boolean().optional(),
-    category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
-    limit: z.number().min(1).max(1000).optional().default(100),
-    project_number: z.number().int().optional(),
-}).strict()
+export const SearchAuditLogSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            if (obj['date_range'] === undefined && (obj['start_date'] !== undefined || obj['end_date'] !== undefined)) {
+                obj['date_range'] = {
+                    start: obj['start_date'],
+                    end: obj['end_date']
+                };
+                delete obj['start_date'];
+                delete obj['end_date'];
+            }
+            if (typeof obj['action'] === 'string' && obj['tool_name'] === undefined) {
+                obj['tool_name'] = obj['action'];
+                delete obj['action'];
+            }
+            return obj;
+        }
+        return val;
+    },
+    z.object({
+        tool_name: z.string().optional(),
+        user: z.string().optional(),
+        date_range: z.object({
+            start: z.string().optional(),
+            end: z.string().optional(),
+        }).optional(),
+        status: z.boolean().optional(),
+        category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
+        limit: z.number().min(1).max(1000).optional().default(100),
+        project_number: z.number().int().optional(),
+    }).strict()
+)
 // ============================================================================
 // Output Schemas
 // ============================================================================

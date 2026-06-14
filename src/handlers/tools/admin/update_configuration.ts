@@ -2,21 +2,46 @@ import { z } from 'zod'
 import type { ToolHandlerConfig } from '../../../types/index.js'
 import type { ConfigManager } from '../../../utils/config-manager.js'
 
-export const updateConfigurationSchema = z.object({
-    instruction_level: z.enum(['essential', 'standard', 'full']).optional(),
-    tool_filter: z.string().optional(),
-    briefing_entries: z.number().int().min(0).optional(),
-    briefing_summaries: z.number().int().min(0).optional(),
-    briefing_include_team: z.boolean().optional(),
-    briefing_issues: z.number().int().min(0).optional(),
-    briefing_prs: z.number().int().min(0).optional(),
-    briefing_pr_status: z.boolean().optional(),
-    briefing_milestones: z.number().int().min(0).optional(),
-    briefing_workflows: z.number().int().min(0).optional(),
-    briefing_workflow_status: z.boolean().optional(),
-    briefing_copilot: z.boolean().optional(),
-    project_number: z.number().int().optional(),
-}).strict()
+export const updateConfigurationSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            let obj = { ...(val as Record<string, unknown>) };
+            if (typeof obj['config'] === 'object' && obj['config'] !== null) {
+                obj = { ...obj, ...(obj['config'] as Record<string, unknown>) };
+                delete obj['config'];
+            }
+            if ('level' in obj) {
+                if (!('instruction_level' in obj)) {
+                    obj['instruction_level'] = obj['level'];
+                }
+                delete obj['level'];
+            }
+            if ('filter' in obj) {
+                if (!('tool_filter' in obj)) {
+                    obj['tool_filter'] = obj['filter'];
+                }
+                delete obj['filter'];
+            }
+            return obj;
+        }
+        return val;
+    },
+    z.object({
+        instruction_level: z.enum(['essential', 'standard', 'full']).optional(),
+        tool_filter: z.string().optional(),
+        briefing_entries: z.number().int().min(0).optional(),
+        briefing_summaries: z.number().int().min(0).optional(),
+        briefing_include_team: z.boolean().optional(),
+        briefing_issues: z.number().int().min(0).optional(),
+        briefing_prs: z.number().int().min(0).optional(),
+        briefing_pr_status: z.boolean().optional(),
+        briefing_milestones: z.number().int().min(0).optional(),
+        briefing_workflows: z.number().int().min(0).optional(),
+        briefing_workflow_status: z.boolean().optional(),
+        briefing_copilot: z.boolean().optional(),
+        project_number: z.number().int().optional(),
+    }).strict()
+)
 
 export type UpdateConfigurationArgs = z.infer<typeof updateConfigurationSchema>
 
