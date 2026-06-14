@@ -65,7 +65,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     }
 
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
-    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry'];
+    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry'];
     if (singleIdMethods.includes(methodName) && args.length === 1) {
         if (Array.isArray(args[0])) {
             return { error: {
@@ -98,10 +98,30 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     recoverable: true
                 }};
             }
+            const idVal = obj['entry_id'] !== undefined ? obj['entry_id'] : obj['id'];
+            if (typeof idVal === 'string' && isNaN(parseInt(idVal, 10))) {
+                return { error: {
+                    success: false,
+                    error: `${methodName} requires a numeric entry_id, but received a non-numeric string ('${idVal}'). Journal entries use auto-incrementing integer IDs.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Provide a numeric ID.',
+                    recoverable: true
+                }};
+            }
         } else if (typeof args[0] === 'number' || typeof args[0] === 'string') {
             const asNum = typeof args[0] === 'string' ? parseInt(args[0], 10) : args[0];
             if (!isNaN(asNum)) {
                 args[0] = { entry_id: asNum };
+            } else {
+                return { error: {
+                    success: false,
+                    error: `${methodName} requires a numeric entry_id, but received a non-numeric string ('${args[0]}'). Journal entries use auto-incrementing integer IDs.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Provide a numeric ID.',
+                    recoverable: true
+                }};
             }
         }
     }

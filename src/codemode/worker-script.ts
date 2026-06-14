@@ -360,7 +360,7 @@ parentPort?.on('message', (msg: unknown) => {
                 const pending = pendingRpcRequests.get(response.id)
                 if (pending) {
                     pendingRpcRequests.delete(response.id)
-                    if (response.error) {
+                    if (response.error !== undefined) {
                         pending.reject(new Error(response.error))
                     } else {
                         pending.resolve(response.result)
