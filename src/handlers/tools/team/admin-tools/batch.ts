@@ -83,6 +83,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             prNumber: e.pr_number,
                             prUrl: e.pr_url,
                             prStatus: e.pr_status,
+                            isPersonal: false,
                             author: e.author ?? currentUser,
                         }
                     })

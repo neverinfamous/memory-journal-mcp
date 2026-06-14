@@ -114,6 +114,7 @@
 - E2E testing suite lacking `DEFAULT_PROJECT_NUMBER` environment injection, preventing full tool coverage.
 - Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP `notifications/progress` events due to missing progress context in sandbox bindings.
 - Stale "99 tools" documentation references, filter math counts, and directory structure architectures (e.g., `cli.ts` to `cli/`) across the documentation to accurately reflect the 100-tool inventory.
+- `team_batch_create_entries` incorrectly setting `isPersonal: true` by omitting the field from mapped parameters.
 
 - Handlers failing to wrap `-32602` Zod validation errors as structured `VALIDATION_ERROR`s due to strict MCP SDK input schemas violating the `.optional()` relaxed schema pattern.
 - Strict `TEAM_AUTHOR` requirement causing hard `PermissionError` failures when reading team resources locally via MCP IDE clients without OAuth, now safely falling back to `resolveAuthor`'s local environment check.
