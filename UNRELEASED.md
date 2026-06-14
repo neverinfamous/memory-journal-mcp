@@ -121,7 +121,8 @@
 - Fixed parameter hallucination and missing filtering in `semantic_search` and `team_semantic_search` by adding schema support for `project_number`, `issue_number`, `pr_number`, and `workflow_run_id`.
 - Fixed missing cross-group and alias hallucination routing in the top-level Code Mode proxy to correctly heal `mj.update_configuration` and `mj.config` usage.
 - Fixed `cross_team_search` returning success instead of `VALIDATION_ERROR` when no configured team DBs matched the request.
-
+- Fixed `update_configuration` and `rebuild_vector_index` silently succeeding with invalid inputs by enforcing strict schema parsing.
+- Intercepted array and primitive parameter hallucinations in the `worker-api-proxy` for Code Mode to automatically heal `delete_entry`, `restore_entry`, `add_to_vector_index`, and batch endpoints.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
