@@ -52,6 +52,21 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const projectNumber = project_number
 
+                    if (projectNumber == null) {
+                        // Search Isolation Bypass: allow pure flag searches, otherwise reject
+                        const isPureFlagSearch = tags && tags.length > 0 && tags.every((t: string) => t.startsWith('flag:'))
+                        if (!isPureFlagSearch) {
+                            return {
+                                success: false,
+                                error: 'Missing project_number. Cross-tenant searches without project_number are strictly limited to pure flag searches (tags starting with "flag:").',
+                                code: 'VALIDATION_ERROR',
+                                category: 'validation',
+                                suggestion: 'Specify a project_number, or use pure flag search tags.',
+                                recoverable: true,
+                            }
+                        }
+                    }
+
                     const searchLimit =
                         tags && tags.length > 0
                             ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT)
@@ -145,6 +160,19 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
 
                     const projectNumber = project_number
+
+                    if (projectNumber == null) {
+                        if (entry_type !== 'flag') {
+                            return {
+                                success: false,
+                                error: 'Missing project_number. Cross-tenant searches without project_number are strictly limited to entry_type: "flag".',
+                                code: 'VALIDATION_ERROR',
+                                category: 'validation',
+                                suggestion: 'Specify a project_number, or set entry_type to "flag".',
+                                recoverable: true,
+                            }
+                        }
+                    }
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
                     if (start_date > end_date) {

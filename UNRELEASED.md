@@ -116,6 +116,7 @@
 - Batch tools returning success instead of structured aggregate errors when entries are not found.
 - Intercepted `create_entry_minimal` parameter hallucination at the SDK routing layer to prevent context window bloat while gracefully self-healing agent errors.
 - Fixed `test-50k-boundary.mjs` executing the wrong entry point (`index.js` instead of `cli.js`) causing false negatives in boundary validation.
+- Fixed Search Isolation Bypass in `team_search` and `team_search_by_date_range` to correctly return `VALIDATION_ERROR` when `project_number` is omitted and the query contains non-flag targets.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
