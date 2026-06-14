@@ -26,7 +26,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                     .union([z.string(), z.number()])
                     .optional()
                     .describe('Tag to merge into (will be created if not exists)'),
-            }),
+            }).strict(),
             outputSchema: MergeTagsOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -40,7 +40,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                         .object({
                             source_tag: z.string().min(1),
                             target_tag: z.string().min(1),
-                        })
+                        }).strict()
                         .parse(params)
 
                     if (source_tag === target_tag) {
@@ -142,7 +142,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({
                 query: z.string().describe('The raw SQL query to execute'),
-            }),
+            }).strict(),
             outputSchema: ExecuteRawQueryUnsafeOutputSchema.describe('The raw query execution result array'),
             annotations: {
                 readOnlyHint: true,

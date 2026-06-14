@@ -46,7 +46,7 @@ export const UpdateEntrySchema = z.preprocess(
         workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
         is_archived: z.boolean().optional(),
         expected_version: z.number().optional(),
-    })
+    }).strict()
 )
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -87,7 +87,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         workflow_status: z.string().nullable().optional(),
         is_archived: z.boolean().optional(),
         expected_version: relaxedNumber().optional(),
-    })
+    }).strict()
 )
 
 export const DeleteEntrySchema = z.preprocess(
@@ -103,7 +103,7 @@ export const DeleteEntrySchema = z.preprocess(
     z.object({
         entry_id: z.number(),
         permanent: z.boolean().optional().default(false),
-    })
+    }).strict()
 )
 
 /** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
@@ -120,18 +120,18 @@ export const DeleteEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional().describe('The ID of the entry to delete. If you need to delete multiple entries, use batch_delete_entries instead.'),
         permanent: z.boolean().optional().default(false).describe('If true, permanently deletes the entry. If false, performs a soft delete.'),
-    })
+    }).strict()
 )
 
 export const BatchCreateEntriesSchema = z.object({
     entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
     auto_index: z.boolean().optional().default(true),
-})
+}).strict()
 
 export const BatchCreateEntriesSchemaMcp = z.object({
     entries: z.array(CreateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
-})
+}).strict()
 
 export const BatchUpdateEntriesSchema = z.preprocess(
     (val: unknown) => {
@@ -164,7 +164,7 @@ export const BatchUpdateEntriesSchema = z.preprocess(
     z.object({
         updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
         auto_index: z.boolean().optional().default(true),
-    })
+    }).strict()
 )
 
 export const BatchUpdateEntriesSchemaMcp = z.preprocess(
@@ -198,7 +198,7 @@ export const BatchUpdateEntriesSchemaMcp = z.preprocess(
     z.object({
         updates: z.array(UpdateEntrySchemaMcp).optional(),
         auto_index: z.boolean().optional().default(true),
-    })
+    }).strict()
 )
 
 export const BatchDeleteEntriesSchema = z.preprocess(
@@ -217,7 +217,7 @@ export const BatchDeleteEntriesSchema = z.preprocess(
     z.object({
         entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
         permanent: z.boolean().optional().default(false),
-    })
+    }).strict()
 )
 
 export const BatchDeleteEntriesSchemaMcp = z.preprocess(
@@ -236,7 +236,7 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
     z.object({
         entry_ids: z.array(relaxedNumber()).optional(),
         permanent: z.boolean().optional().default(false),
-    })
+    }).strict()
 )
 
 export const SearchAuditLogSchema = z.preprocess(

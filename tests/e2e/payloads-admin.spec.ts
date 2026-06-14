@@ -70,7 +70,6 @@ test.describe('Payload Contracts: Admin', () => {
 
     test('delete_entry returns { success, entryId }', async () => {
         const payload = await callToolAndParse(client, 'delete_entry', {
-            project_number: 1,
             entry_id: entryId,
         })
         expectSuccess(payload)
@@ -80,7 +79,6 @@ test.describe('Payload Contracts: Admin', () => {
 
     test('restore_entry returns { success, entryId }', async () => {
         const payload = await callToolAndParse(client, 'restore_entry', {
-            project_number: 1,
             entry_id: entryId,
         })
         expectSuccess(payload)

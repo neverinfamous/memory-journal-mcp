@@ -74,7 +74,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                     }
                     return val;
                 },
-                z.object({ entry_id: relaxedNumber().optional() })
+                z.object({ entry_id: relaxedNumber().optional() }).strict()
             ),
             outputSchema: AddToVectorIndexOutputSchema,
             annotations: {
@@ -95,7 +95,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             }
                             return val;
                         },
-                        z.object({ entry_id: z.number() })
+                        z.object({ entry_id: z.number() }).strict()
                     ).parse(params)
                     if (!vectorManager) {
                         return {
