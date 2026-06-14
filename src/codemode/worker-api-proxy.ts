@@ -130,6 +130,17 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             const ids = args[0].split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
             args[0] = { entry_ids: ids };
         } else if (args.length === 1 && Array.isArray(args[0])) {
+            const hasStrings = args[0].some(id => typeof id === 'string');
+            if (hasStrings) {
+                return { error: {
+                    success: false,
+                    error: `batch_delete_entries expects an array of numeric IDs, but received an array containing strings.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Ensure all IDs in the array are numbers. Use parseInt() if necessary.',
+                    recoverable: true
+                }};
+            }
             args[0] = { entry_ids: args[0] };
         } else if (args.length > 1 && args.every(a => typeof a === 'number')) {
             args = [{ entry_ids: args }];
@@ -149,7 +160,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
-    // merge_tags hallucination: passing `source_tags` or `from`/`to`
+    // merge_tags hallucination: passing `source_tags` or `from`/`to` or comma-separated tags
     if (methodName === 'merge_tags' || methodName === 'mergeTags' || methodName === 'team_merge_tags' || methodName === 'teamMergeTags') {
         if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
             const obj = args[0] as Record<string, unknown>;
@@ -164,6 +175,27 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             if (obj['to'] !== undefined && obj['target_tag'] === undefined) {
                 obj['target_tag'] = obj['to'];
                 delete obj['to'];
+            }
+            if (typeof obj['source_tag'] === 'string' && obj['source_tag'].includes(',')) {
+                return { error: {
+                    success: false,
+                    error: `merge_tags only accepts a single source_tag string, not a comma-separated list.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Provide a single tag string for source_tag. To merge multiple tags, call this tool multiple times.',
+                    recoverable: true
+                }};
+            }
+        }
+    }
+
+    // search_audit_log hallucination: passing `limit` as a string
+    if (methodName === 'search_audit_log' || methodName === 'searchAuditLog') {
+        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+            const obj = args[0] as Record<string, unknown>;
+            if (typeof obj['limit'] === 'string') {
+                const parsed = parseInt(obj['limit'], 10);
+                if (!isNaN(parsed)) obj['limit'] = parsed;
             }
         }
     }
