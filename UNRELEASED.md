@@ -119,6 +119,7 @@
 - Fixed Search Isolation Bypass in `team_search` and `team_search_by_date_range` to correctly return `VALIDATION_ERROR` when `project_number` is omitted and the query contains non-flag targets.
 - Fixed `test-metrics-persistence.mjs` test command in `test-core-infra.md` to use `npx tsx` instead of `node`.
 - Fixed parameter hallucination and missing filtering in `semantic_search` and `team_semantic_search` by adding schema support for `project_number`, `issue_number`, `pr_number`, and `workflow_run_id`.
+- Fixed `cross_team_search` returning success instead of `VALIDATION_ERROR` when no configured team DBs matched the request.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
