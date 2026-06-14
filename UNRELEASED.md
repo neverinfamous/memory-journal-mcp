@@ -61,7 +61,24 @@
 - Code Mode stability issues related to async/await handling, error serialization, and `fetch()`.
 - Various code quality and type safety issues across handlers and schemas.
 - Code Mode sandbox mutability guard failing to protect admin/team structural tools.
-- Common agent parameter hallucinations (e.g., camelCase methods, missing parameters, `exact_match`, `create_entry_minimal`) by adding automatic interception aliases in standard tools and Code Mode.
+- Code Mode proxy agent hallucinations by adding interception aliases for:
+  - `start_date` without `end_date` (maps to today).
+  - `deletedCount` (maps to `count`).
+  - `entryIds` and `deletedIds` destructuring.
+  - missing `project_number` in batch operations.
+  - unresolved string `project_number` (e.g. `"P154"`).
+  - calling tools from the wrong API group.
+  - dynamically probing `mj_execute_code` with empty payloads.
+  - `createEntryMinimal`.
+  - `revisions` (maps to `history`).
+  - `comment` (maps to `resolution` for `resolve_team_flag`).
+  - `target_user` (maps to `author`) and `contributor` (maps to `member`) for `setRole`.
+  - `exact_match` (maps to `fuzzy_match`).
+  - `script` (maps to `code` for `mj_execute_code`).
+  - string parameter for `_executeRawQueryUnsafe`.
+  - camelCase method aliases.
+- Intercepted parameter hallucinations (`id` to `entry_id` and `ids` to `entry_ids`) across all standard Admin MCP schemas and the Code Mode handler to automatically self-heal common agent validation failures.
+- Agent tool hallucination of `create_entry_minimal` by natively registering it as a minimal alias in the Core tools group to ensure structured `{success: false, error}` responses and graceful interception.
 - Schema extraction in `memory://help` failing on Zod pipelines.
 - `dry_run` early returns executing before parameter normalization.
 - `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode.
