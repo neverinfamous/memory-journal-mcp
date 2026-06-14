@@ -64,27 +64,45 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
-    // Single ID methods hallucination: passing primitive instead of object
-    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'add_to_vector_index', 'addToVectorIndex'];
-    if (singleIdMethods.includes(methodName) && args.length === 1 && (typeof args[0] === 'number' || typeof args[0] === 'string')) {
-        const asNum = typeof args[0] === 'string' ? parseInt(args[0], 10) : args[0];
-        if (!isNaN(asNum)) {
-            args[0] = { entry_id: asNum };
-        }
-    }
-
-    // delete_entry hallucination: passing array of IDs
-    if ((methodName === 'delete_entry' || methodName === 'deleteEntry') && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
-        if (Array.isArray(obj['ids']) || Array.isArray(obj['entry_ids'])) {
+    // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
+    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry'];
+    if (singleIdMethods.includes(methodName) && args.length === 1) {
+        if (Array.isArray(args[0])) {
             return { error: {
                 success: false,
-                error: 'delete_entry only accepts a single entry_id. To delete multiple entries, use batch_delete_entries.',
+                error: `${methodName} only accepts a single entry. To process multiple entries, use the batch equivalent (e.g., batch_delete_entries).`,
                 code: 'VALIDATION_ERROR',
                 category: 'validation',
-                suggestion: 'Use batch_delete_entries to delete multiple entries',
+                suggestion: `Use a batch method or pass a single object like { entry_id: number }`,
                 recoverable: true
             }};
+        } else if (typeof args[0] === 'object' && args[0] !== null) {
+            const obj = args[0] as Record<string, unknown>;
+            if (Array.isArray(obj['ids']) || Array.isArray(obj['entry_ids'])) {
+                return { error: {
+                    success: false,
+                    error: `${methodName} only accepts a single entry_id. To process multiple entries, use the batch equivalent.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: `Use a batch method (e.g. batch_delete_entries) or pass { entry_id: number }`,
+                    recoverable: true
+                }};
+            }
+            if (obj['entry_id'] === undefined && obj['id'] === undefined) {
+                return { error: {
+                    success: false,
+                    error: `${methodName} requires an 'entry_id' parameter.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: `Provide { entry_id: number, ... } as the argument`,
+                    recoverable: true
+                }};
+            }
+        } else if (typeof args[0] === 'number' || typeof args[0] === 'string') {
+            const asNum = typeof args[0] === 'string' ? parseInt(args[0], 10) : args[0];
+            if (!isNaN(asNum)) {
+                args[0] = { entry_id: asNum };
+            }
         }
     }
 
@@ -130,6 +148,33 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             }
         }
     }
+
+    // merge_tags hallucination: passing `source_tags` or `from`/`to`
+    if (methodName === 'merge_tags' || methodName === 'mergeTags' || methodName === 'team_merge_tags' || methodName === 'teamMergeTags') {
+        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+            const obj = args[0] as Record<string, unknown>;
+            if (obj['source_tags'] !== undefined && obj['source_tag'] === undefined) {
+                obj['source_tag'] = Array.isArray(obj['source_tags']) ? obj['source_tags'][0] : obj['source_tags'];
+                delete obj['source_tags'];
+            }
+            if (obj['from'] !== undefined && obj['source_tag'] === undefined) {
+                obj['source_tag'] = obj['from'];
+                delete obj['from'];
+            }
+            if (obj['to'] !== undefined && obj['target_tag'] === undefined) {
+                obj['target_tag'] = obj['to'];
+                delete obj['to'];
+            }
+        }
+    }
+
+    // rebuild_vector_index hallucination: passing a boolean instead of object
+    if (methodName === 'rebuild_vector_index' || methodName === 'rebuildVectorIndex') {
+        if (args.length === 1 && typeof args[0] === 'boolean') {
+            args[0] = {};
+        }
+    }
+
     return { args };
 }
 
