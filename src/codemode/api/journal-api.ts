@@ -339,14 +339,7 @@ export class JournalApi {
             addEntry: this.core['createEntry'],
             sqlite_journal_add_entry: this.core['createEntry'],
             entries: this.core,
-            deleteEntry: (params: number | { entry_id: number }) => {
-                const entry_id = typeof params === 'number' ? params : params.entry_id
-                const deleteFn = this.admin['deleteEntry']
-                if (deleteFn === undefined) {
-                    return Promise.reject(new Error('deleteEntry method not found'))
-                }
-                return deleteFn({ entry_id })
-            },
+            deleteEntry: this.admin['deleteEntry'],
             updateEntry: this.admin['updateEntry'],
             
             // Global Hallucinations

@@ -118,8 +118,8 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         return val;
     },
     z.object({
-        entry_id: relaxedNumber().optional(),
-        permanent: z.boolean().optional().default(false),
+        entry_id: relaxedNumber().optional().describe('The ID of the entry to delete. If you need to delete multiple entries, use batch_delete_entries instead.'),
+        permanent: z.boolean().optional().default(false).describe('If true, permanently deletes the entry. If false, performs a soft delete.'),
     })
 )
 

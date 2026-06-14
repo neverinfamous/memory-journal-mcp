@@ -117,6 +117,19 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             args = [{ entry_ids: args }];
         }
     }
+
+    // update_configuration hallucination: passing string directly or nested config object
+    if (methodName === 'update_configuration' || methodName === 'updateConfiguration' || methodName === 'config' || methodName === 'configure') {
+        if (args.length === 1 && typeof args[0] === 'string') {
+            args[0] = { instruction_level: args[0] };
+        } else if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+            const obj = { ...(args[0] as Record<string, unknown>) };
+            if (typeof obj['config'] === 'object' && obj['config'] !== null) {
+                args[0] = { ...obj, ...(obj['config'] as Record<string, unknown>) };
+                delete (args[0] as Record<string, unknown>)['config'];
+            }
+        }
+    }
     return { args };
 }
 

@@ -126,6 +126,8 @@
 - Fixed rigid `project_number` validations across `update_entry` and `update_entry_mcp` schemas to permit partial updates, and healed `text`-to-`content` property hallucinations globally.
 - Extended Code Mode array hallucination interceptors to `team_batch` functions.
 - Injected `projectName` dynamically into all API outputs recursively inside `callTool` and the Code Mode `secureDispatcher` to enrich tool results.
+- Fixed top-level `mj.deleteEntry` skipping parameter normalization in Code Mode bindings, and added `update_configuration` config object unpacking and string property interceptors to the worker API proxy.
+- Added explicit Anti-Hallucination `.describe()` hints to `DeleteEntrySchemaMcp` and `updateConfigurationSchema` to actively guide agents away from nested configuration property arrays and ID-type arrays.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

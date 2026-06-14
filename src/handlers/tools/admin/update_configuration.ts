@@ -27,8 +27,8 @@ export const updateConfigurationSchema = z.preprocess(
         return val;
     },
     z.object({
-        instruction_level: z.enum(['essential', 'standard', 'full']).optional(),
-        tool_filter: z.string().optional(),
+        instruction_level: z.enum(['essential', 'standard', 'full']).optional().describe('The verbosity level of system instructions. Default is essential.'),
+        tool_filter: z.string().optional().describe('A comma-separated list of tool groups to enable, or "all"'),
         briefing_entries: z.number().int().min(0).optional(),
         briefing_summaries: z.number().int().min(0).optional(),
         briefing_include_team: z.boolean().optional(),
@@ -40,7 +40,7 @@ export const updateConfigurationSchema = z.preprocess(
         briefing_workflow_status: z.boolean().optional(),
         briefing_copilot: z.boolean().optional(),
         project_number: z.number().int().optional(),
-    }).strict()
+    }).strict().describe('Updates the active MCP server configuration. Provide parameters as flat keys (e.g. instruction_level: "standard"). Do NOT nest them inside a "config" object.')
 )
 
 export type UpdateConfigurationArgs = z.infer<typeof updateConfigurationSchema>
