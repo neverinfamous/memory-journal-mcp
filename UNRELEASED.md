@@ -115,6 +115,7 @@
 - Various schema validation issues including missing constraints, strict enum violations, and overly strict required fields blocking optimizations.
 - Batch tools returning success instead of structured aggregate errors when entries are not found.
 - Intercepted `create_entry_minimal` parameter hallucination at the SDK routing layer to prevent context window bloat while gracefully self-healing agent errors.
+- Fixed `test-50k-boundary.mjs` executing the wrong entry point (`index.js` instead of `cli.js`) causing false negatives in boundary validation.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.

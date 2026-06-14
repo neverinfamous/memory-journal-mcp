@@ -16,7 +16,7 @@ const request = {
     },
 }
 
-const child = spawn('node', ['dist/index.js'], {
+const child = spawn('node', ['dist/cli.js'], {
     shell: true,
     env: {
         ...process.env,
