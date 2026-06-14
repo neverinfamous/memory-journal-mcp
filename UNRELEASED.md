@@ -121,6 +121,7 @@
 - `TeamExportMarkdownSchemaMcp`, `TeamImportMarkdownSchemaMcp`, `ImportExternalSchemaMcp`, and `ExportMarkdownSchemaMcp` strict enum and non-optional violations.
 - `get_recent_entries` output schema blocking validation errors due to strict required fields `entries` and `count`.
 - `batch_update_entries` and `batch_delete_entries` (along with team equivalents) returning `success: true` instead of structured `AGGREGATE_ERROR` when entries are not found.
+- Team schemas strictly requiring `project_number`, blocking top-level root fallback optimizations in batch tools and handler-level validations for standard tools.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
