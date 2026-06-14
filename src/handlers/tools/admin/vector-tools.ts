@@ -24,8 +24,9 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: async (_params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
+                    z.object({}).strict().parse(params)
                     if (!vectorManager) {
                         return {
                             success: false,

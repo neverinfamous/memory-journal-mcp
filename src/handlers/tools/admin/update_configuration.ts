@@ -15,7 +15,7 @@ export const updateConfigurationSchema = z.object({
     briefing_workflows: z.number().int().min(0).optional(),
     briefing_workflow_status: z.boolean().optional(),
     briefing_copilot: z.boolean().optional(),
-})
+}).strict()
 
 export type UpdateConfigurationArgs = z.infer<typeof updateConfigurationSchema>
 

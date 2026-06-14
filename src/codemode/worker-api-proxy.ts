@@ -63,6 +63,55 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             }
         }
     }
+
+    // Single ID methods hallucination: passing primitive instead of object
+    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'add_to_vector_index', 'addToVectorIndex'];
+    if (singleIdMethods.includes(methodName) && args.length === 1 && (typeof args[0] === 'number' || typeof args[0] === 'string')) {
+        const asNum = typeof args[0] === 'string' ? parseInt(args[0], 10) : args[0];
+        if (!isNaN(asNum)) {
+            args[0] = { entry_id: asNum };
+        }
+    }
+
+    // delete_entry hallucination: passing array of IDs
+    if ((methodName === 'delete_entry' || methodName === 'deleteEntry') && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (Array.isArray(obj['ids']) || Array.isArray(obj['entry_ids'])) {
+            return { error: {
+                success: false,
+                error: 'delete_entry only accepts a single entry_id. To delete multiple entries, use batch_delete_entries.',
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Use batch_delete_entries to delete multiple entries',
+                recoverable: true
+            }};
+        }
+    }
+
+    // update_entry hallucination: passing ID as first arg and data as second arg
+    if ((methodName === 'update_entry' || methodName === 'updateEntry') && args.length === 2 && (typeof args[0] === 'number' || typeof args[0] === 'string') && typeof args[1] === 'object' && args[1] !== null) {
+        const asNum = typeof args[0] === 'string' ? parseInt(args[0], 10) : args[0];
+        if (!isNaN(asNum)) {
+            args = [{ entry_id: asNum, ...args[1] }];
+        }
+    }
+
+    // batch_update_entries hallucination: passing array directly
+    if ((methodName === 'batch_update_entries' || methodName === 'batchUpdateEntries') && args.length === 1 && Array.isArray(args[0])) {
+        args[0] = { updates: args[0] };
+    }
+
+    // batch_delete_entries hallucination: passing comma-separated string or multiple args or direct array
+    if (methodName === 'batch_delete_entries' || methodName === 'batchDeleteEntries') {
+        if (args.length === 1 && typeof args[0] === 'string') {
+            const ids = args[0].split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+            args[0] = { entry_ids: ids };
+        } else if (args.length === 1 && Array.isArray(args[0])) {
+            args[0] = { entry_ids: args[0] };
+        } else if (args.length > 1 && args.every(a => typeof a === 'number')) {
+            args = [{ entry_ids: args }];
+        }
+    }
     return { args };
 }
 
