@@ -106,9 +106,7 @@
 - `teamAddMember` inappropriately performing upserts on duplicate authors.
 - `update_configuration` failing to persist changes to disk due to missing `configFilePath`.
 - `instructionLevel` in `memory://briefing` returning a hardcoded value instead of configuration.
-- `create_entry` bypassing `defaultProjectNumber` auto-injection, causing null project numbers.
 - `get_entry_history` returning raw database objects instead of the expected output schema.
-- E2E testing suite lacking `DEFAULT_PROJECT_NUMBER` environment injection.
 - Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP notifications.
 - Stale 99 tools documentation references across the repository to reflect the new 100-tool inventory.
 - `team_batch_create_entries` incorrectly setting `isPersonal: true`.
