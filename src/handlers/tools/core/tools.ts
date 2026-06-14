@@ -164,6 +164,75 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
         },
         {
+            name: 'create_entry_minimal',
+            title: 'Create Entry Minimal',
+            description: 'Minimal helper to create a basic entry (often hallucinated by agents). Automatically redirects to create_entry.',
+            group: 'core',
+            inputSchema: z.object({
+                content: z.string().optional().describe('Entry content')
+            }),
+            // Use same output schema as create_entry
+            outputSchema: CreateEntryOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    // Strict validation
+                    const input = z.object({
+                        content: z.string().min(1)
+                    }).parse(params)
+
+                    const effectiveProjectNumber = context.config?.defaultProjectNumber
+                    if (effectiveProjectNumber === undefined) {
+                        throw new ValidationError("Missing default project_number. Cannot use minimal creation.")
+                    }
+
+                    // Optional progress for long operations
+                    await sendProgress(progress, 0, 2, 'Creating minimal entry...')
+
+                    const createdEntry = db.createEntry({
+                        content: input.content,
+                        entryType: 'other',
+                        tags: [],
+                        isPersonal: true,
+                        projectNumber: effectiveProjectNumber
+                    })
+                    const id = createdEntry.id
+
+                    // Vectorize entry
+                    try {
+                        const entry = db.getEntryById(id)
+                        if (entry) {
+                            await sendProgress(progress, 1, 2, 'Generating embeddings...')
+                            await context.vectorManager?.addEntry(entry)
+                        }
+                    } catch (e) {
+                        await sendProgress(progress, 2, 2, 'Entry created (Vector indexing disabled)')
+                        return {
+                            success: true,
+                            id,
+                            error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
+                        }
+                    }
+
+                    await sendProgress(progress, 2, 2, 'Entry created successfully')
+
+                    if (context.config?.subscriptionManager) {
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://recent')
+                    }
+
+                    const finalEntry = db.getEntryById(id) ?? undefined
+                    return { success: true, id, entry: finalEntry }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
             name: 'get_entry_by_id',
             title: 'Get Entry by ID',
             description: 'Retrieve a specific entry by its ID',
