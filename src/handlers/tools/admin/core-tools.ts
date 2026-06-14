@@ -178,7 +178,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             }
                             return val;
                         },
-                        z.object({ entry_id: z.number() })
+                        z.object({ entry_id: z.number(), project_number: z.number().int().optional() })
                     ).parse(params)
                     const success = db.restoreEntry(entry_id)
                     if (!success) {

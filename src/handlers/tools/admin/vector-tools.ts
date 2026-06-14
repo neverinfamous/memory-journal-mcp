@@ -74,7 +74,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                     }
                     return val;
                 },
-                z.object({ entry_id: relaxedNumber().optional() }).strict()
+                z.object({ entry_id: relaxedNumber().optional(), project_number: z.number().int().optional() }).strict()
             ),
             outputSchema: AddToVectorIndexOutputSchema,
             annotations: {
@@ -95,7 +95,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             }
                             return val;
                         },
-                        z.object({ entry_id: z.number() }).strict()
+                        z.object({ entry_id: z.number(), project_number: z.number().int().optional() }).strict()
                     ).parse(params)
                     if (!vectorManager) {
                         return {

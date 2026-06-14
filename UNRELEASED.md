@@ -133,6 +133,9 @@
 - Fortified Code Mode sandbox proxy interceptors to explicitly trap and reject array-of-strings hallucinations in `batch_delete_entries` and comma-separated tags in `merge_tags`, returning structured, actionable validation errors.
 - Added silent type coercion for hallucinated string `limit` inputs in `search_audit_log` within the Code Mode proxy.
 - Hardened all Admin tool Zod schemas (internal and external) with `.strict()` to perfectly intercept parameter hallucinations and return structured `[VALIDATION_ERROR]` objects, addressing an architectural blind spot where Code Mode's `secureDispatcher` directly invoked the handler.
+- Fixed TypeScript compilation errors caused by `relaxedNumber` returning a union type in strict internal schemas by reverting to `z.number()` and moving string-to-number coercion into Code Mode's `param-normalizer`.
+- Resolved `[VALIDATION_ERROR] Unrecognized key: "project_number"` in Code Mode batch endpoints by adding `project_number: z.number().int().optional()` to strict internal admin schemas.
+- Healed the `title` property hallucination for `update_entry` and the `msg`/`message` property alias by automatically mapping them to `content` within the Code Mode parameter normalizer.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

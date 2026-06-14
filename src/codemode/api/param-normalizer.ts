@@ -21,6 +21,7 @@ const PARAM_ALIASES: Record<string, string> = {
     text: 'content',
     body: 'content',
     note: 'content',
+    title: 'content',
     entry: 'entry_id',
     q: 'query',
     issue: 'issue_number',
@@ -28,7 +29,8 @@ const PARAM_ALIASES: Record<string, string> = {
     project: 'project_number',
     user: 'target_user',
     assignee: 'target_user',
-    msg: 'message',
+    msg: 'content',
+    message: 'content',
     repo_name: 'repo',
     version: 'expected_version',
     search: 'query',
@@ -109,6 +111,27 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<str
         // Coerce hallucinated role values
         if (snakeKey === 'role' && typeof value === 'string' && value.toLowerCase() === 'contributor') {
             result[snakeKey] = 'member'
+            continue
+        }
+
+        // Coerce string numbers for ID fields
+        if ((snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') && typeof value === 'string') {
+            const num = Number(value)
+            if (!Number.isNaN(num) && value.trim() !== '') {
+                result[snakeKey] = num
+                continue
+            }
+        }
+        
+        // Coerce arrays of string numbers for ID fields (e.g. entry_ids)
+        if ((snakeKey.endsWith('_ids') || snakeKey === 'ids') && Array.isArray(value)) {
+            result[snakeKey] = value.map((v: unknown) => {
+                if (typeof v === 'string') {
+                    const num = Number(v)
+                    if (!Number.isNaN(num) && v.trim() !== '') return num
+                }
+                return v
+            })
             continue
         }
 

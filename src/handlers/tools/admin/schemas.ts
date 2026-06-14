@@ -103,6 +103,7 @@ export const DeleteEntrySchema = z.preprocess(
     z.object({
         entry_id: z.number(),
         permanent: z.boolean().optional().default(false),
+        project_number: z.number().int().optional(),
     }).strict()
 )
 
@@ -126,6 +127,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
 export const BatchCreateEntriesSchema = z.object({
     entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
     auto_index: z.boolean().optional().default(true),
+    project_number: z.number().int().optional(),
 }).strict()
 
 export const BatchCreateEntriesSchemaMcp = z.object({
@@ -164,6 +166,7 @@ export const BatchUpdateEntriesSchema = z.preprocess(
     z.object({
         updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
         auto_index: z.boolean().optional().default(true),
+        project_number: z.number().int().optional(),
     }).strict()
 )
 
@@ -217,6 +220,7 @@ export const BatchDeleteEntriesSchema = z.preprocess(
     z.object({
         entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
         permanent: z.boolean().optional().default(false),
+        project_number: z.number().int().optional(),
     }).strict()
 )
 
