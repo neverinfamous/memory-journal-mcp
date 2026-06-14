@@ -179,54 +179,16 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     // Strict validation
-                    const input = z.object({
+                    z.object({
                         content: z.string().min(1)
                     }).parse(params)
 
-                    const effectiveProjectNumber = context.config?.defaultProjectNumber
-                    if (effectiveProjectNumber === undefined) {
-                        throw new ValidationError("Missing default project_number. Cannot use minimal creation.")
-                    }
-
-                    // Optional progress for long operations
-                    await sendProgress(progress, 0, 2, 'Creating minimal entry...')
-
-                    const createdEntry = db.createEntry({
-                        content: input.content,
-                        entryType: 'other',
-                        tags: [],
-                        isPersonal: true,
-                        projectNumber: effectiveProjectNumber
-                    })
-                    const id = createdEntry.id
-
-                    // Vectorize entry
-                    try {
-                        const entry = db.getEntryById(id)
-                        if (entry) {
-                            await sendProgress(progress, 1, 2, 'Generating embeddings...')
-                            await context.vectorManager?.addEntry(entry)
-                        }
-                    } catch (e) {
-                        await sendProgress(progress, 2, 2, 'Entry created (Vector indexing disabled)')
-                        return {
-                            success: true,
-                            id,
-                            error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
-                        }
-                    }
-
-                    await sendProgress(progress, 2, 2, 'Entry created successfully')
-
-                    if (context.config?.subscriptionManager) {
-                        void context.config.subscriptionManager.notifyResourceUpdated('memory://recent')
-                    }
-
-                    const finalEntry = db.getEntryById(id) ?? undefined
-                    return { success: true, id, entry: finalEntry }
+                    // We can't use a default project number because it causes information to be saved to the wrong project.
+                    // Instead, we explicitly guide the agent to use the correct tool.
+                    throw new ValidationError("The 'create_entry_minimal' tool is deprecated and does not support project routing. You MUST use 'create_entry' instead and explicitly provide the 'project_number' parameter. You can find your current workspace's project_number in your Briefing (e.g., 'adamic (#16)' means project_number: 16).")
                 } catch (err) {
                     return formatHandlerError(err)
                 }
