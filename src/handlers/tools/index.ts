@@ -47,7 +47,7 @@ export type { ToolHandlerConfig }
 // Project Name Injection
 // ============================================================================
 
-function injectProjectNames(obj: unknown, registry?: Record<string, ProjectRegistryEntry>): void {
+export function injectProjectNames(obj: unknown, registry?: Record<string, ProjectRegistryEntry>): void {
     if (obj === undefined || obj === null || typeof obj !== 'object' || registry === undefined) return
     
     if (Array.isArray(obj)) {
