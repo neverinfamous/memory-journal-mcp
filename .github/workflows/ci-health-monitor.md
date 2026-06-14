@@ -5,7 +5,7 @@ labels: [maintenance, ci-cd]
 
 on:
   schedule:
-    - cron: '0 14 * * 3' # Every Wednesday at 14:00 UTC
+    - cron: 'weekly on wednesday'
   workflow_dispatch:
 
 engine:
