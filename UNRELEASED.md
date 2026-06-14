@@ -27,6 +27,7 @@
 - `scripts/README.md` containing an agent-optimized script inventory and execution guidelines.
 
 ### Changed
+- Updated adversarial skills (performance, planner, security, skill-audit, workflow-audit) with explicit execution rules enforcing continuous prompt improvement, graceful handling of GitHub Copilot quota failures, and strict prohibition of memory-journal-mcp entries.
 - Updated `mj-mcp-optimize` developer skill document to focus on anti-hallucination guardrails and native optimization.
 - Consolidated dependency updates.
 - Removed mandatory journaling requirement from `adversarial-performance` skill to support analytical runs.
