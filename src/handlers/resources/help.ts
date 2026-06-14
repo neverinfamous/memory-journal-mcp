@@ -138,6 +138,13 @@ export function extractParameters(inputSchema: unknown): ParameterInfo[] {
     ) {
         schema = (schema['_def'] as Record<string, unknown>)['schema'] as Record<string, unknown>
     } else if (
+        schema['out'] !== undefined &&
+        schema['out'] !== null &&
+        typeof schema['out'] === 'object' &&
+        'shape' in schema['out']
+    ) {
+        schema = schema['out']
+    } else if (
         schema['in'] !== undefined &&
         schema['in'] !== null &&
         typeof schema['in'] === 'object'

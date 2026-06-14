@@ -63,6 +63,8 @@
 - Code quality findings by removing unsafe types, using centralized loggers, and hardening schemas.
 - Code Mode sandbox mutability guard failing to protect admin/team structural tools.
 - Deep camelCase hallucinations in Code Mode batch payloads via recursive normalization.
+- Parameter hallucinations mapping `id` and `ids` to `entry_id` and `entry_ids` in admin tool schemas.
+- Schema parameter extraction in `memory://help` failing on Zod 4 `z.preprocess` effects (ZodPipelines) by correctly resolving `schema.out`.
 - `dry_run` early returns executing before parameter normalization.
 - Code Mode `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode.
 - `idempotentHint` values for `_execute_raw_query_unsafe`, `team_consolidate_authors`, and `team_remove_author_alias` tools not reflecting their actual destructiveness.
