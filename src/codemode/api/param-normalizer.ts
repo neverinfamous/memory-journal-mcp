@@ -74,7 +74,9 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
 
         // Context-aware 'type' hallucination
         if (snakeKey === 'type') {
-            if (
+            if (methodName?.toLowerCase().includes('export')) {
+                snakeKey = 'format'
+            } else if (
                 !('entry_type' in obj) &&
                 !('flag_type' in obj) &&
                 !('entry_type' in result) &&
@@ -134,6 +136,16 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         if (useAlias && snakeKey === 'mode') {
             if (methodName && !methodName.toLowerCase().includes('config')) {
                 useAlias = false
+            }
+        }
+
+        // Context-aware protection for 'source' (only for importExternal)
+        if (useAlias && snakeKey === 'source') {
+            if (methodName?.toLowerCase().includes('import')) {
+                useAlias = false
+                snakeKey = 'source_format'
+            } else if (methodName && !methodName.toLowerCase().includes('link')) {
+                // For link tools, source_tag is correct. Otherwise, we don't know what they mean.
             }
         }
 
