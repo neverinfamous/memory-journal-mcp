@@ -84,7 +84,7 @@ src/
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
-│   └── server-instructions.ts  # Auto-generated (pnpm exec tsx scripts/generate-server-instructions.ts)
+│   └── server-instructions.ts  # Agent prompts and HELP_CONTENT map (Single Source of Truth)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
@@ -115,7 +115,7 @@ src/
 
 | File                                     | Purpose                                              |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `src/constants/server-instructions.ts` | Server instructions (Auto-generated from markdown sources) |
+| `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
 | `test-server/tool-reference.md`          | Categorized 100-tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |

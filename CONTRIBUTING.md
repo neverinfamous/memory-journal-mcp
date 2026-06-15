@@ -218,7 +218,7 @@ src/
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
-├── constants/                  # Server instructions (source + generated)
+├── constants/                  # Server instructions (agent prompt and composable segments)
 ├── database/
 │   ├── adapter-factory.ts      # Adapter instantiation
 │   ├── core/                   # Interfaces, schema, entry columns
