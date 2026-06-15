@@ -35,6 +35,27 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             delete obj['q'];
         }
         
+        if (obj['text'] !== undefined && obj['query'] === undefined) {
+            obj['query'] = obj['text'];
+            delete obj['text'];
+        }
+        if (obj['message'] !== undefined && obj['query'] === undefined) {
+            obj['query'] = obj['message'];
+            delete obj['message'];
+        }
+        if (obj['description'] !== undefined && obj['query'] === undefined) {
+            obj['query'] = obj['description'];
+            delete obj['description'];
+        }
+        if (obj['path'] !== undefined && obj['query'] === undefined) {
+            obj['query'] = obj['path'];
+            delete obj['path'];
+        }
+        if (obj['keep'] !== undefined && obj['query'] === undefined) {
+            obj['query'] = obj['keep'];
+            delete obj['keep'];
+        }
+        
         if (obj['start'] !== undefined && obj['start_date'] === undefined) {
             obj['start_date'] = obj['start'];
             delete obj['start'];
