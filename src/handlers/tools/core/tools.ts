@@ -376,34 +376,41 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 openWorldHint: false,
             },
             handler: async (params: unknown) => {
-                const input = params as { error_type: string; message: string }
-                
-                // Helper to simulate database errors which SQLite often throws as raw Error objects
-                if (input.error_type === 'database') {
-                    const err = new Error(`SQLITE_CONSTRAINT: ${input.message}`)
-                    Object.defineProperty(err, 'code', { value: 'SQLITE_CONSTRAINT', enumerable: true })
-                    throw err
-                }
-                
-                if (input.error_type === 'type') {
-                    throw new TypeError(input.message)
-                }
+                try {
+                    const input = z.object({
+                        error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
+                        message: z.string().optional().default('Test error message'),
+                    }).parse(params)
+                    
+                    // Helper to simulate database errors which SQLite often throws as raw Error objects
+                    if (input.error_type === 'database') {
+                        const err = new Error(`SQLITE_CONSTRAINT: ${input.message}`)
+                        Object.defineProperty(err, 'code', { value: 'SQLITE_CONSTRAINT', enumerable: true })
+                        throw err
+                    }
+                    
+                    if (input.error_type === 'type') {
+                        throw new TypeError(input.message)
+                    }
 
-                if (input.error_type === 'memory_journal') {
-                    const { MemoryJournalMcpError } = await import('../../../types/errors.js')
-                    throw new MemoryJournalMcpError(
-                        input.message,
-                        'TEST_ERROR',
-                        'internal'
-                    )
+                    if (input.error_type === 'memory_journal') {
+                        const { MemoryJournalMcpError } = await import('../../../types/errors.js')
+                        throw new MemoryJournalMcpError(
+                            input.message,
+                            'TEST_ERROR',
+                            'internal'
+                        )
+                    }
+                    
+                    if (input.error_type === 'zod') {
+                        // Force a zod error
+                        z.object({ required_field: z.string() }).parse({})
+                    }
+                    
+                    throw new Error(input.message)
+                } catch (err) {
+                    return formatHandlerError(err)
                 }
-                
-                if (input.error_type === 'zod') {
-                    // Force a zod error
-                    z.object({ required_field: z.string() }).parse({})
-                }
-                
-                throw new Error(input.message)
             },
         },
     ]

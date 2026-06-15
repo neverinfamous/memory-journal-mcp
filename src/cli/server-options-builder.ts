@@ -61,7 +61,7 @@ export function buildServerOptions(
         teamDbPath: teamDb,
         teamDefaultRole: catchConfig(() => (resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied') as 'admin' | 'member' | 'viewer' | 'denied', 'denied'),
         teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
-        toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'TOOL_FILTER'), undefined),
+        toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined),
         defaultProjectNumber: catchConfig(() => {
             const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
             return val ? parseInt(val, 10) : undefined;
