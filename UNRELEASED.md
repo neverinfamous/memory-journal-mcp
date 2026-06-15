@@ -148,6 +148,7 @@
 - Added GitHub proxy array interception to support `.map()` and `.filter()` on `issues`, `pullRequests`, and `milestones`, and healed `issue_id`/`pr_id` aliases globally.
 - Implemented positional parameter support for `backup_journal` and `restore_backup`, and added `relaxedNumber()` coercion for `cleanup_backups`.
 - Healed the `teamListEntries` alias and `proj` parameter hallucinations in Team tool proxies.
+- Updated `test-server/README.md` documentation to accurately reflect database fallback behavior and include `--db` explicitly in Quick Run commands to prevent stray databases.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

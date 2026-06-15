@@ -49,7 +49,7 @@ node test-server/scripts/test-tool-annotations.mjs
 node test-server/scripts/test-prompts.mjs
 
 # Phase 9 — Scheduler (requires HTTP server in a separate terminal)
-node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
+node dist/cli.js --transport http --port 3099 --db .test-output/test-memory-journal.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
 # In another terminal:
 node test-server/scripts/test-scheduler.mjs
 ```
@@ -123,14 +123,12 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 The SQLite database path for `memory-journal-mcp` is entirely portable and **does not require code changes**.
 
-The server initializes its database locations using **Smart Path Resolution**:
+The server initializes its database locations based on the following precedence:
 
 1. If `--db` or `DB_PATH` is passed explicitly, it is used immediately.
-2. If `memory_journal.db` exists in the root directory, it is used.
-3. If `test-server/test-memory-journal.db` exists, it falls back to this test database automatically.
-4. If neither exist, it creates a new `memory_journal.db` in the root.
+2. If neither exist, it creates a new `memory_journal.db` in the root directory.
 
-_(The identical fallback pattern applies to `--team-db` / `TEAM_DB_PATH` / `test-team-journal.db`)_.
+_(The identical fallback pattern applies to `--team-db` / `TEAM_DB_PATH` which defaults to being disabled)_.
 
 ### Automated Test Artifacts
 
