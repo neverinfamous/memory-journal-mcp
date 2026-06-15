@@ -597,10 +597,14 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
-    // search_audit_log hallucination: passing `limit` as a string
+    // search_audit_log hallucination: passing `limit` as a string or using `keep` instead of `limit`
     if (methodName === 'search_audit_log' || methodName === 'searchAuditLog') {
         if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
             const obj = args[0] as Record<string, unknown>;
+            if (obj['keep'] !== undefined && obj['limit'] === undefined) {
+                obj['limit'] = obj['keep'];
+                delete obj['keep'];
+            }
             if (typeof obj['limit'] === 'string') {
                 const parsed = parseInt(obj['limit'], 10);
                 if (!isNaN(parsed)) obj['limit'] = parsed;
@@ -615,18 +619,19 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
-    // update_configuration hallucination: trying to change maxTokens
-    if (methodName === 'update_configuration') {
+    // update_configuration hallucination: trying to change maxTokens or temperature
+    if (methodName === 'update_configuration' || methodName === 'updateConfiguration') {
         if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
             const obj = args[0] as Record<string, unknown>;
-            if ('maxTokens' in obj || 'max_tokens' in obj) {
+            const hasContextParam = ['maxTokens', 'max_tokens', 'temperature', 'top_p', 'topP'].find(k => k in obj);
+            if (hasContextParam) {
                 return {
                     error: {
                         success: false,
-                        error: "[VALIDATION_ERROR] Unrecognized key: \"max_tokens\". update_configuration does not support changing maxTokens.",
+                        error: `Unrecognized key: "${hasContextParam}". update_configuration does not support changing LLM context parameters.`,
                         code: "VALIDATION_ERROR",
                         category: "validation",
-                        suggestion: "Remove 'max_tokens' from the payload. Only instruction_level, tool_filters, and briefing preferences are supported.",
+                        suggestion: `Remove '${hasContextParam}' from the payload. Only instruction_level, tool_filter, and briefing preferences are supported.`,
                         recoverable: false
                     }
                 };
