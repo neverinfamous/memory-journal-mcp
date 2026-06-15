@@ -16,7 +16,7 @@ The most robust way to prevent a hallucination is to explicitly instruct the age
 * **Schema `.describe()` Tags:** When an agent hallucinates a property (e.g. inventing a `title` field instead of using `message`), update the Zod schema in `src/handlers/tools/*/schemas.ts`. Add an explicit "Anti-Hallucination Hint" in the `.describe()` string. These surface directly in the JSON Schema that agents see on `tools/list`.
     * *Example:* `.describe('Note: The primary text is stored in the `message` property (not `title` or `content`).')`
 * **Tool Descriptions:** Update the `description` fields on tool definition files (e.g., `src/handlers/tools/*/tools.ts`). This is the agent's first impression of each tool.
-* **Server Instructions:** If a structural hallucination persists (e.g. inventing `## Summary` sections instead of `## Accomplished`), update the `src/constants/server-instructions/overview.md` or `templates.md` files. These alter the context payload for all agents upon connection.
+* **Server Instructions:** If a structural hallucination persists (e.g. inventing `## Summary` sections instead of `## Accomplished`), update `src/constants/server-instructions.ts`. This is the single source of truth for all instruction content. These alter the context payload for all agents upon connection.
 
 ## Layer 2: Dispatcher Healing (Frictionless Recovery)
 

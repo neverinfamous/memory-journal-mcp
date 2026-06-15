@@ -9,7 +9,7 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 
 ## Workflow Rules
 
-1. **Sequential Execution**: Tests MUST be executed sequentially (one subagent at a time). The server schemas and proxies are central files, and parallel mutation will cause git conflicts and require overlapping server restarts.
+1. **Sequential Execution**: Tests MUST be executed sequentially (one subagent at a time). The server schemas, proxies, and `server-instructions.ts` are central files, and parallel mutation will cause git conflicts and require overlapping server restarts.
 2. **Subagent Delegation**: 
    - Use the `invoke_subagent` tool to spawn a `self` subagent for each test file.
    - Provide the exact path to the test file as the subagent's prompt.
@@ -21,6 +21,8 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 4. **Verification and Commit**:
    - The subagent will verify the fix, commit the code (`git commit -m "Optimize [group] tool usage"`), and exit.
    - Once the subagent completes, mark the task as done and move to the next test in the queue.
+5. **Code Mode Error Testing Protocol**:
+   - Subagents executing Code Mode test matrices must anticipate structured `VALIDATION_ERROR` payloads with `{ success: false }` for type mismatches, rather than expecting sandbox crashes or thrown `ZodError` messages.
 
 ## Test Sequence Queue
 
