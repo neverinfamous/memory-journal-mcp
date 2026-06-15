@@ -65,7 +65,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     },
     analytics: {
         stats: 'getStatistics',
+        getStats: 'getStatistics',
         insights: 'getCrossProjectInsights',
+        getInsights: 'getCrossProjectInsights',
         getProjects: 'getCrossProjectInsights',
         listProjects: 'getCrossProjectInsights',
         projects: 'getCrossProjectInsights',
