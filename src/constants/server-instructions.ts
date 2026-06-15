@@ -238,7 +238,7 @@ const CODE_MODE_INSTRUCTIONS = `
 API: \`tool_name\` → \`mj.group.action()\` (e.g., \`search_entries\` → \`mj.search.searchEntries()\`)
 Globals: \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
 Positional: \`create("note")\`, \`searchEntries("performance")\`
-Aliases: Common parameter names are auto-corrected (\`text\`→\`content\`, \`entry\`→\`entry_id\`, \`q\`→\`query\`, \`tag\`→\`tags[]\`).
+Aliases: Common parameter names are auto-corrected (\`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`q\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`mode\`→\`instruction_level\`, \`keep\`→\`keep_count\`).
 Discovery: \`mj.help()\` → \`{groups, totalMethods}\`. \`mj.core.help()\` for group-specific.
 Sandbox: No network access (\`fetch\` is undefined). \`setTimeout\` and \`sleep(ms)\` are available for minor delays.
 Readonly: Pass \`readonly: true\` to \`mj_execute_code\` to restrict execution to read-only operations.
@@ -391,8 +391,8 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - **Network:** Disabled. \`fetch()\` throws \`SandboxNetworkError\`. Node network modules are stripped.
 - **Globals:** \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
 - **Positional Arguments:** \`create("note")\`, \`searchEntries("performance")\`, \`mj.backup.backupJournal("snapshot")\`.
-- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`text\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`issue_id\`→\`issue_number\`).
-- **Arrays:** GitHub proxies support native array methods on results (\`.map()\`, \`.filter()\`).
+- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`issue_id\`→\`issue_number\`, \`q\`→\`query\`, \`path\`/\`filepath\`→\`source_dir\`/\`output_dir\`, \`mode\`→\`instruction_level\`, \`keep\`→\`keep_count\`).
+- **Arrays:** Proxies seamlessly support native array properties and methods (e.g., \`.length\`, \`[0]\`, \`.map()\`, \`.filter()\`, \`.includes()\`, \`.indexOf()\`).
 
 ## API Namespace Map
 
@@ -412,8 +412,8 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`crossTeamSearch(params)\`
 
 ### \`mj.analytics\`
-- \`getStatistics(params)\`
-- \`getCrossProjectInsights(params)\`
+- \`getStatistics(params)\` (or \`getStats()\`)
+- \`getCrossProjectInsights(params)\` (or \`getInsights()\`)
 
 ### \`mj.relationships\`
 - \`linkEntries(params)\`
@@ -466,13 +466,13 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`cleanupBackups(params)\`
 
 ### \`mj.team\`
-- \`teamCreateEntry(params)\`, \`teamGetEntryById(params)\`, \`teamGetRecent(params)\`, \`teamListTags(params)\`
+- \`teamCreateEntry(params)\`, \`teamGetEntryById(params)\` (or \`teamRead()\`), \`teamGetRecent(params)\`, \`teamListTags(params)\`
 - \`teamSearch(params)\`, \`teamSearchByDateRange(params)\`, \`teamSemanticSearch(params)\`
-- \`teamUpdateEntry(params)\`, \`teamDeleteEntry(params)\`, \`teamRestoreEntry(params)\`, \`teamListDeletedEntries(params)\`
+- \`teamUpdateEntry(params)\`, \`teamDeleteEntry(params)\` (or \`teamTrash()\`), \`teamRestoreEntry(params)\`, \`teamListDeletedEntries(params)\`
 - \`teamMergeTags(params)\`, \`teamLinkEntries(params)\`, \`teamVisualizeRelationships(params)\`
 - \`teamBatchCreateEntries(params)\`, \`teamBatchUpdateEntries(params)\`, \`teamBatchDeleteEntries(params)\`
-- \`teamGetStatistics(params)\`, \`teamGetCrossProjectInsights(params)\`, \`teamGetCollaborationMatrix(params)\`
-- \`teamExportEntries(params)\`, \`teamExportMarkdown(params)\`, \`teamImportMarkdown(params)\`, \`teamImportExternal(params)\`
+- \`teamGetStatistics(params)\` (or \`teamGetStats()\`), \`teamGetCrossProjectInsights(params)\`, \`teamGetCollaborationMatrix(params)\`
+- \`teamExportEntries(params)\` (or \`teamExport()\`), \`teamExportMarkdown(params)\`, \`teamImportMarkdown(params)\` (or \`teamImportMd()\`), \`teamImportExternal(params)\`
 - \`teamBackup(params)\`, \`teamListBackups(params)\`
 - \`teamGetVectorIndexStats(params)\`, \`teamRebuildVectorIndex(params)\`, \`teamAddToVectorIndex(params)\`
 - \`teamPassFlag(params)\`, \`teamResolveFlag(params)\`, \`teamListFlags(params)\`, \`teamUpdateFlag(params)\`, \`teamGetFlagAnalytics(params)\`
