@@ -284,6 +284,67 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // Backup tools hallucinations
+    const backupMethods = ['backup_journal', 'backupJournal', 'team_backup', 'teamBackup', 'list_backups', 'listBackups', 'team_list_backups', 'teamListBackups', 'restore_backup', 'restoreBackup', 'cleanup_backups', 'cleanupBackups'];
+    if (backupMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+
+        if (methodName.includes('backup_journal') || methodName.includes('backupJournal') || methodName.includes('team_backup') || methodName.includes('teamBackup')) {
+            if (obj['name'] === undefined) {
+                if (obj['description'] !== undefined) obj['name'] = obj['description'];
+                else if (obj['message'] !== undefined) obj['name'] = obj['message'];
+                else if (obj['text'] !== undefined) obj['name'] = obj['text'];
+                else if (obj['path'] !== undefined) obj['name'] = obj['path'];
+                
+                delete obj['description'];
+                delete obj['message'];
+                delete obj['text'];
+                delete obj['path'];
+            }
+        }
+
+        if (methodName.includes('list_backups') || methodName.includes('listBackups') || methodName.includes('team_list_backups') || methodName.includes('teamListBackups')) {
+            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `list_backups does not support search queries. It lists all available backups.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove the query parameter.',
+                    recoverable: true
+                }};
+            }
+            if (obj['limit'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `list_backups does not support a limit parameter.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove the limit parameter.',
+                    recoverable: true
+                }};
+            }
+        }
+
+        if (methodName.includes('restore_backup') || methodName.includes('restoreBackup')) {
+            if (obj['path'] !== undefined && obj['filename'] === undefined) {
+                obj['filename'] = obj['path'];
+                delete obj['path'];
+            }
+            if (obj['file'] !== undefined && obj['filename'] === undefined) {
+                obj['filename'] = obj['file'];
+                delete obj['file'];
+            }
+        }
+
+        if (methodName.includes('cleanup_backups') || methodName.includes('cleanupBackups')) {
+            if (obj['keep'] !== undefined && obj['keep_count'] === undefined) {
+                obj['keep_count'] = obj['keep'];
+                delete obj['keep'];
+            }
+        }
+    }
+
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
     const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships'];
     if (singleIdMethods.includes(methodName)) {
