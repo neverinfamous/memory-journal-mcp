@@ -5,7 +5,7 @@
  * update_entry, delete_entry, merge_tags, rebuild_vector_index, add_to_vector_index.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 

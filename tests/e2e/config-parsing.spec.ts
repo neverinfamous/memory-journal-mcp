@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { startServer, stopServer, createClient } from './helpers'

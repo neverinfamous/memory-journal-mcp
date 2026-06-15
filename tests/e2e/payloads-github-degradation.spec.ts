@@ -6,7 +6,7 @@
  * or throwing unhandled exceptions when PROJECT_REGISTRY is missing.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { startServer, stopServer, createClient, callToolAndParse } from './helpers.js'
 import { tmpdir } from 'node:os'

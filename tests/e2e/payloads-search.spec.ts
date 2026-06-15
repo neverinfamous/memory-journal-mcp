@@ -5,7 +5,7 @@
  * search_entries, search_by_date_range, semantic_search, get_vector_index_stats.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 

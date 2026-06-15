@@ -3,7 +3,7 @@
  * Tests that allowedIoRoots correctly restricts tools.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient, callToolAndParse } from './helpers.js'
 import * as os from 'node:os'
 

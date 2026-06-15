@@ -9,7 +9,7 @@
  * Also verifies memory://help/{group} returns per-group tool details.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient } from './helpers.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 

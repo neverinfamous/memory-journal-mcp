@@ -6,7 +6,7 @@
  * HTTP transport layer or crashing the server.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient } from './helpers.js'
 

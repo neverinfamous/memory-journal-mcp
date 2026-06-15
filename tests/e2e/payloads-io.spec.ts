@@ -5,7 +5,7 @@
  * export_entries, export_markdown, import_markdown
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 import { rm } from 'node:fs/promises'

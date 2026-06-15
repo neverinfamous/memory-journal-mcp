@@ -5,10 +5,11 @@
  * on port 3102 to avoid conflicting with the main webServer.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
-const STATELESS_PORT = 3102
+const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
+const STATELESS_PORT = 4200 + (workerIndex * 10)
 const STATELESS_BASE = `http://localhost:${STATELESS_PORT}`
 
 test.describe('Stateless HTTP Mode', () => {

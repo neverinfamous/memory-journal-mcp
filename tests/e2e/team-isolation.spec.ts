@@ -5,7 +5,7 @@
  * parameter to prevent cross-tenant data leakage, while read/search tools remain permissive.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient, callToolAndParse } from './helpers.js'
 

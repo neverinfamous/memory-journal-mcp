@@ -5,7 +5,7 @@
  * on port 3101 to avoid conflicting with the main webServer.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
 const AUTH_TOKEN = 'test-secret-token-e2e'

@@ -6,7 +6,7 @@
  * and without OAuth enabled.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
 import express from 'express'

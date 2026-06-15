@@ -261,10 +261,16 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         // 1. Text aliases
         for (const key of ['text', 'message', 'description'] as const) {
             if (obj[key] !== undefined) {
-                if (methodName.includes('create_github_issue') || methodName.includes('createGithubIssue') || methodName.includes('create_github_milestone') || methodName.includes('update_github_milestone') || methodName.includes('createGithubMilestone') || methodName.includes('updateGithubMilestone')) {
-                    const targetProp = methodName.includes('milestone') || methodName.includes('Milestone') ? 'description' : 'body';
-                    if (obj[targetProp] === undefined) {
-                        obj[targetProp] = obj[key];
+                if (methodName.includes('create_github_issue') || methodName.includes('createGithubIssue')) {
+                    if (obj['body'] === undefined) {
+                        obj['body'] = obj[key];
+                        if (key === 'text') delete obj['text'];
+                        else if (key === 'message') delete obj['message'];
+                        else if (key === 'description') delete obj['description'];
+                    }
+                } else if (methodName.includes('create_github_milestone') || methodName.includes('createGithubMilestone') || methodName.includes('update_github_milestone') || methodName.includes('updateGithubMilestone')) {
+                    if (obj['title'] === undefined && (key === 'text' || key === 'message' || key === 'description')) {
+                        obj['title'] = obj[key];
                         if (key === 'text') delete obj['text'];
                         else if (key === 'message') delete obj['message'];
                         else if (key === 'description') delete obj['description'];
@@ -283,7 +289,8 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
 
         // 2. State aliases
-        if (obj['keep'] !== undefined && obj['state'] === undefined) {
+        const hasStateParam = methodName.includes('get_github_issues') || methodName.includes('getGithubIssues') || methodName.includes('get_github_prs') || methodName.includes('getGithubPrs') || methodName.includes('get_github_milestones') || methodName.includes('getGithubMilestones');
+        if (hasStateParam && obj['keep'] !== undefined && obj['state'] === undefined) {
             if (obj['keep'] === true) {
                 obj['state'] = 'open';
             } else if (obj['keep'] === false) {
@@ -292,6 +299,38 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                 obj['state'] = obj['keep'];
             }
             delete obj['keep'];
+        }
+
+        // 2b. Kanban specific aliases
+        if (methodName.includes('move_kanban_item') || methodName.includes('moveKanbanItem')) {
+            if (obj['keep'] !== undefined && obj['item_id'] === undefined) {
+                obj['item_id'] = obj['keep'];
+                delete obj['keep'];
+            }
+            if (obj['path'] !== undefined && obj['target_status'] === undefined) {
+                obj['target_status'] = obj['path'];
+                delete obj['path'];
+            }
+        }
+        if (methodName.includes('add_kanban_item') || methodName.includes('addKanbanItem')) {
+            if (obj['keep'] !== undefined && obj['issue_number'] === undefined) {
+                obj['issue_number'] = obj['keep'];
+                delete obj['keep'];
+            }
+        }
+        if (methodName.includes('delete_kanban_item') || methodName.includes('deleteKanbanItem')) {
+            if (obj['keep'] !== undefined && obj['item_id'] === undefined) {
+                obj['item_id'] = obj['keep'];
+                delete obj['keep'];
+            }
+        }
+
+        // 2c. Milestone specific aliases
+        if (methodName.includes('get_github_milestone') || methodName.includes('getGithubMilestone') || methodName.includes('update_github_milestone') || methodName.includes('updateGithubMilestone') || methodName.includes('delete_github_milestone') || methodName.includes('deleteGithubMilestone')) {
+            if (obj['keep'] !== undefined && obj['milestone_number'] === undefined) {
+                obj['milestone_number'] = obj['keep'];
+                delete obj['keep'];
+            }
         }
 
         // 3. Mode alias for Kanban

@@ -13,7 +13,7 @@
  * admin, github, backup, team.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })

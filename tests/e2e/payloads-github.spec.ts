@@ -10,7 +10,7 @@
  * In all cases the response must be a non-empty, recognizable shape.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient } from './helpers.js'
 

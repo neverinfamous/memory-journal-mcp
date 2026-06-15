@@ -5,12 +5,14 @@
  * protocol error handling and routing.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
+import { getBaseURL } from './helpers.js'
 
 test.describe('HTTP Transport Protocols', () => {
     test.describe('Streamable HTTP (MCP 2025-03-26)', () => {
-        test('should reject non-init request without session ID', async ({ request }) => {
-            const response = await request.post('/mcp', {
+        test('should reject non-init request without session ID', async ({ request }, testInfo) => {
+            const baseURL = getBaseURL(testInfo)
+            const response = await request.post(`${baseURL}/mcp`, {
                 headers: {
                     Accept: 'application/json, text/event-stream',
                 },
@@ -29,8 +31,9 @@ test.describe('HTTP Transport Protocols', () => {
             )
         })
 
-        test('should reject malformed JSON body on /mcp', async ({ request }) => {
-            const response = await request.post('/mcp', {
+        test('should reject malformed JSON body on /mcp', async ({ request }, testInfo) => {
+            const baseURL = getBaseURL(testInfo)
+            const response = await request.post(`${baseURL}/mcp`, {
                 headers: {
                     Accept: 'application/json, text/event-stream',
                     'Content-Type': 'application/json',
@@ -42,8 +45,9 @@ test.describe('HTTP Transport Protocols', () => {
             expect(response.status()).toBe(400)
         })
 
-        test('should accept initialization and return session ID', async ({ request }) => {
-            const response = await request.post('/mcp', {
+        test('should accept initialization and return session ID', async ({ request }, testInfo) => {
+            const baseURL = getBaseURL(testInfo)
+            const response = await request.post(`${baseURL}/mcp`, {
                 headers: {
                     Accept: 'application/json, text/event-stream',
                 },
@@ -69,8 +73,9 @@ test.describe('HTTP Transport Protocols', () => {
     })
 
     test.describe('Legacy SSE (MCP 2024-11-05)', () => {
-        test('should reject /messages POST without sessionId parameter', async ({ request }) => {
-            const response = await request.post('/messages', {
+        test('should reject /messages POST without sessionId parameter', async ({ request }, testInfo) => {
+            const baseURL = getBaseURL(testInfo)
+            const response = await request.post(`${baseURL}/messages`, {
                 data: {
                     jsonrpc: '2.0',
                     id: 1,
@@ -88,8 +93,9 @@ test.describe('HTTP Transport Protocols', () => {
             expect(body.error).toHaveProperty('message', 'Missing sessionId parameter')
         })
 
-        test('should reject /messages POST with unknown sessionId', async ({ request }) => {
-            const response = await request.post('/messages?sessionId=invalid-session-uuid', {
+        test('should reject /messages POST with unknown sessionId', async ({ request }, testInfo) => {
+            const baseURL = getBaseURL(testInfo)
+            const response = await request.post(`${baseURL}/messages?sessionId=invalid-session-uuid`, {
                 data: {
                     jsonrpc: '2.0',
                     id: 1,
@@ -102,13 +108,14 @@ test.describe('HTTP Transport Protocols', () => {
             expect(body.error).toHaveProperty('message', 'Session not found')
         })
 
-        test('should complete full SDK client round-trip via Legacy SSE', async () => {
+        test('should complete full SDK client round-trip via Legacy SSE', async ({ request: _ }, testInfo) => {
             // Regression test: server.connect() auto-calls start() on SSEServerTransport,
             // so a redundant start() call would throw "already started!" and break SSE entirely.
             const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
             const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js')
 
-            const transport = new SSEClientTransport(new URL('http://localhost:3100/sse'))
+            const baseURL = getBaseURL(testInfo)
+            const transport = new SSEClientTransport(new URL(`${baseURL}/sse`))
             const client = new Client(
                 { name: 'playwright-sse-regression', version: '1.0.0' },
                 { capabilities: {} }

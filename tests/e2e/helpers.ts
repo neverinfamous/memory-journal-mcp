@@ -29,21 +29,26 @@ const DEFAULT_PORT = 3100
  * Falls back to http://localhost:3100 if not set in project config.
  */
 export function getBaseURL(testInfo: TestInfo): string {
-    return (
-        (testInfo.project.use as { baseURL?: string }).baseURL ?? `http://localhost:${DEFAULT_PORT}`
-    )
+    const customBaseURL = (testInfo.project.use as { baseURL?: string }).baseURL
+    if (customBaseURL) return customBaseURL
+
+    const workerIndex = testInfo.parallelIndex ?? Number(process.env.TEST_PARALLEL_INDEX || 0)
+    return `http://localhost:${DEFAULT_PORT + workerIndex}`
 }
 
 /**
  * Create and connect a Streamable HTTP MCP client.
  * Caller is responsible for calling client.close() in afterAll.
  */
-export async function createClient(port = 3100, authToken?: string): Promise<Client> {
+export async function createClient(port?: number, authToken?: string): Promise<Client> {
+    const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
+    const resolvedPort = port ?? (DEFAULT_PORT + workerIndex)
+
     const transportOptions = authToken
         ? { requestInit: { headers: { Authorization: `Bearer ${authToken}` } } }
         : undefined
     const transport = new StreamableHTTPClientTransport(
-        new URL(`http://localhost:${port}/mcp`),
+        new URL(`http://localhost:${resolvedPort}/mcp`),
         transportOptions
     )
     const client = new Client(

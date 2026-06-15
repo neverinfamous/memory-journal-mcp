@@ -8,10 +8,11 @@
  * Uses a dedicated server on port 3103 with MCP_RATE_LIMIT_MAX=5.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
-const RATE_PORT = 3103
+const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
+const RATE_PORT = 4100 + (workerIndex * 10)
 const RATE_BASE = `http://localhost:${RATE_PORT}`
 
 test.describe('Rate Limiting', () => {

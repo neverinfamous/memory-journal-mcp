@@ -9,7 +9,7 @@
  * nonexistent entry, self-loop link, and duplicate link detection.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 

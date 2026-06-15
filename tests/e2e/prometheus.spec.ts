@@ -4,7 +4,7 @@
  * Verifies the HTTP server's /metrics endpoint exposes Prometheus metrics.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 
 test.describe('Prometheus Metrics Export', () => {
     test('should return 200 OK from /metrics endpoint with text/plain content type', async ({ request }) => {

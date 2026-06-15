@@ -6,7 +6,7 @@
  * { success: false, code: 'CONFIGURATION_ERROR' } — never raw MCP exceptions.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient, callToolAndParse, startServer, stopServer } from './helpers.js'
 

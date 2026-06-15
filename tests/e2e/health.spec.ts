@@ -5,7 +5,7 @@
  * return correct responses with expected structure.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 
 test.describe('Health & Root Info', () => {
     test('should return 200 OK from /health endpoint', async ({ request }) => {

@@ -6,7 +6,7 @@
  * memory://tags, and unknown resource URI error handling.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient } from './helpers.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 

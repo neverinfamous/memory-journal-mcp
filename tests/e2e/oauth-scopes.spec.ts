@@ -9,7 +9,7 @@
  * admin: rebuild_vector_index (admin group)
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import * as jose from 'jose'

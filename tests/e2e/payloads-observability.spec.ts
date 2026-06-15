@@ -22,7 +22,7 @@
  *   - Metrics accumulate across tests within this describe block (serial mode).
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
