@@ -301,7 +301,7 @@ test.describe('Errors: Backup', () => {
 // =============================================================================
 
 test.describe('Errors: Team', () => {
-    const TEAM_EXT_PORT = 3122
+    const TEAM_EXT_PORT = 5122 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
     let client: import('@modelcontextprotocol/sdk/client/index.js').Client
 
     test.beforeAll(async () => {

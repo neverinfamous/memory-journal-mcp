@@ -12,8 +12,8 @@ import { startServer, stopServer } from './helpers.js'
 import express from 'express'
 import { Server } from 'node:http'
 
-const OAUTH_PORT = 3199
-const MOCK_ISSUER_PORT = 3198
+const OAUTH_PORT = 5199 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const MOCK_ISSUER_PORT = 5198 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe('OAuth 2.1 Discovery', () => {
     test.describe('Without OAuth enabled (default)', () => {

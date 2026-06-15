@@ -9,7 +9,7 @@ import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
 const AUTH_TOKEN = 'test-secret-token-e2e'
-const AUTH_PORT = 3101
+const AUTH_PORT = 6100 + Number(process.env.TEST_PARALLEL_INDEX || 0)
 const AUTH_BASE = `http://localhost:${AUTH_PORT}`
 
 test.describe('Bearer Token Authentication', () => {

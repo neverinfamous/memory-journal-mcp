@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 
-const TEAM_PORT = 3109
+const TEAM_PORT = 5109 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const TEAM_BASE = `http://localhost:${TEAM_PORT}`
 
 test.describe.configure({ mode: 'serial' })

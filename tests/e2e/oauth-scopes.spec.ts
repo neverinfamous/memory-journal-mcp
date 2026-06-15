@@ -16,8 +16,8 @@ import * as jose from 'jose'
 import express from 'express'
 import type { Server } from 'node:http'
 
-const OAUTH_SCOPES_PORT = 3113
-const JWKS_PORT = 3114
+const OAUTH_SCOPES_PORT = 5113 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const JWKS_PORT = 5114 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe.configure({ mode: 'serial' })
 

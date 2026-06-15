@@ -12,7 +12,7 @@
 import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
-const STREAM_PORT = 3123
+const STREAM_PORT = 5123 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('HTTP/SSE Streaming', () => {

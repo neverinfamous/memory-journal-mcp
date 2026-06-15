@@ -16,6 +16,8 @@ const RATE_PORT = 4100 + (workerIndex * 10)
 const RATE_BASE = `http://localhost:${RATE_PORT}`
 
 test.describe('Rate Limiting', () => {
+    test.setTimeout(120000)
+
     test.beforeAll(async () => {
         await startServer(RATE_PORT, [], 'rate-limit')
     })

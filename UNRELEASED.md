@@ -60,6 +60,7 @@
 - False-positive in the static security scanner regarding bracket-notation AST escapes.
 - `--tool-filter codemode` inadvertently disabling mutating tool bindings.
 - Test pollution in `codemode-restore.test.ts`.
+- E2E Test suite execution time bottlenecks by enabling parallel Playwright workers, fully isolating worker-specific SQLite databases and dynamically assigning custom collision-free ports for in-test HTTP servers.
 - `create_entry` missing auto-population of GitHub URLs when `issue_number` is provided.
 - `get_entry_by_id` missing relationships and importance breakdown in response.
 - `restore_backup` tool failing in environments with database encryption.

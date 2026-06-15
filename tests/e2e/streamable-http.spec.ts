@@ -17,7 +17,7 @@ import { startServer, stopServer } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-const STREAM_PORT = 3108
+const STREAM_PORT = 5108 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {

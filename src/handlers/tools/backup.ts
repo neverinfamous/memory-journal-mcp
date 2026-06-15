@@ -93,7 +93,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .string()
                     .optional()
                     .describe('Custom backup name (optional, defaults to timestamp). Anti-Hallucination Hint: You can use positional args like mj.backup.backupJournal("my_name").'),
-            }),
+            }).strict(),
             outputSchema: BackupResultOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -106,7 +106,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     const input = z
                         .object({
                             name: z.string().optional(),
-                        })
+                        }).strict()
                         .parse(params)
                     await sendProgress(progress, 0, 2, 'Creating backup...')
                     const result = await db.exportToFile(input.name)
@@ -172,7 +172,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .boolean()
                     .optional()
                     .describe('Must be set to true to confirm the restore operation'),
-            }),
+            }).strict(),
             outputSchema: RestoreResultOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -186,7 +186,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         .object({
                             filename: z.string().min(1, 'filename cannot be empty'),
                             confirm: z.boolean().optional(),
-                        })
+                        }).strict()
                         .parse(params)
 
                     if (!input.confirm) {
@@ -273,7 +273,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 keep_count: relaxedNumber()
                     .default(5)
                     .describe('Number of most recent backups to keep (default: 5). Anti-Hallucination Hint: You can pass a string or number, or use positional args: mj.backup.cleanupBackups(5).'),
-            }),
+            }).strict(),
             outputSchema: CleanupBackupsOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -284,7 +284,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { keep_count } = z
-                        .object({ keep_count: relaxedNumber().default(5) })
+                        .object({ keep_count: relaxedNumber().default(5) }).strict()
                         .parse(params)
 
                     const keepCountNum = typeof keep_count === 'string' ? parseInt(keep_count, 10) : keep_count

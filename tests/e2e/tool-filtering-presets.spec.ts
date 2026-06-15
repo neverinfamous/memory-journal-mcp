@@ -21,9 +21,9 @@ import { getAllToolNames, TOOL_GROUPS } from '../../src/filtering/tool-filter.js
 const TOTAL_TOOLS = getAllToolNames().length
 const GITHUB_TOOLS = TOOL_GROUPS.github.length
 
-const ESSENTIAL_PORT = 3120
-const CODEMODE_PORT = 3121
-const MINUS_GITHUB_PORT = 3122
+const ESSENTIAL_PORT = 5120 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const CODEMODE_PORT = 5121 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const MINUS_GITHUB_PORT = 5122 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 // ============================================================================
 // essential preset: core + codemode (no github, no team, no search)

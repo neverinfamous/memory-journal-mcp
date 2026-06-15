@@ -21,8 +21,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { startServer, stopServer } from './helpers.js'
 
-const CORE_ONLY_PORT = 3110 // --tool-filter core  (no codemode, no github, no search)
-const NO_GITHUB_PORT = 3111 // --tool-filter -github (all except github)
+const CORE_ONLY_PORT = 5110 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100) // --tool-filter core  (no codemode, no github, no search)
+const NO_GITHUB_PORT = 5111 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100) // --tool-filter -github (all except github)
 
 /** Read memory://instructions text from a client */
 async function readInstructions(client: Client): Promise<string> {
@@ -138,7 +138,7 @@ test.describe('memory://instructions: -github filter gating', () => {
 // codemode-only filter: Code Mode API injection
 // ============================================================================
 
-const CODEMODE_ONLY_PORT = 3112
+const CODEMODE_ONLY_PORT = 5112 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe('memory://instructions: codemode-only filter gating', () => {
     let client: Client

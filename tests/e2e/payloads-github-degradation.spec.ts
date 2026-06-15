@@ -11,7 +11,7 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { startServer, stopServer, createClient, callToolAndParse } from './helpers.js'
 import { tmpdir } from 'node:os'
 
-const GITHUB_DEGRADE_PORT = 3115
+const GITHUB_DEGRADE_PORT = 5115 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe.configure({ mode: 'serial', timeout: 120000 })
 

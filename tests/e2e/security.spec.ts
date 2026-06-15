@@ -100,7 +100,7 @@ test.describe('HTTP Transport Security & Limits', () => {
     })
 
     test('should include HSTS header when --enable-hsts is configured', async () => {
-        const HSTS_PORT = 3124
+        const HSTS_PORT = 5124 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
         await startServer(HSTS_PORT, ['--enable-hsts'], 'hsts')
 

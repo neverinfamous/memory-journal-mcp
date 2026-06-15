@@ -12,7 +12,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { startServer, stopServer } from './helpers.js'
 
-const FILTER_PORT = 3104
+const FILTER_PORT = 5104 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe('Tool Filtering', () => {
     let client: Client

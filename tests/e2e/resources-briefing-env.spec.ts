@@ -13,7 +13,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { spawn, type ChildProcess } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 
-const BRIEFING_PORT = 3112
+const BRIEFING_PORT = 5112 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const BRIEFING_BASE = `http://localhost:${BRIEFING_PORT}`
 
 test.describe.configure({ mode: 'serial' })
