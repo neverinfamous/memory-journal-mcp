@@ -148,6 +148,17 @@
 - Implemented positional parameter support for `backup_journal` and `restore_backup`, and added `relaxedNumber()` coercion for `cleanup_backups`.
 - Healed the `teamListEntries` alias and `proj` parameter hallucinations in Team tool proxies.
 - Updated `test-server/README.md` documentation to accurately reflect database fallback behavior and include `--db` explicitly in Quick Run commands to prevent stray databases.
+- Resolved unhandled V8 errors in Code Mode by returning actionable feedback when calling missing array methods (`shift`, `concat`, `reduceRight`) or accessing `Promise` objects synchronously.
+- Fixed `test_error_handling` throwing raw Zod errors by explicitly wrapping it to return formatted `[VALIDATION_ERROR]` objects.
+- Intercepted `text` parameter hallucinations in Search tools by gracefully mapping them to `query`.
+- Enforced strict schema definitions for Analytics tools to prevent `param-normalizer` from silently dropping invalid hallucinated arguments.
+- Fixed alias mapping for `link_entries` (`source` to `from_entry_id`, `target` to `to_entry_id`) and positional ID constraints in `visualize_relationships`.
+- Fixed overloaded string aliases (`keep`, `mode`, `text`) in parameter normalization by making them context-aware to prevent conflicts across IO tools.
+- Intercepted external URL usage for `import_external`, gracefully guiding agents back to local `source_dir` usage.
+- Added explicit mapping for `maxTokens` and `max_tokens` hallucinations in `update_configuration`.
+- Fixed GitHub tools to properly intercept and map common parameter hallucinations (`q`, `path`, `mode: "summary"`).
+- Added explicit mapping for backup parameters (`message`/`text`/`path` to `name` for `backup_journal`, `file`/`path` to `filename` for `restore_backup`, and `keep` to `keep_count` for `cleanup_backups`), and added `backups`/`deleted` arrays to the proxy properties.
+- Fixed case-sensitivity checks in the proxy layer to correctly intercept and heal hallucinations for team-prefixed variants of IO tools (e.g. `teamExportMarkdown`).
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
