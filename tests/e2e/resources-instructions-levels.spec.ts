@@ -123,23 +123,54 @@ test.describe('memory://instructions: -github filter gating', () => {
         expect(text).toContain('## Code Mode')
     })
 
-    test('-github: GitHub Integration section is absent (github group removed)', async () => {
+    test('-github: GitHub help pointer is absent (github group removed)', async () => {
         const text = await readInstructions(client)
-        expect(text).not.toContain('## GitHub Integration')
-    })
-
-    test('-github: Copilot Review Patterns section is absent (github group removed)', async () => {
-        const text = await readInstructions(client)
-        expect(text).not.toContain('Copilot Review Patterns')
-    })
-
-    test('-github: semantic_search is present in Active Tools (search group enabled)', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('semantic_search')
+        expect(text).not.toContain('memory://help/github')
     })
 
     test('-github: Active Tools section does not list github tools', async () => {
         const text = await readInstructions(client)
         expect(text).not.toContain('get_github_issues')
+    })
+})
+
+// ============================================================================
+// codemode-only filter: Code Mode API injection
+// ============================================================================
+
+const CODEMODE_ONLY_PORT = 3112
+
+test.describe('memory://instructions: codemode-only filter gating', () => {
+    let client: Client
+
+    test.beforeAll(async () => {
+        await startServer(CODEMODE_ONLY_PORT, ['--tool-filter', 'codemode'], 'instr-codemode')
+        const transport = new StreamableHTTPClientTransport(
+            new URL(`http://localhost:${CODEMODE_ONLY_PORT}/mcp`)
+        )
+        client = new Client(
+            { name: 'instr-codemode-test', version: '1.0.0' },
+            { capabilities: {} }
+        )
+        await client.connect(transport)
+    })
+
+    test.afterAll(async () => {
+        await client.close()
+        stopServer(CODEMODE_ONLY_PORT)
+    })
+
+    test('codemode-only: injects full Code Mode API Reference', async () => {
+        const text = await readInstructions(client)
+        expect(text).toContain('# Code Mode API Reference')
+        expect(text).toContain('## API Namespace Map')
+        expect(text).toContain('mj.core')
+        expect(text).toContain('mj.github')
+    })
+
+    test('codemode-only: Active Tools section lists only codemode group', async () => {
+        const text = await readInstructions(client)
+        expect(text).toContain('**codemode**: `mj_execute_code`')
+        expect(text).not.toContain('**core**:')
     })
 })
