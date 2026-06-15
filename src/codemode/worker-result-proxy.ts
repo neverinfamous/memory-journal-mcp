@@ -106,9 +106,28 @@ export function wrapResult(result: unknown): unknown {
                         }
                     }
 
+                    if (prop === 'length') {
+                        const targetRecord = target as Record<string, unknown>
+                        const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
+                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        if (targetKey !== undefined) {
+                            return (targetRecord[targetKey] as unknown[]).length
+                        }
+                    }
+
+                    if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+                        const idx = parseInt(prop, 10)
+                        const targetRecord = target as Record<string, unknown>
+                        const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
+                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        if (targetKey !== undefined) {
+                            return (targetRecord[targetKey] as unknown[])[idx]
+                        }
+                    }
+
                     if (
                         typeof prop === 'string' &&
-                        ['find', 'map', 'filter', 'reduce', 'forEach', 'some', 'every', 'flatMap', 'push', 'pop', 'slice', 'splice', 'sort'].includes(prop)
+                        ['find', 'map', 'filter', 'reduce', 'forEach', 'some', 'every', 'flatMap', 'push', 'pop', 'slice', 'splice', 'sort', 'includes', 'indexOf', 'findIndex', 'join', 'reverse', 'at'].includes(prop)
                     ) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
