@@ -19,6 +19,7 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
    - When you receive this message, DO NOT proceed. Surface the message to the user and wait for them to manually refresh the server.
    - Once the user confirms the server is ready, use the `send_message` tool to pass the "ready" signal to the waiting subagent.
 4. **Verification and Commit**:
+   - The subagent MUST explicitly re-verify the fix using `mj_execute_code` (Code Mode) after the server is restarted to ensure the proxy changes are live and effective.
    - The subagent will verify the fix, commit the code (`git commit -m "Optimize [group] tool usage"`), and exit.
    - Once the subagent completes, mark the task as done and move to the next test in the queue.
 5. **Code Mode Error Testing Protocol**:

@@ -122,7 +122,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     }
 
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
-    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry'];
+    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships'];
     if (singleIdMethods.includes(methodName)) {
         if (args.length === 0) {
             return { error: {
@@ -232,6 +232,49 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             args[0] = { entry_ids: args[0] };
         } else if (args.length > 1 && args.every(a => typeof a === 'number')) {
             args = [{ entry_ids: args }];
+        }
+    }
+
+    // link_entries hallucination: passing source, target, type, description, etc.
+    if (methodName === 'link_entries' || methodName === 'linkEntries' || methodName === 'team_link_entries' || methodName === 'teamLinkEntries') {
+        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+            const obj = args[0] as Record<string, unknown>;
+            if (obj['source'] !== undefined && obj['from_entry_id'] === undefined) {
+                obj['from_entry_id'] = obj['source'];
+                delete obj['source'];
+            }
+            if (obj['source_id'] !== undefined && obj['from_entry_id'] === undefined) {
+                obj['from_entry_id'] = obj['source_id'];
+                delete obj['source_id'];
+            }
+            if (obj['target'] !== undefined && obj['to_entry_id'] === undefined) {
+                obj['to_entry_id'] = obj['target'];
+                delete obj['target'];
+            }
+            if (obj['target_id'] !== undefined && obj['to_entry_id'] === undefined) {
+                obj['to_entry_id'] = obj['target_id'];
+                delete obj['target_id'];
+            }
+            if (obj['dest'] !== undefined && obj['to_entry_id'] === undefined) {
+                obj['to_entry_id'] = obj['dest'];
+                delete obj['dest'];
+            }
+            if (obj['type'] !== undefined && obj['relationship_type'] === undefined) {
+                obj['relationship_type'] = obj['type'];
+                delete obj['type'];
+            }
+            if (obj['rel'] !== undefined && obj['relationship_type'] === undefined) {
+                obj['relationship_type'] = obj['rel'];
+                delete obj['rel'];
+            }
+            if (obj['description'] !== undefined && obj['notes'] === undefined) {
+                obj['notes'] = obj['description'];
+                delete obj['description'];
+            }
+            if (obj['message'] !== undefined && obj['notes'] === undefined) {
+                obj['notes'] = obj['message'];
+                delete obj['message'];
+            }
         }
     }
 
