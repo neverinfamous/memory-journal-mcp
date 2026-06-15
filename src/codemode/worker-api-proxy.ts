@@ -684,27 +684,30 @@ export function buildApiProxy(
 
                 // Resolve using unified METHOD_ALIASES map
                 const aliases = METHOD_ALIASES[group]
+                let resolvedKey = key
                 if (aliases && typeof key === 'string' && aliases[key]) {
                     const canonicalCamel = aliases[key]
                     // Convert the canonical camelCase to the target's snake_case keys
                     const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
                     if (canonicalSnake in target) return target[canonicalSnake]
                     if (canonicalCamel in target) return target[canonicalCamel]
+                    
+                    resolvedKey = canonicalCamel
                 }
 
-                if (key === 'getConfig') {
+                if (resolvedKey === 'getConfig') {
                     return () => Promise.reject(new Error(
                         "Code Mode cannot directly read configuration via getConfig(). Use mj.core.listProjects() to discover active projects, or updateConfiguration() to change settings."
                     ))
                 }
 
-                if (key === 'getBriefing') {
+                if (resolvedKey === 'getBriefing') {
                     return () => Promise.reject(new Error(
                         "Code Mode cannot directly read the briefing resource via getBriefing(). Use mj.core.getRecentEntries() instead, or read the memory://briefing resource via standard MCP client requests outside of Code Mode."
                     ))
                 }
 
-                if (key === 'readResource') {
+                if (resolvedKey === 'readResource') {
                     // §2.3: URI-aware suggestions for common readResource hallucinations
                     return (uri?: string) => {
                         const suggestions: Record<string, string> = {
@@ -728,11 +731,11 @@ export function buildApiProxy(
                     }
                 }
 
-                if (key === 'then') return undefined
+                if (resolvedKey === 'then') return undefined
                 
                 // Cross-group search and Team tool transparent routing
-                if (typeof key === 'string') {
-                    const snakeKey = /[A-Z]/.test(key) ? key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`) : key;
+                if (typeof resolvedKey === 'string') {
+                    const snakeKey = /[A-Z]/.test(resolvedKey) ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`) : resolvedKey;
                     
                     // 1. Check for team prefix hallucination (e.g. semanticSearch -> team_semantic_search)
                     const teamSnakeKey = `team_${snakeKey}`;
