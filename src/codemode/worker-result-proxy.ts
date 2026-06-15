@@ -138,10 +138,8 @@ export function wrapResult(result: unknown): unknown {
                         typeof prop === 'string' &&
                         [
                             'find', 'map', 'filter', 'reduce', 'reduceRight', 'forEach', 'some', 'every', 
-                            'flatMap', 'push', 'pop', 'shift', 'unshift', 'slice', 'splice', 'sort', 
-                            'includes', 'indexOf', 'findIndex', 'findLast', 'findLastIndex', 'join', 
-                            'reverse', 'at', 'concat', 'keys', 'values', 'entries', 'flat', 'copyWithin', 
-                            'fill', 'with'
+                            'flatMap', 'includes', 'indexOf', 'findIndex', 'findLast', 'findLastIndex', 'join', 
+                            'at', 'concat', 'keys', 'values', 'entries', 'flat', 'with', 'slice'
                         ].includes(prop)
                     ) {
                         const targetRecord = target as Record<string, unknown>
@@ -165,6 +163,15 @@ export function wrapResult(result: unknown): unknown {
                         const keys = Object.keys(target).join(', ') || 'none'
                         throw new TypeError(
                             `CodeMode Non-Array Proxy Error: Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Keys available: ${keys}`
+                        )
+                    }
+
+                    if (
+                        typeof prop === 'string' &&
+                        ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'copyWithin', 'fill'].includes(prop)
+                    ) {
+                        throw new Error(
+                            `[VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You must use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
                         )
                     }
                     return undefined
