@@ -56,6 +56,7 @@ const PARAM_ALIASES: Record<string, string> = {
     sort: 'sort_by',
     order_by: 'sort_by',
     order: 'sort_by',
+    keep: 'keep_count',
 }
 
 /**
