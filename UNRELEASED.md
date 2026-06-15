@@ -108,6 +108,7 @@
 - `get_entry_history` returning raw database objects instead of the expected output schema.
 - Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP notifications.
 - Stale 99 tools documentation references across the repository to reflect the new 100-tool inventory.
+- Stale wiki documentation references in `Code-Mode.md` and `Tools.md` to align exactly with v8.0.1 codebase taxonomy and SSoT constraints.
 - `team_batch_create_entries` incorrectly setting `isPersonal: true`.
 - Handlers failing to wrap Zod validation errors as structured `VALIDATION_ERROR`s.
 - Strict `TEAM_AUTHOR` requirement causing permission errors on local environments without OAuth.
