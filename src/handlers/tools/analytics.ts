@@ -145,6 +145,9 @@ const GetStatisticsSchemaMcp = z.object({
     end_date: z.string().optional(),
     project_breakdown: z.boolean().optional().default(false),
     project_number: z.any().optional().describe('Anti-Hallucination Hint: get_statistics cannot be filtered by project_number. It always returns global stats. Use project_breakdown: true instead.'),
+    timeframe: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
+    period: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
+    time: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or time.'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -172,6 +175,8 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
         .default(3)
         .describe('Minimum entries to include project'),
     project_number: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects. Do not pass a project_number.'),
+    query: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a query. It analyzes all entries.'),
+    limit: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a limit.'),
 })
 
 // ============================================================================

@@ -193,6 +193,38 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // Analytics tools hallucinations
+    const analyticsMethods = ['get_statistics', 'getStatistics', 'get_cross_project_insights', 'getCrossProjectInsights', 'team_get_statistics', 'teamGetStatistics', 'team_get_cross_project_insights', 'teamGetCrossProjectInsights'];
+    if (analyticsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        
+        if (methodName.includes('get_statistics') || methodName.includes('getStatistics')) {
+            if (obj['time'] !== undefined || obj['timeframe'] !== undefined || obj['period'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `get_statistics does not accept a time/timeframe parameter. Use 'group_by' ('day', 'week', 'month') instead.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove time/timeframe and use group_by.',
+                    recoverable: true
+                }};
+            }
+        }
+
+        if (methodName.includes('get_cross_project_insights') || methodName.includes('getCrossProjectInsights')) {
+            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['limit'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `get_cross_project_insights does not accept search queries or limits. It analyzes all projects.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove the query and limit parameters.',
+                    recoverable: true
+                }};
+            }
+        }
+    }
+
     // GitHub tools hallucinations
     const githubMethods = [
         'get_github_issues', 'getGithubIssues',
