@@ -1,6 +1,7 @@
 import { getAllToolNames, getEnabledGroups } from '../../../filtering/tool-filter.js'
 import {
-    generateInstructions,
+    generateStandardInstructions,
+    generateCodeModeInstructions,
     type InstructionLevel,
 } from '../../../constants/server-instructions.js'
 import { getPrompts } from '../../prompts/index.js'
@@ -30,7 +31,12 @@ export const instructionsResource: InternalResourceDef = {
             return { name: prompt.name, description: prompt.description }
         })
 
-        const instructions = generateInstructions(
+        const isCodeModeOnly = enabledTools.size === 1 && enabledTools.has('mj_execute_code')
+        const generatorFn = (isCodeModeOnly || context.filterConfig?.raw === 'codemode') 
+            ? generateCodeModeInstructions 
+            : generateStandardInstructions;
+
+        const instructions = generatorFn(
             enabledTools,
             prompts,
             undefined,

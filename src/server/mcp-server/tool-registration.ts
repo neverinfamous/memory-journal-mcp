@@ -3,7 +3,7 @@ import type { z } from 'zod'
 import { getEnabledGroups } from '../../filtering/tool-filter.js'
 import { callTool } from '../../handlers/tools/index.js'
 import { readResource, validateResourceSubscription } from '../../handlers/resources/index.js'
-import { generateInstructions } from '../../constants/server-instructions.js'
+import { generateStandardInstructions, generateCodeModeInstructions } from '../../constants/server-instructions.js'
 import { type DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { registerResources, registerPrompts } from '../registration.js'
 import type { ResourceDefinition, PromptDefinition } from '../registration.js'
@@ -31,7 +31,23 @@ export function createServerInstance(
             const currentConfig = configManager.getConfig()
             const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
             const groups = currentConfig.toolFilterConfig ? getEnabledGroups(currentConfig.toolFilterConfig.enabledTools) : undefined
-            return generateInstructions(
+            
+            const isCodeModeOnly = enabledSet.size === 1 && enabledSet.has('mj_execute_code')
+            
+            if (isCodeModeOnly || currentConfig.toolFilterConfig?.raw === 'codemode') {
+                return generateCodeModeInstructions(
+                    enabledSet,
+                    prompts.map((p) => {
+                        const prompt = p as { name: string; description?: string }
+                        return { name: prompt.name, description: prompt.description }
+                    }),
+                    undefined,
+                    currentConfig.instructionLevel,
+                    groups
+                )
+            }
+            
+            return generateStandardInstructions(
                 enabledSet,
                 prompts.map((p) => {
                     const prompt = p as { name: string; description?: string }
