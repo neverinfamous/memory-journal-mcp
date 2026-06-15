@@ -123,7 +123,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             }
         }
 
-        if (useAlias) {
+        if (useAlias && typeof alias === 'string') {
             snakeKey = alias
         }
 
