@@ -98,7 +98,10 @@ export function wrapResult(result: unknown): unknown {
                     if (prop === Symbol.iterator) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k))
+                        if (targetKey === undefined && arrayKeys.length === 1) {
+                            targetKey = arrayKeys[0]
+                        }
                         if (targetKey !== undefined) {
                             return function* () {
                                 yield* (targetRecord[targetKey] as unknown[])
@@ -109,7 +112,10 @@ export function wrapResult(result: unknown): unknown {
                     if (prop === 'length') {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k))
+                        if (targetKey === undefined && arrayKeys.length === 1) {
+                            targetKey = arrayKeys[0]
+                        }
                         if (targetKey !== undefined) {
                             return (targetRecord[targetKey] as unknown[]).length
                         }
@@ -119,7 +125,10 @@ export function wrapResult(result: unknown): unknown {
                         const idx = parseInt(prop, 10)
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k))
+                        if (targetKey === undefined && arrayKeys.length === 1) {
+                            targetKey = arrayKeys[0]
+                        }
                         if (targetKey !== undefined) {
                             return (targetRecord[targetKey] as unknown[])[idx]
                         }
@@ -137,7 +146,10 @@ export function wrapResult(result: unknown): unknown {
                     ) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k))
+                        if (targetKey === undefined && arrayKeys.length === 1) {
+                            targetKey = arrayKeys[0]
+                        }
 
                         if (targetKey !== undefined) {
                             const arr = target[targetKey] as unknown[]
