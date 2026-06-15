@@ -127,7 +127,13 @@ export function wrapResult(result: unknown): unknown {
 
                     if (
                         typeof prop === 'string' &&
-                        ['find', 'map', 'filter', 'reduce', 'forEach', 'some', 'every', 'flatMap', 'push', 'pop', 'slice', 'splice', 'sort', 'includes', 'indexOf', 'findIndex', 'join', 'reverse', 'at'].includes(prop)
+                        [
+                            'find', 'map', 'filter', 'reduce', 'reduceRight', 'forEach', 'some', 'every', 
+                            'flatMap', 'push', 'pop', 'shift', 'unshift', 'slice', 'splice', 'sort', 
+                            'includes', 'indexOf', 'findIndex', 'findLast', 'findLastIndex', 'join', 
+                            'reverse', 'at', 'concat', 'keys', 'values', 'entries', 'flat', 'copyWithin', 
+                            'fill', 'with'
+                        ].includes(prop)
                     ) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
