@@ -14,10 +14,23 @@ const MAX_SEARCH_LIMIT = 500
 export const CreateEntrySchema = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
             if ('text' in obj && !('content' in obj)) {
-                return { ...obj, content: obj['text'] };
+                obj['content'] = obj['text'];
+                delete obj['text'];
+                modified = true;
             }
+            if ('title' in obj) {
+                if (!('content' in obj)) {
+                    obj['content'] = obj['title'];
+                } else {
+                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
+                }
+                delete obj['title'];
+                modified = true;
+            }
+            return modified ? obj : val;
         }
         return val;
     },
@@ -44,10 +57,23 @@ export const CreateEntrySchema = z.preprocess(
 export const CreateEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = val as Record<string, unknown>;
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
             if ('text' in obj && !('content' in obj)) {
-                return { ...obj, content: obj['text'] };
+                obj['content'] = obj['text'];
+                delete obj['text'];
+                modified = true;
             }
+            if ('title' in obj) {
+                if (!('content' in obj)) {
+                    obj['content'] = obj['title'];
+                } else {
+                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
+                }
+                delete obj['title'];
+                modified = true;
+            }
+            return modified ? obj : val;
         }
         return val;
     },

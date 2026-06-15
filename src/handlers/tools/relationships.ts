@@ -37,19 +37,21 @@ const LinkEntriesSchema = z.object({
 
 const LinkEntriesSchemaMcp = z
     .object({
-        from_entry_id: relaxedNumber().optional(),
-        to_entry_id: relaxedNumber().optional(),
+        from_entry_id: relaxedNumber().optional().describe('ID of the source entry. Anti-Hallucination Hint: use from_entry_id, not sourceId'),
+        to_entry_id: relaxedNumber().optional().describe('ID of the target entry. Anti-Hallucination Hint: use to_entry_id, not targetId'),
         from: relaxedNumber().optional(),
         to: relaxedNumber().optional(),
         from_id: relaxedNumber().optional(),
         to_id: relaxedNumber().optional(),
+        source_id: relaxedNumber().optional(),
+        target_id: relaxedNumber().optional(),
         relationship_type: z.string().optional(),
         type: z.string().optional(),
         description: z.string().optional(),
     })
     .transform((data) => ({
-        from_entry_id: data.from_entry_id ?? data.from_id ?? data.from,
-        to_entry_id: data.to_entry_id ?? data.to_id ?? data.to,
+        from_entry_id: data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id,
+        to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
         relationship_type: data.type ?? data.relationship_type ?? 'references',
         description: data.description,
     }))
@@ -147,7 +149,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const input = LinkEntriesSchema.parse(params)
+                    const input = LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
 
                     // Guard: self-referential links are not meaningful
                     if (input.from_entry_id === input.to_entry_id) {
@@ -213,7 +215,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Domain errors from db.linkEntries (nonexistent entries)
                     const input = (() => {
                         try {
-                            return LinkEntriesSchema.parse(params)
+                            return LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
                         } catch {
                             // If parse itself failed, use formatHandlerError
                             return null
@@ -254,7 +256,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const input = VisualizeInputSchema.parse(params)
+                    const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
                     if (input.entry_id !== undefined) {
                         const entry = db.getEntryById(input.entry_id)
                         if (!entry || entry.deletedAt) {

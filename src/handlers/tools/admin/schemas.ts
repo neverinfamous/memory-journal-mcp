@@ -29,6 +29,15 @@ export const UpdateEntrySchema = z.preprocess(
                 delete obj['text'];
                 modified = true;
             }
+            if ('title' in obj) {
+                if (!('content' in obj)) {
+                    obj['content'] = obj['title'];
+                } else {
+                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
+                }
+                delete obj['title'];
+                modified = true;
+            }
             return modified ? obj : val;
         }
         return val;
@@ -69,6 +78,15 @@ export const UpdateEntrySchemaMcp = z.preprocess(
             if ('text' in obj && !('content' in obj)) {
                 obj['content'] = obj['text'];
                 delete obj['text'];
+                modified = true;
+            }
+            if ('title' in obj) {
+                if (!('content' in obj)) {
+                    obj['content'] = obj['title'];
+                } else {
+                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
+                }
+                delete obj['title'];
                 modified = true;
             }
             return modified ? obj : val;
@@ -140,11 +158,36 @@ export const DeleteEntrySchemaMcp = z.preprocess(
     }).strict()
 )
 
-export const BatchCreateEntriesSchema = z.object({
-    entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
-    auto_index: z.boolean().optional().default(true),
-    project_number: z.number().int().optional(),
-}).strict()
+export const BatchCreateEntriesSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if (Array.isArray(obj['entries'])) {
+                const rootProjectNum = obj['project_number'];
+                const newEntries = obj['entries'].map((e: unknown) => {
+                    if (typeof e === 'object' && e !== null) {
+                        const eObj = { ...(e as Record<string, unknown>) };
+                        if (eObj['project_number'] === undefined && rootProjectNum !== undefined) {
+                            eObj['project_number'] = rootProjectNum;
+                        }
+                        return eObj;
+                    }
+                    return e;
+                });
+                obj['entries'] = newEntries;
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
+        entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+        auto_index: z.boolean().optional().default(true),
+        project_number: z.number().int().optional(),
+    }).strict()
+)
 
 export const BatchCreateEntriesSchemaMcp = z.object({
     entries: z.array(CreateEntrySchemaMcp).optional(),
@@ -167,12 +210,16 @@ export const BatchUpdateEntriesSchema = z.preprocess(
                 delete obj['entries'];
             }
             if (Array.isArray(updatesArr)) {
+                const rootProjectNum = obj['project_number'];
                 const newUpdates = updatesArr.map((u: unknown) => {
                     if (typeof u === 'object' && u !== null) {
                         const uObj = { ...(u as Record<string, unknown>) };
                         if ('id' in uObj && !('entry_id' in uObj)) {
                             uObj['entry_id'] = uObj['id'];
                             delete uObj['id'];
+                        }
+                        if (uObj['project_number'] === undefined && rootProjectNum !== undefined) {
+                            uObj['project_number'] = rootProjectNum;
                         }
                         return uObj;
                     }

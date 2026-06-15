@@ -48,7 +48,7 @@ test.describe('Payload Contracts: Code Mode API Bridge Depth', () => {
     test('mj.analytics.getStatistics() returns stats object with expected fields', async () => {
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: `
-                const result = await mj.analytics.getStatistics({ project_number: 1 });
+                const result = await mj.analytics.getStatistics();
                 return result;
             `,
         })

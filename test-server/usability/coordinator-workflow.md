@@ -14,6 +14,7 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
    - Use the `invoke_subagent` tool to spawn a `self` subagent for each test file.
    - Provide the exact path to the test file as the subagent's prompt.
 3. **Server Restart Coordination**:
+   - The subagent MUST run `pnpm run check`, `pnpm run build`, `pnpm run test`, and `pnpm run test:e2e` locally, and ensure they all pass completely cleanly BEFORE they send the pause message asking to refresh the server.
    - The subagent is instructed to pause and message you: *"Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."*
    - When you receive this message, DO NOT proceed. Surface the message to the user and wait for them to manually refresh the server.
    - Once the user confirms the server is ready, use the `send_message` tool to pass the "ready" signal to the waiting subagent.
