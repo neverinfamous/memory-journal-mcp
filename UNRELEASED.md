@@ -44,7 +44,7 @@
 - Relaxed the Code Mode `context` schema to allow non-object values without validation failures.
 - Promoted parameter normalization and coercion to the top-level SDK proxy to prevent validation failures from hallucinated keys.
 - Converted `scripts/check-orphans.ts` to a portable, zero-configuration `scripts/check-orphans.mjs` Node script.
-
+- Updated test suite standard and Code Mode prompts to use `create_entry` instead of `create_entry_minimal`, fixing omitted `project_number` fields and aligning with schema updates.
 ### Removed
 - `pnpm` configuration block from `package.json` to eliminate startup warnings.
 

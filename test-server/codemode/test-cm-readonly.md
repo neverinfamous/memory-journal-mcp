@@ -47,7 +47,7 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 | Test                    | Code (readonly: false, default)                                                                                                 | Expected Result                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Create works in default | `const r = await mj.core.createEntryMinimal({content: "readonly=false test"}); return { success: r.success, id: r.entry?.id };` | `success: true`, entry created |
+| Create works in default | `const r = await mj.core.createEntry({ project_number: 5, content: "readonly=false test"}); return { success: r.success, id: r.entry?.id };` | `success: true`, entry created |
 
 ### 18.4 Cleanup
 

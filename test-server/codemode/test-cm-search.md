@@ -60,7 +60,7 @@ Test search, semantic search, date range, analytics, and vector index operations
 const byIssue = await mj.search.searchEntries({ project_number: 5, issue_number: 44 })
 const byPr = await mj.search.searchEntries({ project_number: 5, pr_status: 'merged' })
 const byWorkflow = await mj.search.searchEntries({ project_number: 5, workflow_run_id: 12345 })
-const byProject = await mj.search.searchEntries({ project_number: 5, project_number: 5 })
+const byProject = await mj.search.searchEntries({ project_number: 5 })
 const personal = await mj.search.searchEntries({
   project_number: 5,
   query: 'test',

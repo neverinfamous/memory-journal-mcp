@@ -25,7 +25,7 @@
 
 | Test                 | Command/Action                                                                                                                 | Expected Result                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Minimal create       | `create_entry_minimal(project_number: 5, content: "Test entry")`                                                               | Returns entry ID                                                                      |
+| Minimal create       | `create_entry(project_number: 5, content: "Test entry")`                                                               | Returns entry ID                                                                      |
 | Full create          | `create_entry(project_number: 5, content: "...", entry_type: "planning", tags: ["test"])`                                      | Entry created with metadata                                                           |
 | With GitHub linking  | `create_entry(project_number: 5, ..., issue_number: <N>)`                                                                      | Entry links to issue                                                                  |
 | issueUrl auto-pop    | `create_entry(project_number: 5, content: "...", issue_number: <N>)` — omit issueUrl                                           | `issueUrl` auto-populated from cached repo info (requires prior `get_github_context`) |

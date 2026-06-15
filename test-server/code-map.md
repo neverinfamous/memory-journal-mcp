@@ -35,14 +35,7 @@ src/
 │
 ├── constants/
 │   ├── icons.ts                    # MCP icon definitions per tool group (CDN SVG URLs)
-│   ├── server-instructions/        # Source markdown files for behavioral instructions (directory-per-group)
-│   │   ├── overview.md             # Core behaviors, entry types, tag taxonomy, relationship patterns
-│   │   ├── github.md               # GitHub integration patterns, Copilot review workflow
-│   │   ├── gotchas.md              # Common pitfalls and critical usage patterns
-│   │   ├── hush-protocol.md        # Team flag protocol, flag types, resolution workflow
-│   │   ├── skills.md               # Agent skills index, SKILLS_DIR_PATH, skill-builder
-│   │   └── README.md               # Developer guide for the instruction system
-│   └── server-instructions.ts      # ⚠️ AUTO-GENERATED — HELP_CONTENT map + generateInstructions() + composable segments
+│   └── server-instructions.ts      # HELP_CONTENT map + generateInstructions() + composable segments
 │
 ├── filtering/
 │   └── tool-filter.ts              # ToolFilter class — parse/apply --tool-filter expressions, group/shortcut/tool resolution
@@ -392,7 +385,6 @@ catch (error) {
 | What                               | Where                                  | Notes                                                                                                                                                                                                                                                                    |
 | ---------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `HELP_CONTENT` map + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`)                                                                                                                              |
-| Instruction source markdown        | `src/constants/server-instructions/`   | Directory-per-group: `overview.md`, `github.md`, `hush-protocol.md`, `skills.md`; compiled by `npm run generate:instructions`                                                                                                                                            |
 | Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating                                                                                                                                             |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                                                                                                                                                                                             |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`)                                                                                                              |

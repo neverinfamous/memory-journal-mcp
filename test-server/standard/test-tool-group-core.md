@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Core Tool Group
 
-**Scope:** Deterministic verification of the Core tool group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) against the strict error handling matrix.
+**Scope:** Deterministic verification of the Core tool group (`create_entry`, `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) against the strict error handling matrix.
 
 **Prerequisites:**
 
@@ -29,7 +29,7 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 | Tool                   | Happy Path          | Domain Error Test              | Zod Empty Param (`{}`)            | Zod Type Mismatch             |
 | ---------------------- | ------------------- | ------------------------------ | --------------------------------- | ----------------------------- |
 | `create_entry`         | Create normal entry | `entry_type: "invalid"`        | ⚠️ Should return validation error | `content: 123`                |
-| `create_entry_minimal` | Create with string  | N/A                            | ⚠️ Should return validation error | N/A (requires 1 string param) |
+| `create_entry` | Create with string  | N/A                            | ⚠️ Should return validation error | N/A (requires 1 string param) |
 | `get_entry_by_id`      | Fetch existing      | `entry_id: 999999` (not found) | ⚠️ Should return validation error | `entry_id: "abc"`             |
 | `get_entry_history`    | Fetch history       | `entry_id: 999999` (not found) | ⚠️ Should return validation error | `entry_id: "abc"`             |
 | `get_recent_entries`   | Fetch recent        | N/A                            | Should succeed (defaults)         | `limit: "abc"`                |

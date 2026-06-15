@@ -85,7 +85,7 @@ All tools must accept `{}` without crashing. Tools with required logical params 
 | Tool                   | Input | Expected Result                                               |
 | ---------------------- | ----- | ------------------------------------------------------------- |
 | `create_entry`         | `{}`  | `VALIDATION_ERROR`: content required                          |
-| `create_entry_minimal` | `{}`  | `VALIDATION_ERROR`: content required                          |
+| `create_entry` | `{}`  | `VALIDATION_ERROR`: content required                          |
 | `get_entry_by_id`      | `{}`  | `VALIDATION_ERROR`: entry_id required                         |
 | `update_entry`         | `{}`  | `VALIDATION_ERROR`: entry_id required                         |
 | `delete_entry`         | `{}`  | `VALIDATION_ERROR`: entry_id required                         |

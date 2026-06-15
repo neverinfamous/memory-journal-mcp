@@ -130,7 +130,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntryMinimal({ content: 'CM3 update test' })
+const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 update test' })
 const id = created.entry.id
 const updated = await mj.admin.updateEntry({
   entry_id: id,
@@ -166,7 +166,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntryMinimal({ content: 'CM3 delete test' })
+const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 delete test' })
 const id = created.entry.id
 const soft = await mj.admin.deleteEntry({ entry_id: id, permanent: false })
 const searchAfterSoft = await mj.search.searchEntries({
@@ -216,7 +216,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntryMinimal({ content: 'CM3 personal toggle test' })
+const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 personal toggle test' })
 const id = created.entry.id
 
 // Toggle to non-personal
@@ -252,7 +252,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntryMinimal({ content: 'CM3 history test v1' })
+const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 history test v1' })
 const id = created.entry.id
 
 await mj.admin.updateEntry({ entry_id: id, content: 'CM3 history test v2' })
@@ -281,7 +281,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntryMinimal({ content: 'CM3 recovery test' })
+const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 recovery test' })
 const id = created.entry.id
 await mj.admin.deleteEntry({ entry_id: id, permanent: false })
 const deletedList = await mj.search.listDeletedEntries({ project_number: 5 })
@@ -322,7 +322,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntryMinimal({ content: 'CM3 locking test' })
+const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 locking test' })
 const id = created.entry.id
 const v1 = created.entry.version
 
