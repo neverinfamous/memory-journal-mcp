@@ -13,7 +13,7 @@ import { startServer, stopServer } from './helpers.js'
 
 const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
 const RATE_PORT = 4100 + (workerIndex * 10)
-const RATE_BASE = `http://localhost:${RATE_PORT}`
+const RATE_BASE = `http://127.0.0.1:${RATE_PORT}`
 
 test.describe('Rate Limiting', () => {
     test.setTimeout(120000)
@@ -30,7 +30,7 @@ test.describe('Rate Limiting', () => {
         const { spawn } = await import('node:child_process')
         const { setTimeout: delay } = await import('node:timers/promises')
 
-        // Start with default rate limit (no override)
+        const testPort = RATE_PORT + 1
         const serverProcess = spawn(
             'node',
             [
@@ -39,8 +39,8 @@ test.describe('Rate Limiting', () => {
                 process.cwd(),
                 '--transport',
                 'http',
-                '--port',
-                String(RATE_PORT + 1), // Use a different port to avoid conflicts
+                '--server-host', '127.0.0.1', '--port',
+                String(testPort),
                 '--db',
                 './.test-output/e2e/test-e2e-rate-default.db',
             ],
@@ -53,7 +53,7 @@ test.describe('Rate Limiting', () => {
 
         for (let i = 0; i < 30; i++) {
             try {
-                const res = await fetch(`http://localhost:${RATE_PORT + 1}/health`)
+                const res = await fetch(`http://127.0.0.1:${testPort}/health`)
                 if (res.ok) break
             } catch {
                 /* Not ready */
@@ -66,7 +66,7 @@ test.describe('Rate Limiting', () => {
             const promises = []
             for (let i = 0; i < burstCount; i++) {
                 promises.push(
-                    fetch(`http://localhost:${RATE_PORT + 1}/mcp`, {
+                    fetch(`http://127.0.0.1:${testPort}/mcp`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -95,18 +95,11 @@ test.describe('Rate Limiting', () => {
     })
 
     test('should return 429 after exceeding rate limit', async () => {
-        // The server on this port uses the default env MCP_RATE_LIMIT_MAX=10000.
-        // We need to override it. Since startServer doesn't pass MCP_RATE_LIMIT_MAX
-        // for rate limit tests (checked in the helper), we use direct fetch with
-        // a tight burst.
-
-        // Actually, let's stop the default server and start one with low limit
-        stopServer(RATE_PORT)
-
-        // Start with explicit low rate limit via env override
         const { spawn } = await import('node:child_process')
         const { setTimeout: delay } = await import('node:timers/promises')
 
+        const testPort = RATE_PORT + 2
+        const testBase = `http://127.0.0.1:${testPort}`
         const serverProcess = spawn(
             'node',
             [
@@ -115,8 +108,8 @@ test.describe('Rate Limiting', () => {
                 process.cwd(),
                 '--transport',
                 'http',
-                '--port',
-                String(RATE_PORT),
+                '--server-host', '127.0.0.1', '--port',
+                String(testPort),
                 '--db',
                 './.test-output/e2e/test-e2e-rate-limit.db',
             ],
@@ -134,7 +127,7 @@ test.describe('Rate Limiting', () => {
         // Wait for server to start
         for (let i = 0; i < 30; i++) {
             try {
-                const res = await fetch(`${RATE_BASE}/health`)
+                const res = await fetch(`${testBase}/health`)
                 if (res.ok) break
             } catch {
                 // Not ready
@@ -145,7 +138,7 @@ test.describe('Rate Limiting', () => {
         try {
             let status429Hit = false
             for (let i = 0; i < 20; i++) {
-                const res = await fetch(`${RATE_BASE}/mcp`, {
+                const res = await fetch(`${testBase}/mcp`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -177,6 +170,8 @@ test.describe('Rate Limiting', () => {
         const { spawn } = await import('node:child_process')
         const { setTimeout: delay } = await import('node:timers/promises')
 
+        const testPort = RATE_PORT + 3
+        const testBase = `http://127.0.0.1:${testPort}`
         const serverProcess = spawn(
             'node',
             [
@@ -185,8 +180,8 @@ test.describe('Rate Limiting', () => {
                 process.cwd(),
                 '--transport',
                 'http',
-                '--port',
-                String(RATE_PORT),
+                '--server-host', '127.0.0.1', '--port',
+                String(testPort),
                 '--db',
                 './.test-output/e2e/test-e2e-rate-retry.db',
             ],
@@ -203,7 +198,7 @@ test.describe('Rate Limiting', () => {
 
         for (let i = 0; i < 30; i++) {
             try {
-                const res = await fetch(`${RATE_BASE}/health`)
+                const res = await fetch(`${testBase}/health`)
                 if (res.ok) break
             } catch {
                 // Not ready
@@ -214,7 +209,7 @@ test.describe('Rate Limiting', () => {
         try {
             let retryAfter: string | null = null
             for (let i = 0; i < 20; i++) {
-                const res = await fetch(`${RATE_BASE}/mcp`, {
+                const res = await fetch(`${testBase}/mcp`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -247,6 +242,8 @@ test.describe('Rate Limiting', () => {
         const { spawn } = await import('node:child_process')
         const { setTimeout: delay } = await import('node:timers/promises')
 
+        const testPort = RATE_PORT + 4
+        const testBase = `http://127.0.0.1:${testPort}`
         const serverProcess = spawn(
             'node',
             [
@@ -255,8 +252,8 @@ test.describe('Rate Limiting', () => {
                 process.cwd(),
                 '--transport',
                 'http',
-                '--port',
-                String(RATE_PORT),
+                '--server-host', '127.0.0.1', '--port',
+                String(testPort),
                 '--db',
                 './.test-output/e2e/test-e2e-rate-health.db',
             ],
@@ -273,7 +270,7 @@ test.describe('Rate Limiting', () => {
 
         for (let i = 0; i < 30; i++) {
             try {
-                const res = await fetch(`${RATE_BASE}/health`)
+                const res = await fetch(`${testBase}/health`)
                 if (res.ok) break
             } catch {
                 // Not ready
@@ -284,7 +281,7 @@ test.describe('Rate Limiting', () => {
         try {
             let status429Hit = false
             for (let i = 0; i < 20; i++) {
-                const res = await fetch(`${RATE_BASE}/health`)
+                const res = await fetch(`${testBase}/health`)
                 if (res.status === 429) {
                     status429Hit = true
                     break
