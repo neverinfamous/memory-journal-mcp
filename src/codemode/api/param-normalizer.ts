@@ -32,6 +32,8 @@ const PARAM_ALIASES: Record<string, string> = {
     proj: 'project_number',
     milestone_id: 'milestone_number',
     issue_id: 'issue_number',
+    pull_request_id: 'pr_number',
+    pull_number: 'pr_number',
     user: 'target_user',
     assignee: 'target_user',
     repo_name: 'repo',
@@ -57,6 +59,7 @@ const PARAM_ALIASES: Record<string, string> = {
     order_by: 'sort_by',
     order: 'sort_by',
     keep: 'keep_count',
+    path: 'source_dir', // common fallback, handled contextually
 }
 
 /**
@@ -168,8 +171,18 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         }
 
         // Context-aware 'content' hallucination
-        if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'description') {
-            if (methodName && (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry')) && !methodName.toLowerCase().includes('link')) {
+        if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'description' || snakeKey === 'content') {
+            const isGithubTool = Boolean(methodName && (
+                methodName.toLowerCase().includes('github') || 
+                methodName.toLowerCase().includes('issue') || 
+                methodName.toLowerCase().includes('pr')
+            ));
+            
+            if (isGithubTool) {
+                if (!('body' in obj) && !('body' in result)) {
+                    snakeKey = 'body'
+                }
+            } else if (methodName && (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry')) && !methodName.toLowerCase().includes('link')) {
                 if (!('content' in obj) && !('content' in result)) {
                     snakeKey = 'content'
                 }
