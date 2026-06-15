@@ -98,7 +98,7 @@ export function wrapResult(result: unknown): unknown {
                     if (prop === Symbol.iterator) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
                         if (targetKey !== undefined) {
                             return function* () {
                                 yield* (targetRecord[targetKey] as unknown[])
@@ -112,7 +112,7 @@ export function wrapResult(result: unknown): unknown {
                     ) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'files', 'errors'].includes(k)) || arrayKeys[0]
+                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors'].includes(k)) || arrayKeys[0]
 
                         if (targetKey !== undefined) {
                             const arr = target[targetKey] as unknown[]
