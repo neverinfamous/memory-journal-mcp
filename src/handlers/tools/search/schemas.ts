@@ -14,7 +14,7 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SearchEntriesSchema = z.object({
-    query: z.string().max(250).optional(),
+    query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     mode: z
         .enum(['auto', 'fts', 'semantic', 'hybrid'])
@@ -56,7 +56,7 @@ export const SearchEntriesSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 export const SearchEntriesSchemaMcp = z.object({
-    query: z.string().optional(),
+    query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     mode: z
         .string()
@@ -98,8 +98,8 @@ export const SearchEntriesSchemaMcp = z.object({
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SearchByDateRangeSchema = z.object({
-    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
-    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('Start date (use `start_date`, not `start`)'),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional(),
@@ -124,8 +124,8 @@ export const SearchByDateRangeSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 export const SearchByDateRangeSchemaMcp = z.object({
-    start_date: z.string(),
-    end_date: z.string(),
+    start_date: z.string().describe('Start date (use `start_date`, not `start`)'),
+    end_date: z.string().describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
     tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional(),
@@ -150,7 +150,7 @@ export const SearchByDateRangeSchemaMcp = z.object({
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SemanticSearchSchema = z.object({
-    query: z.string().max(250).optional(),
+    query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: z
         .number()
         .optional()
@@ -191,7 +191,7 @@ export const SemanticSearchSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 export const SemanticSearchSchemaMcp = z.object({
-    query: z.string().optional(),
+    query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: relaxedNumber()
         .optional()
         .describe(

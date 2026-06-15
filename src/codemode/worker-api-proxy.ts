@@ -14,6 +14,42 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     if (methodName === '_executeRawQueryUnsafe' && args.length === 1 && typeof args[0] === 'string') {
         args[0] = { query: args[0] }
     }
+
+    // Search tools hallucinations (q -> query, start -> start_date, end -> end_date, limit string -> number)
+    if (
+        (methodName === 'search_entries' || methodName === 'searchEntries' || 
+         methodName === 'team_search' || methodName === 'teamSearch' || 
+         methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || 
+         methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange' ||
+         methodName === 'semantic_search' || methodName === 'semanticSearch' ||
+         methodName === 'team_semantic_search' || methodName === 'teamSemanticSearch' ||
+         methodName === 'cross_team_search' || methodName === 'crossTeamSearch') &&
+        args.length === 1 &&
+        typeof args[0] === 'object' &&
+        args[0] !== null
+    ) {
+        const obj = args[0] as Record<string, unknown>;
+        
+        if (obj['q'] !== undefined && obj['query'] === undefined) {
+            obj['query'] = obj['q'];
+            delete obj['q'];
+        }
+        
+        if (obj['start'] !== undefined && obj['start_date'] === undefined) {
+            obj['start_date'] = obj['start'];
+            delete obj['start'];
+        }
+        
+        if (obj['end'] !== undefined && obj['end_date'] === undefined) {
+            obj['end_date'] = obj['end'];
+            delete obj['end'];
+        }
+        
+        if (typeof obj['limit'] === 'string') {
+            const parsed = parseInt(obj['limit'], 10);
+            if (!isNaN(parsed)) obj['limit'] = parsed;
+        }
+    }
     // Hallucination intercept for search exact_match
     if (
         (methodName === 'search_entries' || methodName === 'searchEntries' || methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
