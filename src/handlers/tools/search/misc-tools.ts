@@ -49,7 +49,7 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 limit: relaxedNumber().optional().default(50),
                 offset: relaxedNumber().optional().default(0),
-            }),
+            }).strict(),
             outputSchema: EntriesListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -59,7 +59,7 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { limit, offset } = z.object({ limit: z.number().optional().default(50), offset: z.number().optional().default(0) }).parse(params)
+                    const { limit, offset } = z.object({ limit: z.number().optional().default(50), offset: z.number().optional().default(0) }).strict().parse(params)
                     const result = db.getDeletedEntries({ limit, offset })
                     return {
                         success: true,

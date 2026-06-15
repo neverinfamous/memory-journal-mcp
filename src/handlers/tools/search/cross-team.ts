@@ -37,7 +37,7 @@ export const CrossTeamSearchSchema = z.object({
         .describe('Sort results by timestamp (default) or importance score'),
     include_archived: z.boolean().optional().default(false),
     fuzzy_match: z.boolean().optional().default(false),
-})
+}).strict()
 
 export const CrossTeamSearchOutputSchema = z
     .object({

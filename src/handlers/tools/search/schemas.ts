@@ -52,7 +52,7 @@ export const SearchEntriesSchema = z.object({
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
     exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
-})
+}).strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 export const SearchEntriesSchemaMcp = z.object({
@@ -94,7 +94,7 @@ export const SearchEntriesSchemaMcp = z.object({
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
     exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
-})
+}).strict()
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SearchByDateRangeSchema = z.object({
@@ -120,7 +120,7 @@ export const SearchByDateRangeSchema = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-})
+}).strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 export const SearchByDateRangeSchemaMcp = z.object({
@@ -146,7 +146,7 @@ export const SearchByDateRangeSchemaMcp = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-})
+}).strict()
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SemanticSearchSchema = z.object({
@@ -187,7 +187,7 @@ export const SemanticSearchSchema = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-})
+}).strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 export const SemanticSearchSchemaMcp = z.object({
@@ -219,7 +219,7 @@ export const SemanticSearchSchemaMcp = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-})
+}).strict()
 
 // ============================================================================
 // Output Schemas

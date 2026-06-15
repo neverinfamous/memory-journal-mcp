@@ -100,9 +100,7 @@ test.describe('Payload Contracts: Search', () => {
     })
 
     test('list_deleted_entries returns { entries, count }', async () => {
-        const payload = await callToolAndParse(client, 'list_deleted_entries', {
-            project_number: 1,
-        })
+        const payload = await callToolAndParse(client, 'list_deleted_entries', {})
         expectSuccess(payload)
         expect(Array.isArray(payload.entries)).toBe(true)
         expect(typeof payload.count).toBe('number')
