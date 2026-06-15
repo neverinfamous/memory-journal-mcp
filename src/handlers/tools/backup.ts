@@ -92,7 +92,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 name: z
                     .string()
                     .optional()
-                    .describe('Custom backup name (optional, defaults to timestamp)'),
+                    .describe('Custom backup name (optional, defaults to timestamp). Anti-Hallucination Hint: You can use positional args like mj.backup.backupJournal("my_name").'),
             }),
             outputSchema: BackupResultOutputSchema,
             annotations: {
@@ -167,7 +167,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 filename: z
                     .string()
                     .optional()
-                    .describe('Backup filename to restore from (e.g., backup_2025-01-01.db)'),
+                    .describe('Backup filename to restore from (e.g., backup_2025-01-01.db). Anti-Hallucination Hint: Property is strictly `filename`, not `file`. You can pass positional args: mj.backup.restoreBackup("filename.db", true).'),
                 confirm: z
                     .boolean()
                     .optional()
@@ -272,7 +272,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 keep_count: relaxedNumber()
                     .default(5)
-                    .describe('Number of most recent backups to keep (default: 5)'),
+                    .describe('Number of most recent backups to keep (default: 5). Anti-Hallucination Hint: You can pass a string or number, or use positional args: mj.backup.cleanupBackups(5).'),
             }),
             outputSchema: CleanupBackupsOutputSchema,
             annotations: {
@@ -284,7 +284,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { keep_count } = z
-                        .object({ keep_count: z.number().min(1).default(5) })
+                        .object({ keep_count: relaxedNumber().default(5) })
                         .parse(params)
 
                     const result = db.deleteOldBackups(keep_count)

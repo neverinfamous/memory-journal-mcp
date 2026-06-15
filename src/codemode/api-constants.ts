@@ -356,7 +356,8 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     getCopilotReviews: 'pr_number',
 
     // Backup
-    restoreBackup: 'filename',
+    backupJournal: 'name',
+    restoreBackup: ['filename', 'confirm'],
     cleanupBackups: 'keep_count',
 
     // Team
