@@ -140,6 +140,13 @@
 - Healed `id`/`ids` to `entry_id`/`entry_ids` parameter hallucinations across all strict internal Team schemas using `z.preprocess`, matching the admin hardening pass to prevent `Unrecognized key` validation failures in Code Mode.
 - Fixed a Code Mode alias shadowing bug where the `stats` alias for the search group pointed to an invalid method name (`getVectorStats`), causing it to incorrectly fall back to the analytics group's `getStatistics` method.
 - Added `z.preprocess` coercions to all Search tools' `tags` arrays to heal the common string hallucination (passing `tags: "test"` instead of `tags: ["test"]`) without triggering schema validation errors.
+- Fixed `get_statistics` and `get_cross_project_insights` Code Mode auto-injection crashes by removing `.strict()` from internal schemas while retaining MCP anti-hallucination descriptions.
+- Added `LinkEntriesSchemaMcp` to gracefully map hallucinated `sourceId` and `targetId` parameters to `from_entry_id` and `to_entry_id` in relationships tools.
+- Fixed IO tool shadowing trap where `export_markdown` was incorrectly intercepted by the team proxy, and added `files` array proxy support.
+- Enforced `target_tag` as a required parameter in `merge_tags` and fixed single-entry Admin intercepts to properly return `RESOURCE_NOT_FOUND` on hallucinated IDs.
+- Added GitHub proxy array interception to support `.map()` and `.filter()` on `issues`, `pullRequests`, and `milestones`, and healed `issue_id`/`pr_id` aliases globally.
+- Implemented positional parameter support for `backup_journal` and `restore_backup`, and added `relaxedNumber()` coercion for `cleanup_backups`.
+- Healed the `teamListEntries` alias and `proj` parameter hallucinations in Team tool proxies.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
