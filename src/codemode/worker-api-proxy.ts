@@ -523,13 +523,17 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                 obj['relationship_type'] = obj['rel'];
                 delete obj['rel'];
             }
-            if (obj['description'] !== undefined && obj['notes'] === undefined) {
-                obj['notes'] = obj['description'];
-                delete obj['description'];
+            if (obj['notes'] !== undefined && obj['description'] === undefined) {
+                obj['description'] = obj['notes'];
+                delete obj['notes'];
             }
-            if (obj['message'] !== undefined && obj['notes'] === undefined) {
-                obj['notes'] = obj['message'];
+            if (obj['message'] !== undefined && obj['description'] === undefined) {
+                obj['description'] = obj['message'];
                 delete obj['message'];
+            }
+            if (obj['text'] !== undefined && obj['description'] === undefined) {
+                obj['description'] = obj['text'];
+                delete obj['text'];
             }
         }
     }

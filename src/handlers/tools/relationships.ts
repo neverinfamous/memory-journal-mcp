@@ -49,12 +49,14 @@ const LinkEntriesSchemaMcp = z
         type: z.string().optional(),
         rel: z.string().optional(),
         description: z.string().optional(),
+        message: z.string().optional(),
+        text: z.string().optional(),
     })
     .transform((data) => ({
         from_entry_id: data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id,
         to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
         relationship_type: data.type ?? data.rel ?? data.relationship_type ?? 'references',
-        description: data.description,
+        description: data.description ?? data.message ?? data.text,
     }))
 
 const VisualizeInputSchema = z.object({
@@ -87,15 +89,25 @@ const VisualizeInputSchemaMcp = z.object({
         .describe('Specific entry ID to visualize (shows connected entries)'),
     id: relaxedNumber().optional(),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+    q: z.string().optional(),
     relationship_type: z
         .string()
         .optional()
         .describe('Filter to show only this relationship type (e.g., blocked_by, implements)'),
+    type: z.string().optional(),
+    rel: z.string().optional(),
+    mode: z.string().optional(),
     depth: relaxedNumber().optional().default(2).describe('Relationship traversal depth'),
+    path: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(20).describe('Maximum entries to include'),
+    keep: relaxedNumber().optional(),
 }).transform(data => ({
     ...data,
-    entry_id: data.entry_id ?? data.id
+    entry_id: data.entry_id ?? data.id,
+    relationship_type: data.type ?? data.rel ?? data.mode ?? data.relationship_type,
+    depth: data.path ?? data.depth,
+    limit: data.keep ?? data.limit,
+    tags: data.tags ?? (data.q ? [data.q] : undefined),
 }))
 
 // ============================================================================

@@ -1,21 +1,22 @@
-# Standard Testing Coordinator Workflow
+# memory-journal-mcp Standard Testing Coordinator Workflow
 
 > **This document is optimized for an autonomous agent acting as a Coordinator.**
 
 This guide instructs the Coordinator agent on how to run the `memory-journal-mcp` Standard test suite using subagents.
 
 ## Goal
+
 Systematically execute all Standard tests in `test-server/standard/` to verify direct `callTool` operations via MCP. You will delegate testing to subagents, ensuring high-fidelity results, tracking token estimates, and maintaining codebase stability.
 
 ## Workflow Rules
 
 1. **Sequential Execution**: Tests MUST be executed sequentially (one subagent at a time) according to the Dependency DAG below. Parallel execution may cause conflicts or test data interference.
-2. **Subagent Delegation**: 
+2. **Subagent Delegation**:
    - Use the `invoke_subagent` tool to spawn a `self` subagent for each test file.
    - Provide the exact path to the test file as the subagent's prompt, along with these execution requirements.
 3. **Validation and Server Restart Coordination**:
    - If a subagent modifies the codebase to fix an issue, the subagent MUST validate all changes locally by running `pnpm run check; pnpm run build; pnpm run test; pnpm run test:e2e`. They must ensure these pass completely cleanly BEFORE requesting a server refresh.
-   - After passing local CI, the subagent is instructed to pause and message you: *"Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."*
+   - After passing local CI, the subagent is instructed to pause and message you: _"Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."_
    - When you receive this message, DO NOT proceed. Surface the message to the user and wait for them to manually refresh the server.
    - Once the user confirms the server is ready, use the `send_message` tool to pass the "ready" signal to the waiting subagent.
 4. **Finalization and Commit**:
@@ -54,4 +55,5 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 25. `test-payload-optimization.md`
 
 ## Telemetry Collection
+
 When the suite finishes, compile the **Total Token Estimate** and resource metrics (e.g., `memory://metrics/summary`) from all subagents into a final report for the user.

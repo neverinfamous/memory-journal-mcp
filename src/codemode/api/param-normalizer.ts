@@ -157,7 +157,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
 
         // Context-aware 'content' hallucination
         if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'description') {
-            if (methodName && (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry'))) {
+            if (methodName && (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry')) && !methodName.toLowerCase().includes('link')) {
                 if (!('content' in obj) && !('content' in result)) {
                     snakeKey = 'content'
                 }
