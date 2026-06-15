@@ -158,8 +158,13 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     if (obj['output_dir'] === undefined) obj['output_dir'] = obj[key];
                     didMap = true;
                 } else if (methodName.toLowerCase().includes('import')) {
-                    if (obj['source_dir'] === undefined) obj['source_dir'] = obj[key];
-                    didMap = true;
+                    if (key === 'source' && (methodName.includes('import_external') || methodName.includes('importExternal') || methodName.includes('teamImportExternal') || methodName.includes('team_import_external'))) {
+                        // Do not map 'source' to 'source_dir' for import_external.
+                        // It represents source_format, which is handled below.
+                    } else {
+                        if (obj['source_dir'] === undefined) obj['source_dir'] = obj[key];
+                        didMap = true;
+                    }
                 }
                 
                 if (didMap) {
@@ -189,6 +194,10 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             if (obj['format'] !== undefined && obj['source_format'] === undefined) {
                 obj['source_format'] = obj['format'];
                 delete obj['format'];
+            }
+            if (obj['source'] !== undefined && obj['source_format'] === undefined) {
+                obj['source_format'] = obj['source'];
+                delete obj['source'];
             }
         }
     }
