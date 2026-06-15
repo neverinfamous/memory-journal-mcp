@@ -23,8 +23,10 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                | Phase | Focus                                                 | When to Run        |
 | ------------------- | :---: | ----------------------------------------------------- | ------------------ |
-| `test-cm-crud.md`   |  20   | Create/read/update/delete, recovery, history tracking, archiving, pagination, full params, error paths | After Phases 16–19 |
-| `test-cm-search.md` |  21   | FTS5, filters, date range, semantic search, archiving & pagination, analytics | After Phases 16–19 |
+| `test-cm-crud.md`   |  20   | Create/read/update/delete, error paths | After Phases 16–19 |
+| `test-cm-crud-advanced.md` | 20B | Recovery, history tracking, archiving, pagination, full params | After Phase 20 |
+| `test-cm-search.md` |  21   | FTS5, filters, date range | After Phases 16–19 |
+| `test-cm-search-advanced.md` | 21B | Semantic search, archiving & pagination, analytics | After Phase 21 |
 
 ### Workflows & Relationships (from CM-3)
 
@@ -46,9 +48,11 @@ This directory contains agent-optimized test prompts specifically designed to va
 | `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, batch operations, recovery, archiving, pagination, analytics, relationships, IO logic, backup | After Team CRUD    |
 | `test-cm-team-vector-errors.md` | 28.10–28.11 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
 | `test-cm-team-flags-core.md`    |    28.12    | Flag creation, vocabulary, error paths, and resolution lifecycle      | After Team Admin   |
-| `test-cm-team-flags-advanced.md`|    28.13    | Flag search, metadata mutation, reopen, analytics, resources, and cleanup | After Team Flags Core |
+| `test-cm-team-flags-advanced.md`|    28.13    | Flag search, metadata mutation, reopen, and cleanup | After Team Flags Core |
+| `test-cm-team-flags-analytics.md`|   28.14    | Flag analytics | After Team Flags Advanced |
 | `test-cm-team-rbac.md`          | 28.16       | Team member management tools and RBAC enforcement                     | After Team Admin   |
-| `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches across all `mj.*` groups | After Phases 16–19 |
+| `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches (Part 1) | After Phases 16–19 |
+| `test-cm-error-matrix-2.md`     |    29B      | Systematic `{}` Zod sweeps + type mismatches (Part 2) | After Phase 29 |
 | `test-cm-hallucination-smoothing.md` |  31     | Hallucination smoothing, cross-group wiring, sandbox aliases, and `context` param | After Phases 16–19 |
 
 ### Cross-Cutting Optimization Tests
@@ -67,7 +71,9 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
     └── Phase 19 (Security)
          │
          ├── Phase 20 (CRUD) ──────────────── independent
+         │    └── Phase 20B (CRUD Adv)
          ├── Phase 21 (Search) ────────────── independent
+         │    └── Phase 21B (Search Adv)
          ├── Phase 22 (Workflows) ─────────── independent
          ├── Phase 23 (Orchestration) ─────── independent
          ├── Phase 24 (Relationships) ─────── cleanup for 22-24
@@ -76,13 +82,15 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
          ├── Phase 26 (IO & Markdown) ─────── independent
          ├── Phase 27 (Admin/Backup) ──────── independent
          ├── Phase 29 (Error Matrix) ─────── independent
+         │    └── Phase 29B (Error Matrix Part 2)
          ├── Phase 30 (Payload Optimization)─ independent
          ├── Phase 31 (Hallucination Smoothing)─ independent
          └── Phase 28.1-3 (Team CRUD) ─────── sequential
               └── Phase 28.4-9 (Team Admin)
                    ├── Phase 28.10-11 (Team Vector/Errors + cleanup)
                    ├── Phase 28.12 (Team Flags Core)
-                   │    └── Phase 28.13-15 (Team Flags Advanced)
+                   │    └── Phase 28.13 (Team Flags Advanced)
+                   │         └── Phase 28.14 (Team Flags Analytics)
                    └── Phase 28.16 (Team RBAC)
 ```
 

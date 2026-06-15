@@ -294,6 +294,12 @@ const ioImport = await mj.team.teamImportMarkdown({
   project_number: 5,
 })
 
+const ioExtImport = await mj.team.teamImportExternal({
+  source_dir: MOCK_DIR,
+  dry_run: true,
+  project_number: 5,
+})
+
 return {
   jsonHasData: typeof jsonExport.data === 'string',
   mdHasData: typeof mdExport.data === 'string',
@@ -301,6 +307,7 @@ return {
   ioExportedCount: ioExport.exported_count ?? 0,
   ioImportSuccess: ioImport.success,
   ioImportDryRun: ioImport.dry_run,
+  ioExtImportSuccess: ioExtImport.success,
 }
 ```
 
@@ -309,7 +316,9 @@ return {
 | `jsonHasData`     | `true`   |
 | `mdHasData`       | `true`   |
 | `ioExportSuccess` | `true`   |
+| `ioImportSuccess` | `true` (dry run successful) |
 | `ioImportDryRun`  | `true`   |
+| `ioExtImportSuccess` | `true` (dry run successful) |
 
 ### 28.8 Team Backup
 

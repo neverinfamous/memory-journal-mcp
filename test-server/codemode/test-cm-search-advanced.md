@@ -1,0 +1,364 @@
+# Re-Test memory-journal-mcp — Code Mode: Search & Semantics Advanced
+
+Test semantic search, analytics, and vector index operations through the Code Mode mj.* API bridge.
+
+**Scope:** 1 tool (mj_execute_code), Phase 21B — advanced features.
+
+**Prerequisites:**
+
+- Confirm MCP server instructions were auto-received before starting.
+- **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
+
+**Workflow after testing:**
+
+1. Create a plan to fix any issues found.
+2. Use code-map.md as a source of truth.
+3. If you made code changes/fixes, update UNRELEASED.md and commit.
+4. Re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
+
+---
+
+## Phase 21B: Semantics & Analytics via Code Mode
+
+### 21.6 Semantic Search
+
+```javascript
+// Test code:
+const related = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
+const basic = await mj.search.semanticSearch({ query: 'improving performance' })
+const byId = await mj.search.semanticSearch({ entry_id: related.entries[0].id })
+const strict = await mj.search.semanticSearch({
+  query: 'performance',
+  similarity_threshold: 0.5,
+})
+const filtered = await mj.search.semanticSearch({
+  query: 'test',
+  is_personal: true,
+  tags: ['testing'],
+})
+const noHint = await mj.search.semanticSearch({
+  query: 'xyznonexistent',
+  hint_on_empty: false,
+  similarity_threshold: 0.0,
+})
+const stats = await mj.search.getVectorIndexStats({})
+return {
+  basicCount: basic.entries?.length ?? 0,
+  byIdCount: byId.entries?.length ?? 0,
+  strictCount: strict.entries?.length ?? 0,
+  strictFewer: (strict.entries?.length ?? 0) <= (basic.entries?.length ?? 0),
+  filteredCorrectly:
+    filtered.entries?.every((e) => (e.isPersonal || e.is_personal) && e.tags.includes('testing')) ??
+    true,
+  noHintHasQualityHint: !!noHint.hint,
+  vectorAvailable: stats.available,
+  vectorItemCount: stats.itemCount,
+  hasModelName: typeof stats.modelName === 'string',
+  hasDimensions: typeof stats.dimensions === 'number',
+}
+```
+
+| Check                  | Expected                                |
+| ---------------------- | --------------------------------------- |
+| `basicCount`           | ≥ 1                                     |
+| `byIdCount`            | ≥ 1                                     |
+| `strictFewer`          | `true`                                  |
+| `noHintHasQualityHint` | `true` (quality gate hint always shown) |
+| `vectorAvailable`      | `true`                                  |
+| `vectorItemCount`      | Number > 0                              |
+| `hasModelName`         | `true`                                  |
+| `hasDimensions`        | `true`                                  |
+
+### 21.7 Analytics
+
+```javascript
+// Test code:
+const byMonth = await mj.analytics.getStatistics({ group_by: 'month' })
+const byDay = await mj.analytics.getStatistics({ group_by: 'day' })
+const withDates = await mj.analytics.getStatistics({
+  start_date: '2026-01-01',
+  end_date: '2026-03-01',
+})
+const withProject = await mj.analytics.getStatistics({ project_breakdown: true })
+const insights = await mj.analytics.getCrossProjectInsights({})
+const insightsFiltered = await mj.analytics.getCrossProjectInsights({
+  start_date: '2026-01-01',
+  end_date: '2026-03-01',
+  min_entries: 1,
+})
+return {
+  hasDecisionDensity: typeof byMonth.decisionDensity !== 'undefined',
+  hasRelComplexity: typeof byMonth.relationshipComplexity !== 'undefined',
+  hasActivityTrend: typeof byMonth.activityTrend !== 'undefined',
+  hasCausalMetrics: typeof byMonth.causalMetrics !== 'undefined',
+  dayPeriodsExist: (byDay.entriesByPeriod?.length ?? 0) >= 0,
+  dateFilteredRange: !!withDates.dateRange,
+  projectBreakdown: !!withProject.projectBreakdown,
+  insightsProjectCount: insights.project_count,
+  insightsHasProjects: Array.isArray(insights.projects),
+  filteredInsights: insightsFiltered.project_count >= 0,
+}
+```
+
+| Check                 | Expected |
+| --------------------- | -------- |
+| `hasDecisionDensity`  | `true`   |
+| `hasRelComplexity`    | `true`   |
+| `hasActivityTrend`    | `true`   |
+| `hasCausalMetrics`    | `true`   |
+| `dateFilteredRange`   | `true`   |
+| `insightsHasProjects` | `true`   |
+
+### 21.8 Vector Index Management
+
+| Test                  | Code                                                                                                                                                | Expected Result                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Rebuild index         | `await mj.admin.batchCreateEntries({ entries: [{ content: "test", project_number: 5 }], auto_index: false }); return await mj.admin.rebuildVectorIndex({});` | `{ success: true, entriesIndexed: N }` where N > 0 |
+| Add existing to index | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
+| Add nonexistent       | `return await mj.admin.addToVectorIndex({ entry_id: 999999 });`                                                                                     | `{ success: false, error: "..." }`                 |
+
+---
+
+### 21.9 Importance-Sorted Search
+
+> [!NOTE]
+> These tests validate the `sort_by: 'importance'` parameter across `search_entries`, `get_recent_entries`, and `search_by_date_range`. Setup: create entries with varying importance signals.
+
+```javascript
+// Setup: create test entries with different importance profiles
+const e1 = await mj.core.createEntry({
+  project_number: 5,
+  content: 'IMPSORT_TEST_LOW: no significance, no relationships',
+  entry_type: 'test_entry',
+  tags: ['importance-sort-test'],
+})
+const e2 = await mj.core.createEntry({
+  project_number: 5,
+  content: 'IMPSORT_TEST_HIGH: milestone with relationships',
+  entry_type: 'test_entry',
+  tags: ['importance-sort-test'],
+  significance_type: 'milestone',
+})
+const e3 = await mj.core.createEntry({
+  project_number: 5,
+  content: 'IMPSORT_TEST_MED: decision with causal link',
+  entry_type: 'test_entry',
+  tags: ['importance-sort-test'],
+  significance_type: 'decision',
+})
+// Add relationships to boost e2 and e3
+await mj.relationships.linkEntries({
+  from_entry_id: e2.entry.id,
+  to_entry_id: e1.entry.id,
+  relationship_type: 'references',
+})
+await mj.relationships.linkEntries({
+  from_entry_id: e2.entry.id,
+  to_entry_id: e3.entry.id,
+  relationship_type: 'caused',
+})
+await mj.relationships.linkEntries({
+  from_entry_id: e3.entry.id,
+  to_entry_id: e1.entry.id,
+  relationship_type: 'resolved',
+})
+
+// T1: search_entries with sort_by: 'importance'
+const impSearch = await mj.search.searchEntries({
+  project_number: 5,
+  query: 'IMPSORT_TEST',
+  sort_by: 'importance',
+  mode: 'fts',
+  limit: 10,
+})
+
+// T2: search_entries with default sort_by (timestamp)
+const tsSearch = await mj.search.searchEntries({
+  project_number: 5,
+  query: 'IMPSORT_TEST',
+  limit: 10,
+})
+
+// T3: get_recent_entries with sort_by: 'importance'
+const impRecent = await mj.core.getRecentEntries({
+  project_number: 5,
+  limit: 5,
+  sort_by: 'importance',
+})
+
+// T4: get_recent_entries with default sort_by (timestamp)
+const tsRecent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
+
+// T5: search_by_date_range with sort_by: 'importance'
+const today = new Date().toISOString().split('T')[0]
+const impDateRange = await mj.search.searchByDateRange({
+  project_number: 5,
+  start_date: '2026-01-01',
+  end_date: today,
+  sort_by: 'importance',
+  limit: 5,
+})
+
+// T6: search_by_date_range with default sort_by (timestamp)
+const tsDateRange = await mj.search.searchByDateRange({
+  project_number: 5,
+  start_date: '2026-01-01',
+  end_date: today,
+  limit: 5,
+})
+
+// Cleanup
+await mj.admin.deleteEntry({ entry_id: e1.entry.id, permanent: true })
+await mj.admin.deleteEntry({ entry_id: e2.entry.id, permanent: true })
+await mj.admin.deleteEntry({ entry_id: e3.entry.id, permanent: true })
+
+return {
+  searchImportance: {
+    count: impSearch.count,
+    hasScores: impSearch.entries?.every((e) => typeof e.importanceScore === 'number'),
+    orderCorrect: impSearch.entries?.every(
+      (e, i, arr) => i === 0 || (arr[i - 1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
+    ),
+  },
+  searchTimestamp: {
+    noScores: tsSearch.entries?.every((e) => e.importanceScore === undefined),
+  },
+  recentImportance: {
+    hasScores: impRecent.entries?.every((e) => typeof e.importanceScore === 'number'),
+    orderCorrect: impRecent.entries?.every(
+      (e, i, arr) => i === 0 || (arr[i - 1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
+    ),
+  },
+  recentTimestamp: {
+    noScores: tsRecent.entries?.every((e) => e.importanceScore === undefined),
+  },
+  dateRangeImportance: {
+    hasScores: impDateRange.entries?.every((e) => typeof e.importanceScore === 'number'),
+    orderCorrect: impDateRange.entries?.every(
+      (e, i, arr) => i === 0 || (arr[i - 1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
+    ),
+  },
+  dateRangeTimestamp: {
+    noScores: tsDateRange.entries?.every((e) => e.importanceScore === undefined),
+  },
+}
+```
+
+| Check                              | Expected                                      |
+| ---------------------------------- | --------------------------------------------- |
+| `searchImportance.hasScores`       | `true` — every entry has `importanceScore`    |
+| `searchImportance.orderCorrect`    | `true` — descending importance order          |
+| `searchTimestamp.noScores`         | `true` — no `importanceScore` (zero overhead) |
+| `recentImportance.hasScores`       | `true` — every entry has `importanceScore`    |
+| `recentImportance.orderCorrect`    | `true` — descending importance order          |
+| `recentTimestamp.noScores`         | `true` — no `importanceScore` (zero overhead) |
+| `dateRangeImportance.hasScores`    | `true` — every entry has `importanceScore`    |
+| `dateRangeImportance.orderCorrect` | `true` — descending importance order          |
+| `dateRangeTimestamp.noScores`      | `true` — no `importanceScore` (zero overhead) |
+
+---
+
+### 21.10 Keyset Pagination & Archiving in Search
+
+```javascript
+// Test code:
+const created = await mj.core.createEntry({ project_number: 5, content: 'CM3 search archiving pagination test' })
+const id = created.entry.id
+await mj.admin.updateEntry({ entry_id: id, is_archived: true })
+
+const searchArchivedOff = await mj.search.searchEntries({ project_number: 5, query: "search archiving pagination", include_archived: false })
+const isArchivedHidden = !searchArchivedOff.entries?.some(e => e.id === id)
+
+const searchArchivedOn = await mj.search.searchEntries({ project_number: 5, query: "search archiving pagination", include_archived: true })
+const isArchivedVisible = searchArchivedOn.entries?.some(e => e.id === id)
+
+const searchPagPage1 = await mj.search.searchEntries({ project_number: 5, query: "test", limit: 2 })
+const hasSearchCursor = typeof searchPagPage1.next_cursor === 'string'
+
+// Clean up
+await mj.admin.deleteEntry({ entry_id: id, permanent: true })
+
+return {
+  isArchivedHidden,
+  isArchivedVisible,
+  hasSearchCursor,
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `isArchivedHidden`  | `true`   |
+| `isArchivedVisible` | `true`   |
+| `hasSearchCursor`   | `true`   |
+
+---
+
+### 21.11 Search Enhancements (Highlights, Facets, Weights, Quotes)
+
+```javascript
+// Test code:
+const withHighlights = await mj.search.searchEntries({ project_number: 5, query: "architecture", include_highlights: true, mode: "fts" })
+const withFacets = await mj.search.searchEntries({ project_number: 5, query: "test", include_facets: true })
+const withWeights = await mj.search.searchEntries({ project_number: 5, query: "performance", mode: "hybrid", fts_weight: 2.0, semantic_weight: 0.1 })
+const withQuotes = await mj.search.searchEntries({ project_number: 5, query: '"error handling" AND "performance"', mode: "fts" })
+
+return {
+  hasHighlights: Array.isArray(withHighlights.highlights) && withHighlights.highlights.length >= 0,
+  hasTagsFacet: typeof withFacets.facets === 'object' && Array.isArray(withFacets.facets.tags),
+  hasTypesFacet: typeof withFacets.facets === 'object' && Array.isArray(withFacets.facets.entryTypes),
+  weightsExecutes: typeof withWeights.count === 'number',
+  quotesExecutes: typeof withQuotes.count === 'number',
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `hasHighlights`     | `true`   |
+| `hasTagsFacet`      | `true`   |
+| `hasTypesFacet`     | `true`   |
+| `weightsExecutes`   | `true`   |
+| `quotesExecutes`    | `true`   |
+
+---
+
+## Success Criteria
+
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
+- `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
+- FTS correctly parses standard keyword/phrase syntax (OR, NOT, "phrases")
+- FTS detects unsafe queries (like `test's`) and seamlessly drops to `LIKE` fallback without crashing
+- Hybrid search utilizes RRF mode automatically when heuristics warrant it
+- `exact_match: true` successfully maps to `fuzzy_match: false` resulting in exact matching
+- `exact_match: false` successfully maps to `fuzzy_match: true` resulting in Levenshtein matching
+- FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
+- FTS5 LIKE fallback works for special characters (`test's`, `100%`)
+- `search_entries` gracefully falls back to fuzzy Levenshtein matching via Code Mode when `fuzzy_match` is true and FTS yields zero results
+- `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
+- Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
+- `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
+- `search_by_date_range` rejects invalid date format with structured error
+- `search_by_date_range` rejects inverted date range (start > end) with structured error
+- `search_entries` rejects queries exceeding 250 characters with structured Zod error
+- `search_by_date_range` filters by `project_number`
+- `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
+- `semantic_search` correctly filters results downstream using `tags` and `is_personal`
+- `semantic_search` with custom threshold returns fewer results
+- `semantic_search` quality gate hint shown even with `hint_on_empty: false`
+- `get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
+- `rebuild_vector_index` and `add_to_vector_index` work via Code Mode
+- `get_statistics` returns all 4 enhanced analytics metrics via Code Mode
+- `get_cross_project_insights` returns schema-compliant response
+- `search_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
+- Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
+- `search_entries` and `search_by_date_range` correctly respect the `include_archived` filter via Code Mode scripts
+- Keyset cursor pagination (`cursor` & `next_cursor`) works reliably across FTS, semantic, and date range searches via Code Mode scripts
+- `search_entries` with `include_highlights: true` returns snippets with FTS query terms highlighted via Code Mode
+- `search_entries` with `include_facets: true` returns aggregate tag and entryType distribution counts via Code Mode
+- Hybrid mode properly supports `fts_weight` and `semantic_weight` dynamic biasing multipliers via Code Mode
+- FTS query parser safely preserves balanced double-quotes for true phrase matching without crashing the sandbox

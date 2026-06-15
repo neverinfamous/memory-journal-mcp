@@ -28,6 +28,11 @@ Because testing and healing all tools at once exhausts an agent's context window
 - `test-usability-relationships.md`
 - `test-usability-io.md`
 - `test-usability-admin.md`
-- `test-usability-github.md`
+- `test-usability-github-issues.md`
+- `test-usability-github-projects.md`
 - `test-usability-backup.md`
-- `test-usability-team.md`
+- `test-usability-team-core.md`
+- `test-usability-team-search-analytics.md`
+- `test-usability-team-io-admin.md`
+- `test-usability-team-flags.md`
+- `test-usability-team-rbac.md`

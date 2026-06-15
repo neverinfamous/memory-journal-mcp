@@ -41,7 +41,9 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | -------------------------- | :---: | ------------------------------------------------------------------------------------------------------- | ----------- |
 | `test-github.md`           |  13   | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, milestones, insights, Copilot, cleanup) | After seed  |
 | `test-kanban-lifecycle.md` | 13.5  | **Kanban Lifecycle** — Seamless Add/Move/Delete flow using token-efficient `get_kanban_board`           | After seed  |
-| `test-team.md`             |  14   | **Team Collaboration** — 33 team tools + 4 team resources (incl. Hush Protocol flags)                   | After seed  |
+| `test-team-crud.md`        |  14A  | **Team CRUD & Search** — Entry creation, read, search, and batch operations                             | After seed  |
+| `test-team-admin.md`       |  14B  | **Team Admin & IO** — Admin, analytics, vector search, relationships, export/import, backup             | After seed  |
+| `test-team-hush.md`        |  14C  | **Hush Protocol** — Flag creation, resolution, updates, and resources                                   | After seed  |
 | `test-team-rbac.md`        | 14.5  | **Team RBAC** — Member management tools (add, update, get, list, remove) and role-based access limits   | After seed  |
 
 ### Granular Tool Group Stress Tests
@@ -94,7 +96,9 @@ The following table maps each standard testing prompt to the specific MCP tool g
 | `test-resources.md`            | General             | `analytics`, `codemode`, `core`, `github`                                                               |
 | `test-schemas.md`              | General             | `admin`, `analytics`, `backup`, `codemode`, `core`, `github`, `io`, `relationships`, `search`, `team`   |
 | `test-seed.md`                 | General             | `full`                                                                                                  |
-| `test-team.md`                 | Team Operations     | `admin`, `codemode`, `team`                                                                             |
+| `test-team-crud.md`            | Team CRUD & Search  | `codemode`, `team`                                                                                      |
+| `test-team-admin.md`           | Team Admin & IO     | `admin`, `codemode`, `team`                                                                             |
+| `test-team-hush.md`            | Team Flags          | `codemode`, `team`                                                                                      |
 | `test-team-rbac.md`            | Team RBAC           | `team`, `admin`                                                                                         |
 | `test-tool-group-admin.md`     | Admin / Tagging     | `admin`, `codemode`, `core`                                                                             |
 | `test-tool-group-backup.md`    | General             | `backup`, `codemode`, `io`                                                                              |
@@ -120,7 +124,9 @@ Phase 0 (Seed Data) ─── MUST PASS FIRST
     ├── Phase 11 (Errors) ───────────── independent
     ├── Phase 12 (Integrity) ────────── independent
     ├── Phase 13 (GitHub) ───────────── independent
-    ├── Phase 14 (Team) ─────────────── independent
+    ├── Phase 14A (Team CRUD) ───────── independent
+    ├── Phase 14B (Team Admin & IO) ─── independent
+    ├── Phase 14C (Hush Protocol) ───── independent
     ├── Phase 14.5 (Team RBAC) ──────── independent
     ├── Phase 15a–f (Tool Groups) ──── independent (any order)
     └── Phase 16 (Payload Optimization) independent

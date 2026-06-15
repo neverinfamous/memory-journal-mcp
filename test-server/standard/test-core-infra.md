@@ -28,6 +28,7 @@
 | Test               | Command/Action         | Expected Result                                                                                 |
 | ------------------ | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | Basic connectivity | `test_simple`          | Returns echo message                                                                            |
+| Trigger progress   | `trigger_progress`     | Emits progress notifications and returns complete                                               |
 | Health resource    | Read `memory://health` | Shows DB stats, tool filter status, vector index health                                         |
 | Health team block  | Read `memory://health` | Includes `teamDatabase` block with `configured`, `entryCount`, `path` (requires `TEAM_DB_PATH`) |
 | Scheduler inactive | Read `memory://health` | `scheduler.active: false`, `scheduler.jobs: []` (scheduler is HTTP-only, inactive in stdio)     |

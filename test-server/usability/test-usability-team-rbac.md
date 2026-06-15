@@ -1,13 +1,13 @@
-# memory-journal-mcp Usability & Hallucination Test: Team
+# memory-journal-mcp Usability & Hallucination Test: Team RBAC
 
 > **This test is optimized for an autonomous agent.**
 
-This prompt instructs you to organically test the `team` tool group using Code Mode (`mj_execute_code`), intentionally fuzzing the inputs to discover agent hallucinations, and permanently hardening the codebase against them.
+This prompt instructs you to organically test the `team` RBAC (Role-Based Access Control) tool group using Code Mode (`mj_execute_code`), intentionally fuzzing the inputs to discover agent hallucinations, and permanently hardening the codebase against them.
 
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in the `team` group:
-44 tools (refer to tool reference for full list)
+`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`, `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`
 
 **Instructions:**
 
@@ -44,7 +44,7 @@ Output the following message to the user:
 Once the server is refreshed (or if no codebase changes were needed):
 
 1. Re-run your Code Mode script to verify that the guardrail successfully intercepts the hallucination and provides actionable feedback (or seamlessly heals it).
-2. If successful, run `git add .` and `git commit -m "Optimize team tool usage"` to save your changes locally.
+2. If successful, run `git add .` and `git commit -m "Optimize team rbac tool usage"` to save your changes locally.
 3. Conclude the test and report your findings.
 
 ## 5. Continuous Improvement
