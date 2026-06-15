@@ -237,7 +237,7 @@ docker pull writenotenow/memory-journal-mcp:latest
 
 ## 🔒 **Code Mode Sandbox Security**
 
-Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `worker_threads` + `vm.createContext` sandbox:
+Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `worker_threads` + `vm.createContext` sandbox, enforcing fleet-standard restrictions:
 
 ### **Engine-Level Restrictions**
 
