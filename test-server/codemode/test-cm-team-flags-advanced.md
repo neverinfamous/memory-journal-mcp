@@ -2,7 +2,7 @@
 
 Test the advanced Hush Protocol flag features (`team_list_flags`, `team_update_flag`, `team_get_flag_analytics`) and flag resources through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phases 28.15–28.19 — ~14 test cases covering idempotency, querying/filtering, metadata mutation, reopen, analytics, resource verification, and error paths via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 28.13 — ~14 test cases covering idempotency, querying/filtering, metadata mutation, reopen, analytics, resource verification, and error paths via Code Mode.
 
 **Prerequisites:**
 

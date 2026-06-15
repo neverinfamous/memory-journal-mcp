@@ -1,5 +1,7 @@
 # Memory Journal MCP - Config Reload Test
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+
 This document provides a guided walkthrough for testing the dynamic configuration update capabilities of the memory-journal-mcp server. 
 It ensures that the `update_configuration` tool properly updates the configuration state and notifies the client.
 
@@ -49,3 +51,8 @@ npx tsx src/cli.ts --db data/mcp_test_db.db --config ./mcp-config.json
 ## Step 5: Clean Up
 
 1. Revert changes to `./mcp-config.json` to leave the environment clean for other tests.
+
+
+## Token Consumption
+
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.

@@ -12,6 +12,9 @@ Focus purely on the mechanics of Code Mode itself, ignoring specific tool data. 
 - Try to call raw resources instead of tools (e.g. `await mj.core.getBriefing()`).
 - Test standard Javascript array methods like `.map()` or `.filter()` on what you intuitively assume is an array.
 - Call `mj.help()`.
+- Explicitly test the newly added alias mappings (e.g., passing `keep`, `path`, `q`, `mode`, `text`, `message`, or `description` as arguments) to see if they resolve to the correct property.
+- Explicitly test missing array operations on returned objects (e.g., `.push()`, `.filter()`) and verify they give actionable feedback.
+- Verify token consumption tracking limits and ensure explicit error paths correctly reject invalid operations or overages.
 
 ## 2. Heal Phase
 

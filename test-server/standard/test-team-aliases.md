@@ -4,6 +4,7 @@
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests.
 - Seed data from `test-seed.md` must be present.
@@ -38,6 +39,7 @@
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
 - `team_add_author_alias` successfully adds an alias.
 - `team_add_author_alias` rejects duplicate aliases with a structured error.
 - `team_resolve_author` resolves a known alias to its canonical author.

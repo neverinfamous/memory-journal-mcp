@@ -4,6 +4,8 @@
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+- **Required Tool Groups:** `admin`, `backup`, `codemode`, `core`, `search`
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
 - Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
@@ -79,6 +81,7 @@
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
 - `merge_tags` consolidates duplicate tags correctly — verified via `list_tags` and entry re-check
 - `merge_tags` returns structured error when source equals target or source tag nonexistent
 - `backup_journal` rejects names containing path traversal characters (`../`) with structured errors

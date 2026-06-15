@@ -46,19 +46,20 @@ const resolved = await mj.team.resolveTeamFlag({
   comment: 'Resolved via alias'
 })
 
-// 3. version -> expected_version
-const entry = await mj.core.createEntry({ project_number: 5, content: 'Alias entry' })
+// 3. version -> expected_version, text/message -> content
+const entry = await mj.core.createEntry({ project_number: 5, text: 'Alias entry' })
 const updated = await mj.core.updateEntry({
   entry_id: entry.id,
-  content: 'Updated alias',
+  message: 'Updated alias',
   version: entry.version
 })
 
-// 4. search -> query
+// 4. search/q -> query, mode -> instruction_level
 const searched = await mj.core.searchEntries({
   project_number: 5,
-  search: 'Alias'
+  q: 'Alias'
 })
+const configMode = await mj.admin.config({ mode: 'standard' })
 
 // 5. filename -> source_dir (for io import)
 let ioError = false;
@@ -78,6 +79,7 @@ return {
   resolveCommentMapped: resolved.resolution === 'Resolved via alias',
   versionMapped: updated.success,
   searchMapped: searched.success && searched.count > 0,
+  modeMapped: configMode.success,
   filenameMapped: ioError // If it threw, it passed validation
 }
 ```
@@ -90,6 +92,7 @@ return {
 | `resolveCommentMapped` | `true`   |
 | `versionMapped`        | `true`   |
 | `searchMapped`         | `true`   |
+| `modeMapped`           | `true`   |
 | `filenameMapped`       | `true`   |
 
 ### 31.2 Method Aliases & read_query Wrapper
@@ -197,7 +200,7 @@ const result = await (async () => {
     uriError = e.message.includes('mj.core.getRecentEntries')
   }
   
-  // 5. Array proxy interception
+  // 5. Array proxy interception & hardened Code Mode array proxies
   // Use createEntry instead of searchEntries to correctly test Non-Array Proxy Error
   const createResult = await mj.core.createEntry({ project_number: 5, content: 'x' })
   let proxyError = false
@@ -209,6 +212,21 @@ const result = await (async () => {
   // cleanup the test entry
   await mj.core.deleteEntry({ entry_id: createResult.id, permanent: true })
   
+  // Newly hardened 'Code Mode' array proxies: test support for .length, [0], .indexOf, .includes, .map, .filter
+  const listResult = await mj.core.searchEntries({ project_number: 5, limit: 1 })
+  let arrayProxiesHardened = false
+  try {
+    const len = listResult.length
+    const item = listResult[0]
+    const idx = listResult.indexOf ? listResult.indexOf(item) : -1
+    const inc = listResult.includes ? listResult.includes(item) : false
+    const mapRes = listResult.map ? listResult.map(x => x) : []
+    const filRes = listResult.filter ? listResult.filter(x => true) : []
+    arrayProxiesHardened = typeof len === 'number' && Array.isArray(mapRes) && Array.isArray(filRes)
+  } catch (e) {
+    arrayProxiesHardened = false
+  }
+  
   // 6. Context parameter
   // Call mj_execute_code explicitly with context="Large context string" before running this
   const hasContext = typeof context !== 'undefined'
@@ -218,6 +236,7 @@ const result = await (async () => {
     configHasDb: !!cfg.dbPath,
     uriErrorHandled: uriError,
     proxyErrorHandled: proxyError,
+    arrayProxiesHardened: arrayProxiesHardened,
     contextAvailable: hasContext
   }
 })()
@@ -225,13 +244,14 @@ const result = await (async () => {
 return result
 ```
 
-| Check               | Expected |
-| ------------------- | -------- |
-| `templateValue`     | `"Auto return template: 2"` |
-| `configHasDb`       | `true`   |
-| `uriErrorHandled`   | `true` (intercepted URI read) |
-| `proxyErrorHandled` | `true` (intercepted `.forEach`) |
-| `contextAvailable`  | `true` (when passed via outer schema) |
+| Check                  | Expected |
+| ---------------------- | -------- |
+| `templateValue`        | `"Auto return template: 2"` |
+| `configHasDb`          | `true`   |
+| `uriErrorHandled`      | `true` (intercepted URI read) |
+| `proxyErrorHandled`    | `true` (intercepted `.forEach`) |
+| `arrayProxiesHardened` | `true` (supports `.length`, `[0]`, `.map`, etc.) |
+| `contextAvailable`     | `true` (when passed via outer schema) |
 
 ---
 
@@ -239,12 +259,13 @@ return result
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- Parameter aliases map successfully (`user` → `target_user`, `msg` → `message`, `severity` → `flag_type`, `comment` → `resolution`, `sort` → `sort_by`, `version` → `expected_version`, `search` → `query`, `filename` → `source_dir`)
+- Parameter aliases map successfully (`user` → `target_user`, `msg` → `message`, `severity` → `flag_type`, `comment` → `resolution`, `sort` → `sort_by`, `version` → `expected_version`, `search`/`q` → `query`, `text`/`message` → `content`, `mode` → `instruction_level`, `filename` → `source_dir`)
 - Method aliases map successfully (`mj.admin.config`, `mj.core.history`, `mj.team.setRole`, `mj.team.aliases`, `mj.search.read_query`)
 - Cross-group constructor wiring works (`mj.core.semanticSearch`, `mj.core.vectorStats`, `mj.core.searchAuditLog`, `mj.core.listDeletedEntries`)
 - `sleep()` and `setTimeout` globals exist and resolve in Sandbox
 - `await getConfig()` returns server configuration inside Sandbox
 - `readResource("memory://...")` throws a structured guidance error pointing to tools
 - Calling `.forEach()` on a tool response object throws a specific `CodeMode Non-Array Proxy Error`
+- Newly hardened array proxies support `.length`, `[0]`, `.indexOf`, `.includes`, `.map`, and `.filter` natively
 - The outer `context` parameter value is accessible inside the Sandbox via the `context` variable
 - Multi-line template literals automatically return without a `return` statement

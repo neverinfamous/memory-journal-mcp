@@ -2,7 +2,7 @@
 
 Test team vector search, cross-project insights, and comprehensive cross-tool error path verification through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 28.9–28.10 — ~10 test cases covering team vector operations, insights, and cross-tool structured error verification via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 28.10–28.11 — ~10 test cases covering team vector operations, insights, and cross-tool structured error verification via Code Mode.
 
 **Prerequisites:**
 

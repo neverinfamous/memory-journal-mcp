@@ -4,6 +4,8 @@
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+- **Required Tool Groups:** `admin`, `analytics`, `codemode`, `core`, `io`, `relationships`, `search`
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test (like limits testing), do NOT write custom temporary scripts; instead, strictly use the existing verification scripts provided in `test-server/scripts/` (e.g., `test-long-mcp.mjs`). **Important:** Always run these scripts from the project root (e.g., `node test-server/scripts/test-long-mcp.mjs`) so they can successfully spawn `dist/cli.js`.
 - Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
@@ -113,6 +115,7 @@ After testing, permanently delete all entries created during Phase 12. Since no 
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
 - All field round-trips preserve data exactly (content, tags, PR fields, workflow fields, project number, is_personal)
 - Unicode, multiline, HTML-like, and long content stored and retrieved correctly
 - `update_entry` preserves unset fields (partial update semantics)

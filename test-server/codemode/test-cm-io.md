@@ -2,7 +2,7 @@
 
 Test the unified IO namespace, testing both legacy `exportEntries` formats and the new filesystem-bound `.md` orchestration tools over Code Mode's `mj.io.*` binding.
 
-**Scope:** 4 tools (`export_entries`, `export_markdown`, `import_markdown`, `import_external` inside Code Mode namespace `mj.io.*`).
+**Scope:** 4 tools (`export_entries`, `export_markdown`, `import_markdown`, `import_external` inside Code Mode namespace `mj.io.*`), Phase 26 — covering IO and markdown interop.
 
 **Prerequisites:**
 

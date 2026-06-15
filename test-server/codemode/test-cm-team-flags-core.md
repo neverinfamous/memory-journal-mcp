@@ -2,7 +2,7 @@
 
 Test the core Hush Protocol flag system (`team_pass_flag`, `team_resolve_flag`) through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phases 28.12–28.14 — ~10 test cases covering flag creation, vocabulary validation, and resolution lifecycle via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 28.12 — ~10 test cases covering flag creation, vocabulary validation, and resolution lifecycle via Code Mode.
 *(Advanced features like analytics and metadata mutation are in `test-cm-team-flags-advanced.md`)*
 
 **Prerequisites:**

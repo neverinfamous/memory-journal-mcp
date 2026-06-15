@@ -13,6 +13,9 @@ Use the `mj_execute_code` tool to interact with the following tools in the `back
 
 - Do not perfectly structure your initial calls. Act intuitively as an agent.
 - Try natural, ambiguous scripting (e.g., guessing property names, forgetting `await`, assuming incorrect return types like arrays instead of objects).
+- Explicitly test the newly added alias mappings (e.g., passing `keep`, `path`, `q`, `mode`, `text`, `message`, or `description` as arguments) to see if they resolve to the correct property.
+- Explicitly test missing array operations on returned objects (e.g., `.push()`, `.filter()`) and verify they give actionable feedback.
+- Verify token consumption tracking limits and ensure explicit error paths correctly reject invalid operations or overages.
 - Do not try to bypass the sandbox, simply test the API surface.
 - Note any errors, exceptions, or unexpected behavior.
 
