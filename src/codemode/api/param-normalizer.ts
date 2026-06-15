@@ -34,7 +34,6 @@ const PARAM_ALIASES: Record<string, string> = {
     issue_id: 'issue_number',
     user: 'target_user',
     assignee: 'target_user',
-    msg: 'content',
     repo_name: 'repo',
     version: 'expected_version',
     search: 'query',
@@ -61,7 +60,7 @@ const PARAM_ALIASES: Record<string, string> = {
 /**
  * Convert camelCase object keys to snake_case
  */
-export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
+export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?: string): Record<string, unknown> {
     const result: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {
         let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
@@ -110,6 +109,15 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>): Record<str
         const alias = PARAM_ALIASES[snakeKey]
         if (alias !== undefined && !(alias in obj) && !(alias in result)) {
             snakeKey = alias
+        }
+
+        // Context-aware 'content' hallucination
+        if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'description') {
+            if (methodName && (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry'))) {
+                if (!('content' in obj) && !('content' in result)) {
+                    snakeKey = 'content'
+                }
+            }
         }
 
         // Coerce hallucinated role values
@@ -182,7 +190,7 @@ export function normalizeParams(methodName: string, args: unknown[]): unknown {
 
         // Object arg — pass through and convert camelCase to snake_case
         if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-            const obj = convertKeysToSnakeCase(arg as Record<string, unknown>)
+            const obj = convertKeysToSnakeCase(arg as Record<string, unknown>, methodName)
 
             // Handle common agent hallucination where they omit 'content' and pass arbitrary fields
             if (
@@ -258,7 +266,7 @@ export function normalizeParams(methodName: string, args: unknown[]): unknown {
         if (args.length > 1) {
             const lastArg = args[args.length - 1]
             if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
-                Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>))
+                Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>, methodName))
             }
         }
         return result
@@ -278,7 +286,7 @@ export function normalizeParams(methodName: string, args: unknown[]): unknown {
     if (args.length > paramMapping.length) {
         const lastArg = args[args.length - 1]
         if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
-            Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>))
+            Object.assign(result, convertKeysToSnakeCase(lastArg as Record<string, unknown>, methodName))
         }
     }
 
