@@ -18,6 +18,7 @@ Use the `mj_execute_code` tool to interact with the following tools in the `admi
 - Explicitly test passing primitives (like `true` or `"string"`) to parameter-less functions (like `rebuild_vector_index`) to ensure the proxy correctly maps them to empty objects instead of causing Zod strict failures.
 - Explicitly test the newly added alias mappings (e.g., passing `keep`, `path`, `q`, `mode`, `text`, `message`, or `description` as arguments) to see if they resolve to the correct property.
 - Explicitly test missing array operations on returned objects (e.g., `.push()`, `.filter()`) and verify they give actionable feedback.
+- Explicitly test hallucinating LLM context parameters in `update_configuration` (e.g., passing `maxTokens`, `temperature`, or `max_tokens`) to verify they are intercepted with actionable guidance rather than generic Zod strict failures.
 - Verify token consumption tracking limits and ensure explicit error paths correctly reject invalid operations or overages.
 - Do not try to bypass the sandbox, simply test the API surface.
 - Note any errors, exceptions, or unexpected behavior.

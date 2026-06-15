@@ -418,6 +418,25 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // update_configuration hallucination: trying to change maxTokens
+    if (methodName === 'update_configuration') {
+        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+            const obj = args[0] as Record<string, unknown>;
+            if ('maxTokens' in obj || 'max_tokens' in obj) {
+                return {
+                    error: {
+                        success: false,
+                        error: "[VALIDATION_ERROR] Unrecognized key: \"max_tokens\". update_configuration does not support changing maxTokens.",
+                        code: "VALIDATION_ERROR",
+                        category: "validation",
+                        suggestion: "Remove 'max_tokens' from the payload. Only instruction_level, tool_filters, and briefing preferences are supported.",
+                        recoverable: false
+                    }
+                };
+            }
+        }
+    }
+
     return { args };
 }
 

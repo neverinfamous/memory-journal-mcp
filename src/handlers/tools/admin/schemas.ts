@@ -342,6 +342,14 @@ export const SearchAuditLogSchema = z.preprocess(
                 obj['tool_name'] = obj['action'];
                 delete obj['action'];
             }
+            if (typeof obj['query'] === 'string' && obj['tool_name'] === undefined) {
+                obj['tool_name'] = obj['query'];
+                delete obj['query'];
+            }
+            if (typeof obj['q'] === 'string' && obj['tool_name'] === undefined) {
+                obj['tool_name'] = obj['q'];
+                delete obj['q'];
+            }
             return obj;
         }
         return val;

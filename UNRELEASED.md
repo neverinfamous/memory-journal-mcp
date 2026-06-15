@@ -50,6 +50,7 @@
 - `pnpm` configuration block from `package.json` to eliminate startup warnings.
 
 ### Fixed
+- Deprecated github-copilot-cli references in `.github/copilot-instructions.md` in favor of `gh copilot`.
 - Zod validation errors in test suite caused by strict enforcement of `project_number`.
 - Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation.
 - Native MCP tools failing to auto-resolve hallucinated repository or project string parameters.
