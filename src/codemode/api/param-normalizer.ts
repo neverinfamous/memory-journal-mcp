@@ -123,6 +123,34 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             }
         }
 
+        // Context-aware protection for 'keep' (only for backup tools)
+        if (useAlias && snakeKey === 'keep') {
+            if (methodName && !methodName.toLowerCase().includes('backup')) {
+                useAlias = false
+            }
+        }
+
+        // Context-aware protection for 'mode' (only for config tools)
+        if (useAlias && snakeKey === 'mode') {
+            if (methodName && !methodName.toLowerCase().includes('config')) {
+                useAlias = false
+            }
+        }
+
+        // Context-aware protection for 'text', 'body', 'note', 'title' (only for entry/comment tools)
+        if (useAlias && (snakeKey === 'text' || snakeKey === 'body' || snakeKey === 'note' || snakeKey === 'title')) {
+            if (methodName && !(
+                methodName.toLowerCase().includes('create') || 
+                methodName.toLowerCase().includes('update') || 
+                methodName.toLowerCase().includes('entry') ||
+                methodName.toLowerCase().includes('github') ||
+                methodName.toLowerCase().includes('issue') ||
+                methodName.toLowerCase().includes('pr')
+            )) {
+                useAlias = false
+            }
+        }
+
         if (useAlias && typeof alias === 'string') {
             snakeKey = alias
         }
