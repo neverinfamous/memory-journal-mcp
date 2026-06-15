@@ -88,7 +88,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     recoverable: true
                 }};
             }
-            if (obj['entry_id'] === undefined && obj['id'] === undefined) {
+            if (obj['entry_id'] === undefined && obj['id'] === undefined && obj['entryId'] === undefined) {
                 return { error: {
                     success: false,
                     error: `${methodName} requires an 'entry_id' parameter.`,
@@ -98,7 +98,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     recoverable: true
                 }};
             }
-            const idVal = obj['entry_id'] !== undefined ? obj['entry_id'] : obj['id'];
+            const idVal = obj['entry_id'] !== undefined ? obj['entry_id'] : (obj['entryId'] !== undefined ? obj['entryId'] : obj['id']);
             if (typeof idVal === 'string' && isNaN(parseInt(idVal, 10))) {
                 return { error: {
                     success: false,

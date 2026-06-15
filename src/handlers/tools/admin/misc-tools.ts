@@ -20,11 +20,9 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 source_tag: z
                     .union([z.string(), z.number()])
-                    .optional()
                     .describe('Tag to merge from (will be deleted)'),
                 target_tag: z
                     .union([z.string(), z.number()])
-                    .optional()
                     .describe('Tag to merge into (will be created if not exists)'),
             }).strict(),
             outputSchema: MergeTagsOutputSchema,
@@ -38,8 +36,8 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { source_tag, target_tag } = z
                         .object({
-                            source_tag: z.preprocess((v) => String(v), z.string().min(1)),
-                            target_tag: z.preprocess((v) => String(v), z.string().min(1)),
+                            source_tag: z.preprocess((v) => v !== undefined ? String(v as string | number) : v, z.string().min(1)),
+                            target_tag: z.preprocess((v) => v !== undefined ? String(v as string | number) : v, z.string().min(1)),
                         }).strict()
                         .parse(params)
 
