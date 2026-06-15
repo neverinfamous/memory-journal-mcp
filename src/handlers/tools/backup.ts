@@ -287,7 +287,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         .object({ keep_count: relaxedNumber().default(5) })
                         .parse(params)
 
-                    const result = db.deleteOldBackups(keep_count)
+                    const keepCountNum = typeof keep_count === 'string' ? parseInt(keep_count, 10) : keep_count
+                    if (isNaN(keepCountNum) || keepCountNum < 1) {
+                        throw new Error('keep_count must be a positive integer')
+                    }
+
+                    const result = db.deleteOldBackups(keepCountNum)
 
                     return {
                         success: true,
