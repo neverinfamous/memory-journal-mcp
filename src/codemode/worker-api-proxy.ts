@@ -121,6 +121,78 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // IO tools hallucinations
+    const ioMethods = ['export_entries', 'exportEntries', 'team_export_entries', 'teamExportEntries', 'export_markdown', 'exportMarkdown', 'team_export_markdown', 'teamExportMarkdown', 'import_markdown', 'importMarkdown', 'team_import_markdown', 'teamImportMarkdown', 'import_external', 'importExternal', 'team_import_external', 'teamImportExternal'];
+    if (ioMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+
+        // Intercept query/text hallucinations on export_entries
+        if (methodName === 'export_entries' || methodName === 'exportEntries' || methodName === 'team_export_entries' || methodName === 'teamExportEntries') {
+            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['text'] !== undefined || obj['search'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `export_entries does not support text search. It exports all entries (optionally filtered by date or tags).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'To search for specific text, use search_entries. Otherwise, remove the search query parameter.',
+                    recoverable: true
+                }};
+            }
+            if (obj['path'] !== undefined || obj['output_dir'] !== undefined || obj['file'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `export_entries returns the exported data directly and does not write to disk.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Use export_markdown if you want to save files to a directory, or remove path/output_dir.',
+                    recoverable: true
+                }};
+            }
+        }
+
+        // Map path/file/dir to output_dir or source_dir
+        for (const key of ['path', 'file', 'filepath', 'dir', 'folder', 'target', 'source']) {
+            if (obj[key] !== undefined) {
+                let didMap = false;
+                if (methodName.includes('export_markdown') || methodName.includes('exportMarkdown')) {
+                    if (obj['output_dir'] === undefined) obj['output_dir'] = obj[key];
+                    didMap = true;
+                } else if (methodName.includes('import')) {
+                    if (obj['source_dir'] === undefined) obj['source_dir'] = obj[key];
+                    didMap = true;
+                }
+                
+                if (didMap) {
+                    if (key === 'path') delete obj['path'];
+                    else if (key === 'file') delete obj['file'];
+                    else if (key === 'filepath') delete obj['filepath'];
+                    else if (key === 'dir') delete obj['dir'];
+                    else if (key === 'folder') delete obj['folder'];
+                    else if (key === 'target') delete obj['target'];
+                    else if (key === 'source') delete obj['source'];
+                }
+            }
+        }
+
+        // URL hallucination on import_external
+        if (methodName.includes('import_external') || methodName.includes('importExternal')) {
+            if (obj['url'] !== undefined || obj['link'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `import_external does not download from URLs. It imports from a local directory (source_dir).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Provide a local directory path in source_dir.',
+                    recoverable: true
+                }};
+            }
+            if (obj['format'] !== undefined && obj['source_format'] === undefined) {
+                obj['source_format'] = obj['format'];
+                delete obj['format'];
+            }
+        }
+    }
+
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
     const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships'];
     if (singleIdMethods.includes(methodName)) {

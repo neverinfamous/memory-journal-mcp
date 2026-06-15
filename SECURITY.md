@@ -35,7 +35,7 @@ are safely handled by the database layer and do not pose injection risks.
 
 ### **SQL Injection Prevention**
 
-- ✅ **Raw SQL Restrictions** — Standard handlers must strictly use parameterized methods defined by `IDatabaseAdapter`. The `_executeRawQueryUnsafe` method is retained purely as an internal, hidden administrative tool for index maintenance and debugging, and is explicitly restricted from Code Mode or standard user interaction.
+- ✅ **Raw SQL Restrictions** — Standard handlers must strictly use parameterized methods defined by `IDatabaseAdapter`.
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** via Zod schemas before database operations
 - ✅ **Warning system** for potentially dangerous content patterns

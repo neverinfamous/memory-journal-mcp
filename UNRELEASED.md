@@ -52,7 +52,6 @@
 ### Fixed
 - Zod validation errors in test suite caused by strict enforcement of `project_number`.
 - Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation.
-- `_execute_raw_query_unsafe` returning validation errors in the MCP client.
 - Native MCP tools failing to auto-resolve hallucinated repository or project string parameters.
 - Code Mode sandbox explicitly exposing `setTimeout` and `getConfig` globals.
 - `semanticSearch` returning artificially low similarity scores.
@@ -81,7 +80,6 @@
   - `target_user` (maps to `author`) and `contributor` (maps to `member`) for `setRole`.
   - `exact_match` (maps to `fuzzy_match`).
   - `script` (maps to `code` for `mj_execute_code`).
-  - string parameter for `_executeRawQueryUnsafe`.
   - camelCase method aliases.
 - Intercepted parameter hallucinations (`id` to `entry_id` and `ids` to `entry_ids`) across all standard Admin MCP schemas and the Code Mode handler to automatically self-heal common agent validation failures.
 - Schema extraction in `memory://help` failing on Zod pipelines.
@@ -102,7 +100,6 @@
 - Code Mode sandbox not enforcing global `readonly` server mode.
 - Missing `metrics` object in Code Mode responses.
 - Undocumented `timeout` alias for `mj_execute_code` schema.
-- Exposed `_execute_raw_query_unsafe` in Code Mode Phase 16 Sandbox Basics.
 - Hallucinated test code in `test-cm-sandbox-basics.md`.
 - FTS5 and Semantic/Auto search ignoring the `include_archived` flag.
 - `teamAddMember` inappropriately performing upserts on duplicate authors.

@@ -437,7 +437,6 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`batchUpdateEntries(params)\`
 - \`batchDeleteEntries(params)\`
 - \`searchAuditLog(params)\`
-- \`_executeRawQueryUnsafe(params)\`
 
 ### \`mj.github\`
 - \`getGithubIssues(params)\`

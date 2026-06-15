@@ -344,6 +344,8 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
 
     // Export
     exportEntries: 'format',
+    exportMarkdown: 'output_dir',
+    importMarkdown: 'source_dir',
     importExternal: 'source_dir',
 
     // Admin
@@ -394,6 +396,9 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamLinkEntries: ['from_entry_id', 'to_entry_id', 'relationship_type'],
     teamVisualizeRelationships: 'entry_id',
     teamExportEntries: 'format',
+    teamExportMarkdown: 'output_dir',
+    teamImportMarkdown: 'source_dir',
+    teamImportExternal: 'source_dir',
     teamSemanticSearch: 'query',
     teamAddToVectorIndex: 'entry_id',
     teamPassFlag: 'flag_type',
@@ -409,7 +414,6 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamListAuthorAliases: 'canonical_author',
     teamResolveAuthor: 'author',
     teamConsolidateAuthors: 'canonical_author',
-    teamImportExternal: 'source_dir',
 
     // Team Members
     teamAddMember: ['author', 'role'],

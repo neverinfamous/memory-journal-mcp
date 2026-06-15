@@ -84,7 +84,6 @@ src/
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
-│   ├── server-instructions/    # Modular instruction markdown sources
 │   └── server-instructions.ts  # Auto-generated (pnpm exec tsx scripts/generate-server-instructions.ts)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
@@ -116,7 +115,7 @@ src/
 
 | File                                     | Purpose                                              |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `src/constants/server-instructions/*.md` | Modular instruction sources (overview, github, etc.) |
+| `src/constants/server-instructions.ts` | Server instructions (Auto-generated from markdown sources) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
 | `test-server/tool-reference.md`          | Categorized 100-tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
