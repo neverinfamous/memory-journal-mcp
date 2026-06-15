@@ -34,9 +34,14 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 5. `test-usability-relationships.md`
 6. `test-usability-io.md`
 7. `test-usability-admin.md`
-8. `test-usability-github.md`
-9. `test-usability-backup.md`
-10. `test-usability-team.md`
+8. `test-usability-github-issues.md`
+9. `test-usability-github-projects.md`
+10. `test-usability-backup.md`
+11. `test-usability-team-core.md`
+12. `test-usability-team-search-analytics.md`
+13. `test-usability-team-io-admin.md`
+14. `test-usability-team-flags.md`
+15. `test-usability-team-rbac.md`
 
 ## Finalization
 Once all subagents have completed their tests, run `pnpm run check` to ensure no type errors or formatting issues were introduced by the optimization layers.
