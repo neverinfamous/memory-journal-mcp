@@ -29,6 +29,7 @@ const PARAM_ALIASES: Record<string, string> = {
     pr_id: 'pr_number',
     project: 'project_number',
     project_id: 'project_number',
+    proj: 'project_number',
     milestone_id: 'milestone_number',
     issue_id: 'issue_number',
     user: 'target_user',
