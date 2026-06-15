@@ -193,6 +193,97 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // GitHub tools hallucinations
+    const githubMethods = [
+        'get_github_issues', 'getGithubIssues',
+        'get_github_prs', 'getGithubPrs',
+        'get_github_issue', 'getGithubIssue',
+        'get_github_pr', 'getGithubPr',
+        'get_github_context', 'getGithubContext',
+        'get_kanban_board', 'getKanbanBoard',
+        'move_kanban_item', 'moveKanbanItem',
+        'add_kanban_item', 'addKanbanItem',
+        'delete_kanban_item', 'deleteKanbanItem',
+        'create_github_issue_with_entry', 'createGithubIssueWithEntry',
+        'close_github_issue_with_entry', 'closeGithubIssueWithEntry',
+        'get_github_milestones', 'getGithubMilestones',
+        'get_github_milestone', 'getGithubMilestone',
+        'create_github_milestone', 'createGithubMilestone',
+        'update_github_milestone', 'updateGithubMilestone',
+        'delete_github_milestone', 'deleteGithubMilestone',
+        'get_repo_insights', 'getRepoInsights',
+        'get_copilot_reviews', 'getCopilotReviews'
+    ];
+    if (githubMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        
+        // 1. Text aliases
+        for (const key of ['text', 'message', 'description'] as const) {
+            if (obj[key] !== undefined) {
+                if (methodName.includes('create_github_issue') || methodName.includes('createGithubIssue') || methodName.includes('create_github_milestone') || methodName.includes('update_github_milestone') || methodName.includes('createGithubMilestone') || methodName.includes('updateGithubMilestone')) {
+                    const targetProp = methodName.includes('milestone') || methodName.includes('Milestone') ? 'description' : 'body';
+                    if (obj[targetProp] === undefined) {
+                        obj[targetProp] = obj[key];
+                        if (key === 'text') delete obj['text'];
+                        else if (key === 'message') delete obj['message'];
+                        else if (key === 'description') delete obj['description'];
+                    }
+                } else if (methodName.includes('close_github_issue') || methodName.includes('closeGithubIssue')) {
+                    if (obj['comment'] === undefined && key !== 'description') {
+                        obj['comment'] = obj[key];
+                        if (key === 'text') delete obj['text'];
+                        else if (key === 'message') delete obj['message'];
+                    } else if (obj['resolution_notes'] === undefined && key === 'description') {
+                        obj['resolution_notes'] = obj[key];
+                        delete obj['description'];
+                    }
+                }
+            }
+        }
+
+        // 2. State aliases
+        if (obj['keep'] !== undefined && obj['state'] === undefined) {
+            if (obj['keep'] === true) {
+                obj['state'] = 'open';
+            } else if (obj['keep'] === false) {
+                obj['state'] = 'closed';
+            } else if (typeof obj['keep'] === 'string') {
+                obj['state'] = obj['keep'];
+            }
+            delete obj['keep'];
+        }
+
+        // 3. Mode alias for Kanban
+        if (obj['mode'] !== undefined && obj['summary_only'] === undefined) {
+            obj['summary_only'] = obj['mode'] === 'summary';
+            delete obj['mode'];
+        }
+
+        // 4. Q/Query for list issues/PRs
+        if ((methodName.includes('get_github_issues') || methodName.includes('getGithubIssues') || methodName.includes('get_github_prs') || methodName.includes('getGithubPrs')) && (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined)) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries (q/query/search). It only supports listing by state (open/closed).`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove the query parameter to list items, or use GitHub directly for complex searches.',
+                recoverable: true
+            }};
+        }
+
+        // 5. Path for context
+        if ((methodName.includes('get_github_context') || methodName.includes('getGithubContext')) && obj['path'] !== undefined) {
+             return { error: {
+                success: false,
+                error: `get_github_context does not take a 'path' parameter. It returns repository-wide context.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove the path parameter.',
+                recoverable: true
+            }};
+        }
+    }
+
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
     const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships'];
     if (singleIdMethods.includes(methodName)) {
