@@ -154,10 +154,10 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         for (const key of ['path', 'file', 'filepath', 'dir', 'folder', 'target', 'source']) {
             if (obj[key] !== undefined) {
                 let didMap = false;
-                if (methodName.includes('export_markdown') || methodName.includes('exportMarkdown')) {
+                if (methodName.includes('export_markdown') || methodName.includes('exportMarkdown') || methodName.includes('teamExportMarkdown') || methodName.includes('team_export_markdown')) {
                     if (obj['output_dir'] === undefined) obj['output_dir'] = obj[key];
                     didMap = true;
-                } else if (methodName.includes('import')) {
+                } else if (methodName.toLowerCase().includes('import')) {
                     if (obj['source_dir'] === undefined) obj['source_dir'] = obj[key];
                     didMap = true;
                 }
@@ -175,7 +175,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
 
         // URL hallucination on import_external
-        if (methodName.includes('import_external') || methodName.includes('importExternal')) {
+        if (methodName.includes('import_external') || methodName.includes('importExternal') || methodName.includes('teamImportExternal') || methodName.includes('team_import_external')) {
             if (obj['url'] !== undefined || obj['link'] !== undefined) {
                 return { error: {
                     success: false,
