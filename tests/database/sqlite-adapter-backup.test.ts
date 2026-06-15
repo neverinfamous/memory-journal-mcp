@@ -70,7 +70,7 @@ describe('Backup Manager Edge Cases', () => {
         const lockDir = `${testDbPath}.lock.d`
         if (fs.existsSync(lockDir)) {
             try {
-                fs.rmSync(lockDir, { recursive: true, force: true })
+                fs.rmSync(lockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
             } catch {
                 // ignore cleanup errors in test
             }

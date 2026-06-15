@@ -328,7 +328,9 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
 
     // Relationships
     linkEntries: ['from_entry_id', 'to_entry_id', 'relationship_type'],
+    link_entries: ['from_entry_id', 'to_entry_id', 'relationship_type'],
     visualizeRelationships: 'entry_id',
+    visualize_relationships: 'entry_id',
 
     // Export
     exportEntries: 'format',

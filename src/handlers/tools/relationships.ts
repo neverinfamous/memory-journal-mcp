@@ -47,12 +47,13 @@ const LinkEntriesSchemaMcp = z
         target_id: relaxedNumber().optional(),
         relationship_type: z.string().optional(),
         type: z.string().optional(),
+        rel: z.string().optional(),
         description: z.string().optional(),
     })
     .transform((data) => ({
         from_entry_id: data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id,
         to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
-        relationship_type: data.type ?? data.relationship_type ?? 'references',
+        relationship_type: data.type ?? data.rel ?? data.relationship_type ?? 'references',
         description: data.description,
     }))
 
@@ -84,6 +85,7 @@ const VisualizeInputSchemaMcp = z.object({
     entry_id: relaxedNumber()
         .optional()
         .describe('Specific entry ID to visualize (shows connected entries)'),
+    id: relaxedNumber().optional(),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),
     relationship_type: z
         .string()
@@ -91,7 +93,10 @@ const VisualizeInputSchemaMcp = z.object({
         .describe('Filter to show only this relationship type (e.g., blocked_by, implements)'),
     depth: relaxedNumber().optional().default(2).describe('Relationship traversal depth'),
     limit: relaxedNumber().optional().default(20).describe('Maximum entries to include'),
-})
+}).transform(data => ({
+    ...data,
+    entry_id: data.entry_id ?? data.id
+}))
 
 // ============================================================================
 // Output Schemas
