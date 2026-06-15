@@ -108,7 +108,21 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
 
         // Remap known parameter aliases (only when canonical name is absent)
         const alias = PARAM_ALIASES[snakeKey]
-        if (alias !== undefined && !(alias in obj) && !(alias in result)) {
+        let useAlias = alias !== undefined && !(alias in obj) && !(alias in result)
+
+        // Context-aware protection for 'title' and 'body' in GitHub tools
+        if (useAlias && (snakeKey === 'title' || snakeKey === 'body')) {
+            if (methodName && (
+                methodName.toLowerCase().includes('github') || 
+                methodName.toLowerCase().includes('issue') || 
+                methodName.toLowerCase().includes('milestone') || 
+                methodName.toLowerCase().includes('pr')
+            )) {
+                useAlias = false
+            }
+        }
+
+        if (useAlias) {
             snakeKey = alias
         }
 
