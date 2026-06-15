@@ -109,7 +109,7 @@ export const ExportMarkdownSchema = z.preprocess(
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
                     if (key in obj) {
                         obj['output_dir'] = obj[key];
-                        delete obj[key];
+                        Reflect.deleteProperty(obj, key);
                         modified = true;
                         break;
                     }
@@ -143,7 +143,7 @@ export const ExportMarkdownSchemaMcp = z.preprocess(
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
                     if (key in obj) {
                         obj['output_dir'] = obj[key];
-                        delete obj[key];
+                        Reflect.deleteProperty(obj, key);
                         modified = true;
                         break;
                     }
@@ -194,7 +194,7 @@ export const ImportMarkdownSchema = z.preprocess(
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
                     if (key in obj) {
                         obj['source_dir'] = obj[key];
-                        delete obj[key];
+                        Reflect.deleteProperty(obj, key);
                         modified = true;
                         break;
                     }
@@ -225,7 +225,7 @@ export const ImportMarkdownSchemaMcp = z.preprocess(
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
                     if (key in obj) {
                         obj['source_dir'] = obj[key];
-                        delete obj[key];
+                        Reflect.deleteProperty(obj, key);
                         modified = true;
                         break;
                     }
@@ -287,7 +287,7 @@ export const ImportExternalSchema = z.preprocess(
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
                     if (key in obj) {
                         obj['source_dir'] = obj[key];
-                        delete obj[key];
+                        Reflect.deleteProperty(obj, key);
                         modified = true;
                         break;
                     }
@@ -325,7 +325,7 @@ export const ImportExternalSchemaMcp = z.preprocess(
                 for (const key of ['path', 'filepath', 'target_dir', 'dir']) {
                     if (key in obj) {
                         obj['source_dir'] = obj[key];
-                        delete obj[key];
+                        Reflect.deleteProperty(obj, key);
                         modified = true;
                         break;
                     }

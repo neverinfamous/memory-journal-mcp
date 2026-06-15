@@ -281,7 +281,7 @@ export const BatchDeleteEntriesSchema = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
             if ('ids' in obj && !('entry_ids' in obj)) {
-                obj['entry_ids'] = obj['ids'];
+                obj['entry_ids'] = Array.isArray(obj['ids']) ? obj['ids'] : [obj['ids']];
                 delete obj['ids'];
                 modified = true;
             }
@@ -307,7 +307,7 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
             if ('ids' in obj && !('entry_ids' in obj)) {
-                obj['entry_ids'] = obj['ids'];
+                obj['entry_ids'] = Array.isArray(obj['ids']) ? obj['ids'] : [obj['ids']];
                 delete obj['ids'];
                 modified = true;
             }

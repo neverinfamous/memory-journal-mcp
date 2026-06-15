@@ -201,7 +201,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                         continue
                                     }
                                     if (snakeKey === 'ids' && !('entry_ids' in obj)) {
-                                        newObj['entry_ids'] = deepCamelToSnake(v)
+                                        const vSnake = deepCamelToSnake(v);
+                                        newObj['entry_ids'] = Array.isArray(vSnake) ? vSnake : [vSnake];
                                         continue
                                     }
                                     newObj[snakeKey] = deepCamelToSnake(v)

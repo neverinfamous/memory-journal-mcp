@@ -102,7 +102,17 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
 
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
     const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry'];
-    if (singleIdMethods.includes(methodName) && args.length === 1) {
+    if (singleIdMethods.includes(methodName)) {
+        if (args.length === 0) {
+            return { error: {
+                success: false,
+                error: `${methodName} requires an 'entry_id' parameter.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: `Provide { entry_id: number } as the argument`,
+                recoverable: true
+            }};
+        } else if (args.length === 1) {
         if (Array.isArray(args[0])) {
             return { error: {
                 success: false,
@@ -159,6 +169,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     recoverable: true
                 }};
             }
+        }
         }
     }
 
@@ -223,6 +234,14 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             if (obj['source_tags'] !== undefined && obj['source_tag'] === undefined) {
                 obj['source_tag'] = Array.isArray(obj['source_tags']) ? obj['source_tags'][0] : obj['source_tags'];
                 delete obj['source_tags'];
+            }
+            if (obj['old_tag'] !== undefined && obj['source_tag'] === undefined) {
+                obj['source_tag'] = obj['old_tag'];
+                delete obj['old_tag'];
+            }
+            if (obj['new_tag'] !== undefined && obj['target_tag'] === undefined) {
+                obj['target_tag'] = obj['new_tag'];
+                delete obj['new_tag'];
             }
             if (obj['from'] !== undefined && obj['source_tag'] === undefined) {
                 obj['source_tag'] = obj['from'];
