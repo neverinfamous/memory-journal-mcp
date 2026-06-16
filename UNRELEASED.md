@@ -4,7 +4,6 @@
 
 ### Added
 - Implemented commit-enriched session summaries via `SessionCommitContextSchema` and `memory://commits/{project_number}` resource. (`eda39c0`)
-- Fixed state pollution in `memory://briefing` environment configuration E2E tests. (`eda39c0`)
 
 - Added team flag analytics tests to Code Mode test suite. (`798fdd3`)
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations.
@@ -37,9 +36,8 @@
 - Updated `mj-mcp-heal` developer skill document to focus on anti-hallucination guardrails and native optimization (`4694d2cb`).
 - Renamed `mj-mcp-optimize` → `mj-mcp-heal` (codebase healing) and `journal-optimizer` → `mj-mcp-optimize` (data optimization) for naming consistency (`a54e15b0`).
 - Bumped `eslint` to 10.5.0 (`4a2a2ae1`).
-- Removed mandatory journaling requirement from `adversarial-performance` skill to support analytical runs (`ce37b2f1`).
 - Wrapped batch operations in a single database transaction for improved throughput.
-- Modularized core files and handlers into logical sub-directories.
+- Refactored core files and handlers into sub-directories for modularity.
 - Enforced dynamic read-only constraints for Code Mode mutation protection.
 - Injected dynamic method aliases into Sandbox group bindings to resolve alias errors (`0dc49c2b`).
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
@@ -53,9 +51,11 @@
 - Converted `scripts/check-orphans.ts` to a portable, zero-configuration `scripts/check-orphans.mjs` Node script.
 - Streamlined all testing coordinator workflows (Code Mode, Standard, Usability) to enforce local pipeline verification and omit live server restarts. (`64708af5`)
 ### Removed
+- Removed mandatory journaling requirement from `adversarial-performance` skill to support analytical runs.
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
+- Fixed state pollution in `memory://briefing` environment configuration E2E tests. (`eda39c0`)
 - Fixed flaky test timeout in Code Mode test suite by increasing the Vitest global `testTimeout` to 10s. (`37fda1e`)
 - Fixed `setTimeout` and `sleep` functions in the Code Mode sandbox to correctly bind to global execution context. (`96b5b47`)
 - Fixed ESLint `@typescript-eslint/no-unsafe-function-type` error in Code Mode sandbox `setTimeout` callback definition. (`5b715f3`)
@@ -63,112 +63,97 @@
 - Fixed strict TypeScript linting errors (type vs interface, boolean evaluation) in Code Mode proxy handler and updated coordinator workflows to strictly enforce linting quality gates. (`430849e`)
 - Fixed Code Mode leaking raw MCP exceptions into execution contexts by catching unhandled rejections at the proxy boundary and returning structured error objects. (`35c18b6`)
 - Fixed `team_delete_entry` call in Code Mode analytics test suite which was failing due to an unsupported `permanent` flag. (`dc7efdd`)
-- Zod validation errors in test suite caused by strict enforcement of `project_number` (`38936398`).
-- Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation (`48c5728e`).
-- Native MCP tools failing to auto-resolve hallucinated repository or project string parameters (`fde3adab`).
-- Code Mode sandbox explicitly exposing `setTimeout` and `getConfig` globals (`7fdb3233`).
-- `semanticSearch` returning artificially low similarity scores.
-- False-positive in the static security scanner regarding bracket-notation AST escapes (`148bdcba`).
-- `--tool-filter codemode` inadvertently disabling mutating tool bindings.
-- Test pollution in `codemode-restore.test.ts`.
-- E2E Test suite execution time bottlenecks by enabling parallel Playwright workers, fully isolating worker-specific SQLite databases and dynamically assigning custom collision-free ports for in-test HTTP servers (`69e16091`).
-- `create_entry` missing auto-population of GitHub URLs when `issue_number` is provided (`b753596e`).
-- `get_entry_by_id` missing relationships and importance breakdown in response (`cc081ee7`).
-- `restore_backup` tool failing in environments with database encryption.
-- `search_audit_log` returning validation errors in environments without audit logging.
-- Multiple `project_number` validation and resolution issues in the Code Mode dispatcher (`38936398`).
-- Code Mode stability issues related to async/await handling, error serialization, and `fetch()` (`a24ace02`).
-- Code Mode sandbox mutability guard failing to protect admin/team structural tools.
-- Code Mode proxy agent hallucinations by adding interception aliases for:
-  - `start_date` without `end_date` (maps to today).
-  - `deletedCount` (maps to `count`) (`a93b4935`).
-  - `entryIds` and `deletedIds` destructuring.
-  - missing `project_number` in batch operations (`070dcc4b`).
-  - unresolved string `project_number` (e.g. `"P154"`) (`434778fe`).
-  - calling tools from the wrong API group.
-  - dynamically probing `mj_execute_code` with empty payloads (`005019a6`).
-  - `createEntryMinimal`.
-  - `revisions` (maps to `history`).
-  - `comment` (maps to `resolution` for `resolve_team_flag`).
-  - `target_user` (maps to `author`) and `contributor` (maps to `member`) for `setRole`.
-  - `exact_match` (maps to `fuzzy_match`).
-  - `script` (maps to `code` for `mj_execute_code`) (`b7a947e2`).
-  - camelCase method aliases (`8c2ef951`).
+- Fixed Zod validation errors in test suite caused by strict enforcement of `project_number`.
+- Removed stale `create_entry_minimal` from `TOOL_GROUPS` to fix test failures.
+- Fixed Native MCP tools failing to auto-resolve hallucinated repository or project string parameters.
+- Removed explicit `setTimeout` and `getConfig` globals from Code Mode sandbox.
+- Fixed `semanticSearch` returning artificially low similarity scores.
+- Resolved false-positive in static security scanner regarding bracket-notation AST escapes.
+- Fixed `--tool-filter codemode` inadvertently disabling mutating tool bindings.
+- Fixed test pollution in `codemode-restore.test.ts`.
+- Resolved E2E Test suite execution bottlenecks by enabling parallel Playwright workers and isolated databases.
+- Fixed `create_entry` missing auto-population of GitHub URLs when `issue_number` is provided.
+- Fixed `get_entry_by_id` missing relationships and importance breakdown in response.
+- Fixed `restore_backup` tool failing in environments with database encryption.
+- Fixed `search_audit_log` returning validation errors in environments without audit logging.
+- Resolved multiple `project_number` validation and resolution issues in Code Mode dispatcher.
+- Fixed Code Mode stability issues related to async/await handling, error serialization, and `fetch()`.
+- Fixed Code Mode sandbox mutability guard failing to protect admin/team structural tools.
+- Healed Code Mode proxy agent parameter hallucinations by adding interception aliases for common aliases and omitted parameters (`a93b4935`, `070dcc4b`, `434778fe`, `005019a6`, `b7a947e2`, `8c2ef951`).
 - Intercepted parameter hallucinations (`id` to `entry_id` and `ids` to `entry_ids`) across all standard Admin MCP schemas and the Code Mode handler to automatically self-heal common agent validation failures.
-- Schema extraction in `memory://help` failing on Zod pipelines.
-- `dry_run` early returns executing before parameter normalization (`65876dd9`).
-- `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode (`76d6ef33`).
-- Incorrect `idempotentHint` values for destructive tools (`a522cefb`).
-- `project_number` hallucination loop by appending numeric IDs to repository names in the Briefing rows.
-- Code Mode `mj.help()` returning incomplete group lists and snake_case method names.
-- `worker-script.js` resolution during Vitest execution (`2a770648`).
-- Code Mode API signature mismatches breaking pagination for `get_recent_entries` and `get_entry_history`.
-- Code Mode sandbox failing to map test authors in environments missing `TEAM_AUTHOR`.
-- `search_audit_log` schema allowing negative limits.
-- `cross_team_search` handler throwing raw Zod errors instead of formatted responses (`5c655a93`).
-- Code Mode proxy error messages and test assertions silently failing or missing error codes.
-- Code Mode `semanticSearch` returning zero results during vector latency by falling back to FTS (`d8cd5d16`).
-- Code Mode transparent cross-group routing discarding security validation errors (`e8d7d8b9`).
-- Code Mode sandbox not enforcing global `readonly` server mode (`c6bcb724`).
-- Missing `metrics` object in Code Mode responses.
-- Undocumented `timeout` alias for `mj_execute_code` schema (`d7095be6`).
-- FTS5 and Semantic/Auto search ignoring the `include_archived` flag (`1129fb3d`).
-- `teamAddMember` inappropriately performing upserts on duplicate authors.
-- `update_configuration` failing to persist changes to disk due to missing `configFilePath`.
-- `instructionLevel` in `memory://briefing` returning a hardcoded value instead of configuration.
-- `get_entry_history` returning raw database objects instead of the expected output schema (`e9df75db`).
-- Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP notifications.
-- `team_batch_create_entries` incorrectly setting `isPersonal: true` (`fdcc565e`).
-- Handlers failing to wrap Zod validation errors as structured `VALIDATION_ERROR`s (`be20bf9e`).
-- Strict `TEAM_AUTHOR` requirement causing permission errors on local environments without OAuth (`73e17a83`).
-- Batch tools returning success instead of structured aggregate errors when entries are not found (`d71482a5`).
+- Fixed schema extraction in `memory://help` failing on Zod pipelines.
+- Fixed `dry_run` early returns executing before parameter normalization.
+- Fixed `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode.
+- Fixed incorrect `idempotentHint` values for destructive tools.
+- Fixed `project_number` hallucination loop by appending numeric IDs to repository names in Briefing rows.
+- Fixed Code Mode `mj.help()` returning incomplete group lists and snake_case method names.
+- Fixed `worker-script.js` resolution during Vitest execution.
+- Fixed Code Mode API signature mismatches breaking pagination for `get_recent_entries` and `get_entry_history`.
+- Fixed Code Mode sandbox failing to map test authors in environments missing `TEAM_AUTHOR`.
+- Fixed `search_audit_log` schema allowing negative limits.
+- Fixed `cross_team_search` handler throwing raw Zod errors instead of formatted responses.
+- Fixed Code Mode proxy error messages silently failing or missing error codes.
+- Fixed Code Mode `semanticSearch` returning zero results during vector latency by falling back to FTS.
+- Fixed Code Mode transparent cross-group routing discarding security validation errors.
+- Fixed Code Mode sandbox not enforcing global `readonly` server mode.
+- Fixed missing `metrics` object in Code Mode responses.
+- Fixed undocumented `timeout` alias for `mj_execute_code` schema.
+- Fixed FTS5 and Semantic/Auto search ignoring the `include_archived` flag.
+- Fixed `teamAddMember` inappropriately performing upserts on duplicate authors.
+- Fixed `update_configuration` failing to persist changes to disk due to missing `configFilePath`.
+- Fixed `instructionLevel` in `memory://briefing` returning a hardcoded value instead of configuration.
+- Fixed `get_entry_history` returning raw database objects instead of the expected output schema.
+- Fixed Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP notifications.
+- Fixed `team_batch_create_entries` incorrectly setting `isPersonal: true`.
+- Fixed handlers failing to wrap Zod validation errors as structured `VALIDATION_ERROR`s.
+- Fixed strict `TEAM_AUTHOR` requirement causing permission errors on local environments without OAuth.
+- Fixed batch tools returning success instead of structured aggregate errors when entries are not found.
 - Intercepted `create_entry_minimal` parameter hallucination at the SDK routing layer to prevent context window bloat while gracefully self-healing agent errors (`0de118ab`).
-`test-50k-boundary.mjs` executing the wrong entry point (`index.js` instead of `cli.js`) causing false negatives in boundary validation.
-Search Isolation Bypass in `team_search` and `team_search_by_date_range` to correctly return `VALIDATION_ERROR` when `project_number` is omitted and the query contains non-flag targets (`48d8766d`).
-`test-metrics-persistence.mjs` test command in `test-core-infra.md` to use `npx tsx` instead of `node` (`47b53076`).
-Parameter hallucination and missing filtering in `semantic_search` and `team_semantic_search` by adding schema support for `project_number`, `issue_number`, `pr_number`, and `workflow_run_id` (`b4dc69f2`).
-Missing cross-group and alias hallucination routing in the top-level Code Mode proxy to correctly heal `mj.update_configuration` and `mj.config` usage.
-`cross_team_search` returning success instead of `VALIDATION_ERROR` when no configured team DBs matched the request (`cf4a8bb6`).
-`update_configuration` and `rebuild_vector_index` silently succeeding with invalid inputs by enforcing strict schema parsing.
+- Fixed `test-50k-boundary.mjs` executing the wrong entry point (`index.js` instead of `cli.js`) causing false negatives in boundary validation.
+- Fixed Search Isolation Bypass in `team_search` and `team_search_by_date_range` to correctly return `VALIDATION_ERROR` when `project_number` is omitted and the query contains non-flag targets (`48d8766d`).
+- Fixed `test-metrics-persistence.mjs` test command in `test-core-infra.md` to use `npx tsx` instead of `node` (`47b53076`).
+- Fixed Parameter hallucination and missing filtering in `semantic_search` and `team_semantic_search` by adding schema support for `project_number`, `issue_number`, `pr_number`, and `workflow_run_id` (`b4dc69f2`).
+- Fixed Missing cross-group and alias hallucination routing in the top-level Code Mode proxy to correctly heal `mj.update_configuration` and `mj.config` usage.
+- Fixed `cross_team_search` returning success instead of `VALIDATION_ERROR` when no configured team DBs matched the request (`cf4a8bb6`).
+- Fixed `update_configuration` and `rebuild_vector_index` silently succeeding with invalid inputs by enforcing strict schema parsing.
 - Intercepted array and primitive parameter hallucinations in the `worker-api-proxy` for Code Mode to automatically heal `delete_entry`, `restore_entry`, `add_to_vector_index`, and batch endpoints (`3bdb6c0c`).
-Rigid `project_number` validations across `update_entry` and `update_entry_mcp` schemas to permit partial updates, and healed `text`-to-`content` property hallucinations globally.
+- Fixed Rigid `project_number` validations across `update_entry` and `update_entry_mcp` schemas to permit partial updates, and healed `text`-to-`content` property hallucinations globally.
 - Extended Code Mode array hallucination interceptors to `team_batch` functions.
 - Injected `projectName` dynamically into all API outputs recursively inside `callTool` and the Code Mode `secureDispatcher` to enrich tool results (`ef9ba9ba`).
 Top-level `mj.deleteEntry` skipping parameter normalization in Code Mode bindings, and added `update_configuration` config object unpacking and string property interceptors to the worker API proxy.
 - Added explicit Anti-Hallucination `.describe()` hints to `DeleteEntrySchemaMcp` and `updateConfigurationSchema` to actively guide agents away from nested configuration property arrays and ID-type arrays (`0201c9ca`).
 - Enhanced `injectProjectNames` to automatically attach `projectName` to `getCrossProjectInsights` and `getStatistics` results containing `project_number`, resolving string-matching failures in Code Mode project lookups (`3e5329d6`).
-An architectural sandbox bypass where top-level convenience methods (e.g., `delete_entry`, `update_entry`, `merge_tags`) skipped array/primitive parameter interception entirely due to missing handler wraps in `worker-api-proxy.js`.
+- Fixed An architectural sandbox bypass where top-level convenience methods (e.g., `delete_entry`, `update_entry`, `merge_tags`) skipped array/primitive parameter interception entirely due to missing handler wraps in `worker-api-proxy.js`.
 - Fortified Code Mode sandbox proxy interceptors to explicitly trap and reject array-of-strings hallucinations in `batch_delete_entries` and comma-separated tags in `merge_tags`, returning structured, actionable validation errors.
 - Added silent type coercion for hallucinated string `limit` inputs in `search_audit_log` within the Code Mode proxy (`aff838dd`).
 - Hardened all Admin tool Zod schemas (internal and external) with `.strict()` to perfectly intercept parameter hallucinations and return structured `[VALIDATION_ERROR]` objects, addressing an architectural blind spot where Code Mode's `secureDispatcher` directly invoked the handler (`6ff67c4b`).
-TypeScript compilation errors caused by `relaxedNumber` returning a union type in strict internal schemas by reverting to `z.number()` and moving string-to-number coercion into Code Mode's `param-normalizer` (`2f7b956e`).
+- Fixed TypeScript compilation errors caused by `relaxedNumber` returning a union type in strict internal schemas by reverting to `z.number()` and moving string-to-number coercion into Code Mode's `param-normalizer` (`2f7b956e`).
 - Resolved `[VALIDATION_ERROR] Unrecognized key: "project_number"` in Code Mode batch endpoints by adding `project_number: z.number().int().optional()` to strict internal admin schemas.
 - Healed the `title` property hallucination for `update_entry` and the `msg` property alias by automatically mapping them to `content` within the Code Mode parameter normalizer (`34454a84`).
 - Healed `id`/`ids` to `entry_id`/`entry_ids` parameter hallucinations across all strict internal Team schemas using `z.preprocess`, matching the admin hardening pass to prevent `Unrecognized key` validation failures in Code Mode (`a0254d24`).
-A Code Mode alias shadowing bug where the `stats` alias for the search group pointed to an invalid method name (`getVectorStats`), causing it to incorrectly fall back to the analytics group's `getStatistics` method.
+- Fixed A Code Mode alias shadowing bug where the `stats` alias for the search group pointed to an invalid method name (`getVectorStats`), causing it to incorrectly fall back to the analytics group's `getStatistics` method.
 - Added `z.preprocess` coercions to all Search tools' `tags` arrays to heal the common string hallucination (passing `tags: "test"` instead of `tags: ["test"]`) without triggering schema validation errors (`b67dae7f`).
-`get_statistics` and `get_cross_project_insights` Code Mode auto-injection crashes by removing `.strict()` from internal schemas while retaining MCP anti-hallucination descriptions.
+- Fixed `get_statistics` and `get_cross_project_insights` Code Mode auto-injection crashes by removing `.strict()` from internal schemas while retaining MCP anti-hallucination descriptions.
 - Added `LinkEntriesSchemaMcp` to gracefully map hallucinated `sourceId` and `targetId` parameters to `from_entry_id` and `to_entry_id` in relationships tools (`e3d17d9c`).
-IO tool shadowing trap where `export_markdown` was incorrectly intercepted by the team proxy, and added `files` array proxy support.
+- Fixed IO tool shadowing trap where `export_markdown` was incorrectly intercepted by the team proxy, and added `files` array proxy support.
 - Enforced `target_tag` as a required parameter in `merge_tags` and fixed single-entry Admin intercepts to properly return `RESOURCE_NOT_FOUND` on hallucinated IDs (`3bdb6c0c`).
 - Added GitHub proxy array interception to support `.map()` and `.filter()` on `issues`, `pullRequests`, and `milestones`, and healed `issue_id`/`pr_id` aliases globally.
 - Implemented positional parameter support for `backup_journal` and `restore_backup`, and added `relaxedNumber()` coercion for `cleanup_backups`.
 - Healed the `teamListEntries` alias and `proj` parameter hallucinations in Team tool proxies.
 - Resolved unhandled V8 errors in Code Mode by returning actionable feedback when calling missing array methods (`shift`, `concat`, `reduceRight`) or accessing `Promise` objects synchronously.
-`test_error_handling` throwing raw Zod errors by explicitly wrapping it to return formatted `[VALIDATION_ERROR]` objects.
+- Fixed `test_error_handling` throwing raw Zod errors by explicitly wrapping it to return formatted `[VALIDATION_ERROR]` objects.
 - Intercepted `text` parameter hallucinations in Search tools by gracefully mapping them to `query` (`d8cd5d16`).
 - Enforced strict schema definitions for Analytics tools to prevent `param-normalizer` from silently dropping invalid hallucinated arguments (`f6fa0e45`).
-Alias mapping for `link_entries` (`source` to `from_entry_id`, `target` to `to_entry_id`) and positional ID constraints in `visualize_relationships`.
-Overloaded string aliases (`keep`, `mode`, `text`) in parameter normalization by making them context-aware to prevent conflicts across IO tools.
+
 - Alias mapping for `link_entries` (`source` to `from_entry_id`, `target` to `to_entry_id`) and positional ID constraints in `visualize_relationships`.
 - Overloaded string aliases (`keep`, `mode`, `text`) in parameter normalization by making them context-aware to prevent conflicts across IO tools.
 - Intercepted external URL usage for `import_external`, gracefully guiding agents back to local `source_dir` usage.
 - Added explicit mapping for `maxTokens` and `max_tokens` hallucinations in `update_configuration`.
-- GitHub tools to properly intercept and map common parameter hallucinations (`q`, `path`, `mode: "summary"`).
+- Updated GitHub tools to properly intercept and map common parameter hallucinations.
 - Added explicit mapping for backup parameters (`message`/`text`/`path` to `name` for `backup_journal`, `file`/`path` to `filename` for `restore_backup`, and `keep` to `keep_count` for `cleanup_backups`), and added `backups`/`deleted` arrays to the proxy properties.
-- Case-sensitivity checks in the proxy layer to correctly intercept and heal hallucinations for team-prefixed variants of IO tools (e.g. `teamExportMarkdown`).
-- A parameter preprocessing bug in the Team Identity layer where the strictly required `author` parameter was being dynamically deleted before validation by Zod during `team_resolve_author` execution.
-- A concurrency bug in the Playwright E2E test suite where parallel workers running the same test file would crash due to `SqliteError: UNIQUE constraint failed` by injecting the worker's unique port into the database filename.
+- Added case-sensitivity checks in the proxy layer to correctly intercept and heal hallucinations.
+- Fixed a parameter preprocessing bug in the Team Identity layer where `author` was dynamically deleted before validation.
+- Fixed a concurrency bug in the Playwright E2E test suite where parallel workers crashed due to `UNIQUE constraint failed`.
 - Hardened Code Mode API proxies and Zod schemas against common agent parameter and array mutator hallucinations across 14 tool groups. (`122bcfff`, `a9728155`, `1770c232`, `9d90aa6e`, `bdbaa5a2`, `37bede5d`, `9c0ba337`, `89d87c07`, `9d398c9e`, `d7817e9b`, `9733a25a`, `c7751db4`, `40a64d00`, `4ffca805`)
 - Intercept and gracefully ignore `auto_context` parameter hallucination in Code Mode for `create_entry` APIs. (`5ea3525`)
 - Fixed `list_deleted_entries` hallucination proxy rejecting valid queries by removing incorrectly passed `project_number`, and added array element proxying for `get_entry_history` to map `revisionNumber` and `contentSnapshot` within Code Mode. (`6d9e77b`)
@@ -177,5 +162,5 @@ Overloaded string aliases (`keep`, `mode`, `text`) in parameter normalization by
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1 (`4a2a2ae1`)
-- Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
-- Critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.
+- Fixed scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
+- Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.
