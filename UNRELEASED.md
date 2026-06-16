@@ -56,6 +56,7 @@
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
+- Fixed flaky test timeout in Code Mode test suite by increasing the Vitest global `testTimeout` to 10s. (`37fda1e`)
 - Fixed `setTimeout` and `sleep` functions in the Code Mode sandbox to correctly bind to global execution context. (`96b5b47`)
 - Fixed ESLint `@typescript-eslint/no-unsafe-function-type` error in Code Mode sandbox `setTimeout` callback definition. (`5b715f3`)
 - Fixed explicit success:false check in Code Mode RBAC tests and boolean lint (`d092818`).
