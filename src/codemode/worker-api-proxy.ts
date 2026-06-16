@@ -30,6 +30,19 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     ) {
         const obj = args[0] as Record<string, unknown>;
         
+        if (methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') {
+            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['keep'] !== undefined || obj['path'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `${methodName} does not support search queries. It only searches by date.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Use team_search (or search_entries) if you want to search by text, or remove the text/query parameters.',
+                    recoverable: true
+                }};
+            }
+        }
+        
         if (obj['q'] !== undefined && obj['query'] === undefined) {
             obj['query'] = obj['q'];
             delete obj['q'];
@@ -202,8 +215,23 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // Vector index stats hallucination: passing `q` or `query`
+    if ((methodName === 'team_get_vector_index_stats' || methodName === 'teamGetVectorIndexStats' || methodName === 'get_vector_index_stats' || methodName === 'getVectorIndexStats') && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries. It returns overall index statistics.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove the search query parameter.',
+                recoverable: true
+            }};
+        }
+    }
+
     // Analytics tools hallucinations
-    const analyticsMethods = ['get_statistics', 'getStatistics', 'get_cross_project_insights', 'getCrossProjectInsights', 'team_get_statistics', 'teamGetStatistics', 'team_get_cross_project_insights', 'teamGetCrossProjectInsights'];
+    const analyticsMethods = ['get_statistics', 'getStatistics', 'get_cross_project_insights', 'getCrossProjectInsights', 'team_get_statistics', 'teamGetStatistics', 'team_get_cross_project_insights', 'teamGetCrossProjectInsights', 'get_collaboration_matrix', 'getCollaborationMatrix', 'team_get_collaboration_matrix', 'teamGetCollaborationMatrix'];
     if (analyticsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
         
@@ -228,6 +256,19 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
                     suggestion: 'Remove the query and limit parameters.',
+                    recoverable: true
+                }};
+            }
+        }
+
+        if (methodName.includes('get_collaboration_matrix') || methodName.includes('getCollaborationMatrix')) {
+            if (obj['q'] !== undefined || obj['query'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `get_collaboration_matrix does not accept search queries.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove the query parameter.',
                     recoverable: true
                 }};
             }
@@ -426,7 +467,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     }
 
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
-    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships'];
+    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'team_add_to_vector_index', 'teamAddToVectorIndex', 'add_to_index', 'addToIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'edit', 'update', 'team_delete_entry', 'teamDeleteEntry', 'delete', 'team_restore_entry', 'teamRestoreEntry', 'restore', 'team_restore', 'teamRestore', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships', 'graph'];
     if (singleIdMethods.includes(methodName)) {
         if (args.length === 0) {
             return { error: {
@@ -737,7 +778,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     }
 
     // rebuild_vector_index hallucination: passing a boolean or string instead of object
-    if (methodName === 'rebuild_vector_index' || methodName === 'rebuildVectorIndex') {
+    if (methodName === 'rebuild_vector_index' || methodName === 'rebuildVectorIndex' || methodName === 'team_rebuild_vector_index' || methodName === 'teamRebuildVectorIndex') {
         if (args.length === 1 && (typeof args[0] === 'boolean' || typeof args[0] === 'string')) {
             args[0] = {};
         }

@@ -313,6 +313,7 @@ export const TeamDeleteEntrySchema = z.preprocess(
     z.object({
         entry_id: z.number(),
         project_number: StrictProjectNumberSchema.optional(),
+        expected_version: z.number().optional(),
     }).strict()
 )
 
@@ -332,6 +333,7 @@ export const TeamDeleteEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional(),
         project_number: relaxedNumber().optional(),
+        expected_version: relaxedNumber().optional(),
     }).strict()
 )
 
