@@ -48,7 +48,7 @@ let conflictCaught = false
 const update2 = await mj.team.teamUpdateEntry({
   project_number: 5,
   entry_id: id,
-  expected_version: v1, // deliberately stale (it incremented on previous update)
+  expected_version: v1 - 1, // deliberately stale (it incremented on previous update)
   content: 'CM4 locking update 2'
 })
 if (!update2.success && update2.error?.includes('VERSION_CONFLICT')) {
@@ -296,6 +296,7 @@ const ioImport = await mj.team.teamImportMarkdown({
 
 const ioExtImport = await mj.team.teamImportExternal({
   source_dir: MOCK_DIR,
+  source_format: 'obsidian',
   dry_run: true,
   project_number: 5,
 })
