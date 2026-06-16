@@ -5,106 +5,106 @@
 ### Added
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations.
 - Auto-prune lifecycle management flags (`--archive-older-than-days`, `--prune-dry-run`).
-- Database schema migration framework with composite and partial performance indexes.
-- Scheduled digest report delivery via `--report-interval`.
-- Security enhancements including `DB_ENCRYPTION_KEY` for SQLCipher and Team RBAC.
-- Native `.json`/`.yaml` configuration support with hot-reload via `update_configuration`.
-- Persistent Prometheus `/metrics` export with latency percentiles and read tracking.
+- Database schema migration framework with composite and partial performance indexes (`f73da9f6`).
+- Scheduled digest report delivery via `--report-interval` (`c6d7f9b9`).
+- Security enhancements including `DB_ENCRYPTION_KEY` for SQLCipher and Team RBAC (`5bfa17d5`).
+- Native `.json`/`.yaml` configuration support with hot-reload via `update_configuration` (`557017a9`).
+- Persistent Prometheus `/metrics` export with latency percentiles and read tracking (`b8e03515`).
 - `search_audit_log` tool for querying server audit logs.
 - Optimistic concurrency control for entry updates (`version` and `expected_version`).
 - Team Identity Layer with author aliases and cross-team search via `cross_team_search`.
 - GitHub rate limit introspection resource (`memory://github/rate-limit`).
-- Advanced Search: Levenshtein distance fallback, FTS5 highlight snippets, and dynamic hybrid search weighting.
-- Support for swappable vector embedding models via `--embedding-model`.
+- Advanced Search: Levenshtein distance fallback, FTS5 highlight snippets, and dynamic hybrid search weighting (`8dc855b2`).
+- Support for swappable vector embedding models via `--embedding-model` (`2c01b174`).
 - Real-time subscription manager (`resources/subscribe`).
-- Soft-delete recovery and archiving capabilities.
-- Keyset cursor pagination for listing and search tools.
-- Entry versioning and history tracking via `get_entry_history`.
+- Soft-delete recovery and archiving capabilities (`0e53a67c`).
+- Keyset cursor pagination for listing and search tools (`ce47f46c`).
+- Entry versioning and history tracking via `get_entry_history` (`0e3578c8`).
 - Content templates instruction file (`memory://help/templates`) with per-entry-type markdown scaffolding.
-- Context bloat warning during initialization when registering >50 tools without filters.
+- Context bloat warning during initialization when registering >50 tools without filters (`6d1490bf`).
 - Auto-population of `issue_url` and `pr_url` in Code Mode proxy when GitHub context is available.
-- `test-sdk-boundaries.mjs` integration test script to validate strict MCP SDK boundaries.
-- `scripts/README.md` containing an agent-optimized script inventory and execution guidelines.
+- `test-sdk-boundaries.mjs` integration test script to validate strict MCP SDK boundaries (`a406fa21`).
+- `scripts/README.md` containing an agent-optimized script inventory and execution guidelines (`2a770648`).
 
 ### Changed
 - Updated adversarial skills (performance, planner, security, skill-audit, workflow-audit) with explicit execution rules enforcing continuous prompt improvement, graceful handling of GitHub Copilot quota failures, and strict prohibition of memory-journal-mcp entries (`e216823f`).
 - Updated `mj-mcp-optimize` developer skill document to focus on anti-hallucination guardrails and native optimization (`4694d2cb`).
 - Bumped `eslint` to 10.5.0 (`4a2a2ae1`).
-- Removed mandatory journaling requirement from `adversarial-performance` skill to support analytical runs.
+- Removed mandatory journaling requirement from `adversarial-performance` skill to support analytical runs (`ce37b2f1`).
 - Wrapped batch operations in a single database transaction for improved throughput.
 - Modularized core files and handlers into logical sub-directories.
 - Enforced dynamic read-only constraints for Code Mode mutation protection.
-- Injected dynamic method aliases into Sandbox group bindings to resolve alias errors.
+- Injected dynamic method aliases into Sandbox group bindings to resolve alias errors (`0dc49c2b`).
 - Improved GitHub resource routing to safely fall back to `DEFAULT_PROJECT_NUMBER`.
 - Upgraded token estimation to use content-type-aware ratios.
 - Aggregated all startup validation errors simultaneously in the CLI configuration loader.
 - Replaced raw generic errors with structured `ConfigurationError` and `MemoryJournalMcpError`.
-- Enriched schema descriptions, prompts, and documentation with explicit templates.
+- Enriched schema descriptions, prompts, and documentation with explicit templates (`cfd764cb`).
 - Replaced disabled lint rules with modern Unicode property escapes in security utilities.
-- Relaxed the Code Mode `context` schema to allow non-object values without validation failures.
-- Promoted parameter normalization and coercion to the top-level SDK proxy to prevent validation failures from hallucinated keys.
+- Relaxed the Code Mode `context` schema to allow non-object values without validation failures (`74cc1d08`).
+- Promoted parameter normalization and coercion to the top-level SDK proxy to prevent validation failures from hallucinated keys (`2db727f3`).
 - Converted `scripts/check-orphans.ts` to a portable, zero-configuration `scripts/check-orphans.mjs` Node script.
 ### Removed
-- `pnpm` configuration block from `package.json` to eliminate startup warnings.
+- `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
-- Zod validation errors in test suite caused by strict enforcement of `project_number`.
-- Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation.
+- Zod validation errors in test suite caused by strict enforcement of `project_number` (`38936398`).
+- Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation (`48c5728e`).
 - Native MCP tools failing to auto-resolve hallucinated repository or project string parameters (`fde3adab`).
 - Code Mode sandbox explicitly exposing `setTimeout` and `getConfig` globals (`7fdb3233`).
 - `semanticSearch` returning artificially low similarity scores.
-- False-positive in the static security scanner regarding bracket-notation AST escapes.
+- False-positive in the static security scanner regarding bracket-notation AST escapes (`148bdcba`).
 - `--tool-filter codemode` inadvertently disabling mutating tool bindings.
 - Test pollution in `codemode-restore.test.ts`.
 - E2E Test suite execution time bottlenecks by enabling parallel Playwright workers, fully isolating worker-specific SQLite databases and dynamically assigning custom collision-free ports for in-test HTTP servers (`69e16091`).
-- `create_entry` missing auto-population of GitHub URLs when `issue_number` is provided.
-- `get_entry_by_id` missing relationships and importance breakdown in response.
+- `create_entry` missing auto-population of GitHub URLs when `issue_number` is provided (`b753596e`).
+- `get_entry_by_id` missing relationships and importance breakdown in response (`cc081ee7`).
 - `restore_backup` tool failing in environments with database encryption.
 - `search_audit_log` returning validation errors in environments without audit logging.
-- Multiple `project_number` validation and resolution issues in the Code Mode dispatcher.
-- Code Mode stability issues related to async/await handling, error serialization, and `fetch()`.
+- Multiple `project_number` validation and resolution issues in the Code Mode dispatcher (`38936398`).
+- Code Mode stability issues related to async/await handling, error serialization, and `fetch()` (`a24ace02`).
 - Code Mode sandbox mutability guard failing to protect admin/team structural tools.
 - Code Mode proxy agent hallucinations by adding interception aliases for:
   - `start_date` without `end_date` (maps to today).
-  - `deletedCount` (maps to `count`).
+  - `deletedCount` (maps to `count`) (`a93b4935`).
   - `entryIds` and `deletedIds` destructuring.
-  - missing `project_number` in batch operations.
-  - unresolved string `project_number` (e.g. `"P154"`).
+  - missing `project_number` in batch operations (`070dcc4b`).
+  - unresolved string `project_number` (e.g. `"P154"`) (`434778fe`).
   - calling tools from the wrong API group.
-  - dynamically probing `mj_execute_code` with empty payloads.
+  - dynamically probing `mj_execute_code` with empty payloads (`005019a6`).
   - `createEntryMinimal`.
   - `revisions` (maps to `history`).
   - `comment` (maps to `resolution` for `resolve_team_flag`).
   - `target_user` (maps to `author`) and `contributor` (maps to `member`) for `setRole`.
   - `exact_match` (maps to `fuzzy_match`).
-  - `script` (maps to `code` for `mj_execute_code`).
-  - camelCase method aliases.
+  - `script` (maps to `code` for `mj_execute_code`) (`b7a947e2`).
+  - camelCase method aliases (`8c2ef951`).
 - Intercepted parameter hallucinations (`id` to `entry_id` and `ids` to `entry_ids`) across all standard Admin MCP schemas and the Code Mode handler to automatically self-heal common agent validation failures.
 - Schema extraction in `memory://help` failing on Zod pipelines.
-- `dry_run` early returns executing before parameter normalization.
-- `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode.
+- `dry_run` early returns executing before parameter normalization (`65876dd9`).
+- `mj.*` positional argument processing and empty parameter invocations throwing errors in Code Mode (`76d6ef33`).
 - Incorrect `idempotentHint` values for destructive tools (`a522cefb`).
 - `project_number` hallucination loop by appending numeric IDs to repository names in the Briefing rows.
 - Code Mode `mj.help()` returning incomplete group lists and snake_case method names.
-- `worker-script.js` resolution during Vitest execution.
+- `worker-script.js` resolution during Vitest execution (`2a770648`).
 - Code Mode API signature mismatches breaking pagination for `get_recent_entries` and `get_entry_history`.
 - Code Mode sandbox failing to map test authors in environments missing `TEAM_AUTHOR`.
 - `search_audit_log` schema allowing negative limits.
-- `cross_team_search` handler throwing raw Zod errors instead of formatted responses.
+- `cross_team_search` handler throwing raw Zod errors instead of formatted responses (`5c655a93`).
 - Code Mode proxy error messages and test assertions silently failing or missing error codes.
-- Code Mode `semanticSearch` returning zero results during vector latency by falling back to FTS.
-- Code Mode transparent cross-group routing discarding security validation errors.
-- Code Mode sandbox not enforcing global `readonly` server mode.
+- Code Mode `semanticSearch` returning zero results during vector latency by falling back to FTS (`d8cd5d16`).
+- Code Mode transparent cross-group routing discarding security validation errors (`e8d7d8b9`).
+- Code Mode sandbox not enforcing global `readonly` server mode (`c6bcb724`).
 - Missing `metrics` object in Code Mode responses.
-- Undocumented `timeout` alias for `mj_execute_code` schema.
-- FTS5 and Semantic/Auto search ignoring the `include_archived` flag.
+- Undocumented `timeout` alias for `mj_execute_code` schema (`d7095be6`).
+- FTS5 and Semantic/Auto search ignoring the `include_archived` flag (`1129fb3d`).
 - `teamAddMember` inappropriately performing upserts on duplicate authors.
 - `update_configuration` failing to persist changes to disk due to missing `configFilePath`.
 - `instructionLevel` in `memory://briefing` returning a hardcoded value instead of configuration.
-- `get_entry_history` returning raw database objects instead of the expected output schema.
+- `get_entry_history` returning raw database objects instead of the expected output schema (`e9df75db`).
 - Code Mode's `mj.reportProgress()` failing to trigger system-wide MCP notifications.
 - `team_batch_create_entries` incorrectly setting `isPersonal: true` (`fdcc565e`).
-- Handlers failing to wrap Zod validation errors as structured `VALIDATION_ERROR`s.
+- Handlers failing to wrap Zod validation errors as structured `VALIDATION_ERROR`s (`be20bf9e`).
 - Strict `TEAM_AUTHOR` requirement causing permission errors on local environments without OAuth (`73e17a83`).
 - Batch tools returning success instead of structured aggregate errors when entries are not found (`d71482a5`).
 - Intercepted `create_entry_minimal` parameter hallucination at the SDK routing layer to prevent context window bloat while gracefully self-healing agent errors (`0de118ab`).
@@ -120,29 +120,29 @@ Rigid `project_number` validations across `update_entry` and `update_entry_mcp` 
 - Extended Code Mode array hallucination interceptors to `team_batch` functions.
 - Injected `projectName` dynamically into all API outputs recursively inside `callTool` and the Code Mode `secureDispatcher` to enrich tool results (`ef9ba9ba`).
 Top-level `mj.deleteEntry` skipping parameter normalization in Code Mode bindings, and added `update_configuration` config object unpacking and string property interceptors to the worker API proxy.
-- Added explicit Anti-Hallucination `.describe()` hints to `DeleteEntrySchemaMcp` and `updateConfigurationSchema` to actively guide agents away from nested configuration property arrays and ID-type arrays.
+- Added explicit Anti-Hallucination `.describe()` hints to `DeleteEntrySchemaMcp` and `updateConfigurationSchema` to actively guide agents away from nested configuration property arrays and ID-type arrays (`0201c9ca`).
 - Enhanced `injectProjectNames` to automatically attach `projectName` to `getCrossProjectInsights` and `getStatistics` results containing `project_number`, resolving string-matching failures in Code Mode project lookups (`3e5329d6`).
 An architectural sandbox bypass where top-level convenience methods (e.g., `delete_entry`, `update_entry`, `merge_tags`) skipped array/primitive parameter interception entirely due to missing handler wraps in `worker-api-proxy.js`.
 - Fortified Code Mode sandbox proxy interceptors to explicitly trap and reject array-of-strings hallucinations in `batch_delete_entries` and comma-separated tags in `merge_tags`, returning structured, actionable validation errors.
-- Added silent type coercion for hallucinated string `limit` inputs in `search_audit_log` within the Code Mode proxy.
+- Added silent type coercion for hallucinated string `limit` inputs in `search_audit_log` within the Code Mode proxy (`aff838dd`).
 - Hardened all Admin tool Zod schemas (internal and external) with `.strict()` to perfectly intercept parameter hallucinations and return structured `[VALIDATION_ERROR]` objects, addressing an architectural blind spot where Code Mode's `secureDispatcher` directly invoked the handler (`6ff67c4b`).
 TypeScript compilation errors caused by `relaxedNumber` returning a union type in strict internal schemas by reverting to `z.number()` and moving string-to-number coercion into Code Mode's `param-normalizer` (`2f7b956e`).
 - Resolved `[VALIDATION_ERROR] Unrecognized key: "project_number"` in Code Mode batch endpoints by adding `project_number: z.number().int().optional()` to strict internal admin schemas.
-- Healed the `title` property hallucination for `update_entry` and the `msg` property alias by automatically mapping them to `content` within the Code Mode parameter normalizer.
+- Healed the `title` property hallucination for `update_entry` and the `msg` property alias by automatically mapping them to `content` within the Code Mode parameter normalizer (`34454a84`).
 - Healed `id`/`ids` to `entry_id`/`entry_ids` parameter hallucinations across all strict internal Team schemas using `z.preprocess`, matching the admin hardening pass to prevent `Unrecognized key` validation failures in Code Mode (`a0254d24`).
 A Code Mode alias shadowing bug where the `stats` alias for the search group pointed to an invalid method name (`getVectorStats`), causing it to incorrectly fall back to the analytics group's `getStatistics` method.
-- Added `z.preprocess` coercions to all Search tools' `tags` arrays to heal the common string hallucination (passing `tags: "test"` instead of `tags: ["test"]`) without triggering schema validation errors.
+- Added `z.preprocess` coercions to all Search tools' `tags` arrays to heal the common string hallucination (passing `tags: "test"` instead of `tags: ["test"]`) without triggering schema validation errors (`b67dae7f`).
 `get_statistics` and `get_cross_project_insights` Code Mode auto-injection crashes by removing `.strict()` from internal schemas while retaining MCP anti-hallucination descriptions.
-- Added `LinkEntriesSchemaMcp` to gracefully map hallucinated `sourceId` and `targetId` parameters to `from_entry_id` and `to_entry_id` in relationships tools.
+- Added `LinkEntriesSchemaMcp` to gracefully map hallucinated `sourceId` and `targetId` parameters to `from_entry_id` and `to_entry_id` in relationships tools (`e3d17d9c`).
 IO tool shadowing trap where `export_markdown` was incorrectly intercepted by the team proxy, and added `files` array proxy support.
-- Enforced `target_tag` as a required parameter in `merge_tags` and fixed single-entry Admin intercepts to properly return `RESOURCE_NOT_FOUND` on hallucinated IDs.
+- Enforced `target_tag` as a required parameter in `merge_tags` and fixed single-entry Admin intercepts to properly return `RESOURCE_NOT_FOUND` on hallucinated IDs (`3bdb6c0c`).
 - Added GitHub proxy array interception to support `.map()` and `.filter()` on `issues`, `pullRequests`, and `milestones`, and healed `issue_id`/`pr_id` aliases globally.
 - Implemented positional parameter support for `backup_journal` and `restore_backup`, and added `relaxedNumber()` coercion for `cleanup_backups`.
 - Healed the `teamListEntries` alias and `proj` parameter hallucinations in Team tool proxies.
 - Resolved unhandled V8 errors in Code Mode by returning actionable feedback when calling missing array methods (`shift`, `concat`, `reduceRight`) or accessing `Promise` objects synchronously.
 `test_error_handling` throwing raw Zod errors by explicitly wrapping it to return formatted `[VALIDATION_ERROR]` objects.
-- Intercepted `text` parameter hallucinations in Search tools by gracefully mapping them to `query`.
-- Enforced strict schema definitions for Analytics tools to prevent `param-normalizer` from silently dropping invalid hallucinated arguments.
+- Intercepted `text` parameter hallucinations in Search tools by gracefully mapping them to `query` (`d8cd5d16`).
+- Enforced strict schema definitions for Analytics tools to prevent `param-normalizer` from silently dropping invalid hallucinated arguments (`f6fa0e45`).
 Alias mapping for `link_entries` (`source` to `from_entry_id`, `target` to `to_entry_id`) and positional ID constraints in `visualize_relationships`.
 Overloaded string aliases (`keep`, `mode`, `text`) in parameter normalization by making them context-aware to prevent conflicts across IO tools.
 - Intercepted external URL usage for `import_external`, gracefully guiding agents back to local `source_dir` usage.
