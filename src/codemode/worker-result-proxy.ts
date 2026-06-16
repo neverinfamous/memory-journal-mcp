@@ -98,7 +98,7 @@ export function wrapResult(result: unknown): unknown {
                     if (prop === Symbol.iterator) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships'].includes(k))
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships', 'members'].includes(k))
                         if (targetKey === undefined && arrayKeys.length === 1) {
                             targetKey = arrayKeys[0]
                         }
@@ -112,7 +112,7 @@ export function wrapResult(result: unknown): unknown {
                     if (prop === 'length') {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships'].includes(k))
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships', 'members'].includes(k))
                         if (targetKey === undefined && arrayKeys.length === 1) {
                             targetKey = arrayKeys[0]
                         }
@@ -125,7 +125,7 @@ export function wrapResult(result: unknown): unknown {
                         const idx = parseInt(prop, 10)
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships'].includes(k))
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships', 'members'].includes(k))
                         if (targetKey === undefined && arrayKeys.length === 1) {
                             targetKey = arrayKeys[0]
                         }
@@ -144,7 +144,7 @@ export function wrapResult(result: unknown): unknown {
                     ) {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
-                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships'].includes(k))
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships', 'members'].includes(k))
                         if (targetKey === undefined && arrayKeys.length === 1) {
                             targetKey = arrayKeys[0]
                         }
