@@ -156,6 +156,7 @@ Overloaded string aliases (`keep`, `mode`, `text`) in parameter normalization by
 - A parameter preprocessing bug in the Team Identity layer where the strictly required `author` parameter was being dynamically deleted before validation by Zod during `team_resolve_author` execution.
 - A concurrency bug in the Playwright E2E test suite where parallel workers running the same test file would crash due to `SqliteError: UNIQUE constraint failed` by injecting the worker's unique port into the database filename.
 - Hardened Code Mode API proxies and Zod schemas against common agent parameter and array mutator hallucinations across 14 tool groups. (`122bcfff`, `a9728155`, `1770c232`, `9d90aa6e`, `bdbaa5a2`, `37bede5d`, `9c0ba337`, `89d87c07`, `9d398c9e`, `d7817e9b`, `9733a25a`, `c7751db4`, `40a64d00`, `4ffca805`)
+- Intercept and gracefully ignore `auto_context` parameter hallucination in Code Mode for `create_entry` APIs.
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1 (`4a2a2ae1`).

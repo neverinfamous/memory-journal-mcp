@@ -887,6 +887,9 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             obj['content'] = obj['description'];
             delete obj['description'];
         }
+        if (obj['auto_context'] !== undefined) {
+            delete obj['auto_context'];
+        }
         if (obj['q'] !== undefined || obj['query'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined || obj['keep'] !== undefined || obj['search'] !== undefined) {
             return { error: {
                 success: false,
