@@ -90,7 +90,13 @@ export function wrapResult(result: unknown): unknown {
 
                     // Hallucination Intercept: revisions vs history
                     if (prop === 'revisions' && 'history' in targetRecord && Array.isArray(targetRecord['history'])) {
-                        return targetRecord['history'] as unknown[]
+                        return (targetRecord['history'] as any[]).map((h) => new Proxy(h, {
+                            get(t, p) {
+                                if (p === 'revisionNumber') return t.revisionId;
+                                if (p === 'contentSnapshot') return t.content;
+                                return t[p as keyof typeof t];
+                            }
+                        })) as unknown[]
                     }
 
                     // Native Iteration fallback: If an agent tries to destructure the result object directly:

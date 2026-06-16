@@ -289,6 +289,12 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             obj['limit'] = obj['keep'];
             delete obj['keep'];
         }
+        if (obj['project_number'] !== undefined) {
+            delete obj['project_number'];
+        }
+        if (obj['project_id'] !== undefined) {
+            delete obj['project_id'];
+        }
     }
 
     // Analytics tools hallucinations
