@@ -265,6 +265,12 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // Parameterless functions hallucination: passing primitives
+    const parameterlessMethods = ['rebuild_vector_index', 'rebuildVectorIndex', 'team_rebuild_vector_index', 'teamRebuildVectorIndex'];
+    if (parameterlessMethods.includes(methodName) && args.length === 1 && (typeof args[0] === 'boolean' || typeof args[0] === 'string' || typeof args[0] === 'number')) {
+        args[0] = {};
+    }
+
     // List deleted entries hallucinations
     const listDeletedMethods = ['list_deleted_entries', 'listDeletedEntries', 'team_list_deleted_entries', 'teamListDeletedEntries'];
     if (listDeletedMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
@@ -697,6 +703,16 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             if (typeof obj['config'] === 'object' && obj['config'] !== null) {
                 args[0] = { ...obj, ...(obj['config'] as Record<string, unknown>) };
                 delete (args[0] as Record<string, unknown>)['config'];
+            }
+            if (obj['maxTokens'] !== undefined || obj['max_tokens'] !== undefined || obj['temperature'] !== undefined || obj['model'] !== undefined || obj['top_p'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `update_configuration is for configuring the memory-journal-mcp server (e.g., instruction_level). It does not configure the LLM context (like maxTokens or temperature).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove LLM parameters. Server configuration only accepts instruction_level.',
+                    recoverable: true
+                }};
             }
         }
     }
