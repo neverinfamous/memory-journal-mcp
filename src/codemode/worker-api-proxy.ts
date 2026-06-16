@@ -502,7 +502,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     }
 
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
-    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'team_add_to_vector_index', 'teamAddToVectorIndex', 'add_to_index', 'addToIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'edit', 'update', 'team_delete_entry', 'teamDeleteEntry', 'delete', 'team_restore_entry', 'teamRestoreEntry', 'restore', 'team_restore', 'teamRestore', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships', 'graph'];
+    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'team_add_to_vector_index', 'teamAddToVectorIndex', 'add_to_index', 'addToIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'edit', 'update', 'team_delete_entry', 'teamDeleteEntry', 'delete', 'team_restore_entry', 'teamRestoreEntry', 'restore', 'team_restore', 'teamRestore'];
     if (singleIdMethods.includes(methodName)) {
         if (args.length === 0) {
             return { error: {

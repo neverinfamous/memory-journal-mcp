@@ -90,6 +90,9 @@ const VisualizeInputSchemaMcp = z.object({
     id: relaxedNumber().optional(),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),
     q: z.string().optional(),
+    text: z.string().optional(),
+    message: z.string().optional(),
+    description: z.string().optional(),
     relationship_type: z
         .string()
         .optional()
@@ -101,14 +104,22 @@ const VisualizeInputSchemaMcp = z.object({
     path: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(20).describe('Maximum entries to include'),
     keep: relaxedNumber().optional(),
-}).transform(data => ({
-    ...data,
-    entry_id: data.entry_id ?? data.id,
-    relationship_type: data.type ?? data.rel ?? data.mode ?? data.relationship_type,
-    depth: data.path ?? data.depth,
-    limit: data.keep ?? data.limit,
-    tags: data.tags ?? (data.q ? [data.q] : undefined),
-}))
+}).transform(data => {
+    // Collect all string queries into an array of tags
+    let extractedTags = data.tags;
+    if (!extractedTags) {
+        const queryVal = data.q ?? data.text ?? data.message ?? data.description;
+        if (queryVal) extractedTags = [queryVal];
+    }
+    return {
+        ...data,
+        entry_id: data.entry_id ?? data.id,
+        relationship_type: data.type ?? data.rel ?? data.mode ?? data.relationship_type,
+        depth: data.path ?? data.depth,
+        limit: data.keep ?? data.limit,
+        tags: extractedTags,
+    };
+})
 
 // ============================================================================
 // Output Schemas
