@@ -1160,6 +1160,10 @@ export function buildApiProxy(
 ): Record<string, unknown> {
     const api: Record<string, unknown> = {}
 
+    const safeRpcCall = (group: string, method: string, args: unknown[]) => 
+        rpcCall(group, method, args).catch(err => ({ success: false, error: err instanceof Error ? err.message : String(err), code: 'EXECUTION_ERROR', category: 'execution', recoverable: true }));
+
+
     function wrapPromise(promise: Promise<unknown>, methodName: string): Promise<unknown> {
         return new Proxy(promise, {
             get(target, prop) {
@@ -1186,7 +1190,7 @@ export function buildApiProxy(
                     if ('error' in intercept) {
                         return wrapPromise(Promise.resolve(wrapResult(intercept.error)), methodName)
                     }
-                    const resultPromise = rpcCall('_topLevel', methodName, intercept.args).then(wrapResult)
+                    const resultPromise = safeRpcCall('_topLevel', methodName, intercept.args).then(wrapResult)
                     return wrapPromise(resultPromise, methodName)
                 }
                 Object.assign(proxyFn, {
@@ -1206,7 +1210,7 @@ export function buildApiProxy(
                 if ('error' in intercept) {
                     return wrapPromise(Promise.resolve(wrapResult(intercept.error)), methodName)
                 }
-                const resultPromise = rpcCall(group, methodName, intercept.args).then(wrapResult)
+                const resultPromise = safeRpcCall(group, methodName, intercept.args).then(wrapResult)
                 return wrapPromise(resultPromise, methodName)
             }
             Object.assign(proxyFn, {
@@ -1298,7 +1302,7 @@ export function buildApiProxy(
                             if ('error' in intercept) {
                                 return wrapPromise(Promise.resolve(wrapResult(intercept.error)), teamSnakeKey);
                             }
-                            const resultPromise = rpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
+                            const resultPromise = safeRpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, teamSnakeKey);
                         }
                     }
@@ -1311,7 +1315,7 @@ export function buildApiProxy(
                             if ('error' in intercept) {
                                 return wrapPromise(Promise.resolve(wrapResult(intercept.error)), snakeKey);
                             }
-                            const resultPromise = rpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
+                            const resultPromise = safeRpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, snakeKey);
                         }
                     }
@@ -1367,7 +1371,7 @@ export function buildApiProxy(
                                 if ('error' in intercept) {
                                     return wrapPromise(Promise.resolve(wrapResult(intercept.error)), canonicalSnake);
                                 }
-                                const resultPromise = rpcCall(g, canonicalSnake, intercept.args).then(wrapResult);
+                                const resultPromise = safeRpcCall(g, canonicalSnake, intercept.args).then(wrapResult);
                                 return wrapPromise(resultPromise, canonicalSnake);
                             }
                         }
@@ -1383,7 +1387,7 @@ export function buildApiProxy(
                         if ('error' in intercept) {
                             return wrapPromise(Promise.resolve(wrapResult(intercept.error)), teamSnakeKey);
                         }
-                        const resultPromise = rpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
+                        const resultPromise = safeRpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
                         return wrapPromise(resultPromise, teamSnakeKey);
                     }
                 }
@@ -1396,7 +1400,7 @@ export function buildApiProxy(
                         if ('error' in intercept) {
                             return wrapPromise(Promise.resolve(wrapResult(intercept.error)), snakeKey);
                         }
-                        const resultPromise = rpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
+                        const resultPromise = safeRpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
                         return wrapPromise(resultPromise, snakeKey);
                     }
                 }

@@ -51,6 +51,7 @@
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
+- Fixed Code Mode leaking raw MCP exceptions into execution contexts by catching unhandled rejections at the proxy boundary and returning structured error objects. (`86712fd`)
 - Fixed `team_delete_entry` call in Code Mode analytics test suite which was failing due to an unsupported `permanent` flag. (`dc7efdd`)
 - Zod validation errors in test suite caused by strict enforcement of `project_number` (`38936398`).
 - Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation (`48c5728e`).
