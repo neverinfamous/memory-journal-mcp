@@ -6,7 +6,7 @@ This guide instructs the Coordinator agent on how to run the `memory-journal-mcp
 
 ## Goal
 
-Execute all usability tests in `test-server/usability/` to fuzz the `memory-journal-mcp` tools and explicitly trigger agent hallucinations. Harden the codebase against these hallucinations via the `mj-mcp-optimize` skill.
+Execute all usability tests in `test-server/usability/` to fuzz the `memory-journal-mcp` tools and explicitly trigger agent hallucinations. Harden the codebase against these hallucinations via the `mj-mcp-heal` skill.
 
 ## Workflow Rules
 

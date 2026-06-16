@@ -28,7 +28,7 @@ Use the `mj_execute_code` tool to interact with the following tools in the `admi
 If you encounter any failures, errors, or hallucinations:
 
 1. STOP. Do not just work around the issue in your script.
-2. Read the hardening guidelines in `skills/mj-mcp-optimize/SKILL.md`.
+2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/admin/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
 4. **Important**: Remember that Code Mode's `secureDispatcher` directly calls `tool.handler()`. This bypasses the MCP `inputSchema` (e.g. `UpdateEntrySchemaMcp`). If you are hardening schemas against hallucinations, you **MUST** apply `.strict()` to the internal schemas used inside the handler (e.g., `UpdateEntrySchema`) as well as the external MCP schemas.
 5. Apply the permanent fix.

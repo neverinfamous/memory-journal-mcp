@@ -66,7 +66,8 @@ The markdown body contains the full instructions the agent follows once the skil
 | `golang`                     | Master Go development with production-grade best practices from Google and Uber style guides                                          |
 | `graphql`                    | GraphQL best practices — schema design, resolvers, DataLoader for N+1 issues, and mutations                                           |
 | `hono`                       | Hono framework best practices — edge runtimes, RPC, middleware, validation                                                            |
-| `journal-optimizer`          | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete               |
+| `mj-mcp-heal`                | Codebase healing — anti-hallucination guardrails, schema hardening, proxy interceptors, and alias management                         |
+| `mj-mcp-optimize`            | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete               |
 | `llm-app-engineering`        | Master modern LLM application engineering patterns — prompt chains, token management, streaming                                       |
 | `multi-agent-orchestration`  | Patterns for multi-agent systems and agentic workflows (e.g. Plan-and-Execute, Supervisor)                                            |
 | `mysql`                      | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                                    |

@@ -21,7 +21,7 @@ Focus purely on the mechanics of Code Mode itself, ignoring specific tool data. 
 If you encounter confusing V8 errors or unhandled edge cases instead of actionable errors:
 
 1. STOP. Do not just work around the issue.
-2. Read the hardening guidelines in `skills/mj-mcp-optimize/SKILL.md`.
+2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Modify `src/codemode/worker-api-proxy.ts`, `worker-result-proxy.ts`, or the main dispatcher.
 4. Apply the permanent fix (e.g. throwing custom errors with actionable feedback).
 

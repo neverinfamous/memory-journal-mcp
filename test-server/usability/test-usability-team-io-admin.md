@@ -24,7 +24,7 @@ Use the `mj_execute_code` tool to interact with the following tools in the `team
 If you encounter any failures, errors, or hallucinations:
 
 1. STOP. Do not just work around the issue in your script.
-2. Read the hardening guidelines in `skills/mj-mcp-optimize/SKILL.md`.
+2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/team/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
 4. Apply the permanent fix.
 
