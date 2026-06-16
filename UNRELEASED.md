@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Implemented `briefingImportanceThreshold` configuration, GitHub active branch PR cross-referencing, and Briefing Graph Context enhancements (hubs and orphan warnings). (`d1effdf`)
 - Implemented commit-enriched session summaries via `SessionCommitContextSchema` and `memory://commits/{project_number}` resource. (`eda39c0`)
 
 - Added team flag analytics tests to Code Mode test suite. (`798fdd3`)

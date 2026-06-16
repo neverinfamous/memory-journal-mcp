@@ -164,7 +164,7 @@ export async function buildGitHubSection(
         const degraded = degradedReasons.length > 0
 
         let activePr: BriefingGitHub['activePr'] = undefined
-        const localBranch = 'branch' in localGitStatus ? (localGitStatus.branch as string | null | undefined) : undefined;
+        const localBranch = 'branch' in localGitStatus ? localGitStatus.branch : undefined;
         const activePrData =
             localBranch && allPrs
                 ? allPrs.find((p) => p.headRef === localBranch)
@@ -179,7 +179,7 @@ export async function buildGitHubSection(
                     repo,
                     activePrData.number
                 )
-                if (reviewSummary && reviewSummary.state !== 'none') {
+                if (reviewSummary.state !== 'none') {
                     reviewStatus = reviewSummary.state
                     commentCount = reviewSummary.commentCount
                 }

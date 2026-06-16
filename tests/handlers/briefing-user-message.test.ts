@@ -539,6 +539,7 @@ describe('formatUserMessage', () => {
                 totalRelationships: 0,
                 density: 0,
                 causalMetrics: {},
+                topHubs: [],
             },
         })
 
@@ -552,6 +553,7 @@ describe('formatUserMessage', () => {
                 totalRelationships: 15,
                 density: 1.5,
                 causalMetrics: { evolves_from: 8, implements: 7 },
+                topHubs: [],
             },
         })
 
