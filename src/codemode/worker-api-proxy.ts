@@ -402,6 +402,16 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
 
         // 2b. Kanban specific aliases
+        if (methodName.includes('get_kanban_board') || methodName.includes('getKanbanBoard')) {
+            if (obj['keep'] !== undefined && obj['project_number'] === undefined) {
+                obj['project_number'] = obj['keep'];
+                delete obj['keep'];
+            }
+            if (obj['path'] !== undefined && obj['project_number'] === undefined) {
+                obj['project_number'] = obj['path'];
+                delete obj['path'];
+            }
+        }
         if (methodName.includes('move_kanban_item') || methodName.includes('moveKanbanItem')) {
             if (obj['keep'] !== undefined && obj['item_id'] === undefined) {
                 obj['item_id'] = obj['keep'];
@@ -439,8 +449,8 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             delete obj['mode'];
         }
 
-        // 4. Q/Query for list issues/PRs
-        if ((methodName.includes('get_github_issues') || methodName.includes('getGithubIssues') || methodName.includes('get_github_prs') || methodName.includes('getGithubPrs')) && (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined)) {
+        // 4. Q/Query for list issues/PRs/Milestones
+        if ((methodName.includes('get_github_issues') || methodName.includes('getGithubIssues') || methodName.includes('get_github_prs') || methodName.includes('getGithubPrs') || methodName.includes('get_github_milestones') || methodName.includes('getGithubMilestones')) && (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined)) {
             return { error: {
                 success: false,
                 error: `${methodName} does not support search queries (q/query/search). It only supports listing by state (open/closed).`,
