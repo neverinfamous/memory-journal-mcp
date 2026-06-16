@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+
+- Added team flag analytics tests to Code Mode test suite. (`9d6029e`)
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations.
 - Auto-prune lifecycle management flags (`--archive-older-than-days`, `--prune-dry-run`).
 - Database schema migration framework with composite and partial performance indexes (`f73da9f6`).

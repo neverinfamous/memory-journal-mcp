@@ -316,6 +316,40 @@ return result
 | `contentNoMarker`      | `true` ([RESOLVED] removed)        |
 | `reopenActiveNoChange` | `true` (no-op when already active) |
 
+### 28.18 Flag Analytics (team_get_flag_analytics)
+
+```javascript
+// Test code:
+
+// Get analytics
+const analytics = await mj.team.teamGetFlagAnalytics({ project_number: 5 })
+
+const result = {
+  analyticsSuccess: analytics.success,
+  hasSummary: !!analytics.summary,
+  hasByType: !!analytics.by_type,
+  hasByTarget: !!analytics.by_target,
+  hasTrend: !!analytics.trend,
+  totalFlags: typeof analytics.summary?.total_flags === 'number',
+  activeFlags: typeof analytics.summary?.active_flags === 'number',
+  resolvedFlags: typeof analytics.summary?.resolved_flags === 'number',
+  mathChecksOut: analytics.summary?.total_flags === ((analytics.summary?.active_flags || 0) + (analytics.summary?.resolved_flags || 0))
+}
+return result
+```
+
+| Check               | Expected                               |
+| ------------------- | -------------------------------------- |
+| `analyticsSuccess`  | `true`                                 |
+| `hasSummary`        | `true`                                 |
+| `hasByType`         | `true`                                 |
+| `hasByTarget`       | `true`                                 |
+| `hasTrend`          | `true`                                 |
+| `totalFlags`        | `true` (is number)                     |
+| `activeFlags`       | `true` (is number)                     |
+| `resolvedFlags`     | `true` (is number)                     |
+| `mathChecksOut`     | `true` (total === active + resolved)   |
+
 ## Success Criteria
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
