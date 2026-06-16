@@ -40,12 +40,14 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
                 timestamp: '2025-01-15T10:00:00Z',
                 entryType: 'note',
                 content: 'This is a sample entry for testing purposes.',
+                significanceScore: 0.5,
             },
             {
                 id: 2,
                 timestamp: '2025-01-14T09:00:00Z',
                 entryType: 'decision',
                 content: 'Decided to use TypeScript for the project.',
+                significanceScore: 0.5,
             },
         ] }),
         searchEntries: vi.fn().mockReturnValue({ entries: [] }),
@@ -102,6 +104,7 @@ describe('buildJournalContext', () => {
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: longContent,
+                    significanceScore: 0.5,
                 },
             ] }),
         })
@@ -137,6 +140,7 @@ describe('buildJournalContext', () => {
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: null,
+                    significanceScore: 0.5,
                 },
             ] }),
         })

@@ -7,7 +7,7 @@
     "packages": [
         {
             "registryType": "oci",
-            "identifier": "docker.io/writenotenow/memory-journal-mcp:v8.0.1",
+            "identifier": "docker.io/writenotenow/memory-journal-mcp:latest",
             "transport": {
                 "type": "stdio"
             }

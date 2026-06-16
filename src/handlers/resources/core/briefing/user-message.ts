@@ -139,6 +139,17 @@ export function formatUserMessage(opts: {
         }
 
         // PRs
+        if (github.activePr) {
+            const apr = github.activePr
+            let reviewStr = 'Pending Review'
+            if (apr.reviewStatus === 'approved') reviewStr = 'Approved'
+            else if (apr.reviewStatus === 'changes_requested') reviewStr = `Changes Requested (${String(apr.commentCount ?? 0)} comments)`
+            else if (apr.reviewStatus) reviewStr = apr.reviewStatus
+            
+            const ciStr = apr.ciStatus ? `CI: ${apr.ciStatus.charAt(0).toUpperCase() + apr.ciStatus.slice(1)}` : 'CI: Unknown'
+            trackingParts.push(`Current PR (#${String(apr.number)}): ${escapeCell(reviewStr)} · ${escapeCell(ciStr)}`)
+        }
+
         if (github.prStatusSummary) {
             const s = github.prStatusSummary
             const parts: string[] = []
@@ -326,9 +337,17 @@ export function formatUserMessage(opts: {
                 .filter(([_, count]) => count > 0)
                 .map(([type, count]) => `${type}: ${String(count)}`)
                 .join(', ') || 'none'
-        graphLines.push(
-            `${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
-        )
+        
+        let graphText = `${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
+        
+        if (graphSummary.topHubs.length > 0) {
+            const hubsStr = graphSummary.topHubs
+                .map(h => `#${h.id} ${h.preview}`)
+                .join(', ')
+            graphText += `<br>Context Hubs: ${escapeCell(hubsStr)}`
+        }
+
+        graphLines.push(graphText)
     }
 
     // ========================================================================
@@ -382,6 +401,11 @@ export function formatUserMessage(opts: {
     let flagsAlert = ''
     if (opts.flagSummary && opts.flagSummary.count > 0) {
         flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
+    }
+
+    if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
+        const orphanPct = Math.round(graphSummary.orphanRatio * 100)
+        flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`mj-mcp-optimize\`.\n\n`
     }
 
     if (opts.deprecationWarnings && opts.deprecationWarnings.length > 0) {

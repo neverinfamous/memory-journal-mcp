@@ -125,6 +125,7 @@ export class RepositoryManager {
         try {
             const status = await this.client.git.status()
             return {
+                branch: status.current || null,
                 modified: status.modified.length,
                 untracked: status.not_added.length,
                 isClean: status.isClean(),

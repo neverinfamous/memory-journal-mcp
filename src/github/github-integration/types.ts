@@ -46,6 +46,7 @@ export interface PullRequestDetails extends GitHubPullRequest {
  * Local Git status details
  */
 export interface LocalGitStatus {
+    branch?: string | null
     modified: number
     untracked: number
     isClean: boolean

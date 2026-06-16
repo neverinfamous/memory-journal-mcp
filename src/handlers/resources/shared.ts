@@ -198,6 +198,8 @@ export interface BriefingConfig {
     flagVocabulary?: string[]
     /** Allowlisted directory roots for strict filesystem jailing of agent read access */
     allowedIoRoots?: string[]
+    /** Minimum significance score for entries to be included in the briefing (default: 0.3) */
+    briefingImportanceThreshold?: number
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
@@ -212,6 +214,7 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
     workflowCount: 0,
     workflowStatusBreakdown: false,
     copilotReviews: false,
+    briefingImportanceThreshold: 0.3,
 }
 
 /**

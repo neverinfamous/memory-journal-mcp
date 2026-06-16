@@ -50,6 +50,15 @@ export interface BriefingGitHub {
         degraded?: boolean
     }
     ciName?: string
+    activePr?: {
+        number: number
+        title: string
+        url: string
+        state: string
+        reviewStatus?: string
+        commentCount?: number
+        ciStatus?: string
+    }
     degraded?: boolean
     degradedReasons?: string[]
 }
@@ -146,13 +155,62 @@ export async function buildGitHubSection(
                 `Local Git Status fetch failed: ${String(localGitStatusResult.reason)}`
             )
 
-        const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
+        const { openIssues, openIssueList, openPRs, openPrList, allPrs } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
         const ciName = ciStatus.ciName
         const milestones = milestonesData.items ?? []
         const insights = insightsData.insights
         const copilotReviews = copilotReviewsData.reviews
         const degraded = degradedReasons.length > 0
+
+        let activePr: BriefingGitHub['activePr'] = undefined
+        const localBranch = 'branch' in localGitStatus ? (localGitStatus.branch as string | null | undefined) : undefined;
+        const activePrData =
+            localBranch && allPrs
+                ? allPrs.find((p) => p.headRef === localBranch)
+                : undefined
+
+        if (activePrData) {
+            let reviewStatus: string | undefined
+            let commentCount = 0
+            try {
+                const reviewSummary = await github.getCopilotReviewSummary(
+                    owner,
+                    repo,
+                    activePrData.number
+                )
+                if (reviewSummary && reviewSummary.state !== 'none') {
+                    reviewStatus = reviewSummary.state
+                    commentCount = reviewSummary.commentCount
+                }
+            } catch {
+                // ignore
+            }
+
+            let prCiStatus: string | undefined
+            try {
+                const runs = await github.getWorkflowRuns(owner, repo, 20)
+                const prRun = runs.find((r) => r.headBranch === activePrData.headRef)
+                if (prRun) {
+                    if (prRun.status !== 'completed') prCiStatus = 'pending'
+                    else if (prRun.conclusion === 'success') prCiStatus = 'passing'
+                    else if (prRun.conclusion === 'failure') prCiStatus = 'failing'
+                    else if (prRun.conclusion === 'cancelled') prCiStatus = 'cancelled'
+                }
+            } catch {
+                // ignore
+            }
+
+            activePr = {
+                number: activePrData.number,
+                title: activePrData.title,
+                url: activePrData.url,
+                state: activePrData.state,
+                reviewStatus,
+                commentCount,
+                ciStatus: prCiStatus,
+            }
+        }
 
         return {
             repo: `${owner}/${repo}`,
@@ -166,6 +224,7 @@ export async function buildGitHubSection(
             insights,
             openIssueList,
             openPrList,
+            ...(activePr ? { activePr } : {}),
             ...(config.prStatusBreakdown && openPrList
                 ? {
                       prStatusSummary: {
@@ -307,6 +366,7 @@ async function fetchIssuesAndPrs(
     openPRs: number
     openIssueList?: { number: number; title: string }[]
     openPrList?: { number: number; title: string; state: string }[]
+    allPrs?: { number: number; title: string; url: string; state: string; headRef?: string }[]
     degraded?: boolean
 }> {
     try {
@@ -342,7 +402,7 @@ async function fetchIssuesAndPrs(
                   }))
                 : undefined
 
-        return { openIssues, openPRs, openIssueList, openPrList }
+        return { openIssues, openPRs, openIssueList, openPrList, allPrs: prs }
     } catch (error) {
         logger.debug('Failed to fetch issues and PRs', {
             module: 'BRIEFING',

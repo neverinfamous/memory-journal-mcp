@@ -199,6 +199,12 @@ export function buildServerOptions(
                 const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
                 return val ? parseInt(val, 10) : undefined;
             }, undefined),
+            briefingImportanceThreshold: catchConfig(() => {
+                const val = resolver.resolve<unknown>('briefingImportanceThreshold', 'BRIEFING_IMPORTANCE_THRESHOLD');
+                if (typeof val === 'number') return val;
+                if (typeof val === 'string') return parseFloat(val);
+                return 0.3;
+            }, 0.3),
         },
         instructionLevel: catchConfig(() => (resolver.resolve<string>('instructionLevel', 'INSTRUCTION_LEVEL') ?? 'standard') as 'essential' | 'standard' | 'full', 'standard'),
         auditConfig,

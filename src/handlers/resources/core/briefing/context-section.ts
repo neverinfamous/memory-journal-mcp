@@ -9,7 +9,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-import { parseFlagContext } from '../../../../types/auto-context.js'
+import { parseFlagContext, parseSessionCommitContext } from '../../../../types/auto-context.js'
 import {
     markUntrustedContentInline,
     assertSafeFilePath,
@@ -49,13 +49,28 @@ function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): J
     return 'entries' in result ? result.entries : []
 }
 
+function extractSection(content: string, sectionTitle: string): string | null {
+    const regex = new RegExp(`##\\s+${sectionTitle}\\s*\\n([\\s\\S]*?)(?:\\n##\\s|$)`, 'i')
+    const match = content.match(regex)
+    if (match?.[1]) {
+        return match[1].trim()
+    }
+    return null
+}
+
 export function buildJournalContext(
     context: ResourceContext,
     config: BriefingConfig,
     projectNumber?: number | null
 ): JournalContext {
+    const threshold = config.briefingImportanceThreshold ?? 0.3
+    const isImportant = (e: JournalEntry): boolean => {
+        if (e.tags?.includes('session-summary')) return true
+        return (e.significanceScore ?? 0) >= threshold
+    }
+
     // ── Session summaries (computed first to enable deduplication) ──────
-    const summaryEntries =
+    let summaryEntries =
         typeof projectNumber === 'number'
             ? extractEntries(context.db.searchEntries('', {
                   limit: config.summaryCount,
@@ -66,9 +81,11 @@ export function buildJournalContext(
                   limit: config.summaryCount,
                   tags: ['session-summary'],
               }))
+    
+    summaryEntries = summaryEntries.filter(isImportant)
 
     // Fallback to retrospective type if no tag matched
-    const retroEntries =
+    let retroEntries =
         summaryEntries.length === 0
             ? typeof projectNumber === 'number'
                 ? extractEntries(context.db.searchEntries('', {
@@ -81,6 +98,8 @@ export function buildJournalContext(
                       entryType: 'retrospective',
                   }))
             : []
+            
+    retroEntries = retroEntries.filter(isImportant)
 
     const finalSummaryEntries = summaryEntries.length > 0 ? summaryEntries : retroEntries
 
@@ -95,14 +114,39 @@ export function buildJournalContext(
                 preview: markUntrustedContentInline(cleanPreview(entry.content, PREVIEW_LENGTH)),
             }
         })
+        
         latestSessionSummary = sessionSummaries[0]
+        const firstEntry = finalSummaryEntries[0]
+        if (latestSessionSummary && firstEntry) {
+            let latestPreviewStr = cleanPreview(firstEntry.content, PREVIEW_LENGTH)
+            
+            const unfinished = extractSection(firstEntry.content, 'Unfinished / Blocked')
+            const nextSession = extractSection(firstEntry.content, 'Context for Next Session')
+            
+            if (unfinished) {
+                latestPreviewStr += ` | Unfinished: ${cleanPreview(unfinished, 60)}`
+            }
+            if (nextSession) {
+                latestPreviewStr += ` | Next Session: ${cleanPreview(nextSession, 60)}`
+            }
+            
+            const commitCtx = parseSessionCommitContext(firstEntry.autoContext)
+            if (commitCtx?.commits && commitCtx.commits.length > 0) {
+                const shortShas = commitCtx.commits.map(c => c.slice(0, 7)).join(', ')
+                latestPreviewStr += ` | Latest Session Commits: ${shortShas}`
+            }
+            
+            latestSessionSummary.preview = markUntrustedContentInline(latestPreviewStr)
+        }
     }
 
     // ── Latest entries (deduplicated against summaries) ──────────────
-    const recentEntries =
+    let recentEntries =
         typeof projectNumber === 'number'
             ? extractEntries(context.db.searchEntries('', { limit: config.entryCount, projectNumber }))
             : extractEntries(context.db.getRecentEntries(config.entryCount))
+            
+    recentEntries = recentEntries.filter(isImportant)
 
     // Exclude entries already shown in the Summary slot to diversify briefing content
     const summaryIds = new Set(finalSummaryEntries.map((e: JournalEntry) => e.id))
@@ -344,6 +388,8 @@ export interface GraphSummary {
     totalRelationships: number
     density: number
     causalMetrics: Record<string, number>
+    topHubs: { id: number; preview: string; count: number }[]
+    orphanRatio?: number
 }
 
 export function buildGraphContext(context: ResourceContext): GraphSummary | undefined {
@@ -356,10 +402,65 @@ export function buildGraphContext(context: ResourceContext): GraphSummary | unde
 
         if (!comp || !causal) return undefined
 
+        const totalEntries = (stats['totalEntries'] as number) || 0
+
+        // Fetch top hubs and orphan ratio using a single query if possible
+        let topHubs: { id: number; preview: string; count: number }[] = []
+        let orphanRatio: number | undefined
+
+        if (typeof context.db._executeRawQueryUnsafe === 'function') {
+            try {
+                // Calculate hubs
+                const hubsQuery = `
+                    SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
+                    FROM (
+                        SELECT from_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY from_entry_id
+                        UNION ALL
+                        SELECT to_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY to_entry_id
+                    ) counts
+                    JOIN memory_journal m ON counts.entry_id = m.id
+                    WHERE m.deleted_at IS NULL
+                    GROUP BY counts.entry_id
+                    ORDER BY total_links DESC
+                    LIMIT 3
+                `
+                const hubsRes = context.db._executeRawQueryUnsafe(hubsQuery)
+                if (Array.isArray(hubsRes) && hubsRes.length > 0 && hubsRes[0]) {
+                    topHubs = hubsRes[0].values.map(row => ({
+                        id: Number(row[0]),
+                        count: Number(row[1]),
+                        preview: cleanPreview(String(row[2]), 30)
+                    }))
+                }
+
+                // Calculate orphans
+                if (totalEntries > 0) {
+                    const orphansQuery = `
+                        SELECT COUNT(*) as orphan_count
+                        FROM memory_journal m
+                        WHERE m.deleted_at IS NULL AND m.id NOT IN (
+                            SELECT from_entry_id FROM relationships
+                            UNION
+                            SELECT to_entry_id FROM relationships
+                        )
+                    `
+                    const orphansRes = context.db._executeRawQueryUnsafe(orphansQuery)
+                    if (Array.isArray(orphansRes) && orphansRes.length > 0 && orphansRes[0]) {
+                        const orphanCount = Number(orphansRes[0].values[0]?.[0]) || 0
+                        orphanRatio = orphanCount / totalEntries
+                    }
+                }
+            } catch {
+                // Ignore raw query errors gracefully
+            }
+        }
+
         return {
             totalRelationships: comp.totalRelationships,
             density: comp.avgPerEntry,
             causalMetrics: causal,
+            topHubs,
+            orphanRatio,
         }
     } catch (error) {
         logger.debug('Failed to build graph context', {
