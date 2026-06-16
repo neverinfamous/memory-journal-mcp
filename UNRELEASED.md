@@ -31,6 +31,7 @@
 ### Changed
 - Updated adversarial skills (performance, planner, security, skill-audit, workflow-audit) with explicit execution rules enforcing continuous prompt improvement, graceful handling of GitHub Copilot quota failures, and strict prohibition of memory-journal-mcp entries (`e216823f`).
 - Updated `mj-mcp-heal` developer skill document to focus on anti-hallucination guardrails and native optimization (`4694d2cb`).
+- Renamed `mj-mcp-optimize` → `mj-mcp-heal` (codebase healing) and `journal-optimizer` → `mj-mcp-optimize` (data optimization) for naming consistency (`a54e15b0`).
 - Bumped `eslint` to 10.5.0 (`4a2a2ae1`).
 - Removed mandatory journaling requirement from `adversarial-performance` skill to support analytical runs (`ce37b2f1`).
 - Wrapped batch operations in a single database transaction for improved throughput.
