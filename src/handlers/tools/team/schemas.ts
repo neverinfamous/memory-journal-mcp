@@ -35,50 +35,86 @@ export const TeamEntryOutputSchema = EntryOutputSchema.extend({
 // ============================================================================
 
 /** team_create_entry — strict */
-export const TeamCreateEntrySchema = z.object({
-    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
-    entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-    tags: z.array(z.string()).optional().default([]),
-    significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-    project_number: StrictProjectNumberSchema,
-    project_owner: z.string().optional(),
-    issue_number: z.number().optional(),
-    issue_url: z.string().optional(),
-    pr_number: z.number().optional(),
-    pr_url: z.string().optional(),
-    pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
-    author: z.string().optional(),
-})
+export const TeamCreateEntrySchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['text', 'message', 'description']) {
+                if (key in obj && !('content' in obj)) {
+                    obj['content'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
+        content: z.string().min(1).max(MAX_CONTENT_LENGTH),
+        entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
+        tags: z.array(z.string()).optional().default([]),
+        significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
+        project_number: StrictProjectNumberSchema,
+        project_owner: z.string().optional(),
+        issue_number: z.number().optional(),
+        issue_url: z.string().optional(),
+        pr_number: z.number().optional(),
+        pr_url: z.string().optional(),
+        pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
+        author: z.string().optional(),
+    }).strict()
+)
 
 /** team_create_entry — relaxed for MCP SDK */
-export const TeamCreateEntrySchemaMcp = z.object({
-    content: z.string().optional().describe(
-        'Markdown-formatted entry content. Use ## section headers to organize content. ' +
-        'Note: The primary text is stored in the `content` property (not `title` or `message`). ' +
-        'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
-        'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
-        'Do NOT invent extra top-level sections for session summaries.'
-    ),
-    entry_type: z.string().optional().default('personal_reflection').describe(
-        'Entry type. Use "retrospective" for session summaries, "bug_fix" for bugs, ' +
-        '"feature_implementation" for features, "planning" for roadmaps, ' +
-        '"technical_note" for implementation notes. Do NOT default to "personal_reflection" ' +
-        'unless the entry is genuinely a personal note.'
-    ),
-    tags: z.array(z.string()).optional().default([]).describe(
-        'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
-        'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
-    ),
-    significance_type: z.string().optional(),
-    project_number: relaxedNumber(),
-    project_owner: z.string().optional(),
-    issue_number: relaxedNumber().optional(),
-    issue_url: z.string().optional(),
-    pr_number: relaxedNumber().optional(),
-    pr_url: z.string().optional(),
-    pr_status: z.string().optional(),
-    author: z.string().optional(),
-})
+export const TeamCreateEntrySchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['text', 'message', 'description']) {
+                if (key in obj && !('content' in obj)) {
+                    obj['content'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
+        content: z.string().optional().describe(
+            'Markdown-formatted entry content. Use ## section headers to organize content. ' +
+            'Note: The primary text is stored in the `content` property (not `title` or `message`). ' +
+            'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
+            'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+            'Do NOT invent extra top-level sections for session summaries.'
+        ),
+        entry_type: z.string().optional().default('personal_reflection').describe(
+            'Entry type. Use "retrospective" for session summaries, "bug_fix" for bugs, ' +
+            '"feature_implementation" for features, "planning" for roadmaps, ' +
+            '"technical_note" for implementation notes. Do NOT default to "personal_reflection" ' +
+            'unless the entry is genuinely a personal note.'
+        ),
+        tags: z.array(z.string()).optional().default([]).describe(
+            'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
+            'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
+        ),
+        significance_type: z.string().optional(),
+        project_number: relaxedNumber(),
+        project_owner: z.string().optional(),
+        issue_number: relaxedNumber().optional(),
+        issue_url: z.string().optional(),
+        pr_number: relaxedNumber().optional(),
+        pr_url: z.string().optional(),
+        pr_status: z.string().optional(),
+        author: z.string().optional(),
+    }).strict()
+)
 
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
@@ -221,10 +257,13 @@ export const TeamUpdateEntrySchema = z.preprocess(
                 delete obj['id'];
                 modified = true;
             }
-            if ('text' in obj && !('content' in obj)) {
-                obj['content'] = obj['text'];
-                delete obj['text'];
-                modified = true;
+            for (const key of ['text', 'message', 'description']) {
+                if (key in obj && !('content' in obj)) {
+                    obj['content'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
             }
             return modified ? obj : val;
         }
@@ -262,10 +301,13 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
                 delete obj['id'];
                 modified = true;
             }
-            if ('text' in obj && !('content' in obj)) {
-                obj['content'] = obj['text'];
-                delete obj['text'];
-                modified = true;
+            for (const key of ['text', 'message', 'description']) {
+                if (key in obj && !('content' in obj)) {
+                    obj['content'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
             }
             return modified ? obj : val;
         }
