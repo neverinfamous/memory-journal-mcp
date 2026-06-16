@@ -16,7 +16,7 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 const authorAliases = ['path', 'target', 'user', 'name', 'account', 'username', 'member'];
 const roleAliases = ['keep', 'mode', 'type', 'level', 'permission'];
 
-const preprocessMember = (val: unknown) => {
+const preprocessMember = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) };
         let modified = false;

@@ -14,7 +14,7 @@ import { getCallerIdentity } from './rbac.js'
 // ============================================================================
 
 const aliasNames = ['text', 'message', 'description', 'name', 'from', 'source'];
-const canonicalNames = ['target', 'to', 'author', 'canonical', 'dest'];
+const canonicalNames = ['target', 'to', 'canonical', 'dest'];
 const searchNames = ['q', 'query', 'search'];
 
 const preprocessAlias = (val: unknown): unknown => {
@@ -51,8 +51,8 @@ const preprocessAlias = (val: unknown): unknown => {
                 break;
             }
         }
-        // fix 'author' vs 'canonical_author' vs 'alias' confusion
-        if ('author' in obj && !('canonical_author' in obj) && !('alias' in obj)) {
+        // fix 'author' vs 'canonical_author' confusion
+        if ('author' in obj && !('canonical_author' in obj)) {
             obj['canonical_author'] = obj['author'];
         }
         return modified ? obj : val;

@@ -14,7 +14,7 @@ const AUTH_BASE = `http://localhost:${AUTH_PORT}`
 
 test.describe('Bearer Token Authentication', () => {
     test.beforeAll(async () => {
-        await startServer(AUTH_PORT, ['--auth-token', AUTH_TOKEN], 'auth')
+        await startServer(AUTH_PORT, ['--auth-token', AUTH_TOKEN])
     })
 
     test.afterAll(() => {

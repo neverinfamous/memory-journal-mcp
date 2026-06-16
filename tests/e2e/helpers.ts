@@ -177,7 +177,7 @@ export async function startServer(
     dbSuffix?: string,
     options?: { cwd?: string; env?: Record<string, string | undefined> }
 ): Promise<void> {
-    const suffix = dbSuffix ?? String(port)
+    const suffix = dbSuffix ? `${dbSuffix}-${port}` : String(port)
     const serverProcess = spawn(
         'node',
         [

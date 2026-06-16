@@ -791,13 +791,13 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         for (const key of ['path', 'target', 'user', 'name', 'account', 'username', 'member']) {
             if (obj[key] !== undefined && obj['author'] === undefined) {
                 obj['author'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
             }
         }
         for (const key of ['keep', 'mode', 'type', 'level', 'permission']) {
             if (obj[key] !== undefined && obj['role'] === undefined) {
                 obj['role'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
             }
         }
     }
@@ -814,19 +814,19 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     obj['author'] = obj[key];
                     obj['alias'] = obj[key];
                 }
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
             }
         }
         for (const key of ['text', 'message', 'description', 'name', 'from', 'source']) {
             if (obj[key] !== undefined && obj['alias'] === undefined) {
                 obj['alias'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
             }
         }
         for (const key of ['target', 'to', 'canonical', 'dest']) {
             if (obj[key] !== undefined && obj['canonical_author'] === undefined) {
                 obj['canonical_author'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
             }
         }
         if (obj['author'] !== undefined && obj['canonical_author'] === undefined && obj['alias'] === undefined) {

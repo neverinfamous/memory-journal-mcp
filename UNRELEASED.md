@@ -161,6 +161,8 @@
 - Fixed GitHub tools to properly intercept and map common parameter hallucinations (`q`, `path`, `mode: "summary"`).
 - Added explicit mapping for backup parameters (`message`/`text`/`path` to `name` for `backup_journal`, `file`/`path` to `filename` for `restore_backup`, and `keep` to `keep_count` for `cleanup_backups`), and added `backups`/`deleted` arrays to the proxy properties.
 - Fixed case-sensitivity checks in the proxy layer to correctly intercept and heal hallucinations for team-prefixed variants of IO tools (e.g. `teamExportMarkdown`).
+- Fixed a parameter preprocessing bug in the Team Identity layer where the strictly required `author` parameter was being dynamically deleted before validation by Zod during `team_resolve_author` execution.
+- Fixed a concurrency bug in the Playwright E2E test suite where parallel workers running the same test file would crash due to `SqliteError: UNIQUE constraint failed` by injecting the worker's unique port into the database filename.
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1.
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.

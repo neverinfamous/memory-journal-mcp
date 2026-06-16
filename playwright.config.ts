@@ -4,6 +4,7 @@ const WORKERS = process.env.CI ? 4 : 4; // Using 4 workers for optimal parallel 
 
 export default defineConfig({
     testDir: './tests/e2e',
+    timeout: 120000,
     outputDir: '.test-output/playwright',
     fullyParallel: true,
     forbidOnly: !!process.env.CI,

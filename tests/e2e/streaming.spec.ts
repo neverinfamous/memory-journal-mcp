@@ -17,7 +17,7 @@ const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('HTTP/SSE Streaming', () => {
     test.beforeAll(async () => {
-        await startServer(STREAM_PORT, [], 'streaming')
+        await startServer(STREAM_PORT, [])
     })
 
     test.afterAll(() => {
