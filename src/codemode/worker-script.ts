@@ -202,7 +202,7 @@ async function executeCode(
             },
             fetch: undefined,
             sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5000))),
-            setTimeout: (cb: Function, ms: number, ...args: unknown[]) => setTimeout(cb, Math.min(ms, 5000), ...args),
+            setTimeout: (cb: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => setTimeout(cb, Math.min(ms, 5000), ...args),
             setInterval: undefined,
             setImmediate: undefined,
             getConfig: () => Promise.resolve({ dbPath: 'memory-journal.db' }),

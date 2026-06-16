@@ -54,6 +54,7 @@
 
 ### Fixed
 - Fixed \`setTimeout\` and \`sleep\` functions in the Code Mode sandbox to correctly bind to global execution context. (\`96b5b47\`)
+- Fixed ESLint \`@typescript-eslint/no-unsafe-function-type\` error in Code Mode sandbox \`setTimeout\` callback definition. (\`aba56de\`)
 - Fixed explicit success:false check in Code Mode RBAC tests and boolean lint (\`9c0c7d0\`).
 - Fixed strict TypeScript linting errors (type vs interface, boolean evaluation) in Code Mode proxy handler and updated coordinator workflows to strictly enforce linting quality gates. (`430849e`)
 - Fixed Code Mode leaking raw MCP exceptions into execution contexts by catching unhandled rejections at the proxy boundary and returning structured error objects. (`86712fd`)
