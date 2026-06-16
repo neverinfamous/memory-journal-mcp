@@ -426,7 +426,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     }
 
     // Single ID methods hallucination: passing primitive instead of object, passing array, or missing ID
-    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships'];
+    const singleIdMethods = ['delete_entry', 'deleteEntry', 'restore_entry', 'restoreEntry', 'get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById', 'get_entry_history', 'getEntryHistory', 'add_to_vector_index', 'addToVectorIndex', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry', 'team_delete_entry', 'teamDeleteEntry', 'team_restore_entry', 'teamRestoreEntry', 'visualize_relationships', 'visualizeRelationships', 'team_visualize_relationships', 'teamVisualizeRelationships'];
     if (singleIdMethods.includes(methodName)) {
         if (args.length === 0) {
             return { error: {
@@ -459,7 +459,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     recoverable: true
                 }};
             }
-            if (obj['entry_id'] === undefined && obj['id'] === undefined && obj['entryId'] === undefined) {
+            if (obj['entry_id'] === undefined && obj['id'] === undefined && obj['entryId'] === undefined && obj['path'] === undefined && obj['keep'] === undefined) {
                 return { error: {
                     success: false,
                     error: `${methodName} requires an 'entry_id' parameter.`,
@@ -469,7 +469,15 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     recoverable: true
                 }};
             }
-            const idVal = obj['entry_id'] !== undefined ? obj['entry_id'] : (obj['entryId'] !== undefined ? obj['entryId'] : obj['id']);
+            const idVal = obj['entry_id'] !== undefined ? obj['entry_id'] : (obj['entryId'] !== undefined ? obj['entryId'] : (obj['id'] !== undefined ? obj['id'] : (obj['path'] !== undefined ? obj['path'] : obj['keep'])));
+            if (obj['path'] !== undefined && obj['entry_id'] === undefined) {
+                obj['entry_id'] = obj['path'];
+                delete obj['path'];
+            }
+            if (obj['keep'] !== undefined && obj['entry_id'] === undefined) {
+                obj['entry_id'] = obj['keep'];
+                delete obj['keep'];
+            }
             if (typeof idVal === 'string' && isNaN(parseInt(idVal, 10))) {
                 return { error: {
                     success: false,
@@ -596,6 +604,83 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                 args[0] = { ...obj, ...(obj['config'] as Record<string, unknown>) };
                 delete (args[0] as Record<string, unknown>)['config'];
             }
+        }
+    }
+
+    // team_update_entry hallucination: passing `keep` instead of `is_archived`
+    if (methodName === 'update_entry' || methodName === 'updateEntry' || methodName === 'team_update_entry' || methodName === 'teamUpdateEntry') {
+        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+            const obj = args[0] as Record<string, unknown>;
+            if (obj['keep'] !== undefined && obj['is_archived'] === undefined) {
+                obj['is_archived'] = !obj['keep'];
+                delete obj['keep'];
+            }
+            if (obj['text'] !== undefined && obj['content'] === undefined) {
+                obj['content'] = obj['text'];
+                delete obj['text'];
+            }
+            if (obj['message'] !== undefined && obj['content'] === undefined) {
+                obj['content'] = obj['message'];
+                delete obj['message'];
+            }
+            if (obj['description'] !== undefined && obj['content'] === undefined) {
+                obj['content'] = obj['description'];
+                delete obj['description'];
+            }
+        }
+    }
+    
+    // team_get_recent hallucination: passing `q` or `query` or `keep`
+    const recentMethods = ['get_recent_entries', 'getRecentEntries', 'team_get_recent', 'teamGetRecent'];
+    if (recentMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries. It only returns the most recent entries.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'To search for specific text, use team_search (or search_entries) instead.',
+                recoverable: true
+            }};
+        }
+        if (obj['keep'] !== undefined && obj['limit'] === undefined) {
+            obj['limit'] = obj['keep'];
+            delete obj['keep'];
+        }
+    }
+
+    // team_list_tags hallucination: passing `q` or `query`
+    const listTagsMethods = ['list_tags', 'listTags', 'team_list_tags', 'teamListTags'];
+    if (listTagsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries. It returns all tags.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove the search query parameter.',
+                recoverable: true
+            }};
+        }
+    }
+
+    // team_create_entry hallucination: text/message/description
+    const createMethods = ['create_entry', 'createEntry', 'team_create_entry', 'teamCreateEntry'];
+    if (createMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['text'] !== undefined && obj['content'] === undefined) {
+            obj['content'] = obj['text'];
+            delete obj['text'];
+        }
+        if (obj['message'] !== undefined && obj['content'] === undefined) {
+            obj['content'] = obj['message'];
+            delete obj['message'];
+        }
+        if (obj['description'] !== undefined && obj['content'] === undefined) {
+            obj['content'] = obj['description'];
+            delete obj['description'];
         }
     }
 
