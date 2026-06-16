@@ -1180,8 +1180,8 @@ export function buildApiProxy(
 ): Record<string, unknown> {
     const api: Record<string, unknown> = {}
 
-    const safeRpcCall = (group: string, method: string, args: unknown[]) => 
-        rpcCall(group, method, args).catch(err => ({ success: false, error: err instanceof Error ? err.message : String(err), code: 'EXECUTION_ERROR', category: 'execution', recoverable: true }));
+    const safeRpcCall = (group: string, method: string, args: unknown[]): Promise<unknown> => 
+        rpcCall(group, method, args).catch((err: unknown) => ({ success: false, error: err instanceof Error ? err.message : String(err), code: 'EXECUTION_ERROR', category: 'execution', recoverable: true }));
 
 
     function wrapPromise(promise: Promise<unknown>, methodName: string): Promise<unknown> {

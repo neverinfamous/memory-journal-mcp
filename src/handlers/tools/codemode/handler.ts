@@ -221,18 +221,32 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             
                             // Auto-inject project_number if not present but available from context
                             // ONLY inject if the tool actually expects a project_number (inspect Zod schema)
-                            const checkSchemaAcceptsKey = (schema: any, key: string): boolean => {
-                                if (!schema) return false;
-                                if (schema.shape && typeof schema.shape === 'object' && key in schema.shape) return true;
-                                if (schema._def) {
-                                    if (schema._def.typeName === 'ZodObject' && schema.shape) {
-                                        return key in schema.shape;
+                            interface ZodLike {
+                                shape?: Record<string, unknown>;
+                                _def?: {
+                                    typeName?: string;
+                                    schema?: ZodLike;
+                                    left?: ZodLike;
+                                    right?: ZodLike;
+                                };
+                                innerType?: () => ZodLike;
+                            }
+
+                            const checkSchemaAcceptsKey = (schema: unknown, key: string): boolean => {
+                                if (schema === null || schema === undefined || typeof schema !== 'object') return false;
+                                const s = schema as ZodLike;
+                                
+                                if (s.shape !== undefined && s.shape !== null && typeof s.shape === 'object' && key in s.shape) return true;
+                                
+                                if (s._def !== undefined && s._def !== null) {
+                                    if (s._def.typeName === 'ZodObject' && s.shape !== undefined && s.shape !== null) {
+                                        return key in s.shape;
                                     }
-                                    if (schema._def.typeName === 'ZodEffects' || schema._def.typeName === 'ZodOptional' || schema._def.typeName === 'ZodNullable') {
-                                        return checkSchemaAcceptsKey(schema._def.schema || schema.innerType?.(), key);
+                                    if (s._def.typeName === 'ZodEffects' || s._def.typeName === 'ZodOptional' || s._def.typeName === 'ZodNullable') {
+                                        return checkSchemaAcceptsKey(s._def.schema ?? s.innerType?.(), key);
                                     }
-                                    if (schema._def.typeName === 'ZodIntersection') {
-                                        return checkSchemaAcceptsKey(schema._def.left, key) || checkSchemaAcceptsKey(schema._def.right, key);
+                                    if (s._def.typeName === 'ZodIntersection') {
+                                        return checkSchemaAcceptsKey(s._def.left, key) || checkSchemaAcceptsKey(s._def.right, key);
                                     }
                                 }
                                 return false;

@@ -16,6 +16,7 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
    - Provide the exact path to the test file as the subagent's prompt, along with these execution requirements.
 3. **Local Verification**:
    - If a subagent modifies the codebase, they MUST run `pnpm run check`, `pnpm run build`, `pnpm run test`, and `pnpm run test:e2e` locally, and ensure they all pass completely cleanly.
+   - **Quality Gates**: Pay strict attention to ESLint and TypeScript compiler outputs. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
    - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
    - The user will verify the live fixes in a completely new run/pass in a separate thread.
 4. **Commit**:
