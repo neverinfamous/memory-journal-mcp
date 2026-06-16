@@ -43,7 +43,7 @@ export const TeamCreateEntrySchema = z.preprocess(
             for (const key of ['text', 'message', 'description']) {
                 if (key in obj && !('content' in obj)) {
                     obj['content'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -77,7 +77,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
             for (const key of ['text', 'message', 'description']) {
                 if (key in obj && !('content' in obj)) {
                     obj['content'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -254,13 +254,13 @@ export const TeamUpdateEntrySchema = z.preprocess(
             let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 modified = true;
             }
             for (const key of ['text', 'message', 'description']) {
                 if (key in obj && !('content' in obj)) {
                     obj['content'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -298,13 +298,13 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
             let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 modified = true;
             }
             for (const key of ['text', 'message', 'description']) {
                 if (key in obj && !('content' in obj)) {
                     obj['content'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -346,7 +346,7 @@ export const TeamDeleteEntrySchema = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 return obj;
             }
         }
@@ -366,7 +366,7 @@ export const TeamDeleteEntrySchemaMcp = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 return obj;
             }
         }
@@ -386,7 +386,7 @@ export const TeamRestoreEntrySchema = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 return obj;
             }
         }
@@ -405,7 +405,7 @@ export const TeamRestoreEntrySchemaMcp = z.preprocess(
             const obj = { ...(val as Record<string, unknown>) };
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 return obj;
             }
         }
@@ -451,12 +451,12 @@ export const TeamBatchUpdateEntriesSchema = z.preprocess(
             if (updatesArr === undefined && Array.isArray(obj['items'])) {
                 updatesArr = obj['items'];
                 obj['updates'] = updatesArr;
-                delete obj['items'];
+                Reflect.deleteProperty(obj, 'items');
             }
             if (updatesArr === undefined && Array.isArray(obj['entries'])) {
                 updatesArr = obj['entries'];
                 obj['updates'] = updatesArr;
-                delete obj['entries'];
+                Reflect.deleteProperty(obj, 'entries');
             }
             if (Array.isArray(updatesArr)) {
                 const newUpdates = updatesArr.map((u: unknown) => {
@@ -490,12 +490,12 @@ export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
             if (updatesArr === undefined && Array.isArray(obj['items'])) {
                 updatesArr = obj['items'];
                 obj['updates'] = updatesArr;
-                delete obj['items'];
+                Reflect.deleteProperty(obj, 'items');
             }
             if (updatesArr === undefined && Array.isArray(obj['entries'])) {
                 updatesArr = obj['entries'];
                 obj['updates'] = updatesArr;
-                delete obj['entries'];
+                Reflect.deleteProperty(obj, 'entries');
             }
             if (Array.isArray(updatesArr)) {
                 const newUpdates = updatesArr.map((u: unknown) => {
@@ -528,12 +528,12 @@ export const TeamBatchDeleteEntriesSchema = z.preprocess(
             let modified = false;
             if ('ids' in obj && !('entry_ids' in obj)) {
                 obj['entry_ids'] = obj['ids'];
-                delete obj['ids'];
+                Reflect.deleteProperty(obj, 'ids');
                 modified = true;
             }
             if ('id' in obj && !('entry_ids' in obj)) {
                 obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 modified = true;
             }
             return modified ? obj : val;
@@ -554,12 +554,12 @@ export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
             let modified = false;
             if ('ids' in obj && !('entry_ids' in obj)) {
                 obj['entry_ids'] = obj['ids'];
-                delete obj['ids'];
+                Reflect.deleteProperty(obj, 'ids');
                 modified = true;
             }
             if ('id' in obj && !('entry_ids' in obj)) {
                 obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
-                delete obj['id'];
+                Reflect.deleteProperty(obj, 'id');
                 modified = true;
             }
             return modified ? obj : val;
@@ -1113,7 +1113,7 @@ export const PassTeamFlagSchema = z.preprocess(
             for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
                 if (key in obj && !('message' in obj)) {
                     obj['message'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -1134,6 +1134,7 @@ export const PassTeamFlagSchema = z.preprocess(
     issue_number: z.number().optional(),
     author: z.string().optional(),
 })
+)
 
 /** pass_team_flag — relaxed */
 export const PassTeamFlagSchemaMcp = z.preprocess(
@@ -1144,7 +1145,7 @@ export const PassTeamFlagSchemaMcp = z.preprocess(
             for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
                 if (key in obj && !('message' in obj)) {
                     obj['message'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -1162,6 +1163,7 @@ export const PassTeamFlagSchemaMcp = z.preprocess(
     issue_number: relaxedNumber().optional(),
     author: z.string().optional(),
 })
+)
 
 /** resolve_team_flag — strict */
 export const ResolveTeamFlagSchema = z.preprocess(
@@ -1169,9 +1171,10 @@ export const ResolveTeamFlagSchema = z.preprocess(
         if (typeof val === 'object' && val !== null) {
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
-            if ('id' in obj && !('flag_id' in obj)) {
-                obj['flag_id'] = obj['id'];
-                delete obj['id'];
+            if (('id' in obj || 'entry_id' in obj) && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'] ?? obj['entry_id'];
+                Reflect.deleteProperty(obj, 'id');
+                Reflect.deleteProperty(obj, 'entry_id');
                 modified = true;
             }
             return modified ? obj : val;
@@ -1182,6 +1185,7 @@ export const ResolveTeamFlagSchema = z.preprocess(
     flag_id: z.number().describe('Entry ID of the flag to resolve'),
     resolution: z.string().optional().describe('Optional resolution comment'),
 })
+)
 
 /** resolve_team_flag — relaxed */
 export const ResolveTeamFlagSchemaMcp = z.preprocess(
@@ -1189,9 +1193,10 @@ export const ResolveTeamFlagSchemaMcp = z.preprocess(
         if (typeof val === 'object' && val !== null) {
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
-            if ('id' in obj && !('flag_id' in obj)) {
-                obj['flag_id'] = obj['id'];
-                delete obj['id'];
+            if (('id' in obj || 'entry_id' in obj) && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'] ?? obj['entry_id'];
+                Reflect.deleteProperty(obj, 'id');
+                Reflect.deleteProperty(obj, 'entry_id');
                 modified = true;
             }
             return modified ? obj : val;
@@ -1202,6 +1207,7 @@ export const ResolveTeamFlagSchemaMcp = z.preprocess(
     flag_id: relaxedNumber().optional(),
     resolution: z.string().optional(),
 })
+)
 
 // ============================================================================
 // Flag Output Schemas
@@ -1262,15 +1268,16 @@ export const UpdateTeamFlagSchema = z.preprocess(
         if (typeof val === 'object' && val !== null) {
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
-            if ('id' in obj && !('flag_id' in obj)) {
-                obj['flag_id'] = obj['id'];
-                delete obj['id'];
+            if (('id' in obj || 'entry_id' in obj) && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'] ?? obj['entry_id'];
+                Reflect.deleteProperty(obj, 'id');
+                Reflect.deleteProperty(obj, 'entry_id');
                 modified = true;
             }
             for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
                 if (key in obj && !('message' in obj)) {
                     obj['message'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -1287,6 +1294,7 @@ export const UpdateTeamFlagSchema = z.preprocess(
     link: z.string().nullable().optional().describe('Updated link (null to clear)'),
     reopen: z.boolean().optional().describe('If true, reopen a resolved flag'),
 })
+)
 
 /** update_team_flag — relaxed for MCP SDK */
 export const UpdateTeamFlagSchemaMcp = z.preprocess(
@@ -1294,15 +1302,16 @@ export const UpdateTeamFlagSchemaMcp = z.preprocess(
         if (typeof val === 'object' && val !== null) {
             const obj = { ...(val as Record<string, unknown>) };
             let modified = false;
-            if ('id' in obj && !('flag_id' in obj)) {
-                obj['flag_id'] = obj['id'];
-                delete obj['id'];
+            if (('id' in obj || 'entry_id' in obj) && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'] ?? obj['entry_id'];
+                Reflect.deleteProperty(obj, 'id');
+                Reflect.deleteProperty(obj, 'entry_id');
                 modified = true;
             }
             for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
                 if (key in obj && !('message' in obj)) {
                     obj['message'] = obj[key];
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                     modified = true;
                     break;
                 }
@@ -1319,6 +1328,7 @@ export const UpdateTeamFlagSchemaMcp = z.preprocess(
     link: z.string().nullable().optional(),
     reopen: z.boolean().optional(),
 })
+)
 
 /** flag_analytics — strict */
 export const FlagAnalyticsSchema = z.object({
@@ -1421,3 +1431,4 @@ export const FlagAnalyticsOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+
