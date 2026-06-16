@@ -1105,7 +1105,24 @@ export const TeamCollaborationMatrixOutputSchema = z
 export const DEFAULT_FLAG_VOCABULARY = ['blocker', 'needs_review', 'help_requested', 'fyi'] as const
 
 /** pass_team_flag — strict */
-export const PassTeamFlagSchema = z.object({
+export const PassTeamFlagSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
+                if (key in obj && !('message' in obj)) {
+                    obj['message'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     flag_type: z
         .string()
         .min(1)
@@ -1119,7 +1136,24 @@ export const PassTeamFlagSchema = z.object({
 })
 
 /** pass_team_flag — relaxed */
-export const PassTeamFlagSchemaMcp = z.object({
+export const PassTeamFlagSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
+                if (key in obj && !('message' in obj)) {
+                    obj['message'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     flag_type: z.string().optional(),
     message: z.string().optional(),
     target_user: z.string().optional(),
@@ -1130,13 +1164,41 @@ export const PassTeamFlagSchemaMcp = z.object({
 })
 
 /** resolve_team_flag — strict */
-export const ResolveTeamFlagSchema = z.object({
+export const ResolveTeamFlagSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('id' in obj && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     flag_id: z.number().describe('Entry ID of the flag to resolve'),
     resolution: z.string().optional().describe('Optional resolution comment'),
 })
 
 /** resolve_team_flag — relaxed */
-export const ResolveTeamFlagSchemaMcp = z.object({
+export const ResolveTeamFlagSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('id' in obj && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     flag_id: relaxedNumber().optional(),
     resolution: z.string().optional(),
 })
@@ -1195,7 +1257,29 @@ export const ListTeamFlagsSchemaMcp = z.object({
 })
 
 /** update_team_flag — strict */
-export const UpdateTeamFlagSchema = z.object({
+export const UpdateTeamFlagSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('id' in obj && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
+            }
+            for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
+                if (key in obj && !('message' in obj)) {
+                    obj['message'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     flag_id: z.number().describe('Entry ID of the flag to update'),
     flag_type: z.string().optional().describe('New flag type'),
     target_user: z.string().nullable().optional().describe('New target user (null to clear)'),
@@ -1205,7 +1289,29 @@ export const UpdateTeamFlagSchema = z.object({
 })
 
 /** update_team_flag — relaxed for MCP SDK */
-export const UpdateTeamFlagSchemaMcp = z.object({
+export const UpdateTeamFlagSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('id' in obj && !('flag_id' in obj)) {
+                obj['flag_id'] = obj['id'];
+                delete obj['id'];
+                modified = true;
+            }
+            for (const key of ['keep', 'path', 'q', 'mode', 'text', 'description', 'content']) {
+                if (key in obj && !('message' in obj)) {
+                    obj['message'] = obj[key];
+                    delete obj[key];
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     flag_id: relaxedNumber().optional(),
     flag_type: z.string().optional(),
     target_user: z.string().nullable().optional(),
