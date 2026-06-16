@@ -50,7 +50,7 @@ Test search, semantic search, date range, analytics, and vector index operations
 | Special chars   | `return await mj.search.searchEntries({ project_number: 5, query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
 | Fuzzy fallback  | `return await mj.search.searchEntries({ project_number: 5, query: "architeqture", mode: "fts", fuzzy_match: true });` | ≥ 1 result (S1/S11)             |
 | Fuzzy off       | `return await mj.search.searchEntries({ project_number: 5, query: "architeqture", mode: "fts", fuzzy_match: false });`| 0 results                       |
-| Hybrid auto     | `return await mj.search.searchEntries({ project_number: 5, query: "how did we fix performance" });`              | Heuristic RRF triggering S7     |
+| Hybrid auto     | `return await mj.search.searchEntries({ project_number: 5, query: "performance architecture fix" });`              | Heuristic RRF triggering S7     |
 | Forced semantic | `return await mj.search.searchEntries({ project_number: 5, query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
 
 ### 21.2 Search Filters
