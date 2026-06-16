@@ -725,6 +725,23 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // test_simple & test_error_handling hallucination: passing text/description instead of message
+    if ((methodName === 'test_simple' || methodName === 'testSimple' || methodName === 'test_error_handling' || methodName === 'testErrorHandling') && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['text'] !== undefined && obj['message'] === undefined) {
+            obj['message'] = obj['text'];
+            delete obj['text'];
+        }
+        if (obj['description'] !== undefined && obj['message'] === undefined) {
+            obj['message'] = obj['description'];
+            delete obj['description'];
+        }
+        if (obj['type'] !== undefined && obj['error_type'] === undefined && (methodName === 'test_error_handling' || methodName === 'testErrorHandling')) {
+            obj['error_type'] = obj['type'];
+            delete obj['type'];
+        }
+    }
+
     // merge_tags hallucination: passing `source_tags` or `from`/`to` or comma-separated tags
     if (methodName === 'merge_tags' || methodName === 'mergeTags' || methodName === 'team_merge_tags' || methodName === 'teamMergeTags') {
         if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
