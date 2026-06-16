@@ -275,13 +275,13 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     const listDeletedMethods = ['list_deleted_entries', 'listDeletedEntries', 'team_list_deleted_entries', 'teamListDeletedEntries'];
     if (listDeletedMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
-        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined) {
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined) {
             return { error: {
                 success: false,
-                error: `${methodName} does not support search queries. It returns all deleted entries.`,
+                error: `${methodName} does not support search queries, path, or mode. It returns all deleted entries.`,
                 code: 'VALIDATION_ERROR',
                 category: 'validation',
-                suggestion: 'Remove the search query parameter.',
+                suggestion: 'Remove these parameters.',
                 recoverable: true
             }};
         }
@@ -620,6 +620,18 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                 obj['entry_id'] = obj['keep'];
                 delete obj['keep'];
             }
+            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['mode'] !== undefined || obj['search'] !== undefined) {
+                if (methodName !== 'update_entry' && methodName !== 'updateEntry' && methodName !== 'team_update_entry' && methodName !== 'teamUpdateEntry') {
+                    return { error: {
+                        success: false,
+                        error: `${methodName} does not support q, query, search, or mode parameters. It operates on a single entry by entry_id.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        suggestion: 'Remove these parameters. Provide only the entry_id.',
+                        recoverable: true
+                    }};
+                }
+            }
             if (typeof idVal === 'string' && isNaN(parseInt(idVal, 10))) {
                 return { error: {
                     success: false,
@@ -779,6 +791,16 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                 obj['content'] = obj['description'];
                 delete obj['description'];
             }
+            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined || obj['search'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `${methodName} does not support q, query, search, path, or mode parameters.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove these parameters. Use entry_id and content to update the entry.',
+                    recoverable: true
+                }};
+            }
         }
     }
     
@@ -806,13 +828,13 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     const listTagsMethods = ['list_tags', 'listTags', 'team_list_tags', 'teamListTags'];
     if (listTagsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
-        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined || obj['keep'] !== undefined) {
             return { error: {
                 success: false,
-                error: `${methodName} does not support search queries. It returns all tags.`,
+                error: `${methodName} does not support search queries, path, mode, or keep. It returns all tags.`,
                 code: 'VALIDATION_ERROR',
                 category: 'validation',
-                suggestion: 'Remove the search query parameter.',
+                suggestion: 'Remove these parameters.',
                 recoverable: true
             }};
         }
@@ -833,6 +855,16 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         if (obj['description'] !== undefined && obj['content'] === undefined) {
             obj['content'] = obj['description'];
             delete obj['description'];
+        }
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined || obj['keep'] !== undefined || obj['search'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support q, query, search, path, mode, or keep parameters. It creates a new journal entry.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove these parameters. Ensure you are providing the "content" of the entry.',
+                recoverable: true
+            }};
         }
     }
 
