@@ -29,6 +29,7 @@
 - `scripts/README.md` containing an agent-optimized script inventory and execution guidelines (`2a770648`).
 
 ### Changed
+- Updated `mj-mcp-optimize` skill documentation with advanced learnings for Code Mode bulk operations and handling encrypted databases. (`4fc0bf8`)
 - Updated adversarial skills (performance, planner, security, skill-audit, workflow-audit) with explicit execution rules enforcing continuous prompt improvement, graceful handling of GitHub Copilot quota failures, and strict prohibition of memory-journal-mcp entries (`e216823f`).
 - Updated `mj-mcp-heal` developer skill document to focus on anti-hallucination guardrails and native optimization (`4694d2cb`).
 - Renamed `mj-mcp-optimize` → `mj-mcp-heal` (codebase healing) and `journal-optimizer` → `mj-mcp-optimize` (data optimization) for naming consistency (`a54e15b0`).
@@ -52,7 +53,8 @@
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
-- Fixed explicit success:false check in Code Mode RBAC tests and boolean lint (`9c0c7d0`).
+- Fixed \`setTimeout\` and \`sleep\` functions in the Code Mode sandbox to correctly bind to global execution context. (\`96b5b47\`)
+- Fixed explicit success:false check in Code Mode RBAC tests and boolean lint (\`9c0c7d0\`).
 - Fixed strict TypeScript linting errors (type vs interface, boolean evaluation) in Code Mode proxy handler and updated coordinator workflows to strictly enforce linting quality gates. (`430849e`)
 - Fixed Code Mode leaking raw MCP exceptions into execution contexts by catching unhandled rejections at the proxy boundary and returning structured error objects. (`86712fd`)
 - Fixed `team_delete_entry` call in Code Mode analytics test suite which was failing due to an unsupported `permanent` flag. (`dc7efdd`)
