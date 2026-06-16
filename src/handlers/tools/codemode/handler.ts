@@ -228,6 +228,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     schema?: ZodLike;
                                     left?: ZodLike;
                                     right?: ZodLike;
+                                    out?: ZodLike;
                                 };
                                 innerType?: () => ZodLike;
                             }
@@ -248,7 +249,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     if (s._def.typeName === 'ZodIntersection') {
                                         return checkSchemaAcceptsKey(s._def.left, key) || checkSchemaAcceptsKey(s._def.right, key);
                                     }
-                                    if (s._def.typeName === 'ZodPipeline' || s._def.out) {
+                                    if (s._def.typeName === 'ZodPipeline' || (s._def.out !== undefined && s._def.out !== null)) {
                                         return checkSchemaAcceptsKey(s._def.out, key);
                                     }
                                     if (s._def.schema) {
