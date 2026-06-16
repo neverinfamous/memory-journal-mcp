@@ -44,6 +44,7 @@
 - Relaxed the Code Mode `context` schema to allow non-object values without validation failures (`74cc1d08`).
 - Promoted parameter normalization and coercion to the top-level SDK proxy to prevent validation failures from hallucinated keys (`2db727f3`).
 - Converted `scripts/check-orphans.ts` to a portable, zero-configuration `scripts/check-orphans.mjs` Node script.
+- Streamlined all testing coordinator workflows (Code Mode, Standard, Usability) to enforce local pipeline verification and omit live server restarts. (`64708af5`)
 ### Removed
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
