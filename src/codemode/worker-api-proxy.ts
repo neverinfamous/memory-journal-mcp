@@ -669,13 +669,35 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     }
 
     // batch_create_entries hallucination: passing array directly
-    if ((methodName === 'batch_create_entries' || methodName === 'batchCreateEntries' || methodName === 'team_batch_create_entries' || methodName === 'teamBatchCreateEntries') && args.length === 1 && Array.isArray(args[0])) {
-        args[0] = { entries: args[0] };
+    if ((methodName === 'batch_create_entries' || methodName === 'batchCreateEntries' || methodName === 'team_batch_create_entries' || methodName === 'teamBatchCreateEntries') && args.length === 1) {
+        if (Array.isArray(args[0])) {
+            args[0] = { entries: args[0] };
+        } else if (typeof args[0] === 'object' && args[0] !== null && !('entries' in args[0])) {
+            return { error: {
+                success: false,
+                error: `${methodName} requires an 'entries' array.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: `Provide { entries: [...] } as the argument`,
+                recoverable: true
+            }};
+        }
     }
 
     // batch_update_entries hallucination: passing array directly
-    if ((methodName === 'batch_update_entries' || methodName === 'batchUpdateEntries' || methodName === 'team_batch_update_entries' || methodName === 'teamBatchUpdateEntries') && args.length === 1 && Array.isArray(args[0])) {
-        args[0] = { updates: args[0] };
+    if ((methodName === 'batch_update_entries' || methodName === 'batchUpdateEntries' || methodName === 'team_batch_update_entries' || methodName === 'teamBatchUpdateEntries') && args.length === 1) {
+        if (Array.isArray(args[0])) {
+            args[0] = { updates: args[0] };
+        } else if (typeof args[0] === 'object' && args[0] !== null && !('updates' in args[0])) {
+            return { error: {
+                success: false,
+                error: `${methodName} requires an 'updates' array.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: `Provide { updates: [...] } as the argument`,
+                recoverable: true
+            }};
+        }
     }
 
     // batch_delete_entries hallucination: passing comma-separated string or multiple args or direct array
@@ -698,6 +720,15 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             args[0] = { entry_ids: args[0] };
         } else if (args.length > 1 && args.every(a => typeof a === 'number')) {
             args = [{ entry_ids: args }];
+        } else if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null && !Array.isArray(args[0]) && !('entry_ids' in args[0])) {
+            return { error: {
+                success: false,
+                error: `${methodName} requires an 'entry_ids' array.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: `Provide { entry_ids: [...] } as the argument`,
+                recoverable: true
+            }};
         }
     }
 
