@@ -143,7 +143,24 @@ export const TeamGetRecentSchemaMcp = z.object({
 })
 
 /** team_search — strict */
-export const TeamSearchSchema = z.object({
+export const TeamSearchSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode']) {
+                if (key in obj && !('query' in obj)) {
+                    obj['query'] = obj[key];
+                    Reflect.deleteProperty(obj, key);
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     query: z.string().optional(),
     cursor: z.string().optional().describe('Cursor for pagination'),
     tags: z.array(z.string()).optional(),
@@ -157,10 +174,27 @@ export const TeamSearchSchema = z.object({
     include_archived: z.boolean().optional().default(false),
     fuzzy_match: z.boolean().optional().default(false),
     auto_correct: z.boolean().optional().default(false),
-})
+}))
 
 /** team_search — relaxed */
-export const TeamSearchSchemaMcp = z.object({
+export const TeamSearchSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode']) {
+                if (key in obj && !('query' in obj)) {
+                    obj['query'] = obj[key];
+                    Reflect.deleteProperty(obj, key);
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     query: z.string().optional(),
     cursor: z.string().optional().describe('Cursor for pagination'),
     tags: z.array(z.string()).optional(),
@@ -174,7 +208,7 @@ export const TeamSearchSchemaMcp = z.object({
     include_archived: z.boolean().optional().default(false),
     fuzzy_match: z.boolean().optional().default(false),
     auto_correct: z.boolean().optional().default(false),
-})
+}))
 
 /** team_list_deleted_entries — strict */
 export const TeamListDeletedEntriesSchema = z.object({
@@ -209,7 +243,26 @@ export const TeamGetEntryByIdSchemaMcp = z.object({
 // ============================================================================
 
 /** team_search_by_date_range — strict */
-export const TeamSearchByDateRangeSchema = z.object({
+export const TeamSearchByDateRangeSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('start' in obj && !('start_date' in obj)) {
+                obj['start_date'] = obj['start'];
+                Reflect.deleteProperty(obj, 'start');
+                modified = true;
+            }
+            if ('end' in obj && !('end_date' in obj)) {
+                obj['end_date'] = obj['end'];
+                Reflect.deleteProperty(obj, 'end');
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     cursor: z.string().optional().describe('Cursor for pagination'),
@@ -223,10 +276,29 @@ export const TeamSearchByDateRangeSchema = z.object({
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
     include_archived: z.boolean().optional().default(false),
-})
+}))
 
 /** team_search_by_date_range — relaxed */
-export const TeamSearchByDateRangeSchemaMcp = z.object({
+export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            if ('start' in obj && !('start_date' in obj)) {
+                obj['start_date'] = obj['start'];
+                Reflect.deleteProperty(obj, 'start');
+                modified = true;
+            }
+            if ('end' in obj && !('end_date' in obj)) {
+                obj['end_date'] = obj['end'];
+                Reflect.deleteProperty(obj, 'end');
+                modified = true;
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
@@ -240,7 +312,7 @@ export const TeamSearchByDateRangeSchemaMcp = z.object({
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
     include_archived: z.boolean().optional().default(false),
-})
+}))
 
 // ============================================================================
 // Admin Tool Schemas
@@ -868,7 +940,24 @@ export const TeamBackupsListOutputSchema = z
 // ============================================================================
 
 /** team_semantic_search — strict */
-export const TeamSemanticSearchSchema = z.object({
+export const TeamSemanticSearchSchema = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['q', 'text', 'message', 'description']) {
+                if (key in obj && !('query' in obj)) {
+                    obj['query'] = obj[key];
+                    Reflect.deleteProperty(obj, key);
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     query: z.string().optional(),
     entry_id: z.number().optional().describe('Find entries related to this entry ID'),
     limit: z.number().max(500).optional().default(10),
@@ -887,10 +976,27 @@ export const TeamSemanticSearchSchema = z.object({
     pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: z.number().optional().describe('Filter results by GitHub Actions workflow run ID'),
     include_archived: z.boolean().optional().default(false),
-})
+}))
 
 /** team_semantic_search — relaxed */
-export const TeamSemanticSearchSchemaMcp = z.object({
+export const TeamSemanticSearchSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
+            for (const key of ['q', 'text', 'message', 'description']) {
+                if (key in obj && !('query' in obj)) {
+                    obj['query'] = obj[key];
+                    Reflect.deleteProperty(obj, key);
+                    modified = true;
+                    break;
+                }
+            }
+            return modified ? obj : val;
+        }
+        return val;
+    },
+    z.object({
     query: z.string().optional(),
     entry_id: relaxedNumber().optional().describe('Find entries related to this entry ID'),
     limit: relaxedNumber().optional().default(10),
@@ -909,7 +1015,7 @@ export const TeamSemanticSearchSchemaMcp = z.object({
     pr_number: relaxedNumber().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: relaxedNumber().optional().describe('Filter results by GitHub Actions workflow run ID'),
     include_archived: z.boolean().optional().default(false),
-})
+}))
 
 /** team_add_to_vector_index — strict */
 export const TeamAddToVectorIndexSchema = z.object({
