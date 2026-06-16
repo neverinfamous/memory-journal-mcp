@@ -152,6 +152,16 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             }
         }
 
+        // Context-aware protection for 'path'
+        if (useAlias && snakeKey === 'path') {
+            if (methodName?.toLowerCase().includes('export')) {
+                useAlias = false
+                snakeKey = 'output_dir'
+            } else if (!methodName?.toLowerCase().includes('import')) {
+                useAlias = false
+            }
+        }
+
         // Context-aware protection for 'text', 'body', 'note', 'title' (only for entry/comment tools)
         if (useAlias && (snakeKey === 'text' || snakeKey === 'body' || snakeKey === 'note' || snakeKey === 'title')) {
             if (methodName && !(
@@ -160,7 +170,8 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
                 methodName.toLowerCase().includes('entry') ||
                 methodName.toLowerCase().includes('github') ||
                 methodName.toLowerCase().includes('issue') ||
-                methodName.toLowerCase().includes('pr')
+                methodName.toLowerCase().includes('pr') ||
+                methodName.toLowerCase().includes('milestone')
             )) {
                 useAlias = false
             }
@@ -171,16 +182,32 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         }
 
         // Context-aware 'content' hallucination
-        if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'description' || snakeKey === 'content') {
+        if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'description' || snakeKey === 'content' || snakeKey === 'comment') {
             const isGithubTool = Boolean(methodName && (
                 methodName.toLowerCase().includes('github') || 
                 methodName.toLowerCase().includes('issue') || 
-                methodName.toLowerCase().includes('pr')
+                methodName.toLowerCase().includes('pr') ||
+                methodName.toLowerCase().includes('milestone')
             ));
             
             if (isGithubTool) {
-                if (!('body' in obj) && !('body' in result)) {
-                    snakeKey = 'body'
+                if (snakeKey === 'name') {
+                    if (!('title' in obj) && !('title' in result)) {
+                        snakeKey = 'title'
+                    }
+                } else if (snakeKey === 'description' && methodName?.toLowerCase().includes('milestone')) {
+                    // milestones use description natively
+                    snakeKey = 'description'
+                } else if (methodName?.toLowerCase().includes('close') && (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')) {
+                    // close issue uses comment
+                    if (!('comment' in obj) && !('comment' in result)) {
+                        snakeKey = 'comment'
+                    }
+                } else {
+                    if (!('body' in obj) && !('body' in result) && snakeKey !== 'comment') {
+                        // PRs and issues use body for content
+                        snakeKey = 'body'
+                    }
                 }
             } else if (methodName && (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry')) && !methodName.toLowerCase().includes('link')) {
                 if (!('content' in obj) && !('content' in result)) {
