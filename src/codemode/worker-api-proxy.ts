@@ -272,6 +272,17 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     if (analyticsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
         
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined || obj['keep'] !== undefined || obj['mode'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries, content parameters, or modes. It returns analytical data.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove these parameters. Use search_entries or team_search if you want to find specific content.',
+                recoverable: true
+            }};
+        }
+
         if (methodName.includes('get_statistics') || methodName.includes('getStatistics')) {
             if (obj['time'] !== undefined || obj['timeframe'] !== undefined || obj['period'] !== undefined) {
                 return { error: {
@@ -286,26 +297,13 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
 
         if (methodName.includes('get_cross_project_insights') || methodName.includes('getCrossProjectInsights')) {
-            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['limit'] !== undefined) {
+            if (obj['limit'] !== undefined) {
                 return { error: {
                     success: false,
-                    error: `get_cross_project_insights does not accept search queries or limits. It analyzes all projects.`,
+                    error: `get_cross_project_insights does not accept a limit parameter. It analyzes all projects.`,
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
-                    suggestion: 'Remove the query and limit parameters.',
-                    recoverable: true
-                }};
-            }
-        }
-
-        if (methodName.includes('get_collaboration_matrix') || methodName.includes('getCollaborationMatrix')) {
-            if (obj['q'] !== undefined || obj['query'] !== undefined) {
-                return { error: {
-                    success: false,
-                    error: `get_collaboration_matrix does not accept search queries.`,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    suggestion: 'Remove the query parameter.',
+                    suggestion: 'Remove the limit parameter.',
                     recoverable: true
                 }};
             }
