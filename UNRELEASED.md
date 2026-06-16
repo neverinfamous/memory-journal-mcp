@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added team flag analytics tests to Code Mode test suite. (`9d6029e`)
+- Added team flag analytics tests to Code Mode test suite. (`798fdd3`)
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations.
 - Auto-prune lifecycle management flags (`--archive-older-than-days`, `--prune-dry-run`).
 - Database schema migration framework with composite and partial performance indexes (`f73da9f6`).
@@ -53,11 +53,11 @@
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
-- Fixed \`setTimeout\` and \`sleep\` functions in the Code Mode sandbox to correctly bind to global execution context. (\`96b5b47\`)
-- Fixed ESLint \`@typescript-eslint/no-unsafe-function-type\` error in Code Mode sandbox \`setTimeout\` callback definition. (\`aba56de\`)
-- Fixed explicit success:false check in Code Mode RBAC tests and boolean lint (\`9c0c7d0\`).
+- Fixed `setTimeout` and `sleep` functions in the Code Mode sandbox to correctly bind to global execution context. (`96b5b47`)
+- Fixed ESLint `@typescript-eslint/no-unsafe-function-type` error in Code Mode sandbox `setTimeout` callback definition. (`5b715f3`)
+- Fixed explicit success:false check in Code Mode RBAC tests and boolean lint (`d092818`).
 - Fixed strict TypeScript linting errors (type vs interface, boolean evaluation) in Code Mode proxy handler and updated coordinator workflows to strictly enforce linting quality gates. (`430849e`)
-- Fixed Code Mode leaking raw MCP exceptions into execution contexts by catching unhandled rejections at the proxy boundary and returning structured error objects. (`86712fd`)
+- Fixed Code Mode leaking raw MCP exceptions into execution contexts by catching unhandled rejections at the proxy boundary and returning structured error objects. (`35c18b6`)
 - Fixed `team_delete_entry` call in Code Mode analytics test suite which was failing due to an unsupported `permanent` flag. (`dc7efdd`)
 - Zod validation errors in test suite caused by strict enforcement of `project_number` (`38936398`).
 - Stale `create_entry_minimal` entry in `TOOL_GROUPS` causing test failures in Code Mode validation (`48c5728e`).
@@ -166,11 +166,11 @@ Overloaded string aliases (`keep`, `mode`, `text`) in parameter normalization by
 - A parameter preprocessing bug in the Team Identity layer where the strictly required `author` parameter was being dynamically deleted before validation by Zod during `team_resolve_author` execution.
 - A concurrency bug in the Playwright E2E test suite where parallel workers running the same test file would crash due to `SqliteError: UNIQUE constraint failed` by injecting the worker's unique port into the database filename.
 - Hardened Code Mode API proxies and Zod schemas against common agent parameter and array mutator hallucinations across 14 tool groups. (`122bcfff`, `a9728155`, `1770c232`, `9d90aa6e`, `bdbaa5a2`, `37bede5d`, `9c0ba337`, `89d87c07`, `9d398c9e`, `d7817e9b`, `9733a25a`, `c7751db4`, `40a64d00`, `4ffca805`)
-- Intercept and gracefully ignore `auto_context` parameter hallucination in Code Mode for `create_entry` APIs.
-- Fixed `list_deleted_entries` hallucination proxy rejecting valid queries by removing incorrectly passed `project_number`, and added array element proxying for `get_entry_history` to map `revisionNumber` and `contentSnapshot` within Code Mode. (`55a93432`)
+- Intercept and gracefully ignore `auto_context` parameter hallucination in Code Mode for `create_entry` APIs. (`5ea3525`)
+- Fixed `list_deleted_entries` hallucination proxy rejecting valid queries by removing incorrectly passed `project_number`, and added array element proxying for `get_entry_history` to map `revisionNumber` and `contentSnapshot` within Code Mode. (`6d9e77b`)
 - Fixed `[VALIDATION_ERROR]` in Code Mode by conditionally injecting `project_number` only if the tool's underlying Zod schema accepts it. (`3661039`)
 
 ### Security
-- Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1 (`4a2a2ae1`).
+- Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1 (`4a2a2ae1`)
 - Scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect.
 - Critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees.
