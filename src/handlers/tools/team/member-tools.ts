@@ -13,24 +13,53 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 // Tool Schemas
 // ============================================================================
 
-const TeamAddMemberSchema = z.object({
+const authorAliases = ['path', 'target', 'user', 'name', 'account', 'username', 'member'];
+const roleAliases = ['keep', 'mode', 'type', 'level', 'permission'];
+
+const preprocessMember = (val: unknown) => {
+    if (typeof val === 'object' && val !== null) {
+        const obj = { ...(val as Record<string, unknown>) };
+        let modified = false;
+        
+        for (const key of authorAliases) {
+            if (key in obj && !('author' in obj)) {
+                obj['author'] = obj[key];
+                delete obj[key];
+                modified = true;
+                break;
+            }
+        }
+        for (const key of roleAliases) {
+            if (key in obj && !('role' in obj)) {
+                obj['role'] = obj[key];
+                delete obj[key];
+                modified = true;
+                break;
+            }
+        }
+        return modified ? obj : val;
+    }
+    return val;
+};
+
+const TeamAddMemberSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to add'),
     role: z.enum(['admin', 'member', 'viewer']).describe('The role to assign'),
     display_name: z.string().optional().describe('Optional display name'),
-}).strict()
+}).strict())
 
-const TeamRemoveMemberSchema = z.object({
+const TeamRemoveMemberSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to remove'),
-}).strict()
+}).strict())
 
-const TeamUpdateMemberRoleSchema = z.object({
+const TeamUpdateMemberRoleSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to update'),
     role: z.enum(['admin', 'member', 'viewer']).describe('The new role to assign'),
-}).strict()
+}).strict())
 
-const TeamGetMemberSchema = z.object({
+const TeamGetMemberSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to fetch'),
-}).strict()
+}).strict())
 
 // ============================================================================
 // Tool Definitions

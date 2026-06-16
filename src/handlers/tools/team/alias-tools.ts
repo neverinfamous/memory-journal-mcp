@@ -13,10 +13,57 @@ import { getCallerIdentity } from './rbac.js'
 // Schemas
 // ============================================================================
 
-const AddAuthorAliasSchema = z.object({
+const aliasNames = ['text', 'message', 'description', 'name', 'from', 'source'];
+const canonicalNames = ['target', 'to', 'author', 'canonical', 'dest'];
+const searchNames = ['q', 'query', 'search'];
+
+const preprocessAlias = (val: unknown) => {
+    if (typeof val === 'object' && val !== null) {
+        const obj = { ...(val as Record<string, unknown>) };
+        let modified = false;
+        
+        for (const key of aliasNames) {
+            if (key in obj && !('alias' in obj)) {
+                obj['alias'] = obj[key];
+                delete obj[key];
+                modified = true;
+                break;
+            }
+        }
+        for (const key of canonicalNames) {
+            if (key in obj && !('canonical_author' in obj)) {
+                obj['canonical_author'] = obj[key];
+                delete obj[key];
+                modified = true;
+                break;
+            }
+        }
+        for (const key of searchNames) {
+            if (key in obj) {
+                if (!('canonical_author' in obj) && !('author' in obj) && !('alias' in obj)) {
+                    // map q to canonical_author, author, or alias based on which schema it is
+                    obj['canonical_author'] = obj[key];
+                    obj['author'] = obj[key];
+                    obj['alias'] = obj[key];
+                }
+                delete obj[key];
+                modified = true;
+                break;
+            }
+        }
+        // fix 'author' vs 'canonical_author' vs 'alias' confusion
+        if ('author' in obj && !('canonical_author' in obj) && !('alias' in obj)) {
+            obj['canonical_author'] = obj['author'];
+        }
+        return modified ? obj : val;
+    }
+    return val;
+};
+
+const AddAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
     alias: z.string().min(1).max(255).describe('The raw author name to map (e.g., "Chris" or "GitHub: neverinfamous")'),
     canonical_author: z.string().min(1).max(255).describe('The canonical author identity to map the alias to (e.g., "christopher")'),
-})
+}))
 
 const AddAuthorAliasOutputSchema = z.object({
     success: z.boolean(),
@@ -30,18 +77,18 @@ const AddAuthorAliasOutputSchema = z.object({
     error: z.string().optional(),
 }).extend(ErrorFieldsMixin.shape)
 
-const RemoveAuthorAliasSchema = z.object({
+const RemoveAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
     alias: z.string().min(1).max(255).describe('The alias mapping to remove'),
-})
+}))
 
 const RemoveAuthorAliasOutputSchema = z.object({
     success: z.boolean().optional(),
     error: z.string().optional()
 }).extend(ErrorFieldsMixin.shape)
 
-const ListAuthorAliasesSchema = z.object({
+const ListAuthorAliasesSchema = z.preprocess(preprocessAlias, z.object({
     canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
-})
+}))
 
 const ListAuthorAliasesOutputSchema = z.object({
     success: z.boolean().default(true),
@@ -55,9 +102,9 @@ const ListAuthorAliasesOutputSchema = z.object({
     error: z.string().optional()
 }).extend(ErrorFieldsMixin.shape)
 
-const ResolveAuthorSchema = z.object({
+const ResolveAuthorSchema = z.preprocess(preprocessAlias, z.object({
     author: z.string().min(1).describe('The raw author name to resolve'),
-})
+}))
 
 const ResolveAuthorOutputSchema = z.object({
     original_author: z.string().optional(),
@@ -66,9 +113,9 @@ const ResolveAuthorOutputSchema = z.object({
     error: z.string().optional()
 }).extend(ErrorFieldsMixin.shape)
 
-const ConsolidateAuthorsSchema = z.object({
+const ConsolidateAuthorsSchema = z.preprocess(preprocessAlias, z.object({
     canonical_author: z.string().min(1).max(255).describe('The canonical author name. All entries matching any of this author\'s aliases will be updated to use this canonical name.'),
-})
+}))
 
 const ConsolidateAuthorsOutputSchema = z.object({
     success: z.boolean().optional(),
