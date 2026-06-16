@@ -123,7 +123,7 @@ const cmFlagIds = (allCmFlags.flags || [])
 const uniqueIds = [...new Set(cmFlagIds)]
 let deleted = 0
 for (const id of uniqueIds) {
-  const r = await mj.team.teamDeleteEntry({ project_number: 5, entry_id: id, permanent: true })
+  const r = await mj.team.teamDeleteEntry({ project_number: 5, entry_id: id })
   if (r.success) deleted++
 }
 
