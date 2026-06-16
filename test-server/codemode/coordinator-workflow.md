@@ -14,16 +14,12 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 2. **Subagent Delegation**:
    - Use the `invoke_subagent` tool to spawn a `self` subagent for each test file.
    - Provide the exact path to the test file as the subagent's prompt, along with these execution requirements.
-3. **Validation and Server Restart Coordination**:
-   - If a subagent modifies the codebase to fix an issue, the subagent MUST validate all changes locally by running `pnpm run check; pnpm run build; pnpm run test; pnpm run test:e2e`. They must ensure these pass completely cleanly BEFORE requesting a server refresh.
-   - After passing local CI, the subagent is instructed to pause and message you: _"Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."_
-   - When you receive this message, DO NOT proceed. Surface the message to the user and wait for them to manually refresh the server.
-   - Once the user confirms the server is ready, use the `send_message` tool to pass the "ready" signal to the waiting subagent.
-4. **Finalization and Commit**:
-   - The subagent MUST explicitly verify the fixes work properly after the server is restarted (e.g. by re-executing `mj_execute_code`).
-   - Once confirmed, the subagent MUST update `UNRELEASED.md` with all changes.
-   - The subagent MUST commit all changes locally (`git commit -m "..."`).
-   - The subagent MUST then create a session summary journal entry using the `/mcp:memory-journal-mcp:session-summary` prompt.
+3. **Local Verification**:
+   - If a subagent modifies the codebase, they MUST run `pnpm run check`, `pnpm run build`, `pnpm run test`, and `pnpm run test:e2e` locally, and ensure they all pass completely cleanly.
+   - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
+   - The user will verify the live fixes in a completely new run/pass in a separate thread.
+4. **Commit**:
+   - Once all local tests pass, the subagent MUST commit their codebase changes locally (`git commit -m "..."`). If no modifications were needed, no commit is required.
    - Once the subagent completes, record their final token estimate and metric telemetry, mark the task as done, and move to the next test in the queue.
 5. **Code Mode Constraints (P401)**:
    - Ensure subagents explicitly check that Code Mode scripts do NOT leak raw MCP exceptions, returning `{ success: false }` for domain errors.
