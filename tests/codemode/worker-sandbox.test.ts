@@ -135,11 +135,8 @@ describe('WorkerSandbox', () => {
             },
         }
         const code = `
-            try {
-                await mj.core.failingMethod();
-            } catch(e) {
-                return e.message;
-            }
+            const res = await mj.core.failingMethod();
+            return res.error;
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
@@ -187,7 +184,7 @@ describe('WorkerSandbox', () => {
             enumerable: true,
         })
 
-        const code = 'try { await mj.testGroup.doBad(); } catch(e) { return e.message; }'
+        const code = 'const res = await mj.testGroup.doBad(); return res.error;'
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
         expect(String(result.result)).toContain('Unknown method: testGroup.doBad')
@@ -207,7 +204,7 @@ describe('WorkerSandbox', () => {
             },
             enumerable: true,
         })
-        const code = 'try { await mj.topFunc(); } catch(e) { return e.message; }'
+        const code = 'const res = await mj.topFunc(); return res.error;'
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
         expect(String(result.result)).toContain('Unknown method: _topLevel.topFunc')

@@ -15,6 +15,26 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         args[0] = { query: args[0] }
     }
 
+    // Generic Parameter Aliases (Phase 31.1 Hallucination Smoothing)
+    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['user'] !== undefined && obj['target_user'] === undefined) { obj['target_user'] = obj['user']; delete obj['user']; }
+        if (obj['severity'] !== undefined && obj['flag_type'] === undefined) { obj['flag_type'] = obj['severity']; delete obj['severity']; }
+        if (obj['msg'] !== undefined && obj['message'] === undefined) { obj['message'] = obj['msg']; delete obj['msg']; }
+        if (obj['sort'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['sort']; delete obj['sort']; }
+        if (obj['comment'] !== undefined && obj['resolution'] === undefined) { obj['resolution'] = obj['comment']; delete obj['comment']; }
+        if (obj['version'] !== undefined && obj['expected_version'] === undefined) { obj['expected_version'] = obj['version']; delete obj['version']; }
+        if ((methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'update_entry' || methodName === 'updateEntry') && obj['content'] === undefined) {
+            if (obj['text'] !== undefined) { obj['content'] = obj['text']; delete obj['text']; }
+            else if (obj['message'] !== undefined) { obj['content'] = obj['message']; delete obj['message']; }
+        }
+        if (obj['search'] !== undefined && obj['query'] === undefined) { obj['query'] = obj['search']; delete obj['search']; }
+        if ((methodName === 'config' || methodName === 'update_configuration' || methodName === 'updateConfiguration') && obj['mode'] !== undefined && obj['instruction_level'] === undefined) { obj['instruction_level'] = obj['mode']; delete obj['mode']; }
+        if ((methodName === 'import_external' || methodName === 'importExternal' || methodName === 'team_import_external' || methodName === 'teamImportExternal') && obj['source_dir'] === undefined) {
+            if (obj['filename'] !== undefined) { obj['source_dir'] = obj['filename']; delete obj['filename']; }
+        }
+    }
+
     // Search tools hallucinations (q -> query, start -> start_date, end -> end_date, limit string -> number)
     if (
         (methodName === 'search_entries' || methodName === 'searchEntries' || 
