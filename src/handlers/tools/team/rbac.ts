@@ -101,3 +101,4 @@ export function wrapWithRbac(context: ToolContext, tools: ToolDefinition[], defa
         return tool
     })
 }
+

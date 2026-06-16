@@ -361,3 +361,4 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
+

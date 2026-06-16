@@ -61,3 +61,4 @@ export function triggerTeamNotifications(context: ToolContext): void {
         void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
     }
 }
+

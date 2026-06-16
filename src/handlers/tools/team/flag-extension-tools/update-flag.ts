@@ -25,6 +25,9 @@ export function getUpdateFlagTool(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
+                    // DEBUG
+                    throw new Error("DEBUG_PARAMS: " + JSON.stringify(params));
+                    
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }

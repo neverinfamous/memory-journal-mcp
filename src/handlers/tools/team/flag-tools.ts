@@ -295,3 +295,4 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
+

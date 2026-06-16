@@ -17,7 +17,7 @@ const aliasNames = ['text', 'message', 'description', 'name', 'from', 'source'];
 const canonicalNames = ['target', 'to', 'author', 'canonical', 'dest'];
 const searchNames = ['q', 'query', 'search'];
 
-const preprocessAlias = (val: unknown) => {
+const preprocessAlias = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) };
         let modified = false;
@@ -25,7 +25,7 @@ const preprocessAlias = (val: unknown) => {
         for (const key of aliasNames) {
             if (key in obj && !('alias' in obj)) {
                 obj['alias'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
                 modified = true;
                 break;
             }
@@ -33,7 +33,7 @@ const preprocessAlias = (val: unknown) => {
         for (const key of canonicalNames) {
             if (key in obj && !('canonical_author' in obj)) {
                 obj['canonical_author'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
                 modified = true;
                 break;
             }
@@ -46,7 +46,7 @@ const preprocessAlias = (val: unknown) => {
                     obj['author'] = obj[key];
                     obj['alias'] = obj[key];
                 }
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
                 modified = true;
                 break;
             }
@@ -334,3 +334,4 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
+

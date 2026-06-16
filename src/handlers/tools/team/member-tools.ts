@@ -24,7 +24,7 @@ const preprocessMember = (val: unknown) => {
         for (const key of authorAliases) {
             if (key in obj && !('author' in obj)) {
                 obj['author'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
                 modified = true;
                 break;
             }
@@ -32,7 +32,7 @@ const preprocessMember = (val: unknown) => {
         for (const key of roleAliases) {
             if (key in obj && !('role' in obj)) {
                 obj['role'] = obj[key];
-                delete obj[key];
+                Reflect.deleteProperty(obj, key);
                 modified = true;
                 break;
             }
@@ -255,3 +255,4 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
+

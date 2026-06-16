@@ -784,6 +784,56 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // team member tools hallucination: path/target/user -> author, keep/mode -> role
+    const memberMethods = ['team_add_member', 'teamAddMember', 'team_update_member_role', 'teamUpdateMemberRole', 'team_remove_member', 'teamRemoveMember', 'team_get_member', 'teamGetMember'];
+    if (memberMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        for (const key of ['path', 'target', 'user', 'name', 'account', 'username', 'member']) {
+            if (obj[key] !== undefined && obj['author'] === undefined) {
+                obj['author'] = obj[key];
+                delete obj[key];
+            }
+        }
+        for (const key of ['keep', 'mode', 'type', 'level', 'permission']) {
+            if (obj[key] !== undefined && obj['role'] === undefined) {
+                obj['role'] = obj[key];
+                delete obj[key];
+            }
+        }
+    }
+
+    // team alias tools hallucination: text/message/name -> alias, target/to/author -> canonical_author
+    const aliasMethods = ['team_add_author_alias', 'teamAddAuthorAlias', 'team_remove_author_alias', 'teamRemoveAuthorAlias', 'team_list_author_aliases', 'teamListAuthorAliases', 'team_resolve_author', 'teamResolveAuthor', 'team_consolidate_authors', 'teamConsolidateAuthors'];
+    if (aliasMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        
+        for (const key of ['q', 'query', 'search']) {
+            if (obj[key] !== undefined) {
+                if (obj['canonical_author'] === undefined && obj['author'] === undefined && obj['alias'] === undefined) {
+                    obj['canonical_author'] = obj[key];
+                    obj['author'] = obj[key];
+                    obj['alias'] = obj[key];
+                }
+                delete obj[key];
+            }
+        }
+        for (const key of ['text', 'message', 'description', 'name', 'from', 'source']) {
+            if (obj[key] !== undefined && obj['alias'] === undefined) {
+                obj['alias'] = obj[key];
+                delete obj[key];
+            }
+        }
+        for (const key of ['target', 'to', 'canonical', 'dest']) {
+            if (obj[key] !== undefined && obj['canonical_author'] === undefined) {
+                obj['canonical_author'] = obj[key];
+                delete obj[key];
+            }
+        }
+        if (obj['author'] !== undefined && obj['canonical_author'] === undefined && obj['alias'] === undefined) {
+            obj['canonical_author'] = obj['author'];
+        }
+    }
+
     // update_configuration hallucination: trying to change maxTokens or temperature
     if (methodName === 'update_configuration' || methodName === 'updateConfiguration') {
         if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
