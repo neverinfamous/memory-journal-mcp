@@ -248,6 +248,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     if (s._def.typeName === 'ZodIntersection') {
                                         return checkSchemaAcceptsKey(s._def.left, key) || checkSchemaAcceptsKey(s._def.right, key);
                                     }
+                                    if (s._def.typeName === 'ZodPipeline' || s._def.out) {
+                                        return checkSchemaAcceptsKey(s._def.out, key);
+                                    }
+                                    if (s._def.schema) {
+                                        return checkSchemaAcceptsKey(s._def.schema, key);
+                                    }
                                 }
                                 return false;
                             };
