@@ -59,14 +59,24 @@ export function createGroupApi(
     for (const tool of tools) {
         const methodName = toolNameToMethodName(tool.name, groupName)
 
-        api[methodName] = (...args: unknown[]): Promise<unknown> => {
-            const normalizedParams = normalizeParams(methodName, args) ?? {}
-            // SEC-1.1: Route through dispatcher (callTool gate) when available.
-            // Dispatcher enforces scope checks, maintenance mode, and audit.
-            if (dispatcher) {
-                return dispatcher(tool.name, normalizedParams as Record<string, unknown>)
+        api[methodName] = async (...args: unknown[]): Promise<unknown> => {
+            try {
+                const normalizedParams = normalizeParams(methodName, args) ?? {}
+                // SEC-1.1: Route through dispatcher (callTool gate) when available.
+                // Dispatcher enforces scope checks, maintenance mode, and audit.
+                if (dispatcher) {
+                    return await dispatcher(tool.name, normalizedParams as Record<string, unknown>)
+                }
+                return await Promise.resolve(tool.handler(normalizedParams))
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error),
+                    code: typeof (error as Record<string, unknown>)['code'] === 'string'
+                        ? (error as Record<string, unknown>)['code']
+                        : (error as Error)?.name
+                }
             }
-            return Promise.resolve(tool.handler(normalizedParams))
         }
 
         // Attach original snake_case tool name for backward compatibility with tests and agents
