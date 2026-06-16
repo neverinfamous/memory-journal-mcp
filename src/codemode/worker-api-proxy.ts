@@ -485,22 +485,28 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                 else if (obj['message'] !== undefined) obj['name'] = obj['message'];
                 else if (obj['text'] !== undefined) obj['name'] = obj['text'];
                 else if (obj['path'] !== undefined) obj['name'] = obj['path'];
+                else if (obj['q'] !== undefined) obj['name'] = obj['q'];
+                else if (obj['keep'] !== undefined) obj['name'] = obj['keep'];
+                else if (obj['mode'] !== undefined) obj['name'] = obj['mode'];
                 
                 delete obj['description'];
                 delete obj['message'];
                 delete obj['text'];
                 delete obj['path'];
+                delete obj['q'];
+                delete obj['keep'];
+                delete obj['mode'];
             }
         }
 
         if (methodName.includes('list_backups') || methodName.includes('listBackups') || methodName.includes('team_list_backups') || methodName.includes('teamListBackups')) {
-            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
+            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined || obj['keep'] !== undefined || obj['mode'] !== undefined) {
                 return { error: {
                     success: false,
-                    error: `list_backups does not support search queries. It lists all available backups.`,
+                    error: `list_backups does not support search queries or other parameters. It lists all available backups.`,
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
-                    suggestion: 'Remove the query parameter.',
+                    suggestion: 'Remove these parameters.',
                     recoverable: true
                 }};
             }
@@ -517,20 +523,46 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
 
         if (methodName.includes('restore_backup') || methodName.includes('restoreBackup')) {
-            if (obj['path'] !== undefined && obj['filename'] === undefined) {
-                obj['filename'] = obj['path'];
+            if (obj['filename'] === undefined) {
+                if (obj['path'] !== undefined) obj['filename'] = obj['path'];
+                else if (obj['file'] !== undefined) obj['filename'] = obj['file'];
+                else if (obj['text'] !== undefined) obj['filename'] = obj['text'];
+                else if (obj['message'] !== undefined) obj['filename'] = obj['message'];
+                else if (obj['description'] !== undefined) obj['filename'] = obj['description'];
+                else if (obj['q'] !== undefined) obj['filename'] = obj['q'];
+                else if (obj['keep'] !== undefined) obj['filename'] = obj['keep'];
+                else if (obj['mode'] !== undefined) obj['filename'] = obj['mode'];
+
                 delete obj['path'];
-            }
-            if (obj['file'] !== undefined && obj['filename'] === undefined) {
-                obj['filename'] = obj['file'];
                 delete obj['file'];
+                delete obj['text'];
+                delete obj['message'];
+                delete obj['description'];
+                delete obj['q'];
+                delete obj['keep'];
+                delete obj['mode'];
             }
         }
 
         if (methodName.includes('cleanup_backups') || methodName.includes('cleanupBackups')) {
-            if (obj['keep'] !== undefined && obj['keep_count'] === undefined) {
-                obj['keep_count'] = obj['keep'];
+            if (obj['keep_count'] === undefined) {
+                if (obj['keep'] !== undefined) obj['keep_count'] = obj['keep'];
+                else if (obj['limit'] !== undefined) obj['keep_count'] = obj['limit'];
+                else if (obj['q'] !== undefined) obj['keep_count'] = obj['q'];
+                else if (obj['mode'] !== undefined) obj['keep_count'] = obj['mode'];
+                else if (obj['text'] !== undefined) obj['keep_count'] = obj['text'];
+                else if (obj['message'] !== undefined) obj['keep_count'] = obj['message'];
+                else if (obj['description'] !== undefined) obj['keep_count'] = obj['description'];
+                else if (obj['path'] !== undefined) obj['keep_count'] = obj['path'];
+
                 delete obj['keep'];
+                delete obj['limit'];
+                delete obj['q'];
+                delete obj['mode'];
+                delete obj['text'];
+                delete obj['message'];
+                delete obj['description'];
+                delete obj['path'];
             }
         }
     }
