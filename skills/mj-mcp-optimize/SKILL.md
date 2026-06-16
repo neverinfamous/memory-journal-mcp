@@ -77,6 +77,13 @@ These rules are **mandatory** for all workflows:
 6. **Log all cleanup operations** as a journal entry with
    `entry_type: 'maintenance'` and tag `database-optimizer`
 
+## Code Mode & Bulk Modification Learnings
+
+When executing advanced data enrichment or purging workflows (e.g., optimizing `test.db` for production migration):
+- **Encrypted Database Access**: Direct filesystem operations via `better-sqlite3` on databases like `test.db` will fail with `SQLITE_NOTADB` because the files use `sqlcipher`. You **MUST** use the `mj_execute_code` Code Mode bridge to interact with the database within the server's running context.
+- **Synchronous Timeout Constraints**: The Code Mode isolated VM enforces strict synchronous execution limits (typically ~30s). When performing massive bulk operations (e.g., soft-deleting 200+ test artifacts), chunk the operations into smaller limits (e.g., 150 entries per pass) and catch exceptions to prevent `Worker exited with code 1` timeout crashes.
+- **External File Ingestion**: `mj_execute_code` runs in a sandbox and cannot execute `fs.readFileSync` to read external files (like `UNRELEASED.md` changelogs). To perform string matching or data ingestion, run an external script locally to parse the files, construct the specific payloads (e.g., mapped ID to SHA arrays), and then invoke `mj_execute_code` containing the precise, minimized dataset.
+
 ## Safe Deletion Protocol
 
 For all destructive workflows (2–5), execute this exact sequence once the candidate list is prepared:
