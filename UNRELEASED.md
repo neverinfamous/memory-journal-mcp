@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Implemented commit-enriched session summaries via `SessionCommitContextSchema` and `memory://commits/{project_number}` resource. (`eda39c0`)
+- Fixed state pollution in `memory://briefing` environment configuration E2E tests. (`eda39c0`)
 
 - Added team flag analytics tests to Code Mode test suite. (`798fdd3`)
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations.
