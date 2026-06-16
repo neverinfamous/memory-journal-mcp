@@ -10,6 +10,7 @@ import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
+import { parseSessionCommitContext } from '../../types/auto-context.js'
 
 /**
  * Get template resource definitions
@@ -163,6 +164,51 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                               hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
                           }
                         : {}),
+                }
+            },
+        },
+        {
+            uri: 'memory://commits/{project_number}',
+            name: 'Project Commits',
+            title: 'Project Commits from Summaries',
+            description: 'Aggregates all commit SHAs from session summary auto_context',
+            mimeType: 'application/json',
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/commits\/(\d+)/.exec(uri)
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (projectNumber === null) {
+                    return { error: 'Invalid project number' }
+                }
+
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+
+                const commits: string[] = []
+                const metadata: Record<string, unknown>[] = []
+
+                for (const entry of entries) {
+                    if (entry.tags.includes('session-summary')) {
+                        const ctx = parseSessionCommitContext(entry.autoContext)
+                        if (ctx && ctx.commits.length > 0) {
+                            commits.push(...ctx.commits)
+                            metadata.push({
+                                entryId: entry.id,
+                                timestamp: entry.timestamp,
+                                commits: ctx.commits,
+                                branch: ctx.branch,
+                                pr: ctx.pr,
+                                repo: ctx.repo,
+                            })
+                        }
+                    }
+                }
+
+                return {
+                    projectNumber,
+                    commits: Array.from(new Set(commits)),
+                    metadata,
+                    count: commits.length,
                 }
             },
         },

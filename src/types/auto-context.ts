@@ -21,6 +21,18 @@ export const FlagContextSchema = z.object({
 export type FlagContext = z.infer<typeof FlagContextSchema>
 
 /**
+ * Session Commit Context Schema
+ */
+export const SessionCommitContextSchema = z.object({
+    commits: z.array(z.string()),
+    branch: z.string().optional(),
+    pr: z.number().optional(),
+    repo: z.string().optional(),
+})
+
+export type SessionCommitContext = z.infer<typeof SessionCommitContextSchema>
+
+/**
  * Versioned Envelope Schema for explicit typing
  */
 export const VersionedEnvelopeSchema = z.object({
@@ -33,7 +45,11 @@ export type VersionedEnvelope = z.infer<typeof VersionedEnvelopeSchema>
 /**
  * Union schema for all valid AutoContext payloads
  */
-export const AutoContextSchema = z.union([FlagContextSchema, VersionedEnvelopeSchema])
+export const AutoContextSchema = z.union([
+    FlagContextSchema,
+    VersionedEnvelopeSchema,
+    SessionCommitContextSchema,
+])
 
 /**
  * Helper to safely parse and validate autoContext JSON.
@@ -78,5 +94,18 @@ export function parseFlagContext(autoContext: string | null | undefined): FlagCo
     if (parsed === null) return null
 
     const result = FlagContextSchema.safeParse(parsed)
+    return result.success ? result.data : null
+}
+
+/**
+ * Safe extractor specifically for Session Commit entries.
+ */
+export function parseSessionCommitContext(
+    autoContext: string | null | undefined
+): SessionCommitContext | null {
+    const parsed = parseAutoContext(autoContext)
+    if (parsed === null) return null
+
+    const result = SessionCommitContextSchema.safeParse(parsed)
     return result.success ? result.data : null
 }

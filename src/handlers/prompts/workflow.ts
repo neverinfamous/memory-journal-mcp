@@ -393,11 +393,15 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain tags)
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
+- \`auto_context\`: [OPTIONAL] JSON string of commit metadata if any commits were made (e.g., \`{"commits":["sha1"],"branch":"main","pr":123,"repo":"owner/repo"}\`)
 
 **Required Content Structure (use EXACTLY these section headers):**
 \`\`\`
 ## Accomplished
 - [List concrete items: changes made, decisions taken, files modified, PRs submitted]
+
+## Commits
+- [List commit SHAs and short descriptions of code changes — or "None"]
 
 ## Unfinished / Blocked
 - [List pending items, blockers, open questions — or "None" if everything is complete]
@@ -408,9 +412,10 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the three required sections
+- Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
+- If commits were made, populate \`auto_context\` with the commit metadata JSON
 - If in Code Mode, use \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`
 
 **Recent Entries (for context):**
@@ -460,12 +465,16 @@ ${markUntrustedContent(entrySummary)}`,
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain tags)
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
+- \`auto_context\`: [OPTIONAL] JSON string of commit metadata if any commits were made (e.g., \`{"commits":["sha1"],"branch":"main","pr":123,"repo":"owner/repo"}\`)
 - YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
 
 **Required Content Structure (use EXACTLY these section headers):**
 \`\`\`
 ## Accomplished
 - [List concrete items: changes made, decisions taken, files modified, PRs submitted]
+
+## Commits
+- [List commit SHAs and short descriptions of code changes — or "None"]
 
 ## Unfinished / Blocked
 - [List pending items, blockers, open questions — or "None" if everything is complete]
@@ -476,9 +485,10 @@ ${markUntrustedContent(entrySummary)}`,
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the three required sections
+- Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
+- If commits were made, populate \`auto_context\` with the commit metadata JSON
 - If in Code Mode, use \`await mj.team.teamCreateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`
 
 **Recent Team Entries (for context):**
