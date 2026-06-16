@@ -156,18 +156,36 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     if (ioMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
 
-        // Intercept query/text hallucinations on export_entries
+        // Keep alias maps to limit for all IO methods
+        if (obj['keep'] !== undefined && obj['limit'] === undefined) {
+            obj['limit'] = obj['keep'];
+            delete obj['keep'];
+        }
+
+        // Intercept query/text/mode hallucinations on all IO methods
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['text'] !== undefined || obj['search'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support text search or content parameters. It only exports/imports data.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'To search for specific text, use search_entries (or team_search). Otherwise, remove the search/content parameters.',
+                recoverable: true
+            }};
+        }
+        
+        if (obj['mode'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support the 'mode' parameter.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove the mode parameter.',
+                recoverable: true
+            }};
+        }
+
         if (methodName === 'export_entries' || methodName === 'exportEntries' || methodName === 'team_export_entries' || methodName === 'teamExportEntries') {
-            if (obj['q'] !== undefined || obj['query'] !== undefined || obj['text'] !== undefined || obj['search'] !== undefined) {
-                return { error: {
-                    success: false,
-                    error: `export_entries does not support text search. It exports all entries (optionally filtered by date or tags).`,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    suggestion: 'To search for specific text, use search_entries. Otherwise, remove the search query parameter.',
-                    recoverable: true
-                }};
-            }
             if (obj['path'] !== undefined || obj['output_dir'] !== undefined || obj['file'] !== undefined) {
                 return { error: {
                     success: false,
