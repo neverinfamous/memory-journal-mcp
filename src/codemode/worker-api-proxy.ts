@@ -83,10 +83,23 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             const parsed = parseInt(obj['limit'], 10);
             if (!isNaN(parsed)) obj['limit'] = parsed;
         }
+
+        if (methodName !== 'search_entries' && methodName !== 'searchEntries' && methodName !== 'team_search' && methodName !== 'teamSearch') {
+            if (obj['mode'] !== undefined) {
+                return { error: {
+                    success: false,
+                    error: `${methodName} does not support the 'mode' parameter.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Remove the mode parameter or use search_entries instead.',
+                    recoverable: true
+                }};
+            }
+        }
     }
     // Hallucination intercept for search exact_match
     if (
-        (methodName === 'search_entries' || methodName === 'searchEntries' || methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') &&
+        (methodName === 'search_entries' || methodName === 'searchEntries' || methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange' || methodName === 'cross_team_search' || methodName === 'crossTeamSearch') &&
         args.length === 1 &&
         typeof args[0] === 'object' &&
         args[0] !== null
@@ -95,10 +108,14 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         if ('exact_match' in obj) {
             const isFuzzy = obj['exact_match'] === false;
             obj['fuzzy_match'] = isFuzzy;
-            obj['auto_correct'] = isFuzzy;
+            if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') {
+                obj['auto_correct'] = isFuzzy;
+            }
             delete obj['exact_match']
         } else if (obj['fuzzy_match'] === true && !('auto_correct' in obj)) {
-            obj['auto_correct'] = true;
+            if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') {
+                obj['auto_correct'] = true;
+            }
         }
         
         if (typeof obj['start_date'] === 'string' && (obj['end_date'] === undefined || obj['end_date'] === null || obj['end_date'] === '')) {
@@ -218,7 +235,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
     // Vector index stats hallucination: passing `q` or `query`
     if ((methodName === 'team_get_vector_index_stats' || methodName === 'teamGetVectorIndexStats' || methodName === 'get_vector_index_stats' || methodName === 'getVectorIndexStats') && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
-        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined) {
             return { error: {
                 success: false,
                 error: `${methodName} does not support search queries. It returns overall index statistics.`,
@@ -227,6 +244,26 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                 suggestion: 'Remove the search query parameter.',
                 recoverable: true
             }};
+        }
+    }
+
+    // List deleted entries hallucinations
+    const listDeletedMethods = ['list_deleted_entries', 'listDeletedEntries', 'team_list_deleted_entries', 'teamListDeletedEntries'];
+    if (listDeletedMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries. It returns all deleted entries.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove the search query parameter.',
+                recoverable: true
+            }};
+        }
+        if (obj['keep'] !== undefined && obj['limit'] === undefined) {
+            obj['limit'] = obj['keep'];
+            delete obj['keep'];
         }
     }
 
