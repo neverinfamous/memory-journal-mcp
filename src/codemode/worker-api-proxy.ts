@@ -1025,6 +1025,93 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
 
+    // team flags hallucination: team_pass_flag, team_update_flag mode/type -> flag_type, description/text/content -> message
+    const passFlagMethods = ['team_pass_flag', 'teamPassFlag', 'pass_team_flag', 'passTeamFlag', 'pass_flag', 'passFlag'];
+    const updateFlagMethods = ['team_update_flag', 'teamUpdateFlag', 'update_flag', 'updateFlag', 'edit_flag', 'editFlag', 'escalate_flag', 'escalateFlag', 'reassign_flag', 'reassignFlag'];
+    if ((passFlagMethods.includes(methodName) || updateFlagMethods.includes(methodName)) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (updateFlagMethods.includes(methodName)) {
+            for (const key of ['id', 'path', 'keep']) {
+                if (obj[key] !== undefined && obj['flag_id'] === undefined) {
+                    obj['flag_id'] = obj[key];
+                    Reflect.deleteProperty(obj, key);
+                }
+            }
+        }
+        if (obj['mode'] !== undefined && obj['flag_type'] === undefined) {
+            obj['flag_type'] = obj['mode'];
+            Reflect.deleteProperty(obj, 'mode');
+        }
+        if (obj['type'] !== undefined && obj['flag_type'] === undefined) {
+            obj['flag_type'] = obj['type'];
+            Reflect.deleteProperty(obj, 'type');
+        }
+        for (const key of ['description', 'text', 'content', 'body', 'note']) {
+            if (obj[key] !== undefined && obj['message'] === undefined) {
+                obj['message'] = obj[key];
+                Reflect.deleteProperty(obj, key);
+            }
+        }
+    }
+
+    // team_resolve_flag hallucination: path/keep/id -> flag_id, message/text/description/content -> resolution
+    const resolveFlagMethods = ['team_resolve_flag', 'teamResolveFlag', 'resolve_team_flag', 'resolveTeamFlag', 'resolve_flag', 'resolveFlag'];
+    if (resolveFlagMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        for (const key of ['id', 'path', 'keep']) {
+            if (obj[key] !== undefined && obj['flag_id'] === undefined) {
+                obj['flag_id'] = obj[key];
+                Reflect.deleteProperty(obj, key);
+            }
+        }
+        for (const key of ['message', 'text', 'description', 'content', 'resolution_notes']) {
+            if (obj[key] !== undefined && obj['resolution'] === undefined) {
+                obj['resolution'] = obj[key];
+                Reflect.deleteProperty(obj, key);
+            }
+        }
+    }
+
+    // team_list_flags hallucination: q/query/path/search/text -> validation error, keep -> limit, mode -> status
+    const listFlagsMethods = ['team_list_flags', 'teamListFlags', 'list_flags', 'listFlags', 'flags'];
+    if (listFlagsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['path'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries or content filters. It lists flags by status.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove query, path, and text parameters. Use team_search if you need to search flag content.',
+                recoverable: true
+            }};
+        }
+        if (obj['keep'] !== undefined && obj['limit'] === undefined) {
+            obj['limit'] = obj['keep'];
+            Reflect.deleteProperty(obj, 'keep');
+        }
+        if (obj['mode'] !== undefined && obj['status'] === undefined) {
+            obj['status'] = obj['mode'];
+            Reflect.deleteProperty(obj, 'mode');
+        }
+    }
+
+    // team_get_flag_analytics hallucination: q/query/path/search/keep/mode/text -> validation error
+    const getFlagAnalyticsMethods = ['team_get_flag_analytics', 'teamGetFlagAnalytics', 'flag_analytics', 'flagAnalytics', 'flag_stats', 'flagStats'];
+    if (getFlagAnalyticsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['path'] !== undefined || obj['keep'] !== undefined || obj['mode'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} does not support search queries, keep, or mode parameters. It returns overall flag statistics.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: 'Remove these parameters.',
+                recoverable: true
+            }};
+        }
+    }
+
     // update_configuration hallucination: trying to change maxTokens or temperature
     if (methodName === 'update_configuration' || methodName === 'updateConfiguration') {
         if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
