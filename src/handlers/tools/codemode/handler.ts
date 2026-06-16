@@ -220,7 +220,25 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             const paramsObj = { ...(finalParams as Record<string, unknown>) }
                             
                             // Auto-inject project_number if not present but available from context
-                            if (paramsObj['project_number'] === undefined && projectId !== undefined) {
+                            // ONLY inject if the tool actually expects a project_number (inspect Zod schema)
+                            const checkSchemaAcceptsKey = (schema: any, key: string): boolean => {
+                                if (!schema) return false;
+                                if (schema.shape && typeof schema.shape === 'object' && key in schema.shape) return true;
+                                if (schema._def) {
+                                    if (schema._def.typeName === 'ZodObject' && schema.shape) {
+                                        return key in schema.shape;
+                                    }
+                                    if (schema._def.typeName === 'ZodEffects' || schema._def.typeName === 'ZodOptional' || schema._def.typeName === 'ZodNullable') {
+                                        return checkSchemaAcceptsKey(schema._def.schema || schema.innerType?.(), key);
+                                    }
+                                    if (schema._def.typeName === 'ZodIntersection') {
+                                        return checkSchemaAcceptsKey(schema._def.left, key) || checkSchemaAcceptsKey(schema._def.right, key);
+                                    }
+                                }
+                                return false;
+                            };
+                            const acceptsProjectNumber = checkSchemaAcceptsKey(tool.inputSchema, 'project_number');
+                            if (paramsObj['project_number'] === undefined && projectId !== undefined && acceptsProjectNumber) {
                                 paramsObj['project_number'] = projectId
                             }
 
