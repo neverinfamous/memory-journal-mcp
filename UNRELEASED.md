@@ -68,6 +68,7 @@
 - Restored `skills/package.json` containing the accurate manifest of currently active skills, and relocated `github-repo-setup` out of this repository into the `adamic` repository workflows. (`30bc26a5`)
 
 ### Fixed
+- Fixed vitest creating test databases in the project root by explicitly redirecting them to `.test-output/vitest/`. (`834b21a`)
 - Intercepted tool name hallucinations (e.g. Prompt/Tool confusion) before SDK validation to return actionable error guidance. (`9f704a08`)
 - Fixed missing skills in package manifest and README. (`d12b78cc`)
 - Fixed widespread test failures by injecting `expected_version` into `delete_entry` integration payloads and integrated adversarial Cloudflare SEO skill. (`0b1eb687`)
