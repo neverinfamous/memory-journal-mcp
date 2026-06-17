@@ -1,1 +1,5 @@
-- Added automatic discovery for global config files (`~/.gemini/config/memory-journal.config.json` and `~/.memory-journal/config.json`) when `MEMORY_JOURNAL_CONFIG` is not set. (`1815e707`)
+# Unreleased Changes
+
+This project uses a single-source-of-truth Git commit strategy. `UNRELEASED.md` is no longer used. 
+
+To view pending unreleased changes, please view the recent git history or run the Adamic `preview-changelog.mjs` script.
