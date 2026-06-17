@@ -1,15 +1,13 @@
 ---
-name: github-commander
+name: github-issue-commander
 description: |
-  Structured workflows for GitHub issues, PRs, milestones, and code audits with validation gates and HITL checkpoints. 
-  Use when assigned a GitHub issue, reviewing a PR, sprinting through a milestone, updating dependencies, or running code audits. 
-  Also use when asked to "triage an issue", "review a PR", or "update deps". 
+  Structured workflows for GitHub issues, milestones, and roadmaps with HITL checkpoints. 
+  Use when assigned a GitHub issue, sprinting through a milestone, or when asked to "triage an issue". 
   Do NOT trigger on bare verbs (e.g. "fix this"); require GitHub context. 
-  NOT for pipeline authoring (use github-actions instead).
-  Delegate all code quality, performance, and security audits to the dedicated `adversarial-*` skills instead.
+  NOT for PR reviews (use github-pr-commander).
 ---
 
-# GitHub Commander
+# GitHub Issue Commander
 
 Structured, configurable workflows that teach AI agents to triage GitHub issues,
 review PRs, and sprint through milestones. Every action is journaled for full
@@ -36,12 +34,8 @@ Load this skill when any of these apply:
 | Workflow                | File                            | Purpose                                     |
 | ----------------------- | ------------------------------- | ------------------------------------------- |
 | **Issue Triage**        | `workflows/issue-triage.md`     | Fix a single GitHub issue end-to-end        |
-| **PR Review**           | `workflows/pr-review.md`        | Review a PR with validation pipeline        |
 | **Milestone Sprint**    | `workflows/milestone-sprint.md` | Work through milestone issues sequentially  |
 | **Roadmap Kickoff**     | `workflows/roadmap-kickoff.md`  | Translate planning epics into Kanban issues |
-| **Update Dependencies** | `workflows/update-deps.md`      | Dependency update with audit trail          |
-| **Changelog Audit**     | `workflows/changelog-audit.md`  | Audit and backfill SHA provenance           |
-| **Changelog Commit**    | `workflows/changelog-commit.md` | Create SHA-enriched changelog entries       |
 
 ## Prerequisites
 
@@ -140,7 +134,4 @@ These entry types are used by Commander workflows for structured audit trails:
 | `gate_pass`              | all              | Validation gate passed                      |
 | `gate_fail`              | all              | Validation gate failed (with error details) |
 | `pr_submitted`           | issue-triage     | PR created and pushed                       |
-| `review_start`           | pr-review        | PR review initiated                         |
-| `review_complete`        | pr-review        | PR review completed                         |
 | `milestone_sprint_start` | milestone-sprint | Sprint started                              |
-| `deps_update`            | update-deps      | Dependency update completed                 |

@@ -38,24 +38,7 @@ The server computes importance scores (0.0–1.0) for every entry using
 a weighted formula. Understanding this formula is essential for making
 intelligent pruning decisions.
 
-### Formula
-
-| Component         | Weight | Max Score | How It's Earned                                                        |
-| ----------------- | ------ | --------- | ---------------------------------------------------------------------- |
-| **Significance**  | 0.30   | 0.30      | Entry has a `significance_type` (milestone, decision, release, etc.)   |
-| **Relationships** | 0.35   | 0.35      | Entry has ≥5 relationships (linear scale: 1 rel = 0.07)                |
-| **Causal**        | 0.20   | 0.20      | Entry has ≥3 causal relationships (`blocked_by`, `resolved`, `caused`) |
-| **Recency**       | 0.15   | 0.15      | Created within the last 90 days (linear decay to 0 at day 90)          |
-
-### Threshold Guide
-
-| Score       | Label      | Meaning                                                  |
-| ----------- | ---------- | -------------------------------------------------------- |
-| `0.00`      | Expendable | No significance, no relationships, older than 90 days    |
-| `0.01–0.14` | Low        | Minimal context — weak tags or a single old relationship |
-| `0.15–0.29` | Moderate   | Has some context but not structurally important          |
-| `0.30–0.49` | High       | Well-connected or has significance markers               |
-| `0.50+`     | Critical   | Major decisions, densely linked entries, milestones      |
+Read **[references/importance-scoring.md](references/importance-scoring.md)** for the full formula, component weights, and threshold guide.
 
 > **Key insight**: Entries scoring `0.00` have zero structural value to the
 > knowledge graph. They are safe to soft-delete in virtually all cases.
@@ -215,34 +198,12 @@ After completing any workflow, recommend these follow-up actions:
    consider linking remaining orphans to related entries
 
 ## Synergies
-
-| Tool/Workflow          | Relationship                                                       |
-| ---------------------- | ------------------------------------------------------------------ |
-| Auto-Prune (startup)   | Automated version of Workflow 2 with fixed thresholds              |
-| `get_statistics`       | Primary data source for importance scores and graph metrics        |
-| `backup_journal`       | Safety gate for all destructive operations                         |
-| `restore_backup`       | Revert mechanism for soft-deleted entries                          |
-| `rebuild_vector_index` | Post-cleanup maintenance to clean stale embeddings                 |
-| `link_entries`         | Alternative to deletion — connect orphans instead of removing them |
+Complements `get_statistics`, `backup_journal`, and `rebuild_vector_index`.
 
 ## Scheduled Agent Integration
 
 This skill supports autonomous execution via Antigravity's `/schedule` command.
 
-- **Config:** [scheduled-config.json](references/scheduled-config.json) — runtime-tunable thresholds
-- **Agent reference:** [scheduled-optimize-agent.md](references/scheduled-optimize-agent.md) — full execution guide
-
-### What's Automated (No HITL)
-| Phase | Action | Safety |
-|-------|--------|--------|
-| 1. Audit | Importance distribution, tag consistency scan, stale detection | ✅ Read-only |
-| 2. Enrichment | Auto-link orphans (similarity > 0.85, max 10/project/run) | ✅ Non-destructive |
-| 2. Enrichment | Auto-merge exact duplicate tags to kebab-case | ✅ Non-destructive |
-| 3. Detection | Duplicate pairs, delete candidates | ✅ Report only |
-| 4. Report | Create maintenance entry with health report | ✅ Single entry |
-
-### What Requires Human Review
-- All delete operations (soft or hard)
-- Fuzzy tag matches (Levenshtein ≤ 2 but not exact normalization match)
-- Orphan links with similarity ≤ 0.85
-- Any entry with `significance_type` set
+- **Config:** [references/scheduled-config.json](references/scheduled-config.json) — runtime-tunable thresholds
+- **Agent reference:** [references/scheduled-optimize-agent.md](references/scheduled-optimize-agent.md) — full execution guide
+- **Automation Boundaries:** [references/automation-boundaries.md](references/automation-boundaries.md) — what is automated vs HITL

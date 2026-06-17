@@ -14,11 +14,10 @@
         "adversarial-skill-audit/",
         "adversarial-skill-builder/",
         "adversarial-workflow-audit/",
-        "github-commander/",
-        "github-copilot-cli/",
+        "github-issue-commander/",
+        "github-pr-commander/",
         "mj-mcp-heal/",
-        "mj-mcp-optimize/",
-        "sqlite/"
+        "mj-mcp-optimize/"
     ],
     "keywords": [
         "agent",

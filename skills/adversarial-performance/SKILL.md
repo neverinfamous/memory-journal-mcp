@@ -5,6 +5,7 @@ description: |
   structured profiling (Agent A) with adversarial stress-testing critique
   (Agent B) through iterative passes. Optimize repo/backend performance, hot-paths, build size, and server throughput. Do NOT use for frontend page load metrics 
   or Lighthouse audits (use web-perf). NOT for frontend Core Web Vitals (use web-perf).
+  DO NOT use for security vulnerability scanning, codebase quality audits, or markdown workflow reviews.
 ---
 
 # Adversarial Performance

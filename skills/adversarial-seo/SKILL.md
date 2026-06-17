@@ -1,6 +1,7 @@
 ---
 name: adversarial-seo
-description: Adversarial SEO enforcement skill. A proactive guide for modifying the codebase, web UI, or generated content to enforce Technical SEO, Semantic Markup, and E-E-A-T standards autonomously.
+description: |
+  Adversarial SEO enforcement skill. A proactive guide for modifying the codebase to enforce Technical SEO, Semantic Markup, and E-E-A-T standards. DO NOT use for backend performance, codebase security, or general code quality.
 ---
 
 # Adversarial SEO Enforcement & Healing Guardrails

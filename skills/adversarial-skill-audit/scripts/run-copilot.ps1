@@ -39,14 +39,21 @@ foreach ($skill in $skills) {
         $prompt += $content
         $prompt += "`n`nOutput a Markdown table with columns: #, Category, Severity, Finding, Suggestion."
         
+        # Sanitize prompt to prevent injection and shell escaping issues
+        $prompt = $prompt -replace '`', "'"
+        
         # Trim prompt to avoid max command line length issues (approx 8191 chars on Windows)
         $maxLength = 7800
         if ($prompt.Length -gt $maxLength) {
             $prompt = $prompt.Substring(0, $maxLength) + "`n... [CONTENT TRUNCATED FOR LENGTH]"
         }
         
-        # Execute gh copilot in non-interactive mode with -p
-        gh copilot -s -p $prompt
+        # Execute gh copilot in non-interactive mode with -p and allow-tool
+        if ($env:CI) {
+            gh copilot -s -p $prompt --allow-tool "shell(find,cat,head,grep)"
+        } else {
+            gh copilot -p $prompt --allow-tool "shell(find,cat,head,grep)"
+        }
         Write-Host "`n"
     }
 }

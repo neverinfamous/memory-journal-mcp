@@ -2,12 +2,8 @@
 name: adversarial-security
 description: |
   Multi-pass adversarial security audit for entire repositories. Combines
-  structured threat modeling (Agent A) with adversarial attack surface
-  analysis (Agent B) through iterative passes. Merges the security-audit
-  workflow's 10-category checklist with the adversarial-planner's
-  structured critique methodology. Use when running security audits,
-  threat modeling, or when the user says "security audit", "adversarial
-  security", "threat model this repo", "red team this repo", or "find vulnerabilities". NOT for fixing or remediating known security issues (use autonomous-dev instead). NOT for supply chain dependency scanning. NOT for general workflow audits or code quality. If user says 'fix security issues', ask whether they want to audit first or fix known issues.
+  structured threat modeling with adversarial attack surface analysis. Use for security audits and threat modeling.
+  DO NOT use for general code quality, performance profiling, SEO, or workflow audits.
 ---
 
 # Adversarial Security

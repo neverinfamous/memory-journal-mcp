@@ -2,12 +2,9 @@
 name: adversarial-planner
 description: |
   Multi-pass adversarial planning and review skill that improves agent-generated
-  plans through structured critique stages. Combines an initial planning agent
-  (structure, logic, task sequencing) with an adversarial review agent
-  (performance, security, maintainability) and a final Copilot extension validation
-  pass. Use when creating implementation plans, designing architecture, planning
-  roadmaps or milestones, or when the user says "plan this", "review my plan",
-  "adversarial review", or "multi-pass plan".
+  plans through structured critique stages. Use when creating implementation plans,
+  designing architecture, or planning roadmaps. DO NOT use for post-implementation
+  code audits, security scanning, or performance profiling.
 ---
 
 # Adversarial Planner

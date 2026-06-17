@@ -2,10 +2,7 @@
 name: adversarial-workflow-audit
 description: |
   Multi-pass adversarial quality audit for flat markdown workflow files. 
-  Combines structured evaluation (Agent A) with adversarial stress-testing (Agent B) 
-  to assess sequential clarity, prerequisite validation, HITL (Human-in-the-loop) safety gates, 
-  loop prevention, and formatting. Use when auditing workflow scripts (e.g., slash-commands like /bump-deploy),
-  or when the user asks to review or improve operational playbooks.
+  Combines structured evaluation with adversarial stress-testing. Use for workflow scripts and playbooks. DO NOT use for code quality, performance profiling, or security audits.
 ---
 
 # Adversarial Workflow Audit

@@ -4,6 +4,7 @@ description: |
   Multi-pass adversarial code quality audit. Combines structured static analysis
   with adversarial critique methodology. Use when running code quality audits,
   linting reviews, or when the user says "audit code quality" or "find technical debt".
+  DO NOT use for security vulnerability scanning, performance profiling, or markdown workflow audits.
 ---
 
 # Adversarial Code Quality Audit

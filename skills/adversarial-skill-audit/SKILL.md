@@ -3,7 +3,7 @@ name: adversarial-skill-audit
 description: |
   Multi-pass adversarial quality audit for agent skill directories. Combines
   structured evaluation with adversarial stress-testing to assess skill completeness,
-  instruction clarity, trigger accuracy, and security. Use when auditing a skills directory.
+  instruction clarity, trigger accuracy, and security. Use when auditing a skills directory. DO NOT load for single-skill reviews unless a specific target is specified.
 ---
 
 # Adversarial Skill Audit
@@ -22,15 +22,23 @@ Load this skill when any of these apply:
 - Reviewing a batch of skills before publishing or distributing
 - The user asks for skill quality review, audit, or improvement suggestions
 - The user says "audit my skills", "skill quality check", "review these
-  skills", "check my skills", "how good are my skills", or "validate these skills"
+  skills", "check my skills", "how good are my skills", "validate these skills",
+  "evaluate skills", "score my skills", or "grade these skills"
 - Preparing a skills directory for npm packaging or distribution
 - You want to identify redundant, incomplete, or poorly triggered skills
+
+## Execution Entry Point
+
+1. Read `references/multi-pass-skill-protocol.md`.
+2. Run `scripts/check-skills.ps1` to inventory the directory.
+3. Proceed to Phase 1 in the protocol.
 
 ## Adversarial Protocol
 
 This skill follows the standard dual-agent adversarial pattern (Agent A: The Evaluator, Agent B: The Adversarial User).
 For the core pipeline rules, phase definitions, and agent switching protocols, read:
 **[../adversarial-security/references/adversarial-base-protocol.md](../adversarial-security/references/adversarial-base-protocol.md)**
+*(If `adversarial-base-protocol.md` is unavailable, use this embedded summary: You must switch between a baseline documenter (Agent A) and an adversarial stress-tester (Agent B) across 4 defined phases: Profile, Review, Remediation, and Validation.)*
 
 For the skill audit-specific protocol with scoring and templates, read:
 **[references/multi-pass-skill-protocol.md](references/multi-pass-skill-protocol.md)**
@@ -108,10 +116,4 @@ This skill includes automated helper scripts located in the `scripts/` directory
   - Check for stale content (outdated API references, deprecated tools)
 
 ## Synergies
-
-| Skill/Workflow            | Relationship                                                 |
-| ------------------------- | ------------------------------------------------------------ |
-| `skill-builder`           | Defines the quality standards this skill audits against      |
-| `adversarial-planner`     | Parent pattern — plan-level adversarial review               |
-| `adversarial-security`    | Sibling — audits security posture; this audits skill quality |
-| `adversarial-performance` | Sibling — audits performance; this audits skill quality      |
+Complements `skill-builder` (standards source), `adversarial-security`, and `adversarial-performance`.
