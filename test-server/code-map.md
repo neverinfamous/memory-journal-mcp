@@ -81,7 +81,7 @@ src/
 │   ├── sandbox-factory.ts          # Sandbox creation factory (engine-level restrictions: codeGeneration disabled, frozen prototypes, Proxy nullified, API surface frozen)
 │   ├── auto-return.ts              # Last-expression auto-return transform (IIFE helper)
 │   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge, pre-warmed pool with lifecycle management)
-│   ├── worker-script.ts            # Worker thread entry point — initializes shimMj and proxy API
+│   ├── worker-script.ts            # Worker thread entry point — initializes shimMj (empty-target proxy) and applies strict API surface freezing
 │   ├── worker-api-proxy.ts         # Worker API Proxy Builder (builds mj.* API, handles missing await interceptions)
 │   ├── worker-result-proxy.ts      # Result Wrapping Proxy (prevents silent failures, explicit IPC serialization traps)
 │   ├── api/                        # Unified mj.* API bridge factory
