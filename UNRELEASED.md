@@ -2,6 +2,10 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
+### Changed
+- Refactored tool filtering architecture by extracting `TOOL_GROUPS` and `META_GROUPS` constants into a dedicated `tool-constants.ts` file to establish structural parity with `mysql-mcp` and `db-mcp`. (`1d952c3`)
+- Standardized Playwright and Vitest test configurations to enforce strict timeouts, isolation, and consistent artifact paths for ecosystem parity. (`1e012d1`)
+
 ### Added
 - Implemented staleness analytics and commit grouping template resources. (`b960eb0c`, `22cb4206`)
 - Created `adversarial-github-actions` skill to enforce secure, reliable, and performant CI/CD workflows across NPM, Docker, and GitHub environments. (`ff72a8e`)
