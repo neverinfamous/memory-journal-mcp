@@ -55,8 +55,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Admin Batch Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-admin-batch-personal.db'
-    const teamDbPath = './test-team-admin-batch-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-admin-batch-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-admin-batch-team.db'
 
     const teamVector = {
         addEntry: vi.fn().mockResolvedValue({ success: true }),

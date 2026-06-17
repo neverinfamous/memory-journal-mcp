@@ -56,8 +56,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-tools-personal.db'
-    const teamDbPath = './test-team-tools-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-tools-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-tools-team.db'
 
     beforeAll(async () => {
         process.env.TEAM_AUTHOR = 'Alice'

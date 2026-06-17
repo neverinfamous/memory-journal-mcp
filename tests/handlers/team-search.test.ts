@@ -51,8 +51,8 @@ describe('Team Search Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
 
-    const personalDbPath = './test-team-search-personal.db'
-    const teamDbPath = './test-team-search-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-search-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-search-team.db'
 
     beforeAll(async () => {
         try {

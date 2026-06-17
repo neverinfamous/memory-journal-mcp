@@ -50,8 +50,8 @@ const callTool = (
 describe('Search Tool Handlers - Coverage', () => {
     let db: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const testDbPath = './test-search-cov.db'
-    const teamDbPath = './test-search-team-cov.db'
+    const testDbPath = './.test-output/vitest/test-search-cov.db'
+    const teamDbPath = './.test-output/vitest/test-search-team-cov.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -439,7 +439,7 @@ describe('Search Tool Handlers - Coverage', () => {
 
     describe('Importance-sorted search', () => {
         let impDb: DatabaseAdapter
-        const impDbPath = './test-importance-sort.db'
+        const impDbPath = './.test-output/vitest/test-importance-sort.db'
         let lowId: number
         let highId: number
         let medId: number

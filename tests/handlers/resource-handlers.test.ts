@@ -11,7 +11,7 @@ import { getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 describe('Resource Handlers', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-resources.db'
+    const testDbPath = './.test-output/vitest/test-resources.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

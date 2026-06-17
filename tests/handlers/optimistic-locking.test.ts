@@ -57,8 +57,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Optimistic Locking Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-optimistic-locking-personal.db'
-    const teamDbPath = './test-optimistic-locking-team.db'
+    const personalDbPath = './.test-output/vitest/test-optimistic-locking-personal.db'
+    const teamDbPath = './.test-output/vitest/test-optimistic-locking-team.db'
 
     beforeAll(async () => {
         try {

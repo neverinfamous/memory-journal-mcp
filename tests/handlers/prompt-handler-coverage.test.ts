@@ -11,7 +11,7 @@ import { getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
 
 describe('Prompt Handlers - Coverage', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-prompts-cov.db'
+    const testDbPath = './.test-output/vitest/test-prompts-cov.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

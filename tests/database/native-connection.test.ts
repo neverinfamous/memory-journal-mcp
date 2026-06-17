@@ -10,9 +10,9 @@ import type { Database } from 'better-sqlite3'
 import fs from 'node:fs'
 import { NativeConnectionManager } from '../../src/database/sqlite-adapter/native-connection.js'
 
-const TEST_DB_PATH = './test-native-conn.db'
-const TEST_DB_PATH_2 = './test-native-conn-2.db'
-const TEST_DB_NESTED = './test-native-nested/subdir/test.db'
+const TEST_DB_PATH = './.test-output/vitest/test-native-conn.db'
+const TEST_DB_PATH_2 = './.test-output/vitest/test-native-conn-2.db'
+const TEST_DB_NESTED = './.test-output/vitest/test-native-nested/subdir/test.db'
 
 function cleanupFiles(...paths: string[]) {
     for (const p of paths) {
@@ -60,7 +60,7 @@ describe('NativeConnectionManager', () => {
     // =========================================================================
 
     describe('encryption', () => {
-        const ENCRYPTED_DB_PATH = './test-native-encrypted.db'
+        const ENCRYPTED_DB_PATH = './.test-output/vitest/test-native-encrypted.db'
         afterEach(() => {
             delete process.env['DB_ENCRYPTION_KEY']
             try {

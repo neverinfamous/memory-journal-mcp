@@ -57,7 +57,7 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 
 describe('Handler catch blocks via Zod validation errors', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-catch-blocks.db'
+    const testDbPath = './.test-output/vitest/test-catch-blocks.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

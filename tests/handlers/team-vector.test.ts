@@ -57,8 +57,8 @@ describe('Team Vector Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
     let vectorManager: VectorSearchManager
-    const personalDbPath = './test-team-vector-personal.db'
-    const teamDbPath = './test-team-vector-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-vector-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-vector-team.db'
 
     beforeAll(async () => {
         try {

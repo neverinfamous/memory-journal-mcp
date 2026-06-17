@@ -68,8 +68,8 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
 describe('Tool Handler Coverage', () => {
     let db: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const testDbPath = './test-tool-cov.db'
-    const teamDbPath = './test-tool-team-cov.db'
+    const testDbPath = './.test-output/vitest/test-tool-cov.db'
+    const teamDbPath = './.test-output/vitest/test-tool-team-cov.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

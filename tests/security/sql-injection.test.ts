@@ -126,7 +126,7 @@ describe('Security Utilities', () => {
 
 describe('DatabaseAdapter SQL Injection Protection', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-security.db'
+    const testDbPath = './.test-output/vitest/test-security.db'
 
     beforeAll(async () => {
         // Use temp file database for testing (DatabaseAdapter always saves to disk)

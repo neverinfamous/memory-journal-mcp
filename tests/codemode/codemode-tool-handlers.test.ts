@@ -53,7 +53,7 @@ import { getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 describe('mj_execute_code Tool Handler', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-codemode-handler.db'
+    const testDbPath = './.test-output/vitest/test-codemode-handler.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

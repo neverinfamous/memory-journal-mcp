@@ -55,8 +55,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Flag Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-flags-personal.db'
-    const teamDbPath = './test-team-flags-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-flags-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-flags-team.db'
 
     beforeAll(async () => {
         try {

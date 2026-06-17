@@ -325,7 +325,7 @@ describe('McpServer', function () {
         it('should initialize database and register tools/resources/prompts', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // Database should be initialized
@@ -349,7 +349,7 @@ describe('McpServer', function () {
         it('should pass tool options with description', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // First registered tool should have description
@@ -362,7 +362,7 @@ describe('McpServer', function () {
         it('should register create_entry tool', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // Check that 'create_entry' was registered
@@ -377,7 +377,7 @@ describe('McpServer', function () {
         it('should initialize audit logger when auditConfig is enabled', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 auditConfig: {
                     enabled: true,
                     logPath: '/tmp/test-mcp-server-audit.log',
@@ -398,7 +398,7 @@ describe('McpServer', function () {
         it('should apply tool filter when provided', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 toolFilter: 'core',
             })
 
@@ -418,7 +418,7 @@ describe('McpServer', function () {
         it('should rebuild vector index when autoRebuildIndex is true', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 autoRebuildIndex: true,
             })
 
@@ -429,7 +429,7 @@ describe('McpServer', function () {
         it('should NOT rebuild index when autoRebuildIndex is not set', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             expect(mockVectorInitialize).toHaveBeenCalled()
@@ -445,7 +445,7 @@ describe('McpServer', function () {
         it('should initialize team database and team vector manager when teamDbPath is provided', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 teamDbPath: './team.db',
             })
             // Since mockDbInitialize is shared, it should be called twice (once for main, once for team)
@@ -461,7 +461,7 @@ describe('McpServer', function () {
         it('should register both static and template resources', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // Should have both static and template resources
@@ -478,7 +478,7 @@ describe('McpServer', function () {
         it('should register prompts with argsSchema', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             const promptCalls = mockRegisterPrompt.mock.calls
@@ -501,7 +501,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: true,
                 port: 4000,
                 host: '127.0.0.1',
@@ -521,7 +521,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
                 port: 5000,
                 host: '127.0.0.1',
@@ -538,7 +538,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 corsOrigins: ['https://example.com'],
                 statelessHttp: false,
             })
@@ -555,7 +555,7 @@ describe('McpServer', function () {
         it('should pass defaultProjectNumber through to tools', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 defaultProjectNumber: 42,
             })
 
@@ -566,7 +566,7 @@ describe('McpServer', function () {
         it('should resolve githubPath using projectRegistry when defaultProjectNumber matches', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 defaultProjectNumber: 42,
                 projectRegistry: {
                     testProj: { path: '/custom/repo/path', project_number: 42 },
@@ -579,7 +579,7 @@ describe('McpServer', function () {
         it('should resolve githubPath using projectRegistry fallback to first entry when defaultProjectNumber missing', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 projectRegistry: {
                     testProj: { path: '/custom/repo/fallback', project_number: 99 },
                 },
@@ -596,7 +596,7 @@ describe('McpServer', function () {
         it('should invoke tool handler and return structured content', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // Get the handler for a tool
@@ -627,7 +627,7 @@ describe('McpServer', function () {
 
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             const createEntryCalls = mockRegisterTool.mock.calls.filter(
@@ -675,7 +675,7 @@ describe('McpServer', function () {
             const spyCall = vi.spyOn(toolsModule, 'callTool').mockResolvedValueOnce({
                 invalidField: 10n,
             })
-            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+            await createServer({ transport: 'stdio', dbPath: './.test-output/vitest/test-server.db' })
 
             const toolCalls = mockRegisterTool.mock.calls.filter(
                 (call: unknown[]) => call[0] === 'fake_boom_tool'
@@ -716,7 +716,7 @@ describe('McpServer', function () {
                 .spyOn(toolsModule, 'callTool')
                 .mockResolvedValueOnce('Just a simple string result')
 
-            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+            await createServer({ transport: 'stdio', dbPath: './.test-output/vitest/test-server.db' })
 
             const toolCalls = mockRegisterTool.mock.calls.filter(
                 (call: unknown[]) => call[0] === 'fake_string_tool'
@@ -749,7 +749,7 @@ describe('McpServer', function () {
                 } as any,
             ])
 
-            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+            await createServer({ transport: 'stdio', dbPath: './.test-output/vitest/test-server.db' })
 
             // The tool should still be registered with its original schema options
             const fakeToolCall = mockRegisterTool.mock.calls.find(
@@ -772,7 +772,7 @@ describe('McpServer', function () {
         it('should invoke prompt handler and return messages', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             const promptCalls = mockRegisterPrompt.mock.calls
@@ -798,7 +798,7 @@ describe('McpServer', function () {
         it('should invoke resource handler and return contents', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 briefingConfig: { defaultProjectNumber: 1337 } as any, // Also tests passing explicit briefingConfig
             })
 
@@ -824,7 +824,7 @@ describe('McpServer', function () {
         it('should register SIGINT handlers and cleanly close database (stdio)', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 auditConfig: {
                     enabled: true,
                     logPath: '/tmp/test-mcp-server-audit-sigint.log',
@@ -848,7 +848,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
                 port: 5123,
                 auditConfig: {
@@ -878,7 +878,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: true,
             })
 
@@ -899,7 +899,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: true,
             })
 
@@ -922,7 +922,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 
@@ -960,7 +960,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // Find the OPTIONS middleware
@@ -1008,7 +1008,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: true,
             })
 
@@ -1052,7 +1052,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: true,
                 corsOrigins: ['https://test.example.com'],
             })
@@ -1137,7 +1137,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 
@@ -1162,7 +1162,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 
@@ -1183,7 +1183,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 
@@ -1202,7 +1202,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 
@@ -1226,7 +1226,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 
@@ -1273,7 +1273,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 
@@ -1310,7 +1310,7 @@ describe('McpServer', function () {
         it('should warn and not start scheduler on stdio transport', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 scheduler: {
                     backupIntervalMinutes: 60,
                     vacuumIntervalMinutes: 120,
@@ -1329,7 +1329,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: true,
                 scheduler: {
                     backupIntervalMinutes: 60,
@@ -1347,7 +1347,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 scheduler: {
                     backupIntervalMinutes: 0,
                     vacuumIntervalMinutes: 0,
@@ -1369,7 +1369,7 @@ describe('McpServer', function () {
         it('should return structuredContent for tools with outputSchema', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // get_recent_entries has an outputSchema
@@ -1396,7 +1396,7 @@ describe('McpServer', function () {
         it('should pass progressToken to tool handler when provided', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             const calls = mockRegisterTool.mock.calls.filter(
@@ -1428,7 +1428,7 @@ describe('McpServer', function () {
 
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             // Tools should be filtered from env
@@ -1441,7 +1441,7 @@ describe('McpServer', function () {
             mockRegisterTool.mockClear()
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             const unfilteredCount = mockRegisterTool.mock.calls.length
@@ -1456,7 +1456,7 @@ describe('McpServer', function () {
         })
 
         it('should execute registered tools successfully', async function () {
-            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+            await createServer({ transport: 'stdio', dbPath: './.test-output/vitest/test-server.db' })
 
             // Verify tool registration occurred
             const toolCall = mockRegisterTool.mock.calls.find(
@@ -1480,7 +1480,7 @@ describe('McpServer', function () {
         })
 
         it('should execute registered resources successfully', async function () {
-            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+            await createServer({ transport: 'stdio', dbPath: './.test-output/vitest/test-server.db' })
 
             const resCall =
                 mockRegisterResource.mock.calls.find((c: any[]) => c[0].endsWith('recent')) ||
@@ -1510,7 +1510,7 @@ describe('McpServer', function () {
         it('should register SIGINT handler for stdio transport', async function () {
             await createServer({
                 transport: 'stdio',
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
             })
 
             expect(mockSigintHandlers.length).toBe(1)
@@ -1520,7 +1520,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: true,
             })
 
@@ -1541,7 +1541,7 @@ describe('McpServer', function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './test-server.db',
+                dbPath: './.test-output/vitest/test-server.db',
                 statelessHttp: false,
             })
 

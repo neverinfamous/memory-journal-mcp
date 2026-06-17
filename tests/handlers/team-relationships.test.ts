@@ -55,8 +55,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Relationship Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-relationships-personal.db'
-    const teamDbPath = './test-team-relationships-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-relationships-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-relationships-team.db'
 
     let e1: number, e2: number, e3: number
 

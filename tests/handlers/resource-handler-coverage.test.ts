@@ -13,7 +13,7 @@ import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Resource Handler Coverage', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-resource-coverage.db'
+    const testDbPath = './.test-output/vitest/test-resource-coverage.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

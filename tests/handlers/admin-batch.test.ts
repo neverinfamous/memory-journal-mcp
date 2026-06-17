@@ -39,7 +39,7 @@ const callTool = (
 
 describe('Admin Batch Tool Handlers', () => {
     let db: DatabaseAdapter
-    const dbPath = './test-admin-batch.db'
+    const dbPath = './.test-output/vitest/test-admin-batch.db'
 
     // Simple mock vector manager
     const vectorManager = {

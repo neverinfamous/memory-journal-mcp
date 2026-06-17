@@ -44,7 +44,7 @@ const callTool = (
 
 describe('Tool Handlers', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-tools.db'
+    const testDbPath = './.test-output/vitest/test-tools.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

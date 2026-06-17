@@ -67,7 +67,7 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
 
 describe('Handler Error Branches', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-handler-branches.db'
+    const testDbPath = './.test-output/vitest/test-handler-branches.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

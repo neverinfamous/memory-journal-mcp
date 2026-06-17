@@ -55,8 +55,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Admin Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-admin-personal.db'
-    const teamDbPath = './test-team-admin-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-admin-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-admin-team.db'
 
     beforeAll(async () => {
         try {

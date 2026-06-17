@@ -66,7 +66,7 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
 
 describe('Vector Tool Handlers', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-vector-tools.db'
+    const testDbPath = './.test-output/vitest/test-vector-tools.db'
     let entryId: number
 
     beforeAll(async () => {

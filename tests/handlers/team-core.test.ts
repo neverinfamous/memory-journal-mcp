@@ -51,8 +51,8 @@ describe('Team Core Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
 
-    const personalDbPath = './test-team-core-personal.db'
-    const teamDbPath = './test-team-core-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-core-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-core-team.db'
     let entry1Id: number
 
     beforeAll(async () => {

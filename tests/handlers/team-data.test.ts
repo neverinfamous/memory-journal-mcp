@@ -55,8 +55,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Backup and Export Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-data-personal.db'
-    const teamDbPath = './test-team-data-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-data-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-data-team.db'
 
     beforeAll(async () => {
         try {

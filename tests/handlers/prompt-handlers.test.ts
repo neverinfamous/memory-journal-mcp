@@ -11,8 +11,8 @@ import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 describe('Prompt Handlers', () => {
     let db: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const testDbPath = './test-prompts.db'
-    const testTeamDbPath = './test-team-prompts.db'
+    const testDbPath = './.test-output/vitest/test-prompts.db'
+    const testTeamDbPath = './.test-output/vitest/test-team-prompts.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

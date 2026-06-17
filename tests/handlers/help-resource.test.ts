@@ -12,7 +12,7 @@ describe('Help Resource Handlers', () => {
     let db: DatabaseAdapter
 
     beforeAll(async () => {
-        const dbPath = './test-help-resource.db'
+        const dbPath = './.test-output/vitest/test-help-resource.db'
         if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
         db = new DatabaseAdapter(dbPath)
         await db.initialize()
@@ -20,7 +20,7 @@ describe('Help Resource Handlers', () => {
 
     afterAll(() => {
         db.close()
-        const dbPath = './test-help-resource.db'
+        const dbPath = './.test-output/vitest/test-help-resource.db'
         if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
     })
 

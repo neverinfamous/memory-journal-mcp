@@ -48,7 +48,7 @@ const callTool = (
 
 describe('Error Path Coverage', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-error-paths.db'
+    const testDbPath = './.test-output/vitest/test-error-paths.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

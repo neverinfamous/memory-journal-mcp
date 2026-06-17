@@ -60,8 +60,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Targeted Gap Closure', () => {
     let db: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const testDbPath = './test-gaps.db'
-    const teamDbPath = './test-gaps-team.db'
+    const testDbPath = './.test-output/vitest/test-gaps.db'
+    const teamDbPath = './.test-output/vitest/test-gaps-team.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

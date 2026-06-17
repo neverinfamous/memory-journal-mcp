@@ -73,7 +73,7 @@ vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
 describe('Code Mode Tool Handlers', () => {
     let personalDb: DatabaseAdapter
 
-    const personalDbPath = './test-codemode-handlers.db'
+    const personalDbPath = './.test-output/vitest/test-codemode-handlers.db'
 
     beforeAll(async () => {
         try {

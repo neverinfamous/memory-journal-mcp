@@ -84,7 +84,7 @@ import {
 
 describe('Targeted Gap Closure — Batch 2', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-gaps-2.db'
+    const testDbPath = './.test-output/vitest/test-gaps-2.db'
 
     beforeAll(async () => {
         try {
