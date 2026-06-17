@@ -61,6 +61,7 @@ export const UpdateEntrySchema = z.preprocess(
         workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
         is_archived: z.boolean().optional(),
         expected_version: z.number().optional(),
+        auto_context: z.string().nullable().optional(),
     }).strict()
 )
 
@@ -117,6 +118,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         workflow_status: z.string().nullable().optional(),
         is_archived: z.boolean().optional(),
         expected_version: relaxedNumber().optional(),
+        auto_context: z.string().nullable().optional(),
     }).strict()
 )
 

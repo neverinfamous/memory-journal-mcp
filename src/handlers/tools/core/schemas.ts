@@ -51,6 +51,7 @@ export const CreateEntrySchema = z.preprocess(
         workflow_name: z.string().optional(),
         workflow_status: z.string().optional(),
         share_with_team: z.boolean().optional().default(false),
+        auto_context: z.string().optional(),
     }).strict()
 )
 
@@ -111,6 +112,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
         workflow_name: z.string().optional(),
         workflow_status: z.string().optional(),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
+        auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
     }).strict()
 )
 

@@ -39,12 +39,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     coerceSignificanceAlias(params)
 
-                    if (params !== null && typeof params === 'object' && 'auto_context' in params) {
-                        context.config?.runtime?.metrics?.recordDeprecationWarning(
-                            'Agent recently used deprecated auto_context field in update_entry. This field is ignored.'
-                        )
-                    }
-
                     const input = UpdateEntrySchema.parse(params)
                     const entry = db.updateEntry(input.entry_id, {
                         content: input.content,
@@ -64,6 +58,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: input.workflow_status,
                         isArchived: input.is_archived,
                         expectedVersion: input.expected_version,
+                        autoContext: input.auto_context,
                     })
                     if (!entry) {
                         return {

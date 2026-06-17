@@ -78,6 +78,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: input.workflow_run_id,
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                        autoContext: input.auto_context,
                     })
                     const id = createdEntry.id
 
