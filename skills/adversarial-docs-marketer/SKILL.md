@@ -66,7 +66,7 @@ documentation surfaces, scores each against 10 categories, and produces a
 prioritized improvement plan. Fast and practical — best for routine docs
 reviews.
 
-### Adversarial Mode (`AUDIT_DEPTH: adversarial`)
+### Thorough Mode (`AUDIT_DEPTH: thorough`)
 
 Full dual-agent pipeline. After Agent A's baseline profile, Agent B (The
 Skeptical Reader) simulates a developer discovering the project for the first
@@ -98,7 +98,7 @@ For the full rubric with scoring guides, checklists, and anti-patterns, read
 
 This skill follows the standard dual-agent adversarial pattern (Agent A: The
 Marketer, Agent B: The Skeptical Reader) when `AUDIT_DEPTH` is set to
-`adversarial`.
+`thorough`.
 
 For the core pipeline rules, phase definitions, and agent switching protocols,
 read:
@@ -152,7 +152,7 @@ refinement cycles via `skill-builder`.
 
 | Variable             | Default    | Description                                                                |
 | -------------------- | ---------- | -------------------------------------------------------------------------- |
-| `AUDIT_DEPTH`        | `standard` | Depth: `standard` (single-pass) or `adversarial` (dual-agent)              |
+| `AUDIT_DEPTH`        | `standard` | Depth: `standard` (single-pass) or `thorough` (dual-agent)              |
 | `MAX_AUDIT_PASSES`   | `2`        | Maximum adversarial cycles (phases 2–3 repeat). Ignored in standard mode.  |
 | `COPILOT_VALIDATION` | `true`     | Enable/disable Copilot extension validation phase                          |
 | `TARGET_DOCS`        | `auto`     | Auto-detect surfaces or explicit list (e.g., `README.md,DOCKER_README.md`) |
@@ -162,7 +162,7 @@ refinement cycles via `skill-builder`.
 - **Standard**: All 10 categories scored per surface. Agent A only. Best for
   routine checks and quick improvement passes. Produces a prioritized
   improvement plan directly.
-- **Adversarial**: Full dual-agent pipeline with Skeptical Reader stress
+- **Thorough**: Full dual-agent pipeline with Skeptical Reader stress
   testing. Agent B simulates first-time discovery, competitive evaluation,
   and friction audits. Best for launch preparation, major releases, or when
   you want the deepest analysis.

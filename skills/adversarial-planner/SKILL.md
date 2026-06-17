@@ -36,6 +36,16 @@ For the core pipeline rules, phase definitions, and agent switching protocols, r
 For the planner-specific protocol with review dimensions, scoring weights, and output templates, read:
 **[references/multi-pass-protocol.md](references/multi-pass-protocol.md)**
 
+## Audit Categories
+
+The 5 dimensions evaluated during the review phase:
+
+1. **Correctness & Feasibility**
+2. **Performance & Scalability**
+3. **Security & Data Privacy**
+4. **Maintainability & Extensibility**
+5. **Migration Safety**
+
 ## External Validation (Phase 4)
 
 Phase 4 triggers an independent validation pass using the GitHub CLI (`gh copilot`).

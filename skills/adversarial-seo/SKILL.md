@@ -1,7 +1,9 @@
 ---
 name: adversarial-seo
 description: |
-  Adversarial SEO enforcement skill. A proactive guide for modifying the codebase to enforce Technical SEO, Semantic Markup, and E-E-A-T standards. DO NOT use for backend performance, codebase security, or general code quality.
+  Adversarial SEO enforcement skill. A proactive guide for modifying the codebase to enforce Technical SEO, Semantic Markup, and E-E-A-T standards. 
+  Use when the user asks to "audit SEO", "improve discoverability", or when you encounter missing metadata.
+  DO NOT use for backend performance, codebase security, or general code quality.
 ---
 
 # Adversarial SEO Enforcement & Healing Guardrails
@@ -11,6 +13,21 @@ The primary philosophy of this skill is: **When you (the agent) encounter missin
 You must act adversarially against bad SEO practices. You must proactively modify the architecture, components, or content generation logic to ensure future outputs are fully SEO-compliant by default. 
 
 This document details the critical SEO layers you must enforce as an integrated amalgamation of the best Technical SEO, Semantic Clustering, and E-E-A-T skills.
+
+## When to Load
+
+Load this skill when any of these apply:
+
+- The user asks to "audit SEO", "improve discoverability", "fix meta tags", or "optimize for search engines"
+- You encounter a route or component missing standard SEO metadata (Title, Description, Canonical)
+- You notice generic `div` soup that should be semantic HTML
+- You are adding a new public-facing page or blog post
+
+## Adversarial Protocol
+
+This skill follows the standard dual-agent adversarial pattern (Agent A: The SEO Marketer, Agent B: The Search Engine Crawler).
+For the core pipeline rules, phase definitions, and agent switching protocols, read:
+**[../adversarial-security/references/adversarial-base-protocol.md](../adversarial-security/references/adversarial-base-protocol.md)**
 
 ## Layer 1: Technical SEO & Metadata Enforcement
 
@@ -51,7 +68,13 @@ Similar to the `mysql-mcp-heal` sandbox interceptors, apply these concepts to we
 
 ## Layer 5: Cloudflare Edge SEO (Pages & Workers)
 
-Since this project primarily utilizes Cloudflare, you must leverage the Edge for SEO:
-* **Edge Caching for Bots:** Ensure Cloudflare caching rules explicitly accommodate `Googlebot` and other major crawlers to ensure lightning-fast time-to-first-byte (TTFB).
-* **HTMLRewriter Injection:** If backend metadata is missing or dynamic, use Cloudflare's `HTMLRewriter` in a Worker or Pages Function to inject `<title>`, `<meta>`, and JSON-LD tags on the fly before it reaches the crawler.
-* **Redirects & Status Codes:** Enforce strict 301 redirects at the Cloudflare Pages/Worker level (using `_redirects` or Worker logic) for any deprecated URLs. Ensure a 404 status is returned natively at the edge for missing pages.
+Since this project primarily utilizes Cloudflare, you must leverage the Edge for SEO.
+For detailed edge caching, HTMLRewriter injection, and status code redirects, read:
+**[references/cloudflare.md](references/cloudflare.md)**
+
+## Configuration
+
+| Variable             | Default    | Description                                       |
+| -------------------- | ---------- | ------------------------------------------------- |
+| `AUDIT_DEPTH`        | `standard` | Depth: `standard` or `thorough` (dual-agent)      |
+| `MAX_AUDIT_PASSES`   | `2`        | Maximum adversarial cycles                        |

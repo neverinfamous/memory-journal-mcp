@@ -11,6 +11,15 @@ description: |
 
 A multi-pass code quality auditing system that produces high-confidence findings by introducing structured adversarial critique stages.
 
+## When to Load
+
+Load this skill when any of these apply:
+
+- Running a comprehensive code quality audit on a repository
+- Linting reviews or refactoring planning
+- The user asks to "audit code quality", "find technical debt", "review code", or "clean up this codebase"
+- DO NOT load for security vulnerability scanning, performance profiling, or markdown workflow audits.
+
 ## Prompt
 
 Perform a comprehensive code quality audit of the target project. For each
@@ -80,7 +89,7 @@ After human approval:
 2. Run validation gates after all fixes:
    - Gate 1: Lint + Typecheck
    - Gate 2: Build
-   - Gate 3: Tests _(Agent Note: Ensure OutputCharacterCount >= 10000 on test command execution to fully capture the summary line.)_
+   - Gate 3: Tests
 3. Update changelog with audit fixes
 4. Commit with descriptive message:
    ```bash

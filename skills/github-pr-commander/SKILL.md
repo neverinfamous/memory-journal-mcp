@@ -2,8 +2,8 @@
 name: github-pr-commander
 description: |
   Structured workflows for GitHub PRs, dependency updates, and changelog management with validation gates. 
-  Use when reviewing a PR, updating dependencies, or running code audits. 
-  Do NOT trigger on bare verbs. NOT for pipeline authoring.
+  Use when reviewing a PR, creating a PR, updating dependencies, or modifying changelogs. 
+  Do NOT trigger on bare verbs. NOT for issue triage (use github-issue-commander).
 ---
 
 # GitHub PR Commander
@@ -20,12 +20,12 @@ failed, without the human needing to remember or repeat context.
 
 Load this skill when any of these apply:
 
-- You are assigned or asked to fix a GitHub issue
-- You need to review or submit a pull request
-- You need to work through issues in a milestone
-- You want to run dependency updates, security audits, or code quality audits
-- The user mentions an issue number (e.g., "fix #42") or PR number
-- The user says "triage", "audit", "review", "update deps", or similar
+- You need to review, update, or submit a pull request
+- You are managing merge conflicts or PR feedback
+- You want to run dependency updates (e.g., "update npm packages")
+- You need to audit or write changelog entries
+- The user mentions a PR number (e.g., "review PR #42")
+- The user says "review PR", "update deps", "cut a release", or similar
 - You are about to push code and want a structured validation pipeline
 
 ## Quick Reference
@@ -34,9 +34,9 @@ Load this skill when any of these apply:
 | ----------------------- | ------------------------------- | ------------------------------------------- |
 | **PR Review**           | `workflows/pr-review.md`        | Review a PR with validation pipeline        |
 | **Copilot Audit**       | `workflows/copilot-audit.md`    | Native gh copilot PR pre-push review        |
-| **Update Dependencies** | `../../adamic/.agents/workflows/update-deps.md`      | Dependency update with audit trail          |
-| **Changelog Audit**     | `../../adamic/.agents/workflows/changelog-audit.md`  | Audit and backfill SHA provenance           |
-| **Changelog Commit**    | `../../adamic/.agents/workflows/commit.md` | Create SHA-enriched changelog entries       |
+| **Update Dependencies** | *(External adamic workflow)* | Dependency update with audit trail          |
+| **Changelog Audit**     | *(External adamic workflow)* | Audit and backfill SHA provenance           |
+| **Changelog Commit**    | *(External adamic workflow)* | Create SHA-enriched changelog entries       |
 
 ## Prerequisites
 

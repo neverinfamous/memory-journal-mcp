@@ -21,7 +21,7 @@ Load this skill when:
 
 This skill uses the standard dual-agent adversarial pattern (Agent A: The Evaluator, Agent B: The Adversarial Tester) to audit the workflow configurations.
 For the core pipeline rules, phase definitions, and agent switching protocols, read:
-**[../../adversarial-security/references/adversarial-base-protocol.md](../../adversarial-security/references/adversarial-base-protocol.md)**
+**[../adversarial-security/references/adversarial-base-protocol.md](../adversarial-security/references/adversarial-base-protocol.md)**
 
 ## Deep References
 

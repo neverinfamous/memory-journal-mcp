@@ -2,7 +2,9 @@
 name: adversarial-workflow-audit
 description: |
   Multi-pass adversarial quality audit for flat markdown workflow files. 
-  Combines structured evaluation with adversarial stress-testing. Use for workflow scripts and playbooks. DO NOT use for code quality, performance profiling, or security audits.
+  Combines structured evaluation with adversarial stress-testing. 
+  Use for workflow scripts and playbooks, or when asked to "audit this workflow" or "review this playbook". 
+  DO NOT use for code quality, performance profiling, or security audits.
 ---
 
 # Adversarial Workflow Audit
