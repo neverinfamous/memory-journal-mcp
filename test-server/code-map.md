@@ -145,6 +145,7 @@ src/
 │   └── audit-resource.ts           # memory://audit resource handler (last 50 entries via recent(), session summary)
 │
 ├── github/
+│   ├── commit-references/          # Commit message parser and issue/PR reference resolver
 │   └── github-integration/
 │       ├── index.ts                # GitHubIntegration class (facade for all GitHub operations)
 │       ├── client.ts               # GitHub REST API client (Octokit wrapper)
@@ -307,6 +308,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `github.ts`                | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, `memory://github/rate-limit`                                                              |
 | `graph.ts`                 | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                  |
 | `insights.ts`              | `memory://insights/digest`, `memory://insights/team-collaboration`, `memory://insights/reports`                                                                               |
+| `staleness.ts`             | `memory://staleness`, `memory://staleness/{project_number}` — project activity staleness analysis                                                                             |
 | `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`, `memory://flags/history`                                                   |
 | `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)                                                                                          |
 | `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/resources` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY), `memory://metrics/latency` (MEDIUM_PRIORITY) |
@@ -316,7 +318,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 | Handler File   | Resources                                                                                                                                                                                                                                |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram` |
+| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram`, `memory://commits/{project_number}/by-issue`, `memory://commits/{project_number}/by-pr` |
 | `github.ts`    | `memory://github/status/{repo}`, `memory://github/insights/{repo}`, `memory://github/milestones/{repo}`, `memory://milestones/{number}`, `memory://milestones/{repo}/{number}`                                                           |
 
 ### Briefing Assembly (`src/handlers/resources/core/briefing/`)

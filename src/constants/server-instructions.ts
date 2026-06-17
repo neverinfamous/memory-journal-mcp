@@ -65,6 +65,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 | Metrics/Summary | \`memory://metrics/summary\`  |
 | Metrics/Latency | \`memory://metrics/latency\`  |
 | Resource reads  | \`memory://metrics/resources\`|
+| Project staleness| \`memory://staleness\`        |
 | Report history  | \`memory://insights/reports\` |
 | Full context    | \`get-context-bundle\` prompt |
 
@@ -487,6 +488,7 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
 - Kanban: \`get_kanban_board\` → \`add_kanban_item\` / \`move_kanban_item\` / \`delete_kanban_item\` → document completion (project_number auto-resolves if repo is registered). **⚠️ Eventual Consistency:** GitHub Projects V2 read index is heavily eventually consistent. Do NOT rely on \`get_kanban_board\` to immediately reflect items that were just added or moved.
 - Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
+- Commits: \`memory://commits/{project_number}/by-issue\` and \`memory://commits/{project_number}/by-pr\` group commits by referenced issues/PRs.
 - Rate Limits: Before expensive API operations, check \`memory://github/rate-limit\` (or \`memory://github/rate-limit/{repo}\`) to proactively throttle.
 - **Project Initialization**: To register a new project workspace, create an entry with \`project_number: N\`. Instruct the user to manually update their \`PROJECT_REGISTRY\` config, as agents cannot directly edit protected IDE config files.
 - **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces":

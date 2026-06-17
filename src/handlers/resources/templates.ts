@@ -11,6 +11,7 @@ import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotat
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
+import { enrichCommits } from '../../github/commit-references/index.js'
 
 /**
  * Get template resource definitions
@@ -174,8 +175,8 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'Aggregates all commit SHAs from session summary auto_context',
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/commits\/(\d+)/.exec(uri)
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/commits\/(\d+)$/.exec(uri)
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
@@ -204,11 +205,172 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
+                const uniqueCommits = Array.from(new Set(commits))
+
+                let enrichedCommits: Awaited<ReturnType<typeof enrichCommits>> = []
+                const cwd = process.cwd()
+                if (uniqueCommits.length > 0) {
+                    enrichedCommits = await enrichCommits(
+                        cwd,
+                        uniqueCommits,
+                        context.github ?? undefined
+                    )
+                }
+
                 return {
                     projectNumber,
-                    commits: Array.from(new Set(commits)),
+                    commits: uniqueCommits,
                     metadata,
-                    count: commits.length,
+                    enrichedCommits,
+                    count: uniqueCommits.length,
+                }
+            },
+        },
+        {
+            uri: 'memory://commits/{project_number}/by-issue',
+            name: 'Commits by Issue',
+            title: 'Project Commits Grouped by Issue',
+            description: 'Groups project commits by referenced GitHub issues',
+            mimeType: 'application/json',
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/commits\/(\d+)\/by-issue$/.exec(uri)
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (projectNumber === null) {
+                    return { error: 'Invalid project number' }
+                }
+
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+                const commits: string[] = []
+
+                for (const entry of entries) {
+                    if (entry.tags.includes('session-summary')) {
+                        const ctx = parseSessionCommitContext(entry.autoContext)
+                        if (ctx && ctx.commits.length > 0) {
+                            commits.push(...ctx.commits)
+                        }
+                    }
+                }
+
+                const uniqueCommits = Array.from(new Set(commits))
+                interface IssueGroup {
+                    number: number;
+                    title?: string;
+                    state?: string;
+                    milestone?: { number: number; title: string };
+                    commits: { hash: string; subject: string; authorName: string; date: string; }[];
+                }
+                const issues: Record<number, IssueGroup> = {}
+                const cwd = process.cwd()
+
+                if (uniqueCommits.length > 0) {
+                    const enrichedCommits = await enrichCommits(
+                        cwd,
+                        uniqueCommits,
+                        context.github ?? undefined
+                    )
+
+                    for (const commit of enrichedCommits) {
+                        for (const ref of commit.references) {
+                            if (ref.type === 'issue') {
+                                issues[ref.number] ??= {
+                                    number: ref.number,
+                                    title: ref.title,
+                                    state: ref.state,
+                                    milestone: ref.milestone,
+                                    commits: [],
+                                }
+                                const group = issues[ref.number]
+                                if (group) {
+                                    group.commits.push({
+                                        hash: commit.hash,
+                                        subject: commit.subject,
+                                        authorName: commit.authorName,
+                                        date: commit.date,
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return {
+                    projectNumber,
+                    issues: Object.values(issues),
+                }
+            },
+        },
+        {
+            uri: 'memory://commits/{project_number}/by-pr',
+            name: 'Commits by PR',
+            title: 'Project Commits Grouped by PR',
+            description: 'Groups project commits by referenced GitHub pull requests',
+            mimeType: 'application/json',
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/commits\/(\d+)\/by-pr$/.exec(uri)
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (projectNumber === null) {
+                    return { error: 'Invalid project number' }
+                }
+
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+                const commits: string[] = []
+
+                for (const entry of entries) {
+                    if (entry.tags.includes('session-summary')) {
+                        const ctx = parseSessionCommitContext(entry.autoContext)
+                        if (ctx && ctx.commits.length > 0) {
+                            commits.push(...ctx.commits)
+                        }
+                    }
+                }
+
+                const uniqueCommits = Array.from(new Set(commits))
+                interface PRGroup {
+                    number: number;
+                    title?: string;
+                    state?: string;
+                    commits: { hash: string; subject: string; authorName: string; date: string; }[];
+                }
+                const prs: Record<number, PRGroup> = {}
+                const cwd = process.cwd()
+
+                if (uniqueCommits.length > 0) {
+                    const enrichedCommits = await enrichCommits(
+                        cwd,
+                        uniqueCommits,
+                        context.github ?? undefined
+                    )
+
+                    for (const commit of enrichedCommits) {
+                        for (const ref of commit.references) {
+                            if (ref.type === 'pull_request') {
+                                prs[ref.number] ??= {
+                                    number: ref.number,
+                                    title: ref.title,
+                                    state: ref.state,
+                                    commits: [],
+                                }
+                                const group = prs[ref.number]
+                                if (group) {
+                                    group.commits.push({
+                                        hash: commit.hash,
+                                        subject: commit.subject,
+                                        authorName: commit.authorName,
+                                        date: commit.date,
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return {
+                    projectNumber,
+                    pullRequests: Object.values(prs),
                 }
             },
         },

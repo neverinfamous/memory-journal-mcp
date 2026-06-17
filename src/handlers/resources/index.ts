@@ -25,6 +25,7 @@ import { getTemplateResourceDefinitions } from './templates.js'
 import { getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import { getInsightResourceDefinitions } from './insights.js'
+import { getStalenessResourceDefinitions } from './staleness.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
@@ -209,6 +210,7 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
         ...getInsightResourceDefinitions(),
+        ...getStalenessResourceDefinitions(),
         // Audit resource — bound to the runtime's instance audit logger
         getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]

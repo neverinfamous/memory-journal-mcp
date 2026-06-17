@@ -106,6 +106,16 @@ test.describe('E2E Resource Reads: Template Resources', () => {
         expect(text.length).toBeGreaterThan(0)
     })
 
+    test('memory://commits/1/by-issue returns valid response', async () => {
+        const text = await readTemplateResource('memory://commits/1/by-issue')
+        expect(text.length).toBeGreaterThan(0)
+    })
+
+    test('memory://commits/1/by-pr returns valid response', async () => {
+        const text = await readTemplateResource('memory://commits/1/by-pr')
+        expect(text.length).toBeGreaterThan(0)
+    })
+
     test('memory://kanban/1 returns valid response', async () => {
         await expect(readTemplateResource('memory://kanban/1')).rejects.toThrow(
             'GitHub API not available'
