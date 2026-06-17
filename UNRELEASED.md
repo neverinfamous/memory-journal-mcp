@@ -32,6 +32,7 @@
 - `scripts/README.md` containing an agent-optimized script inventory and execution guidelines (`2a770648`).
 
 ### Changed
+- Refactored adversarial skills directory to implement audit improvements, split github-commander into issue and PR specific skills, and prune unused sqlite and github-copilot-cli skills. (`0599ad64`)
 - Promoted code quality audit to an adversarial skill and removed redundant GitHub Commander workflows. (`7bcf3d3f`)
 - Updated skills inventory: migrated general ecosystem skills to adamic, centralized changelog workflows into github-commander, and standardized adversarial-skill-builder. (`053fa89a`)
 - Updated all testing coordinator workflows to enforce strict validation prerequisite checks and warn against post-commit amending that breaks changelog SHAs. (`edd3dab`)
