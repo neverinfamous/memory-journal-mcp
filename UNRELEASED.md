@@ -7,6 +7,7 @@
 - Implemented commit-enriched session summaries via `SessionCommitContextSchema` and `memory://commits/{project_number}` resource. (`eda39c0`)
 
 - Added team flag analytics tests to Code Mode test suite. (`798fdd3`)
+- Added `test-usability-crud-mutations.md` test module to explicitly fuzz structural and data integrity boundaries of core CRUD operations and session summaries. (`59c162c`)
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations.
 - Auto-prune lifecycle management flags (`--archive-older-than-days`, `--prune-dry-run`).
 - Database schema migration framework with composite and partial performance indexes (`f73da9f6`).
