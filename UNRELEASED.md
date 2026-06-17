@@ -9,8 +9,8 @@
 
 - Added team flag analytics tests to Code Mode test suite. (`798fdd3`)
 - Added `test-usability-crud-mutations.md` test module to explicitly fuzz structural and data integrity boundaries of core CRUD operations and session summaries. (`59c162c`)
-- External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations.
-- Auto-prune lifecycle management flags (`--archive-older-than-days`, `--prune-dry-run`).
+- External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations. (`f5b7f7e`)
+- Auto-prune lifecycle management flags (`--archive-older-than-days`, `--prune-dry-run`). (`12d4362`)
 - Database schema migration framework with composite and partial performance indexes (`f73da9f6`).
 - Scheduled digest report delivery via `--report-interval` (`c6d7f9b9`).
 - Security enhancements including `DB_ENCRYPTION_KEY` for SQLCipher and Team RBAC (`5bfa17d5`).
