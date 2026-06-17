@@ -1,0 +1,1 @@
+- Added automatic discovery for global config files (`~/.gemini/config/memory-journal.config.json` and `~/.memory-journal/config.json`) when `MEMORY_JOURNAL_CONFIG` is not set. (`1815e707`)
