@@ -164,6 +164,7 @@ Top-level `mj.deleteEntry` skipping parameter normalization in Code Mode binding
 - Fixed `list_deleted_entries` hallucination proxy rejecting valid queries by removing incorrectly passed `project_number`, and added array element proxying for `get_entry_history` to map `revisionNumber` and `contentSnapshot` within Code Mode. (`6d9e77b`)
 - Fixed `[VALIDATION_ERROR]` in Code Mode by conditionally injecting `project_number` only if the tool's underlying Zod schema accepts it. (`3661039`)
 - Fixed Vitest unit test database pollution in the project root directory by explicitly defining `DB_PATH` to isolate test databases in `.test-output/vitest/`. (`7ce718c`)
+- Removed hallucinated Journal instructions from adversarial-planner skill references. (`dc642d51`)
 
 ### Security
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1 (`4a2a2ae1`)
