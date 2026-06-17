@@ -57,7 +57,6 @@ Read [references/copilot-usage.md](references/copilot-usage.md) for critical non
 ## Execution Rules
 
 1. **Continuous Prompt Improvement**: Whenever you see an opportunity to improve this skill's prompt or instructions, proactively update the prompt itself.
-2. **No Journal Entries**: Do NOT instruct the agent to create entries in `memory-journal-mcp`.
 
 ## Configuration
 

@@ -64,17 +64,7 @@ Run a non-interactive `gh copilot` scan (`gh copilot -p "..." --allow-tool "shel
 Anything requiring user input before proceeding.
 ```
 
-### Journal
 
-```
-create_entry({
-  content: "<full plan draft>",
-  entry_type: "plan_draft",
-  tags: ["adversarial-planner", "plan-draft"],
-  issue_number: <if applicable>,
-  project_number: <if applicable>
-})
-```
 
 ## Phase 2 — Adversarial Review (Agent B: Reviewer)
 
@@ -138,16 +128,7 @@ scrutiny:
 List any findings that MUST be addressed before the plan can proceed.
 ```
 
-### Journal
 
-```
-create_entry({
-  content: "<full critique>",
-  entry_type: "adversarial_review",
-  tags: ["adversarial-planner", "review"],
-  issue_number: <if applicable>
-})
-```
 
 ## Phase 3 — Plan Refinement (Agent A: Planner)
 
@@ -195,16 +176,7 @@ The default of 2 passes means: 1 initial review + 1 review of the refinement.
 For most plans this is sufficient. Increase for high-stakes architectural
 decisions.
 
-### Journal
 
-```
-create_entry({
-  content: "<refinement with dispositions>",
-  entry_type: "plan_refinement",
-  tags: ["adversarial-planner", "refinement"],
-  issue_number: <if applicable>
-})
-```
 
 ## Phase 4 — Copilot Validation (External)
 
@@ -217,13 +189,4 @@ parsing guidance.
 After the Copilot pass, any new findings follow the same disposition process
 from Phase 3. The final plan is then presented to the user for approval.
 
-### Journal
 
-```
-create_entry({
-  content: "<copilot findings + final dispositions>",
-  entry_type: "copilot_validation",
-  tags: ["adversarial-planner", "copilot"],
-  issue_number: <if applicable>
-})
-```
