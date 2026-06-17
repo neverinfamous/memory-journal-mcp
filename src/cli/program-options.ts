@@ -2,13 +2,8 @@ import { Command } from 'commander'
 import { VERSION } from '../version.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../audit/index.js'
 
-export function resolveDbPath(envPath: string | undefined, defaultName: string): string {
-    if (envPath) return envPath
-    return `./${defaultName}`
-}
-
-export const defaultDbPath = resolveDbPath(process.env['DB_PATH'], 'memory_journal.db')
-export const defaultTeamDbPath = process.env['TEAM_DB_PATH'] ? process.env['TEAM_DB_PATH'] : undefined
+export const defaultDbPath = './memory_journal.db'
+export const defaultTeamDbPath = undefined
 
 export function createProgram(): Command {
     const program = new Command()
