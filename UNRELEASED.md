@@ -56,6 +56,7 @@
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
+- Fixed missing `auto_context` parameter in `CreateEntrySchema` and `UpdateEntrySchema` to allow agents to submit Session Commit metadata. (`fe3b893`)
 - Fixed state pollution in `memory://briefing` environment configuration E2E tests. (`eda39c0`)
 - Fixed flaky test timeout in Code Mode test suite by increasing the Vitest global `testTimeout` to 10s. (`37fda1e`)
 - Fixed `setTimeout` and `sleep` functions in the Code Mode sandbox to correctly bind to global execution context. (`96b5b47`)
