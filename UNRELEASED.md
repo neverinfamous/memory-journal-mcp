@@ -68,6 +68,7 @@
 - Restored `skills/package.json` containing the accurate manifest of currently active skills, and relocated `github-repo-setup` out of this repository into the `adamic` repository workflows. (`30bc26a5`)
 
 ### Fixed
+- Fixed a concurrency leak in the Code Mode worker pool where instances bypassed the `maxInstances` constraint due to eager `minInstances` pre-warming overlapping bounds, triggering sandbox exhaustion errors. (`ab94749`)
 - Fixed Code Mode Proxy invariant violation where the sandbox proxy failed on frozen target properties by migrating the proxy target to an empty extensible object. (`9172999`)
 - Fixed vitest creating test databases in the project root by explicitly redirecting them to `.test-output/vitest/`. (`834b21a`)
 - Intercepted tool name hallucinations (e.g. Prompt/Tool confusion) before SDK validation to return actionable error guidance. (`9f704a08`)

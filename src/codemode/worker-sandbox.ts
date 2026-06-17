@@ -312,6 +312,9 @@ export class WorkerSandboxPool {
     constructor(sandboxOptions?: SandboxOptions, poolOptions?: PoolOptions) {
         this.sandboxOptions = sandboxOptions ?? {}
         this.options = { ...DEFAULT_POOL_OPTIONS, ...poolOptions }
+        if (this.options.minInstances > this.options.maxInstances) {
+            this.options.minInstances = this.options.maxInstances
+        }
         this.warmPool()
         this.lifecycleTimer = setInterval(() => this.lifecycleSweep(), LIFECYCLE_INTERVAL_MS)
         this.lifecycleTimer.unref()
