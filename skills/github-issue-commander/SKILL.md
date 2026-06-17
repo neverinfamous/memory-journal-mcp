@@ -22,11 +22,10 @@ failed, without the human needing to remember or repeat context.
 Load this skill when any of these apply:
 
 - You are assigned or asked to fix a GitHub issue
-- You need to review or submit a pull request
 - You need to work through issues in a milestone
-- You want to run dependency updates, security audits, or code quality audits
-- The user mentions an issue number (e.g., "fix #42") or PR number
-- The user says "triage", "audit", "review", "update deps", or similar
+- You want to run security audits or code quality audits on an issue
+- The user mentions an issue number (e.g., "fix #42")
+- The user says "triage", "audit", or similar
 - You are about to push code and want a structured validation pipeline
 
 ## Quick Reference

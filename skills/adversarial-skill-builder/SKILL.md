@@ -12,6 +12,17 @@ description: |
 
 A guide for creating high-quality agent skills — the `.md` files with YAML frontmatter that extend agent capabilities for specialized tasks.
 
+## When to Load
+
+Load this skill when any of these apply:
+
+- Creating a new skill (`.md` file with YAML frontmatter)
+- Improving or auditing an existing skill
+- Writing skill descriptions or determining progressive disclosure boundaries
+- The user asks about skill structure, best practices for agent instructions, or how to build a skill
+- Reviewing third-party skills before installation
+
+
 ## 1. Skill Security (Primary Guidance)
 
 Skills are natural-language instructions the agent executes with its full capabilities. Treat them like code injection.

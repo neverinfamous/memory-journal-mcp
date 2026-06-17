@@ -16,6 +16,16 @@ memory-journal-mcp database. Every operation uses the soft-delete system
 as a safe first pass — entries remain recoverable via `restore_backup`
 until explicitly purged.
 
+## When to Load
+
+Load this skill when any of these apply:
+
+- The user says "clean up the database", "optimize entries", or "prune old entries"
+- The user asks "what entries can I delete?" or says "my journal is getting too big"
+- Performing scheduled or ad-hoc database maintenance
+- Archiving old entries or test artifacts
+
+
 ## Prerequisites
 
 The following tool groups must be enabled:
