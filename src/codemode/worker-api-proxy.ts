@@ -861,20 +861,10 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
         }
     }
     
-    // delete_entry hallucination: missing expected_version
+    // delete_entry hallucination: version -> expected_version mapping
     const deleteMethods = ['delete_entry', 'deleteEntry', 'team_delete_entry', 'teamDeleteEntry'];
     if (deleteMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
-        if (obj['expected_version'] === undefined && obj['version'] === undefined) {
-            return { error: {
-                success: false,
-                error: `${methodName} requires an 'expected_version' for safety.`,
-                code: 'VALIDATION_ERROR',
-                category: 'validation',
-                suggestion: `Pessimistic concurrency guardrail: You must provide 'expected_version'. If you don't know it, read the entry first via get_entry_by_id to retrieve its current version.`,
-                recoverable: true
-            }};
-        }
         if (obj['version'] !== undefined && obj['expected_version'] === undefined) {
             obj['expected_version'] = obj['version'];
             delete obj['version'];

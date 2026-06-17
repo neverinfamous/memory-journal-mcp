@@ -51,7 +51,7 @@ export function wrapResult(result: unknown): unknown {
             const successResult = result as Record<string | symbol, unknown>
 
             // §2.4: Inject `hasMore` convenience boolean when pagination cursor is present
-            if ('next_cursor' in successResult && successResult['next_cursor'] !== null && successResult['next_cursor'] !== undefined) {
+            if ('next_cursor' in successResult && successResult['next_cursor'] !== null && successResult['next_cursor'] !== undefined && successResult['next_cursor'] !== '') {
                 successResult['hasMore'] = true
             } else if (
                 ('entries' in successResult || 'results' in successResult || 'items' in successResult) &&
