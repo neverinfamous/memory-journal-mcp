@@ -7,6 +7,7 @@
     "files": [
         "README.md",
         "adversarial-code-quality/",
+        "adversarial-github-actions/",
         "adversarial-performance/",
         "adversarial-planner/",
         "adversarial-security/",

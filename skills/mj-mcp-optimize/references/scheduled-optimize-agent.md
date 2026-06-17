@@ -79,7 +79,7 @@ if (tagNames.length <= 200) { // O(n^2) guard
 for (let i = 0; i < norms.length; i++) {
   for (let j = i + 1; j < norms.length; j++) {
     const d = lev(norms[i], norms[j])
-    if (d > 0 && d <= 2) {
+    if (d > 0 && d <= 2 && norms[i].length > 4 && norms[j].length > 4) {
       fuzzy.push({ a: groups.get(norms[i]), b: groups.get(norms[j]), distance: d })
     }
   }
@@ -211,7 +211,7 @@ ${report.projects.map(p => `- **${p.name}** (#${p.projectNumber})`).join('\\n')}
 ### 🔴 Action Required
 - **${report.deleteCandidates.count} entries** flagged for review
 - Run \\\`mj-mcp-optimize\\\` Workflow 2 (Targeted Cleanup) to process candidates interactively`,
-  entry_type: 'maintenance',
+  entry_type: 'technical_note',
   tags: ['database-optimizer', 'scheduled-report', 'health-check'],
 })
 ```
