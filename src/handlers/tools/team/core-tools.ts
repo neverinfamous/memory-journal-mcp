@@ -145,6 +145,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         prUrl: input.pr_url,
                         prStatus: input.pr_status,
                         author,
+                        autoContext: input.auto_context,
                     })
 
                     teamDb.flushSave()

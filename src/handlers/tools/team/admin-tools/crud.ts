@@ -120,6 +120,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: input.workflow_status,
                         isArchived: input.is_archived,
                         expectedVersion: input.expected_version,
+                        autoContext: input.auto_context,
                     })
 
                     triggerTeamNotifications(context)
