@@ -3,8 +3,7 @@ name: adversarial-performance
 description: |
   Multi-pass adversarial performance audit for entire repositories. Combines
   structured profiling (Agent A) with adversarial stress-testing critique
-  (Agent B) through iterative passes. Optimize repo/backend performance, hot-paths, build size, and server throughput. Do NOT use for frontend page load metrics 
-  or Lighthouse audits (use web-perf). NOT for frontend Core Web Vitals (use web-perf).
+  (Agent B) through iterative passes. Optimize repo/backend performance, hot-paths, build size, and server throughput. Also natively supports frontend Core Web Vitals (LCP, INP, CLS) and Lighthouse audits.
   DO NOT use for security vulnerability scanning, codebase quality audits, or markdown workflow reviews.
 ---
 
@@ -42,6 +41,7 @@ Before starting, auto-detect the project profile by scanning the repository:
 | Vitest/Jest/Playwright config                   | `tested`        | Test Suite Performance (Category 5) — full depth           |
 | Dockerfile present                              | `containerized` | Build Performance (Category 1) — Docker layer analysis     |
 | Database imports (better-sqlite3, pg, mysql2)   | `data-layer`    | Database & I/O (Category 6) — full depth                   |
+| Vite/Next/React/Astro                           | `frontend`      | Frontend Web Vitals (Category 8) — Chrome DevTools audit   |
 
 Profiles stack. A typical MCP server might be `mcp-server + cli-tool +
 tested + containerized + data-layer`.
@@ -67,10 +67,11 @@ challenged during Phase 2 (Stress Test) are:
 5. Test Suite Performance
 6. Database & I/O Performance
 7. Token & Context Efficiency (MCP servers — graceful degradation)
+8. Frontend Web Vitals (LCP, INP, CLS via Chrome DevTools — triggers on `frontend` profile)
 
 For the full checklist with measurement methods, anti-patterns, and
 optimization patterns, read
-[references/audit-categories.md](references/audit-categories.md).
+[references/audit-categories.md](references/audit-categories.md) (and [references/frontend-audit.md](references/frontend-audit.md) for web apps).
 
 ## External Validation (Phase 4)
 
@@ -129,4 +130,3 @@ validation results. Before sharing output outside the audit context, redact or g
 | `adversarial-planner`  | Parent pattern — plan-level adversarial review; this and security extend it to audits       |
 | `autonomous-dev`       | Generator/Evaluator pipeline at code level; use after this skill to implement optimizations |
 | `/perf-audit` workflow | Provides the category checklist; this skill adds adversarial methodology on top             |
-| `web-perf`             | Web-specific performance skill; use alongside for frontend-heavy projects                   |
