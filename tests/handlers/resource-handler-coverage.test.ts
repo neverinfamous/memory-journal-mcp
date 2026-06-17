@@ -258,7 +258,7 @@ describe('Resource Handler Coverage', () => {
             expect(data.configured).toBe(true)
             expect(data.skills.length).toBeGreaterThanOrEqual(1)
             expect(
-                data.skills.some((s) => s.name === 'github-commander' && s.source === 'shipped')
+                data.skills.some((s) => s.name === 'github-issue-commander' && s.source === 'shipped')
             ).toBe(true)
 
             // Restore

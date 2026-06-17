@@ -1,18 +1,19 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const WORKERS = process.env.CI ? 4 : 4; // Using 4 workers for optimal parallel execution locally and in CI
+const WORKERS = 1; // Using 1 worker to prevent SQLite lock contention and transport blocking
 
 export default defineConfig({
     testDir: './tests/e2e',
     timeout: 120000,
     outputDir: '.test-output/playwright',
-    fullyParallel: true,
+    fullyParallel: false,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: WORKERS,
     reporter: 'list',
     use: {
         trace: 'on-first-retry',
+        actionTimeout: 0,
     },
     projects: [
         {

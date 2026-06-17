@@ -15,7 +15,7 @@ export type { ToolFilterConfig } from '../types/index.js'
  *
  * All 100 tools are categorized here for filtering support.
  */
-export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
+export const TOOL_GROUPS = {
     core: [
         'create_entry',
         'get_entry_by_id',
@@ -119,12 +119,12 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_consolidate_authors',
     ],
     codemode: ['mj_execute_code'],
-}
+} satisfies Record<ToolGroup, string[]>
 
 /**
  * Meta-group definitions mapping shortcuts to groups
  */
-export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
+export const META_GROUPS = {
     starter: ['core', 'search', 'codemode'],
     essential: ['core', 'codemode'],
     full: [
@@ -140,7 +140,7 @@ export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
         'codemode',
     ],
     readonly: ['core', 'search', 'analytics', 'relationships', 'io', 'codemode'],
-}
+} satisfies Record<MetaGroup, ToolGroup[]>
 
 /**
  * Get all tool names across all groups

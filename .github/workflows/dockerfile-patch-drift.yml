@@ -1,0 +1,138 @@
+name: Dockerfile Patch Drift Check
+
+# Detects when manually patched transitive dependencies in the Dockerfile
+# have been updated in the Node.js base image's bundled npm, making the
+# patches redundant. Runs daily and on Dockerfile changes.
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # Daily at noon UTC
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-patches:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Check patch drift
+        run: |
+          echo "🔍 Checking Dockerfile transitive dependency patches for drift..."
+          echo ""
+
+          # These are the versions we manually patch in the Dockerfile.
+          # If npm's bundled version is already >= patched version, the patch is stale.
+          declare -A PATCHES=(
+            ["diff"]="9.0.0"
+            ["@isaacs/brace-expansion"]="5.0.1"
+            ["tar"]="7.5.15"
+            ["minimatch"]="10.2.5"
+            ["brace-expansion"]="5.0.6"
+          )
+
+          NPM_DIR="/usr/local/lib/node_modules/npm"
+          STALE=0
+
+          for pkg in "${!PATCHES[@]}"; do
+            patched_version="${PATCHES[$pkg]}"
+
+            # Find the package.json for the bundled dependency
+            pkg_path="$NPM_DIR/node_modules/$pkg/package.json"
+            if [ ! -f "$pkg_path" ]; then
+              echo "⚠️  $pkg: not found in npm bundle (may have been removed upstream)"
+              continue
+            fi
+
+            bundled_version=$(node -p "require('$pkg_path').version")
+
+            # Compare versions using node's semver-aware comparison
+            is_stale=$(BUNDLED_VERSION="$bundled_version" PATCHED_VERSION="$patched_version" node -e "
+              const bv = process.env.BUNDLED_VERSION.split('.').map(Number);
+              const pv = process.env.PATCHED_VERSION.split('.').map(Number);
+              const cmp = bv[0] - pv[0] || bv[1] - pv[1] || bv[2] - pv[2];
+              console.log(cmp >= 0 ? 'true' : 'false');
+            ")
+
+            if [ "$is_stale" = "true" ]; then
+              echo "🟡 STALE: $pkg — bundled=$bundled_version >= patched=$patched_version (patch can be removed)"
+              STALE=1
+            else
+              echo "✅ CURRENT: $pkg — bundled=$bundled_version < patched=$patched_version (patch still needed)"
+            fi
+          done
+
+          echo ""
+          if [ "$STALE" -eq 1 ]; then
+            echo "::warning::One or more Dockerfile transitive dependency patches are stale and should be reviewed for removal."
+            echo ""
+            echo "Action: Review the Dockerfile patches and remove any that are no longer needed."
+            echo "The bundled npm version has caught up to (or exceeded) the patched version."
+          else
+            echo "✅ All Dockerfile patches are still necessary."
+          fi
+
+  check-overrides:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "24.x"
+
+      - name: Check package.json override drift
+        run: |
+          echo "🔍 Checking package.json overrides for drift..."
+          echo ""
+
+          # Extract overrides from package.json
+          OVERRIDES=$(node -e "
+            const pkg = require('./package.json');
+            const overrides = pkg.overrides || {};
+            for (const [name, version] of Object.entries(overrides)) {
+              console.log(name + '=' + version);
+            }
+          ")
+
+          STALE=0
+          while IFS='=' read -r pkg version; do
+            [ -z "$pkg" ] && continue
+
+            # Check if the lockfile still needs this override
+            # by looking for the package in node_modules after pnpm install --frozen-lockfile
+            LATEST=$(pnpm view "$pkg" version 2>/dev/null || echo "unknown")
+
+            if [ "$LATEST" = "$version" ]; then
+              echo "✅ CURRENT: $pkg@$version — matches latest registry version"
+            elif [ "$LATEST" = "unknown" ]; then
+              echo "⚠️  $pkg: not found in npm registry"
+            else
+              echo "ℹ️  REVIEW: $pkg — override=$version, registry latest=$LATEST"
+            fi
+          done <<< "$OVERRIDES"
+
+          echo ""
+          echo "ℹ️  Overrides are intentional CVE patches for transitive dependencies."
+          echo "   Remove an override only after confirming the parent dependency"
+          echo "   has adopted the fix and pnpm audit passes without it."
