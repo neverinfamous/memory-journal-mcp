@@ -68,6 +68,7 @@
 - Restored `skills/package.json` containing the accurate manifest of currently active skills, and relocated `github-repo-setup` out of this repository into the `adamic` repository workflows. (`30bc26a5`)
 
 ### Fixed
+- Fixed Code Mode Proxy invariant violation where the sandbox proxy failed on frozen target properties by migrating the proxy target to an empty extensible object. (`9172999`)
 - Fixed vitest creating test databases in the project root by explicitly redirecting them to `.test-output/vitest/`. (`834b21a`)
 - Intercepted tool name hallucinations (e.g. Prompt/Tool confusion) before SDK validation to return actionable error guidance. (`9f704a08`)
 - Fixed missing skills in package manifest and README. (`d12b78cc`)

@@ -83,8 +83,9 @@ async function executeCode(
         }
 
         // Permissive shim to smooth out common agent hallucinations across different repos
-        const shimMj: Record<string, unknown> = new Proxy(mjApi, {
-            get(target: Record<string, unknown>, prop: string | symbol): unknown {
+        const shimMj: Record<string, unknown> = new Proxy({}, {
+            get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
+                const target = mjApi
                 // Handle infinite chaining
                 if (prop === 'mj' || prop === 'journal' || prop === 'memory') return shimMj
                 // Handle `sqlite.mj.executeCode` (from db-mcp parity)
@@ -190,6 +191,25 @@ async function executeCode(
                 // Fall back to the strict `mjApi` proxy which provides exact error messages
                 return Reflect.get(target, prop) as unknown
             },
+            has(_fakeTarget, prop) {
+                return prop in mjApi
+            },
+            ownKeys(_fakeTarget) {
+                return Reflect.ownKeys(mjApi)
+            },
+            getOwnPropertyDescriptor(_fakeTarget, prop) {
+                const desc = Reflect.getOwnPropertyDescriptor(mjApi, prop)
+                if (desc) {
+                    return { ...desc, configurable: true }
+                }
+                return undefined
+            },
+            set() { return false },
+            defineProperty() { return false },
+            deleteProperty() { return false },
+            setPrototypeOf() { return false },
+            isExtensible() { return true },
+            preventExtensions() { return false }
         })
 
         const frozenContext = Object.freeze(contextObj ?? {})
