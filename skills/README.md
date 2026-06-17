@@ -13,13 +13,13 @@ This directory contains highly customized, core operational skills specifically 
 | `adversarial-planner`        | Multi-pass adversarial planning — iterative plan drafting, structured critique, and Copilot validation                                |
 | `adversarial-security`       | Multi-pass adversarial security audit — iterative threat modeling, attack surface analysis, and Copilot validation                    |
 | `adversarial-skill-audit`    | Multi-pass adversarial skill audit — iterative quality evaluation, trigger stress-testing, and Copilot validation                     |
+| `adversarial-skill-builder`  | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing                             |
 | `adversarial-workflow-audit` | Multi-pass adversarial workflow audit — sequential clarity, HITL safety gates, loop prevention, and Copilot validation                |
 | `github-commander`           | GitHub pipeline workflows for orchestrating issues, regressions, and deployments                                                      |
 | `github-copilot-cli`         | Adversarial pre-push validation and full repository code audits driven natively by the `gh copilot` CLI                               |
 | `github-repo-setup`          | Scaffold public TypeScript/Node.js repos under `{{ORG_NAME}}`                                                                         |
 | `mj-mcp-heal`                | Codebase healing — anti-hallucination guardrails, schema hardening, proxy interceptors, and alias management                         |
 | `mj-mcp-optimize`            | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete               |
-| `skill-builder`              | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing                             |
 | `sqlite`                     | Production configurations for concurrency (WAL), typing (STRICT), and data integrity                                                  |
 
 ## Automated Auditing

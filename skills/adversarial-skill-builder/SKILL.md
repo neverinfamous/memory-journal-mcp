@@ -1,5 +1,5 @@
 ---
-name: skill-builder
+name: adversarial-skill-builder
 description: |
   Guide for creating, evaluating, and refining agent skills (.md files with YAML
   frontmatter). Use this skill whenever you are creating a new skill, improving
