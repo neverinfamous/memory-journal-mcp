@@ -10,7 +10,7 @@
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { TOOL_GROUPS } from '../filtering/tool-filter.js'
+import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 
 // =============================================================================
 // Scope Constants

@@ -8,7 +8,8 @@
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { TOOL_GROUPS, getEnabledGroups } from '../filtering/tool-filter.js'
+import { getEnabledGroups } from '../filtering/tool-filter.js'
+import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 
 /**
  * Resource definition for instruction generation
