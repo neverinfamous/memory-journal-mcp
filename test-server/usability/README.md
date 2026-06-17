@@ -22,6 +22,7 @@ Because testing and healing all tools at once exhausts an agent's context window
 ## Test Modules
 
 - `test-usability-codemode.md` - Core sandbox and proxy mechanics.
+- `test-usability-crud-mutations.md`
 - `test-usability-core.md`
 - `test-usability-search.md`
 - `test-usability-analytics.md`

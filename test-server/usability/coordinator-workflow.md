@@ -29,20 +29,21 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 ## Test Sequence Queue
 
 1. `test-usability-codemode.md`
-2. `test-usability-core.md`
-3. `test-usability-search.md`
-4. `test-usability-analytics.md`
-5. `test-usability-relationships.md`
-6. `test-usability-io.md`
-7. `test-usability-admin.md`
-8. `test-usability-github-issues.md`
-9. `test-usability-github-projects.md`
-10. `test-usability-backup.md`
-11. `test-usability-team-core.md`
-12. `test-usability-team-search-analytics.md`
-13. `test-usability-team-io-admin.md`
-14. `test-usability-team-flags.md`
-15. `test-usability-team-rbac.md`
+2. `test-usability-crud-mutations.md`
+3. `test-usability-core.md`
+4. `test-usability-search.md`
+5. `test-usability-analytics.md`
+6. `test-usability-relationships.md`
+7. `test-usability-io.md`
+8. `test-usability-admin.md`
+9. `test-usability-github-issues.md`
+10. `test-usability-github-projects.md`
+11. `test-usability-backup.md`
+12. `test-usability-team-core.md`
+13. `test-usability-team-search-analytics.md`
+14. `test-usability-team-io-admin.md`
+15. `test-usability-team-flags.md`
+16. `test-usability-team-rbac.md`
 
 ## Finalization
 
