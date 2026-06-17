@@ -4,13 +4,13 @@ const WORKERS = 1; // Using 1 worker to prevent SQLite lock contention and trans
 
 export default defineConfig({
     testDir: './tests/e2e',
-    timeout: 120000,
+    timeout: 60000,
     outputDir: '.test-output/playwright',
     fullyParallel: false,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: WORKERS,
-    reporter: 'list',
+    reporter: [['list'], ['json', { outputFile: '.test-output/playwright-results.json' }]],
     use: {
         trace: 'on-first-retry',
         actionTimeout: 0,

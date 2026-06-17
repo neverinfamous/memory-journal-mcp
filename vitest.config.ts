@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
     test: {
         globals: true,
+        isolate: true,
         environment: 'node',
         env: {
             TEAM_AUTHOR: 'test-author',
@@ -13,7 +14,7 @@ export default defineConfig({
         include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',
-            reporter: ['text', 'html', 'json-summary'],
+            reporter: ['text', 'html', 'json-summary', 'lcov'],
             reportsDirectory: '.test-output/coverage',
             include: ['src/**/*.ts'],
             exclude: [
@@ -25,8 +26,8 @@ export default defineConfig({
                 'src/types/**',
             ],
         },
-        hookTimeout: 30_000,
-        testTimeout: 10_000,
+        hookTimeout: 30000,
+        testTimeout: 10000,
         pool: 'forks',
         maxWorkers: 2,
         fileParallelism: true,
