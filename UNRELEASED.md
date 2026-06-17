@@ -4,7 +4,6 @@
 
 ### Changed
 - Refactored tool filtering architecture by extracting `TOOL_GROUPS` and `META_GROUPS` constants into a dedicated `tool-constants.ts` file to establish structural parity with `mysql-mcp` and `db-mcp`. (`1d952c3`)
-- Standardized Playwright and Vitest test configurations to enforce strict timeouts, isolation, and consistent artifact paths for ecosystem parity. (`1e012d1`)
 
 ### Added
 - Implemented staleness analytics and commit grouping template resources. (`b960eb0c`, `22cb4206`)
@@ -12,7 +11,6 @@
 - Implemented `briefingImportanceThreshold` configuration, GitHub active branch PR cross-referencing, and Briefing Graph Context enhancements (hubs and orphan warnings). (`d1effdf`)
 - Implemented commit-enriched session summaries via `SessionCommitContextSchema` and `memory://commits/{project_number}` resource. (`eda39c0`)
 - Added rigorous Playwright E2E test coverage (`codemode-abuse.spec.ts`) asserting that Code Mode successfully maintains proxy invariants on frozen targets and strictly prevents prototype pollution / property mutation boundaries via `Object.freeze()`. (`5fc64c1`)
-- Added comprehensive usability test automation suite modeling 26 domain-specific test prompts natively against the stateless HTTP endpoints. (`37eb7bb`)
 - Added team flag analytics tests to Code Mode test suite. (`798fdd3`)
 - Added `test-usability-crud-mutations.md` test module to explicitly fuzz structural and data integrity boundaries of core CRUD operations and session summaries. (`59c162c`)
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations. (`f5b7f7e`)
@@ -39,7 +37,6 @@
 - `scripts/README.md` containing an agent-optimized script inventory and execution guidelines (`2a770648`). (`e979200d`)
 
 ### Changed
-- Harmonized CI workflows, test configurations, and filtering parity to strictly mirror `db-mcp` rigour. (`8d5b69bd`)
 - Standardized adversarial skill protocols and resolved trigger collisions across 14 skills, including structural progressive disclosure improvements. (`584977a1`)
 - Integrated `web-perf` checklist into `adversarial-performance` to automatically run against frontend web apps, and aligned `docs-marketer` with the adversarial protocol format. (`b30f21d5`)
 - Refactored adversarial skills directory to implement audit improvements, split github-commander into issue and PR specific skills, and prune unused sqlite and github-copilot-cli skills. (`0599ad64`)
@@ -50,7 +47,6 @@
 - Updated adversarial skills (performance, planner, security, skill-audit, workflow-audit) with explicit execution rules enforcing continuous prompt improvement, graceful handling of GitHub Copilot quota failures, and strict prohibition of memory-journal-mcp entries (`e216823f`). (`118dfd0a`)
 - Updated `mj-mcp-heal` developer skill document to focus on anti-hallucination guardrails and native optimization (`4694d2cb`). (`4694d2cb`)
 - Renamed `mj-mcp-optimize` → `mj-mcp-heal` (codebase healing) and `journal-optimizer` → `mj-mcp-optimize` (data optimization) for naming consistency (`a54e15b0`). (`a54e15b0`)
-- Bumped `eslint` to 10.5.0 (`4a2a2ae1`). (`79069b07`)
 - Wrapped batch operations in a single database transaction for improved throughput. (`434778fe`)
 - Refactored core files and handlers into sub-directories for modularity. (`b685a5a7`)
 - Enforced dynamic read-only constraints for Code Mode mutation protection. (`2d243d38`)
@@ -81,24 +77,20 @@
 - Fixed vitest creating test databases in the project root by explicitly redirecting them to `.test-output/vitest/`. (`834b21a`)
 - Intercepted tool name hallucinations (e.g. Prompt/Tool confusion) before SDK validation to return actionable error guidance. (`9f704a08`)
 - Fixed missing skills in package manifest and README. (`d12b78cc`)
-- Fixed widespread test failures by injecting `expected_version` into `delete_entry` integration payloads and integrated adversarial Cloudflare SEO skill. (`0b1eb687`)
 - Fixed missing `auto_context` parameter in `CreateEntrySchema` and `UpdateEntrySchema` (including Team database variants) to allow agents to submit Session Commit metadata. (`fe3b893`, `597cd49`, `5b1faa3c`). (`ea1dcf19`)
 - Fixed state pollution in `memory://briefing` environment configuration E2E tests. (`eda39c0`)
 - Fixed flaky test timeout in Code Mode test suite by increasing the Vitest global `testTimeout` to 10s. (`37fda1e`)
 - Fixed `setTimeout` and `sleep` functions in the Code Mode sandbox to correctly bind to global execution context. (`96b5b47`)
-- Fixed ESLint `@typescript-eslint/no-unsafe-function-type` error in Code Mode sandbox `setTimeout` callback definition. (`5b715f3`)
 - Fixed explicit success:false check in Code Mode RBAC tests and boolean lint (`d092818`). (`d0928188`)
 - Fixed strict TypeScript linting errors (type vs interface, boolean evaluation) in Code Mode proxy handler and updated coordinator workflows to strictly enforce linting quality gates. (`430849e`)
 - Fixed Code Mode leaking raw MCP exceptions into execution contexts by catching unhandled rejections at the proxy boundary and returning structured error objects. (`35c18b6`)
 - Fixed `team_delete_entry` call in Code Mode analytics test suite which was failing due to an unsupported `permanent` flag. (`dc7efdd`)
 - Fixed Zod validation errors in test suite caused by strict enforcement of `project_number`. (`cd985384`)
-- Removed stale `create_entry_minimal` from `TOOL_GROUPS` to fix test failures. (`d2297b00`)
 - Fixed Native MCP tools failing to auto-resolve hallucinated repository or project string parameters. (`fde3adab`)
 - Removed explicit `setTimeout` and `getConfig` globals from Code Mode sandbox. (`96b5b47c`)
 - Fixed `semanticSearch` returning artificially low similarity scores. (`0000000`)
 - Resolved false-positive in static security scanner regarding bracket-notation AST escapes. (`898b7959`)
 - Fixed `--tool-filter codemode` inadvertently disabling mutating tool bindings. (`56cfb69f`)
-- Fixed test pollution in `codemode-restore.test.ts`. (`0c9ec50a`)
 - Resolved E2E Test suite execution bottlenecks by enabling parallel Playwright workers and isolated databases. (`69e16091`)
 - Fixed `create_entry` missing auto-population of GitHub URLs when `issue_number` is provided. (`e9df75db`)
 - Fixed `get_entry_by_id` missing relationships and importance breakdown in response. (`96b5b47c`)
