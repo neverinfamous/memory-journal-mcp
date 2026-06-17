@@ -11,36 +11,48 @@ prompt targets a specific dimension of documentation marketability.
 ## Prompt 1: First Impression Evaluation
 
 ```
+
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
 gh copilot -p "You are a developer evaluating this project for the first time. Read README.md and answer in under 200 words: (1) What does this project do? (2) Why should I choose it over alternatives? (3) What's my fastest path to trying it? (4) What critical information is missing from the first screen? Rate the first impression 1-5." --allow-tool "shell(find,cat,head,grep)"
 ```
 
 ## Prompt 2: Feature Visibility Gap Analysis
 
 ```
+
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
 gh copilot -p "Compare the features documented in README.md against the actual tool groups defined in the source code (check src/filtering/ for tool definitions). List any capabilities that exist in source code but are NOT prominently mentioned in the README. For each gap, rate its marketing impact as Critical/High/Medium/Low." --allow-tool "shell(find,cat,head,grep)"
 ```
 
 ## Prompt 3: Competitive Positioning Review
 
 ```
+
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
 gh copilot -p "Read the README.md 'What Sets Us Apart' section (or equivalent). For each differentiator listed: (1) Is it specific or generic? (2) Is it backed by evidence? (3) Would it convince a skeptic? Then suggest 3 improvements to strengthen the competitive positioning." --allow-tool "shell(find,cat,head,grep)"
 ```
 
 ## Prompt 4: Onboarding Friction Assessment
 
 ```
+
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
 gh copilot -p "Follow the Quick Start instructions in README.md as if you were setting up this project for the first time. Identify every point where you would need to: (1) look up external documentation, (2) make an assumption not documented, (3) troubleshoot an unclear step. Rate the onboarding experience 1-5." --allow-tool "shell(find,cat,head,grep)"
 ```
 
 ## Prompt 5: Cross-Surface Consistency Check
 
 ```
+
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
 gh copilot -p "Compare README.md, DOCKER_README.md (if it exists), and any wiki pages in a .wiki/ directory. Report any inconsistencies in: (1) feature counts or tool numbers, (2) version references, (3) configuration examples, (4) feature naming or descriptions. List each inconsistency with its location." --allow-tool "shell(find,cat,head,grep)"
 ```
 
 ## Prompt 6: Documentation Tone Analysis
 
 ```
+
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
 gh copilot -p "Analyze the writing tone across README.md. Report: (1) instances of passive voice that weaken the message, (2) hedging language (hopefully, should, might), (3) inconsistencies in formality level between sections, (4) overuse of superlatives without evidence. Suggest 5 specific tone improvements." --allow-tool "shell(find,cat,head,grep)"
 ```
 

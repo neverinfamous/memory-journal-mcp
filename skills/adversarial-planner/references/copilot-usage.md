@@ -2,7 +2,7 @@
 
 > **⚠️ CRITICAL — Non-Interactive Mode**: The `gh copilot` CLI must be run in
 > non-interactive mode using the `-p` (or `--prompt`) flag. Interactive mode
-> will hang indefinitely in an automated agent context. Use:
+> will hang indefinitely in an automated agent context. Do NOT include the `explain` or `suggest` subcommands before the `-p` flag. Use:
 >
 > ```
 > gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"

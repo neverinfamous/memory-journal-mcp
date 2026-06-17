@@ -315,7 +315,9 @@ remediation plan.
 See [copilot-security-prompts.md](copilot-security-prompts.md) for prompt
 templates, correct CLI syntax, and parsing guidance.
 
-> **⚠️ CRITICAL**: You MUST use `gh copilot -p "<prompt>"` (non-interactive
+> **⚠️ CRITICAL**: You MUST use `
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
+gh copilot -p "<prompt>"` (non-interactive. Do NOT use the 'explain' or 'suggest' subcommands)
 > mode). Do NOT use `gh copilot explain` which is interactive and will hang.
 > Always `Set-Location` to the target repository before invoking. Include
 > `--allow-tool "shell(find,cat,head,grep)"` so Copilot can read source files.

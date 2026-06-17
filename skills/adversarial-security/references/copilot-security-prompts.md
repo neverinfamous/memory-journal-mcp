@@ -39,6 +39,8 @@ in the journal entry. The audit is still valid with Phases 1–3 alone.
 
 ```
 Set-Location <target-repo>
+
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
 gh copilot -p "<prompt text>" --allow-tool "shell(find,cat,head,grep)"
 ```
 

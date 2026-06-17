@@ -52,7 +52,9 @@ Which tasks can be parallelized.
 
 ## Copilot Security & Performance Scan
 
-Run a non-interactive `gh copilot` scan (`gh copilot -p "..." --allow-tool "shell(find,cat,head,grep)"`) focusing specifically on performance and security risks for the proposed changes, and embed the raw or summarized findings here.
+Run a non-interactive `gh copilot` scan (`
+> **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
+gh copilot -p "..." --allow-tool "shell(find,cat,head,grep)"`) focusing specifically on performance and security risks for the proposed changes, and embed the raw or summarized findings here.
 
 ## Risk Assessment
 
