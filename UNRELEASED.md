@@ -1,6 +1,11 @@
 # Unreleased Changes
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
+## [Unreleased]
+
+> **Agent Context**: This file tracks unreleased changes. For historical release context, read [`CHANGELOG.md`](CHANGELOG.md).
+> - **Search**: Entries are prefixed with exact file paths to enable rapid `grep` correlation.
+> - **Tags**: `[BREAKING]`, `[MIGRATION]`, `[SECURITY]`, `[PERFORMANCE]`, `[FEATURE]`, `[BUGFIX]`
+(https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Changed
 - Refactored tool filtering architecture by extracting `TOOL_GROUPS` and `META_GROUPS` constants into a dedicated `tool-constants.ts` file to establish structural parity with `mysql-mcp` and `db-mcp`. (`1d952c3`)
