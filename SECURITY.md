@@ -245,6 +245,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
 - ✅ **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
 - ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
+- ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context) are Object.freeze()'d to prevent prototype pollution on the API bridge
 
 ### **Static Code Validation**
 
@@ -260,6 +261,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
 - ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
 - ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
+- ✅ **Pre-warmed worker pool** — Worker threads are pre-warmed on startup to eliminate cold-start latency, with idle recycling and age-based recycling for memory hygiene
 
 ## 🔍 **Data Privacy**
 
@@ -422,6 +424,8 @@ chmod 700 /shared/team-data
 - [x] Code Mode RPC allowlist validation (host-side method authorization)
 - [x] Code Mode readonly Proxy traps (structured errors for stripped methods)
 - [x] CI/CD security pipeline (CodeQL, Trivy, secret scanning)
+- [x] Code Mode frozen API surfaces (Object.freeze on mj.*, console, context)
+- [x] Code Mode pre-warmed worker pool with lifecycle management
 - [x] Comprehensive security documentation
 
 ## 🎯 **Threat Model**

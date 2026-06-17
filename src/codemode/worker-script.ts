@@ -60,6 +60,15 @@ async function executeCode(
     try {
         const mjApi = buildApiProxy(rpcCall, methodList, schemaList, readonlyMode)
 
+        // Freeze each group namespace in the API to prevent prototype pollution
+        for (const key of Object.keys(mjApi)) {
+            const val = mjApi[key]
+            if (typeof val === 'object' && val !== null) {
+                Object.freeze(val)
+            }
+        }
+        Object.freeze(mjApi)
+
         const DB_TO_JOURNAL: Record<string, [string, string]> = {
             listTables: ['analytics', 'getStatistics'],
             describeTable: ['analytics', 'getStatistics'],
@@ -183,6 +192,17 @@ async function executeCode(
             },
         })
 
+        const frozenContext = Object.freeze(contextObj ?? {})
+
+        const consoleShim = {
+            log: (...args: unknown[]) => args,
+            warn: (...args: unknown[]) => args,
+            error: (...args: unknown[]) => args,
+            info: (...args: unknown[]) => args,
+            debug: (...args: unknown[]) => args,
+        }
+        Object.freeze(consoleShim)
+
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
             journal: shimMj,
@@ -192,14 +212,8 @@ async function executeCode(
             db: shimMj,
             memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
             sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'],
-            context: contextObj ?? {},
-            console: {
-                log: (...args: unknown[]) => args,
-                warn: (...args: unknown[]) => args,
-                error: (...args: unknown[]) => args,
-                info: (...args: unknown[]) => args,
-                debug: (...args: unknown[]) => args,
-            },
+            context: frozenContext,
+            console: consoleShim,
             fetch: undefined,
             sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5000))),
             setTimeout: (cb: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => setTimeout(cb, Math.min(ms, 5000), ...args),
@@ -226,6 +240,11 @@ async function executeCode(
                 sandbox[key] = val
             }
         }
+
+        // Freeze the sandbox object itself before passing to vm.createContext.
+        // Note: shimMj is a Proxy and cannot be frozen — the underlying mjApi
+        // target is already frozen above, which is sufficient.
+        Object.freeze(sandbox)
 
         const context = vm.createContext(sandbox, {
             name: 'codemode-worker-sandbox',

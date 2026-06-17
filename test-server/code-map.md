@@ -78,9 +78,9 @@ src/
 │
 ├── codemode/                       # Code Mode sandbox (secure JS execution)
 │   ├── sandbox.ts                  # SandboxPool lifecycle manager
-│   ├── sandbox-factory.ts          # Sandbox creation factory (engine-level restrictions: codeGeneration disabled, frozen prototypes, Proxy nullified)
+│   ├── sandbox-factory.ts          # Sandbox creation factory (engine-level restrictions: codeGeneration disabled, frozen prototypes, Proxy nullified, API surface frozen)
 │   ├── auto-return.ts              # Last-expression auto-return transform (IIFE helper)
-│   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge)
+│   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge, pre-warmed pool with lifecycle management)
 │   ├── worker-script.ts            # Worker thread entry point — initializes shimMj and proxy API
 │   ├── worker-api-proxy.ts         # Worker API Proxy Builder (builds mj.* API, handles missing await interceptions)
 │   ├── worker-result-proxy.ts      # Result Wrapping Proxy (prevents silent failures, explicit IPC serialization traps)

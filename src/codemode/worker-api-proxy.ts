@@ -617,7 +617,7 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             }};
         } else if (typeof args[0] === 'object' && args[0] !== null) {
             const obj = args[0] as Record<string, unknown>;
-            if (Array.isArray(obj['ids']) || Array.isArray(obj['entry_ids'])) {
+            if (Array.isArray(obj['ids']) || Array.isArray(obj['entry_ids']) || Array.isArray(obj['entry_id']) || Array.isArray(obj['id'])) {
                 return { error: {
                     success: false,
                     error: `${methodName} only accepts a single entry_id. To process multiple entries, use the batch equivalent.`,
@@ -858,6 +858,26 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
                     recoverable: true
                 }};
             }
+        }
+    }
+    
+    // delete_entry hallucination: missing expected_version
+    const deleteMethods = ['delete_entry', 'deleteEntry', 'team_delete_entry', 'teamDeleteEntry'];
+    if (deleteMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        if (obj['expected_version'] === undefined && obj['version'] === undefined) {
+            return { error: {
+                success: false,
+                error: `${methodName} requires an 'expected_version' for safety.`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                suggestion: `Pessimistic concurrency guardrail: You must provide 'expected_version'. If you don't know it, read the entry first via get_entry_by_id to retrieve its current version.`,
+                recoverable: true
+            }};
+        }
+        if (obj['version'] !== undefined && obj['expected_version'] === undefined) {
+            obj['expected_version'] = obj['version'];
+            delete obj['version'];
         }
     }
     
@@ -1178,6 +1198,11 @@ export function buildApiProxy(
     schemas?: Record<string, Record<string, string>>,
     readonlyMode?: boolean
 ): Record<string, unknown> {
+    // Freeze note: Group namespaces are Proxy objects and cannot be frozen
+    // via Object.freeze(). Schema descriptors are function closures attached
+    // via Object.assign (`.schema()`) that return Promise<string> — they are
+    // not mutable data objects. The caller (worker-script.ts) freezes the
+    // returned `api` object and its group namespace values after construction.
     const api: Record<string, unknown> = {}
 
     const safeRpcCall = (group: string, method: string, args: unknown[]): Promise<unknown> => 
@@ -1429,7 +1454,20 @@ export function buildApiProxy(
             const available = Object.keys(methods)
                 .filter((k) => k !== '_topLevel')
                 .join(', ')
-            const reason = `Group or property '${prop}' is not found on 'mj'. Available groups: ${available}. Use mj.help() for more info.`
+            let reason = `Group or property '${prop}' is not found on 'mj'. Available groups: ${available}. Use mj.help() for more info.`
+
+            if (typeof prop === 'string') {
+                const normalized = prop.replace(/^mj_/, '').replace(/_/g, '-');
+                // Common prompt names that agents mistake for tools in Code Mode
+                const knownPrompts = ['session-summary', 'plan-draft', 'adversarial-review', 'copilot-validation', 'plan-refinement', 'team-session-summary'];
+                const isPrompt = knownPrompts.includes(normalized) || knownPrompts.includes(prop) || knownPrompts.includes(prop.replace(/^mj_/, ''));
+                
+                if (isPrompt) {
+                    reason = `'${prop}' is an MCP Prompt, not an MCP Tool. Code Mode cannot invoke MCP Prompts directly. Please use the 'get_prompt' tool (or your native MCP Prompts integration) outside of Code Mode to evaluate it, then use 'mj.core.createEntry' to save the result.`;
+                } else if (prop.startsWith('mj_')) {
+                    reason = `'${prop}' is not a valid root tool in Code Mode. Code Mode uses namespaced groups (e.g., 'mj.core.searchEntries'). Use 'mj.help()' to see available namespaces.`;
+                }
+            }
 
             // Return a proxy that rejects any method call
             return new Proxy(
