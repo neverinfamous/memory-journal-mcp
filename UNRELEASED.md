@@ -32,6 +32,7 @@
 - `scripts/README.md` containing an agent-optimized script inventory and execution guidelines (`2a770648`).
 
 ### Changed
+- Updated skills inventory: migrated general ecosystem skills to adamic, centralized changelog workflows into github-commander, and standardized adversarial-skill-builder. (`053fa89a`)
 - Updated all testing coordinator workflows to enforce strict validation prerequisite checks and warn against post-commit amending that breaks changelog SHAs. (`edd3dab`)
 - Updated `mj-mcp-optimize` skill documentation with advanced learnings for Code Mode bulk operations and handling encrypted databases. (`4fc0bf8`)
 - Updated adversarial skills (performance, planner, security, skill-audit, workflow-audit) with explicit execution rules enforcing continuous prompt improvement, graceful handling of GitHub Copilot quota failures, and strict prohibition of memory-journal-mcp entries (`e216823f`).
