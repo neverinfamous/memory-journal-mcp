@@ -33,6 +33,7 @@
 - `scripts/README.md` containing an agent-optimized script inventory and execution guidelines (`2a770648`).
 
 ### Changed
+- Standardized adversarial skill protocols and resolved trigger collisions across 14 skills, including structural progressive disclosure improvements. (`584977a1`)
 - Integrated `web-perf` checklist into `adversarial-performance` to automatically run against frontend web apps, and aligned `docs-marketer` with the adversarial protocol format. (`b30f21d5`)
 - Refactored adversarial skills directory to implement audit improvements, split github-commander into issue and PR specific skills, and prune unused sqlite and github-copilot-cli skills. (`0599ad64`)
 - Promoted code quality audit to an adversarial skill and removed redundant GitHub Commander workflows. (`7bcf3d3f`)
