@@ -65,6 +65,7 @@ export const TeamCreateEntrySchema = z.preprocess(
         pr_url: z.string().optional(),
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
         author: z.string().optional(),
+        auto_context: z.string().optional(),
     }).strict()
 )
 
@@ -113,6 +114,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         pr_url: z.string().optional(),
         pr_status: z.string().optional(),
         author: z.string().optional(),
+        auto_context: z.string().optional(),
     }).strict()
 )
 
@@ -359,6 +361,7 @@ export const TeamUpdateEntrySchema = z.preprocess(
         workflow_status: z.enum(['queued', 'in_progress', 'completed']).nullable().optional(),
         is_archived: z.boolean().optional(),
         expected_version: z.number().optional(),
+        auto_context: z.string().nullable().optional(),
     }).strict()
 )
 
@@ -408,6 +411,7 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
         workflow_status: z.string().nullable().optional(),
         is_archived: z.boolean().optional(),
         expected_version: relaxedNumber().optional(),
+        auto_context: z.string().nullable().optional(),
     }).strict()
 )
 
