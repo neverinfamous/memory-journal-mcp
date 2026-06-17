@@ -1,0 +1,13 @@
+{
+  "instructionLevel": "standard",
+  "briefingEntries": 5,
+  "briefingSummaries": 1,
+  "briefingIncludeTeam": false,
+  "briefingIssues": 0,
+  "briefingPrs": 0,
+  "briefingPrStatus": false,
+  "briefingMilestones": 3,
+  "briefingWorkflows": 0,
+  "briefingWorkflowStatus": false,
+  "briefingCopilot": false
+}

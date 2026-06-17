@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
+import path from 'node:path'
+
+process.env.MEMORY_JOURNAL_CONFIG = path.join(process.cwd(), 'tests', 'e2e', 'empty-config.json');
 
 const WORKERS = 1; // Using 1 worker to prevent SQLite lock contention and transport blocking
 
@@ -36,6 +39,7 @@ export default defineConfig({
                 DEFAULT_PROJECT_NUMBER: '1',
                 ALLOWED_IO_ROOTS: process.cwd() + '/.test-output/e2e',
                 METRICS_EXPORT: 'prometheus',
+                MEMORY_JOURNAL_CONFIG: process.cwd() + '/tests/e2e/empty-config.json',
             },
             url: `http://localhost:${port}/health`,
             reuseExistingServer: !process.env.CI,

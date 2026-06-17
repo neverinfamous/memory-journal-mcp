@@ -203,6 +203,7 @@ export async function startServer(
                     GITHUB_TOKEN: '',
                     GITHUB_PERSONAL_ACCESS_TOKEN: '',
                     ALLOWED_IO_ROOTS: process.cwd(),
+                    MEMORY_JOURNAL_CONFIG: join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
                     MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
                         ? undefined
                         : '10000',

@@ -189,7 +189,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const metadata: Record<string, unknown>[] = []
 
                 for (const entry of entries) {
-                    if (entry.tags.includes('session-summary')) {
+                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
                         const ctx = parseSessionCommitContext(entry.autoContext)
                         if (ctx && ctx.commits.length > 0) {
                             commits.push(...ctx.commits)
@@ -245,7 +245,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const commits: string[] = []
 
                 for (const entry of entries) {
-                    if (entry.tags.includes('session-summary')) {
+                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
                         const ctx = parseSessionCommitContext(entry.autoContext)
                         if (ctx && ctx.commits.length > 0) {
                             commits.push(...ctx.commits)
@@ -320,7 +320,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const commits: string[] = []
 
                 for (const entry of entries) {
-                    if (entry.tags.includes('session-summary')) {
+                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
                         const ctx = parseSessionCommitContext(entry.autoContext)
                         if (ctx && ctx.commits.length > 0) {
                             commits.push(...ctx.commits)

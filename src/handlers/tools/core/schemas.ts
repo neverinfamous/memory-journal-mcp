@@ -63,6 +63,24 @@ export const CreateEntrySchema = z.preprocess(
                 });
             }
         }
+        if (data.tags?.includes('commit-narrative')) {
+            try {
+                const ac = JSON.parse(data.auto_context || '{}') as unknown;
+                if (!ac || typeof ac !== 'object' || !Array.isArray((ac as Record<string, unknown>).commits) || (ac as Record<string, unknown[]>).commits.length === 0) {
+                    ctx.addIssue({
+                        code: "custom",
+                        path: ['auto_context'],
+                        message: "Entries tagged 'commit-narrative' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
+                    });
+                }
+            } catch {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ['auto_context'],
+                    message: "auto_context must be a valid JSON string for commit narratives.",
+                });
+            }
+        }
     })
 )
 
@@ -132,6 +150,24 @@ export const CreateEntrySchemaMcp = z.preprocess(
                     code: "custom",
                     path: ['content'],
                     message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                });
+            }
+        }
+        if (data.tags?.includes('commit-narrative')) {
+            try {
+                const ac = JSON.parse(data.auto_context || '{}') as unknown;
+                if (!ac || typeof ac !== 'object' || !Array.isArray((ac as Record<string, unknown>).commits) || (ac as Record<string, unknown[]>).commits.length === 0) {
+                    ctx.addIssue({
+                        code: "custom",
+                        path: ['auto_context'],
+                        message: "Entries tagged 'commit-narrative' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
+                    });
+                }
+            } catch {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ['auto_context'],
+                    message: "auto_context must be a valid JSON string for commit narratives.",
                 });
             }
         }
