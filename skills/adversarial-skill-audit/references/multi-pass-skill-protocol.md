@@ -88,16 +88,7 @@ After scoring all skills individually, produce a directory-level overview:
 - **Inventory accuracy**: [is the README table and package.json current?]
 ```
 
-### Journal
 
-```
-create_entry({
-  content: "<full inventory with all scorecards>",
-  entry_type: "skill_audit_profile",
-  tags: ["adversarial-skill-audit", "profile"],
-  project_number: <project number>
-})
-```
 
 ---
 
@@ -202,16 +193,7 @@ For each skill, identify instructions that an agent might:
 Skills that are actively harmful, misleading, or security-risk.
 ```
 
-### Journal
 
-```
-create_entry({
-  content: "<full adversarial review>",
-  entry_type: "skill_audit_stress",
-  tags: ["adversarial-skill-audit", "stress-test"],
-  project_number: <project number>
-})
-```
 
 ---
 
@@ -282,16 +264,7 @@ Check: has `MAX_AUDIT_PASSES` been reached?
 - **No** → return to Phase 2 (stress-test the improvement plan itself)
 - **Yes** → proceed to Phase 4
 
-### Journal
 
-```
-create_entry({
-  content: "<improvement plan with dispositions>",
-  entry_type: "skill_audit_remediation",
-  tags: ["adversarial-skill-audit", "remediation"],
-  project_number: <project number>
-})
-```
 
 ---
 
@@ -302,16 +275,7 @@ If available, invoke Copilot CLI. See
 
 If unavailable, skip gracefully.
 
-### Journal
 
-```
-create_entry({
-  content: "<copilot findings + final dispositions>",
-  entry_type: "skill_audit_copilot",
-  tags: ["adversarial-skill-audit", "copilot"],
-  project_number: <project number>
-})
-```
 
 ---
 
