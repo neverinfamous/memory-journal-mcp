@@ -104,7 +104,7 @@ const errors = {}
 errors.createEmpty = await mj.core.createEntry({ project_number: 5, content: '' })
 errors.getNotFound = await mj.core.getEntryById({ entry_id: 999999 })
 errors.updateNotFound = await mj.admin.updateEntry({ entry_id: 999999, content: 'x' })
-errors.deleteNotFound = await mj.admin.deleteEntry({ entry_id: 999999 })
+errors.deleteNotFound = await mj.admin.deleteEntry({ entry_id: 999999, expected_version: 1 })
 
 // Relationship errors
 errors.linkBadSource = await mj.relationships.linkEntries({
@@ -146,6 +146,7 @@ errors.teamUpdateNotFound = await mj.team.teamUpdateEntry({
 errors.teamDeleteNotFound = await mj.team.teamDeleteEntry({
   project_number: 5,
   entry_id: 999999,
+  expected_version: 1,
 })
 errors.teamLinkBad = await mj.team.teamLinkEntries({
   project_number: 5,
@@ -204,7 +205,8 @@ const cm4Entries = entries.entries.filter(
 )
 const results = []
 for (const e of cm4Entries) {
-  const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true })
+  const getVersion = await mj.core.getEntryById({ entry_id: e.id })
+  const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true, expected_version: getVersion.entry?.version ?? 1 })
   results.push({ id: e.id, deleted: del.success })
 }
 
@@ -216,10 +218,11 @@ const teamEntries = await mj.team.teamSearch({
 })
 for (const e of teamEntries.entries ?? []) {
   if (e.content?.includes('CM4')) {
+    const getVersion = await mj.team.teamGetEntryById({ project_number: 5, entry_id: e.id })
     const del = await mj.team.teamDeleteEntry({
       project_number: 5,
-      project_number: 5,
       entry_id: e.id,
+      expected_version: getVersion.entry?.version ?? 1,
     })
     results.push({ id: e.id, source: 'team', deleted: del.success })
   }
