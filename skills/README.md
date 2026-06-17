@@ -13,6 +13,7 @@ This directory contains highly customized, core operational skills specifically 
 | `adversarial-performance`    | Multi-pass adversarial performance audit — iterative profiling, stress-testing critique, and Copilot validation                       |
 | `adversarial-planner`        | Multi-pass adversarial planning — iterative plan drafting, structured critique, and Copilot validation                                |
 | `adversarial-security`       | Multi-pass adversarial security audit — iterative threat modeling, attack surface analysis, and Copilot validation                    |
+| `adversarial-seo`            | Adversarial SEO enforcement — proactive technical SEO, markup, and E-E-A-T guards                                                     |
 | `adversarial-skill-audit`    | Multi-pass adversarial skill audit — iterative quality evaluation, trigger stress-testing, and Copilot validation                     |
 | `adversarial-skill-builder`  | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing                             |
 | `adversarial-workflow-audit` | Multi-pass adversarial workflow audit — sequential clarity, HITL safety gates, loop prevention, and Copilot validation                |

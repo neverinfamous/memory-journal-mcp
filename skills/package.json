@@ -6,6 +6,7 @@
     "main": "README.md",
     "files": [
         "README.md",
+        "adversarial-code-quality/",
         "adversarial-performance/",
         "adversarial-planner/",
         "adversarial-security/",
