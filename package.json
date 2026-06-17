@@ -20,6 +20,7 @@
         "lint": "eslint src/ tests/",
         "lint:fix": "eslint src/ tests/ --fix",
         "typecheck": "tsc --noEmit",
+        "generate:code-map": "tsx scripts/update-code-map.ts",
         "check": "tsx scripts/run-checks.ts",
         "test": "vitest run",
         "test:watch": "vitest",

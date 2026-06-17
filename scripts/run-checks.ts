@@ -9,9 +9,9 @@ try {
     // Ensure the output directory exists
     mkdirSync(testOutputDir, { recursive: true })
 
-    console.log('Running lint and typecheck...')
-    // Run both checks
-    execSync('npm run lint && npm run typecheck', { stdio: 'inherit' })
+    console.log('Running code-map generation, lint, and typecheck...')
+    // Run all checks
+    execSync('npm run generate:code-map && npm run lint && npm run typecheck', { stdio: 'inherit' })
 
     console.log('Checks passed! Writing health-status.json...')
     // Write success status
