@@ -36,6 +36,7 @@ If agents consistently hallucinate inputs that can be logically inferred or norm
 * **Type Coercion:** If agents pass strings (e.g., `{ project_number: 'db-mcp' }`) instead of numbers, use the `projectRegistry` to auto-resolve string repo names into numeric IDs.
 * **Case Normalization:** Because Zod schemas enforce `snake_case`, if an agent hallucinates `{ projectNumber: 123 }` in a batch payload, ensure the `deepCamelToSnake` normalizer in the dispatcher catches and heals it automatically to `project_number`.
 * **Explicit Interception:** If a string cannot be coerced (e.g., `"P154"`), intercept it before validation and throw a highly actionable custom error explicitly guiding the agent to omit the field.
+* **Tool Name Hallucinations:** Agents sometimes confuse MCP Prompts for MCP Tools (e.g. attempting to call a `mj_session_summary` tool). Intercept nonexistent tools in the MCP Server's `tools/call` handler (`tool-registration.ts`) *before* the SDK throws a generic `-32602` error, and return a structured error with an actionable suggestion (e.g. "This is an MCP Prompt, not an MCP Tool. Use the get_prompt tool.").
 
 ## Layer 3: Sandbox Proxy Interceptors (Actionable Errors)
 

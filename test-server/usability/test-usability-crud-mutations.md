@@ -21,6 +21,7 @@ Use the `mj_execute_code` tool to interact with the following tools across the s
   - Call delete endpoints without `expected_version` (to test optimistic concurrency gaps).
   - Attempt hard-deletes without explicitly passing `permanent: true`.
   - Pass arrays or malformed IDs to destructive endpoints.
+- **Prompt/Tool Confusion**: Try to execute MCP Prompts as if they were tools (e.g., calling `mj_session_summary` or `session_summary` directly via tool call instead of using `get_prompt`). Verify the server explicitly heals this and directs you to the correct prompt retrieval method, rather than returning a generic 'Tool not found' or validation error.
 - Do not try to bypass the sandbox, simply test the API surface.
 - Note any errors, exceptions, or unexpected behavior.
 

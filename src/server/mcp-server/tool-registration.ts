@@ -455,6 +455,48 @@ export function createServerInstance(
                                 toolArgs['entry_type'] = 'personal_reflection';
                             }
                         }
+
+                        // Catch hallucinated tool names BEFORE the SDK throws a generic validation error
+                        if (req.params.name && !allToolNames.has(req.params.name)) {
+                            const requestedTool = req.params.name;
+                            let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
+                            
+                            const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-');
+                            const isPrompt = prompts.some((p) => p.name === normalized || p.name === requestedTool || p.name === requestedTool.replace(/^mj_/, ''));
+                            
+                            if (isPrompt) {
+                                suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`;
+                            } else if (requestedTool.startsWith('mj_')) {
+                                suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`;
+                            }
+
+                            const errorResult = {
+                                success: false,
+                                error: `MCP error -32602: Tool ${requestedTool} not found`,
+                                code: 'TOOL_NOT_FOUND',
+                                category: 'hallucination',
+                                suggestion,
+                                recoverable: false,
+                            };
+
+                            const enriched = JSON.stringify({
+                                ...errorResult,
+                                _meta: { tokenEstimate: 0 },
+                            });
+                            const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4);
+                            const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`);
+
+                            return {
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: finalText,
+                                    },
+                                ],
+                                structuredContent: errorResult,
+                                isError: true,
+                            };
+                        }
                     }
 
                     const result = await originalHandler(request, extra)
@@ -592,6 +634,7 @@ export function createServerInstance(
                                 },
                             ],
                             structuredContent: errorResult,
+                            isError: true,
                         }
                     }
                     throw error
