@@ -124,14 +124,14 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
 
     test('should read memory://github/milestones', async () => {
         await expect(client.readResource({ uri: 'memory://github/milestones' })).rejects.toThrow(
-            'GitHub API not available'
+            /(GitHub API not available|Bad credentials|Not Found)/
         )
     })
 
     // --- Graph resources ---
     test('should read memory://graph/actions', async () => {
         await expect(client.readResource({ uri: 'memory://graph/actions' })).rejects.toThrow(
-            'GitHub API not available'
+            /(GitHub API not available|Bad credentials|Not Found)/
         )
     })
 

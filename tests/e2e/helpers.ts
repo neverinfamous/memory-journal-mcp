@@ -200,6 +200,8 @@ export async function startServer(
             env: Object.fromEntries(
                 Object.entries({
                     ...process.env,
+                    GITHUB_TOKEN: '',
+                    GITHUB_PERSONAL_ACCESS_TOKEN: '',
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
                         ? undefined
