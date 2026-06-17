@@ -59,6 +59,7 @@
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
 ### Fixed
+- Fixed widespread test failures by injecting `expected_version` into `delete_entry` integration payloads and integrated adversarial Cloudflare SEO skill. (`0b1eb687`)
 - Fixed missing `auto_context` parameter in `CreateEntrySchema` and `UpdateEntrySchema` (including Team database variants) to allow agents to submit Session Commit metadata. (`fe3b893`, `597cd49`, `5b1faa3c`)
 - Fixed state pollution in `memory://briefing` environment configuration E2E tests. (`eda39c0`)
 - Fixed flaky test timeout in Code Mode test suite by increasing the Vitest global `testTimeout` to 10s. (`37fda1e`)
