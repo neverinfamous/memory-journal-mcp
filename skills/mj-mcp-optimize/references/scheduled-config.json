@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Configuration for the mj-mcp-optimize scheduled agent",
+  "staleOlderThanDays": 90,
+  "staleImportanceThreshold": 0.15,
+  "orphanAutoLinkSimilarityThreshold": 0.85,
+  "orphanAutoLinkMaxPerRun": 10,
+  "orphanScanLimit": 30,
+  "duplicateScanLimit": 50,
+  "duplicateSimilarityThreshold": 0.85,
+  "tagNormalizationAutoMerge": true,
+  "entryScanLimit": 500,
+  "projects": [
+    { "name": "memory-journal-mcp", "projectNumber": 5 },
+    { "name": "adamic", "projectNumber": 16 },
+    { "name": "postgres-mcp", "projectNumber": 13 },
+    { "name": "mysql-mcp", "projectNumber": 14 },
+    { "name": "db-mcp", "projectNumber": 15 }
+  ]
+}

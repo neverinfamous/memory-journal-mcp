@@ -331,7 +331,7 @@ describe('Error Path Coverage', () => {
         })
 
         it('delete_entry should fail for nonexistent entry', async () => {
-            const result = (await callTool('delete_entry', { entry_id: 99999 }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: 99999 , expected_version: 1 }, db)) as {
                 error: string
             }
 

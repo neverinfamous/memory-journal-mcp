@@ -66,7 +66,18 @@ export const TeamCreateEntrySchema = z.preprocess(
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
         author: z.string().optional(),
         auto_context: z.string().optional(),
-    }).strict()
+    }).strict().superRefine((data, ctx) => {
+        if (data.tags?.includes('session-summary')) {
+            const c = data.content || '';
+            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ['content'],
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                });
+            }
+        }
+    })
 )
 
 /** team_create_entry — relaxed for MCP SDK */
@@ -115,7 +126,18 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         pr_status: z.string().optional(),
         author: z.string().optional(),
         auto_context: z.string().optional(),
-    }).strict()
+    }).strict().superRefine((data, ctx) => {
+        if (data.tags?.includes('session-summary')) {
+            const c = data.content || '';
+            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ['content'],
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                });
+            }
+        }
+    })
 )
 
 /** team_get_recent — strict */
@@ -345,7 +367,16 @@ export const TeamUpdateEntrySchema = z.preprocess(
     },
     z.object({
         entry_id: z.number(),
-        content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
+        content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional().refine(
+            (val) => {
+                if (!val) return true;
+                const trimmed = val.trim();
+                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
+                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                return !(startsWithSection && !hasAccomplished);
+            },
+            { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
+        ),
         entry_type: z.enum(ENTRY_TYPES).optional(),
         tags: z.array(z.string()).optional(),
         project_number: StrictProjectNumberSchema,
@@ -390,7 +421,16 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
     },
     z.object({
         entry_id: relaxedNumber().optional(),
-        content: z.string().optional().describe(
+        content: z.string().optional().refine(
+            (val) => {
+                if (!val) return true;
+                const trimmed = val.trim();
+                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
+                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                return !(startsWithSection && !hasAccomplished);
+            },
+            { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
+        ).describe(
             'Updated markdown content. Preserve the existing ## section header structure. ' +
             'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
             '## Context for Next Session structure intact. ' +
@@ -431,7 +471,7 @@ export const TeamDeleteEntrySchema = z.preprocess(
     z.object({
         entry_id: z.number(),
         project_number: StrictProjectNumberSchema.optional(),
-        expected_version: z.number().optional(),
+        expected_version: z.number().describe('REQUIRED for concurrency safety'),
     }).strict()
 )
 
@@ -451,7 +491,7 @@ export const TeamDeleteEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional(),
         project_number: relaxedNumber().optional(),
-        expected_version: relaxedNumber().optional(),
+        expected_version: relaxedNumber().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
     }).strict()
 )
 

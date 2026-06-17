@@ -148,7 +148,7 @@ describe('Tool Handler Coverage', () => {
 
             const result = (await callTool(
                 'delete_entry',
-                { entry_id: entry.id },
+                { entry_id: entry.id, expected_version: 1 },
                 db,
                 vectorManager
             )) as { success: boolean }
@@ -161,7 +161,7 @@ describe('Tool Handler Coverage', () => {
             const entry = db.createEntry({ content: 'Permanent delete test' })
             const result = (await callTool(
                 'delete_entry',
-                { entry_id: entry.id, permanent: true },
+                { entry_id: entry.id, permanent: true, expected_version: 1 },
                 db
             )) as { success: boolean; permanent: boolean }
 

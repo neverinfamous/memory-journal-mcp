@@ -358,6 +358,7 @@ describe('Team Admin Tool Handlers', () => {
                 {
                     project_number: 1,
                     entry_id: entryId,
+                    expected_version: 1,
                 },
                 personalDb,
                 undefined,
@@ -396,6 +397,7 @@ describe('Team Admin Tool Handlers', () => {
                 {
                     project_number: 1,
                     entry_id: 999,
+                    expected_version: 1,
                 },
                 personalDb
             )) as any
@@ -410,6 +412,7 @@ describe('Team Admin Tool Handlers', () => {
                 {
                     project_number: 1,
                     entry_id: 9999,
+                    expected_version: 1,
                 },
                 personalDb,
                 undefined,

@@ -201,7 +201,7 @@ test.describe('Errors: Admin', () => {
             const p = await callToolAndParse(client, 'delete_entry', {
                 project_number: 1,
                 entry_id: 999999999,
-            })
+            , expected_version: 1 })
             // May soft-succeed on missing rows or return structured error
             if (p.success === false) {
                 expect(typeof p.error).toBe('string')

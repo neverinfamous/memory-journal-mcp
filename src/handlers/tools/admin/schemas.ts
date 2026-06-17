@@ -44,7 +44,16 @@ export const UpdateEntrySchema = z.preprocess(
     },
     z.object({
         entry_id: z.number(),
-        content: z.string().optional(),
+        content: z.string().optional().refine(
+            (val) => {
+                if (!val) return true;
+                const trimmed = val.trim();
+                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
+                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                return !(startsWithSection && !hasAccomplished);
+            },
+            { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
+        ),
         entry_type: z.enum(ENTRY_TYPES).optional(),
         is_personal: z.boolean().optional(),
         tags: z.array(z.string()).optional(),
@@ -96,7 +105,16 @@ export const UpdateEntrySchemaMcp = z.preprocess(
     },
     z.object({
         entry_id: relaxedNumber().optional(),
-        content: z.string().optional().describe(
+        content: z.string().optional().refine(
+            (val) => {
+                if (!val) return true;
+                const trimmed = val.trim();
+                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
+                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                return !(startsWithSection && !hasAccomplished);
+            },
+            { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
+        ).describe(
             'Updated markdown content. Preserve the existing ## section header structure. ' +
             'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
             '## Context for Next Session structure intact. ' +
@@ -138,6 +156,7 @@ export const DeleteEntrySchema = z.preprocess(
         entry_id: z.number(),
         permanent: z.boolean().optional().default(false),
         project_number: z.number().int().optional(),
+        expected_version: z.number().describe('REQUIRED for concurrency safety'),
     }).strict()
 )
 
@@ -157,6 +176,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional().describe('The ID of the entry to delete. If you need to delete multiple entries, use batch_delete_entries instead.'),
         permanent: z.boolean().optional().default(false).describe('If true, permanently deletes the entry. If false, performs a soft delete.'),
+        expected_version: relaxedNumber().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
     }).strict()
 )
 

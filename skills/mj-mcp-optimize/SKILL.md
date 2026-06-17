@@ -224,3 +224,25 @@ After completing any workflow, recommend these follow-up actions:
 | `restore_backup`       | Revert mechanism for soft-deleted entries                          |
 | `rebuild_vector_index` | Post-cleanup maintenance to clean stale embeddings                 |
 | `link_entries`         | Alternative to deletion — connect orphans instead of removing them |
+
+## Scheduled Agent Integration
+
+This skill supports autonomous execution via Antigravity's `/schedule` command.
+
+- **Config:** [scheduled-config.json](references/scheduled-config.json) — runtime-tunable thresholds
+- **Agent reference:** [scheduled-optimize-agent.md](references/scheduled-optimize-agent.md) — full execution guide
+
+### What's Automated (No HITL)
+| Phase | Action | Safety |
+|-------|--------|--------|
+| 1. Audit | Importance distribution, tag consistency scan, stale detection | ✅ Read-only |
+| 2. Enrichment | Auto-link orphans (similarity > 0.85, max 10/project/run) | ✅ Non-destructive |
+| 2. Enrichment | Auto-merge exact duplicate tags to kebab-case | ✅ Non-destructive |
+| 3. Detection | Duplicate pairs, delete candidates | ✅ Report only |
+| 4. Report | Create maintenance entry with health report | ✅ Single entry |
+
+### What Requires Human Review
+- All delete operations (soft or hard)
+- Fuzzy tag matches (Levenshtein ≤ 2 but not exact normalization match)
+- Orphan links with similarity ≤ 0.85
+- Any entry with `significance_type` set

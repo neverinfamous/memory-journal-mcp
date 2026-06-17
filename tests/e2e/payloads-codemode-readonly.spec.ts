@@ -78,7 +78,7 @@ test.describe('Code Mode Readonly Enforcement', () => {
             name: 'mj_execute_code',
             arguments: {
                 code: `
-                    const result = await mj.admin.delete_entry({ entry_id: 1 });
+                    const result = await mj.admin.delete_entry({ entry_id: 1 , expected_version: 1 });
                     return result;
                 `,
                 dry_run: true,

@@ -83,7 +83,7 @@ describe('Handler catch blocks via Zod validation errors', () => {
     })
 
     it('delete_entry: invalid params triggers catch', async () => {
-        const result = (await callTool('delete_entry', { entry_id: 'bad' }, db)) as any
+        const result = (await callTool('delete_entry', { entry_id: 'bad' , expected_version: 1 }, db)) as any
         expect(result.success).toBe(false)
         expect(typeof result.error).toBe('string')
         expect(result.code).toBeDefined()
@@ -488,6 +488,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
             {
                 project_number: 1,
                 entry_id: 99999,
+                expected_version: 1,
             },
             db,
             undefined,
@@ -566,6 +567,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
             {
                 project_number: 1,
                 entry_id: 2,
+                expected_version: 1,
             },
             db,
             undefined,

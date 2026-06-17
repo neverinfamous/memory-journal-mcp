@@ -71,7 +71,7 @@ test.describe('Payload Contracts: Admin', () => {
     test('delete_entry returns { success, entryId }', async () => {
         const payload = await callToolAndParse(client, 'delete_entry', {
             entry_id: entryId,
-        })
+        , expected_version: 1 })
         expectSuccess(payload)
         expect(payload.success).toBeDefined()
         expect(payload.entryId).toBe(entryId)

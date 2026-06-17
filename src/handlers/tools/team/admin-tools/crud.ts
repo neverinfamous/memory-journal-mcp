@@ -154,7 +154,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, project_number } = TeamDeleteEntrySchema.parse(params)
+                    const { entry_id, project_number, expected_version } = TeamDeleteEntrySchema.parse(params)
 
                     const projectNumber = project_number
                     if (projectNumber === undefined || projectNumber === null) {
@@ -169,7 +169,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Verify entry exists and belongs to project (if projectNumber is specified)
-                    const existing = teamDb.getEntryById(entry_id)
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id)
                     if (
                         !existing ||
                         (projectNumber !== undefined && existing.projectNumber !== projectNumber)
@@ -182,6 +182,17 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             suggestion:
                                 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
+                        }
+                    }
+
+                    if (expected_version !== undefined && existing.version !== expected_version) {
+                        return {
+                            success: false,
+                            error: `Concurrency conflict: Expected version ${expected_version} but found ${existing.version}. Please get the latest entry before deleting.`,
+                            code: 'CONCURRENCY_ERROR',
+                            category: 'validation',
+                            suggestion: 'Get the latest entry and use its version',
+                            recoverable: true
                         }
                     }
 

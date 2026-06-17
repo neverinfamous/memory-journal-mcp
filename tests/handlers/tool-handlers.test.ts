@@ -447,7 +447,7 @@ describe('Tool Handlers', () => {
                 entry: { id: number }
             }
 
-            const result = (await callTool('delete_entry', { entry_id: created.entry.id }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: created.entry.id, expected_version: 1 }, db)) as {
                 success: boolean
                 entryId: number
             }
@@ -457,7 +457,7 @@ describe('Tool Handlers', () => {
         })
 
         it('should return error for nonexistent entry', async () => {
-            const result = (await callTool('delete_entry', { entry_id: 99999 }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: 99999, expected_version: 1 }, db)) as {
                 success: boolean
                 error: string
             }

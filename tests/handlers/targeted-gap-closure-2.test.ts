@@ -128,7 +128,7 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('delete_entry should return not found for invalid ID', async () => {
-            const result = (await callTool('delete_entry', { entry_id: 99999 }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: 99999, expected_version: 1 }, db)) as {
                 success: boolean
                 error: string
             }

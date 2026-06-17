@@ -99,7 +99,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { entry_id, permanent } = DeleteEntrySchema.parse(params)
+                    const { entry_id, permanent, expected_version } = DeleteEntrySchema.parse(params)
+
+                    if (expected_version !== undefined) {
+                        const existing = db.getEntryByIdIncludeDeleted(entry_id);
+                        if (existing && existing.version !== expected_version) {
+                            return {
+                                success: false,
+                                error: `Concurrency conflict: Expected version ${expected_version} but found ${existing.version}. Please get the latest entry before deleting.`,
+                                code: 'CONCURRENCY_ERROR',
+                                category: 'validation',
+                                suggestion: 'Get the latest entry and use its version',
+                                recoverable: true
+                            }
+                        }
+                    }
+
                     const success = db.deleteEntry(entry_id, permanent)
 
                     if (!success) {

@@ -52,7 +52,18 @@ export const CreateEntrySchema = z.preprocess(
         workflow_status: z.string().optional(),
         share_with_team: z.boolean().optional().default(false),
         auto_context: z.string().optional(),
-    }).strict()
+    }).strict().superRefine((data, ctx) => {
+        if (data.tags?.includes('session-summary')) {
+            const c = data.content || '';
+            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ['content'],
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                });
+            }
+        }
+    })
 )
 
 export const CreateEntrySchemaMcp = z.preprocess(
@@ -113,7 +124,18 @@ export const CreateEntrySchemaMcp = z.preprocess(
         workflow_status: z.string().optional(),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
-    }).strict()
+    }).strict().superRefine((data, ctx) => {
+        if (data.tags?.includes('session-summary')) {
+            const c = data.content || '';
+            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ['content'],
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                });
+            }
+        }
+    })
 )
 
 export const CreateEntryOutputSchema = z
