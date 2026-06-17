@@ -70,6 +70,7 @@
 - Restored `skills/package.json` containing the accurate manifest of currently active skills, and relocated `github-repo-setup` out of this repository into the `adamic` repository workflows. (`30bc26a5`)
 
 ### Fixed
+- Fixed `delete_entry` hallucination guard inappropriately requiring `expected_version` in Code Mode, and fixed `hasMore` injection logic incorrectly evaluating empty string cursors as true. (`8056ae83`)
 - Fixed Code Mode `auto_version` parameter failing to inject `expected_version` into `delete_entry` and `update_entry` mutations by properly registering them as version-aware tools. (`160bb941`)
 - Fixed trigger collision in `github-issue-commander` and resolved progressive disclosure gaps across the adversarial skills directory. (`3d3e3284`)
 - Fixed a concurrency leak in the Code Mode worker pool where instances bypassed the `maxInstances` constraint due to eager `minInstances` pre-warming overlapping bounds, triggering sandbox exhaustion errors. (`ab94749`)
