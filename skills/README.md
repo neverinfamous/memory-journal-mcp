@@ -9,6 +9,7 @@ This directory contains highly customized, core operational skills specifically 
 
 | Skill                        | Description                                                                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `adversarial-code-quality`   | Multi-pass adversarial code quality audit — structured static analysis, findings checklist, and human-in-the-loop fixes               |
 | `adversarial-performance`    | Multi-pass adversarial performance audit — iterative profiling, stress-testing critique, and Copilot validation                       |
 | `adversarial-planner`        | Multi-pass adversarial planning — iterative plan drafting, structured critique, and Copilot validation                                |
 | `adversarial-security`       | Multi-pass adversarial security audit — iterative threat modeling, attack surface analysis, and Copilot validation                    |

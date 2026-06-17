@@ -1,7 +1,14 @@
-# Code Quality Audit
+---
+name: adversarial-code-quality
+description: |
+  Multi-pass adversarial code quality audit. Combines structured static analysis
+  with adversarial critique methodology. Use when running code quality audits,
+  linting reviews, or when the user says "audit code quality" or "find technical debt".
+---
 
-Run a comprehensive code quality audit as a static analysis pass. No code
-changes are made until the human approves the findings.
+# Adversarial Code Quality Audit
+
+A multi-pass code quality auditing system that produces high-confidence findings by introducing structured adversarial critique stages.
 
 ## Prompt
 
