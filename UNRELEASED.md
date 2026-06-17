@@ -68,6 +68,7 @@
 - Restored `skills/package.json` containing the accurate manifest of currently active skills, and relocated `github-repo-setup` out of this repository into the `adamic` repository workflows. (`30bc26a5`)
 
 ### Fixed
+- Intercepted tool name hallucinations (e.g. Prompt/Tool confusion) before SDK validation to return actionable error guidance. (`9f704a08`)
 - Fixed missing skills in package manifest and README. (`d12b78cc`)
 - Fixed widespread test failures by injecting `expected_version` into `delete_entry` integration payloads and integrated adversarial Cloudflare SEO skill. (`0b1eb687`)
 - Fixed missing `auto_context` parameter in `CreateEntrySchema` and `UpdateEntrySchema` (including Team database variants) to allow agents to submit Session Commit metadata. (`fe3b893`, `597cd49`, `5b1faa3c`)
