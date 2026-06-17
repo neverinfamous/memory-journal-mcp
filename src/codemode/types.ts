@@ -32,6 +32,8 @@ export interface PoolOptions {
     maxInstances?: number
     /** Idle timeout before disposing instance (default: 60000ms) */
     idleTimeoutMs?: number
+    /** Maximum age of a worker before recycling (default: 300000ms = 5 min) */
+    maxWorkerAgeMs?: number
 }
 
 /**
@@ -49,7 +51,8 @@ export const DEFAULT_SANDBOX_OPTIONS: Required<SandboxOptions> = {
 export const DEFAULT_POOL_OPTIONS: Required<PoolOptions> = {
     minInstances: 2,
     maxInstances: 10,
-    idleTimeoutMs: 60000,
+    idleTimeoutMs: 60_000,
+    maxWorkerAgeMs: 300_000,
 }
 
 // =============================================================================
