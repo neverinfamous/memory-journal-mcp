@@ -16,7 +16,7 @@
 - Native `.json`/`.yaml` configuration support with hot-reload via `update_configuration` (`557017a9`).
 - Persistent Prometheus `/metrics` export with latency percentiles and read tracking (`b8e03515`).
 - `search_audit_log` tool for querying server audit logs.
-- Optimistic concurrency control for entry updates (`version` and `expected_version`).
+- Optimistic concurrency control for entry updates (`version` and `expected_version`). (`10fe7bae`)
 - Team Identity Layer with author aliases and cross-team search via `cross_team_search`.
 - GitHub rate limit introspection resource (`memory://github/rate-limit`).
 - Advanced Search: Levenshtein distance fallback, FTS5 highlight snippets, and dynamic hybrid search weighting (`8dc855b2`).
@@ -53,6 +53,7 @@
 - Converted `scripts/check-orphans.ts` to a portable, zero-configuration `scripts/check-orphans.mjs` Node script.
 - Streamlined all testing coordinator workflows (Code Mode, Standard, Usability) to enforce local pipeline verification and omit live server restarts. (`64708af5`)
 ### Removed
+- Permanently removed deprecated and unstaged experimental skills. (`2cc58ee`)
 - Removed mandatory journaling requirement from `adversarial-performance` skill to support analytical runs.
 - `pnpm` configuration block from `package.json` to eliminate startup warnings (`557017a9`).
 
