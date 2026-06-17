@@ -6,7 +6,8 @@
 - Created `adversarial-github-actions` skill to enforce secure, reliable, and performant CI/CD workflows across NPM, Docker, and GitHub environments. (`ff72a8e`)
 - Implemented `briefingImportanceThreshold` configuration, GitHub active branch PR cross-referencing, and Briefing Graph Context enhancements (hubs and orphan warnings). (`d1effdf`)
 - Implemented commit-enriched session summaries via `SessionCommitContextSchema` and `memory://commits/{project_number}` resource. (`eda39c0`)
-
+- Added rigorous Playwright E2E test coverage (`codemode-abuse.spec.ts`) asserting that Code Mode successfully maintains proxy invariants on frozen targets and strictly prevents prototype pollution / property mutation boundaries via `Object.freeze()`. (`5fc64c1`)
+- Added comprehensive usability test automation suite modeling 26 domain-specific test prompts natively against the stateless HTTP endpoints. (`37eb7bb`)
 - Added team flag analytics tests to Code Mode test suite. (`798fdd3`)
 - Added `test-usability-crud-mutations.md` test module to explicitly fuzz structural and data integrity boundaries of core CRUD operations and session summaries. (`59c162c`)
 - External import tools (`import_external`, `team_import_external`) for Notion, Obsidian, and Logseq integrations. (`f5b7f7e`)
