@@ -13,6 +13,8 @@ import { relaxedNumber } from '../schemas.js'
 export const VERSION_AWARE_TOOL_NAMES = new Set([
     'team_update_entry',
     'team_delete_entry',
+    'update_entry',
+    'delete_entry',
 ])
 
 // ============================================================================
