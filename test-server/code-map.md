@@ -248,36 +248,21 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ### Tool Handlers (`src/handlers/tools/`)
 
-| Group             | Handler File(s)                | Tools | Key Exports                                                                                                                                        |
-| ----------------- | ------------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **codemode**      | `codemode.ts`                  | 1     | `mj_execute_code`                                                                                                                                  |
-| **core**          | `core.ts`                      | 8     | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `test_simple`, `test_error_handling`, `trigger_progress`, `list_tags`                                        |
-| **search**        | `search/index.ts`              | 6     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`, `list_deleted_entries`, `cross_team_search`                                                              |
-| **analytics**     | `analytics.ts`                 | 2     | `get_statistics`, `get_cross_project_insights`                                                                                                     |
-| **relationships** | `relationships.ts`             | 2     | `link_entries`, `visualize_relationships`                                                                                                          |
-| **io**            | `io.ts`                        | 4     | `export_entries`, `export_markdown`, `import_markdown`, `import_external`                                                                                             |
-| **admin**         | `admin.ts`                     | 11    | `update_configuration`, `update_entry`, `delete_entry`, `restore_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `search_audit_log` |
-| **github**        | `github/read-tools.ts`         | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue` (truncate_body, include_comments), `get_github_pr` (truncate_body), `get_github_context` |
-|                   | `github/issue-tools.ts`        | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                                  |
-|                   | `github/kanban-tools.ts`       | 4     | `get_kanban_board` (summary_only, item_limit), `move_kanban_item`, `add_kanban_item`, `delete_kanban_item`                                             |
-|                   | `github/milestone-tools.ts`    | 5     | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`                   |
-|                   | `github/insights-tools.ts`     | 1     | `get_repo_insights`                                                                                                                                |
-|                   | `github/copilot-tools.ts`      | 1     | `get_copilot_reviews`                                                                                                                              |
-| **backup**        | `backup.ts`                    | 4     | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups`                                                                              |
-| **team**          | `team/core-tools.ts`           | 4     | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`                                                                   |
-|                   | `team/search-tools.ts`         | 3     | `team_search`, `team_search_by_date_range`, `team_list_deleted_entries`                                                                           |
-|                   | `team/admin-tools.ts`          | 7     | `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_merge_tags`, `team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries` |
-|                   | `team/analytics-tools.ts`      | 3     | `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`                                                          |
-|                   | `team/relationship-tools.ts`   | 2     | `team_link_entries`, `team_visualize_relationships`                                                                                                |
-|                   | `team/export-tools.ts`         | 1     | `team_export_entries`                                                                                                                              |
-|                   | `team/io-tools.ts`             | 3     | `team_export_markdown`, `team_import_markdown`, `team_import_external`                                                                                                     |
-|                   | `team/backup-tools.ts`         | 2     | `team_backup`, `team_list_backups`                                                                                                                 |
-|                   | `team/flag-tools.ts`           | 2     | `team_pass_flag`, `team_resolve_flag`                                                                                                              |
-|                   | `team/flag-extension-tools.ts` | 3     | `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`                                                                                   |
-|                   | `team/vector-tools.ts`         | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                                     |
-|                   | `team/member-tools.ts`         | 5     | `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`                                         |
-|                   | `team/alias-tools.ts`          | 5     | `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`                   |
-|                   | `team/rbac.ts`                 | 0     | Shared RBAC enforcement module, role hierarchy, ownership enforcement, `TEAM_TOOL_MIN_ROLES`                                                       |
+<!-- BEGIN: TOOL_MAPPING -->
+| Group | Tools |
+| ----- | ----- |
+| **admin** | `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `update_entry`, `delete_entry`, `restore_entry`, `update_configuration`, `merge_tags`, `search_audit_log`, `_execute_raw_query_unsafe`, `rebuild_vector_index`, `add_to_vector_index` |
+| **analytics** | `get_statistics`, `get_cross_project_insights` |
+| **backup** | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
+| **codemode** | `mj_execute_code` |
+| **core** | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `trigger_progress`, `test_error_handling` |
+| **github** | `get_copilot_reviews`, `get_repo_insights`, `create_github_issue_with_entry`, `close_github_issue_with_entry`, `get_kanban_board`, `move_kanban_item`, `add_kanban_item`, `delete_kanban_item`, `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`, `get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context` |
+| **io** | `export_entries`, `export_markdown`, `import_markdown`, `import_external` |
+| **relationships** | `link_entries`, `visualize_relationships` |
+| **search** | `cross_team_search`, `search_by_date_range`, `get_vector_index_stats`, `list_deleted_entries`, `search_entries`, `semantic_search` |
+| **team** | `team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`, `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_merge_tags`, `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`, `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`, `team_backup`, `team_list_backups`, `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`, `team_export_entries`, `team_get_flag_analytics`, `team_list_flags`, `team_update_flag`, `team_pass_flag`, `team_resolve_flag`, `team_export_markdown`, `team_import_markdown`, `team_import_external`, `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`, `team_link_entries`, `team_visualize_relationships`, `team_search`, `team_search_by_date_range`, `team_list_deleted_entries`, `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index` |
+
+<!-- END: TOOL_MAPPING -->
 
 ### Utility Files (no tools, shared helpers)
 
@@ -299,27 +284,57 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ### Static Resources
 
-| Handler File               | Resources                                                                                                                                                                     |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core/briefing/index.ts`   | `memory://briefing` — session initialization (~300 tokens)                                                                                                                    |
-| `core/instructions.ts`     | `memory://instructions` — behavioral guidance for AI agents                                                                                                                   |
-| `core/health.ts`           | `memory://health` — server health & diagnostics                                                                                                                               |
-| `core/utilities.ts`        | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics`, `memory://rules`, `memory://workflows`, `memory://skills`                                  |
-| `github.ts`                | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, `memory://github/rate-limit`                                                              |
-| `graph.ts`                 | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                  |
-| `insights.ts`              | `memory://insights/digest`, `memory://insights/team-collaboration`, `memory://insights/reports`                                                                               |
-| `staleness.ts`             | `memory://staleness`, `memory://staleness/{project_number}` — project activity staleness analysis                                                                             |
-| `team.ts`                  | `memory://team/recent`, `memory://team/statistics`, `memory://flags`, `memory://flags/vocabulary`, `memory://flags/history`                                                   |
-| `help.ts`                  | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)                                                                                          |
-| `core/metrics-resource.ts` | `memory://metrics/summary` (HIGH_PRIORITY), `memory://metrics/tokens` (MEDIUM_PRIORITY), `memory://metrics/resources` (MEDIUM_PRIORITY), `memory://metrics/system` (MEDIUM_PRIORITY), `memory://metrics/users` (LOW_PRIORITY), `memory://metrics/latency` (MEDIUM_PRIORITY) |
-| `audit/audit-resource.ts`  | `memory://audit` (ASSISTANT_FOCUSED) — last 50 write/admin audit entries from JSONL log; returns `audit: not configured` when `AUDIT_LOG_PATH` unset                          |
+<!-- BEGIN: RESOURCES -->
+| URI | Name |
+| --- | ---- |
+| `memory://briefing` | Initial Briefing |
+| `memory://briefing/{+repo}` | Dynamic Briefing |
+| `memory://health` | Server Health |
+| `memory://instructions` | Server Instructions |
+| `memory://metrics/summary` | Metrics Summary |
+| `memory://metrics/tokens` | Metrics Tokens |
+| `memory://metrics/resources` | Metrics Resources |
+| `memory://metrics/system` | Metrics System |
+| `memory://metrics/users` | Metrics Users |
+| `memory://metrics/latency` | Metrics Latency |
+| `memory://recent` | Recent Entries |
+| `memory://significant` | Significant Entries |
+| `memory://tags` | All Tags |
+| `memory://statistics` | Statistics |
+| `memory://rules` | Rules File |
+| `memory://workflows` | Workflows |
+| `memory://skills` | Skills |
+| `memory://github/status` | GitHub Status |
+| `memory://github/insights` | Repository Insights |
+| `memory://github/milestones` | GitHub Milestones |
+| `memory://milestones/{number}` | Milestone Detail |
+| `memory://github/rate-limit` | GitHub Rate Limit |
+| `memory://graph/recent` | Recent Relationship Graph |
+| `memory://graph/actions` | Actions Graph |
+| `memory://actions/recent` | Recent Actions |
+| `memory://help` | Help — Tool Groups |
+| `memory://help/{group}` | Help — Tool Group Detail |
+| `memory://insights/digest` | Analytics Digest |
+| `memory://insights/team-collaboration` | Team Collaboration Matrix |
+| `memory://insights/reports` | Report History |
+| `memory://staleness` | Project Staleness |
+| `memory://staleness/{project_number}` | Project Staleness Details |
+| `memory://team/recent` | Recent Team Entries |
+| `memory://team/statistics` | Team Statistics |
+| `memory://flags` | Active Flags |
+| `memory://flags/vocabulary` | Flag Vocabulary |
+| `memory://flags/history` | Resolved Flags History |
+| `memory://projects/{number}/timeline` | Project Timeline |
+| `memory://issues/{issue_number}/entries` | Issue Entries |
+| `memory://prs/{pr_number}/entries` | PR Entries |
+| `memory://prs/{pr_number}/timeline` | PR Timeline |
+| `memory://commits/{project_number}` | Project Commits |
+| `memory://commits/{project_number}/by-issue` | Commits by Issue |
+| `memory://commits/{project_number}/by-pr` | Commits by PR |
+| `memory://kanban/{project_number}` | Kanban Board |
+| `memory://kanban/{project_number}/diagram` | Kanban Diagram |
 
-### Template Resources
-
-| Handler File   | Resources                                                                                                                                                                                                                                |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram`, `memory://commits/{project_number}/by-issue`, `memory://commits/{project_number}/by-pr` |
-| `github.ts`    | `memory://github/status/{repo}`, `memory://github/insights/{repo}`, `memory://github/milestones/{repo}`, `memory://milestones/{number}`, `memory://milestones/{repo}/{number}`                                                           |
+<!-- END: RESOURCES -->
 
 ### Briefing Assembly (`src/handlers/resources/core/briefing/`)
 
@@ -339,13 +354,30 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 19 prompts total (11 workflow + 6 GitHub + 1 adversarial + 1 team).
 
-| File             | Prompts                                                                                                                                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workflow.ts`    | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary`, `team-session-summary` |
-| `github.ts`      | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                                            |
-| `adversarial.ts` | `adversarial-plan-review`                                                                                                                                                                                        |
-| `team.ts`        | `flag-dashboard`                                                                                                                                                                                                 |
-| `index.ts`       | Barrel — re-exports workflow + GitHub + adversarial + team prompts, `getPrompt()` / `getPrompts()` dispatch                                                                                                      |
+<!-- BEGIN: PROMPTS -->
+| Prompt | Description |
+| ------ | ----------- |
+| `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
+| `project-status-summary` | GitHub Project status reports |
+| `pr-summary` | Pull request journal activity summary |
+| `code-review-prep` | Comprehensive PR review preparation |
+| `pr-retrospective` | Completed PR analysis with learnings |
+| `actions-failure-digest` | CI/CD failure analysis with root cause identification |
+| `project-milestone-tracker` | Milestone progress tracking |
+| `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
+| `find-related` | Discover connected entries via semantic similarity |
+| `prepare-standup` | Daily standup summaries |
+| `prepare-retro` | Sprint retrospectives |
+| `weekly-digest` | Day-by-day weekly summaries |
+| `analyze-period` | Deep period analysis with insights |
+| `goal-tracker` | Milestone and achievement tracking |
+| `get-context-bundle` | Project context with recent entries, statistics, and GitHub status hints |
+| `get-recent-entries` | Formatted recent entries |
+| `confirm-briefing` | Acknowledge session context received from memory://briefing to inform the user |
+| `session-summary` | Create a session summary entry capturing what was accomplished, pending items, a... |
+| `team-session-summary` | Create a session summary entry for the team capturing what was accomplished, pen... |
+
+<!-- END: PROMPTS -->
 
 ---
 
