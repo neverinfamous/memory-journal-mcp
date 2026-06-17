@@ -769,23 +769,34 @@ memory-journal-mcp --transport http --port 3000
 
 | Variable                                       | Description                                                |
 | ---------------------------------------------- | ---------------------------------------------------------- |
+| **Core Database** | |
 | `DB_PATH`                                      | Path to the personal journal SQLite database               |
 | `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
+| **Security & Tooling** | |
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode filesystem boundaries  |
 | `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control exposed tools (e.g. `starter`, `full`, `readonly`) |
 | `INSTRUCTION_LEVEL`                            | Instruction depth (`essential`, `standard`, `full`)        |
-| `AUDIT_LOG_PATH`                               | File path for JSONL tool call audit logs                   |
-| `AUDIT_REDACT`                                 | Redact tool arguments from audit entries                   |
-| `AUDIT_READS`                                  | Log read-scoped tool calls                                 |
-| `AUDIT_LOG_MAX_SIZE`                           | Max audit log size (bytes) before rotation                 |
-| `MCP_METRICS_ENABLED`                          | Enable in-memory metrics                                   |
-| `PERSIST_METRICS` / `METRICS_PATH`             | Persist metrics state                                      |
-| `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings                                        |
-| `PROJECT_LINT_CMD` / `PROJECT_TEST_CMD`        | Validation commands                                        |
-| `COMMANDER_HITL_FILE_THRESHOLD`                | Threshold for human-in-the-loop checkpoints                |
+| `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
+| `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
+| **Briefing & Context** | |
+| `BRIEFING_ENTRY_COUNT`                         | Number of granular journal entries in briefing (default: 3)|
+| `BRIEFING_SUMMARY_COUNT`                       | Number of session summaries in briefing (default: 1)       |
+| `BRIEFING_INCLUDE_TEAM`                        | Include entries from the team database (default: false)    |
+| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT`   | GitHub Issues and PRs to list with titles                  |
+| `BRIEFING_MILESTONE_COUNT`                     | GitHub Milestones to list with titles                      |
+| `BRIEFING_WORKFLOW_COUNT`                      | CI workflow runs to list                                   |
+| `RULES_FILE_PATH` / `SKILLS_DIR_PATH`          | Injected behavioral rules and skills boundaries            |
+| **OAuth (HTTP Mode)** | |
+| `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
+| `OAUTH_ISSUER` / `OAUTH_AUDIENCE`              | OAuth token verification parameters                        |
+| **Telemetry & Administration** | |
+| `AUDIT_LOG_PATH` / `AUDIT_REDACT`              | File path for JSONL telemetry and argument redaction       |
+| `MCP_METRICS_ENABLED` / `PERSIST_METRICS`      | In-memory and disk-persisted operational metrics           |
+| `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings and exclusion tags                     |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
+| `PROJECT_LINT_CMD` / `PROJECT_TEST_CMD`        | Local GitHub Commander Validation commands                 |
 
 ### GitHub Integration (Optional)
 

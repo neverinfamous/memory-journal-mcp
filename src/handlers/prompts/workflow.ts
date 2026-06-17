@@ -400,9 +400,6 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
 ## Accomplished
 - [List concrete items: changes made, decisions taken, files modified, PRs submitted]
 
-## Commits
-- [List commit SHAs and short descriptions of code changes — or "None"]
-
 ## Unfinished / Blocked
 - [List pending items, blockers, open questions — or "None" if everything is complete]
 
@@ -412,7 +409,7 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the four required sections
+- Do NOT omit any of the three required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - If commits were made, populate \`auto_context\` with the commit metadata JSON
@@ -473,9 +470,6 @@ ${markUntrustedContent(entrySummary)}`,
 ## Accomplished
 - [List concrete items: changes made, decisions taken, files modified, PRs submitted]
 
-## Commits
-- [List commit SHAs and short descriptions of code changes — or "None"]
-
 ## Unfinished / Blocked
 - [List pending items, blockers, open questions — or "None" if everything is complete]
 
@@ -485,7 +479,7 @@ ${markUntrustedContent(entrySummary)}`,
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the four required sections
+- Do NOT omit any of the three required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - If commits were made, populate \`auto_context\` with the commit metadata JSON
