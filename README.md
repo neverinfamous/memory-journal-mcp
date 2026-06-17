@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-69.53%25-yellow.svg)
+![Coverage](https://img.shields.io/badge/Coverage-69.45%25-yellow.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**100 MCP Tools** · **19 Workflow Prompts** · **57 Resources (51 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**100 MCP Tools** · **19 Workflow Prompts** · **62 Resources (56 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -207,9 +207,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **51 Resources** (33 Static + 18 Template)
+### 📡 **56 Resources** (34 Static + 22 Template)
 
-**33 Static Resources** (appear in resource lists):
+**34 Static Resources** (appear in resource lists):
 
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
@@ -241,11 +241,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://flags` - Active (unresolved) team flags dashboard (requires `TEAM_DB_PATH`)
 - `memory://flags/vocabulary` - Configured flag vocabulary terms
 - `memory://flags/history` - Recently resolved flags with resolution details and avg time-to-resolution (last 7 days)
+- `memory://staleness` - Project staleness overview
 - `memory://insights/digest` - Aggregate insights digest
 - `memory://insights/team-collaboration` - Team collaboration metrics
 - `memory://insights/reports` - Generated scheduled report snapshots and delivery statuses
 
-**18 Template Resources** (10 base templates + 8 dynamic `{repo}` variants):
+**22 Template Resources** (14 base templates + 8 dynamic `{repo}` variants):
 
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
@@ -254,6 +255,10 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://kanban/{project_number}` - GitHub Project Kanban board
 - `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
 - `memory://milestones/{number}` - Milestone detail with completion progress
+- `memory://staleness/{project_number}` - Project staleness detailed breakdown
+- `memory://commits/{project_number}` - Commits list
+- `memory://commits/{project_number}/by-issue` - Commits grouped by referenced issue
+- `memory://commits/{project_number}/by-pr` - Commits grouped by referenced PR
 - `memory://help/{group}` - Per-group tool reference with parameters and annotations
 - `memory://briefing/{repo}` - Context targeted to a specific repository
 
