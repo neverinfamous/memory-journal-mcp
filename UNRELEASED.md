@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v8.0.1...HEAD)
 
 ### Added
+- Created `adversarial-github-actions` skill to enforce secure, reliable, and performant CI/CD workflows across NPM, Docker, and GitHub environments. (`ff72a8e`)
 - Implemented `briefingImportanceThreshold` configuration, GitHub active branch PR cross-referencing, and Briefing Graph Context enhancements (hubs and orphan warnings). (`d1effdf`)
 - Implemented commit-enriched session summaries via `SessionCommitContextSchema` and `memory://commits/{project_number}` resource. (`eda39c0`)
 
