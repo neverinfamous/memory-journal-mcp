@@ -193,3 +193,4 @@ Top-level `mj.deleteEntry` skipping parameter normalization in Code Mode binding
 - Arbitrary file read and missing binary integrity vulnerabilities in development server by pinning `esbuild` to 0.28.1 (`4a2a2ae1`)
 - Fixed scope boundary bypass vulnerability in `resources/subscribe` where unauthorized clients could connect. (`592df473`)
 - Resolved critical supply-chain gap by fully migrating CI/CD workflows and Dockerfile to use `pnpm` lockfile guarantees. (`8d5b69bd`)
+- Secured the Code Mode sandbox by nullifying global timers (`setTimeout`, `setInterval`) to prevent asynchronous execution and isolation bypass. (`fc86c00`)
