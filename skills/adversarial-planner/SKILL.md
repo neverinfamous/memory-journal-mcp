@@ -59,6 +59,10 @@ For Copilot-specific prompt templates and integration details, read
 **Prerequisites:** `gh` CLI v2.x+ with `gh auth status` passing. If `gh copilot`
 fails (e.g., due to an empty quota allowance) or is not available, skip Phase 4 gracefully and proceed with the rest of the workflow.
 
+**CRITICAL REQUIREMENT:** You MUST run `gh copilot` in non-interactive mode. 
+Agents hanging on interactive prompts will fail the task. 
+Use the syntax: `gh copilot -p "Analyze this plan: $(cat plan.md)"` 
+
 Read [references/copilot-usage.md](references/copilot-usage.md) for critical non-interactive execution requirements.
 
 ## Execution Rules
