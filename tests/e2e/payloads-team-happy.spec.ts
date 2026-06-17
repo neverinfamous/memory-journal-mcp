@@ -272,7 +272,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
             project_number: 1,
             entry_id: entryId2,
-        , expected_version: 1 })
+            expected_version: 1 })
         expectSuccess(payload)
         expect(payload.success).toBe(true)
     })

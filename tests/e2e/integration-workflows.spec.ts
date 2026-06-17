@@ -128,12 +128,12 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
                 await callToolAndParse(client, 'delete_entry', {
                     project_number: 1,
                     entry_id: entryIdA,
-                , expected_version: 1 })
+                    expected_version: 1 })
             if (entryIdB)
                 await callToolAndParse(client, 'delete_entry', {
                     project_number: 1,
                     entry_id: entryIdB,
-                , expected_version: 1 })
+                    expected_version: 1 })
         } finally {
             await client.close()
         }
@@ -178,7 +178,7 @@ test.describe('Integration: Core → Export Pipeline', () => {
                 await callToolAndParse(client, 'delete_entry', {
                     project_number: 1,
                     entry_id: exportEntryId,
-                , expected_version: 1 })
+                expected_version: 1 })
             }
         } finally {
             await client.close()

@@ -115,7 +115,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
             project_number: 1,
             entry_id: 1,
-        , expected_version: 1 })
+            expected_version: 1 })
         expectConfigError(payload)
     })
 

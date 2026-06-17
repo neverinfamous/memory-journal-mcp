@@ -154,7 +154,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
         const payload = await callToolAndParse(client, 'delete_entry', {
             project_number: 1,
             entry_id: 999999998,
-        , expected_version: 1 })
+            expected_version: 1 })
 
         // Should be a structured error with minimum fields
         if (payload.success === false) {
