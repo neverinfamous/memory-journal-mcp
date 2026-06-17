@@ -48,7 +48,11 @@ The `description` field is the most important part of the skill because it deter
 - Keep `SKILL.md` body STRICTLY under 500 lines to preserve token context.
 - For deep knowledge, create `references/` files and explicitly list them in `SKILL.md`.
 
-## 5. Deep References
+## 5. Validation (Adversarial Process)
+
+Once your skill is drafted, you MUST run it through the **`adversarial-skill-audit`** workflow to stress-test its triggers, identify hallucination loopholes, and ensure token efficiency before finalizing. Do not skip this step for any production-grade skill.
+
+## 6. Deep References
 
 For the complete lifecycle (Capture, Write, Test, Iterate), writing style tips, and detailed rubrics:
 

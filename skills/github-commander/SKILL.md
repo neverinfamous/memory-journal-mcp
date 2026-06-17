@@ -40,6 +40,8 @@ Load this skill when any of these apply:
 | **Milestone Sprint**    | `workflows/milestone-sprint.md` | Work through milestone issues sequentially  |
 | **Roadmap Kickoff**     | `workflows/roadmap-kickoff.md`  | Translate planning epics into Kanban issues |
 | **Update Dependencies** | `workflows/update-deps.md`      | Dependency update with audit trail          |
+| **Changelog Audit**     | `workflows/changelog-audit.md`  | Audit and backfill SHA provenance           |
+| **Changelog Commit**    | `workflows/changelog-commit.md` | Create SHA-enriched changelog entries       |
 
 ## Prerequisites
 
