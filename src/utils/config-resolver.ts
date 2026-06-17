@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as os from 'node:os'
 import { parse as parseYaml } from 'yaml'
 import type { Command } from 'commander'
 import { logger } from './logger.js'
@@ -30,6 +31,9 @@ export class ConfigResolver {
                   path.resolve(process.cwd(), 'memory-journal.config.yaml'),
                   path.resolve(process.cwd(), 'memory-journal.config.yml'),
                   path.resolve(process.cwd(), 'memory-journal.config.json'),
+                  path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json'),
+                  path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.yaml'),
+                  path.resolve(os.homedir(), '.memory-journal', 'config.json'),
               ]
 
         for (const filePath of pathsToTry) {
