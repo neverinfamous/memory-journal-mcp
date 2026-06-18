@@ -28,6 +28,7 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 ```javascript
 // Test code:
 const r = await mj.team.teamGetRecent({ project_number: 5, limit: 1, project_number: 5 })
+if (!r.success) return { success: false, error: r.error }
 const id = r.entries[0].id
 
 const updated = await mj.team.teamUpdateEntry({
@@ -42,6 +43,7 @@ const verify = await mj.team.teamGetEntryById({
   project_number: 5,
   entry_id: id,
 })
+if (!verify.success) return { success: false, error: verify.error }
 const v1 = verify.entry?.version
 
 let conflictCaught = false
@@ -82,6 +84,7 @@ const deleted = await mj.team.teamDeleteEntry({
 const deletedList = await mj.team.teamListDeletedEntries({
   project_number: 5,
 })
+if (!deletedList.success) return { success: false, error: deletedList.error }
 const isDeleted = deletedList.entries?.some((e) => e.id === toDelete.entry.id)
 const restored = await mj.team.teamRestoreEntry({
   project_number: 5,
@@ -156,6 +159,7 @@ const bCreated = await mj.team.teamBatchCreateEntries({
     { content: 'CM4 team batch 2' }
   ]
 })
+if (!bCreated.success) return { success: false, error: bCreated.error }
 const [id1, id2] = bCreated.entryIds
 
 // Batch Update
@@ -208,7 +212,9 @@ return {
 ```javascript
 // Test code:
 const stats = await mj.team.teamGetStatistics({})
+if (!stats.success) return { success: false, error: stats.error }
 const monthly = await mj.team.teamGetStatistics({ group_by: 'month' })
+if (!monthly.success) return { success: false, error: monthly.error }
 return {
   hasTotalEntries: typeof stats.totalEntries === 'number',
   hasEntriesByType: !!stats.entriesByType,
@@ -229,6 +235,7 @@ return {
 ```javascript
 // Test code:
 const r = await mj.team.teamGetRecent({ project_number: 5, limit: 2, project_number: 5 })
+if (!r.success) return { success: false, error: r.error }
 const [a, b] = r.entries.map((e) => e.id)
 
 const linked = await mj.team.teamLinkEntries({
@@ -300,6 +307,8 @@ const ioExtImport = await mj.team.teamImportExternal({
   dry_run: true,
   project_number: 5,
 })
+if (!jsonExport.success) return { success: false, error: jsonExport.error }
+if (!mdExport.success) return { success: false, error: mdExport.error }
 
 return {
   jsonHasData: typeof jsonExport.data === 'string',
@@ -326,8 +335,11 @@ return {
 ```javascript
 // Test code:
 const named = await mj.team.teamBackup({ name: 'cm4-team-backup' })
+if (!named.success) return { success: false, error: named.error }
 const auto = await mj.team.teamBackup({})
+if (!auto.success) return { success: false, error: auto.error }
 const list = await mj.team.teamListBackups({})
+if (!list.success) return { success: false, error: list.error }
 return {
   namedSuccess: named.success,
   namedFilename: named.filename,
@@ -352,6 +364,7 @@ return {
 ```javascript
 // Test code:
 const matrix = await mj.team.teamGetCollaborationMatrix({})
+if (!matrix.success) return { success: false, error: matrix.error }
 
 // Return key properties to prove Code Mode boundary bindings work seamlessly
 return {
