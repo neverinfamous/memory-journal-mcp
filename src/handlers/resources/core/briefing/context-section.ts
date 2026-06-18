@@ -66,7 +66,8 @@ export function buildJournalContext(
     const threshold = config.briefingImportanceThreshold ?? 0.3
     const isImportant = (e: JournalEntry): boolean => {
         if (e.tags?.includes('session-summary')) return true
-        return (e.importanceScore ?? 0) >= threshold
+        const score = e.importanceScore ?? context.db.calculateImportance(e.id).score
+        return score >= threshold
     }
 
     // ── Session summaries (computed first to enable deduplication) ──────
