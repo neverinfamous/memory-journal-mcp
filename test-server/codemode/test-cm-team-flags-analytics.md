@@ -28,10 +28,14 @@ Test the advanced Hush Protocol flag analytics.
 
 // Get analytics for the test project (flags created in prior phases)
 const analytics = await mj.team.teamGetFlagAnalytics({ project_number: 5 })
+if (!analytics.success) return { success: false, error: 'P401 Check: analytics failed', code: analytics.code }
 
 // Analytics with different periods
 const daily = await mj.team.teamGetFlagAnalytics({ project_number: 5, period: 'day' })
+if (!daily.success) return { success: false, error: 'P401 Check: daily failed', code: daily.code }
+
 const monthly = await mj.team.teamGetFlagAnalytics({ project_number: 5, period: 'month' })
+if (!monthly.success) return { success: false, error: 'P401 Check: monthly failed', code: monthly.code }
 
 // Omit project_number on teamGetFlagAnalytics to test fallback / validation
 const omitAnalytics = await mj.team.teamGetFlagAnalytics({ period: 'day' })
@@ -107,6 +111,8 @@ return result
 
 // Cleanup: delete all CM test flag entries using team_list_flags
 const allCmFlags = await mj.team.teamListFlags({ project_number: 5, status: 'all', limit: 100 })
+if (!allCmFlags.success) return { success: false, error: 'P401 Check: allCmFlags failed', code: allCmFlags.code }
+
 const cmFlagIds = (allCmFlags.flags || [])
   .filter(
     (f) =>
