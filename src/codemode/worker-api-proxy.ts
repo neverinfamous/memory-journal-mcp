@@ -9,7 +9,7 @@
 import { wrapResult } from './worker-result-proxy.js'
 import { METHOD_ALIASES } from './api-constants.js'
 
-function applyArgInterceptions(methodName: string, args: unknown[]): { args: unknown[] } | { error: Record<string, unknown> } {
+export function applyArgInterceptions(methodName: string, args: unknown[]): { args: unknown[] } | { error: Record<string, unknown> } {
     // Generic Parameter Aliases (Phase 31.1 Hallucination Smoothing)
     if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
@@ -918,8 +918,33 @@ function applyArgInterceptions(methodName: string, args: unknown[]): { args: unk
             obj['content'] = obj['description'];
             delete obj['description'];
         }
+        // auto_context: objects are silently stringified (agents may pass a plain object);
+        // valid JSON strings pass through unchanged; other types are rejected with an actionable error.
         if (obj['auto_context'] !== undefined) {
-            delete obj['auto_context'];
+            if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+                try {
+                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
+                } catch {
+                    return { error: {
+                        success: false,
+                        error: `${methodName}: auto_context could not be serialized to JSON. Ensure it is a plain object (e.g. { commits: ['<sha>'] }) or a valid JSON string.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        suggestion: 'Pass auto_context as either a JSON string (e.g. JSON.stringify({ commits: [sha] })) or a plain serializable object.',
+                        recoverable: true
+                    }};
+                }
+            } else if (typeof obj['auto_context'] !== 'string') {
+                return { error: {
+                    success: false,
+                    error: `${methodName}: auto_context must be a JSON string or plain object (received ${typeof obj['auto_context']}).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: 'Pass auto_context as a JSON string, e.g. JSON.stringify({ commits: ["<sha>"] }), or as a plain object like { commits: ["<sha>"] }.',
+                    recoverable: true
+                }};
+            }
+            // typeof string: passes through unchanged
         }
         if (obj['q'] !== undefined || obj['query'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined || obj['keep'] !== undefined || obj['search'] !== undefined) {
             return { error: {
@@ -1279,6 +1304,25 @@ export function buildApiProxy(
                     if (canonicalCamel in target) return target[canonicalCamel]
                     
                     resolvedKey = canonicalCamel
+                }
+
+                // Cross-Group Constructor Wiring (Phase 31.3)
+                if (group === 'core') {
+                    const semanticGroup = api['semantic'] as Record<string, unknown> | undefined;
+                    const adminGroup = api['admin'] as Record<string, unknown> | undefined;
+                    
+                    if (resolvedKey === 'semanticSearch' || key === 'semantic_search') {
+                        return semanticGroup?.['semantic_search'] ?? semanticGroup?.['semanticSearch'];
+                    }
+                    if (resolvedKey === 'vectorStats' || key === 'vector_stats') {
+                        return semanticGroup?.['vector_stats'] ?? semanticGroup?.['vectorStats'];
+                    }
+                    if (resolvedKey === 'searchAuditLog' || key === 'search_audit_log') {
+                        return adminGroup?.['search_audit_log'] ?? adminGroup?.['searchAuditLog'];
+                    }
+                    if (resolvedKey === 'listDeletedEntries' || key === 'list_deleted_entries') {
+                        return adminGroup?.['list_deleted_entries'] ?? adminGroup?.['listDeletedEntries'];
+                    }
                 }
 
                 if (resolvedKey === 'getConfig') {

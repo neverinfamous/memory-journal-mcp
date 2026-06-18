@@ -71,14 +71,19 @@ export const CreateEntrySchema = z.preprocess(
                     ctx.addIssue({
                         code: "custom",
                         path: ['auto_context'],
-                        message: "Entries tagged 'commit-narrative' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
+                        message: [
+                            "Entries tagged 'commit-narrative' MUST include an auto_context with a non-empty 'commits' array.",
+                            "In Code Mode, pass it as a plain object: { commits: ['<sha>'] }",
+                            "or as a pre-stringified JSON string: JSON.stringify({ commits: ['<sha>'] }).",
+                            "Example: await mj.core.create_entry({ ..., auto_context: { commits: ['abc1234'] } })",
+                        ].join(' '),
                     });
                 }
             } catch {
                 ctx.addIssue({
                     code: "custom",
                     path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string for commit narratives.",
+                    message: "auto_context must be a valid JSON string or plain object for commit narratives. Example: { commits: ['<sha>'] }",
                 });
             }
         }
@@ -170,14 +175,19 @@ export const CreateEntrySchemaMcp = z.preprocess(
                     ctx.addIssue({
                         code: "custom",
                         path: ['auto_context'],
-                        message: "Entries tagged 'commit-narrative' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
+                        message: [
+                            "Entries tagged 'commit-narrative' MUST include an auto_context with a non-empty 'commits' array.",
+                            "In Code Mode, pass it as a plain object: { commits: ['<sha>'] }",
+                            "or as a pre-stringified JSON string: JSON.stringify({ commits: ['<sha>'] }).",
+                            "Example: await mj.core.create_entry({ ..., auto_context: { commits: ['abc1234'] } })",
+                        ].join(' '),
                     });
                 }
             } catch {
                 ctx.addIssue({
                     code: "custom",
                     path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string for commit narratives.",
+                    message: "auto_context must be a valid JSON string or plain object for commit narratives. Example: { commits: ['<sha>'] }",
                 });
             }
         }
