@@ -41,7 +41,11 @@ try {
     const db = new Database(outPath)
     
     // Perform the encryption in-place on the copy
-    db.pragma(`rekey = '${key}'`)
+    if (key.startsWith("x'") && key.endsWith("'")) {
+        db.pragma(`rekey = "${key}"`)
+    } else {
+        db.pragma(`rekey = '${key}'`)
+    }
     
     // Close to save
     db.close()

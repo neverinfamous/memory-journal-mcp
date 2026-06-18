@@ -93,6 +93,7 @@ Only help resources for your enabled tool groups are registered.
 
 ### Journal Behaviors
 
+- **Dual-Schema Nuance**: The system uses a dual-schema pattern. MCP SDK schemas are intentionally relaxed (all fields optional) to bypass strict \`-32602\` SDK errors. However, the internal handlers still strictly enforce validation. Always provide all required parameters!
 - **Strict Validation**: The \`project_number\` parameter is STRICTLY REQUIRED for all mutation operations (Create, Update, Delete). It must be a **numeric** ID (e.g., \`1\`, \`14\`), not a repo name string. Find it in the briefing's Config row (\`registry: repoName (#N)\`) or via \`get_statistics\`. In Code Mode, string repo names (e.g., \`"mysql-mcp"\`) are auto-resolved to numeric IDs via the project registry, but direct MCP tool calls require the numeric value.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Entry History**: Every modification to an entry creates a revision. Use \`get_entry_history\` to view past versions and changes of an entry. When updating entries, consider passing \`expected_version\` to use optimistic locking and avoid overwriting concurrent edits.

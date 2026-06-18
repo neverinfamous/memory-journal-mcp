@@ -149,18 +149,30 @@ export async function buildGitHubSection(
         const localGitStatus =
             localGitStatusResult.status === 'fulfilled'
                 ? localGitStatusResult.value
-                : { modified: 0, untracked: 0, isClean: true, degraded: true }
+                : { modified: 0, untracked: 0, isClean: true, degraded: true, resolvedIssues: undefined }
+
         if (localGitStatusResult.status === 'rejected')
             degradedReasons.push(
                 `Local Git Status fetch failed: ${String(localGitStatusResult.reason)}`
             )
 
-        const { openIssues, openIssueList, openPRs, openPrList, allPrs } = issuesAndPrs
+        let { openIssues, openIssueList } = issuesAndPrs
+        const { openPRs, openPrList, allPrs } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
         const ciName = ciStatus.ciName
         const milestones = milestonesData.items ?? []
         const insights = insightsData.insights
         const copilotReviews = copilotReviewsData.reviews
+        
+        // Briefing Staleness Fix: Filter out locally resolved issues
+        const resolvedIssues = localGitStatus.resolvedIssues
+        if (resolvedIssues !== undefined && resolvedIssues.length > 0 && openIssueList !== undefined) {
+            const initialListLength = openIssueList.length
+            openIssueList = openIssueList.filter(i => !resolvedIssues.includes(i.number))
+            const removedCount = initialListLength - openIssueList.length
+            openIssues = Math.max(0, openIssues - removedCount)
+        }
+
         const degraded = degradedReasons.length > 0
 
         let activePr: BriefingGitHub['activePr'] = undefined

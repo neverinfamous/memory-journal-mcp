@@ -65,8 +65,9 @@ export const CreateEntrySchema = z.preprocess(
         }
         if (data.tags?.includes('commit-narrative')) {
             try {
-                const ac = JSON.parse(data.auto_context || '{}') as unknown;
-                if (!ac || typeof ac !== 'object' || !Array.isArray((ac as Record<string, unknown>).commits) || (ac as Record<string, unknown[]>).commits.length === 0) {
+                const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
+                const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
+                if (!Array.isArray(commits) || commits.length === 0) {
                     ctx.addIssue({
                         code: "custom",
                         path: ['auto_context'],
@@ -155,8 +156,9 @@ export const CreateEntrySchemaMcp = z.preprocess(
         }
         if (data.tags?.includes('commit-narrative')) {
             try {
-                const ac = JSON.parse(data.auto_context || '{}') as unknown;
-                if (!ac || typeof ac !== 'object' || !Array.isArray((ac as Record<string, unknown>).commits) || (ac as Record<string, unknown[]>).commits.length === 0) {
+                const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
+                const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
+                if (!Array.isArray(commits) || commits.length === 0) {
                     ctx.addIssue({
                         code: "custom",
                         path: ['auto_context'],

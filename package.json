@@ -17,9 +17,9 @@
     "scripts": {
         "build": "tsup",
         "dev": "tsc --watch",
-        "lint": "eslint src/ tests/",
-        "lint:fix": "eslint src/ tests/ --fix",
-        "typecheck": "tsc --noEmit",
+        "lint": "tsx scripts/run-checks.ts lint",
+        "lint:fix": "eslint src/ tests/ --fix && tsx scripts/run-checks.ts lint",
+        "typecheck": "tsx scripts/run-checks.ts typecheck",
         "generate:code-map": "tsx scripts/update-code-map.ts",
         "check": "tsx scripts/run-checks.ts",
         "test": "vitest run",

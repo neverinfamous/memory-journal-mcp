@@ -124,11 +124,36 @@ export class RepositoryManager {
     async getLocalGitStatus(): Promise<LocalGitStatus> {
         try {
             const status = await this.client.git.status()
+            const resolvedIssues: number[] = []
+
+            try {
+                // Parse recent local commits for issue resolution references
+                const log = await this.client.git.log({ maxCount: 50 })
+                for (const commit of log.all) {
+                    const matches = commit.message.match(/(?:fix|fixes|resolve|resolves|close|closes)\s+#(\d+)/ig)
+                    if (matches) {
+                        for (const m of matches) {
+                            const execMatch = /#(\d+)/.exec(m)
+                            const numStr = execMatch?.[1]
+                            if (numStr) {
+                                const num = parseInt(numStr, 10)
+                                if (!isNaN(num) && !resolvedIssues.includes(num)) {
+                                    resolvedIssues.push(num)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // Ignore git log parsing errors
+            }
+
             return {
                 branch: status.current || null,
                 modified: status.modified.length,
                 untracked: status.not_added.length,
                 isClean: status.isClean(),
+                resolvedIssues,
             }
         } catch (error) {
             logger.debug('Failed to get local git status', {

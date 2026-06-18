@@ -396,10 +396,12 @@ export async function buildSystemContext(
         }
     }
 
-    // Check if readonly (admin tools disabled)
+    // Check if readonly (admin tools disabled, and codemode disabled since codemode is root)
     let isReadonly = false
     if (filterConfig) {
-        isReadonly = !TOOL_GROUPS.admin.some((t) => filterConfig.enabledTools.has(t))
+        const hasAdmin = TOOL_GROUPS.admin.some((t) => filterConfig.enabledTools.has(t))
+        const hasCodemode = filterConfig.enabledTools.has('mj_execute_code')
+        isReadonly = !hasAdmin && !hasCodemode
     }
 
     // Registry repos

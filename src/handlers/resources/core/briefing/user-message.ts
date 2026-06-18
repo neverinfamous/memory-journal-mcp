@@ -233,8 +233,8 @@ export function formatUserMessage(opts: {
     const testLines: string[] = []
     if (opts.testHealth) {
         const th = opts.testHealth
-        const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}%)` : ''
-        testLines.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
+        const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}% cov)` : ''
+        testLines.push(`Tests: ${String(th.unitTests)} pass + ${String(th.e2eTests)} E2E${covStr}`)
     }
     if (opts.localCheck !== undefined) {
         testLines.push(`Lint & Typecheck: ${opts.localCheck ? '✅' : '❌'}`)
@@ -267,8 +267,8 @@ export function formatUserMessage(opts: {
     if (configLine1.length) configLines.push(configLine1.join(' · '))
 
     const configLine2: string[] = []
-    configLine2.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
-    configLine2.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
+    configLine2.push(`team: ${opts.teamConfigured ? 'yes' : 'no (TEAM_DB_PATH unset)'}`)
+    configLine2.push(`github: ${opts.githubConfigured ? 'yes' : 'no (token unset)'}`)
     if (configLine2.length) configLines.push(configLine2.join(' · '))
 
     const configLine3: string[] = []

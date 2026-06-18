@@ -176,7 +176,12 @@ export class BackupManager {
             
             // Apply encryption key if present
             if (process.env['DB_ENCRYPTION_KEY']) {
-                tempDb.pragma(`key = '${process.env['DB_ENCRYPTION_KEY']}'`)
+                const key = process.env['DB_ENCRYPTION_KEY']
+                if (key.startsWith("x'") && key.endsWith("'")) {
+                    tempDb.pragma(`key = "${key}"`)
+                } else {
+                    tempDb.pragma(`key = '${key}'`)
+                }
             }
             
             const tempStmt = tempDb.prepare('PRAGMA integrity_check')

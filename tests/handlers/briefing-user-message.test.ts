@@ -470,8 +470,8 @@ describe('formatUserMessage', () => {
             testHealth: { unitTests: 1782, e2eTests: 391, coverage: 91.07 },
         })
 
-        expect(result).toContain('Tests: 1782+391 E2E')
-        expect(result).toContain('91%')
+        expect(result).toContain('Tests: 1782 pass + 391 E2E')
+        expect(result).toContain('91% cov')
     })
 
     it('should omit coverage when zero', () => {
@@ -480,7 +480,7 @@ describe('formatUserMessage', () => {
             testHealth: { unitTests: 500, e2eTests: 100, coverage: 0 },
         })
 
-        expect(result).toContain('Tests: 500+100 E2E')
+        expect(result).toContain('Tests: 500 pass + 100 E2E')
         expect(result).not.toContain('%')
     })
 
