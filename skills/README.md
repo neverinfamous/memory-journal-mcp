@@ -19,7 +19,6 @@ This directory contains highly customized, core operational skills specifically 
 | `adversarial-workflow-audit` | Multi-pass adversarial workflow audit — sequential clarity, HITL safety gates, loop prevention, and Copilot validation                |
 | `github-issue-commander`     | GitHub pipeline workflows for orchestrating issues, milestones, and roadmap planning                                                  |
 | `github-pr-commander`        | GitHub pipeline workflows for orchestrating pull requests, dependency updates, and changelogs                                         |
-| `mj-mcp-heal`                | Codebase healing — anti-hallucination guardrails, schema hardening, proxy interceptors, and alias management                         |
 | `mj-mcp-optimize`            | Guided database pruning and optimization — importance audits, orphan cleanup, duplicate detection, and safe soft-delete               |
 
 ## Automated Auditing
