@@ -58,11 +58,17 @@ const help = await mj.team.passTeamFlag({
   message: 'Cannot reproduce the race condition on Windows',
 })
 
+if (!blocker.success) return { success: false, error: blocker.error }
+if (!fyi.success) return { success: false, error: fyi.error }
+if (!review.success) return { success: false, error: review.error }
+if (!help.success) return { success: false, error: help.error }
+
 // Verify entry structure
 const detail = await mj.team.teamGetEntryById({
   project_number: 5,
   entry_id: blocker.entry?.id,
 })
+if (!detail.success) return { success: false, error: detail.error }
 const flagMeta = detail.entry?.flagMetadata || null
 
 const result = {
@@ -140,6 +146,7 @@ const resolveEmpty = await mj.team.resolveTeamFlag({})
 
 // Resolve a non-flag entry (get a recent non-flag entry first)
 const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 10 })
+if (!recent.success) return { success: false, error: recent.error }
 const nonFlagEntry = recent.entries?.find((e) => e.entryType !== 'flag')
 let resolveWrongType = { skipped: true }
 if (nonFlagEntry) {
@@ -188,6 +195,7 @@ const flag = await mj.team.passTeamFlag({
   flag_type: 'blocker',
   message: 'CM test flag for resolution',
 })
+if (!flag.success) return { success: false, error: flag.error }
 const flagId = flag.entry?.id
 
 // Resolve with comment
@@ -195,12 +203,14 @@ const resolved = await mj.team.resolveTeamFlag({
   flag_id: flagId,
   resolution: 'Fixed by migration hotfix',
 })
+if (!resolved.success) return { success: false, error: resolved.error }
 
 // Verify resolved state
 const after = await mj.team.teamGetEntryById({
   project_number: 5,
   entry_id: flagId,
 })
+if (!after.success) return { success: false, error: after.error }
 const afterCtx = after.entry?.flagMetadata || null
 
 // Idempotent re-resolve
@@ -215,6 +225,7 @@ const flag2 = await mj.team.passTeamFlag({
   flag_type: 'fyi',
   message: 'CM bare resolve test',
 })
+if (!flag2.success) return { success: false, error: flag2.error }
 const bareResolved = await mj.team.resolveTeamFlag({ flag_id: flag2.entry?.id })
 
 const result = {
