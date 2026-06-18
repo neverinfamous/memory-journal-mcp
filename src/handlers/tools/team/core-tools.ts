@@ -146,6 +146,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         prStatus: input.pr_status,
                         author,
                         autoContext: input.auto_context,
+                        workspaceId: input.workspace_id,
                     })
 
                     teamDb.flushSave()
@@ -189,10 +190,10 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, include_relationships, project_number } =
+                    const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
                     const projectNumber = project_number
-                    const entry = teamDb.getEntryById(entry_id)
+                    const entry = teamDb.getEntryById(entry_id, workspace_id)
 
                     if (
                         !entry ||
@@ -252,13 +253,14 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { limit, cursor, sort_by, project_number } = TeamGetRecentSchema.parse(params)
+                    const { limit, cursor, sort_by, project_number, workspace_id } = TeamGetRecentSchema.parse(params)
                     const projectNumber = project_number
                     const result = teamDb.searchEntries('', {
                         limit,
                         cursor,
                         sortBy: sort_by,
                         projectNumber: projectNumber,
+                        workspaceId: workspace_id,
                     })
 
                     const entries = result.entries

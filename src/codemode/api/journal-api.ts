@@ -374,6 +374,13 @@ export class JournalApi {
             mergeTags: this.admin['mergeTags'],
             exportEntries: this.io['exportEntries'],
 
+            // Anti-Hallucination: setWorkspace interceptor
+            setWorkspace: () => {
+                return Promise.reject(new Error(
+                    `Workspace changes should be done via parameters (e.g., passing \`workspace_id\` to tool functions), not through imperative state like setWorkspace().`
+                ))
+            },
+
             // Top-level help
             help: (): Promise<{
                 groups: string[]

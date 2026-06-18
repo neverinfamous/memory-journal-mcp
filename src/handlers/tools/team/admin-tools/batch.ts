@@ -85,6 +85,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             prStatus: e.pr_status,
                             isPersonal: false,
                             author: e.author ?? currentUser,
+                            workspaceId: e.workspace_id ?? input.workspace_id,
                         }
                     })
 
@@ -161,7 +162,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const notFound: number[] = []
                     
                     for (const u of input.updates) {
-                        const existing = teamDb.getEntryById(u.entry_id)
+                        const existing = teamDb.getEntryById(u.entry_id, u.workspace_id ?? input.workspace_id)
                         
                         const projectNumber = u.project_number ?? input.project_number ?? existing?.projectNumber
                         if (projectNumber === undefined || projectNumber === null) {
@@ -209,6 +210,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             workflowStatus: u.workflow_status,
                             isArchived: u.is_archived,
                             expectedVersion: u.expected_version,
+                            workspaceId: u.workspace_id ?? input.workspace_id,
                         })
                     }
 
@@ -303,7 +305,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const notFound: number[] = []
                     
                     for (const id of input.entry_ids) {
-                        const existing = teamDb.getEntryById(id)
+                        const existing = teamDb.getEntryById(id, input.workspace_id)
                         if (existing?.projectNumber !== projectNumber) {
                             notFound.push(id)
                             continue

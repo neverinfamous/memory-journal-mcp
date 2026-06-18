@@ -62,8 +62,12 @@ const TOP_IMPORTANCE_COUNT = 3
  * Compute a full DigestSnapshot from the database.
  * All queries are synchronous (better-sqlite3) and individually lightweight.
  */
-export function computeDigest(db: Database): DigestSnapshot {
+export function computeDigest(db: Database, workspaceId = 'default'): DigestSnapshot {
     const now = new Date().toISOString()
+    const workspaceFilter = workspaceId !== '*' ? ' AND workspace_id = ?' : ''
+    const workspaceFilterAlias = workspaceId !== '*' ? ' AND m.workspace_id = ?' : ''
+    const workspaceFilterE = workspaceId !== '*' ? ' AND e.workspace_id = ?' : ''
+    const workspaceParams: unknown[] = workspaceId !== '*' ? [workspaceId] : []
 
     // --- Activity trend (current vs previous month) ---
     const activityRow = queryRow(
@@ -72,7 +76,8 @@ export function computeDigest(db: Database): DigestSnapshot {
             COALESCE(SUM(CASE WHEN strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now') THEN 1 ELSE 0 END), 0) AS current_count,
             COALESCE(SUM(CASE WHEN strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now', '-1 month') THEN 1 ELSE 0 END), 0) AS previous_count
         FROM memory_journal
-        WHERE deleted_at IS NULL`
+        WHERE deleted_at IS NULL${workspaceFilter}`,
+        ...workspaceParams
     )
     const currentPeriodEntries = (activityRow?.['current_count'] as number) ?? 0
     const previousPeriodEntries = (activityRow?.['previous_count'] as number) ?? 0
@@ -93,7 +98,8 @@ export function computeDigest(db: Database): DigestSnapshot {
             COUNT(DISTINCT strftime('%Y-%m', timestamp)) AS total_periods,
             COALESCE(SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END), 0) AS total_significant
         FROM memory_journal
-        WHERE deleted_at IS NULL`
+        WHERE deleted_at IS NULL${workspaceFilter}`,
+        ...workspaceParams
     )
     const currentPeriodSignificant = (sigRow?.['current_significant'] as number) ?? 0
     const totalPeriods = (sigRow?.['total_periods'] as number) ?? 1
@@ -113,9 +119,10 @@ export function computeDigest(db: Database): DigestSnapshot {
             MAX(timestamp) AS last_entry_date,
             CAST(julianday('now') - julianday(MAX(timestamp)) AS INTEGER) AS days_silent
         FROM memory_journal
-        WHERE deleted_at IS NULL AND project_number IS NOT NULL
+        WHERE deleted_at IS NULL AND project_number IS NOT NULL${workspaceFilter}
         GROUP BY project_number
         HAVING days_silent > ?`,
+        ...workspaceParams,
         STALE_PROJECT_THRESHOLD_DAYS
     )
     const staleProjects: StaleProject[] = staleRows.map((r) => ({
@@ -130,12 +137,14 @@ export function computeDigest(db: Database): DigestSnapshot {
         `SELECT
             COALESCE((SELECT COUNT(*) FROM relationships r
                 JOIN memory_journal m ON r.from_entry_id = m.id
-                WHERE strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now')
+                WHERE strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now')${workspaceFilterAlias}
             ), 0) AS current_rels,
             COALESCE((SELECT COUNT(*) FROM relationships r
                 JOIN memory_journal m ON r.from_entry_id = m.id
-                WHERE strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now', '-1 month')
-            ), 0) AS previous_rels`
+                WHERE strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now', '-1 month')${workspaceFilterAlias}
+            ), 0) AS previous_rels`,
+        ...workspaceParams,
+        ...workspaceParams
     )
     const currentRels = (relDensityRow?.['current_rels'] as number) ?? 0
     const previousRels = (relDensityRow?.['previous_rels'] as number) ?? 0
@@ -158,9 +167,10 @@ export function computeDigest(db: Database): DigestSnapshot {
             SUBSTR(e.content, 1, ${String(PREVIEW_LENGTH)}) AS preview
         FROM memory_journal e
         LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-        WHERE e.deleted_at IS NULL
+        WHERE e.deleted_at IS NULL${workspaceFilterE}
         ORDER BY importance_score DESC
-        LIMIT ${String(TOP_IMPORTANCE_COUNT)}`
+        LIMIT ${String(TOP_IMPORTANCE_COUNT)}`,
+        ...workspaceParams
     )
     const topImportanceEntries: TopImportanceEntry[] = topRows.map((r) => ({
         id: r['id'] as number,

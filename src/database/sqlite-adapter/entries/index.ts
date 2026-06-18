@@ -48,8 +48,8 @@ export class EntriesManager {
         return createEntry(this.sharedContext, input)
     }
 
-    getEntryById(id: number): JournalEntry | null {
-        return getEntryById(this.sharedContext, id)
+    getEntryById(id: number, workspaceId?: string): JournalEntry | null {
+        return getEntryById(this.sharedContext, id, workspaceId)
     }
 
     getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
@@ -62,8 +62,8 @@ export class EntriesManager {
         return getEntriesByIdsWithImportance(this.sharedContext, ids)
     }
 
-    getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
-        return getEntryByIdIncludeDeleted(this.sharedContext, id)
+    getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
+        return getEntryByIdIncludeDeleted(this.sharedContext, id, workspaceId)
     }
 
     getActiveEntryCount(): number {
@@ -90,6 +90,7 @@ export class EntriesManager {
             workflowName?: string | null
             workflowStatus?: string | null
             expectedVersion?: number
+            workspaceId?: string
         }
     ): JournalEntry | null {
         return updateEntry(this.sharedContext, id, input)
@@ -123,6 +124,7 @@ export class EntriesManager {
             workflowName?: string | null
             workflowStatus?: string | null
             expectedVersion?: number
+            workspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return updateEntries(this.sharedContext, updates)
@@ -132,11 +134,11 @@ export class EntriesManager {
         return deleteEntries(this.sharedContext, ids, permanent)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean): { entries: JournalEntry[]; nextCursor?: string } {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string): { entries: JournalEntry[]; nextCursor?: string } {
         if (isPersonal !== undefined) {
-            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived })
+            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived)
+        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId)
     }
 
     getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): { entries: JournalEntry[]; nextCursor?: string } {
@@ -159,6 +161,7 @@ export class EntriesManager {
             includeHighlights?: boolean
             fuzzy_match?: boolean
             auto_correct?: boolean
+            workspaceId?: string
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
         return searchEntries(this.sharedContext, queryStr, options)
@@ -178,6 +181,7 @@ export class EntriesManager {
             startDate?: string
             endDate?: string
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
         return getSearchFacets(this.sharedContext, queryStr, options)
@@ -198,6 +202,7 @@ export class EntriesManager {
             sortBy?: SortBy
             cursor?: string
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
@@ -211,9 +216,10 @@ export class EntriesManager {
         timeframe: 'day' | 'week' | 'month' | 'year' = 'month',
         startDate?: string,
         endDate?: string,
-        projectBreakdown?: boolean
+        projectBreakdown?: boolean,
+        workspaceId?: string
     ): Record<string, unknown> {
-        return getStatistics(this.sharedContext, timeframe, startDate, endDate, projectBreakdown)
+        return getStatistics(this.sharedContext, timeframe, startDate, endDate, projectBreakdown, workspaceId)
     }
 
     getEntryHistory(id: number): EntryRevision[] {
@@ -224,7 +230,7 @@ export class EntriesManager {
         return restoreEntry(this.sharedContext, id)
     }
 
-    getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number } {
+    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number } {
         return getDeletedEntries(this.sharedContext, options)
     }
 }

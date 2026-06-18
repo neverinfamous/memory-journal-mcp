@@ -60,15 +60,17 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit: fetchLimit,
+                            workspaceId: input.workspace_id,
                         }).entries
                     } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         // Tags/types filter: use a wide date range to scan the full database
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit: fetchLimit,
+                            workspaceId: input.workspace_id,
                         }).entries
                     } else {
-                        entries = db.getRecentEntries(fetchLimit).entries
+                        entries = db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, input.workspace_id).entries
                     }
 
                     // Post-filter by entry_types, then cap to requested limit
@@ -166,14 +168,16 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit,
+                            workspaceId: input.workspace_id,
                         }).entries
                     } else if (input.tags && input.tags.length > 0) {
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit,
+                            workspaceId: input.workspace_id,
                         }).entries
                     } else {
-                        entries = db.getRecentEntries(limit).entries
+                        entries = db.getRecentEntries(limit, undefined, undefined, undefined, undefined, input.workspace_id).entries
                     }
 
                     // Post-filter by entry_types
@@ -256,6 +260,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         {
                             dry_run: input.dry_run,
                             limit: input.limit,
+                            workspaceId: input.workspace_id,
                         },
                         context.vectorManager,
                         allowedRoots
@@ -370,6 +375,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
 
                     const result = await processImportBatch(parsedFiles, db, {
                         dry_run: input.dry_run,
+                        workspaceId: input.workspace_id,
                     }, context.vectorManager)
 
                     // Merge conversion phase errors

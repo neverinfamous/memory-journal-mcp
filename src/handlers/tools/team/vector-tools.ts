@@ -142,6 +142,9 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             if (entry.projectNumber !== input.project_number) {
                                 return null
                             }
+                            if (input.workspace_id && entry.workspaceId !== input.workspace_id) {
+                                return null
+                            }
 
                             // Apply filters
                             if (
@@ -312,7 +315,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, project_number } = TeamAddToVectorIndexSchema.parse(params)
+                    const { entry_id, project_number, workspace_id } = TeamAddToVectorIndexSchema.parse(params)
 
                     if (!teamVectorManager) {
                         return {
@@ -327,7 +330,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entry = teamDb.getEntryById(entry_id)
+                    const entry = teamDb.getEntryById(entry_id, workspace_id)
                     if (!entry || entry.projectNumber !== project_number) {
                         return {
                             success: false,

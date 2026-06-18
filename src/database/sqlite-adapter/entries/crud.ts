@@ -49,6 +49,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             'workflow_name',
             'workflow_status',
             'is_archived',
+            'workspace_id'
         ]
         const values = [
             input.entryType ?? 'personal_reflection',
@@ -68,6 +69,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.workflowName || null,
             input.workflowStatus || null,
             input.isArchived ? 1 : 0,
+            input.workspaceId ?? 'default'
         ]
 
         if (input.author !== undefined) {
@@ -96,7 +98,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
     txn()
 
-    const entry = getEntryById(context, insertId)
+    const entry = getEntryById(context, insertId, input.workspaceId ?? 'default')
     if (!entry) {
         throw new Error(
             `Storage Inconsistency Anomaly: Entry with ID ${insertId} successfully written but could not be read back.`
@@ -105,7 +107,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     return entry
 }
 
-export function getEntryById(context: EntriesSharedContext, id: number): JournalEntry | null {
+export function getEntryById(context: EntriesSharedContext, id: number, workspaceId = 'default'): JournalEntry | null {
     const { db, tagsMgr } = context
     const stmt = db.prepare(
         `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ? AND deleted_at IS NULL`
@@ -116,7 +118,11 @@ export function getEntryById(context: EntriesSharedContext, id: number): Journal
         return null
     }
 
-    return rowToEntry(tagsMgr, row)
+    const entry = rowToEntry(tagsMgr, row)
+    if (workspaceId !== '*' && entry.workspaceId !== workspaceId) {
+        return null
+    }
+    return entry
 }
 
 export function getEntriesByIds(
@@ -158,7 +164,8 @@ export function getEntriesByIds(
 
 export function getEntryByIdIncludeDeleted(
     context: EntriesSharedContext,
-    id: number
+    id: number,
+    workspaceId = 'default'
 ): JournalEntry | null {
     const { db, tagsMgr } = context
     const stmt = db.prepare(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ?`)
@@ -168,7 +175,11 @@ export function getEntryByIdIncludeDeleted(
         return null
     }
 
-    return rowToEntry(tagsMgr, row)
+    const entry = rowToEntry(tagsMgr, row)
+    if (workspaceId !== '*' && entry.workspaceId !== workspaceId) {
+        return null
+    }
+    return entry
 }
 
 export function getActiveEntryCount(context: EntriesSharedContext): number {
@@ -200,13 +211,22 @@ export function updateEntry(
         workflowStatus?: string | null
         isArchived?: boolean
         expectedVersion?: number
+        workspaceId?: string
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
 
     // Check existence first
-    const existing = getEntryById(context, id)
+    const existing = getEntryById(context, id, '*')
     if (!existing) return null
+
+    const callerWorkspace = input.workspaceId ?? 'default'
+    if (callerWorkspace !== '*' && existing.workspaceId !== callerWorkspace) {
+        throw new ConflictError(
+            `Entry ${id} belongs to workspace '${existing.workspaceId}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
+            existing as unknown as Record<string, unknown>
+        )
+    }
 
     if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
         throw new ConflictError(
@@ -308,7 +328,7 @@ export function updateEntry(
         tagsMgr.linkTagsToEntry(id, formattedTags)
     }
 
-    return getEntryById(context, id)
+    return getEntryById(context, id, input.workspaceId ?? 'default')
 }
 
 export function deleteEntry(context: EntriesSharedContext, id: number, permanent = false): boolean {
@@ -392,6 +412,7 @@ export function updateEntries(
         workflowStatus?: string | null
         isArchived?: boolean
         expectedVersion?: number
+        workspaceId?: string
     }[]
 ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
     if (updates.length === 0) return { updated: [], notFound: [], errors: [] }

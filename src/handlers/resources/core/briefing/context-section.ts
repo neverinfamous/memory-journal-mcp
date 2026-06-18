@@ -42,6 +42,7 @@ export interface JournalContext {
     latestSessionSummary?: { id: number; timestamp: string; type: string; preview: string }
     sessionSummaries?: { id: number; timestamp: string; type: string; preview: string }[]
     lastModified: string
+    workspaceId?: string
 }
 
 function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): JournalEntry[] {
@@ -165,7 +166,7 @@ export function buildJournalContext(
     const totalEntries = context.db.getActiveEntryCount()
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
-    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified }
+    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: config.defaultWorkspaceId }
 }
 
 // ============================================================================

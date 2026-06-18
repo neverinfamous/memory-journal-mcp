@@ -50,6 +50,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
+                    console.log('create_entry input parsed:', { content: input.content, workspace_id: input.workspace_id })
 
 
                     // Optional progress for long operations
@@ -79,12 +80,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
                         autoContext: input.auto_context,
+                        workspaceId: input.workspace_id,
                     })
                     const id = createdEntry.id
 
                     // Vectorize entry
                     try {
-                        const entry = db.getEntryById(id)
+                        const entry = db.getEntryById(id, input.workspace_id)
                         if (entry) {
                             await sendProgress(progress, 1, 2, 'Generating embeddings...')
                             await context.vectorManager?.addEntry(entry)
@@ -112,8 +114,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             'memory://recent'
                         )
                     }
-
-                    const finalEntry = db.getEntryById(id) ?? undefined
+                    const finalEntry = db.getEntryById(id, input.workspace_id) ?? undefined
 
                     let sharedWithTeam = false
                     let author: string | undefined
@@ -148,6 +149,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
                                 author: author,
+                                workspaceId: input.workspace_id,
                             })
                             context.teamDb.flushSave()
                             sharedWithTeam = true
@@ -224,7 +226,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
-                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived)
+                    console.log('get_recent_entries input parsed:', { workspace_id: input.workspace_id, is_personal: input.is_personal })
+                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, input.workspace_id)
                     return {
                         success: true,
                         entries: result.entries,

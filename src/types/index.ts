@@ -180,6 +180,8 @@ import type { BriefingConfig } from '../handlers/resources/shared.js'
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
+    /** Default workspace ID for isolating journal entries */
+    defaultWorkspaceId?: string
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Additional team database mappings (label -> path) for cross-team discovery */
@@ -327,6 +329,9 @@ export interface ServerConfig {
 
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
+
+    /** Default workspace ID for isolating journal entries */
+    defaultWorkspaceId?: string
 
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>

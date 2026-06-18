@@ -41,7 +41,8 @@ export const instructionsResource: InternalResourceDef = {
             prompts,
             undefined,
             level,
-            enabledGroups
+            enabledGroups,
+            context.briefingConfig
         )
 
         return {

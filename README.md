@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-70.22%25-yellow.svg)
+![Coverage](https://img.shields.io/badge/Coverage-70.19%25-yellow.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -74,6 +74,17 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                         |
 | **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules        |
 | **GitHub Commander**          | Pipeline skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                              |
+
+---
+
+### Multi-Tenancy (Workspaces)
+
+Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
+
+- **Default Isolation:** If omitted, all entries are created in and retrieved from the `default` workspace.
+- **Data Partitioning:** Core CRUD, Search, and Analytics tools accept a `workspace_id` parameter (e.g., `workspace_id: "alpha"`) to scope operations strictly to that workspace.
+- **Immutability:** A `workspace_id` is permanently assigned upon entry creation and **cannot be changed** afterward.
+- **Server Config:** Set `--workspace-id` (or the `WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance, allowing you to run multiple isolated journal interfaces on a single physical database.
 
 ---
 
@@ -625,6 +636,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MEMORY_JOURNAL_CONFIG`           | Path to configuration file (.yaml, .yml, .json) (CLI: `--config`)                                                                                     |
 | `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                                                  |
+| `WORKSPACE_ID`                    | Default workspace for multi-tenant data isolation (CLI: `--workspace-id`; default: `default`)                                                         |
 | `DB_ENCRYPTION_KEY`               | Encryption key for SQLCipher encrypted databases (at-rest encryption)                                                                                 |
 | `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                                                        |
 | `ADDITIONAL_TEAM_DBS`             | Additional team database mappings (label -> path) as JSON for cross-team discovery (CLI: `--additional-team-dbs`)                                     |

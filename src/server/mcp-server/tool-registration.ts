@@ -43,7 +43,8 @@ export function createServerInstance(
                     }),
                     undefined,
                     currentConfig.instructionLevel,
-                    groups
+                    groups,
+                    currentConfig.briefingConfig
                 )
             }
             
@@ -55,7 +56,8 @@ export function createServerInstance(
                 }),
                 undefined,
                 currentConfig.instructionLevel,
-                groups
+                groups,
+                currentConfig.briefingConfig
             )
         }
 

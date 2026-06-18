@@ -99,6 +99,7 @@ export interface JournalEntry {
     importanceScore?: number
     // Concurrency versioning
     version: number
+    workspaceId?: string
 }
 
 /**

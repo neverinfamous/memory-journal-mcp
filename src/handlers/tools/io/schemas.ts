@@ -44,6 +44,7 @@ export const ExportEntriesSchema = z.preprocess(
         .default(100)
         .describe('Maximum entries to export (default: 100)'),
     project_number: z.number().int().optional(),
+    workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -76,6 +77,7 @@ export const ExportEntriesSchemaMcp = z.preprocess(
         .default(100)
         .describe('Maximum entries to export (default: 100)'),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -129,6 +131,7 @@ export const ExportMarkdownSchema = z.preprocess(
     tags: z.array(z.string()).optional(),
     limit: z.number().max(500).optional().default(100),
     project_number: z.number().int().optional(),
+    workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -166,6 +169,7 @@ export const ExportMarkdownSchemaMcp = z.preprocess(
         .default(100)
         .describe('Max entries to export (default: 100, max: 500)'),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -211,6 +215,7 @@ export const ImportMarkdownSchema = z.preprocess(
     dry_run: z.boolean().optional().default(false),
     limit: z.number().max(500).optional().default(100),
     project_number: z.number().int().optional(),
+    workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -249,6 +254,7 @@ export const ImportMarkdownSchemaMcp = z.preprocess(
         .default(100)
         .describe('Max files to process (default: 100, max: 500)'),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -311,6 +317,7 @@ export const ImportExternalSchema = z.preprocess(
     limit: z.number().max(500).optional().default(100),
     default_entry_type: z.enum(ENTRY_TYPES).optional(),
     project_number: z.number().int().optional(),
+    workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -359,6 +366,7 @@ export const ImportExternalSchemaMcp = z.preprocess(
         .optional()
         .describe('Fallback entry type if heuristics cannot determine one'),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 

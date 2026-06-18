@@ -63,6 +63,7 @@ const preprocessAlias = (val: unknown): unknown => {
 const AddAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
     alias: z.string().min(1).max(255).describe('The raw author name to map (e.g., "Chris" or "GitHub: neverinfamous")'),
     canonical_author: z.string().min(1).max(255).describe('The canonical author identity to map the alias to (e.g., "christopher")'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
 
 const AddAuthorAliasOutputSchema = z.object({
@@ -79,6 +80,7 @@ const AddAuthorAliasOutputSchema = z.object({
 
 const RemoveAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
     alias: z.string().min(1).max(255).describe('The alias mapping to remove'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
 
 const RemoveAuthorAliasOutputSchema = z.object({
@@ -88,6 +90,7 @@ const RemoveAuthorAliasOutputSchema = z.object({
 
 const ListAuthorAliasesSchema = z.preprocess(preprocessAlias, z.object({
     canonical_author: z.string().optional().describe('Optional canonical author to filter aliases by'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
 
 const ListAuthorAliasesOutputSchema = z.object({
@@ -104,6 +107,7 @@ const ListAuthorAliasesOutputSchema = z.object({
 
 const ResolveAuthorSchema = z.preprocess(preprocessAlias, z.object({
     author: z.string().min(1).describe('The raw author name to resolve'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
 
 const ResolveAuthorOutputSchema = z.object({
@@ -115,6 +119,7 @@ const ResolveAuthorOutputSchema = z.object({
 
 const ConsolidateAuthorsSchema = z.preprocess(preprocessAlias, z.object({
     canonical_author: z.string().min(1).max(255).describe('The canonical author name. All entries matching any of this author\'s aliases will be updated to use this canonical name.'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))
 
 const ConsolidateAuthorsOutputSchema = z.object({

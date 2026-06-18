@@ -4,6 +4,7 @@ import type { Database } from 'better-sqlite3'
 import { MigrationManager } from '../../src/database/migrations/migration-manager.js'
 import { Migration009AddEntryVersion } from '../../src/database/migrations/009-add-entry-version.js'
 import { Migration010AddAuthorAliases } from '../../src/database/migrations/010-add-author-aliases.js'
+import { Migration011AddWorkspaceId } from '../../src/database/migrations/011-add-workspace-id.js'
 
 describe('Database Migration Framework', () => {
     it('should initialize a fresh database with all migrations applied', () => {
@@ -18,11 +19,11 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(9) // 1 to 6, plus 8, 9, 10
+        expect(applied.length).toBe(10) // 1 to 6, plus 8, 9, 10, 11
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
-        expect(applied[8].version).toBe(10)
-        expect(applied[8].name).toBe('010-add-author-aliases')
+        expect(applied[9].version).toBe(11)
+        expect(applied[9].name).toBe('011-add-workspace-id')
 
         // Verify tables exist
         const tables = db
@@ -47,6 +48,7 @@ describe('Database Migration Framework', () => {
         expect(cols).toContain('is_archived')
         expect(cols).toContain('project_number')
         expect(cols).toContain('version')
+        expect(cols).toContain('workspace_id')
         expect(cols).not.toContain('author') // personal db should not have author
 
         db.close()
@@ -64,7 +66,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(10)
+        expect(applied.length).toBe(11)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
 
@@ -103,6 +105,26 @@ describe('Database Migration Framework', () => {
         db.close()
     })
 
+    it('Migration 011 creates workspace_id column idempotently', () => {
+        const db = new DatabaseAdapter(':memory:')
+        db.exec('CREATE TABLE memory_journal (id INTEGER PRIMARY KEY, timestamp TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT, is_archived INTEGER DEFAULT 0)')
+        
+        // Run migration on empty DB
+        Migration011AddWorkspaceId.up(db)
+        const columns = db.pragma('table_info(memory_journal)') as { name: string }[]
+        expect(columns.some(c => c.name === 'workspace_id')).toBe(true)
+
+        // Add some existing data
+        db.exec("INSERT INTO memory_journal (id, workspace_id) VALUES (1, 'custom')")
+
+        // Run again
+        expect(() => Migration011AddWorkspaceId.up(db)).not.toThrow()
+        const rows = db.prepare('SELECT workspace_id FROM memory_journal').all() as { workspace_id: string }[]
+        expect(rows[0].workspace_id).toBe('custom')
+        
+        db.close()
+    })
+
     it('should self-heal and retrofit a pre-migration-framework database', () => {
         const db = new DatabaseAdapter(':memory:')
 
@@ -137,7 +159,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(9)
+        expect(applied.length).toBe(10)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
@@ -173,8 +195,8 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(9)
-        expect(count2).toBe(9)
+        expect(count1).toBe(10)
+        expect(count2).toBe(10)
 
         db.close()
     })

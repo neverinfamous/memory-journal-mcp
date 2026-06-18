@@ -50,12 +50,12 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { group_by } = TeamGetStatisticsSchema.parse(params)
-                    const stats = teamDb.getStatistics(group_by)
+                    const { group_by, workspace_id } = TeamGetStatisticsSchema.parse(params)
+                    const stats = teamDb.getStatistics(group_by, undefined, undefined, undefined, workspace_id)
 
                     let authors: { author: string; count: number }[] = []
                     try {
-                        authors = teamDb.getAuthorStatistics()
+                        authors = teamDb.getAuthorStatistics(workspace_id)
                     } catch {
                         // Author column may not exist yet
                     }
@@ -97,6 +97,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         endDate: input.end_date,
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
+                        workspaceId: input.workspace_id,
                     })
 
                     if (insights.projects.length === 0) {

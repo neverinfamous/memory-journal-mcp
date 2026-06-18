@@ -23,6 +23,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     
     const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber,
+        defaultWorkspaceId: options.defaultWorkspaceId,
         projectRegistry: options.projectRegistry,
         additionalTeamDbs: options.additionalTeamDbs,
         flagVocabulary: options.flagVocabulary,

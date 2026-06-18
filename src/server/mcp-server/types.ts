@@ -13,6 +13,7 @@ export interface ServerOptions {
     teamAdmin?: string
     toolFilter?: string
     defaultProjectNumber?: number
+    defaultWorkspaceId?: string
     autoRebuildIndex?: boolean
     statelessHttp?: boolean
     corsOrigins?: string[]

@@ -11,7 +11,7 @@ export const ENTRY_COLUMNS =
     'pr_number as prNumber, pr_url as prUrl, pr_status as prStatus, ' +
     'workflow_run_id as workflowRunId, workflow_name as workflowName, ' +
     'workflow_status as workflowStatus, deleted_at as deletedAt, ' +
-    'is_archived as isArchived, version'
+    'is_archived as isArchived, version, workspace_id as workspaceId'
 
 export const ALIASED_ENTRY_COLUMNS =
     'e.id, e.entry_type as entryType, e.content, e.timestamp, ' +
@@ -21,7 +21,7 @@ export const ALIASED_ENTRY_COLUMNS =
     'e.issue_url as issueUrl, e.pr_number as prNumber, e.pr_url as prUrl, ' +
     'e.pr_status as prStatus, e.workflow_run_id as workflowRunId, ' +
     'e.workflow_name as workflowName, e.workflow_status as workflowStatus, ' +
-    'e.deleted_at as deletedAt, e.is_archived as isArchived, e.version'
+    'e.deleted_at as deletedAt, e.is_archived as isArchived, e.version, e.workspace_id as workspaceId'
 
 /**
  * Shared context for entries manager operations

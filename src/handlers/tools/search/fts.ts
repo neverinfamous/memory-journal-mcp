@@ -50,6 +50,7 @@ export function ftsSearch(
         includeHighlights?: boolean
         fuzzy_match?: boolean
         auto_correct?: boolean
+        workspaceId?: string
     }
 ): { entries: EntryWithSource[]; count: number; degraded?: boolean; nextCursor?: string; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
     const hasFilters =
@@ -85,7 +86,7 @@ export function ftsSearch(
 
     let personalResult
     if (!query && !hasFilters) {
-        personalResult = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy, personalCursor, options.includeArchived)
+        personalResult = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy, personalCursor, options.includeArchived, options.workspaceId)
     } else {
         personalResult = db.searchEntries(query || '', {
             limit: perDbLimit,
@@ -105,6 +106,7 @@ export function ftsSearch(
             fuzzy_match: options.fuzzy_match,
             auto_correct: options.auto_correct,
             includeArchived: options.includeArchived,
+            workspaceId: options.workspaceId,
         })
     }
 
@@ -114,7 +116,7 @@ export function ftsSearch(
     if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
         let teamResult
         if (!query && !hasFilters) {
-            teamResult = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy, teamCursor, options.includeArchived)
+            teamResult = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy, teamCursor, options.includeArchived, options.workspaceId)
         } else {
             teamResult = teamDb.searchEntries(query || '', {
                 limit: perDbLimit,
@@ -133,6 +135,7 @@ export function ftsSearch(
                 fuzzy_match: options.fuzzy_match,
                 auto_correct: options.auto_correct,
                 includeArchived: options.includeArchived,
+                workspaceId: options.workspaceId,
             })
         }
         

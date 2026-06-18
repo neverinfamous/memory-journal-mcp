@@ -104,8 +104,8 @@ export interface IDatabaseAdapter {
 
     // Entries Manager
     createEntry(input: CreateEntryInput): JournalEntry
-    getEntryById(id: number): JournalEntry | null
-    getEntryByIdIncludeDeleted(id: number): JournalEntry | null
+    getEntryById(id: number, workspaceId?: string): JournalEntry | null
+    getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null
     getEntryHistory(id: number): EntryRevision[]
     getEntriesByIds(ids: number[]): Map<number, JournalEntry>
     getEntriesByIdsWithImportance(
@@ -117,7 +117,8 @@ export interface IDatabaseAdapter {
         isPersonal?: boolean,
         sortBy?: 'timestamp' | 'importance',
         cursor?: string,
-        includeArchived?: boolean
+        includeArchived?: boolean,
+        workspaceId?: string
     ): { entries: JournalEntry[]; nextCursor?: string }
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
     getActiveEntryCount(): number
@@ -142,6 +143,7 @@ export interface IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            workspaceId?: string
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
@@ -166,7 +168,7 @@ export interface IDatabaseAdapter {
 
     // Soft-Delete Recovery
     restoreEntry(id: number): boolean
-    getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number }
+    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number }
     
     // Batch Operations
     createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] }
@@ -191,6 +193,7 @@ export interface IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            workspaceId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }
     deleteEntries(
@@ -218,6 +221,7 @@ export interface IDatabaseAdapter {
             includeHighlights?: boolean
             fuzzy_match?: boolean
             auto_correct?: boolean
+            workspaceId?: string
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string }
     getSearchFacets(
@@ -234,6 +238,7 @@ export interface IDatabaseAdapter {
             startDate?: string
             endDate?: string
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] }
     searchByDateRange(
@@ -251,15 +256,17 @@ export interface IDatabaseAdapter {
             limit?: number
             sortBy?: 'timestamp' | 'importance'
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { entries: JournalEntry[]; nextCursor?: string }
     getStatistics(
         groupBy?: 'day' | 'week' | 'month' | 'year',
         startDate?: string,
         endDate?: string,
-        projectBreakdown?: boolean
+        projectBreakdown?: boolean,
+        workspaceId?: string
     ): Record<string, unknown>
-    getAuthorStatistics(): { author: string; count: number }[]
+    getAuthorStatistics(workspaceId?: string): { author: string; count: number }[]
     getAuthorsForEntries(entryIds: number[]): Map<number, string | null>
 
     // Tags Manager
@@ -331,6 +338,7 @@ export interface IDatabaseAdapter {
         endDate?: string
         minEntries: number
         inactiveThresholdDays: number
+        workspaceId?: string
     }): {
         projects: Record<string, unknown>[]
         inactiveProjects: { project_number: number; last_entry_date: string }[]
@@ -360,8 +368,8 @@ export interface IDatabaseAdapter {
         impactFactor: { author: string; inboundLinks: number }[]
     }
 
-    getWorkflowActionEntries(limit: number): JournalEntry[]
-    getSignificantEntries(limit: number, projectNumber?: number): JournalEntry[]
+    getWorkflowActionEntries(limit: number, workspaceId?: string): JournalEntry[]
+    getSignificantEntries(limit: number, projectNumber?: number, workspaceId?: string): JournalEntry[]
     getRecentGraphRelationships(limit: number): {
         from_entry_id: number
         to_entry_id: number

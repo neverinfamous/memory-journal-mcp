@@ -71,6 +71,7 @@ export const UpdateEntrySchema = z.preprocess(
         is_archived: z.boolean().optional(),
         expected_version: z.number().optional(),
         auto_context: z.string().nullable().optional(),
+        workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -137,6 +138,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         is_archived: z.boolean().optional(),
         expected_version: relaxedNumber().optional(),
         auto_context: z.string().nullable().optional(),
+        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -157,6 +159,7 @@ export const DeleteEntrySchema = z.preprocess(
         permanent: z.boolean().optional().default(false),
         project_number: z.number().int().optional(),
         expected_version: z.number().optional().describe('REQUIRED for concurrency safety'),
+        workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -177,6 +180,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         entry_id: relaxedNumber().optional().describe('The ID of the entry to delete. If you need to delete multiple entries, use batch_delete_entries instead.'),
         permanent: z.boolean().optional().default(false).describe('If true, permanently deletes the entry. If false, performs a soft delete.'),
         expected_version: relaxedNumber().optional().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
+        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -208,12 +212,14 @@ export const BatchCreateEntriesSchema = z.preprocess(
         entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
         auto_index: z.boolean().optional().default(true),
         project_number: z.number().int().optional(),
+        workspace_id: z.string().optional(),
     }).strict()
 )
 
 export const BatchCreateEntriesSchemaMcp = z.object({
     entries: z.array(CreateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }).strict()
 
 export const BatchUpdateEntriesSchema = z.preprocess(
@@ -256,6 +262,7 @@ export const BatchUpdateEntriesSchema = z.preprocess(
         updates: z.array(UpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
         auto_index: z.boolean().optional().default(true),
         project_number: z.number().int().optional(),
+        workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -294,6 +301,7 @@ export const BatchUpdateEntriesSchemaMcp = z.preprocess(
     z.object({
         updates: z.array(UpdateEntrySchemaMcp).optional(),
         auto_index: z.boolean().optional().default(true),
+        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -320,6 +328,7 @@ export const BatchDeleteEntriesSchema = z.preprocess(
         entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
         permanent: z.boolean().optional().default(false),
         project_number: z.number().int().optional(),
+        workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -345,6 +354,7 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
     z.object({
         entry_ids: z.array(relaxedNumber()).optional(),
         permanent: z.boolean().optional().default(false),
+        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 

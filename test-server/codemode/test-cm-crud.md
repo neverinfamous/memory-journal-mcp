@@ -90,6 +90,43 @@ return {
 | `sharedWithTeam` | `true`           |
 | `author`         | Non-empty string |
 
+### 20.2.1 Create with workspace_id and Verify Isolation
+
+```javascript
+// Test code:
+// Create an entry in workspace ws-a
+const entryA = await mj.core.createEntry({
+  content: 'CM3 workspace-a entry',
+  workspace_id: 'ws-a'
+})
+
+// Search in workspace ws-b (should be empty for our string)
+const searchB = await mj.search.searchEntries({
+  query: 'CM3 workspace-a entry',
+  workspace_id: 'ws-b'
+})
+
+// Get recent from workspace ws-a (should contain the entry)
+const recentA = await mj.core.getRecentEntries({
+  limit: 10,
+  workspace_id: 'ws-a'
+})
+
+return {
+  success: entryA.success,
+  workspaceA: entryA.entry?.workspaceId,
+  searchBCount: searchB.count,
+  recentAContains: recentA.entries?.some(e => e.content === 'CM3 workspace-a entry')
+}
+```
+
+| Check             | Expected |
+| ----------------- | -------- |
+| `success`         | `true`   |
+| `workspaceA`      | `"ws-a"` |
+| `searchBCount`    | `0`      |
+| `recentAContains` | `true`   |
+
 ### 20.3 Create Entry — Error Paths
 
 | Test                 | Code                                                                                                      | Expected Result                                        |

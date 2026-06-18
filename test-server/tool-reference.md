@@ -24,9 +24,9 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 | Tool                   | Description                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------- |
-| `create_entry`         | Create a new journal entry with context and tags (v2.1.0: GitHub Actions support). |
+| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy. |
 | `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
-| `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance) and cursor pagination.          |
+| `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance), cursor pagination, and `workspace_id`.          |
 | `get_entry_history`    | Get the revision history of a specific journal entry (capped at 10 revisions).     |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
 | `test_error_handling`  | Test tool for validating error handler responses.                                  |
@@ -41,8 +41,8 @@ Full-text, date-range, and semantic/vector search.
 
 | Tool                     | Description                                                                                                                                                                                              |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_entries`         | Search journal entries. Use `mode` (`auto`, `fts`, `semantic`, `hybrid`) to control strategy. FTS5 supports phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`. Optional filters, `sort_by`, cursor pagination, `include_facets`, `include_highlights`, hybrid weights, `fuzzy_match` (typo tolerance), and `auto_correct`. |
-| `search_by_date_range`   | Search journal entries within a date range with optional filters, `sort_by` (timestamp or importance), and cursor pagination.                                                                                                |
+| `search_entries`         | Search journal entries. Use `mode` (`auto`, `fts`, `semantic`, `hybrid`). Supports `workspace_id`, filters, `sort_by`, cursor pagination, facets, and highlights. |
+| `search_by_date_range`   | Search journal entries within a date range with optional filters, `workspace_id`, `sort_by`, and cursor pagination.                                                                                                |
 | `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                   |
 | `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                   |
 | `list_deleted_entries`   | List recently soft-deleted entries that can be restored.                                                                                                                                                 |
@@ -56,7 +56,7 @@ Statistics, cross-project insights, and analytics.
 
 | Tool                         | Description                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------- |
-| `get_statistics`             | Get journal statistics and analytics (Phase 2: includes project breakdown). |
+| `get_statistics`             | Get journal statistics and analytics (supports `workspace_id` filtering). |
 | `get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in journal entries.     |
 
 ---

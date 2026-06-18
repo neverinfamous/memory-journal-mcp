@@ -46,19 +46,23 @@ const TeamAddMemberSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to add'),
     role: z.enum(['admin', 'member', 'viewer']).describe('The role to assign'),
     display_name: z.string().optional().describe('Optional display name'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }).strict())
 
 const TeamRemoveMemberSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to remove'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }).strict())
 
 const TeamUpdateMemberRoleSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to update'),
     role: z.enum(['admin', 'member', 'viewer']).describe('The new role to assign'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }).strict())
 
 const TeamGetMemberSchema = z.preprocess(preprocessMember, z.object({
     author: z.string().describe('The author ID/username to fetch'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }).strict())
 
 // ============================================================================
@@ -195,7 +199,9 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             title: 'List Team Members',
             description: 'List all registered team members and their roles. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({}).strict(),
+            inputSchema: z.object({
+                workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+            }).strict(),
             outputSchema: z.object({
                 success: z.boolean(),
                 members: z.array(z.unknown()).optional(),

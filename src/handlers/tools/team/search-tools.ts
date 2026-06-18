@@ -46,7 +46,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct } =
+                    const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct, workspace_id } =
                         TeamSearchSchema.parse(params)
 
 
@@ -80,6 +80,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         includeArchived: include_archived,
                         fuzzy_match,
                         auto_correct,
+                        workspaceId: workspace_id,
                     })
                     let entries = result.entries
 
@@ -156,6 +157,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         sort_by,
                         project_number,
                         include_archived,
+                        workspace_id,
                     } = TeamSearchByDateRangeSchema.parse(params)
 
 
@@ -195,6 +197,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         sortBy: sort_by,
                         projectNumber: projectNumber,
                         includeArchived: include_archived,
+                        workspaceId: workspace_id,
                     })
                     const entries = result.entries
 
@@ -236,9 +239,9 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    const { limit, offset, project_number } = TeamListDeletedEntriesSchema.parse(params)
+                    const { limit, offset, project_number, workspace_id } = TeamListDeletedEntriesSchema.parse(params)
                     const projectNumber = project_number
-                    const result = teamDb.getDeletedEntries({ limit, offset })
+                    const result = teamDb.getDeletedEntries({ limit, offset, workspaceId: workspace_id })
                     let entries = result.entries
                     if (projectNumber != null) {
                         entries = entries.filter((e) => e.projectNumber === projectNumber)

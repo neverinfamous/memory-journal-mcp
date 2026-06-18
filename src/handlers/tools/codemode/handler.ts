@@ -91,6 +91,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    let workspaceId = input.workspace_id
+                    workspaceId ??= context.config?.defaultWorkspaceId
+
                     let sessionContext = context
 
                     // Context injection for GitHub / Kanban routing
@@ -270,6 +273,20 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             const acceptsProjectNumber = checkSchemaAcceptsKey(tool.inputSchema, 'project_number');
                             if (paramsObj['project_number'] === undefined && projectId !== undefined && acceptsProjectNumber) {
                                 paramsObj['project_number'] = projectId
+                            }
+
+                            // Dispatcher Healing: map 'workspace' to 'workspace_id'
+                            if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
+                                paramsObj['workspace_id'] = paramsObj['workspace']
+                            }
+                            // Gracefully cast numeric workspace_id to string
+                            if (typeof paramsObj['workspace_id'] === 'number') {
+                                paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
+                            }
+
+                            const acceptsWorkspaceId = checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id');
+                            if (paramsObj['workspace_id'] === undefined && workspaceId !== undefined && acceptsWorkspaceId) {
+                                paramsObj['workspace_id'] = workspaceId
                             }
 
                             // Auto-inject issue_url if issue_number is present and we have GitHub context

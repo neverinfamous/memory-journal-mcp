@@ -145,6 +145,17 @@ describe('Tool Handlers', () => {
             expect(result.entry.entryType).toBe('project_decision')
             expect(result.entry.tags).toContain('tool-tag-a')
         })
+
+        it('should create entry in specific workspace', async () => {
+            const result = (await callTool(
+                'create_entry',
+                { content: 'Workspace entry', workspace_id: 'test-ws-1' },
+                db
+            )) as { success: boolean; entry: { id: number; workspaceId: string } }
+
+            expect(result.success).toBe(true)
+            expect(result.entry.workspaceId).toBe('test-ws-1')
+        })
     })
 
     describe('callTool - create_entry', () => {
@@ -195,6 +206,17 @@ describe('Tool Handlers', () => {
 
             expect(result.entries.length).toBeLessThanOrEqual(3)
             expect(result.count).toBeGreaterThan(0)
+        })
+
+        it('should filter by workspace_id and use default if omitted', async () => {
+            await callTool('create_entry', { content: 'WS-Alpha entry', workspace_id: 'ws-alpha' }, db)
+            
+            const alphaResult = (await callTool('get_recent_entries', { limit: 10, workspace_id: 'ws-alpha' }, db)) as { entries: { content: string }[] }
+            expect(alphaResult.entries.some(e => e.content === 'WS-Alpha entry')).toBe(true)
+            expect(alphaResult.entries.some(e => e.content === 'Workspace entry')).toBe(false) // from other test
+
+            const defaultResult = (await callTool('get_recent_entries', { limit: 10 }, db)) as { entries: { content: string }[] }
+            expect(defaultResult.entries.some(e => e.content === 'WS-Alpha entry')).toBe(false)
         })
     })
 

@@ -61,7 +61,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamUpdateEntrySchema.parse(params)
 
                     // Verify entry exists
-                    const existing = teamDb.getEntryById(input.entry_id)
+                    const existing = teamDb.getEntryById(input.entry_id, input.workspace_id)
                     if (!existing) {
                         return {
                             success: false,
@@ -121,6 +121,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         isArchived: input.is_archived,
                         expectedVersion: input.expected_version,
                         autoContext: input.auto_context,
+                        workspaceId: input.workspace_id,
                     })
 
                     triggerTeamNotifications(context)
@@ -154,7 +155,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, project_number, expected_version } = TeamDeleteEntrySchema.parse(params)
+                    const { entry_id, project_number, expected_version, workspace_id } = TeamDeleteEntrySchema.parse(params)
 
                     const projectNumber = project_number
                     if (projectNumber === undefined || projectNumber === null) {
@@ -169,7 +170,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Verify entry exists and belongs to project (if projectNumber is specified)
-                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id)
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, workspace_id)
                     if (
                         !existing ||
                         (projectNumber !== undefined && existing.projectNumber !== projectNumber)
@@ -243,7 +244,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     
-                    const { entry_id, project_number } = TeamRestoreEntrySchema.parse(params)
+                    const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
                     
                     const projectNumber = project_number
                     if (projectNumber === undefined || projectNumber === null) {
@@ -258,7 +259,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Verify entry exists and belongs to project (if projectNumber is specified)
-                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id)
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, workspace_id)
                     if (!existing || (projectNumber !== undefined && existing.projectNumber !== projectNumber)) {
                         return {
                             success: false,

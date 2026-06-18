@@ -144,6 +144,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         projectNumber: projectNumber,
                         issueNumber: input.issue_number,
                         author,
+                        workspaceId: input.workspace_id,
                     })
 
                     teamDb.flushSave()
@@ -192,7 +193,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = ResolveTeamFlagSchema.parse(params)
-                    const entry = teamDb.getEntryById(input.flag_id)
+                    const entry = teamDb.getEntryById(input.flag_id, input.workspace_id)
 
                     if (!entry) {
                         return {
@@ -263,6 +264,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     teamDb.updateEntry(input.flag_id, {
                         autoContext: JSON.stringify(updatedContext),
                         content: updatedContent,
+                        workspaceId: input.workspace_id,
                     })
                     teamDb.flushSave()
 
@@ -272,7 +274,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
                     }
 
-                    const updatedEntry = teamDb.getEntryById(input.flag_id)
+                    const updatedEntry = teamDb.getEntryById(input.flag_id, input.workspace_id)
                     const author = fetchAuthor(teamDb, input.flag_id)
 
                     return {

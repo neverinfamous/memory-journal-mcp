@@ -49,6 +49,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         relationship_type,
                         description,
                         project_number,
+                        workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
 
                     // Guard: self-referential links are not meaningful
@@ -65,7 +66,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     // Verify both entries exist and belong to the project
-                    const fromEntry = teamDb.getEntryById(from_entry_id)
+                    const fromEntry = teamDb.getEntryById(from_entry_id, workspace_id)
                     if (fromEntry?.projectNumber !== project_number) {
                         return {
                             success: false,
@@ -77,7 +78,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    const toEntry = teamDb.getEntryById(to_entry_id)
+                    const toEntry = teamDb.getEntryById(to_entry_id, workspace_id)
                     if (toEntry?.projectNumber !== project_number) {
                         return {
                             success: false,
@@ -148,13 +149,13 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, tag, depth } = TeamVisualizeRelationshipsSchema.parse(params)
+                    const { entry_id, tag, depth, workspace_id } = TeamVisualizeRelationshipsSchema.parse(params)
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        const fromEntry = teamDb.getEntryById(entry_id)
+                        const fromEntry = teamDb.getEntryById(entry_id, workspace_id)
                         if (!fromEntry) {
                             return {
                                 success: false,
@@ -191,11 +192,12 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         const { entries: tagEntries } = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {
                             tags: [tag],
                             limit: 50,
+                            workspaceId: workspace_id,
                         })
                         entryIds = tagEntries.map((e) => e.id)
                     } else {
                         // Default: recent entries
-                        const { entries: recent } = teamDb.getRecentEntries(20)
+                        const { entries: recent } = teamDb.getRecentEntries(20, undefined, undefined, undefined, undefined, workspace_id)
                         entryIds = recent.map((e) => e.id)
                     }
 
@@ -214,7 +216,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const seenEdges = new Set<string>()
 
                     for (const eid of entryIds) {
-                        const entry = teamDb.getEntryById(eid)
+                        const entry = teamDb.getEntryById(eid, workspace_id)
                         if (entry) {
                             let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
                             if (entry.content.length > 40) label += '...'

@@ -40,7 +40,8 @@ export const CreateEntrySchema = z.preprocess(
         tags: z.array(z.string()).optional(),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-        project_number: z.number().int(),
+        workspace_id: z.string().optional(),
+        project_number: z.number().int().optional(),
         project_owner: z.string().optional(),
         issue_number: z.number().optional(),
         issue_url: z.string().optional(),
@@ -141,6 +142,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
         ),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
+        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         project_number: relaxedNumber().describe(
             'REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row ' +
             '(registry: repoName (#N)) or use get_statistics. Do NOT pass a repo name string.'
@@ -228,6 +230,7 @@ export const EntryByIdOutputSchema = z
 
 export const GetRecentEntriesSchema = z.object({
     limit: z.number().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
+    workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -243,6 +246,7 @@ export const GetRecentEntriesSchemaMcp = z.object({
         .optional()
         .default(10)
         .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     is_personal: z.boolean().optional(),
     sort_by: z
         .string()

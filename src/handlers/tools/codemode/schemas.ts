@@ -26,6 +26,7 @@ export const ExecuteCodeSchema = z.object({
     script: z.string().optional(),
     auto_version: z.boolean().optional().default(true),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional(),
     repo: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
     context: z.any().optional(),
@@ -52,6 +53,12 @@ export const ExecuteCodeSchemaMcp = z.object({
             'Numeric project ID to bind to all tool calls in this sandbox. ' +
             'Repo name strings (e.g., "mysql-mcp") are auto-resolved via the project registry. ' +
             'Falls back to DEFAULT_PROJECT_NUMBER if unspecified. Find it in the briefing Config row (registry: repoName (#N)).'
+        ),
+    workspace_id: z
+        .string()
+        .optional()
+        .describe(
+            'Target workspace ID to isolate data. If omitted, uses defaultWorkspaceId if configured.'
         ),
     repo: z
         .string()

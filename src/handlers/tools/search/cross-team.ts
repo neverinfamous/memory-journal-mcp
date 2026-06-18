@@ -26,6 +26,7 @@ export const CrossTeamSearchSchema = z.object({
         .optional()
         .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
     tags: z.array(z.string()).optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
@@ -150,6 +151,7 @@ export async function handleCrossTeamSearch(
             endDate: args.end_date,
             fuzzy_match: args.fuzzy_match,
             includeArchived: args.include_archived,
+            workspaceId: args.workspace_id,
         })
 
         // Tag entries with their source

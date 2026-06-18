@@ -59,6 +59,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         isArchived: input.is_archived,
                         expectedVersion: input.expected_version,
                         autoContext: input.auto_context,
+                        workspaceId: input.workspace_id,
                     })
                     if (!entry) {
                         return {
@@ -99,10 +100,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { entry_id, permanent, expected_version } = DeleteEntrySchema.parse(params)
+                    const { entry_id, permanent, expected_version, workspace_id } = DeleteEntrySchema.parse(params)
 
                     if (expected_version !== undefined) {
-                        const existing = db.getEntryByIdIncludeDeleted(entry_id);
+                        const existing = db.getEntryByIdIncludeDeleted(entry_id, workspace_id);
                         if (existing && existing.version !== expected_version) {
                             return {
                                 success: false,

@@ -171,6 +171,7 @@ export const EntryOutputSchema = z
         workflowRunId: z.number().nullable().optional(),
         workflowName: z.string().nullable().optional(),
         workflowStatus: z.string().nullable().optional(),
+        workspaceId: z.string().optional().describe('Workspace isolation identifier'),
         source: z.enum(['personal', 'team']).optional(),
         importanceScore: z
             .number()

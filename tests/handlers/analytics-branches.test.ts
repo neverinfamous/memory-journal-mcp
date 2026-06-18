@@ -74,8 +74,7 @@ describe('analytics tools — branch coverage', () => {
                 end_date: '2025-01-31',
                 project_breakdown: true,
             })
-
-            expect(db.getStatistics).toHaveBeenCalledWith('month', '2025-01-01', '2025-01-31', true)
+            expect(db.getStatistics).toHaveBeenCalledWith('month', '2025-01-01', '2025-01-31', true, undefined)
         })
 
         it('should handle error with formatHandlerError', () => {

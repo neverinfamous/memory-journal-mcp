@@ -71,6 +71,7 @@ export function formatUserMessage(opts: {
     lastReleaseDaysAgo?: number
     localCheck?: boolean
     deprecationWarnings?: string[]
+    workspaceId?: string
     /** Registered workspace paths for non-IDE agents: { repoName: diskPath } */
     registryPaths?: Record<string, string>
     /** Registered project numbers for display: { repoName: numericId } */
@@ -205,6 +206,9 @@ export function formatUserMessage(opts: {
     // TABLE ROW 3: Journal
     // ========================================================================
     const journalLine1 = [`${String(totalEntries)} entries`]
+    if (opts.workspaceId) {
+        journalLine1.push(`Workspace: **${escapeCell(opts.workspaceId)}**`)
+    }
     if (opts.teamTotalEntries !== undefined) {
         journalLine1.push(`Team: ${String(opts.teamTotalEntries)}`)
     }
@@ -275,6 +279,7 @@ export function formatUserMessage(opts: {
     }
 
     if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
+    if (opts.workspaceId) sysLines.push(`Tenant: **${escapeCell(opts.workspaceId)}**`)
 
     // ========================================================================
     // TABLE ROW 5: Config (only when non-default values present)

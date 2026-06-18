@@ -158,6 +158,7 @@ export async function buildBriefingData(
         hasCodeMap: system.hasCodeMap,
         lastReleaseDaysAgo: system.lastReleaseDaysAgo ?? undefined,
         localCheck: system.localCheck ?? undefined,
+        workspaceId: system.workspaceId ?? journal.workspaceId,
         deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
         registryPaths,
         registryProjectNumbers,

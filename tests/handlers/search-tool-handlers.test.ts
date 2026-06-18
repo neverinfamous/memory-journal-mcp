@@ -246,6 +246,25 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.count).toBeGreaterThan(0)
         })
 
+        it('should filter by workspace_id', async () => {
+            db.createEntry({ content: 'Workspace filter test', workspaceId: 'test-ws-search' })
+            const result = (await callTool(
+                'search_entries',
+                { query: 'Workspace filter', workspace_id: 'test-ws-search', limit: 10 },
+                db
+            )) as { entries: unknown[]; count: number }
+
+            expect(result.count).toBeGreaterThan(0)
+            
+            const emptyResult = (await callTool(
+                'search_entries',
+                { query: 'Workspace filter', workspace_id: 'other-ws', limit: 10 },
+                db
+            )) as { entries: unknown[]; count: number }
+            
+            expect(emptyResult.count).toBe(0)
+        })
+
         it('should handle combined filters with teamDb', async () => {
             const result = (await callTool(
                 'search_entries',
@@ -324,6 +343,34 @@ describe('Search Tool Handlers - Coverage', () => {
             )) as { entries: unknown[]; count: number }
 
             expect(result.count).toBeGreaterThan(0)
+        })
+
+        it('should filter by workspace_id', async () => {
+            const today = new Date().toISOString().split('T')[0]!
+            db.createEntry({ content: 'Workspace date test', workspaceId: 'test-ws-date' })
+            const result = (await callTool(
+                'search_by_date_range',
+                {
+                    start_date: today,
+                    end_date: today,
+                    workspace_id: 'test-ws-date',
+                },
+                db
+            )) as { entries: unknown[]; count: number }
+
+            expect(result.count).toBeGreaterThan(0)
+            
+            const emptyResult = (await callTool(
+                'search_by_date_range',
+                {
+                    start_date: today,
+                    end_date: today,
+                    workspace_id: 'other-ws',
+                },
+                db
+            )) as { entries: unknown[]; count: number }
+            
+            expect(emptyResult.count).toBe(0)
         })
 
         it('should apply tags filter', async () => {

@@ -251,7 +251,7 @@ Read \`memory://help/codemode\` for full namespace table, examples, and patterns
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["codemode","github","hush-protocol","skills","templates"]
+const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","hush-protocol","skills","templates"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -316,13 +316,18 @@ export function generateStandardInstructions(
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     level: InstructionLevel = 'standard',
-    enabledGroups?: Set<ToolGroup>
+    enabledGroups?: Set<ToolGroup>,
+    config?: { defaultWorkspaceId?: string }
 ): string {
     // Derive enabled groups from enabled tools if not provided (backward compat)
     const groups = enabledGroups ?? getEnabledGroups(enabledTools)
 
     // Always start with core instructions (overview + behaviors)
     let instructions = CORE_INSTRUCTIONS
+
+    if (config?.defaultWorkspaceId) {
+        instructions += `\n\n### Multi-Tenancy\n**Active Workspace:** \`${config.defaultWorkspaceId}\`\nAll entries and searches are isolated to this workspace by default. Include \`workspace_id\` parameter in tool calls if you need to override this.`
+    }
 
     // Code Mode snippet — only when codemode group is enabled
     if (groups.has('codemode')) {
@@ -368,9 +373,10 @@ export function generateCodeModeInstructions(
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     level: InstructionLevel = 'standard',
-    enabledGroups?: Set<ToolGroup>
+    enabledGroups?: Set<ToolGroup>,
+    config?: { defaultWorkspaceId?: string }
 ): string {
-    const standard = generateStandardInstructions(enabledTools, prompts, latestEntry, level, enabledGroups)
+    const standard = generateStandardInstructions(enabledTools, prompts, latestEntry, level, enabledGroups, config)
     return standard + '\n\n' + HELP_CONTENT.get('codemode')
 }
 
@@ -386,6 +392,12 @@ export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
  * Other keys are feature-specific help (memory://help/{key}).
  */
 export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
+  ["core", `# Core Operations
+- **Workspace Isolation**: When creating or reading entries, consider the \`workspace_id\` parameter. If a default workspace is active, entries are automatically scoped to it unless explicitly overridden.`],
+  ["search", `# Search Operations
+- **Workspace Filtering**: All search and listing operations filter by \`workspace_id\` if configured. You can query across workspaces by explicitly omitting the workspace or passing an asterisk/wildcard if supported.`],
+  ["admin", `# Admin Operations
+- **Workspace Bounds**: Batch updates, deletions, and rebuilding vector indexes require \`workspace_id\` awareness. Ensure you are targeting the correct workspace to avoid unintended cross-tenant mutations.`],
   ["codemode", `# Code Mode API Reference
 
 In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You must orchestrate the server using the \`mj.*\` API inside the sandbox.

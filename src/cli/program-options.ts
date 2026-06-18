@@ -33,6 +33,7 @@ export function createProgram(): Command {
         )
         .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
         .option('--default-project <number>', 'Default GitHub Project number')
+        .option('--default-workspace-id <string>', 'Default workspace ID for isolating journal entries (env: DEFAULT_WORKSPACE_ID)')
         .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
         .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: none)')
         .option('--enable-hsts', 'Enable HSTS header for HTTP transport (use when behind HTTPS)')

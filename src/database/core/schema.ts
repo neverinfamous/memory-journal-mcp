@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     pr_status TEXT,
     workflow_run_id INTEGER,
     workflow_name TEXT,
-    workflow_status TEXT
+    workflow_status TEXT,
+    workspace_id TEXT DEFAULT 'default'
 );
 
 -- Tags table
@@ -104,8 +105,10 @@ CREATE INDEX IF NOT EXISTS idx_memory_journal_recent ON memory_journal(deleted_a
 -- Partial index on active entries to speed up timestamp queries without indexing deleted rows
 CREATE INDEX IF NOT EXISTS idx_memory_journal_active_timestamp ON memory_journal(timestamp DESC) WHERE deleted_at IS NULL;
 
--- Partial covering index for the most common query pattern (active & non-archived sorted by timestamp)
-CREATE INDEX IF NOT EXISTS idx_memory_journal_active_recent ON memory_journal(timestamp DESC, id DESC) WHERE deleted_at IS NULL AND is_archived = 0;
+-- Composite partial index for the most common query pattern (active & non-archived sorted by timestamp)
+CREATE INDEX IF NOT EXISTS idx_memory_journal_ws_active_recent ON memory_journal(workspace_id, timestamp DESC, id DESC) WHERE deleted_at IS NULL AND is_archived = 0;
+
+CREATE INDEX IF NOT EXISTS idx_memory_journal_workspace ON memory_journal(workspace_id);
 
 -- Composite partial index for entry type searches sorted/grouped by timestamp
 CREATE INDEX IF NOT EXISTS idx_memory_journal_type_timestamp ON memory_journal(entry_type, timestamp DESC) WHERE deleted_at IS NULL;
@@ -174,6 +177,7 @@ export interface CreateEntryInput {
     workflowName?: string
     workflowStatus?: 'queued' | 'in_progress' | 'completed'
     author?: string
+    workspaceId?: string
 }
 
 /**
@@ -227,4 +231,5 @@ CREATE INDEX IF NOT EXISTS idx_author_aliases_canonical ON author_aliases(canoni
 export interface CreateTeamEntryInput extends CreateEntryInput {
     /** Author name (auto-detected from git config or TEAM_AUTHOR env) */
     author?: string
+    workspaceId?: string
 }

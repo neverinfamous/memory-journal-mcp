@@ -66,6 +66,8 @@ export interface SystemContext {
     lastReleaseDaysAgo: number | null
     /** Status of the local lint/tsc check, if available */
     localCheck: boolean | null
+    /** The active workspace ID if configured */
+    workspaceId?: string
 }
 
 // ============================================================================
@@ -451,5 +453,6 @@ export async function buildSystemContext(
         hasCodeMap,
         lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(),
         localCheck,
+        workspaceId: config?.defaultWorkspaceId,
     }
 }

@@ -9,12 +9,19 @@ export function getStatistics(
     groupBy: 'day' | 'week' | 'month' | 'year' = 'week',
     startDate?: string,
     endDate?: string,
-    projectBreakdown?: boolean
+    projectBreakdown?: boolean,
+    workspaceId = 'default'
 ): Record<string, unknown> {
     const { db } = context
 
     let dateFilter = ''
     const dateParams: unknown[] = []
+
+    if (workspaceId !== '*') {
+        dateFilter += ' AND workspace_id = ?'
+        dateParams.push(workspaceId)
+    }
+
     if (startDate) {
         dateFilter += ' AND DATE(timestamp) >= DATE(?)'
         dateParams.push(startDate)

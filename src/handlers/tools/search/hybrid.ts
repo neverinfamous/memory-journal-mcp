@@ -97,6 +97,7 @@ export async function hybridSearch(
                 entryType: options.entryType as EntryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
+                workspaceId: options.workspaceId,
             })
         ),
         // Semantic search (returns [] if vectorManager is unavailable)

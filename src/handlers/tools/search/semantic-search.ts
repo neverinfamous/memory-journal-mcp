@@ -106,6 +106,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         endDate: input.end_date,
                         includeTeam: input.include_team,
                         includeArchived: input.include_archived,
+                        workspaceId: input.workspace_id,
                     }
 
                     if (input.tags && input.tags.length > 0) {

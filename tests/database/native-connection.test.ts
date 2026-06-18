@@ -134,7 +134,7 @@ describe('NativeConnectionManager', () => {
             const names = indexes.map((idx) => idx.name)
 
             expect(names).toContain('idx_memory_journal_active_timestamp')
-            expect(names).toContain('idx_memory_journal_active_recent')
+            expect(names).toContain('idx_memory_journal_ws_active_recent')
             expect(names).toContain('idx_memory_journal_type_timestamp')
 
             mgr.close()

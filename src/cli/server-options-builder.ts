@@ -66,6 +66,7 @@ export function buildServerOptions(
             const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
             return val ? parseInt(val, 10) : undefined;
         }, undefined),
+        defaultWorkspaceId: catchConfig(() => resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID'), undefined),
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
         corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
         enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),

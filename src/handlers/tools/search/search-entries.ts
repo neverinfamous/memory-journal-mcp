@@ -96,6 +96,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         includeHighlights: input.include_highlights,
                         fuzzy_match: effectiveFuzzyMatch,
                         auto_correct: effectiveAutoCorrect,
+                        workspaceId: input.workspace_id,
                     }
 
                     let facets: { tags: {name: string; count: number}[]; entryTypes: {name: string; count: number}[] } | undefined
@@ -112,6 +113,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             startDate: input.start_date,
                             endDate: input.end_date,
                             includeArchived: input.include_archived,
+                            workspaceId: input.workspace_id,
                         })
                         // Team facets could be merged here, but we'll stick to personal DB for now to keep it simple and fast,
                         // or merge if needed. Since we usually query one DB, this is acceptable for phase 1.

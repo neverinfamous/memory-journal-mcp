@@ -29,6 +29,8 @@ export interface ImportOptions {
     author?: string
     /** Associate imported entries with a specific GitHub project number */
     project_number?: number
+    /** Workspace isolation identifier */
+    workspaceId?: string
 }
 
 /** Result of an import operation */
@@ -253,7 +255,7 @@ export async function processImportBatch(
     options: ImportOptions = {},
     vectorManager: VectorSearchManager | undefined
 ): Promise<ImportResult> {
-    const { dry_run = false, author, project_number } = options
+    const { dry_run = false, author, project_number, workspaceId } = options
 
     const result: ImportResult = {
         success: true,
@@ -276,7 +278,7 @@ export async function processImportBatch(
             if (dry_run) {
                 // In dry-run mode, just classify what would happen
                 if (metadata.mj_id !== undefined) {
-                    const existing = db.getEntryById(metadata.mj_id)
+                    const existing = db.getEntryById(metadata.mj_id, workspaceId)
                     if (existing) {
                         result.updated++
                     } else {
@@ -292,13 +294,14 @@ export async function processImportBatch(
             const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
 
             if (metadata.mj_id !== undefined) {
-                const existing = db.getEntryById(metadata.mj_id)
+                const existing = db.getEntryById(metadata.mj_id, workspaceId)
                 if (existing) {
                     // UPDATE existing entry
                     db.updateEntry(metadata.mj_id, {
                         content: body,
                         entryType: toEntryType(metadata.entry_type),
                         tags: metadata.tags,
+                        workspaceId,
                     })
                     entryId = metadata.mj_id
                     result.updated++
@@ -314,6 +317,7 @@ export async function processImportBatch(
                         // SEC-2.4: Preserve author attribution from team import options
                         ...(author !== undefined && { author }),
                         ...(project_number !== undefined && { projectNumber: project_number }),
+                        workspaceId,
                     })
                     entryId = newEntry.id
                     result.created++
@@ -330,6 +334,7 @@ export async function processImportBatch(
                     // SEC-2.4: Preserve author attribution from team import options
                     ...(author !== undefined && { author }),
                     ...(project_number !== undefined && { projectNumber: project_number }),
+                    workspaceId,
                 })
                 entryId = newEntry.id
                 result.created++
@@ -341,7 +346,7 @@ export async function processImportBatch(
                     if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
 
                     // Only link if target entry exists
-                    const targetExists = db.getEntryById(rel.target_id)
+                    const targetExists = db.getEntryById(rel.target_id, workspaceId)
                     if (targetExists) {
                         db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
                         result.relationshipsLinked++
@@ -358,7 +363,7 @@ export async function processImportBatch(
         let hasVectorErrors = false
         for (const { entryId, filename } of vectorQueue) {
             try {
-                const entry = db.getEntryById(entryId)
+                const entry = db.getEntryById(entryId, workspaceId)
                 if (entry) {
                     await vectorManager.addEntry(entry)
                     result.vectorsIndexed++

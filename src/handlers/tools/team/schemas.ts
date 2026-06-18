@@ -58,6 +58,7 @@ export const TeamCreateEntrySchema = z.preprocess(
         tags: z.array(z.string()).optional().default([]),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
         project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
         project_owner: z.string().optional(),
         issue_number: z.number().optional(),
         issue_url: z.string().optional(),
@@ -137,6 +138,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         ),
         significance_type: z.string().optional(),
         project_number: relaxedNumber(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         project_owner: z.string().optional(),
         issue_number: relaxedNumber().optional(),
         issue_url: z.string().optional(),
@@ -183,6 +185,7 @@ export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
     cursor: z.string().optional().describe('Cursor for pagination'),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -196,6 +199,7 @@ export const TeamGetRecentSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(10),
     cursor: z.string().optional().describe('Cursor for pagination'),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     sort_by: z
         .string()
         .optional()
@@ -227,6 +231,7 @@ export const TeamSearchSchema = z.preprocess(
     cursor: z.string().optional().describe('Cursor for pagination'),
     tags: z.array(z.string()).optional(),
     project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
     limit: z.number().max(500).optional().default(10),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -261,6 +266,7 @@ export const TeamSearchSchemaMcp = z.preprocess(
     cursor: z.string().optional().describe('Cursor for pagination'),
     tags: z.array(z.string()).optional(),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     limit: relaxedNumber().optional().default(10),
     sort_by: z
         .string()
@@ -277,6 +283,7 @@ export const TeamListDeletedEntriesSchema = z.object({
     limit: z.number().optional().default(50),
     offset: z.number().optional().default(0),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
 })
 
 /** team_list_deleted_entries — relaxed */
@@ -284,6 +291,7 @@ export const TeamListDeletedEntriesSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(50),
     offset: relaxedNumber().optional().default(0),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 /** team_get_entry_by_id — strict */
@@ -291,6 +299,7 @@ export const TeamGetEntryByIdSchema = z.object({
     entry_id: z.number().int(),
     include_relationships: z.boolean().optional().default(true),
     project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
 })
 
 /** team_get_entry_by_id — relaxed */
@@ -298,6 +307,7 @@ export const TeamGetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     include_relationships: z.boolean().optional().default(true),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 // ============================================================================
@@ -331,6 +341,7 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
     project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
     limit: z.number().max(500).optional().default(50),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -367,6 +378,7 @@ export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     limit: relaxedNumber().optional().default(50),
     sort_by: z
         .string()
@@ -418,6 +430,7 @@ export const TeamUpdateEntrySchema = z.preprocess(
         entry_type: z.enum(ENTRY_TYPES).optional(),
         tags: z.array(z.string()).optional(),
         project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
         significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
         project_owner: z.string().nullable().optional(),
         issue_number: z.number().nullable().optional(),
@@ -477,6 +490,7 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
         entry_type: z.string().optional(),
         tags: z.array(z.string()).optional(),
         project_number: relaxedNumber(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         significance_type: z.string().nullable().optional(),
         project_owner: z.string().nullable().optional(),
         issue_number: relaxedNumber().nullable().optional(),
@@ -509,6 +523,7 @@ export const TeamDeleteEntrySchema = z.preprocess(
     z.object({
         entry_id: z.number(),
         project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
         expected_version: z.number().optional().describe('REQUIRED for concurrency safety'),
     }).strict()
 )
@@ -529,6 +544,7 @@ export const TeamDeleteEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional(),
         project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         expected_version: relaxedNumber().optional().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
     }).strict()
 )
@@ -549,6 +565,7 @@ export const TeamRestoreEntrySchema = z.preprocess(
     z.object({
         entry_id: z.number(),
         project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -568,6 +585,7 @@ export const TeamRestoreEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional(),
         project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -575,12 +593,14 @@ export const TeamRestoreEntrySchemaMcp = z.preprocess(
 export const TeamMergeTagsSchema = z.object({
     source_tag: z.string().min(1),
     target_tag: z.string().min(1),
+    workspace_id: z.string().optional(),
 })
 
 /** team_merge_tags — relaxed */
 export const TeamMergeTagsSchemaMcp = z.object({
     source_tag: z.string().optional(),
     target_tag: z.string().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 // Team Batch Schemas
@@ -589,12 +609,14 @@ export const TeamBatchCreateEntriesSchema = z.object({
     entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
     auto_index: z.boolean().optional().default(true),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
 })
 
 export const TeamBatchCreateEntriesSchemaMcp = z.object({
     entries: z.array(TeamCreateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
     project_number: relaxedNumber(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 export const TeamBatchUpdateEntriesSchema = z.preprocess(
@@ -633,6 +655,7 @@ export const TeamBatchUpdateEntriesSchema = z.preprocess(
         updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
         auto_index: z.boolean().optional().default(true),
         project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
     }).strict()
 )
 
@@ -672,6 +695,7 @@ export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
         updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
         auto_index: z.boolean().optional().default(true),
         project_number: relaxedNumber(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
 
@@ -697,6 +721,7 @@ export const TeamBatchDeleteEntriesSchema = z.preprocess(
     z.object({
         entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
         project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
         permanent: z.boolean().optional().default(false),
     }).strict()
 )
@@ -723,6 +748,7 @@ export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
     z.object({
         entry_ids: z.array(relaxedNumber()).optional(),
         project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         permanent: z.boolean().optional().default(false),
     }).strict()
 )
@@ -734,11 +760,13 @@ export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
 /** team_get_statistics — strict */
 export const TeamGetStatisticsSchema = z.object({
     group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 /** team_get_statistics — relaxed */
 export const TeamGetStatisticsSchemaMcp = z.object({
     group_by: z.string().optional().default('week'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 // ============================================================================
@@ -764,6 +792,7 @@ export const TeamLinkEntriesSchema = z.object({
         .default('references'),
     description: z.string().optional(),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
 })
 
 /** team_link_entries — relaxed */
@@ -779,6 +808,7 @@ export const TeamLinkEntriesSchemaMcp = z
         type: z.string().optional(),
         description: z.string().optional(),
         project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     })
     .transform((data) => ({
         from_entry_id: data.from_entry_id ?? data.from_id ?? data.from,
@@ -793,6 +823,7 @@ export const TeamVisualizeRelationshipsSchema = z.object({
     entry_id: z.number().optional(),
     tag: z.string().optional(),
     depth: z.number().min(1).max(5).optional().default(2),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 /** team_visualize_relationships — relaxed */
@@ -800,6 +831,7 @@ export const TeamVisualizeRelationshipsSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     tag: z.string().optional(),
     depth: relaxedNumber().optional().default(2),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 // ============================================================================
@@ -833,6 +865,7 @@ export const TeamExportEntriesSchemaMcp = z.object({
 /** team_backup — strict */
 export const TeamBackupSchema = z.object({
     name: z.string().optional(),
+    workspace_id: z.string().optional(),
 })
 
 // ============================================================================
@@ -1054,6 +1087,7 @@ export const TeamSemanticSearchSchema = z.preprocess(
         .default(true)
         .describe('Include hint when no results found (default: true)'),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
     issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
     pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: z.number().optional().describe('Filter results by GitHub Actions workflow run ID'),
@@ -1093,6 +1127,7 @@ export const TeamSemanticSearchSchemaMcp = z.preprocess(
         .default(true)
         .describe('Include hint when no results found (default: true)'),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     issue_number: relaxedNumber().optional().describe('Filter results by GitHub issue number'),
     pr_number: relaxedNumber().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: relaxedNumber().optional().describe('Filter results by GitHub Actions workflow run ID'),
@@ -1103,12 +1138,14 @@ export const TeamSemanticSearchSchemaMcp = z.preprocess(
 export const TeamAddToVectorIndexSchema = z.object({
     entry_id: z.number(),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
 })
 
 /** team_add_to_vector_index — relaxed */
 export const TeamAddToVectorIndexSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 // ============================================================================
@@ -1178,6 +1215,7 @@ export const TeamCrossProjectInsightsSchema = z.object({
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
     limit: z.number().max(500).optional().default(100).describe('Max projects to return'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 /** team_get_cross_project_insights — relaxed */
@@ -1189,6 +1227,7 @@ export const TeamCrossProjectInsightsSchemaMcp = z.object({
         .default(3)
         .describe('Minimum entries to include project'),
     limit: relaxedNumber().optional().default(100).describe('Max projects to return'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 export const TeamProjectSummaryOutputSchema = z
@@ -1242,12 +1281,14 @@ export const TeamCollaborationMatrixSchema = z.object({
         .default('month')
         .describe('Time granularity for the activity heatmap'),
     limit: z.number().max(100).optional().default(20).describe('Max authors to include'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 /** team_get_collaboration_matrix — relaxed */
 export const TeamCollaborationMatrixSchemaMcp = z.object({
     period: z.string().optional().default('month'),
     limit: relaxedNumber().optional().default(20),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 export const TeamCollaborationMatrixOutputSchema = z
@@ -1319,6 +1360,7 @@ export const PassTeamFlagSchema = z.preprocess(
     target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
     link: z.string().optional().describe('Related file path, URL, or reference'),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
     issue_number: z.number().optional(),
     author: z.string().optional(),
 })
@@ -1348,6 +1390,7 @@ export const PassTeamFlagSchemaMcp = z.preprocess(
     target_user: z.string().optional(),
     link: z.string().optional(),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     issue_number: relaxedNumber().optional(),
     author: z.string().optional(),
 })
@@ -1372,6 +1415,7 @@ export const ResolveTeamFlagSchema = z.preprocess(
     z.object({
     flag_id: z.number().describe('Entry ID of the flag to resolve'),
     resolution: z.string().optional().describe('Optional resolution comment'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 )
 
@@ -1394,6 +1438,7 @@ export const ResolveTeamFlagSchemaMcp = z.preprocess(
     z.object({
     flag_id: relaxedNumber().optional(),
     resolution: z.string().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 )
 
@@ -1436,6 +1481,7 @@ export const ListTeamFlagsSchema = z.object({
     author: z.string().optional().describe('Filter by flag creator'),
     limit: z.number().min(1).max(500).optional().default(20),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
     sort_by: z.enum(['timestamp', 'priority']).optional().default('priority'),
 })
 
@@ -1447,6 +1493,7 @@ export const ListTeamFlagsSchemaMcp = z.object({
     author: z.string().optional(),
     limit: relaxedNumber().optional().default(20),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     sort_by: z.string().optional().default('priority'),
 })
 
@@ -1522,12 +1569,14 @@ export const UpdateTeamFlagSchemaMcp = z.preprocess(
 export const FlagAnalyticsSchema = z.object({
     period: z.enum(['day', 'week', 'month']).optional().default('week'),
     project_number: StrictProjectNumberSchema,
+    workspace_id: z.string().optional(),
 })
 
 /** flag_analytics — relaxed for MCP SDK */
 export const FlagAnalyticsSchemaMcp = z.object({
     period: z.string().optional().default('week'),
     project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 // ============================================================================

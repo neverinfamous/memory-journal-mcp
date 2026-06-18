@@ -21,7 +21,8 @@ export function getRecentEntries(
     limit: number,
     sortBy: SortBy = 'timestamp',
     cursor?: string,
-    includeArchived = false
+    includeArchived = false,
+    workspaceId = 'default'
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
@@ -33,15 +34,20 @@ export function getRecentEntries(
         }
         const importanceExpr = buildImportanceSqlExpression()
         const cte = buildImportanceCte()
+        
+        const params: unknown[] = []
+        if (workspaceId !== '*') params.push(workspaceId)
+        params.push(limit, offset)
+
         const stmt = db.prepare(`
             WITH ${cte}
             SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''}
+            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND e.workspace_id = ?' : ''}
             ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
         `)
-        const rows = stmt.all([limit, offset])
+        const rows = stmt.all(params)
         const entries = rowsToEntries(tagsMgr, rows)
         
         let nextCursor: string | undefined
@@ -54,6 +60,10 @@ export function getRecentEntries(
     let cursorCondition = ''
     const params: unknown[] = []
     
+    if (workspaceId !== '*') {
+        params.push(workspaceId)
+    }
+    
     if (cursor) {
         const decoded = decodeCursor(cursor)
         if (decoded && 't' in decoded) {
@@ -64,7 +74,7 @@ export function getRecentEntries(
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
-        WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${cursorCondition}
+        WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND workspace_id = ?' : ''} ${cursorCondition}
         ORDER BY timestamp DESC, id DESC LIMIT ?
     `)
     params.push(limit)
@@ -130,6 +140,7 @@ export function searchEntries(
         includeHighlights?: boolean
         fuzzy_match?: boolean
         auto_correct?: boolean
+        workspaceId?: string
     }
 ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
     const { db, tagsMgr } = context
@@ -258,6 +269,7 @@ function buildSearchQuery(
               sortBy?: SortBy
               includeArchived?: boolean
               includeHighlights?: boolean
+              workspaceId?: string
           }
         | undefined,
     useFts: boolean,
@@ -306,6 +318,13 @@ function buildSearchQuery(
 
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
+
+    const targetWs = options?.workspaceId ?? 'default';
+    if (targetWs !== '*') {
+        conditions.push('e.workspace_id = ?');
+        params.push(targetWs);
+    }
+
     if (!options?.includeArchived) {
         conditions.push('e.is_archived = 0')
     }
@@ -416,6 +435,7 @@ export function getSearchFacets(
         startDate?: string
         endDate?: string
         includeArchived?: boolean
+        workspaceId?: string
     }
 ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
     const { db } = context
@@ -423,6 +443,13 @@ export function getSearchFacets(
     // Build shared conditions based on options and query
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
+
+    const targetWs = options?.workspaceId ?? 'default';
+    if (targetWs !== '*') {
+        conditions.push('e.workspace_id = ?');
+        params.push(targetWs);
+    }
+
     if (!options?.includeArchived) {
         conditions.push('e.is_archived = 0')
     }
@@ -549,6 +576,7 @@ export function searchByDateRange(
         limit?: number
         sortBy?: SortBy
         includeArchived?: boolean
+        workspaceId?: string
     }
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
@@ -557,10 +585,17 @@ export function searchByDateRange(
     if (!start.includes('T')) start += 'T00:00:00.000Z'
 
     const conditions = ['e.deleted_at IS NULL', 'e.timestamp >= ?']
+    const params: unknown[] = [start]
+
+    const targetWs = options?.workspaceId ?? 'default';
+    if (targetWs !== '*') {
+        conditions.push('e.workspace_id = ?');
+        params.push(targetWs);
+    }
+
     if (!options?.includeArchived) {
         conditions.push('e.is_archived = 0')
     }
-    const params: unknown[] = [start]
 
     if (endDate) {
         conditions.push('e.timestamp <= ?')

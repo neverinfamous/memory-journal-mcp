@@ -75,16 +75,16 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.createEntry(input)
     }
 
-    getEntryById(id: number): JournalEntry | null {
-        return this.entriesMgr.getEntryById(id)
+    getEntryById(id: number, workspaceId?: string): JournalEntry | null {
+        return this.entriesMgr.getEntryById(id, workspaceId)
     }
 
     getEntryHistory(id: number): EntryRevision[] {
         return this.entriesMgr.getEntryHistory(id)
     }
 
-    getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
-        return this.entriesMgr.getEntryByIdIncludeDeleted(id)
+    getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
+        return this.entriesMgr.getEntryByIdIncludeDeleted(id, workspaceId)
     }
 
     getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
@@ -106,9 +106,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         isPersonal?: boolean,
         sortBy?: 'timestamp' | 'importance',
         cursor?: string,
-        includeArchived?: boolean
+        includeArchived?: boolean,
+        workspaceId?: string
     ): { entries: JournalEntry[]; nextCursor?: string } {
-        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor, includeArchived)
+        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor, includeArchived, workspaceId)
     }
 
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string } {
@@ -293,6 +294,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             includeHighlights?: boolean
             fuzzy_match?: boolean
             auto_correct?: boolean
+            workspaceId?: string
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
         return this.entriesMgr.searchEntries(query, options)
@@ -312,6 +314,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             startDate?: string
             endDate?: string
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
         return this.entriesMgr.getSearchFacets(query, options)
@@ -332,18 +335,20 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             sortBy?: 'timestamp' | 'importance'
             cursor?: string
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return this.entriesMgr.searchByDateRange(startDate, endDate, options)
     }
 
     getStatistics(
-        groupBy?: 'day' | 'week' | 'month',
+        groupBy?: 'day' | 'week' | 'month' | 'year',
         startDate?: string,
         endDate?: string,
-        projectBreakdown?: boolean
+        projectBreakdown?: boolean,
+        workspaceId?: string
     ): ReturnType<EntriesManager['getStatistics']> {
-        return this.entriesMgr.getStatistics(groupBy, startDate, endDate, projectBreakdown)
+        return this.entriesMgr.getStatistics(groupBy, startDate, endDate, projectBreakdown, workspaceId)
     }
 
     getTagsForEntry(entryId: number): string[] {

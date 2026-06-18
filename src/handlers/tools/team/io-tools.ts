@@ -39,6 +39,7 @@ const TeamExportMarkdownSchema = z.object({
     tags: z.array(z.string()).optional(),
     project_number: z.number(),
     limit: z.number().max(500).optional().default(100),
+    workspace_id: z.string().optional(),
 })
 
 const TeamExportMarkdownSchemaMcp = z.object({
@@ -51,6 +52,7 @@ const TeamExportMarkdownSchemaMcp = z.object({
         .optional()
         .default(100)
         .describe('Max entries to export (default: 100, max: 500)'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 const TeamExportMarkdownOutputSchema = z
@@ -68,6 +70,7 @@ const TeamImportMarkdownSchema = z.object({
     dry_run: z.boolean().optional().default(false),
     project_number: z.number(),
     limit: z.number().max(500).optional().default(100),
+    workspace_id: z.string().optional(),
 })
 
 const TeamImportMarkdownSchemaMcp = z.object({
@@ -82,6 +85,7 @@ const TeamImportMarkdownSchemaMcp = z.object({
         .optional()
         .default(100)
         .describe('Max files to process (default: 100, max: 500)'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 const TeamImportMarkdownOutputSchema = z
@@ -106,6 +110,7 @@ const TeamImportExternalSchema = z.object({
     project_number: z.number(),
     limit: z.number().max(500).optional().default(100),
     default_entry_type: z.enum(ENTRY_TYPES).optional(),
+    workspace_id: z.string().optional(),
 })
 
 const TeamImportExternalSchemaMcp = z.object({
@@ -125,6 +130,7 @@ const TeamImportExternalSchemaMcp = z.object({
         .string()
         .optional()
         .describe('Fallback entry type if heuristics cannot determine one'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
@@ -236,12 +242,14 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit,
                             projectNumber: input.project_number,
+                            workspaceId: input.workspace_id,
                         })
                         entries = result.entries
                     } else {
                         const result = teamDb.searchEntries('', {
                             limit,
                             projectNumber: input.project_number,
+                            workspaceId: input.workspace_id,
                         })
                         entries = result.entries
                     }
@@ -327,6 +335,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             limit: input.limit,
                             author,
                             project_number: input.project_number,
+                            workspaceId: input.workspace_id,
                         },
                         context.teamVectorManager,
                         allowedRoots
@@ -432,6 +441,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         limit: input.limit,
                         author,
                         project_number: input.project_number,
+                        workspaceId: input.workspace_id,
                     }, context.teamVectorManager)
 
                     if (errors.length > 0) {

@@ -192,6 +192,8 @@ export interface BriefingConfig {
     workflowSummary?: string
     /** Default GitHub Project number for Kanban resources and issue tools (env: DEFAULT_PROJECT_NUMBER) */
     defaultProjectNumber?: number
+    /** Default workspace ID for isolating journal entries */
+    defaultWorkspaceId?: string
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Hush Protocol flag vocabulary passed from CLI/env */

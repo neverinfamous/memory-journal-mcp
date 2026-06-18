@@ -135,6 +135,7 @@ const GetStatisticsSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     project_breakdown: z.boolean().optional().default(false),
+    workspace_id: z.string().optional(),
     project_number: z.any().optional(), // Allow injected project_number
 }).strict()
 
@@ -144,6 +145,7 @@ const GetStatisticsSchemaMcp = z.object({
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     project_breakdown: z.boolean().optional().default(false),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     project_number: z.any().optional().describe('Anti-Hallucination Hint: get_statistics cannot be filtered by project_number. It always returns global stats. Use project_breakdown: true instead.'),
     timeframe: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
     period: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
@@ -163,6 +165,7 @@ const CrossProjectInsightsInputSchema = z.object({
         .optional()
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+    workspace_id: z.string().optional(),
     project_number: z.any().optional(), // Allow injected project_number
 }).strict()
 
@@ -174,6 +177,7 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
         .optional()
         .default(3)
         .describe('Minimum entries to include project'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     project_number: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects. Do not pass a project_number.'),
     query: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a query. It analyzes all entries.'),
     limit: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a limit.'),
@@ -202,13 +206,14 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { group_by, start_date, end_date, project_breakdown } =
+                    const { group_by, start_date, end_date, project_breakdown, workspace_id } =
                         GetStatisticsSchema.parse(params)
                     const stats = db.getStatistics(
                         group_by,
                         start_date,
                         end_date,
-                        project_breakdown
+                        project_breakdown,
+                        workspace_id
                     )
                     return { success: true, ...(stats as object), groupBy: group_by }
                 } catch (err) {
@@ -239,6 +244,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         endDate: input.end_date,
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
+                        workspaceId: input.workspace_id,
                     })
 
                     if (results.projects.length === 0) {

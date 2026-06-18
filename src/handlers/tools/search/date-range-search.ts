@@ -60,6 +60,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                         sortBy: input.sort_by,
                         cursor: personalCursor,
                         includeArchived: input.include_archived,
+                        workspaceId: input.workspace_id,
                     })
 
                     // Cross-database merge when team DB is available
@@ -79,6 +80,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                                 sortBy: input.sort_by,
                                 cursor: teamCursor,
                                 includeArchived: input.include_archived,
+                                workspaceId: input.workspace_id,
                             }
                         )
                         const merged = mergeAndDedup(

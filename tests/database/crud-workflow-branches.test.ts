@@ -55,7 +55,8 @@ function createTestDb() {
             auto_context TEXT DEFAULT NULL,
             share_with_team INTEGER DEFAULT 0,
             is_archived INTEGER DEFAULT 0,
-            version INTEGER DEFAULT 1
+            version INTEGER DEFAULT 1,
+            workspace_id TEXT DEFAULT 'default'
         );
         CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, usage_count INTEGER DEFAULT 0);
         CREATE TABLE entry_tags (entry_id INTEGER, tag_id INTEGER);

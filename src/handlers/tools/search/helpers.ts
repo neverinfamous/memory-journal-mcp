@@ -40,6 +40,7 @@ export interface ISearchFilters {
     endDate?: string
     includeTeam?: boolean
     includeArchived?: boolean
+    workspaceId?: string
 }
 
 // ============================================================================

@@ -53,6 +53,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: e.workflow_run_id,
                         workflowName: e.workflow_name,
                         workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                        workspaceId: e.workspace_id || input.workspace_id,
                     })))
                     
                     await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
@@ -128,6 +129,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: u.workflow_status,
                         isArchived: u.is_archived,
                         expectedVersion: u.expected_version,
+                        workspaceId: u.workspace_id || input.workspace_id,
                     }))
 
                     const { updated, notFound, errors } = db.updateEntries(updates)
