@@ -42,7 +42,7 @@ test.describe('Audit Log Rotation Stress', () => {
 
             const iterations = 40
             for (let i = 0; i < iterations; i++) {
-                await callToolAndParse(client, '_execute_raw_query_unsafe', { query: `SELECT ${i}` })
+                await callToolAndParse(client, 'test_simple', { message: `stress-${i}` })
                 if (i % 5 === 0) {
                     await new Promise((r) => setTimeout(r, 150))
                 }

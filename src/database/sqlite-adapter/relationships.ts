@@ -124,4 +124,52 @@ export class RelationshipsManager {
 
         return result
     }
+
+    /**
+     * Get the top relationship hubs — entries with the most connections.
+     * Used by the briefing resource to surface knowledge graph highlights.
+     */
+    getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[] {
+        const rows = this.db
+            .prepare(
+                `SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
+                 FROM (
+                     SELECT from_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY from_entry_id
+                     UNION ALL
+                     SELECT to_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY to_entry_id
+                 ) counts
+                 JOIN memory_journal m ON counts.entry_id = m.id
+                 WHERE m.deleted_at IS NULL
+                 GROUP BY counts.entry_id
+                 ORDER BY total_links DESC
+                 LIMIT ?`
+            )
+            .all(limit) as { entry_id: number; total_links: number; content: string }[]
+
+        return rows.map((row) => ({
+            entryId: row.entry_id,
+            totalLinks: row.total_links,
+            content: row.content,
+        }))
+    }
+
+    /**
+     * Count entries with no relationships (orphans).
+     * Used by the briefing resource to compute orphan ratio.
+     */
+    getOrphanCount(): number {
+        const row = this.db
+            .prepare(
+                `SELECT COUNT(*) as orphan_count
+                 FROM memory_journal m
+                 WHERE m.deleted_at IS NULL AND m.id NOT IN (
+                     SELECT from_entry_id FROM relationships
+                     UNION
+                     SELECT to_entry_id FROM relationships
+                 )`
+            )
+            .get() as { orphan_count: number } | undefined
+
+        return row?.orphan_count ?? 0
+    }
 }

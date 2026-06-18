@@ -32,8 +32,8 @@ import { spawn } from 'child_process'
 
 const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
 
-/** Expected total tool count: 101 (10 groups + codemode) */
-const EXPECTED_TOOL_COUNT = 101
+/** Expected total tool count: 100 (10 groups + codemode) */
+const EXPECTED_TOOL_COUNT = 100
 
 /**
  * Exact allowlist of tools that legitimately need openWorldHint=true.
@@ -105,7 +105,6 @@ const READ_ONLY_ALLOWLIST = new Set([
     'list_tags',
     'trigger_progress',
     'test_error_handling',
-    '_execute_raw_query_unsafe',
     // Search reads
     'search_entries',
     'search_by_date_range',

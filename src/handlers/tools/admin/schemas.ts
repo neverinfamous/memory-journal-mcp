@@ -468,11 +468,3 @@ export const SearchAuditLogOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
-
-export const ExecuteRawQueryUnsafeOutputSchema = z
-    .object({
-        success: z.boolean().optional(),
-        result: z.unknown().optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)

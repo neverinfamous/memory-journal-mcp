@@ -312,7 +312,7 @@ describe('NativeConnectionManager', () => {
     })
 
     // =========================================================================
-    // _executeRawQueryUnsafe
+    // exec (raw query execution on NativeConnectionManager)
     // =========================================================================
 
     describe('exec', () => {

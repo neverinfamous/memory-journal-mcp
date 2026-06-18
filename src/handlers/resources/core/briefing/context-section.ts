@@ -404,55 +404,24 @@ export function buildGraphContext(context: ResourceContext): GraphSummary | unde
 
         const totalEntries = (stats['totalEntries'] as number) || 0
 
-        // Fetch top hubs and orphan ratio using a single query if possible
+        // Fetch top hubs and orphan ratio via purpose-built safe methods
         let topHubs: { id: number; preview: string; count: number }[] = []
         let orphanRatio: number | undefined
 
-        if (typeof context.db._executeRawQueryUnsafe === 'function') {
-            try {
-                // Calculate hubs
-                const hubsQuery = `
-                    SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
-                    FROM (
-                        SELECT from_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY from_entry_id
-                        UNION ALL
-                        SELECT to_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY to_entry_id
-                    ) counts
-                    JOIN memory_journal m ON counts.entry_id = m.id
-                    WHERE m.deleted_at IS NULL
-                    GROUP BY counts.entry_id
-                    ORDER BY total_links DESC
-                    LIMIT 3
-                `
-                const hubsRes = context.db._executeRawQueryUnsafe(hubsQuery)
-                if (Array.isArray(hubsRes) && hubsRes.length > 0 && hubsRes[0]) {
-                    topHubs = hubsRes[0].values.map(row => ({
-                        id: Number(row[0]),
-                        count: Number(row[1]),
-                        preview: cleanPreview(String(row[2]), 30)
-                    }))
-                }
+        try {
+            const hubs = context.db.getRelationshipHubs(3)
+            topHubs = hubs.map(hub => ({
+                id: hub.entryId,
+                count: hub.totalLinks,
+                preview: cleanPreview(hub.content, 30)
+            }))
 
-                // Calculate orphans
-                if (totalEntries > 0) {
-                    const orphansQuery = `
-                        SELECT COUNT(*) as orphan_count
-                        FROM memory_journal m
-                        WHERE m.deleted_at IS NULL AND m.id NOT IN (
-                            SELECT from_entry_id FROM relationships
-                            UNION
-                            SELECT to_entry_id FROM relationships
-                        )
-                    `
-                    const orphansRes = context.db._executeRawQueryUnsafe(orphansQuery)
-                    if (Array.isArray(orphansRes) && orphansRes.length > 0 && orphansRes[0]) {
-                        const orphanCount = Number(orphansRes[0].values[0]?.[0]) || 0
-                        orphanRatio = orphanCount / totalEntries
-                    }
-                }
-            } catch {
-                // Ignore raw query errors gracefully
+            if (totalEntries > 0) {
+                const orphanCount = context.db.getOrphanCount()
+                orphanRatio = orphanCount / totalEntries
             }
+        } catch {
+            // Ignore query errors gracefully
         }
 
         return {

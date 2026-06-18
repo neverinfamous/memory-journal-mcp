@@ -10,11 +10,6 @@ import { wrapResult } from './worker-result-proxy.js'
 import { METHOD_ALIASES } from './api-constants.js'
 
 function applyArgInterceptions(methodName: string, args: unknown[]): { args: unknown[] } | { error: Record<string, unknown> } {
-    // Hallucination intercept for _executeRawQueryUnsafe string arguments
-    if (methodName === '_executeRawQueryUnsafe' && args.length === 1 && typeof args[0] === 'string') {
-        args[0] = { query: args[0] }
-    }
-
     // Generic Parameter Aliases (Phase 31.1 Hallucination Smoothing)
     if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;

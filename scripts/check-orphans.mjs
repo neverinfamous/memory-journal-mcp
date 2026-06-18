@@ -25,7 +25,7 @@ function checkOrphans() {
         } else {
             console.log(`\n⚠️ Found ${rows.length} orphaned entries without a project_number:`);
             console.log(JSON.stringify(rows, null, 2));
-            console.log('\nRecommendation: Update these entries using the `update_entry` tool with a valid project_number, or use `_execute_raw_query_unsafe` for bulk assignment.');
+            console.log('\nRecommendation: Update these entries using the `update_entry` tool with a valid project_number, or use `batch_update_entries` for bulk assignment.');
         }
         
         db.close();

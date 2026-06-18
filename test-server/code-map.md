@@ -251,7 +251,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 <!-- BEGIN: TOOL_MAPPING -->
 | Group | Tools |
 | ----- | ----- |
-| **admin** | `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `update_entry`, `delete_entry`, `restore_entry`, `update_configuration`, `merge_tags`, `search_audit_log`, `_execute_raw_query_unsafe`, `rebuild_vector_index`, `add_to_vector_index` |
+| **admin** | `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `update_entry`, `delete_entry`, `restore_entry`, `update_configuration`, `merge_tags`, `search_audit_log`, `rebuild_vector_index`, `add_to_vector_index` |
 | **analytics** | `get_statistics`, `get_cross_project_insights` |
 | **backup** | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
 | **codemode** | `mj_execute_code` |
@@ -308,7 +308,6 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://github/insights` | Repository Insights |
 | `memory://github/milestones` | GitHub Milestones |
 | `memory://milestones/{number}` | Milestone Detail |
-| `memory://github/rate-limit` | GitHub Rate Limit |
 | `memory://graph/recent` | Recent Relationship Graph |
 | `memory://graph/actions` | Actions Graph |
 | `memory://actions/recent` | Recent Actions |

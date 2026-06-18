@@ -5,7 +5,6 @@ import {
     MergeTagsOutputSchema,
     SearchAuditLogSchema,
     SearchAuditLogOutputSchema,
-    ExecuteRawQueryUnsafeOutputSchema,
 } from './schemas.js'
 
 export function getMiscTools(context: ToolContext): ToolDefinition[] {
@@ -128,31 +127,6 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                         count: results.length,
                         results,
                     }
-                } catch (err) {
-                    return formatHandlerError(err)
-                }
-            },
-        },
-        {
-            name: '_execute_raw_query_unsafe',
-            title: 'Execute Raw Query Unsafe',
-            description: 'Internal admin method to run a raw SQL query. Should only be used for debugging or verifying indexes.',
-            group: 'admin',
-            inputSchema: z.object({
-                query: z.string().describe('The raw SQL query to execute'),
-            }).strict(),
-            outputSchema: ExecuteRawQueryUnsafeOutputSchema.describe('The raw query execution result array'),
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: (params: unknown) => {
-                try {
-                    const input = z.object({ query: z.string() }).parse(params)
-                    const res = context.db._executeRawQueryUnsafe(input.query)
-                    return { success: true, result: res }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

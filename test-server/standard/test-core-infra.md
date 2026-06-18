@@ -104,7 +104,7 @@ rm *_metrics.json
 | Check               | Expected                                                             |
 | ------------------- | -------------------------------------------------------------------- |
 | Instruction levels  | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations    | 101 tools, all with `annotations`, 76 `false` + 25 `true` = 0 missing |
+| Tool annotations    | 100 tools, all with `annotations`, 75 `false` + 25 `true` = 0 missing |
 | Filter instructions | Output confirms correct filtering of config sections                 |
 | Prompts API         | Successfully fetches and parses all 16 prompts                       |
 | Progress            | Both native and code-mode progress APIs successfully complete        |

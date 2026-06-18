@@ -473,8 +473,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.connection.pragma(command)
     }
 
-    _executeRawQueryUnsafe(query: string, params?: unknown[]): QueryResult[] {
-        return this.connection.exec(query, params)
+    getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[] {
+        return this.relationshipsMgr.getRelationshipHubs(limit)
+    }
+
+    getOrphanCount(): number {
+        return this.relationshipsMgr.getOrphanCount()
     }
 
     // ========================================================================

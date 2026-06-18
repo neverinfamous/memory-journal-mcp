@@ -65,13 +65,13 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 | Custom timeout succeeds | `return "fast";` with `timeout: 5000` | `{ success: true, result: "fast" }`                        |
 | Infinite loop timeout   | `while(true) {}` with `timeout: 2000` | `{ success: false, error: "..." }` with timeout indication |
 
-### 16.5 Database Schema & Indexes Verification
+### 16.5 Admin Tool Verification
 
-Validate that Code Mode can successfully execute raw SQL or introspect the schema to verify that our new composite and partial performance-optimizing indexes exist:
+Validate that Code Mode can successfully call admin tools:
 
 | Test                    | Code                                                                                                                                                                                                                                                                              | Expected Result                                                                                                                                                                 |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Verify index schema     | `const res = await mj.admin._executeRawQueryUnsafe("PRAGMA index_list('memory_journal');"); const names = res.result[0].values.map(v => v[1]); return ["idx_memory_journal_active_timestamp", "idx_memory_journal_active_recent", "idx_memory_journal_type_timestamp"].every(idx => names.includes(idx));` | `{ success: true, result: true }` (meaning all three new indexes exist in the `memory_journal` table index list)                                                                |
+| Search audit log        | `const res = await mj.admin.searchAuditLog({ limit: 5 }); return res.count >= 0;` | `{ success: true, result: true }` (meaning the audit log search returns a valid response)                                                                |
 
 ### 16.6 Telemetry Resource Verification
 
