@@ -104,6 +104,14 @@ export const CreateEntrySchemaMcp = z.preprocess(
                 delete obj['title'];
                 modified = true;
             }
+            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+                try {
+                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
+                    modified = true;
+                } catch {
+                    // Ignore stringify errors, validation will handle it
+                }
+            }
             return modified ? obj : val;
         }
         return val;

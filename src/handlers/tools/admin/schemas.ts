@@ -156,7 +156,7 @@ export const DeleteEntrySchema = z.preprocess(
         entry_id: z.number(),
         permanent: z.boolean().optional().default(false),
         project_number: z.number().int().optional(),
-        expected_version: z.number().describe('REQUIRED for concurrency safety'),
+        expected_version: z.number().optional().describe('REQUIRED for concurrency safety'),
     }).strict()
 )
 
@@ -176,7 +176,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional().describe('The ID of the entry to delete. If you need to delete multiple entries, use batch_delete_entries instead.'),
         permanent: z.boolean().optional().default(false).describe('If true, permanently deletes the entry. If false, performs a soft delete.'),
-        expected_version: relaxedNumber().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
+        expected_version: relaxedNumber().optional().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
     }).strict()
 )
 

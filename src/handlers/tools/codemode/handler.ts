@@ -345,9 +345,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             const paramsObj = { ...(finalParams as Record<string, unknown>) }
                             // Only inject if they didn't explicitly provide it
                             if (paramsObj['expected_version'] === undefined && typeof paramsObj['entry_id'] === 'number') {
-                                const existingEntry = sessionContext.teamDb?.getEntryById(paramsObj['entry_id']) ?? sessionContext.journalDb?.getEntryById(paramsObj['entry_id'])
-                                if (existingEntry?.version !== undefined) {
-                                    paramsObj['expected_version'] = existingEntry.version
+                                const entryId = paramsObj['entry_id'];
+                                const existingEntry = sessionContext.teamDb?.getEntryById(entryId) ?? sessionContext.db.getEntryById(entryId);
+                                if (existingEntry && typeof existingEntry === 'object' && 'version' in existingEntry) {
+                                    paramsObj['expected_version'] = existingEntry.version;
                                 }
                             }
                             finalParams = paramsObj

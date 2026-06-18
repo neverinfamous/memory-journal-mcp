@@ -509,7 +509,7 @@ export const TeamDeleteEntrySchema = z.preprocess(
     z.object({
         entry_id: z.number(),
         project_number: StrictProjectNumberSchema.optional(),
-        expected_version: z.number().describe('REQUIRED for concurrency safety'),
+        expected_version: z.number().optional().describe('REQUIRED for concurrency safety'),
     }).strict()
 )
 
@@ -529,7 +529,7 @@ export const TeamDeleteEntrySchemaMcp = z.preprocess(
     z.object({
         entry_id: relaxedNumber().optional(),
         project_number: relaxedNumber().optional(),
-        expected_version: relaxedNumber().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
+        expected_version: relaxedNumber().optional().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
     }).strict()
 )
 
