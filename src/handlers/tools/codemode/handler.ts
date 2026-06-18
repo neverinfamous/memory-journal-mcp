@@ -80,9 +80,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         if (context.config?.defaultProjectNumber !== undefined) {
                             projectId = context.config.defaultProjectNumber
                         } else if (context.config?.projectRegistry) {
-                            const cwd = process.cwd().toLowerCase()
+                            const cwd = require('node:path').resolve(process.cwd()).toLowerCase()
                             for (const entry of Object.values(context.config.projectRegistry)) {
-                                if (entry.path?.toLowerCase() === cwd && entry.project_number !== undefined) {
+                                if (entry.path && require('node:path').resolve(entry.path).toLowerCase() === cwd && entry.project_number !== undefined) {
                                     projectId = entry.project_number
                                     break
                                 }
