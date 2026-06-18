@@ -32,7 +32,7 @@ test.describe('Audit Log Rotation Stress', () => {
         // Max size 1024 bytes to force rapid rotation (must be >= 1024 per Zod schema)
         await startServer(
             port,
-            ['--audit-log', logPath, '--audit-log-max-size', '1024'],
+            ['--audit-log', logPath, '--audit-log-max-size', '1024', '--audit-reads'],
             'audit-rotation-stress'
         )
 
