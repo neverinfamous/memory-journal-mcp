@@ -29,6 +29,7 @@ const added = await mj.team.teamAddMember({
   author: 'cm_test_viewer',
   role: 'viewer'
 })
+if (!added.success) return { success: false, error: added.error, code: added.code };
 
 let duplicateCaught = false;
 const dup = await mj.team.teamAddMember({
@@ -42,17 +43,21 @@ if (dup.success === false && dup.error) {
 const getMem = await mj.team.teamGetMember({
   author: 'cm_test_viewer'
 })
+if (!getMem.success) return { success: false, error: getMem.error, code: getMem.code };
 
 const updated = await mj.team.teamUpdateMemberRole({
   author: 'cm_test_viewer',
   role: 'member'
 })
+if (!updated.success) return { success: false, error: updated.error, code: updated.code };
 
 const listMem = await mj.team.teamListMembers({})
+if (!listMem.success) return { success: false, error: listMem.error, code: listMem.code };
 
 const removed = await mj.team.teamRemoveMember({
   author: 'cm_test_viewer'
 })
+if (!removed.success) return { success: false, error: removed.error, code: removed.code };
 
 let notFoundCaught = false;
 const nf = await mj.team.teamGetMember({
