@@ -9,7 +9,14 @@ description: |
 
 The primary philosophy of this skill is: **When you (the agent) encounter a hallucination, confusion, or are forced to use introspection to figure out an API, DO NOT just work around it.** 
 
-You must modify the server codebase to ensure future agents never face the same issue. This document details the 4 specific layers of the `memory-journal-mcp` architecture where you can implement these permanent fixes.
+You must modify the server codebase to ensure future agents never face the same issue.
+
+### The Prevention Priority
+There is a strict hierarchy of how you should heal the codebase:
+1. **Prevent (Highest Preference):** Modify the API schemas (e.g., via `z.preprocess`) or the dispatcher to silently catch and transform the hallucinatory payload into a valid format so the execution succeeds automatically without the agent even noticing.
+2. **Mitigate (Fallback):** If the input cannot be safely inferred or coerced, intercept it and throw a highly actionable custom error explicitly guiding the agent on how to fix it immediately.
+
+This document details the 4 specific layers of the `memory-journal-mcp` architecture where you can implement these permanent fixes.
 
 ## When to Load
 
