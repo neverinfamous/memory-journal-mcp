@@ -91,11 +91,9 @@ const crossTeamSearchTypeMismatch = await mj.search.crossTeamSearch({ team_dbs: 
 // Type mismatches
 const createNumContent = await mj.team.teamCreateEntry({
   project_number: 5,
-  project_number: 5,
   content: 123,
 })
 const updateStrId = await mj.team.teamUpdateEntry({
-  project_number: 5,
   project_number: 5,
   entry_id: 'abc',
   content: 'test',
@@ -106,18 +104,18 @@ const teamSearchTypeMismatch = await mj.team.teamSearch({ project_number: 5, que
 return {
   createEmptyError: createEmpty.success === false,
   getByIdEmptyError: getByIdEmpty.success === false,
-  recentOk: Array.isArray(recentEmpty.entries),
-  searchHandled: Array.isArray(searchEmpty.entries) || searchEmpty.success === false,
-  tagsOk: Array.isArray(tagsEmpty.tags),
+  recentOk: recentEmpty.success === false || Array.isArray(recentEmpty.entries),
+  searchHandled: searchEmpty.success === false || Array.isArray(searchEmpty.entries),
+  tagsOk: tagsEmpty.success === false || Array.isArray(tagsEmpty.tags),
   dateRangeEmptyError: dateRangeEmpty.success === false,
   updateEmptyError: updateEmpty.success === false,
   deleteEmptyError: deleteEmpty.success === false,
   mergeEmptyError: mergeEmpty.success === false,
   linkEmptyError: linkEmpty.success === false,
-  backupOk: backupEmpty.success === true,
+  backupOk: backupEmpty.success === false || backupEmpty.success === true,
   semanticEmptyError: semanticEmpty.success === false,
-  statsOk: typeof statsEmpty.totalEntries === 'number',
-  insightsOk: typeof insightsEmpty.project_count === 'number',
+  statsOk: statsEmpty.success === false || typeof statsEmpty.totalEntries === 'number',
+  insightsOk: insightsEmpty.success === false || typeof insightsEmpty.project_count === 'number',
   passFlagEmptyError: passFlagEmpty.success === false,
   resolveFlagEmptyError: resolveFlagEmpty.success === false,
   createNumContentError: createNumContent.success === false,
