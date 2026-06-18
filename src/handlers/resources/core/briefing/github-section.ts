@@ -50,6 +50,7 @@ export interface BriefingGitHub {
         degraded?: boolean
     }
     ciName?: string
+    ciUpdatedAt?: string
     activePr?: {
         number: number
         title: string
@@ -229,6 +230,7 @@ export async function buildGitHubSection(
             branch: resolved.branch,
             ci: ciStatus.status,
             ciName,
+            ciUpdatedAt: ciStatus.ciUpdatedAt,
             localGitStatus,
             openIssues,
             openPRs,
@@ -270,6 +272,7 @@ export async function buildGitHubSection(
 interface CiResult {
     status: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
     ciName?: string
+    ciUpdatedAt?: string
     workflowSummary?: BriefingGitHub['workflowSummary']
     degraded?: boolean
 }
@@ -357,7 +360,7 @@ async function fetchCiStatus(
             }
         }
 
-        return { status, ciName: latestRun?.name, workflowSummary }
+        return { status, ciName: latestRun?.name, ciUpdatedAt: latestRun?.updatedAt, workflowSummary }
     } catch (error) {
         logger.debug('Failed to fetch CI status', {
             module: 'BRIEFING',

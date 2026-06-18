@@ -20,6 +20,22 @@ const escapeContent = (text: string): string =>
 const escapeCell = (text: string): string =>
     escapeContent(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 
+/** Compute a short relative-age string (e.g. '3d ago', '5h ago') from an ISO timestamp */
+const relativeAge = (isoTimestamp: string): string | null => {
+    try {
+        const diffMs = Date.now() - new Date(isoTimestamp).getTime()
+        if (diffMs < 0) return null
+        const minutes = Math.floor(diffMs / 60_000)
+        if (minutes < 60) return `${String(minutes)}m ago`
+        const hours = Math.floor(minutes / 60)
+        if (hours < 24) return `${String(hours)}h ago`
+        const days = Math.floor(hours / 24)
+        return `${String(days)}d ago`
+    } catch {
+        return null
+    }
+}
+
 /**
  * Build the user-facing markdown output for the briefing.
  */
@@ -99,6 +115,10 @@ export function formatUserMessage(opts: {
     } else if (opts.ciStatus === 'passing' && github?.ciName) {
         ciDisplay = `✅ ${github.ciName} (passing)`
     }
+
+    // Append relative age to CI display if timestamp available
+    const ciAge = github?.ciUpdatedAt ? relativeAge(github.ciUpdatedAt) : null
+    if (ciAge) ciDisplay += ` (${ciAge})`
 
     // ========================================================================
     // TABLE ROW 1: GitHub
@@ -382,16 +402,46 @@ export function formatUserMessage(opts: {
     if (opts.registryPaths) {
         const entries = Object.entries(opts.registryPaths)
         if (entries.length > 0) {
+            // Compute common prefix for path compression
+            const allPaths = entries.map(([_, p]) => p.replace(/\\/g, '/'))
+            let commonPrefix = ''
+            if (allPaths.length > 1) {
+                // Find longest common prefix across ALL paths
+                let prefix = allPaths[0] ?? ''
+                for (let p = 1; p < allPaths.length; p++) {
+                    const path = allPaths[p] ?? ''
+                    let i = 0
+                    while (i < prefix.length && i < path.length && prefix[i] === path[i]) i++
+                    prefix = prefix.slice(0, i)
+                    if (prefix.length === 0) break
+                }
+                // Snap to last slash boundary
+                const lastSlash = prefix.lastIndexOf('/')
+                if (lastSlash > 0) {
+                    commonPrefix = prefix.slice(0, lastSlash)
+                }
+            }
+
             const pathList = entries
                 .map(([name, diskPath]) => {
                     const isActive = name === repoName || name === repoName.split('/').pop()
                     const projNum = opts.registryProjectNumbers?.[name]
                     const nameLabel = projNum !== undefined ? `${name} (#${projNum})` : name
-                    const formatted = `${escapeCell(nameLabel)}: ${escapeCell(diskPath)}`
+                    // Use forward slashes and strip common prefix
+                    let displayPath = diskPath.replace(/\\/g, '/')
+                    if (commonPrefix && displayPath.startsWith(commonPrefix)) {
+                        displayPath = displayPath.slice(commonPrefix.length)
+                    }
+                    const formatted = `${escapeCell(nameLabel)}: ${escapeCell(displayPath)}`
                     return isActive ? `**${formatted}** (active)` : formatted
                 })
                 .join('<br>')
-            workspacesLines.push(pathList)
+
+            let legend = ''
+            if (commonPrefix) {
+                legend = `[${escapeCell(commonPrefix)}]<br>`
+            }
+            workspacesLines.push(`${legend}${pathList}`)
         }
     }
 
@@ -421,7 +471,9 @@ export function formatUserMessage(opts: {
     if (trackingParts.length > 0) {
         tableRows.push(`| **Tracking** | ${trackingParts.join('<br>')} |`)
     }
-    tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
+    if (totalEntries > 0) {
+        tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
+    }
     if (sysLines.length > 0) {
         tableRows.push(`| **System** | ${sysLines.join('<br>')} |`)
     }
