@@ -26,10 +26,10 @@ the journal entry.
 > will hang indefinitely in an automated agent context. Do NOT include the `explain` or `suggest` subcommands before the `-p` flag. Use:
 >
 > ```
-> gh copilot -p "<prompt>" --allow-tool "shell(find,cat,head,grep)"
+> gh copilot -p "<prompt>" --yolo
 > ```
 >
-> The `--allow-tool` flag grants Copilot read access to the repository files.
+> The `--yolo` flag grants Copilot permission to read files across directories without hanging on permission prompts. Provide absolute paths to any files you want it to read in the prompt, rather than piping them.
 
 - Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts (like Antigravity's 10s `WaitMsBeforeAsync` limit), allow the command to naturally fall into the background. Use the `schedule` tool or wait for the system notification to retrieve the results. Do not skip execution due to timeout constraints.
 

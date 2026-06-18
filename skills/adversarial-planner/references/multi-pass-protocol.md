@@ -54,7 +54,7 @@ Which tasks can be parallelized.
 
 Run a non-interactive `gh copilot` scan (`
 > **⚠️ CRITICAL**: Do NOT include the `explain` or `suggest` subcommands before `-p`.
-gh copilot -p "..." --allow-tool "shell(find,cat,head,grep)"`) focusing specifically on performance and security risks for the proposed changes, and embed the raw or summarized findings here.
+gh copilot -p "..." --yolo`) focusing specifically on performance and security risks for the proposed changes, and embed the raw or summarized findings here. Provide absolute paths to any files you want it to read in the prompt, rather than piping them.
 
 ## Risk Assessment
 

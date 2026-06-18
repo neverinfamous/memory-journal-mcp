@@ -320,7 +320,7 @@ templates, correct CLI syntax, and parsing guidance.
 gh copilot -p "<prompt>"` (non-interactive. Do NOT use the 'explain' or 'suggest' subcommands)
 > mode). Do NOT use `gh copilot explain` which is interactive and will hang.
 > Always `Set-Location` to the target repository before invoking. Include
-> `--allow-tool "shell(find,cat,head,grep)"` so Copilot can read source files.
+> `--yolo` so Copilot can read source files.
 
 > **⚠️ NO FABRICATION**: You MUST actually execute the `gh copilot` commands
 > and report their real output. Do NOT fabricate or predict Copilot findings.

@@ -5,11 +5,10 @@
 > will hang indefinitely in an automated agent context. Do NOT include the `explain` or `suggest` subcommands before the `-p` flag. Use:
 >
 > ```
-> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --allow-tool "shell(find,cat,head,grep)"
+> gh copilot -p "Considering these standards from Phase 0 research: [insert findings]. <prompt>" --yolo
 > ```
 >
-> The `--allow-tool` flag grants Copilot read access to the repository files.
-> Always `Set-Location` (or `cd`) to the target repository before invoking.
+> The `--yolo` flag grants Copilot permission to read files across directories without hanging on permission prompts. Provide absolute paths to any files you want it to read in the prompt, rather than piping them.
 >
 > **⚠️ TIMEOUT GUIDANCE**: Expect 60–120 seconds per prompt. In environments with hard synchronous timeouts, use the `-s` flag or allow the command to naturally fall into the background.
 
