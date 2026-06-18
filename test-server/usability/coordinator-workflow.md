@@ -25,6 +25,10 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
    - Once the subagent completes, mark the task as done and move to the next test in the queue.
 5. **Code Mode Error Testing Protocol**:
    - Subagents executing Code Mode test matrices must anticipate structured `VALIDATION_ERROR` payloads with `{ success: false }` for type mismatches, rather than expecting sandbox crashes or thrown `ZodError` messages.
+   - **Tool Availability Warning**: If any tools are unavailable during testing for any reason, the subagent MUST immediately warn the user. We want to actively test the tools, not just their graceful degradation.
+6. **Coordinator Progress Reporting**:
+   - The Coordinator MUST provide the user with clear, frequent progress reports. After each subagent finishes, emit a message like: "Test pass 4 out of X completed."
+   - The Coordinator MUST keep a running tally of how many total issues were fixed by the subagents.
 
 ## Test Sequence Queue
 

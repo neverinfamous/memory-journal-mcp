@@ -25,6 +25,10 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
    - Once the subagent completes, record their final token estimate and metric telemetry, mark the task as done, and move to the next test in the queue.
 5. **Code Mode Constraints (P401)**:
    - Ensure subagents explicitly check that Code Mode scripts do NOT leak raw MCP exceptions, returning `{ success: false }` for domain errors.
+   - **Tool Availability Warning**: If any tools are unavailable during testing for any reason, the subagent MUST immediately warn the user. We want to actively test the tools, not just their graceful degradation.
+6. **Coordinator Progress Reporting**:
+   - The Coordinator MUST provide the user with clear, frequent progress reports. After each subagent finishes, emit a message like: "Test pass 4 out of X completed."
+   - The Coordinator MUST keep a running tally of how many total issues were fixed by the subagents.
 
 ## Test Sequence Queue (Dependency DAG)
 
@@ -57,4 +61,4 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 
 ## Telemetry Collection
 
-When the suite finishes, compile the **Total Token Estimate** and resource metrics (e.g., `memory://metrics/summary`) from all subagents into a final report for the user.
+When the suite finishes, compile the **Total Token Estimate** and resource metrics (e.g., `memory://metrics/summary`) from all subagents into a final report for the user. Also, report the **Total Number of Issues Fixed** during the entire suite.
