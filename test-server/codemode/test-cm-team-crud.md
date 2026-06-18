@@ -38,11 +38,15 @@ const created = await mj.team.teamCreateEntry({
   tags: ['codemode4-team-test'],
   entry_type: 'standup',
 })
+if (!created.success) return { createSuccess: false, error: created.error }
+
 const withAuthor = await mj.team.teamCreateEntry({
   project_number: 5,
   content: 'CM4 team explicit author',
   author: 'CM4Bot',
 })
+if (!withAuthor.success) return { explicitAuthorSuccess: false, error: withAuthor.error }
+
 const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 5 })
 const search = await mj.team.teamSearch({
   project_number: 5,
@@ -156,18 +160,23 @@ const results = await mj.team.teamSearchByDateRange({
   start_date: '2026-01-01',
   end_date: '2026-12-31',
 })
+if (!results.success) return { hasEntries: false, error: results.error }
+
 const typed = await mj.team.teamSearchByDateRange({
   project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'standup',
 })
+if (!typed.success) return { typedFiltered: false, error: typed.error }
+
 const tagged = await mj.team.teamSearchByDateRange({
   project_number: 5,
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   tags: ['codemode4-team-test'],
 })
+if (!tagged.success) return { taggedCount: 0, error: tagged.error }
 
 // Search by date range without project_number for flag entry_type (bypasses constraint)
 const rangePureFlag = await mj.team.teamSearchByDateRange({
