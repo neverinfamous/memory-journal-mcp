@@ -50,8 +50,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
-                    console.log('create_entry input parsed:', { content: input.content, workspace_id: input.workspace_id })
-
 
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
@@ -226,7 +224,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
-                    console.log('get_recent_entries input parsed:', { workspace_id: input.workspace_id, is_personal: input.is_personal })
                     const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, input.workspace_id)
                     return {
                         success: true,
