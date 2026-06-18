@@ -214,7 +214,6 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
 
     const configManager = new ConfigManager({
-        instructionLevel: options.instructionLevel ?? 'standard',
         rawToolFilter,
         toolFilterConfig: filterConfig,
         briefingConfig: options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG

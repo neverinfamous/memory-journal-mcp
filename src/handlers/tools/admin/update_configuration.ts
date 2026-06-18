@@ -10,12 +10,7 @@ export const updateConfigurationSchema = z.preprocess(
                 obj = { ...obj, ...(obj['config'] as Record<string, unknown>) };
                 delete obj['config'];
             }
-            if ('level' in obj) {
-                if (!('instruction_level' in obj)) {
-                    obj['instruction_level'] = obj['level'];
-                }
-                delete obj['level'];
-            }
+
             if ('filter' in obj) {
                 if (!('tool_filter' in obj)) {
                     obj['tool_filter'] = obj['filter'];
@@ -27,7 +22,6 @@ export const updateConfigurationSchema = z.preprocess(
         return val;
     },
     z.object({
-        instruction_level: z.enum(['essential', 'standard', 'full']).optional().describe('The verbosity level of system instructions. Default is essential.'),
         tool_filter: z.string().optional().describe('A comma-separated list of tool groups to enable, or "all"'),
         briefing_entries: z.number().int().min(0).optional(),
         briefing_summaries: z.number().int().min(0).optional(),
@@ -40,7 +34,7 @@ export const updateConfigurationSchema = z.preprocess(
         briefing_workflow_status: z.boolean().optional(),
         briefing_copilot: z.boolean().optional(),
         project_number: z.number().int().optional(),
-    }).strict().describe('Updates the active MCP server configuration. Provide parameters as flat keys (e.g. instruction_level: "standard"). Do NOT nest them inside a "config" object.')
+    }).strict().describe('Updates the active MCP server configuration. Provide parameters as flat keys (e.g. tool_filter: "codemode"). Do NOT nest them inside a "config" object.')
 )
 
 export type UpdateConfigurationArgs = z.infer<typeof updateConfigurationSchema>
@@ -59,11 +53,7 @@ export function handleUpdateConfiguration(
     const updates: Partial<Parameters<ConfigManager['updateConfig']>[0]> = {}
     const updatedKeys: string[] = []
 
-    if (args.instruction_level) {
-        updates.instructionLevel = args.instruction_level
-        updatedKeys.push('instruction_level')
-    }
-    
+
     if (args.tool_filter !== undefined) {
         updates.rawToolFilter = args.tool_filter
         updatedKeys.push('tool_filter')

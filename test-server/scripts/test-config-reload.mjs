@@ -6,7 +6,6 @@ const PROJECT_DIR = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
 const CONFIG_FILE = path.join(PROJECT_DIR, 'test-mcp-config.json')
 
 const initialConfig = {
-    instructionLevel: 'standard',
     toolFilter: '',
     briefingEntries: 2,
 }
@@ -93,7 +92,6 @@ async function runTest() {
         const briefing1 = await sendRequest('resources/read', { uri: 'memory://briefing' })
         const text1 = briefing1.contents[0].text
         console.log('  Initial briefing has length:', text1.length)
-        if (!text1.includes('level: standard')) throw new Error('Expected standard level in briefing')
 
         const tools1 = await sendRequest('tools/list', {})
         console.log('  Initial tools count:', tools1.tools.length)
@@ -102,7 +100,6 @@ async function runTest() {
         const updateRes = await sendRequest('tools/call', {
             name: 'update_configuration',
             arguments: {
-                instruction_level: 'full',
                 tool_filter: 'full,-admin',
                 briefing_entries: 5,
             }
@@ -113,7 +110,6 @@ async function runTest() {
         const briefing2 = await sendRequest('resources/read', { uri: 'memory://briefing' })
         const text2 = briefing2.contents[0].text
         console.log('  Updated briefing text:', text2)
-        if (!text2.includes('level: full')) throw new Error('Expected full level in briefing')
         
         const tools2 = await sendRequest('tools/list', {})
         console.log('  Updated tools count:', tools2.tools.length)
@@ -135,7 +131,7 @@ async function runTest() {
         const briefing3 = await sendRequest('resources/read', { uri: 'memory://briefing' })
         const text3 = briefing3.contents[0].text
         console.log('  Briefing after manual config change read successfully.')
-        if (!text3.includes('briefing_entries: 10') && !text3.includes('level: full')) {
+        if (!text3.includes('briefing_entries: 10')) {
             console.log('  (Content inspection of hot reload succeeded)')
         }
 

@@ -207,7 +207,6 @@ export function buildServerOptions(
                 return 0.3;
             }, 0.3),
         },
-        instructionLevel: catchConfig(() => (resolver.resolve<string>('instructionLevel', 'INSTRUCTION_LEVEL') ?? 'standard') as 'essential' | 'standard' | 'full', 'standard'),
         auditConfig,
         flagVocabulary: catchConfig(() => resolver.resolveStringArray('flagVocabulary', 'FLAG_VOCABULARY'), undefined),
         archiveOlderThanDays: catchConfig(() => resolver.resolveIntRequired('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0), 0),

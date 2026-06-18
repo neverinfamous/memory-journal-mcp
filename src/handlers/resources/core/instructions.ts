@@ -2,7 +2,6 @@ import { getAllToolNames, getEnabledGroups } from '../../../filtering/tool-filte
 import {
     generateStandardInstructions,
     generateCodeModeInstructions,
-    type InstructionLevel,
 } from '../../../constants/server-instructions.js'
 import { getPrompts } from '../../prompts/index.js'
 import { ICON_BRIEFING } from '../../../constants/icons.js'
@@ -18,8 +17,6 @@ export const instructionsResource: InternalResourceDef = {
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.95, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
-        const level: InstructionLevel = 'full'
-
         const allToolNames = new Set(getAllToolNames())
         const enabledTools = context.filterConfig?.enabledTools ?? allToolNames
         const enabledGroups = context.filterConfig
@@ -40,7 +37,6 @@ export const instructionsResource: InternalResourceDef = {
             enabledTools,
             prompts,
             undefined,
-            level,
             enabledGroups,
             context.briefingConfig
         )

@@ -35,18 +35,6 @@ describe('server-instructions generation', () => {
         expect(text).toContain('### `mj.core`')
     })
 
-    it('includes Active Tools summary only on full level', () => {
-        const tools = new Set(['create_entry', 'search_entries'])
-        const essential = generateStandardInstructions(tools, [], undefined, 'essential')
-        const standard = generateStandardInstructions(tools, [], undefined, 'standard')
-        const full = generateStandardInstructions(tools, [], undefined, 'full')
-
-        expect(essential).not.toContain('## Active Tools')
-        expect(standard).not.toContain('## Active Tools')
-        
-        expect(full).toContain('## Active Tools')
-        expect(full).toContain('`create_entry`')
-    })
 
     it('includes dynamic help pointers for enabled groups', () => {
         const tools = new Set(['create_entry', 'get_github_issues'])

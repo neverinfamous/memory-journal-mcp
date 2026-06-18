@@ -54,8 +54,6 @@ export interface SystemContext {
     filterSummary: string | null
     /** Whether the system is in a read-only state (admin tools disabled) */
     isReadonly: boolean
-    /** Active instruction level (essential | standard | full) */
-    instructionLevel: string
     /** Registered repo names from PROJECT_REGISTRY, null when unconfigured */
     registryRepos: string[] | null
     /** Count of ALLOWED_IO_ROOTS entries */
@@ -364,8 +362,7 @@ function loadCachedLastReleaseDaysAgo(): number | null {
  */
 export async function buildSystemContext(
     config?: BriefingConfig,
-    filterConfig?: ToolFilterConfig | null,
-    instructionLevel = 'standard'
+    filterConfig?: ToolFilterConfig | null
 ): Promise<SystemContext> {
     const now = new Date()
 
@@ -447,7 +444,6 @@ export async function buildSystemContext(
         testHealth: loadCachedTestHealth(),
         filterSummary,
         isReadonly,
-        instructionLevel,
         registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,

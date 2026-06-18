@@ -10,14 +10,14 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-70.24%25-yellow.svg)
+![Coverage](https://img.shields.io/badge/Coverage-70.31%25-yellow.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 **[📚 Full Documentation (Wiki)](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](CHANGELOG.md)** • **[Security](SECURITY.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions. Enable persistent project memory. Automate handoffs with robust GitHub integration.
 
 **🚀 Quick Deploy:**
 
@@ -84,7 +84,7 @@ Memory Journal supports multi-tenancy out of the box via the `workspace_id` cons
 - **Default Isolation:** If omitted, all entries are created in and retrieved from the `default` workspace.
 - **Data Partitioning:** Core CRUD, Search, and Analytics tools accept a `workspace_id` parameter (e.g., `workspace_id: "alpha"`) to scope operations strictly to that workspace.
 - **Immutability:** A `workspace_id` is permanently assigned upon entry creation and **cannot be changed** afterward.
-- **Server Config:** Set `--workspace-id` (or the `WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance, allowing you to run multiple isolated journal interfaces on a single physical database.
+- **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance, allowing you to run multiple isolated journal interfaces on a single physical database.
 
 ---
 

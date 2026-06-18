@@ -121,11 +121,7 @@ export function createProgram(): Command {
             'Maximum audit log file size in bytes before rotation (default: 10485760 / 10MB, env: AUDIT_LOG_MAX_SIZE)',
             String(DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES)
         )
-        .option(
-            '--instruction-level <level>',
-            'Briefing depth: essential, standard, full (env: INSTRUCTION_LEVEL)',
-            'standard'
-        )
+
         .option(
             '--allowed-io-roots <paths>',
             'Comma-separated absolute paths or JSON array of paths for strict filesystem jailing (env: ALLOWED_IO_ROOTS)'

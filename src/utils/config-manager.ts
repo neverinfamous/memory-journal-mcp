@@ -6,7 +6,6 @@ import { parseToolFilter, type ToolFilterConfig } from '../filtering/tool-filter
 import type { BriefingConfig } from '../handlers/resources/shared.js'
 
 export interface DynamicConfig {
-    instructionLevel: 'essential' | 'standard' | 'full'
     rawToolFilter: string | undefined
     toolFilterConfig: ToolFilterConfig | null
     briefingConfig: BriefingConfig
@@ -60,9 +59,7 @@ export class ConfigManager extends EventEmitter {
             }
             
             // Update keys
-            if (this.config.instructionLevel) {
-                parsed['instructionLevel'] = this.config.instructionLevel
-            }
+
             if (this.config.rawToolFilter !== undefined) {
                 parsed['toolFilter'] = this.config.rawToolFilter
             }
@@ -129,14 +126,6 @@ export class ConfigManager extends EventEmitter {
             }
 
             const updates: Partial<DynamicConfig> = {}
-            
-            if (typeof parsed['instructionLevel'] === 'string') {
-                const lvl = parsed['instructionLevel']
-                if (['essential', 'standard', 'full'].includes(lvl)) {
-                    updates.instructionLevel = lvl as 'essential' | 'standard' | 'full'
-                }
-            }
-            
             if ('toolFilter' in parsed) {
                 updates.rawToolFilter = typeof parsed['toolFilter'] === 'string' ? parsed['toolFilter'] : undefined
             }

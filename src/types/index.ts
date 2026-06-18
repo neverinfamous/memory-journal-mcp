@@ -342,9 +342,6 @@ export interface ServerConfig {
     /** Sentence transformer model name */
     modelName: string
 
-    /** Briefing depth for AI client instructions */
-    instructionLevel?: 'essential' | 'standard' | 'full'
-
     /** Hush Protocol flag vocabulary (defaults: blocker, needs_review, help_requested, fyi) */
     flagVocabulary?: string[]
 

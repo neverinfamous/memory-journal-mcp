@@ -42,7 +42,6 @@ export function createServerInstance(
                         return { name: prompt.name, description: prompt.description }
                     }),
                     undefined,
-                    currentConfig.instructionLevel,
                     groups,
                     currentConfig.briefingConfig
                 )
@@ -55,7 +54,6 @@ export function createServerInstance(
                     return { name: prompt.name, description: prompt.description }
                 }),
                 undefined,
-                currentConfig.instructionLevel,
                 groups,
                 currentConfig.briefingConfig
             )

@@ -38,14 +38,6 @@ export interface LatestEntrySnapshot {
     content: string
 }
 
-/**
- * Instruction detail level for token efficiency
- * - essential: ~300 tokens - Core behaviors + quick access (for token-constrained clients)
- * - standard: ~350 tokens - + help pointers for enabled groups
- * - full: ~500 tokens - + active tools/prompts summary
- */
-export type InstructionLevel = 'essential' | 'standard' | 'full'
-
 // =============================================================================
 // Composable Instruction Segments
 // =============================================================================
@@ -308,14 +300,13 @@ function buildActiveGroupsSummary(enabledTools: Set<string>): string {
  * @param enabledTools - Set of enabled tool names
  * @param prompts - Available prompt definitions
  * @param latestEntry - Optional latest entry for context snapshot
- * @param level - Instruction detail level (default: 'standard')
  * @param enabledGroups - Optional pre-computed enabled groups; derived from enabledTools if omitted
+ * @param config - Server configuration for context
  */
 export function generateStandardInstructions(
     enabledTools: Set<string>,
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
-    level: InstructionLevel = 'standard',
     enabledGroups?: Set<ToolGroup>,
     config?: { defaultWorkspaceId?: string }
 ): string {
@@ -340,25 +331,16 @@ export function generateStandardInstructions(
         instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
     }
 
-    // Essential: minimal help pointer (no group listing)
-    // Standard+: dynamic help pointers listing enabled groups
-    if (level === 'essential') {
-        instructions += '\n\nRead `memory://help` for gotchas and critical usage patterns.'
-    } else {
-        instructions += buildHelpPointers(groups)
-    }
+    // Always include help pointers, active groups summary, and prompts
+    instructions += buildHelpPointers(groups)
+    instructions += buildActiveGroupsSummary(enabledTools)
 
-    // Full level includes active groups summary + prompts
-    if (level === 'full') {
-        instructions += buildActiveGroupsSummary(enabledTools)
-
-        // Add prompts section
-        if (prompts.length > 0) {
-            instructions += `\n## Prompts (${String(prompts.length)})\n`
-            instructions += 'Pre-built templates and guided workflows:\n'
-            for (const prompt of prompts) {
-                instructions += `- \`${prompt.name}\` - ${prompt.description ?? ''}\n`
-            }
+    // Add prompts section
+    if (prompts.length > 0) {
+        instructions += `\n## Prompts (${String(prompts.length)})\n`
+        instructions += 'Pre-built templates and guided workflows:\n'
+        for (const prompt of prompts) {
+            instructions += `- \`${prompt.name}\` - ${prompt.description ?? ''}\n`
         }
     }
 
@@ -372,11 +354,10 @@ export function generateCodeModeInstructions(
     enabledTools: Set<string>,
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
-    level: InstructionLevel = 'standard',
     enabledGroups?: Set<ToolGroup>,
     config?: { defaultWorkspaceId?: string }
 ): string {
-    const standard = generateStandardInstructions(enabledTools, prompts, latestEntry, level, enabledGroups, config)
+    const standard = generateStandardInstructions(enabledTools, prompts, latestEntry, enabledGroups, config)
     return standard + '\n\n' + HELP_CONTENT.get('codemode')
 }
 

@@ -37,7 +37,6 @@ const TEST_CONFIGS = [
     {
         label: 'full (all groups)',
         filter: null, // default
-        level: 'standard',
         expect: {
             CORE: true,
             CODE_MODE: true,
@@ -47,7 +46,6 @@ const TEST_CONFIGS = [
     {
         label: 'codemode only',
         filter: 'codemode',
-        level: 'standard',
         expect: {
             CORE: true,
             CODE_MODE: true,
@@ -57,7 +55,6 @@ const TEST_CONFIGS = [
     {
         label: 'essential (core+codemode — no github)',
         filter: 'essential',
-        level: 'standard',
         // META_GROUPS.essential = ['core', 'codemode'] — no github, no search
         expect: {
             CORE: true,
@@ -68,7 +65,6 @@ const TEST_CONFIGS = [
     {
         label: 'starter (core+search+codemode — no github)',
         filter: 'starter',
-        level: 'standard',
         // META_GROUPS.starter = ['core', 'search', 'codemode']
         expect: {
             CORE: true,
@@ -79,7 +75,6 @@ const TEST_CONFIGS = [
     {
         label: 'core only (no codemode, no github, no search)',
         filter: 'core',
-        level: 'standard',
         expect: {
             CORE: true,
             CODE_MODE: false,
@@ -89,7 +84,6 @@ const TEST_CONFIGS = [
     {
         label: 'full -codemode (github present, no code mode)',
         filter: '-codemode',
-        level: 'standard',
         expect: {
             CORE: true,
             CODE_MODE: false,
@@ -99,7 +93,6 @@ const TEST_CONFIGS = [
     {
         label: 'full -github (no github, no copilot)',
         filter: '-github',
-        level: 'standard',
         expect: {
             CORE: true,
             CODE_MODE: true,
@@ -109,7 +102,6 @@ const TEST_CONFIGS = [
     {
         label: 'readonly (core+search+analytics+relationships+io+codemode — no github)',
         filter: 'readonly',
-        level: 'standard',
         // META_GROUPS.readonly excludes github but includes codemode
         expect: {
             CORE: true,
@@ -117,24 +109,13 @@ const TEST_CONFIGS = [
             HELP_POINTERS: true,
         },
     },
-    {
-        label: 'full — essential level (no help pointers at essential level)',
-        filter: null,
-        level: 'essential',
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: false,
-        },
-    },
 ]
 
 /** Spawn server with given filter/level, send initialize, capture instructions */
-function runConfig(filter, level) {
+function runConfig(filter) {
     return new Promise((resolve, reject) => {
         const args = ['dist/cli.js']
         if (filter) args.push('--tool-filter', filter)
-        if (level) args.push('--instruction-level', level)
 
         const proc = spawn('node', args, {
             cwd: PROJECT_DIR,
@@ -219,7 +200,7 @@ async function main() {
         process.stdout.write(`  Testing: ${config.label} ... `)
         let instructions
         try {
-            instructions = await runConfig(config.filter, config.level)
+            instructions = await runConfig(config.filter)
         } catch (err) {
             console.log(`❌ ERROR: ${err.message}`)
             totalFailed++

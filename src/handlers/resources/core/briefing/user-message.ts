@@ -64,7 +64,6 @@ export function formatUserMessage(opts: {
     isReadonly?: boolean
     teamConfigured?: boolean
     githubConfigured?: boolean
-    instructionLevel?: string
     registryRepos?: string[] | null
     ioRootCount?: number
     hasCodeMap?: boolean
@@ -288,7 +287,6 @@ export function formatUserMessage(opts: {
 
     const configLine1: string[] = []
     if (opts.isReadonly) configLine1.push('mode: readonly')
-    if (opts.instructionLevel) configLine1.push(`level: ${opts.instructionLevel}`)
     if (configLine1.length) configLines.push(configLine1.join(' · '))
 
     const configLine2: string[] = []

@@ -1,5 +1,4 @@
 {
-  "instructionLevel": "standard",
   "briefingEntries": 5,
   "briefingSummaries": 1,
   "briefingIncludeTeam": false,
@@ -9,5 +8,6 @@
   "briefingMilestones": 3,
   "briefingWorkflows": 0,
   "briefingWorkflowStatus": false,
-  "briefingCopilot": false
+  "briefingCopilot": false,
+  "instructionLevel": "standard"
 }
