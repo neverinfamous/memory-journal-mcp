@@ -345,7 +345,6 @@ async function executeCode(
         return {
             success: false,
             error: error.message,
-            stack: error.stack,
             metrics: {
                 wallTimeMs: Math.round(endTime - startTime),
                 cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),

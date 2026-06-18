@@ -31,10 +31,14 @@ const rebuild = await mj.team.teamRebuildVectorIndex({})
 const stats = await mj.team.teamGetVectorIndexStats({})
 
 const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 1 })
-const addResult = await mj.team.teamAddToVectorIndex({
-  project_number: 5,
-  entry_id: recent.entries[0].id,
-})
+let addResult = { success: false }
+if (recent.success && recent.entries && recent.entries.length > 0) {
+  addResult = await mj.team.teamAddToVectorIndex({
+    project_number: 5,
+    entry_id: recent.entries[0].id,
+  })
+}
+
 const addBad = await mj.team.teamAddToVectorIndex({
   project_number: 5,
   entry_id: 999999,
@@ -44,10 +48,13 @@ const search = await mj.team.teamSemanticSearch({
   project_number: 5,
   query: 'standup',
 })
-const relatedById = await mj.team.teamSemanticSearch({
-  project_number: 5,
-  entry_id: recent.entries[0].id,
-})
+let relatedById = { entries: [] }
+if (recent.success && recent.entries && recent.entries.length > 0) {
+  relatedById = await mj.team.teamSemanticSearch({
+    project_number: 5,
+    entry_id: recent.entries[0].id,
+  })
+}
 const strict = await mj.team.teamSemanticSearch({
   project_number: 5,
   query: 'standup',
@@ -63,17 +70,17 @@ const insightsFiltered = await mj.team.teamGetCrossProjectInsights({
 
 return {
   rebuildSuccess: rebuild.success,
-  entriesIndexed: rebuild.entriesIndexed,
-  vectorAvailable: stats.available,
-  vectorItemCount: stats.itemCount,
-  searchCount: search.entries?.length ?? 0,
-  relatedCount: relatedById.entries?.length ?? 0,
-  strictFewer: (strict.entries?.length ?? 0) <= (search.entries?.length ?? 0),
+  entriesIndexed: rebuild.success ? rebuild.entriesIndexed : 0,
+  vectorAvailable: stats.success ? stats.available : false,
+  vectorItemCount: stats.success ? stats.itemCount : 0,
+  searchCount: search.success ? (search.entries?.length ?? 0) : 0,
+  relatedCount: relatedById.success ? (relatedById.entries?.length ?? 0) : 0,
+  strictFewer: strict.success && search.success ? (strict.entries?.length ?? 0) <= (search.entries?.length ?? 0) : true,
   addSuccess: addResult.success,
   addBadError: addBad.success === false,
-  insightsProjectCount: insights.project_count,
-  insightsHasProjects: Array.isArray(insights.projects),
-  filteredInsights: insightsFiltered.project_count >= 0,
+  insightsProjectCount: insights.success ? insights.project_count : 0,
+  insightsHasProjects: insights.success ? Array.isArray(insights.projects) : false,
+  filteredInsights: insightsFiltered.success ? insightsFiltered.project_count >= 0 : false,
 }
 ```
 
@@ -216,15 +223,17 @@ const teamEntries = await mj.team.teamSearch({
   query: 'CM4',
   limit: 50,
 })
-for (const e of teamEntries.entries ?? []) {
-  if (e.content?.includes('CM4')) {
-    const getVersion = await mj.team.teamGetEntryById({ project_number: 5, entry_id: e.id })
-    const del = await mj.team.teamDeleteEntry({
-      project_number: 5,
-      entry_id: e.id,
-      expected_version: getVersion.entry?.version ?? 1,
-    })
-    results.push({ id: e.id, source: 'team', deleted: del.success })
+if (teamEntries.success) {
+  for (const e of teamEntries.entries ?? []) {
+    if (e.content?.includes('CM4')) {
+      const getVersion = await mj.team.teamGetEntryById({ project_number: 5, entry_id: e.id })
+      const del = await mj.team.teamDeleteEntry({
+        project_number: 5,
+        entry_id: e.id,
+        expected_version: getVersion.entry?.version ?? 1,
+      })
+      results.push({ id: e.id, source: 'team', deleted: del.success })
+    }
   }
 }
 
