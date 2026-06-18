@@ -1,57 +1,19 @@
-# Git History Mining & Briefing Refactor (Revised)
+# Git Commit History Implementation Plan
 
-This implementation plan creates a **`git` tool group** (5 tools) for `memory-journal-mcp` and refactors the `memory://briefing` resource's System section to replace file-based changelog reads with live `simple-git` queries. It also adds testing prompts for all three test categories and updates server instructions.
+This implementation plan creates a new **`git` tool group** (5 tools) for `memory-journal-mcp` to mine commit histories and refactors the `memory://briefing` resource's System section to replace file-based changelog reads with live `simple-git` queries.
 
-## Audit Findings & Adversarial Review Resolutions
+## Architecture & Security Requirements
 
-> [!NOTE]
-> The following issues were identified in the [original plan](file:///C:/Users/chris/Desktop/adamic/docs/mj-git-mining-implementation-plan.md) via cross-referencing against the live codebase and rigorous adversarial review (Phase 2 & Phase 3 via Copilot).
+1. **Namespace & Group**: The tools must be named under the `git` group (not `history` to avoid collision with `get_entry_history`), and exposed in Code Mode as `mj.git.*`. The group belongs in `full` and `readonly` meta-groups only (do NOT add to `starter`).
+2. **Multi-Project Support**: `GitHistoryClient` must be initialized per workspace/project via `PROJECT_REGISTRY` in `src/server/mcp-server/initialization.ts`, similar to `GitHubIntegration`.
+3. **Security (Path Traversal & Command Injection)**: Add strict Zod validation (`/^[a-zA-Z0-9._\-\/@]+$/`) for git refs/paths. Never forward absolute paths from the sandbox. Catch `simple-git` errors and sanitize absolute file paths before returning them.
+4. **Performance (ReDoS & O(n) Loops)**: `simple-git` must be initialized with `{ timeout: { block: 30_000 } }`. Cap search queries to 200 characters and block complex regex. Limit commit loops (e.g., max 10 for getReleaseInfo).
 
-### Critical Fixes from Adversarial Review
-| # | Issue | Resolution |
-|---|-------|------------|
-| 1 | **Wrong Server Init Path** | `mcp-server.ts` was split. The correct dependency injection point is `src/server/mcp-server/initialization.ts`. |
-| 2 | **`UnreleasedSummary` Collision** | The briefing's `UnreleasedSummary` expects numeric category counts (`{ added, changed, fixed... }`), while git types need array maps. Rename git type to `GitUnreleasedSummary` and explicitly map to the briefing format. |
-| 3 | **Ghost File** | `commit-analyzer.ts` was missing from Phase 1. Added to Phase 1 setup. |
-| 4 | **Unvalidated Git Ref Injection** | Prevent arbitrary shell options. Add strict Zod validation (`/^[a-zA-Z0-9._\-\/@]+$/`) for refs/paths. |
-| 5 | **ReDoS via `--grep`** | Cap search `query` length to 200 and block complex regex captures. |
-| 6 | **Error Leakage** | `simple-git` errors expose local filesystem paths. Must sanitize absolute paths in error catches before returning. |
-| 7 | **Code Mode API Proxy limit** | `worker-api-proxy.ts` is 84KB. Extract bindings to `src/codemode/api/git-api.ts` to adhere to the 500-line module limit. |
-| 8 | **`starter` meta-group inclusion** | The `starter` group is for minimal configs. Git tools belong in `full` and `readonly`, not `starter`. |
-| 9 | **Multi-Project Support** | `GitHistoryClient` must be initialized per workspace/project via `PROJECT_REGISTRY`, similar to `GitHubIntegration`. |
-| 10 | **Git Block Timeout** | `simple-git` can hang indefinitely. Initialize with `{ timeout: { block: 30_000 } }`. |
+## 1. Git Client Module (TDD Recommended)
 
----
-
-## User Review Required
-
-> [!IMPORTANT]
-> **Group Rename: `history` → `git`**
-> The original plan used `history`. This revision renames to `git` to avoid confusion with the existing `get_entry_history` tool.
-
-> [!IMPORTANT]
-> **Briefing File Fallback Removed**
-> `UNRELEASED.md` reads are permanently removed. If users use `starter` or non-git directories, the briefing will gracefully omit the Unreleased row.
-
-> [!WARNING]
-> **Code Mode Namespace: `mj.git.*`**
-> The 5 new tools will be exposed under `mj.git.*`.
-
----
-
-## Proposed Changes
-
-> [!NOTE]
-> Task Execution Order: **1 → 3 → 4 → 5 → 2 → 6 → 7 → 8 → 9** (Briefing refactor delayed until tools are proven).
-
----
-
-### 1. Git Client Module (TDD Recommended)
-
-Create the backend infrastructure. Write `tests/git/trailer-parser.test.ts` concurrently.
+Create the backend infrastructure wrapping `simple-git`.
 
 #### [NEW] `src/git/types.ts`
-
 ```typescript
 export interface GitCommit {
   hash: string
@@ -76,106 +38,93 @@ export interface GitUnreleasedSummary {
 ```
 
 #### [NEW] `src/git/trailer-parser.ts`
-Parse git trailers.
+Implement logic to parse git trailers from commit messages.
 
 #### [NEW] `src/git/commit-analyzer.ts`
-Handle aggregation logic for file hotspots and contributors.
+Handle aggregation logic for file hotspots, commit frequencies, and contributors.
 
 #### [NEW] `src/git/git-client.ts`
 Implement `GitHistoryClient` wrapping `simple-git`.
-- Instantiate with `simpleGit(workingDir, { timeout: { block: 30_000 } })`
-- `getCommitHistory(options)`: validate refs/paths.
-- `searchCommits(query, options)`: sanitize `query` to prevent ReDoS.
+- Instantiate with `simpleGit(workingDir, { timeout: { block: 30_000 } })`.
+- `getCommitHistory(options)`: Fetch commit logs. Validate refs/paths.
+- `searchCommits(query, options)`: Search commit messages. Sanitize `query` to prevent ReDoS.
 - `getReleaseInfo(options)`: Cap `count` to 5 default, 10 max to prevent O(n) explosion.
+- Implement robust error handling (handling missing tags, detached heads, non-git directories).
 
 #### [NEW] `src/git/index.ts`
 Barrel export.
 
----
+## 2. Briefing Refactor (System Section)
 
-### 2. Briefing Refactor (System Section)
+#### [MODIFY] `src/handlers/resources/core/briefing/system-section.ts`
+- **Delete**: `loadCachedUnreleased()` and `loadCachedLastReleaseDaysAgo()` legacy file reading logic.
+- **Update**: `buildSystemContext` is already async. Map the `GitUnreleasedSummary` array explicitly to the briefing's required numeric format (`{ added, changed, fixed, security, removed }`).
+- Populate `SystemContext.lastReleaseDaysAgo` using the new git client.
 
-#### [MODIFY] [system-section.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/handlers/resources/core/briefing/system-section.ts)
-- **Delete**: `loadCachedUnreleased()`, `loadCachedLastReleaseDaysAgo()`
-- **Update**: `buildSystemContext` is already async. Map `GitUnreleasedSummary` explicitly to the briefing's numeric format.
-- Populate `SystemContext.lastReleaseDaysAgo` using `getLastReleaseDaysAgoFromGit()`.
-
-#### [MODIFY] [shared.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/handlers/resources/shared.ts)
+#### [MODIFY] `src/handlers/resources/shared.ts`
 - Add `gitClient?: GitHistoryClient | null` to `ResourceContext`.
 
----
+## 3. Tool Group Registration
 
-### 3. Tool Group Registration
+Register the tool group into the core MCP Server routing ecosystem.
 
-#### [MODIFY] [filtering.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/types/filtering.ts)
-Add `'git'` to `ToolGroup`. **Hard dependency for compilation.**
+#### [MODIFY] `src/types/filtering.ts`
+Add `'git'` to the `ToolGroup` union type. (Hard dependency for compilation).
 
-#### [MODIFY] [tool-constants.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/filtering/tool-constants.ts)
-Add `git` to `TOOL_GROUPS`. Update `META_GROUPS` (`full`, `readonly` only. **NOT** `starter`).
+#### [MODIFY] `src/filtering/tool-constants.ts`
+Add `git` to `TOOL_GROUPS`. Update `META_GROUPS` to include `git` in `full` and `readonly` only.
 
-#### [MODIFY] [scopes.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/auth/scopes.ts)
+#### [MODIFY] `src/auth/scopes.ts`
 Add `git: SCOPES.READ` to `TOOL_GROUP_SCOPES`.
 
-#### [MODIFY] [icons.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/constants/icons.ts)
+#### [MODIFY] `src/constants/icons.ts`
 Add `ICON_GIT` and `git: [ICON_GIT]`.
 
-#### [MODIFY] [index.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/types/index.ts)
+#### [MODIFY] `src/types/index.ts`
 Add `gitClient?: GitHistoryClient | null` to `ToolContext`.
 
----
-
-### 4. Tool Handlers
+## 4. Tool Handlers
 
 #### [NEW] `src/handlers/tools/git.ts`
-Implement the 5 git tool handlers.
+Implement the 5 git tool handlers (e.g., `get_commit_history`, `search_commits`, `get_release_info`, `get_unreleased_commits`, `analyze_commit_patterns`) with dual Zod/JSON Schema definitions.
+- **Anti-Hallucination (Schema)**: Add explicit `.describe()` hint strings to complex Zod parameters to proactively guide agents (e.g., explaining date formats, or that `repo` should be omitted to use context).
 - Add strict Zod validation regex to refs/tags (`/^[a-zA-Z0-9._\-\/@]+$/`).
 - Wrap errors in a sanitizer to prevent exposing raw paths from `simple-git`.
-- **Anti-Hallucination (Schema)**: Add explicit `.describe()` hint strings to complex Zod parameters to proactively guide agents (e.g., explaining date formats, or that `repo` should be omitted to use context).
 
-#### [MODIFY] [index.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/handlers/tools/index.ts)
+#### [MODIFY] `src/handlers/tools/index.ts`
 Import `getGitTools` and wire into `getTools()`.
 
----
-
-### 5. Server Startup & Context Injection
+## 5. Server Startup & Context Injection
 
 #### [MODIFY] `src/server/mcp-server/initialization.ts`
-- Initialize `GitHistoryClient` inside the project resolution loop (`PROJECT_REGISTRY`), matching `GitHubIntegration`.
+- Initialize `GitHistoryClient` inside the project resolution loop (`PROJECT_REGISTRY`), matching the `GitHubIntegration` pattern.
 - Inject `gitClient` into Context objects.
 - Warm up the `getUnreleasedChanges` cache immediately after creation to eliminate briefing cold-start latency.
 
----
-
-### 6. Code Mode Bindings
+## 6. Code Mode Bindings
 
 #### [NEW] `src/codemode/api/git-api.ts`
-Extract git proxy bindings into a new file to keep `worker-api-proxy.ts` within the 500-line limit.
+Extract git proxy bindings into a new file to keep `worker-api-proxy.ts` within the 500-line module limit. Expose them under `mj.git.*`.
 
-#### [MODIFY] [api-constants.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/codemode/api-constants.ts)
+#### [MODIFY] `src/codemode/api-constants.ts`
 Add `mj.git.*` mappings.
 - **Anti-Hallucination (Aliases)**: Add common fallback aliases to `METHOD_ALIASES` (e.g., map `log` to `getCommitHistory`, map `search` to `searchCommits`) to silently heal extrapolated method calls without shadowing legitimate methods.
 
-#### [MODIFY] [worker-api-proxy.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/codemode/worker-api-proxy.ts)
-Import and bind `gitApi` namespace. Do NOT forward absolute paths from the sandbox.
-- **Anti-Hallucination (Interceptors)**: Ensure the proxy includes interceptors that catch missing `await` calls and provide highly actionable custom errors.
+#### [MODIFY] `src/codemode/worker-api-proxy.ts`
+Import and bind the `gitApi` namespace. Do NOT forward absolute paths from the sandbox.
+- **Anti-Hallucination (Interceptors)**: Ensure the proxy includes interceptors that catch missing `await` calls on git methods and provide highly actionable custom errors.
 
----
+## 7. Server Instructions & Documentation
 
-### 7. Server Instructions
-#### [MODIFY] [server-instructions.ts](file:///C:/Users/chris/Desktop/memory-journal-mcp/src/constants/server-instructions.ts)
-Add `git` help block.
+#### [MODIFY] `src/constants/server-instructions.ts`
+Add a new `## Git` block explaining how agents should utilize the new git tools.
 
----
+#### [MODIFY] `README.md` & `test-server/code-map.md` & `test-server/tool-reference.md`
+Increment the reported tool counts (100 → 105) and document the new group.
 
-### 8. Testing Prompts
-Create `test-git-history.md` for standard, codemode, and usability testing directories. Update `coordinator-workflow.md` DAGs.
+## 8. Testing
 
----
-
-### 9. Documentation Updates
-Update `code-map.md`, `tool-reference.md`, `README.md`, and `Git-Integration.md`.
-
----
-
-## Verification Plan
-Same structure as previously defined, with additional focus on validating the security blocks (ReDoS, Path traversal) and cold-start latency tests.
+- Write a new unit test suite `tests/git/git-client.test.ts` mocking `simple-git`.
+- Write handler tests `tests/handlers/tools/git.test.ts`.
+- Create `test-git.md` for standard, codemode, and usability testing directories. Update `coordinator-workflow.md` DAGs.
+- Run `pnpm run check ; pnpm run test ; pnpm run test:e2e` to verify.
