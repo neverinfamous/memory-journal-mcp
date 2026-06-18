@@ -29,6 +29,7 @@ Test the advanced Hush Protocol flag features (`team_list_flags`, `team_update_f
 
 // Search flags by tag (legacy approach — still works)
 const tagSearch = await mj.team.teamSearch({ project_number: 5, tags: ['flag:blocker'] })
+if (!tagSearch.success) return { success: false, error: tagSearch.error }
 
 // Search flags by entry_type (legacy)
 const typeSearch = await mj.team.teamSearchByDateRange({
@@ -37,15 +38,19 @@ const typeSearch = await mj.team.teamSearchByDateRange({
   end_date: '2026-12-31',
   entry_type: 'flag',
 })
+if (!typeSearch.success) return { success: false, error: typeSearch.error }
 
 // New: team_list_flags — default (active only)
 const activeOnly = await mj.team.teamListFlags({ project_number: 5 })
+if (!activeOnly.success) return { success: false, error: activeOnly.error }
 
 // New: team_list_flags — all statuses
 const allFlags = await mj.team.teamListFlags({ project_number: 5, status: 'all' })
+if (!allFlags.success) return { success: false, error: allFlags.error }
 
 // New: team_list_flags — resolved only
 const resolvedOnly = await mj.team.teamListFlags({ project_number: 5, status: 'resolved' })
+if (!resolvedOnly.success) return { success: false, error: resolvedOnly.error }
 
 // New: team_list_flags — filter by flag_type
 const blockersOnly = await mj.team.teamListFlags({
@@ -53,6 +58,7 @@ const blockersOnly = await mj.team.teamListFlags({
   status: 'all',
   flag_type: 'blocker',
 })
+if (!blockersOnly.success) return { success: false, error: blockersOnly.error }
 
 // New: team_list_flags — filter by target_user (with @ prefix — should be stripped)
 const sarahFlags = await mj.team.teamListFlags({
@@ -60,6 +66,7 @@ const sarahFlags = await mj.team.teamListFlags({
   status: 'all',
   target_user: '@sarah',
 })
+if (!sarahFlags.success) return { success: false, error: sarahFlags.error }
 
 // New: team_list_flags — sort by priority (blockers before fyi)
 const prioritySorted = await mj.team.teamListFlags({
@@ -67,6 +74,7 @@ const prioritySorted = await mj.team.teamListFlags({
   status: 'all',
   sort_by: 'priority',
 })
+if (!prioritySorted.success) return { success: false, error: prioritySorted.error }
 
 // New: team_list_flags — sort by timestamp
 const timeSorted = await mj.team.teamListFlags({
@@ -74,6 +82,7 @@ const timeSorted = await mj.team.teamListFlags({
   status: 'all',
   sort_by: 'timestamp',
 })
+if (!timeSorted.success) return { success: false, error: timeSorted.error }
 
 // Omit project_number on teamListFlags to test fallback / validation
 const omitListFlags = await mj.team.teamListFlags({ status: 'active' })
@@ -138,6 +147,8 @@ const activeFyi = await mj.team.teamListFlags({
   status: 'active',
   flag_type: 'fyi',
 })
+if (!activeFyi.success) return { success: false, error: activeFyi.error }
+
 const fyiId = activeFyi.flags?.[0]?.id
 if (!fyiId) return { error: 'No active fyi flag found for update tests' }
 
@@ -146,36 +157,43 @@ const escalated = await mj.team.teamUpdateFlag({
   flag_id: fyiId,
   flag_type: 'blocker',
 })
+if (!escalated.success) return { success: false, error: escalated.error }
 
 // Reassign target_user
 const reassigned = await mj.team.teamUpdateFlag({
   flag_id: fyiId,
   target_user: '@chris',
 })
+if (!reassigned.success) return { success: false, error: reassigned.error }
 
 // Add link
 const linked = await mj.team.teamUpdateFlag({
   flag_id: fyiId,
   link: 'https://github.com/example/issue/99',
 })
+if (!linked.success) return { success: false, error: linked.error }
 
 // Edit message
 const edited = await mj.team.teamUpdateFlag({
   flag_id: fyiId,
   message: 'Escalated: linting rule now blocking CI pipeline',
 })
+if (!edited.success) return { success: false, error: edited.error }
 
 // Clear target_user (set null)
 const cleared = await mj.team.teamUpdateFlag({
   flag_id: fyiId,
   target_user: null,
 })
+if (!cleared.success) return { success: false, error: cleared.error }
 
 // No-op update (no changes)
 const noop = await mj.team.teamUpdateFlag({ flag_id: fyiId })
+if (!noop.success) return { success: false, error: noop.error }
 
 // Verify final state
 const final = await mj.team.teamGetEntryById({ project_number: 5, entry_id: fyiId })
+if (!final.success) return { success: false, error: final.error }
 const finalCtx = final.entry?.flagMetadata || null
 
 // Error paths
@@ -251,18 +269,21 @@ const flag = await mj.team.passTeamFlag({
   flag_type: 'needs_review',
   message: 'CM reopen lifecycle test flag',
 })
+if (!flag.success) return { success: false, error: flag.error }
 const flagId = flag.entry?.id
 
-await mj.team.resolveTeamFlag({
+const resolveRes = await mj.team.resolveTeamFlag({
   flag_id: flagId,
   resolution: 'Reviewed and approved',
 })
+if (!resolveRes.success) return { success: false, error: resolveRes.error }
 
 // Verify it's resolved
 const afterResolve = await mj.team.teamListFlags({
   project_number: 5,
   status: 'resolved',
 })
+if (!afterResolve.success) return { success: false, error: afterResolve.error }
 const isResolved = afterResolve.flags?.some((f) => f.id === flagId) ?? false
 
 // Reopen it
@@ -270,16 +291,19 @@ const reopened = await mj.team.teamUpdateFlag({
   flag_id: flagId,
   reopen: true,
 })
+if (!reopened.success) return { success: false, error: reopened.error }
 
 // Verify it's active again
 const afterReopen = await mj.team.teamListFlags({
   project_number: 5,
   status: 'active',
 })
+if (!afterReopen.success) return { success: false, error: afterReopen.error }
 const isActive = afterReopen.flags?.some((f) => f.id === flagId) ?? false
 
 // Verify resolved_at and resolution are cleared
 const detail = await mj.team.teamGetEntryById({ project_number: 5, entry_id: flagId })
+if (!detail.success) return { success: false, error: detail.error }
 const ctx = detail.entry?.flagMetadata || null
 
 // Reopen a flag that's already active (should be no-op for reopen)
@@ -287,6 +311,7 @@ const reopenActive = await mj.team.teamUpdateFlag({
   flag_id: flagId,
   reopen: true,
 })
+if (!reopenActive.success) return { success: false, error: reopenActive.error }
 
 const result = {
   isResolved,
@@ -323,6 +348,7 @@ return result
 
 // Get analytics
 const analytics = await mj.team.teamGetFlagAnalytics({ project_number: 5 })
+if (!analytics.success) return { success: false, error: analytics.error }
 
 const result = {
   analyticsSuccess: analytics.success,
