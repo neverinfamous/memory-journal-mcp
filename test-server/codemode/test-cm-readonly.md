@@ -41,7 +41,7 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 | -------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Create entry blocked | `return await mj.core.createEntry({project_number: 5, content: "should fail"});` | ⚠️ Verify: either method doesn't exist (TypeError) or returns error |
 | Update entry blocked | `return await mj.admin.updateEntry({entry_id: 1, content: "fail"});`             | ⚠️ Verify: blocked or error                                         |
-| Delete entry blocked | `return await mj.admin.deleteEntry({entry_id: 999999});`                         | ⚠️ Verify: blocked or error                                         |
+| Delete entry blocked | `return await mj.admin.deleteEntry({entry_id: 999999, expected_version: 1});`                         | ⚠️ Verify: blocked or error                                         |
 
 ### 18.3 Default Mode Allows Writes
 
@@ -53,7 +53,7 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 | Test                   | Code                                                                      | Expected Result |
 | ---------------------- | ------------------------------------------------------------------------- | --------------- |
-| Clean up test artifact | `return await mj.admin.deleteEntry({entry_id: <ID_FROM_PREVIOUS_STEP>});` | `success: true` |
+| Clean up test artifact | `return await mj.admin.deleteEntry({entry_id: <ID_FROM_PREVIOUS_STEP>, expected_version: 1});` | `success: true` |
 
 ---
 
