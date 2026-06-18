@@ -2,7 +2,7 @@
 
 > **Agent-optimized navigation reference.** Read this before searching the codebase. Covers directory layout, handler→tool mapping, resources, prompts, error hierarchy, and key constants.
 >
-> Last updated: June 11, 2026
+> Last updated: June 18, 2026
 
 ---
 
@@ -18,7 +18,12 @@ src/
 ├── version.ts                      # Version SSoT — reads package.json, exports VERSION
 │
 ├── server/
-│   ├── mcp-server.ts               # McpServer setup, tool/resource/prompt wiring
+│   ├── mcp-server/                 # McpServer setup (refactored from single file)
+│   │   ├── index.ts                # Barrel
+│   │   ├── core.ts                 # Server factory, config wiring, ToolHandlerConfig builder
+│   │   ├── initialization.ts       # Dependency initialization (db, vectorManager, github, runtime)
+│   │   ├── tool-registration.ts    # Tool/resource/prompt registration, instructions composition, callTool dispatch
+│   │   └── types.ts                # ServerOptions interface
 │   ├── subscription-manager.ts     # Real-time resource subscriptions and state management
 │   ├── auto-prune.ts               # Importance-based data lifecycle on startup (archive → soft-delete → hard-delete)
 │   ├── registration.ts             # Tool/resource/prompt registration logic
@@ -41,11 +46,17 @@ src/
 │   └── tool-filter.ts              # ToolFilter class — parse/apply --tool-filter expressions, group/shortcut/tool resolution
 │
 ├── utils/
+│   ├── config-manager.ts           # Runtime configuration manager (hot-reload, event emitter)
+│   ├── config-resolver.ts          # CLI/env/config-file resolution with type coercion
 │   ├── error-helpers.ts            # formatHandlerError() — structured {success:false} builder
 │   ├── github-helpers.ts           # GitHub token scrubbing and helper utilities
 │   ├── logger.ts                   # Logger class (structured JSON, severity filtering)
+│   ├── maintenance-lock.ts         # ServerRuntime — maintenance mode lock + instance globals
 │   ├── mcp-logger.ts               # MCP-specific logger with module prefixing
 │   ├── progress-utils.ts           # MCP progress notification helpers (ProgressContext)
+│   ├── query-helpers.ts            # coerceLimit(), buildLimitClause(), DEFAULT_QUERY_LIMIT
+│   ├── request-context.ts          # AsyncLocalStorage request context
+│   ├── resource-annotations.ts     # Centralized resource annotation presets (HIGH/MEDIUM/LOW_PRIORITY)
 │   ├── security-utils.ts           # Input validation, SQL injection prevention, path traversal guards
 │   ├── vector-index-helpers.ts     # Vector index utility helpers
 │   └── errors/
@@ -77,7 +88,6 @@ src/
 │           └── legacy-sse.ts       # Legacy SSE transport (MCP 2024-11-05 compat)
 │
 ├── codemode/                       # Code Mode sandbox (secure JS execution)
-│   ├── sandbox.ts                  # SandboxPool lifecycle manager
 │   ├── sandbox-factory.ts          # Sandbox creation factory (engine-level restrictions: codeGeneration disabled, frozen prototypes, Proxy nullified, API surface frozen)
 │   ├── auto-return.ts              # Last-expression auto-return transform (IIFE helper)
 │   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge, pre-warmed pool with lifecycle management)
@@ -85,8 +95,11 @@ src/
 │   ├── worker-api-proxy.ts         # Worker API Proxy Builder (builds mj.* API, handles missing await interceptions)
 │   ├── worker-result-proxy.ts      # Result Wrapping Proxy (prevents silent failures, explicit IPC serialization traps)
 │   ├── api/                        # Unified mj.* API bridge factory
+│   │   ├── index.ts                # Barrel — exports parseProjectRegistry
 │   │   ├── journal-api.ts          # Unified API builder (creates Sandbox bindings and schema descriptors)
-│   │   └── group-factory.ts        # Group proxy factory (handles camelCase aliases, normalizes positional params)
+│   │   ├── group-factory.ts        # Group proxy factory (handles camelCase aliases, normalizes positional params)
+│   │   ├── param-normalizer.ts     # Parameter normalization (snake_case ↔ camelCase, positional → named, type coercion)
+│   │   └── types.ts                # API bridge TypeScript types
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
 │   ├── security.ts                 # Code validation (18 blocked patterns, 50KB code size limit, injection prevention)
 │   ├── type-generator.ts           # Zod schema-to-TypeScript declaration generator
@@ -99,8 +112,8 @@ src/
 │   │   ├── interfaces.ts           # IDatabaseAdapter interface (database contract)
 │   │   ├── schema.ts               # Database schema DDL (tables, indexes, FTS5)
 │   │   └── entry-columns.ts        # Column name constants for entry queries
-│   ├── migrations/                 # Versioned database migrations (001-007, migration-manager)
-│   │   ├── 001-init.ts ... 008-add-team-members.ts
+│   ├── migrations/                 # Versioned database migrations (001-010, migration-manager)
+│   │   ├── 001-init.ts ... 010-add-author-aliases.ts
 │   │   ├── migration.ts            # Migration interface contract
 │   │   ├── migration-list.ts       # Sequential migration chain array registry
 │   │   └── migration-manager.ts    # Transactional runner & self-healing legacy retrofitting
@@ -112,16 +125,25 @@ src/
 │       ├── relationships.ts        # Entry relationship operations
 │       ├── members.ts              # Team member CRUD and RBAC role resolution
 │       └── entries/
-│           ├── index.ts                # Entry operations barrel
+│           ├── index.ts            # Entry operations barrel
 │           ├── crud.ts             # Entry create/read/update/delete, including batch operations
-│           ├── search.ts           # FTS5 search, date-range search
+│           ├── search/             # Search query module (refactored from flat file)
+│           │   ├── index.ts        # Barrel
+│           │   ├── query.ts        # FTS5 search, date-range search, faceted search, WHERE clause builder
+│           │   ├── cursor.ts       # Opaque cursor encoding/decoding (keyset pagination)
+│           │   └── fts-sanitizer.ts # FTS5 query sanitization (injection prevention)
+│           ├── digest.ts           # Digest computation queries (project activity, trends)
 │           ├── fuzzy-matcher.ts    # Fallback fuzzy string matching (Levenshtein)
 │           ├── importance.ts       # Importance scoring algorithm
 │           ├── statistics.ts       # Journal statistics and analytics
-│           └── shared.ts           # Shared entry query helpers
+│           └── shared.ts           # Shared entry query helpers (ENTRY_COLUMNS, rowToEntry, rowsToEntries)
 │
 ├── vector/
-│   └── vector-search-manager.ts    # VectorSearchManager — sqlite-vec + @huggingface/transformers integration
+│   └── vector-search-manager/      # VectorSearchManager (refactored from single file)
+│       ├── index.ts                # Barrel
+│       ├── manager.ts              # VectorSearchManager — sqlite-vec + @huggingface/transformers integration
+│       ├── rebuild.ts              # Vector index rebuild logic (full re-embedding)
+│       └── types.ts                # Vector search TypeScript types
 │
 ├── markdown/                       # Markdown import/export (round-trip frontmatter parsing)
 │   ├── converters/                 # Markdown converter utilities
@@ -160,22 +182,44 @@ src/
 └── handlers/
     ├── tools/                      # 100 tool handlers (10 groups) — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
-    │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
+    │   ├── schemas.ts              # Shared Zod output schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
-    │   ├── core.ts                 # Core tool group (7 tools)
-    │   ├── search/                 # Search tool group (5 tools)
-    │   │   ├── index.ts            # Barrel — connects 4 search tools
+    │   ├── core/                   # Core tool group (7 tools, refactored from flat file)
+    │   │   ├── index.ts            # Barrel
+    │   │   ├── schemas.ts          # Core Zod input/output schemas (dual-schema: strict + MCP)
+    │   │   └── tools.ts            # Core tool handlers (create_entry, get_entry_by_id, get_recent_entries, etc.)
+    │   ├── search/                 # Search tool group (6 tools)
+    │   │   ├── index.ts            # Barrel — composes all search tools
+    │   │   ├── schemas.ts          # Search Zod input/output schemas
     │   │   ├── helpers.ts          # Search helper functions
     │   │   ├── auto.ts             # Auto-mode query heuristic classifier
     │   │   ├── fts.ts              # FTS5 search logic
+    │   │   ├── search-entries.ts   # search_entries tool handler
+    │   │   ├── date-range-search.ts # search_by_date_range tool handler
+    │   │   ├── semantic-search.ts  # semantic_search tool handler
     │   │   ├── cross-team.ts       # Cross-team search logic
-    │   │   └── hybrid.ts           # RRF (Reciprocal Rank Fusion) hybrid logic
+    │   │   ├── hybrid.ts           # RRF (Reciprocal Rank Fusion) hybrid logic
+    │   │   └── misc-tools.ts       # get_vector_index_stats, list_deleted_entries
     │   ├── analytics.ts            # Analytics tool group (2 tools)
     │   ├── relationships.ts        # Relationships tool group (2 tools)
-    │   ├── io.ts                   # IO tool group (4 tools)
-    │   ├── admin.ts                # Admin tool group (9 tools)
+    │   ├── io/                     # IO tool group (4 tools, refactored from flat file)
+    │   │   ├── index.ts            # Barrel
+    │   │   ├── schemas.ts          # IO Zod input/output schemas
+    │   │   └── tools.ts            # IO tool handlers (export_entries, export_markdown, import_markdown, import_external)
+    │   ├── admin/                  # Admin tool group (11 tools, refactored from flat file)
+    │   │   ├── index.ts            # Barrel — composes all admin tools
+    │   │   ├── schemas.ts          # Admin Zod input/output schemas
+    │   │   ├── core-tools.ts       # Core admin tools (update_entry, delete_entry, restore_entry)
+    │   │   ├── batch-tools.ts      # Batch admin tools (batch_create/update/delete_entries)
+    │   │   ├── misc-tools.ts       # Misc admin tools (merge_tags, search_audit_log)
+    │   │   ├── vector-tools.ts     # Vector admin tools (rebuild_vector_index, add_to_vector_index)
+    │   │   └── update_configuration.ts # Runtime config update tool (update_configuration)
     │   ├── backup.ts               # Backup tool group (4 tools)
-    │   ├── codemode.ts             # Code Mode tool group (1 tool)
+    │   ├── codemode/               # Code Mode tool group (1 tool, refactored from flat file)
+    │   │   ├── index.ts            # Barrel
+    │   │   ├── schemas.ts          # Code Mode Zod input/output schemas
+    │   │   ├── handler.ts          # mj_execute_code handler (sandbox dispatch, project registry resolution)
+    │   │   └── singleton-state.ts  # Code Mode singleton state (sandbox pool, session context)
     │   ├── team/                   # Team tool group (44 tools)
     │   │   ├── index.ts            # Barrel — composes all team sub-modules
     │   │   ├── helpers.ts          # Shared team helpers (author batch-fetch, constants)
@@ -207,7 +251,8 @@ src/
     │
     ├── resources/                  # Resource handlers
     │   ├── index.ts                # Resource registration barrel
-    │   ├── shared.ts               # Shared resource helpers (formatters, entry rendering)
+    │   ├── shared.ts               # Shared resource helpers (formatters, entry rendering, BriefingConfig)
+    │   ├── staleness.ts            # Staleness detection resources (memory://staleness)
     │   ├── github.ts               # GitHub static resources (status, insights, milestones)
     │   ├── graph.ts                # Graph resources (recent relationships, actions narrative)
     │   ├── insights.ts             # Insights resources (digest, team-collaboration)
@@ -222,6 +267,8 @@ src/
     │       └── briefing/
     │           ├── index.ts        # memory://briefing resource (assembles sections)
     │           ├── context-section.ts   # Journal context section (entry count, recent entries)
+    │           ├── system-section.ts    # System section (server config, registry, workspace context)
+    │           ├── insights-section.ts  # Insights section (digest summary, orphan stats, graph hubs)
     │           ├── github-section.ts    # GitHub context section (repo, CI, issues, PRs, milestones, insights)
     │           └── user-message.ts      # User message section (rules, skills awareness)
     │
