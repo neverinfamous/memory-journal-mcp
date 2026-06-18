@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { passMetadataFilters } from './helpers.js'
@@ -29,6 +30,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = SearchEntriesSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const query = input.query?.trim() || ''
                     const mode = input.mode
 
@@ -96,7 +98,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         includeHighlights: input.include_highlights,
                         fuzzy_match: effectiveFuzzyMatch,
                         auto_correct: effectiveAutoCorrect,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     }
 
                     let facets: { tags: {name: string; count: number}[]; entryTypes: {name: string; count: number}[] } | undefined
@@ -113,7 +115,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             startDate: input.start_date,
                             endDate: input.end_date,
                             includeArchived: input.include_archived,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         })
                         // Team facets could be merged here, but we'll stick to personal DB for now to keep it simple and fast,
                         // or merge if needed. Since we usually query one DB, this is acceptable for phase 1.

@@ -8,6 +8,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { logger } from '../../../utils/logger.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
@@ -59,6 +60,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamSemanticSearchSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     if (!input.query && input.entry_id === undefined) {
                         return {
@@ -142,7 +144,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             if (entry.projectNumber !== input.project_number) {
                                 return null
                             }
-                            if (input.workspace_id && entry.workspaceId !== input.workspace_id) {
+                            if (wsId && entry.workspaceId !== wsId) {
                                 return null
                             }
 

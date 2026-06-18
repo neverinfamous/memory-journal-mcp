@@ -10,6 +10,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
 import {
     TeamCreateEntrySchema,
@@ -62,6 +63,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
                     if (projectNumber === undefined || projectNumber === null) {
@@ -146,7 +148,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         prStatus: input.pr_status,
                         author,
                         autoContext: input.auto_context,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
 
                     teamDb.flushSave()
@@ -192,8 +194,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = project_number
-                    const entry = teamDb.getEntryById(entry_id, workspace_id)
+                    const entry = teamDb.getEntryById(entry_id, wsId)
 
                     if (
                         !entry ||
@@ -254,13 +257,14 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const { limit, cursor, sort_by, project_number, workspace_id } = TeamGetRecentSchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = project_number
                     const result = teamDb.searchEntries('', {
                         limit,
                         cursor,
                         sortBy: sort_by,
                         projectNumber: projectNumber,
-                        workspaceId: workspace_id,
+                        workspaceId: wsId,
                     })
 
                     const entries = result.entries

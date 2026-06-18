@@ -1,6 +1,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import {
     BatchCreateEntriesSchema,
@@ -53,7 +54,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: e.workflow_run_id,
                         workflowName: e.workflow_name,
                         workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
-                        workspaceId: e.workspace_id || input.workspace_id,
+                        workspaceId: resolveWorkspaceId(e.workspace_id || input.workspace_id, e.project_number ?? input.project_number, context.config),
                     })))
                     
                     await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
@@ -129,7 +130,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: u.workflow_status,
                         isArchived: u.is_archived,
                         expectedVersion: u.expected_version,
-                        workspaceId: u.workspace_id || input.workspace_id,
+                        workspaceId: resolveWorkspaceId(u.workspace_id || input.workspace_id, u.project_number ?? input.project_number, context.config),
                     }))
 
                     const { updated, notFound, errors } = db.updateEntries(updates)

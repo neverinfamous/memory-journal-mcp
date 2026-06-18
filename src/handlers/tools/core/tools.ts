@@ -4,6 +4,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 import {
     CreateEntrySchema,
@@ -50,6 +51,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
@@ -78,13 +80,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
                         autoContext: input.auto_context,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
                     const id = createdEntry.id
 
                     // Vectorize entry
                     try {
-                        const entry = db.getEntryById(id, input.workspace_id)
+                        const entry = db.getEntryById(id, wsId)
                         if (entry) {
                             await sendProgress(progress, 1, 2, 'Generating embeddings...')
                             await context.vectorManager?.addEntry(entry)
@@ -112,7 +114,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             'memory://recent'
                         )
                     }
-                    const finalEntry = db.getEntryById(id, input.workspace_id) ?? undefined
+                    const finalEntry = db.getEntryById(id, wsId) ?? undefined
 
                     let sharedWithTeam = false
                     let author: string | undefined
@@ -147,7 +149,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
                                 author: author,
-                                workspaceId: input.workspace_id,
+                                workspaceId: wsId,
                             })
                             context.teamDb.flushSave()
                             sharedWithTeam = true
@@ -224,7 +226,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
-                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, input.workspace_id)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, wsId)
                     return {
                         success: true,
                         entries: result.entries,

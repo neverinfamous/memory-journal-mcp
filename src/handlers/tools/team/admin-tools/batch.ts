@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
+import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
 import {
     TeamBatchCreateEntriesSchema,
@@ -85,7 +86,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             prStatus: e.pr_status,
                             isPersonal: false,
                             author: e.author ?? currentUser,
-                            workspaceId: e.workspace_id ?? input.workspace_id,
+                            workspaceId: resolveWorkspaceId(e.workspace_id ?? input.workspace_id, e.project_number ?? input.project_number, context.config),
                         }
                     })
 
@@ -162,7 +163,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const notFound: number[] = []
                     
                     for (const u of input.updates) {
-                        const existing = teamDb.getEntryById(u.entry_id, u.workspace_id ?? input.workspace_id)
+                        const existing = teamDb.getEntryById(u.entry_id, resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config))
                         
                         const projectNumber = u.project_number ?? input.project_number ?? existing?.projectNumber
                         if (projectNumber === undefined || projectNumber === null) {
@@ -210,7 +211,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             workflowStatus: u.workflow_status,
                             isArchived: u.is_archived,
                             expectedVersion: u.expected_version,
-                            workspaceId: u.workspace_id ?? input.workspace_id,
+                            workspaceId: resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config),
                         })
                     }
 
@@ -305,7 +306,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const notFound: number[] = []
                     
                     for (const id of input.entry_ids) {
-                        const existing = teamDb.getEntryById(id, input.workspace_id)
+                        const existing = teamDb.getEntryById(id, resolveWorkspaceId(input.workspace_id, input.project_number, context.config))
                         if (existing?.projectNumber !== projectNumber) {
                             notFound.push(id)
                             continue

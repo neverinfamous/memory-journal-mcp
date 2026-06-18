@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { coerceSignificanceAlias } from '../schemas.js'
 import {
     UpdateEntrySchema,
@@ -40,6 +41,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = UpdateEntrySchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const entry = db.updateEntry(input.entry_id, {
                         content: input.content,
                         entryType: input.entry_type,
@@ -59,7 +61,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         isArchived: input.is_archived,
                         expectedVersion: input.expected_version,
                         autoContext: input.auto_context,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
                     if (!entry) {
                         return {
@@ -101,9 +103,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent, expected_version, workspace_id } = DeleteEntrySchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
 
                     if (expected_version !== undefined) {
-                        const existing = db.getEntryByIdIncludeDeleted(entry_id, workspace_id);
+                        const existing = db.getEntryByIdIncludeDeleted(entry_id, wsId);
                         if (existing && existing.version !== expected_version) {
                             return {
                                 success: false,

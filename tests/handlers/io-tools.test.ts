@@ -100,7 +100,7 @@ describe('getIoTools', () => {
 
         expect(result['format']).toBe('json')
         expect(result['entries']).toHaveLength(3)
-        expect(context.db.getRecentEntries).toHaveBeenCalledWith(100, undefined, undefined, undefined, undefined, undefined) // default limit
+        expect(context.db.getRecentEntries).toHaveBeenCalledWith(100, undefined, undefined, undefined, undefined, 'default') // default limit
     })
 
     it('should respect custom limit', async () => {
@@ -110,7 +110,7 @@ describe('getIoTools', () => {
 
         await handler({ limit: 10 })
 
-        expect(context.db.getRecentEntries).toHaveBeenCalledWith(10, undefined, undefined, undefined, undefined, undefined)
+        expect(context.db.getRecentEntries).toHaveBeenCalledWith(10, undefined, undefined, undefined, undefined, 'default')
     })
 
     // ========================================================================

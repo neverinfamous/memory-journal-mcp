@@ -3,6 +3,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { AggregateMcpError } from '../../../types/errors.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { logger } from '../../../utils/logger.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
@@ -43,6 +44,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ExportEntriesSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
                     const limit = input.limit ?? 100
 
                     await sendProgress(progress, 0, 2, 'Fetching entries...')
@@ -60,17 +62,17 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit: fetchLimit,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         }).entries
                     } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         // Tags/types filter: use a wide date range to scan the full database
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit: fetchLimit,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         }).entries
                     } else {
-                        entries = db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, input.workspace_id).entries
+                        entries = db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId).entries
                     }
 
                     // Post-filter by entry_types, then cap to requested limit
@@ -153,6 +155,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ExportMarkdownSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -168,16 +171,16 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         }).entries
                     } else if (input.tags && input.tags.length > 0) {
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         }).entries
                     } else {
-                        entries = db.getRecentEntries(limit, undefined, undefined, undefined, undefined, input.workspace_id).entries
+                        entries = db.getRecentEntries(limit, undefined, undefined, undefined, undefined, wsId).entries
                     }
 
                     // Post-filter by entry_types
@@ -245,6 +248,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportMarkdownSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -260,7 +264,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         {
                             dry_run: input.dry_run,
                             limit: input.limit,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         },
                         context.vectorManager,
                         allowedRoots
@@ -308,6 +312,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportExternalSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
 
                     // Determine allowed roots
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -375,7 +380,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
 
                     const result = await processImportBatch(parsedFiles, db, {
                         dry_run: input.dry_run,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     }, context.vectorManager)
 
                     // Merge conversion phase errors

@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -208,12 +209,13 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { group_by, start_date, end_date, project_breakdown, workspace_id } =
                         GetStatisticsSchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
                     const stats = db.getStatistics(
                         group_by,
                         start_date,
                         end_date,
                         project_breakdown,
-                        workspace_id
+                        wsId
                     )
                     return { success: true, ...(stats as object), groupBy: group_by }
                 } catch (err) {
@@ -238,13 +240,14 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
 
                     const results = db.getCrossProjectInsights({
                         startDate: input.start_date,
                         endDate: input.end_date,
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
 
                     if (results.projects.length === 0) {

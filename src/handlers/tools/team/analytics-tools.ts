@@ -6,6 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import {
     TeamGetStatisticsSchema,
@@ -51,11 +52,12 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const { group_by, workspace_id } = TeamGetStatisticsSchema.parse(params)
-                    const stats = teamDb.getStatistics(group_by, undefined, undefined, undefined, workspace_id)
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const stats = teamDb.getStatistics(group_by, undefined, undefined, undefined, wsId)
 
                     let authors: { author: string; count: number }[] = []
                     try {
-                        authors = teamDb.getAuthorStatistics(workspace_id)
+                        authors = teamDb.getAuthorStatistics(wsId)
                     } catch {
                         // Author column may not exist yet
                     }
@@ -91,13 +93,14 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamCrossProjectInsightsSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
 
                     const insights = teamDb.getCrossProjectInsights({
                         startDate: input.start_date,
                         endDate: input.end_date,
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
 
                     if (insights.projects.length === 0) {

@@ -11,6 +11,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
 import {
     PassTeamFlagSchema,
@@ -64,6 +65,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = PassTeamFlagSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     const projectNumber = input.project_number
                     if (projectNumber === undefined || projectNumber === null) {
@@ -144,7 +146,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         projectNumber: projectNumber,
                         issueNumber: input.issue_number,
                         author,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
 
                     teamDb.flushSave()
@@ -193,7 +195,8 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = ResolveTeamFlagSchema.parse(params)
-                    const entry = teamDb.getEntryById(input.flag_id, input.workspace_id)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const entry = teamDb.getEntryById(input.flag_id, wsId)
 
                     if (!entry) {
                         return {
@@ -264,7 +267,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     teamDb.updateEntry(input.flag_id, {
                         autoContext: JSON.stringify(updatedContext),
                         content: updatedContent,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
                     teamDb.flushSave()
 
@@ -274,7 +277,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
                     }
 
-                    const updatedEntry = teamDb.getEntryById(input.flag_id, input.workspace_id)
+                    const updatedEntry = teamDb.getEntryById(input.flag_id, wsId)
                     const author = fetchAuthor(teamDb, input.flag_id)
 
                     return {

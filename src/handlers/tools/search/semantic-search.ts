@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { passMetadataFilters } from './helpers.js'
 import { SemanticSearchSchema, SemanticSearchSchemaMcp, SemanticSearchOutputSchema } from './schemas.js'
@@ -26,6 +27,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = SemanticSearchSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Validate: at least one of query or entry_id must be provided
                     if (!input.query && input.entry_id === undefined) {
@@ -106,7 +108,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         endDate: input.end_date,
                         includeTeam: input.include_team,
                         includeArchived: input.include_archived,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     }
 
                     if (input.tags && input.tags.length > 0) {

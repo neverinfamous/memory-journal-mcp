@@ -99,6 +99,7 @@ describe('Cross-Team Search Handler', () => {
                 endDate: undefined,
                 fuzzy_match: false,
                 includeArchived: false,
+                workspaceId: 'default',
             }
         )
     })

@@ -5,6 +5,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
 import { injectProjectNames } from '../index.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
 import { ConfigurationError } from '../../../types/errors.js'
@@ -91,8 +92,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    let workspaceId = input.workspace_id
-                    workspaceId ??= context.config?.defaultWorkspaceId
+                    const numericProjectId = typeof projectId === 'number' ? projectId : undefined
+                    const workspaceId = resolveWorkspaceId(input.workspace_id, numericProjectId, context.config)
 
                     let sessionContext = context
 

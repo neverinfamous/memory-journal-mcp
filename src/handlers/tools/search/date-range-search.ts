@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { calcPerDbLimit, mergeAndDedup } from './helpers.js'
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
@@ -23,6 +24,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
                     if (input.start_date > input.end_date) {
@@ -60,7 +62,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                         sortBy: input.sort_by,
                         cursor: personalCursor,
                         includeArchived: input.include_archived,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
 
                     // Cross-database merge when team DB is available
@@ -80,7 +82,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                                 sortBy: input.sort_by,
                                 cursor: teamCursor,
                                 includeArchived: input.include_archived,
-                                workspaceId: input.workspace_id,
+                                workspaceId: wsId,
                             }
                         )
                         const merged = mergeAndDedup(

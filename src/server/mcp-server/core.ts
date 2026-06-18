@@ -21,22 +21,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     const filterConfig = configManager.getConfig().toolFilterConfig;
     
-    let derivedWorkspaceId = options.defaultWorkspaceId;
-    if (!derivedWorkspaceId) {
-        const cwd = process.cwd().replace(/\\/g, '/').toLowerCase();
-        if (options.projectRegistry) {
-            for (const [key, project] of Object.entries(options.projectRegistry)) {
-                if (project.path && cwd.startsWith(project.path.replace(/\\/g, '/').toLowerCase())) {
-                    derivedWorkspaceId = key;
-                    break;
-                }
-            }
-        }
-    }
-
     const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber,
-        defaultWorkspaceId: derivedWorkspaceId,
+        defaultWorkspaceId: options.defaultWorkspaceId,
         projectRegistry: options.projectRegistry,
         additionalTeamDbs: options.additionalTeamDbs,
         flagVocabulary: options.flagVocabulary,

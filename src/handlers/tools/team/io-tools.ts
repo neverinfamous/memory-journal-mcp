@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
@@ -220,6 +221,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamExportMarkdownSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -242,14 +244,14 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit,
                             projectNumber: input.project_number,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         })
                         entries = result.entries
                     } else {
                         const result = teamDb.searchEntries('', {
                             limit,
                             projectNumber: input.project_number,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         })
                         entries = result.entries
                     }
@@ -311,6 +313,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamImportMarkdownSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -335,7 +338,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             limit: input.limit,
                             author,
                             project_number: input.project_number,
-                            workspaceId: input.workspace_id,
+                            workspaceId: wsId,
                         },
                         context.teamVectorManager,
                         allowedRoots
@@ -371,6 +374,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamImportExternalSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
 
@@ -441,7 +445,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         limit: input.limit,
                         author,
                         project_number: input.project_number,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     }, context.teamVectorManager)
 
                     if (errors.length > 0) {

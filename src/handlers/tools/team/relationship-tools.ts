@@ -6,6 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import {
     TeamLinkEntriesSchema,
@@ -51,6 +52,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         project_number,
                         workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {
@@ -66,7 +68,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     // Verify both entries exist and belong to the project
-                    const fromEntry = teamDb.getEntryById(from_entry_id, workspace_id)
+                    const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
                     if (fromEntry?.projectNumber !== project_number) {
                         return {
                             success: false,
@@ -78,7 +80,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    const toEntry = teamDb.getEntryById(to_entry_id, workspace_id)
+                    const toEntry = teamDb.getEntryById(to_entry_id, wsId)
                     if (toEntry?.projectNumber !== project_number) {
                         return {
                             success: false,
@@ -150,12 +152,13 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     const { entry_id, tag, depth, workspace_id } = TeamVisualizeRelationshipsSchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        const fromEntry = teamDb.getEntryById(entry_id, workspace_id)
+                        const fromEntry = teamDb.getEntryById(entry_id, wsId)
                         if (!fromEntry) {
                             return {
                                 success: false,
@@ -192,12 +195,12 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         const { entries: tagEntries } = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {
                             tags: [tag],
                             limit: 50,
-                            workspaceId: workspace_id,
+                            workspaceId: wsId,
                         })
                         entryIds = tagEntries.map((e) => e.id)
                     } else {
                         // Default: recent entries
-                        const { entries: recent } = teamDb.getRecentEntries(20, undefined, undefined, undefined, undefined, workspace_id)
+                        const { entries: recent } = teamDb.getRecentEntries(20, undefined, undefined, undefined, undefined, wsId)
                         entryIds = recent.map((e) => e.id)
                     }
 
@@ -216,7 +219,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const seenEdges = new Set<string>()
 
                     for (const eid of entryIds) {
-                        const entry = teamDb.getEntryById(eid, workspace_id)
+                        const entry = teamDb.getEntryById(eid, wsId)
                         if (entry) {
                             let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
                             if (entry.content.length > 40) label += '...'

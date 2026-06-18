@@ -12,6 +12,7 @@ import { DatabaseAdapterFactory } from '../../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { ConfigurationError, ValidationError } from '../../../types/errors.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { mergeMultipleSources, type EntryWithSource } from './helpers.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -99,6 +100,7 @@ export async function handleCrossTeamSearch(
     context: ToolContext
 ): Promise<z.infer<typeof CrossTeamSearchOutputSchema>> {
     const { config } = context
+    const wsId = resolveWorkspaceId(args.workspace_id, undefined, config)
 
     // 1. Resolve configured additional team DBs
     const additionalDbs: Record<string, string> = { ...(config?.additionalTeamDbs ?? {}) }
@@ -151,7 +153,7 @@ export async function handleCrossTeamSearch(
             endDate: args.end_date,
             fuzzy_match: args.fuzzy_match,
             includeArchived: args.include_archived,
-            workspaceId: args.workspace_id,
+            workspaceId: wsId,
         })
 
         // Tag entries with their source

@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
+import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
 import {
     TeamUpdateEntrySchema,
@@ -59,9 +60,10 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamUpdateEntrySchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Verify entry exists
-                    const existing = teamDb.getEntryById(input.entry_id, input.workspace_id)
+                    const existing = teamDb.getEntryById(input.entry_id, wsId)
                     if (!existing) {
                         return {
                             success: false,
@@ -121,7 +123,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         isArchived: input.is_archived,
                         expectedVersion: input.expected_version,
                         autoContext: input.auto_context,
-                        workspaceId: input.workspace_id,
+                        workspaceId: wsId,
                     })
 
                     triggerTeamNotifications(context)
