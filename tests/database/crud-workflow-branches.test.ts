@@ -52,11 +52,24 @@ function createTestDb() {
             workflow_name TEXT DEFAULT NULL,
             workflow_status TEXT DEFAULT NULL,
             significance_type TEXT DEFAULT NULL,
+            impact_score REAL DEFAULT NULL,
+            trust_score REAL DEFAULT NULL,
+            validation_status TEXT DEFAULT 'none',
             auto_context TEXT DEFAULT NULL,
             share_with_team INTEGER DEFAULT 0,
             is_archived INTEGER DEFAULT 0,
             version INTEGER DEFAULT 1,
             workspace_id TEXT DEFAULT 'default'
+        );
+        CREATE TABLE entry_anchors (
+            id INTEGER PRIMARY KEY,
+            entry_id INTEGER NOT NULL,
+            anchor_path TEXT NOT NULL,
+            anchor_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (entry_id) REFERENCES memory_journal (id) ON DELETE CASCADE
         );
         CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, usage_count INTEGER DEFAULT 0);
         CREATE TABLE entry_tags (entry_id INTEGER, tag_id INTEGER);

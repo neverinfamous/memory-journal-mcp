@@ -6,6 +6,8 @@ import type {
     RelationshipType,
     ImportanceResult,
     EntryRevision,
+    AnchorStatus,
+    Anchor,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
 import type {
@@ -154,6 +156,14 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             }
             return success
         })
+    }
+
+    updateAnchorStatus(id: number, status: AnchorStatus): void {
+        this.entriesMgr.updateAnchorStatus(id, status)
+    }
+
+    getAnchorsByEntryId(entryId: number): Anchor[] {
+        return this.entriesMgr.getAnchorsByEntryId(entryId)
     }
 
     // Team Membership (RBAC)
@@ -670,6 +680,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
             WHERE e.deleted_at IS NULL
               AND julianday('now') - julianday(e.timestamp) > ${String(options.pruneOlderThanDays)}
               AND ${importanceExpr} < ${String(options.importanceThreshold)}
@@ -680,6 +691,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
             WHERE e.deleted_at IS NULL AND e.is_archived = 0
               AND julianday('now') - julianday(e.timestamp) > ${String(options.archiveOlderThanDays)}
               AND ${importanceExpr} < ${String(options.importanceThreshold)}

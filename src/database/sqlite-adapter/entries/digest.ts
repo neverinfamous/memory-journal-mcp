@@ -167,6 +167,7 @@ export function computeDigest(db: Database, workspaceId = 'default'): DigestSnap
             SUBSTR(e.content, 1, ${String(PREVIEW_LENGTH)}) AS preview
         FROM memory_journal e
         LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+        LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
         WHERE e.deleted_at IS NULL${workspaceFilterE}
         ORDER BY importance_score DESC
         LIMIT ${String(TOP_IMPORTANCE_COUNT)}`,

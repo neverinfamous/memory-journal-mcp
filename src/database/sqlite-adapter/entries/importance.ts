@@ -33,6 +33,18 @@ export function buildImportanceCte(): string {
                 SELECT to_entry_id AS entry_id, relationship_type FROM relationships
             )
             GROUP BY entry_id
+        ),
+        anchor_stats AS (
+            SELECT entry_id,
+                   MIN(
+                       CASE status
+                           WHEN 'invalidated' THEN 1
+                           WHEN 'stale' THEN 2
+                           ELSE 3
+                       END
+                   ) as worst_status_rank
+            FROM entry_anchors
+            GROUP BY entry_id
         )
     `
 }
@@ -44,10 +56,14 @@ export function buildImportanceCte(): string {
 export function buildImportanceSqlExpression(): string {
     const w = IMPORTANCE_WEIGHTS
     return `(
-    CASE WHEN e.significance_type IS NOT NULL THEN ${String(w.significance)} ELSE 0.0 END
-    + MIN(COALESCE(rs.rel_count, 0) * 1.0 / ${String(MAX_RELATIONSHIP_SCORE_AT)}, 1.0) * ${String(w.relationships)}
-    + MIN(COALESCE(rs.causal_count, 0) * 1.0 / ${String(MAX_CAUSAL_SCORE_AT)}, 1.0) * ${String(w.causal)}
-    + MAX(0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0) * ${String(w.recency)}
+    (
+        MAX(COALESCE(e.impact_score, 0.0), CASE WHEN e.significance_type IS NOT NULL THEN 0.5 ELSE 0.0 END) * ${String(w.significance)}
+        + MIN(COALESCE(rs.rel_count, 0) * 1.0 / ${String(MAX_RELATIONSHIP_SCORE_AT)}, 1.0) * ${String(w.relationships)}
+        + MIN(COALESCE(rs.causal_count, 0) * 1.0 / ${String(MAX_CAUSAL_SCORE_AT)}, 1.0) * ${String(w.causal)}
+        + MAX(0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0) * ${String(w.recency)}
+    ) 
+    * CASE COALESCE(ans.worst_status_rank, 3) WHEN 1 THEN 0.1 WHEN 2 THEN 0.8 ELSE 1.0 END
+    * (0.5 + COALESCE(e.trust_score, 0.5))
   )`
 }
 
@@ -60,16 +76,25 @@ export function calculateImportance(
 
     const stmt = db.prepare(`SELECT
         m.significance_type as significanceType,
+        m.impact_score as impactScore,
+        m.trust_score as trustScore,
         m.timestamp,
         (SELECT COUNT(*) FROM relationships
          WHERE from_entry_id = ? OR to_entry_id = ?) AS rel_count,
         (SELECT COUNT(*) FROM relationships
          WHERE (from_entry_id = ? OR to_entry_id = ?)
-         AND relationship_type IN ('blocked_by', 'resolved', 'caused')) AS causal_count
+         AND relationship_type IN ('blocked_by', 'resolved', 'caused')) AS causal_count,
+        (SELECT MIN(
+            CASE status
+                WHEN 'invalidated' THEN 1
+                WHEN 'stale' THEN 2
+                ELSE 3
+            END
+         ) FROM entry_anchors WHERE entry_id = ?) AS worst_status_rank
     FROM memory_journal m
     WHERE m.id = ? AND m.deleted_at IS NULL`)
 
-    const row = rowToObject(stmt.get(entryId, entryId, entryId, entryId, entryId))
+    const row = rowToObject(stmt.get(entryId, entryId, entryId, entryId, entryId, entryId))
 
     if (!row) {
         return {
@@ -79,11 +104,14 @@ export function calculateImportance(
     }
 
     const significanceType = row['significanceType'] as string | null
+    const impactScore = (row['impactScore'] as number) ?? 0.0
+    const trustScore = (row['trustScore'] as number) ?? 0.5
     const timestamp = row['timestamp'] as string
     const relCount = (row['rel_count'] as number) ?? 0
     const causalCount = (row['causal_count'] as number) ?? 0
+    const worstStatusRank = (row['worst_status_rank'] as number) ?? 3
 
-    const significanceRaw = significanceType ? 1.0 : 0.0
+    const significanceRaw = Math.max(impactScore, significanceType ? 1.0 : 0.0)
     const relationshipsRaw = Math.min(relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
     const causalRaw = Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
 
@@ -92,6 +120,10 @@ export function calculateImportance(
     const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
     const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
+    const anchorMultiplier = worstStatusRank === 1 ? 0.1 : (worstStatusRank === 2 ? 0.8 : 1.0)
+    const trustMultiplier = 0.5 + trustScore
+    const totalModifier = anchorMultiplier * trustMultiplier
+
     const w = IMPORTANCE_WEIGHTS
 
     const breakdown: ImportanceBreakdown = {
@@ -99,14 +131,15 @@ export function calculateImportance(
         relationships: round2(relationshipsRaw * w.relationships),
         causal: round2(causalRaw * w.causal),
         recency: round2(recencyRaw * w.recency),
+        trustModifier: round2(totalModifier),
     }
 
-    const score = round2(
-        significanceRaw * w.significance +
+    const baseScore = significanceRaw * w.significance +
             relationshipsRaw * w.relationships +
             causalRaw * w.causal +
             recencyRaw * w.recency
-    )
+
+    const score = round2(baseScore * totalModifier)
 
     return { score, breakdown }
 }
@@ -145,21 +178,44 @@ export function getEntriesByIdsWithImportance(
         causal_count: number
     }[]
 
-    const relData = new Map<number, { relCount: number; causalCount: number }>()
+    const anchorSql = `
+        SELECT entry_id,
+               MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
+        FROM entry_anchors WHERE entry_id IN (${marks})
+        GROUP BY entry_id
+    `
+    const anchorRows = db.prepare(anchorSql).all(...validIds) as {
+        entry_id: number
+        worst_status_rank: number
+    }[]
+
+    const relData = new Map<number, { relCount: number; causalCount: number; worstStatusRank: number }>()
+    for (const id of validIds) {
+        relData.set(id, { relCount: 0, causalCount: 0, worstStatusRank: 3 })
+    }
+
     for (const row of rows) {
-        relData.set(row.entry_id, {
-            relCount: row.rel_count,
-            causalCount: row.causal_count,
-        })
+        const d = relData.get(row.entry_id)
+        if (d) {
+            d.relCount = row.rel_count
+            d.causalCount = row.causal_count
+        }
+    }
+    
+    for (const row of anchorRows) {
+        const d = relData.get(row.entry_id)
+        if (d) {
+            d.worstStatusRank = row.worst_status_rank
+        }
     }
 
     const now = new Date()
     const w = IMPORTANCE_WEIGHTS
 
     for (const [id, entry] of entriesMap.entries()) {
-        const stats = relData.get(id) ?? { relCount: 0, causalCount: 0 }
+        const stats = relData.get(id) ?? { relCount: 0, causalCount: 0, worstStatusRank: 3 }
 
-        const significanceRaw = entry.significanceType ? 1.0 : 0.0
+        const significanceRaw = Math.max(entry.impactScore ?? 0.0, entry.significanceType ? 0.5 : 0.0)
         const relationshipsRaw = Math.min(stats.relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
         const causalRaw = Math.min(stats.causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
 
@@ -167,19 +223,24 @@ export function getEntriesByIdsWithImportance(
         const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
         const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
+        const anchorMultiplier = stats.worstStatusRank === 1 ? 0.1 : (stats.worstStatusRank === 2 ? 0.8 : 1.0)
+        const trustMultiplier = 0.5 + (entry.trustScore ?? 0.5)
+        const totalModifier = anchorMultiplier * trustMultiplier
+
         const breakdown: ImportanceBreakdown = {
             significance: round2(significanceRaw * w.significance),
             relationships: round2(relationshipsRaw * w.relationships),
             causal: round2(causalRaw * w.causal),
             recency: round2(recencyRaw * w.recency),
+            trustModifier: round2(totalModifier),
         }
 
-        const score = round2(
-            significanceRaw * w.significance +
+        const baseScore = significanceRaw * w.significance +
                 relationshipsRaw * w.relationships +
                 causalRaw * w.causal +
                 recencyRaw * w.recency
-        )
+                
+        const score = round2(baseScore * totalModifier)
 
         result.set(id, { entry, importance: { score, breakdown } })
     }

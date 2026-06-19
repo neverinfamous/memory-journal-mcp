@@ -44,6 +44,7 @@ export function getRecentEntries(
             SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
             WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND e.workspace_id = ?' : ''}
             ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
         `)
@@ -288,7 +289,7 @@ function buildSearchQuery(
     let joinClause = ''
     if (useImportance) {
         ctePrefix = `WITH ${buildImportanceCte()}`
-        joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id`
+        joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
     }
 
     const snippetCol = (useFts && options?.includeHighlights) ? ", snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet" : ""
@@ -636,6 +637,7 @@ export function searchByDateRange(
     `
     if (useImportance) {
         query += `LEFT JOIN rel_stats rs ON e.id = rs.entry_id `
+        query += `LEFT JOIN anchor_stats ans ON e.id = ans.entry_id `
     }
 
     if (options?.tags && options.tags.length > 0) {

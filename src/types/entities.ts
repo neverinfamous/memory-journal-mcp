@@ -97,9 +97,29 @@ export interface JournalEntry {
     workflowStatus?: string | null
     // Analytics & search
     importanceScore?: number
+    trustScore?: number
+    impactScore?: number
+    validationStatus?: 'passed' | 'failed' | 'none'
     // Concurrency versioning
     version: number
     workspaceId?: string
+}
+
+/**
+ * Anchor status representing the validity of an external reference
+ */
+export type AnchorStatus = 'pending' | 'valid' | 'stale' | 'invalidated' | 'unresolvable'
+
+/**
+ * Anchor entity representing a referenced file or dependency
+ */
+export interface Anchor {
+    id?: number
+    entryId: number
+    anchorPath: string
+    anchorType: string
+    status: AnchorStatus
+    lastCheckedAt?: string
 }
 
 /**
@@ -148,7 +168,7 @@ export interface Embedding {
  * Importance scoring breakdown showing weighted component contributions
  */
 export interface ImportanceBreakdown {
-    /** Significance type contribution (weight: 0.30) */
+    /** Significance type and impact contribution (weight: 0.30) */
     significance: number
     /** Relationship count contribution (weight: 0.35) */
     relationships: number
@@ -156,6 +176,8 @@ export interface ImportanceBreakdown {
     causal: number
     /** Recency decay contribution (weight: 0.15) */
     recency: number
+    /** Trust and anchor validity contribution (weight modifier) */
+    trustModifier?: number
 }
 
 /**

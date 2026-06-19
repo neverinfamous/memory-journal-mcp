@@ -34,6 +34,8 @@ export type {
     ImportanceBreakdown,
     ImportanceResult,
     EntryRevision,
+    Anchor,
+    AnchorStatus,
 } from './entities.js'
 export type {
     GitHubProject,

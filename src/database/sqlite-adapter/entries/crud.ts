@@ -2,6 +2,7 @@ import type { JournalEntry, EntryType, EntryRevision } from '../../../types/inde
 import type { CreateEntryInput } from '../../core/schema.js'
 import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject, rowsToEntries } from './shared.js'
 import { ConflictError } from '../../../types/errors.js'
+import { insertAnchors } from './anchors.js'
 
 class BatchTransactionError extends Error {
     constructor(public readonly batchError: { index?: number; id?: number; error: Error }) {
@@ -49,7 +50,10 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             'workflow_name',
             'workflow_status',
             'is_archived',
-            'workspace_id'
+            'workspace_id',
+            'trust_score',
+            'validation_status',
+            'impact_score'
         ]
         const values = [
             input.entryType ?? 'personal_reflection',
@@ -69,7 +73,10 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.workflowName || null,
             input.workflowStatus || null,
             input.isArchived ? 1 : 0,
-            input.workspaceId ?? 'default'
+            input.workspaceId ?? 'default',
+            input.trustScore ?? 0.5,
+            input.validationStatus ?? 'none',
+            input.impactScore ?? 0.0
         ]
 
         if (input.author !== undefined) {
@@ -93,6 +100,11 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
                     .replace(/^-+|-+$/g, '')
             )
             tagsMgr.linkTagsToEntry(insertId, formattedTags)
+        }
+
+        // Link anchors
+        if (input.anchors && input.anchors.length > 0) {
+            insertAnchors(context, insertId, input.anchors)
         }
     })
 
@@ -212,6 +224,9 @@ export function updateEntry(
         isArchived?: boolean
         expectedVersion?: number
         workspaceId?: string
+        trustScore?: number
+        validationStatus?: 'passed' | 'failed' | 'none'
+        impactScore?: number
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
@@ -280,6 +295,19 @@ export function updateEntry(
             updates.push(`${snakeKey} = ?`)
             values.push(input[key] ?? null)
         }
+    }
+
+    if (input.trustScore !== undefined) {
+        updates.push('trust_score = ?')
+        values.push(input.trustScore)
+    }
+    if (input.validationStatus !== undefined) {
+        updates.push('validation_status = ?')
+        values.push(input.validationStatus)
+    }
+    if (input.impactScore !== undefined) {
+        updates.push('impact_score = ?')
+        values.push(input.impactScore)
     }
 
     if (updates.length > 0) {
@@ -413,6 +441,9 @@ export function updateEntries(
         isArchived?: boolean
         expectedVersion?: number
         workspaceId?: string
+        trustScore?: number
+        validationStatus?: 'passed' | 'failed' | 'none'
+        impactScore?: number
     }[]
 ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
     if (updates.length === 0) return { updated: [], notFound: [], errors: [] }

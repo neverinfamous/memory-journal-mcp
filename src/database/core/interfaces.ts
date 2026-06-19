@@ -6,6 +6,8 @@ import type {
     RelationshipType,
     ImportanceResult,
     EntryRevision,
+    AnchorStatus,
+    Anchor,
 } from '../../types/index.js'
 import type { CreateEntryInput } from './schema.js'
 
@@ -147,6 +149,8 @@ export interface IDatabaseAdapter {
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
+    getAnchorsByEntryId(entryId: number): Anchor[]
+    updateAnchorStatus(id: number, status: AnchorStatus): void
 
     // Team Membership (RBAC)
     addTeamMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember

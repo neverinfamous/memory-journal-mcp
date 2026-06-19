@@ -1,4 +1,4 @@
-import type { JournalEntry, EntryType, ImportanceResult, EntryRevision } from '../../../types/index.js'
+import type { JournalEntry, EntryType, ImportanceResult, EntryRevision, AnchorStatus, Anchor } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { TagsManager } from '../tags.js'
@@ -30,6 +30,7 @@ import {
 export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
 import { calculateImportance, getEntriesByIdsWithImportance } from './importance.js'
 import { getStatistics } from './statistics.js'
+import { updateAnchorStatus, getAnchorsByEntryId } from './anchors.js'
 
 export class EntriesManager {
     private sharedContext: EntriesSharedContext
@@ -232,5 +233,13 @@ export class EntriesManager {
 
     getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number } {
         return getDeletedEntries(this.sharedContext, options)
+    }
+
+    updateAnchorStatus(id: number, status: AnchorStatus): void {
+        updateAnchorStatus(this.sharedContext, id, status)
+    }
+
+    getAnchorsByEntryId(entryId: number): Anchor[] {
+        return getAnchorsByEntryId(this.sharedContext, entryId)
     }
 }

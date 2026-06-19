@@ -6,6 +6,8 @@ import type {
     RelationshipType,
     ImportanceResult,
     EntryRevision,
+    AnchorStatus,
+    Anchor,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
 import type {
@@ -152,6 +154,14 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             }
             return success
         })
+    }
+
+    updateAnchorStatus(id: number, status: AnchorStatus): void {
+        this.entriesMgr.updateAnchorStatus(id, status)
+    }
+
+    getAnchorsByEntryId(entryId: number): Anchor[] {
+        return this.entriesMgr.getAnchorsByEntryId(entryId)
     }
 
     // Team Membership (RBAC)

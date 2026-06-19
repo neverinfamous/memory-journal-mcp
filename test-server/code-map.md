@@ -302,8 +302,8 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **analytics** | `get_statistics`, `get_cross_project_insights` |
 | **backup** | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
 | **codemode** | `mj_execute_code` |
-| **core** | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `trigger_progress`, `test_error_handling` |
-| **git** | `get_commit_history`, `search_commits`, `get_release_info`, `get_unreleased_commits`, `analyze_commit_patterns` |
+| **core** | `mark_anchors_stale`, `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `trigger_progress`, `test_error_handling` |
+| **git** | `get_commit_history`, `search_commits`, `get_release_info`, `get_unreleased_commits`, `analyze_commit_patterns`, `check_entry_staleness` |
 | **github** | `get_copilot_reviews`, `get_repo_insights`, `create_github_issue_with_entry`, `close_github_issue_with_entry`, `get_kanban_board`, `move_kanban_item`, `add_kanban_item`, `delete_kanban_item`, `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`, `get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context` |
 | **io** | `export_entries`, `export_markdown`, `import_markdown`, `import_external` |
 | **relationships** | `link_entries`, `visualize_relationships` |

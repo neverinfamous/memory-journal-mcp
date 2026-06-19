@@ -34,8 +34,25 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     workflow_run_id INTEGER,
     workflow_name TEXT,
     workflow_status TEXT,
-    workspace_id TEXT DEFAULT 'default'
+    workspace_id TEXT DEFAULT 'default',
+    trust_score REAL DEFAULT 0.5,
+    validation_status TEXT DEFAULT 'none',
+    impact_score REAL DEFAULT 0.0
 );
+
+-- Anchor references table
+CREATE TABLE IF NOT EXISTS entry_anchors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    anchor_path TEXT NOT NULL,
+    anchor_type TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    last_checked_at TEXT,
+    FOREIGN KEY (entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_entry_anchors_entry_id ON entry_anchors(entry_id);
+CREATE INDEX IF NOT EXISTS idx_entry_anchors_anchor_path ON entry_anchors(anchor_path);
 
 -- Tags table
 CREATE TABLE IF NOT EXISTS tags (
@@ -178,6 +195,10 @@ export interface CreateEntryInput {
     workflowStatus?: 'queued' | 'in_progress' | 'completed'
     author?: string
     workspaceId?: string
+    trustScore?: number
+    impactScore?: number
+    validationStatus?: 'passed' | 'failed' | 'none'
+    anchors?: { anchorPath: string; anchorType: string }[]
 }
 
 /**
