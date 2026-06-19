@@ -177,6 +177,9 @@ export const EntryOutputSchema = z
             .number()
             .optional()
             .describe('Importance score (0.0-1.0), present when sort_by=importance'),
+        trustScore: z.number().optional(),
+        impactScore: z.number().optional(),
+        validationStatus: z.string().optional(),
         version: z.number().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

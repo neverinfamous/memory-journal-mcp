@@ -21,6 +21,7 @@ export const TOOL_GROUPS = {
         'test_error_handling',
         'trigger_progress',
         'list_tags',
+        'mark_anchors_stale',
     ],
     search: [
         'search_entries',
@@ -72,6 +73,7 @@ export const TOOL_GROUPS = {
         'get_release_info',
         'get_unreleased_commits',
         'analyze_commit_patterns',
+        'check_entry_staleness',
     ],
     backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
     team: [

@@ -51,6 +51,14 @@ export const CreateEntrySchema = z.preprocess(
         workflow_run_id: z.number().optional(),
         workflow_name: z.string().optional(),
         workflow_status: z.string().optional(),
+        impact_score: z.number().min(0).max(1).optional(),
+        trust_score: z.number().min(0).max(1).optional(),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional(),
+        anchors: z.array(z.object({
+            anchor_path: z.string(),
+            anchor_type: z.string(),
+            status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional().default('pending'),
+        })).optional(),
         share_with_team: z.boolean().optional().default(false),
         auto_context: z.string().optional(),
     }).strict().superRefine((data, ctx) => {
@@ -156,6 +164,14 @@ export const CreateEntrySchemaMcp = z.preprocess(
         workflow_run_id: relaxedNumber().optional(),
         workflow_name: z.string().optional(),
         workflow_status: z.string().optional(),
+        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
+        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional().describe('Current validation status of the entry.'),
+        anchors: z.array(z.object({
+            anchor_path: z.string(),
+            anchor_type: z.string(),
+            status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional().default('pending'),
+        })).optional().describe('Files or lines of code that this entry is fundamentally anchored to. If the anchor becomes stale/invalid, the entry importance score drops.'),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
     }).strict().superRefine((data, ctx) => {

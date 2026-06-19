@@ -25,7 +25,7 @@ import type { ProgressContext } from '../../utils/progress-utils.js'
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHistoryClient } from '../../git/index.js'
 
-import { getCoreTools } from './core/index.js'
+import { getCoreTools, getStalenessTools } from './core/index.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
@@ -464,6 +464,7 @@ export async function callTool(
 function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
     return [
         ...getCoreTools(context),
+        ...getStalenessTools(context),
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
         ...getRelationshipTools(context),

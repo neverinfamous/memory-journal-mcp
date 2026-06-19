@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ToolDefinition, ToolContext } from '../../types/index.js'
+import type { ToolDefinition, ToolContext, AnchorStatus } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { CommitAnalyzer } from '../../git/index.js'
@@ -181,6 +181,115 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     return formatHandlerError(err)
                 }
             },
+        },
+        {
+            name: 'check_entry_staleness',
+            title: 'Check Entry Staleness',
+            description: 'Check if a journal entry\'s anchors have been modified or deleted in git since the entry was created.',
+            group: 'git',
+            inputSchema: z.object({
+                entryId: z.number().describe('The ID of the journal entry to check')
+            }),
+            outputSchema: z.object({
+                success: z.boolean(),
+                results: z.array(z.object({
+                    anchorId: z.number(),
+                    path: z.string(),
+                    oldStatus: z.string(),
+                    newStatus: z.string(),
+                    commitsSince: z.number(),
+                    isDeleted: z.boolean()
+                })).optional(),
+                error: z.string().optional()
+            }).extend(ErrorFieldsMixin.shape),
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            handler: async (params: unknown) => {
+                try {
+                    const { db } = context
+                    if (!gitClient) throw new Error('Git client not available')
+                    const input = z.object({ entryId: z.number() }).parse(params)
+                    
+                    const entry = db.getEntryByIdIncludeDeleted(input.entryId)
+                    if (!entry) throw new Error(`Entry ${input.entryId} not found`)
+                    
+                    const anchors = db.getAnchorsByEntryId(input.entryId)
+                    if (anchors.length === 0) {
+                        return { success: true, results: [] }
+                    }
+
+                    const fs = await import('node:fs')
+                    const path = await import('node:path')
+                    const workspaceRoot = process.cwd() // Assuming running in workspace
+
+                    const results = []
+                    
+                    for (const anchor of anchors) {
+                        let isDeleted = false
+                        let commitsSince = 0
+                        let newStatus: AnchorStatus = anchor.status
+
+                        try {
+                            const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
+                            if (!fullPath.startsWith(workspaceRoot)) {
+                                throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
+                            }
+
+                            isDeleted = !fs.existsSync(fullPath)
+                            
+                            if (isDeleted) {
+                                newStatus = 'invalidated'
+                            } else {
+                                const commits = await gitClient.getCommitHistory({
+                                    path: anchor.anchorPath,
+                                    since: entry.timestamp
+                                })
+                                commitsSince = commits.length
+                                if (commitsSince > 0) {
+                                    newStatus = 'stale'
+                                } else if (anchor.status === 'pending') {
+                                    newStatus = 'valid'
+                                }
+                            }
+                            
+                            if (newStatus !== anchor.status) {
+                                if (anchor.id !== undefined) {
+                                    db.updateAnchorStatus(anchor.id, newStatus)
+                                }
+                            }
+
+                            results.push({
+                                anchorId: anchor.id,
+                                path: anchor.anchorPath,
+                                oldStatus: anchor.status,
+                                newStatus,
+                                commitsSince,
+                                isDeleted
+                            })
+                        } catch {
+                            results.push({
+                                anchorId: anchor.id,
+                                path: anchor.anchorPath,
+                                oldStatus: anchor.status,
+                                newStatus: 'unresolvable',
+                                commitsSince: 0,
+                                isDeleted: false
+                            })
+                            if (anchor.status !== 'unresolvable' && anchor.id !== undefined) {
+                                db.updateAnchorStatus(anchor.id, 'unresolvable')
+                            }
+                        }
+                    }
+
+                    return { success: true, results }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            }
         }
     ]
 }
