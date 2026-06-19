@@ -123,22 +123,9 @@ export function formatUserMessage(opts: {
     // ========================================================================
     // TABLE ROW 1: GitHub
     // ========================================================================
-    let gitStatus = ''
-    if (github?.localGitStatus) {
-        const { modified, untracked, isClean } = github.localGitStatus
-        if (isClean) {
-            gitStatus = ' · Git: Clean'
-        } else {
-            const parts: string[] = []
-            if (modified > 0) parts.push(`${String(modified)} modified`)
-            if (untracked > 0) parts.push(`${String(untracked)} untracked`)
-            gitStatus = ` · Git: ${parts.join(', ')}`
-        }
-    }
-
     const githubParts = [
         `**${escapeCell(repoName)}**`,
-        `${escapeCell(branchName)}${escapeCell(gitStatus)}`,
+        escapeCell(branchName),
         escapeCell(ciDisplay),
     ]
 
@@ -330,7 +317,7 @@ export function formatUserMessage(opts: {
     if (github?.copilotReviews) {
         const cr = github.copilotReviews
         insightsLines.push(
-            `Copilot: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
+            `GH Copilot Reviews: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
         )
     }
 
@@ -361,7 +348,8 @@ export function formatUserMessage(opts: {
                 .map(([type, count]) => `${type}: ${String(count)}`)
                 .join(', ') || 'none'
         
-        let graphText = `${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
+        const orphanAlert = graphSummary.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2 ? '🔴 ' : ''
+        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
         
         if (graphSummary.topHubs.length > 0) {
             const hubsStr = graphSummary.topHubs

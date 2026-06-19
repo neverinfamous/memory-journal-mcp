@@ -120,25 +120,25 @@ export function buildJournalContext(
         latestSessionSummary = sessionSummaries[0]
         const firstEntry = finalSummaryEntries[0]
         if (latestSessionSummary && firstEntry) {
-            let latestPreviewStr = cleanPreview(firstEntry.content, PREVIEW_LENGTH)
+            let latestPreviewStr = markUntrustedContentInline(cleanPreview(firstEntry.content, PREVIEW_LENGTH))
             
             const unfinished = extractSection(firstEntry.content, 'Unfinished / Blocked')
             const nextSession = extractSection(firstEntry.content, 'Context for Next Session')
             
             if (unfinished) {
-                latestPreviewStr += ` | Unfinished: ${cleanPreview(unfinished, 60)}`
+                latestPreviewStr += `<br> • Unfinished: ${markUntrustedContentInline(cleanPreview(unfinished, 60))}`
             }
             if (nextSession) {
-                latestPreviewStr += ` | Next Session: ${cleanPreview(nextSession, 60)}`
+                latestPreviewStr += `<br> • Next Session: ${markUntrustedContentInline(cleanPreview(nextSession, 60))}`
             }
             
             const commitCtx = parseSessionCommitContext(firstEntry.autoContext)
             if (commitCtx?.commits && commitCtx.commits.length > 0) {
                 const shortShas = commitCtx.commits.map(c => c.slice(0, 7)).join(', ')
-                latestPreviewStr += ` | Latest Session Commits: ${shortShas}`
+                latestPreviewStr += `<br> • Latest Session Commits: ${shortShas}`
             }
             
-            latestSessionSummary.preview = markUntrustedContentInline(latestPreviewStr)
+            latestSessionSummary.preview = latestPreviewStr
         }
     }
 
