@@ -6,6 +6,7 @@ import {
     EntryOutputSchema,
     relaxedNumber,
     MAX_QUERY_LIMIT,
+    healAgentHallucinations,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
@@ -13,7 +14,9 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 // ============================================================================
 
 /** Strict schema — used inside handler for structured Zod errors */
-export const SearchEntriesSchema = z.object({
+export const SearchEntriesSchema = z.preprocess(
+    (val: unknown) => healAgentHallucinations(val),
+    z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     mode: z
@@ -31,7 +34,7 @@ export const SearchEntriesSchema = z.object({
     pr_number: z.number().optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
     workflow_run_id: z.number().optional(),
-    tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional(),
+    tags: z.array(z.string()).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
@@ -53,10 +56,12 @@ export const SearchEntriesSchema = z.object({
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
     exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
-}).strict()
+}).strict())
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
-export const SearchEntriesSchemaMcp = z.object({
+export const SearchEntriesSchemaMcp = z.preprocess(
+    (val: unknown) => healAgentHallucinations(val),
+    z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     mode: z
@@ -74,7 +79,7 @@ export const SearchEntriesSchemaMcp = z.object({
     pr_number: relaxedNumber().optional(),
     pr_status: z.string().optional(),
     workflow_run_id: relaxedNumber().optional(),
-    tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional(),
+    tags: z.array(z.string()).optional(),
     entry_type: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
@@ -96,15 +101,17 @@ export const SearchEntriesSchemaMcp = z.object({
     fuzzy_match: z.boolean().optional().default(false).describe('If true and no exact FTS5 results found, returns typo-tolerant suggestions (fts mode only)'),
     auto_correct: z.boolean().optional().default(false).describe('If true and fuzzy_match=true, automatically runs a new search with the best suggestion if distance <= 1'),
     exact_match: z.boolean().optional().describe('Legacy hallucinated alias. Maps exact_match: false to fuzzy_match: true'),
-}).strict()
+}).strict())
 
 /** Strict schema — used inside handler for structured Zod errors */
-export const SearchByDateRangeSchema = z.object({
+export const SearchByDateRangeSchema = z.preprocess(
+    (val: unknown) => healAgentHallucinations(val),
+    z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('Start date (use `start_date`, not `start`)'),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
-    tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional(),
+    tags: z.array(z.string()).optional(),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
@@ -123,15 +130,17 @@ export const SearchByDateRangeSchema = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-}).strict()
+}).strict())
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
-export const SearchByDateRangeSchemaMcp = z.object({
+export const SearchByDateRangeSchemaMcp = z.preprocess(
+    (val: unknown) => healAgentHallucinations(val),
+    z.object({
     start_date: z.string().describe('Start date (use `start_date`, not `start`)'),
     end_date: z.string().describe('End date (use `end_date`, not `end`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
-    tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional(),
+    tags: z.array(z.string()).optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     is_personal: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
@@ -150,10 +159,12 @@ export const SearchByDateRangeSchemaMcp = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-}).strict()
+}).strict())
 
 /** Strict schema — used inside handler for structured Zod errors */
-export const SemanticSearchSchema = z.object({
+export const SemanticSearchSchema = z.preprocess(
+    (val: unknown) => healAgentHallucinations(val),
+    z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: z
         .number()
@@ -169,7 +180,7 @@ export const SemanticSearchSchema = z.object({
     issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
     pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: z.number().optional().describe('Filter results by GitHub Actions workflow run ID'),
-    tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional().describe('Filter results by tags'),
+    tags: z.array(z.string()).optional().describe('Filter results by tags'),
     entry_type: z.enum(ENTRY_TYPES).optional().describe('Filter results by entry type'),
     start_date: z
         .string()
@@ -192,10 +203,12 @@ export const SemanticSearchSchema = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-}).strict()
+}).strict())
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
-export const SemanticSearchSchemaMcp = z.object({
+export const SemanticSearchSchemaMcp = z.preprocess(
+    (val: unknown) => healAgentHallucinations(val),
+    z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: relaxedNumber().optional()
         .optional()
@@ -210,7 +223,7 @@ export const SemanticSearchSchemaMcp = z.object({
     issue_number: relaxedNumber().optional().describe('Filter results by GitHub issue number'),
     pr_number: relaxedNumber().optional().describe('Filter results by GitHub PR number'),
     workflow_run_id: relaxedNumber().optional().describe('Filter results by GitHub Actions workflow run ID'),
-    tags: z.preprocess((val) => typeof val === 'string' ? [val] : val, z.array(z.string())).optional().describe('Filter results by tags'),
+    tags: z.array(z.string()).optional().describe('Filter results by tags'),
     entry_type: z.string().optional().describe('Filter results by entry type'),
     start_date: z.string().optional().describe('Filter results from this date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('Filter results until this date (YYYY-MM-DD)'),
@@ -225,7 +238,7 @@ export const SemanticSearchSchemaMcp = z.object({
         .default(true)
         .describe('Include team entries in the search results'),
     include_archived: z.boolean().optional().default(false),
-}).strict()
+}).strict())
 
 // ============================================================================
 // Output Schemas

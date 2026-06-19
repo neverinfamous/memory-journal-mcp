@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from '../schemas.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber, healAgentHallucinations } from '../schemas.js'
 
 // ============================================================================
 // Shared Constants
@@ -13,8 +13,9 @@ const MAX_SEARCH_LIMIT = 500
 
 export const CreateEntrySchema = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             if ('text' in obj && !('content' in obj)) {
                 obj['content'] = obj['text'];
@@ -30,9 +31,9 @@ export const CreateEntrySchema = z.preprocess(
                 delete obj['title'];
                 modified = true;
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
         entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
@@ -101,8 +102,9 @@ export const CreateEntrySchema = z.preprocess(
 
 export const CreateEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             if ('text' in obj && !('content' in obj)) {
                 obj['content'] = obj['text'];
@@ -126,9 +128,9 @@ export const CreateEntrySchemaMcp = z.preprocess(
                     // Ignore stringify errors, validation will handle it
                 }
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
         entry_type: z.string().optional().default('personal_reflection').describe(

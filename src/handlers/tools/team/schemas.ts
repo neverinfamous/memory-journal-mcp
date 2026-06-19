@@ -19,6 +19,7 @@ import {
     StrictProjectNumberSchema,
     MAX_BATCH_SIZE,
     BatchResultOutputSchema,
+    healAgentHallucinations,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
@@ -37,8 +38,9 @@ export const TeamEntryOutputSchema = EntryOutputSchema.extend({
 /** team_create_entry — strict */
 export const TeamCreateEntrySchema = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             for (const key of ['text', 'message', 'description']) {
                 if (key in obj && !('content' in obj)) {
@@ -56,9 +58,9 @@ export const TeamCreateEntrySchema = z.preprocess(
                     // Ignore stringify errors
                 }
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
         content: z.string().min(1).max(MAX_CONTENT_LENGTH),
@@ -114,8 +116,9 @@ export const TeamCreateEntrySchema = z.preprocess(
 /** team_create_entry — relaxed for MCP SDK */
 export const TeamCreateEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             for (const key of ['text', 'message', 'description']) {
                 if (key in obj && !('content' in obj)) {
@@ -133,9 +136,9 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                     // Ignore stringify errors
                 }
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
         content: z.string().optional().describe(
@@ -203,8 +206,9 @@ export const TeamGetRecentSchemaMcp = z.object({
 /** team_search — strict */
 export const TeamSearchSchema = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode']) {
                 if (key in obj && !('query' in obj)) {
@@ -214,9 +218,9 @@ export const TeamSearchSchema = z.preprocess(
                     break;
                 }
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
     query: z.string().optional(),
@@ -238,8 +242,9 @@ export const TeamSearchSchema = z.preprocess(
 /** team_search — relaxed */
 export const TeamSearchSchemaMcp = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode']) {
                 if (key in obj && !('query' in obj)) {
@@ -249,9 +254,9 @@ export const TeamSearchSchemaMcp = z.preprocess(
                     break;
                 }
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
     query: z.string().optional(),
@@ -309,8 +314,9 @@ export const TeamGetEntryByIdSchemaMcp = z.object({
 /** team_search_by_date_range — strict */
 export const TeamSearchByDateRangeSchema = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             if ('start' in obj && !('start_date' in obj)) {
                 obj['start_date'] = obj['start'];
@@ -322,9 +328,9 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
                 Reflect.deleteProperty(obj, 'end');
                 modified = true;
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
@@ -346,8 +352,9 @@ export const TeamSearchByDateRangeSchema = z.preprocess(
 /** team_search_by_date_range — relaxed */
 export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             if ('start' in obj && !('start_date' in obj)) {
                 obj['start_date'] = obj['start'];
@@ -359,9 +366,9 @@ export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
                 Reflect.deleteProperty(obj, 'end');
                 modified = true;
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
@@ -387,8 +394,9 @@ export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
 /** team_update_entry — strict */
 export const TeamUpdateEntrySchema = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
@@ -411,9 +419,9 @@ export const TeamUpdateEntrySchema = z.preprocess(
                     // Ignore stringify errors
                 }
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
         entry_id: z.number(),
@@ -453,8 +461,9 @@ export const TeamUpdateEntrySchema = z.preprocess(
 /** team_update_entry — relaxed */
 export const TeamUpdateEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healed = healAgentHallucinations(val);
+        if (typeof healed === 'object' && healed !== null) {
+            const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
@@ -477,9 +486,9 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
                     // Ignore stringify errors
                 }
             }
-            return modified ? obj : val;
+            return modified ? obj : healed;
         }
-        return val;
+        return healed;
     },
     z.object({
         entry_id: relaxedNumber().optional(),

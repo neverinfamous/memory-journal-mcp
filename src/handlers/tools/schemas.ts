@@ -85,6 +85,72 @@ export function coerceSignificanceAlias(params: unknown): void {
     }
 }
 
+/**
+ * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
+ * Addresses `tag` vs `tags`, stringified array elements, and invalid `entry_type` / `significance_type`.
+ */
+export function healAgentHallucinations(val: unknown): unknown {
+    if (typeof val === 'object' && val !== null) {
+        const obj = { ...(val as Record<string, unknown>) }
+        let modified = false
+
+        // Heal 'tag' -> 'tags'
+        if ('tag' in obj && !('tags' in obj)) {
+            obj['tags'] = obj['tag']
+            delete obj['tag']
+            modified = true
+        }
+
+        // Heal string tags into arrays
+        if ('tags' in obj && typeof obj['tags'] === 'string') {
+            obj['tags'] = obj['tags'].split(',').map((t: string) => t.trim()).filter(Boolean)
+            modified = true
+        }
+
+        // Heal hallucinated entry types
+        if ('entry_type' in obj && typeof obj['entry_type'] === 'string') {
+            const et = obj['entry_type']
+            const etLower = et.toLowerCase()
+            if (etLower === 'session-summary' || etLower === 'session_summary') {
+                obj['entry_type'] = 'retrospective'
+                obj['tags'] ??= []
+                if (Array.isArray(obj['tags']) && !obj['tags'].includes('session-summary')) {
+                    obj['tags'].push('session-summary')
+                }
+                modified = true
+            } else if (['task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation'].includes(etLower)) {
+                obj['entry_type'] = 'technical_note'
+                obj['tags'] ??= []
+                if (Array.isArray(obj['tags']) && !obj['tags'].includes(etLower)) {
+                    obj['tags'].push(etLower)
+                }
+                modified = true
+            } else if (etLower === 'bug') {
+                obj['entry_type'] = 'bug_fix'
+                modified = true
+            } else if (etLower === 'feature') {
+                obj['entry_type'] = 'feature_implementation'
+                modified = true
+            } else if (etLower === 'meeting') {
+                obj['entry_type'] = 'meeting_notes'
+                modified = true
+            }
+        }
+
+        // Heal significance type alias
+        if ('significance_type' in obj) {
+            const originalSigType = obj['significance_type']
+            coerceSignificanceAlias(obj)
+            if (originalSigType !== obj['significance_type']) {
+                modified = true
+            }
+        }
+
+        return modified ? obj : val
+    }
+    return val
+}
+
 /** Maximum content length for journal entries (chars) */
 export const MAX_CONTENT_LENGTH = 50_000
 
