@@ -149,7 +149,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
             'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
         ),
         is_personal: z.boolean().optional().default(true),
-        significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
+        significance_type: z.string().optional(),
         workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         project_number: relaxedNumber().optional().describe(
             'REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row ' +
@@ -160,56 +160,21 @@ export const CreateEntrySchemaMcp = z.preprocess(
         issue_url: z.string().optional(),
         pr_number: relaxedNumber().optional(),
         pr_url: z.string().optional(),
-        pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
+        pr_status: z.string().optional(),
         workflow_run_id: relaxedNumber().optional(),
         workflow_name: z.string().optional(),
         workflow_status: z.string().optional(),
         impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
         trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
-        validation_status: z.enum(['passed', 'none', 'failed']).optional().describe('Current validation status of the entry.'),
+        validation_status: z.string().optional().describe('Current validation status of the entry.'),
         anchors: z.array(z.object({
             anchor_path: z.string(),
             anchor_type: z.string(),
-            status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']).optional().default('pending'),
+            status: z.string().optional().default('pending'),
         })).optional().describe('Files or lines of code that this entry is fundamentally anchored to. If the anchor becomes stale/invalid, the entry importance score drops.'),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
-    }).strict().superRefine((data, ctx) => {
-        if (data.tags?.includes('session-summary')) {
-            const c = data.content || '';
-            if (!/#+\s+Accomplished/i.test(c) || !/#+\s+Unfinished \/ Blocked/i.test(c) || !/#+\s+Context for Next Session/i.test(c) || !/#+\s+Commits/i.test(c)) {
-                ctx.addIssue({
-                    code: "custom",
-                    path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
-                });
-            }
-        }
-        if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
-            try {
-                const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
-                const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
-                if (!Array.isArray(commits) || commits.length === 0) {
-                    ctx.addIssue({
-                        code: "custom",
-                        path: ['auto_context'],
-                        message: [
-                            "Entries tagged 'commit-narrative' or 'session-summary' (when providing auto_context) MUST include an auto_context with a non-empty 'commits' array.",
-                            "In Code Mode, pass it as a plain object: { commits: ['<sha>'] }",
-                            "or as a pre-stringified JSON string: JSON.stringify({ commits: ['<sha>'] }).",
-                            "Example: await mj.core.create_entry({ ..., auto_context: { commits: ['abc1234'] } })",
-                        ].join(' '),
-                    });
-                }
-            } catch {
-                ctx.addIssue({
-                    code: "custom",
-                    path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string or plain object for commit narratives. Example: { commits: ['<sha>'] }",
-                });
-            }
-        }
-    })
+    }).strict()
 )
 
 export const CreateEntryOutputSchema = z

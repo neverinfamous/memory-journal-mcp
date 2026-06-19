@@ -168,38 +168,8 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         auto_context: z.string().optional(),
         impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
         trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
-        validation_status: z.enum(['passed', 'none', 'failed']).optional().describe('Current validation status of the entry.'),
-    }).strict().superRefine((data, ctx) => {
-        if (data.tags?.includes('session-summary')) {
-            const c = data.content || '';
-            if (!/#+\s+Accomplished/i.test(c) || !/#+\s+Unfinished \/ Blocked/i.test(c) || !/#+\s+Context for Next Session/i.test(c) || !/#+\s+Commits/i.test(c)) {
-                ctx.addIssue({
-                    code: "custom",
-                    path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
-                });
-            }
-        }
-        if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
-            try {
-                const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
-                const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
-                if (!Array.isArray(commits) || commits.length === 0) {
-                    ctx.addIssue({
-                        code: "custom",
-                        path: ['auto_context'],
-                        message: "Entries tagged 'commit-narrative' or 'session-summary' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
-                    });
-                }
-            } catch {
-                ctx.addIssue({
-                    code: "custom",
-                    path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string for commit narratives or session summaries.",
-                });
-            }
-        }
-    })
+        validation_status: z.string().optional().describe('Current validation status of the entry.'),
+    }).strict()
 )
 
 /** team_get_recent — strict */
@@ -513,16 +483,7 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
     },
     z.object({
         entry_id: relaxedNumber().optional(),
-        content: z.string().optional().refine(
-            (val) => {
-                if (!val) return true;
-                const trimmed = val.trim();
-                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished|Commits)/i.test(trimmed);
-                const hasAccomplished = /#+\s+Accomplished/i.test(val);
-                return !(startsWithSection && !hasAccomplished);
-            },
-            { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
-        ).describe(
+        content: z.string().optional().describe(
             'Updated markdown content. Preserve the existing ## section header structure. ' +
             'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
             '## Context for Next Session / ## Commits structure intact. ' +
@@ -547,7 +508,7 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
         auto_context: z.string().nullable().optional(),
         impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
         trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
-        validation_status: z.enum(['passed', 'none', 'failed']).optional().describe('Current validation status of the entry.'),
+        validation_status: z.string().optional().describe('Current validation status of the entry.'),
     }).strict()
 )
 
