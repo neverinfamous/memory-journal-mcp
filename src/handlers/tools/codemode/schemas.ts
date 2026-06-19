@@ -48,7 +48,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Automatically inject expected_version for optimistic concurrency on updates/deletes'),
-    project_number: relaxedNumber()
+    project_number: relaxedNumber().optional()
         .optional()
         .describe(
             'Numeric project ID to bind to all tool calls in this sandbox. ' +

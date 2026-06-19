@@ -49,7 +49,7 @@ export const UpdateEntrySchema = z.preprocess(
                 if (!val) return true;
                 const trimmed = val.trim();
                 const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
-                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                const hasAccomplished = /#+\s+Accomplished/i.test(val);
                 return !(startsWithSection && !hasAccomplished);
             },
             { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
@@ -114,7 +114,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 if (!val) return true;
                 const trimmed = val.trim();
                 const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
-                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                const hasAccomplished = /#+\s+Accomplished/i.test(val);
                 return !(startsWithSection && !hasAccomplished);
             },
             { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
@@ -130,12 +130,12 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         significance_type: z.string().nullable().optional(),
         project_number: relaxedNumber().optional(),
         project_owner: z.string().nullable().optional(),
-        issue_number: relaxedNumber().nullable().optional(),
+        issue_number: relaxedNumber().optional().nullable().optional(),
         issue_url: z.string().nullable().optional(),
-        pr_number: relaxedNumber().nullable().optional(),
+        pr_number: relaxedNumber().optional().nullable().optional(),
         pr_url: z.string().nullable().optional(),
         pr_status: z.string().nullable().optional(),
-        workflow_run_id: relaxedNumber().nullable().optional(),
+        workflow_run_id: relaxedNumber().optional().nullable().optional(),
         workflow_name: z.string().nullable().optional(),
         workflow_status: z.string().nullable().optional(),
         is_archived: z.boolean().optional(),
@@ -358,7 +358,7 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
         return val;
     },
     z.object({
-        entry_ids: z.array(relaxedNumber()).optional(),
+        entry_ids: z.array(relaxedNumber().optional()).optional(),
         permanent: z.boolean().optional().default(false),
         workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()

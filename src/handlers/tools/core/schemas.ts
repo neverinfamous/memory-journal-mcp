@@ -64,15 +64,15 @@ export const CreateEntrySchema = z.preprocess(
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content || '';
-            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+            if (!/#+\s+Accomplished/i.test(c) || !/#+\s+Unfinished \/ Blocked/i.test(c) || !/#+\s+Context for Next Session/i.test(c) || !/#+\s+Commits/i.test(c)) {
                 ctx.addIssue({
                     code: "custom",
                     path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
                 });
             }
         }
-        if (data.tags?.includes('commit-narrative')) {
+        if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
             try {
                 const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
                 const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
@@ -81,7 +81,7 @@ export const CreateEntrySchema = z.preprocess(
                         code: "custom",
                         path: ['auto_context'],
                         message: [
-                            "Entries tagged 'commit-narrative' MUST include an auto_context with a non-empty 'commits' array.",
+                            "Entries tagged 'commit-narrative' or 'session-summary' (when providing auto_context) MUST include an auto_context with a non-empty 'commits' array.",
                             "In Code Mode, pass it as a plain object: { commits: ['<sha>'] }",
                             "or as a pre-stringified JSON string: JSON.stringify({ commits: ['<sha>'] }).",
                             "Example: await mj.core.create_entry({ ..., auto_context: { commits: ['abc1234'] } })",
@@ -141,7 +141,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
             'Markdown-formatted entry content. Use ## section headers to organize content. ' +
             'Note: The primary text is stored in the `content` property (not `title`, `message`, `name`, `description`, or `text`). ' +
             'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
-            'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+            'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
             'Do NOT invent extra top-level sections for session summaries.'
         ),
         tags: z.array(z.string()).optional().describe(
@@ -151,7 +151,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
         workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-        project_number: relaxedNumber().describe(
+        project_number: relaxedNumber().optional().describe(
             'REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row ' +
             '(registry: repoName (#N)) or use get_statistics. Do NOT pass a repo name string.'
         ),
@@ -177,15 +177,15 @@ export const CreateEntrySchemaMcp = z.preprocess(
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content || '';
-            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+            if (!/#+\s+Accomplished/i.test(c) || !/#+\s+Unfinished \/ Blocked/i.test(c) || !/#+\s+Context for Next Session/i.test(c) || !/#+\s+Commits/i.test(c)) {
                 ctx.addIssue({
                     code: "custom",
                     path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
                 });
             }
         }
-        if (data.tags?.includes('commit-narrative')) {
+        if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
             try {
                 const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
                 const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
@@ -194,7 +194,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
                         code: "custom",
                         path: ['auto_context'],
                         message: [
-                            "Entries tagged 'commit-narrative' MUST include an auto_context with a non-empty 'commits' array.",
+                            "Entries tagged 'commit-narrative' or 'session-summary' (when providing auto_context) MUST include an auto_context with a non-empty 'commits' array.",
                             "In Code Mode, pass it as a plain object: { commits: ['<sha>'] }",
                             "or as a pre-stringified JSON string: JSON.stringify({ commits: ['<sha>'] }).",
                             "Example: await mj.core.create_entry({ ..., auto_context: { commits: ['abc1234'] } })",
@@ -258,7 +258,7 @@ export const GetRecentEntriesSchema = z.object({
 })
 
 export const GetRecentEntriesSchemaMcp = z.object({
-    limit: relaxedNumber()
+    limit: relaxedNumber().optional()
         .optional()
         .default(10)
         .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),

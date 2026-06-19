@@ -48,6 +48,14 @@ export const TeamCreateEntrySchema = z.preprocess(
                     break;
                 }
             }
+            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+                try {
+                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
+                    modified = true;
+                } catch {
+                    // Ignore stringify errors
+                }
+            }
             return modified ? obj : val;
         }
         return val;
@@ -73,15 +81,15 @@ export const TeamCreateEntrySchema = z.preprocess(
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content || '';
-            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+            if (!/#+\s+Accomplished/i.test(c) || !/#+\s+Unfinished \/ Blocked/i.test(c) || !/#+\s+Context for Next Session/i.test(c) || !/#+\s+Commits/i.test(c)) {
                 ctx.addIssue({
                     code: "custom",
                     path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
                 });
             }
         }
-        if (data.tags?.includes('commit-narrative')) {
+        if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
             try {
                 const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
                 const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
@@ -89,14 +97,14 @@ export const TeamCreateEntrySchema = z.preprocess(
                     ctx.addIssue({
                         code: "custom",
                         path: ['auto_context'],
-                        message: "Entries tagged 'commit-narrative' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
+                        message: "Entries tagged 'commit-narrative' or 'session-summary' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
                     });
                 }
             } catch {
                 ctx.addIssue({
                     code: "custom",
                     path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string for commit narratives.",
+                    message: "auto_context must be a valid JSON string for commit narratives or session summaries.",
                 });
             }
         }
@@ -117,6 +125,14 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                     break;
                 }
             }
+            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+                try {
+                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
+                    modified = true;
+                } catch {
+                    // Ignore stringify errors
+                }
+            }
             return modified ? obj : val;
         }
         return val;
@@ -126,7 +142,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
             'Markdown-formatted entry content. Use ## section headers to organize content. ' +
             'Note: The primary text is stored in the `content` property (not `title` or `message`). ' +
             'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
-            'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+            'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
             'Do NOT invent extra top-level sections for session summaries.'
         ),
         entry_type: z.string().optional().default('personal_reflection').describe(
@@ -140,7 +156,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
             'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
         ),
         significance_type: z.string().optional(),
-        project_number: relaxedNumber(),
+        project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         project_owner: z.string().optional(),
         issue_number: relaxedNumber().optional(),
@@ -156,15 +172,15 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content || '';
-            if (!/##\s+Accomplished/i.test(c) || !/##\s+Unfinished \/ Blocked/i.test(c) || !/##\s+Context for Next Session/i.test(c)) {
+            if (!/#+\s+Accomplished/i.test(c) || !/#+\s+Unfinished \/ Blocked/i.test(c) || !/#+\s+Context for Next Session/i.test(c) || !/#+\s+Commits/i.test(c)) {
                 ctx.addIssue({
                     code: "custom",
                     path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 3 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. Please correct the structure.",
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
                 });
             }
         }
-        if (data.tags?.includes('commit-narrative')) {
+        if (data.tags?.includes('commit-narrative') || (data.tags?.includes('session-summary') && data.auto_context)) {
             try {
                 const ac = JSON.parse(data.auto_context || '{}') as Record<string, unknown>;
                 const commits = ac !== null && typeof ac === 'object' ? ac['commits'] : undefined;
@@ -172,14 +188,14 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                     ctx.addIssue({
                         code: "custom",
                         path: ['auto_context'],
-                        message: "Entries tagged 'commit-narrative' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
+                        message: "Entries tagged 'commit-narrative' or 'session-summary' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
                     });
                 }
             } catch {
                 ctx.addIssue({
                     code: "custom",
                     path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string for commit narratives.",
+                    message: "auto_context must be a valid JSON string for commit narratives or session summaries.",
                 });
             }
         }
@@ -417,6 +433,14 @@ export const TeamUpdateEntrySchema = z.preprocess(
                     break;
                 }
             }
+            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+                try {
+                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
+                    modified = true;
+                } catch {
+                    // Ignore stringify errors
+                }
+            }
             return modified ? obj : val;
         }
         return val;
@@ -427,8 +451,8 @@ export const TeamUpdateEntrySchema = z.preprocess(
             (val) => {
                 if (!val) return true;
                 const trimmed = val.trim();
-                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
-                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished|Commits)/i.test(trimmed);
+                const hasAccomplished = /#+\s+Accomplished/i.test(val);
                 return !(startsWithSection && !hasAccomplished);
             },
             { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
@@ -475,6 +499,14 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
                     break;
                 }
             }
+            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+                try {
+                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
+                    modified = true;
+                } catch {
+                    // Ignore stringify errors
+                }
+            }
             return modified ? obj : val;
         }
         return val;
@@ -485,29 +517,29 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
             (val) => {
                 if (!val) return true;
                 const trimmed = val.trim();
-                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished)/i.test(trimmed);
-                const hasAccomplished = /##\s+Accomplished/i.test(val);
+                const startsWithSection = /^##\s+(Context for Next Session|Unfinished \/ Blocked|Accomplished|Commits)/i.test(trimmed);
+                const hasAccomplished = /#+\s+Accomplished/i.test(val);
                 return !(startsWithSection && !hasAccomplished);
             },
             { message: "[ANTI-HALLUCINATION] Do not send partial updates. The `content` field fully overwrites the existing entry. You must retrieve the entry first, append your changes, and send the full Markdown content back." }
         ).describe(
             'Updated markdown content. Preserve the existing ## section header structure. ' +
             'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
-            '## Context for Next Session structure intact. ' +
+            '## Context for Next Session / ## Commits structure intact. ' +
             'Do NOT restructure or add new top-level sections unless explicitly requested.'
         ),
         entry_type: z.string().optional(),
         tags: z.array(z.string()).optional(),
-        project_number: relaxedNumber(),
+        project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         significance_type: z.string().nullable().optional(),
         project_owner: z.string().nullable().optional(),
-        issue_number: relaxedNumber().nullable().optional(),
+        issue_number: relaxedNumber().optional().nullable().optional(),
         issue_url: z.string().nullable().optional(),
-        pr_number: relaxedNumber().nullable().optional(),
+        pr_number: relaxedNumber().optional().nullable().optional(),
         pr_url: z.string().nullable().optional(),
         pr_status: z.string().nullable().optional(),
-        workflow_run_id: relaxedNumber().nullable().optional(),
+        workflow_run_id: relaxedNumber().optional().nullable().optional(),
         workflow_name: z.string().nullable().optional(),
         workflow_status: z.string().nullable().optional(),
         is_archived: z.boolean().optional(),
@@ -627,7 +659,7 @@ export const TeamBatchCreateEntriesSchema = z.object({
 export const TeamBatchCreateEntriesSchemaMcp = z.object({
     entries: z.array(TeamCreateEntrySchemaMcp).optional(),
     auto_index: z.boolean().optional().default(true),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
@@ -706,7 +738,7 @@ export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
     z.object({
         updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
         auto_index: z.boolean().optional().default(true),
-        project_number: relaxedNumber(),
+        project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
@@ -758,7 +790,7 @@ export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
         return val;
     },
     z.object({
-        entry_ids: z.array(relaxedNumber()).optional(),
+        entry_ids: z.array(relaxedNumber().optional()).optional(),
         project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         permanent: z.boolean().optional().default(false),
@@ -1234,7 +1266,7 @@ export const TeamCrossProjectInsightsSchema = z.object({
 export const TeamCrossProjectInsightsSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-    min_entries: relaxedNumber()
+    min_entries: relaxedNumber().optional()
         .optional()
         .default(3)
         .describe('Minimum entries to include project'),

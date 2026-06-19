@@ -64,6 +64,9 @@ const PARAM_ALIASES: Record<string, string> = {
     impactScore: 'impact_score',
     trustScore: 'trust_score',
     validationStatus: 'validation_status',
+    // Team identification hallucinations
+    team_id: 'workspace_id',
+    team: 'workspace_id',
 }
 
 /**
@@ -265,6 +268,14 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         const tagVal = result['tag']
         result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
         delete result['tag']
+    }
+
+    // Coerce top-level 'commits' array into auto_context for session summaries / commit narratives
+    if ('commits' in result && Array.isArray(result['commits'])) {
+        if (!('auto_context' in result) || typeof result['auto_context'] !== 'string') {
+            result['auto_context'] = JSON.stringify({ commits: result['commits'] })
+        }
+        delete result['commits']
     }
 
     // Propagate top-level project_number to batch elements

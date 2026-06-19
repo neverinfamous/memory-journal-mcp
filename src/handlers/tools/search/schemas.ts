@@ -197,7 +197,7 @@ export const SemanticSearchSchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 export const SemanticSearchSchemaMcp = z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
-    entry_id: relaxedNumber()
+    entry_id: relaxedNumber().optional()
         .optional()
         .describe(
             'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'

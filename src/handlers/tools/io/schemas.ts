@@ -72,7 +72,7 @@ export const ExportEntriesSchemaMcp = z.preprocess(
     end_date: z.string().optional(),
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
-    limit: relaxedNumber()
+    limit: relaxedNumber().optional()
         .optional()
         .default(100)
         .describe('Maximum entries to export (default: 100)'),
@@ -164,7 +164,7 @@ export const ExportMarkdownSchemaMcp = z.preprocess(
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     entry_types: z.array(z.string()).optional().describe('Filter by entry types'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
-    limit: relaxedNumber()
+    limit: relaxedNumber().optional()
         .optional()
         .default(100)
         .describe('Max entries to export (default: 100, max: 500)'),
@@ -249,7 +249,7 @@ export const ImportMarkdownSchemaMcp = z.preprocess(
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    limit: relaxedNumber()
+    limit: relaxedNumber().optional()
         .optional()
         .default(100)
         .describe('Max files to process (default: 100, max: 500)'),
@@ -357,7 +357,7 @@ export const ImportExternalSchemaMcp = z.preprocess(
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
-    limit: relaxedNumber()
+    limit: relaxedNumber().optional()
         .optional()
         .default(100)
         .describe('Max files to process (default: 100, max: 500)'),
