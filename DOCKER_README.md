@@ -42,28 +42,17 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**100 MCP Tools** · **19 Workflow Prompts** · **62 Resources (56 core + 6 aliases)** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**107 MCP Tools** · **19 Workflow Prompts** · **62 Resources (56 core + 6 aliases)** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                            |
-| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                      |
-| **Dynamic Project Routing**   | Switch contexts across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                                                                   |
-| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                        |
-| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5, semantic vector similarity, heuristics, and date filters                                                                                                      |
-| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                           |
-| **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens  |
-| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                             |
-| **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                   |
-| **Team Collaboration**        | 44 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics), RBAC, and member management |
-| **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                                     |
-| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                |
-| **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                      |
-| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                   |
-| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                            |
-| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                         |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules        |
-| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                                       |
+| **Session Intelligence**      | Agents auto-query history, create checkpoints, and hand off context between sessions via `/session-summary`. Briefings adapt dynamically (CI health, local Git status, unreleased changes).          |
+| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones, Copilot Reviews, and Insights. Switch contexts across multiple repositories seamlessly via `PROJECT_REGISTRY`.                                |
+| **Knowledge & Search**        | 8 relationship types with Mermaid graphs. Hybrid Search combines FTS5, semantic vector similarity, and heuristics. Auto-pruning maintains vector relevance by soft-deleting low-value entries.       |
+| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API.                                                                                                          |
+| **Team & Hush Protocol**      | 44 tools for collaboration: cross-project insights, RBAC, matrix. Hush Protocol replaces chat noise with structured, actionable AI flags (blockers, reviews) that automatically surface in sessions. |
+| **Data & Architecture**       | Markdown roundtripping, unified IO namespace, JSON exports, automated backup/restore, SQLCipher encryption, OAuth 2.1 authentication, HTTP/SSE Transport, and structured error handling.             |
+| **Agent Collaboration**       | Agents share context, suggest reusable rules/skills, and triage issues, review PRs, and audit code via GitHub Commander.                                                                             |
 
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
@@ -93,7 +82,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 100   | All tools (default)      |
+| `full`               | 107   | All tools (default)      |
 | `starter`            | 15    | Core + search + codemode |
 | `essential`          | 9     | Minimal footprint        |
 | `readonly`           | 23    | Disable all mutations    |
@@ -104,24 +93,25 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Custom Selection:** List individual tool names to create your own whitelist: `--tool-filter "create_entry,search_entries,semantic_search"`
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `backup`, `team`, `codemode`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
 ## 📋 Core Capabilities
 
-### 🛠️ **100 MCP Tools** (10 Groups)
+### 🛠️ **107 MCP Tools** (11 Groups)
 
 | Group           | Tools | Description                                                                                                                                                                                       |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
-| `core`          | 8     | Entry CRUD, tags, test                                                                                                                                                                            |
+| `core`          | 9     | Entry CRUD, tags, test, staleness                                                                                                                                                                 |
 | `search`        | 6     | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
 | `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                                                |
 | `relationships` | 2     | Link entries, visualize graphs                                                                                                                                                                    |
 | `io`            | 4     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                                                    |
 | `admin`         | 11    | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                            |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
+| `git`           | 6     | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                                                    |
 | `team`          | 44    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags**, RBAC member management (requires `TEAM_DB_PATH`) |
 
@@ -151,17 +141,13 @@ Code executes in a **worker_threads sandbox** with multiple layers of security. 
 
 ## 🤫 Hush Protocol: Asynchronous Team Collaboration
 
-The **Hush Protocol** reimagines team collaboration for AI-augmented workflows by replacing noisy Slack/Teams messages with structured, machine-actionable flags.
+The **Hush Protocol** replaces noisy chat messages with structured, machine-actionable flags in the Team Database.
 
-When you encounter a blocker, need a review, or want to broadcast a milestone, your AI agent can raise a flag in the shared Team Database:
+- **Actionable Visibility**: Active flags (`blocker`, `needs_review`) automatically surface at the top of `memory://briefing`. Your agents can immediately see and resolve blockers autonomously.
+- **Searchable History**: Flags are permanent journal entries. Agents can query past flags to understand how architectural blockers were conquered.
+- **Full Lifecycle**: Filter by status, type, or assignee. Escalate severity, reassign, or reopen flags. Built-in analytics track resolution velocity and team workload.
 
-- **Actionable Visibility**: Active flags automatically surface at the very top of the `memory://briefing` payload for all team members. When another developer's agent starts a session, it immediately sees your blockers and can help resolve them autonomously.
-- **Structured Types**: Raise specific flag types (`blocker`, `needs_review`, `help_requested`, `fyi`). You can customize your team's vocabulary via the `--flag-vocabulary` configuration.
-- **Searchable History**: Unlike chat messages that disappear into the void, Hush flags are permanent, query-able AI journal entries. Your agents can search past `needs_review` flags to understand how architectural blockers were conquered.
-- **Full Lifecycle Management**: List and filter flags by status, type, or assignee. Update metadata (escalate severity, reassign, add links). Reopen resolved flags. Track resolution velocity and team workload with built-in analytics.
-- **Resolution History**: Read `memory://flags/history` to see recently resolved flags with resolution times and details.
-
-**[Complete Hush Protocol guide and Mermaid sequence diagrams →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
+**[Complete Hush Protocol guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
 
 ## 🚀 Quick Start (2 Minutes)
 
