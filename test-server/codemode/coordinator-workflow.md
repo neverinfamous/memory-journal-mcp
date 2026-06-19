@@ -58,6 +58,7 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 24. `test-cm-error-matrix-2.md`
 25. `test-cm-payload-optimization.md`
 26. `test-cm-hallucination-smoothing.md`
+27. `test-git.md`
 
 ## Telemetry Collection
 

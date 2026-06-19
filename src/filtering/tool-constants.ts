@@ -66,6 +66,13 @@ export const TOOL_GROUPS = {
         'get_repo_insights',
         'get_copilot_reviews',
     ],
+    git: [
+        'get_commit_history',
+        'search_commits',
+        'get_release_info',
+        'get_unreleased_commits',
+        'analyze_commit_patterns',
+    ],
     backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
     team: [
         'team_create_entry',
@@ -130,9 +137,10 @@ export const META_GROUPS = {
         'io',
         'admin',
         'github',
+        'git',
         'backup',
         'team',
         'codemode',
     ],
-    readonly: ['core', 'search', 'analytics', 'relationships', 'io', 'codemode'],
+    readonly: ['core', 'search', 'analytics', 'relationships', 'io', 'git', 'codemode'],
 } satisfies Record<MetaGroup, ToolGroup[]>

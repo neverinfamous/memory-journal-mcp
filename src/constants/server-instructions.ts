@@ -243,7 +243,7 @@ Read \`memory://help/codemode\` for full namespace table, examples, and patterns
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","hush-protocol","skills","templates"]
+const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","hush-protocol","skills","templates"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -476,6 +476,13 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`teamAddAuthorAlias(params)\`, \`teamRemoveAuthorAlias(params)\`, \`teamListAuthorAliases(params)\`, \`teamResolveAuthor(params)\`, \`teamConsolidateAuthors(params)\`
 
 **Rule:** When \`mj_execute_code\` is the only registered tool (e.g., Code Mode), all tool actions must be performed using the \`mj.*\` namespaces listed above inside the code sandbox. Do NOT attempt to call the original tool names as direct MCP operations.`],
+  ["git", `# Git History Mining
+
+- **Commit Discovery**: Use \`get_commit_history\` to fetch sequential logs and \`search_commits\` to find specific changes by message or author.
+- **Release Tracking**: Use \`get_release_info\` to retrieve tag details and \`get_unreleased_commits\` to track work pending release.
+- **Analytics**: Use \`analyze_commit_patterns\` to identify file hotspots and active contributors within a timeframe.
+- **Performance**: Deep searches can take time. Cap your search ranges when possible.
+- **Code Mode**: These tools are exposed under the \`mj.git.*\` namespace (e.g., \`mj.git.getCommitHistory()\`).`],
   ["github", `# GitHub Integration
 
 - Include \`issue_number\`/\`pr_number\` and \`project_number\` in \`create_entry\` to auto-link

@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **100 tools** organized by 10 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **105 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -132,6 +132,20 @@ GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights
 
 ---
 
+## git (5 tools + Code Mode)
+
+Commit history mining, release tracking, and commit analytics using `simple-git`.
+
+| Tool                      | Description                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_commit_history`      | Fetch the commit history of the repository (with optional range or limit).                                                                 |
+| `search_commits`          | Search commit messages or authors within the repository.                                                                                  |
+| `get_release_info`        | Retrieve information about a specific release tag, including commit count and timestamp.                                                   |
+| `get_unreleased_commits`  | Track commits that have been merged since the last release tag.                                                                            |
+| `analyze_commit_patterns` | Analyze commit history to identify frequent contributors and frequently modified files.                                                    |
+
+---
+
 ## backup (4 tools + Code Mode)
 
 Database backup, restore, and retention management.
@@ -256,7 +270,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 100   | All tools (default)      |
+| `full`               | 105   | All tools (default)      |
 | `starter`            | 15    | Core + search + codemode |
 | `essential`          | 9     | Minimal footprint        |
 | `readonly`           | 23    | Disable all mutations    |

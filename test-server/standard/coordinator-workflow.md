@@ -56,6 +56,7 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 24. `test-tool-group-team.md`
 25. `test-payload-optimization.md`
 26. `test-workspace-isolation.md`
+27. `test-git.md`
 
 ## Telemetry Collection
 

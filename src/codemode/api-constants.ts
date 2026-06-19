@@ -227,6 +227,16 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         consolidate: 'teamConsolidateAuthors',
         consolidateAuthors: 'teamConsolidateAuthors',
     },
+    git: {
+        history: 'getCommitHistory',
+        log: 'getCommitHistory',
+        commits: 'getCommitHistory',
+        search: 'searchCommits',
+        find: 'searchCommits',
+        release: 'getReleaseInfo',
+        unreleased: 'getUnreleasedCommits',
+        analyze: 'analyzeCommitPatterns',
+    },
 }
 
 // =============================================================================
@@ -307,6 +317,13 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.team.teamListFlags({ status: "active" })',
         'mj.team.teamUpdateFlag({ flag_id: 42, flag_type: "blocker" })',
         'mj.team.teamGetFlagAnalytics()',
+    ],
+    git: [
+        'mj.git.getCommitHistory({ maxCount: 10 })',
+        'mj.git.searchCommits({ query: "fix" })',
+        'mj.git.getReleaseInfo()',
+        'mj.git.getUnreleasedCommits()',
+        'mj.git.analyzeCommitPatterns({ maxCount: 20 })',
     ],
 }
 
@@ -427,6 +444,12 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamRemoveMember: 'author',
     teamUpdateMemberRole: ['author', 'role'],
     teamGetMember: 'author',
+
+    // Git
+    getCommitHistory: 'maxCount',
+    searchCommits: 'query',
+    getReleaseInfo: 'ref',
+    analyzeCommitPatterns: 'maxCount',
 }
 
 // =============================================================================
@@ -448,6 +471,7 @@ export const GROUP_PREFIX_MAP: Record<string, string> = {
     github: '',
     backup: '',
     team: '',
+    git: '',
     codemode: 'mj_',
 }
 

@@ -8,6 +8,7 @@
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
+import type { GitHistoryClient } from '../git/index.js'
 import type { ProgressContext } from '../utils/progress-utils.js'
 
 // Re-export sub-module types
@@ -243,6 +244,8 @@ export interface ToolContext {
     teamVectorManager?: VectorSearchManager
     /** GitHub integration (optional) */
     github?: GitHubIntegration
+    /** Git History client (optional) */
+    gitClient?: GitHistoryClient | null
     /** Handler configuration */
     config?: ToolHandlerConfig
     /** Progress reporting context */

@@ -13,6 +13,7 @@ export type ToolGroup =
     | 'io' // IO: export_entries, export_markdown, import_markdown
     | 'admin' // Admin: update_entry, delete_entry
     | 'github' // Reserved for future GitHub-specific tools
+    | 'git' // Git History operations
     | 'backup' // Backup: backup_journal, list_backups, restore_backup
     | 'team' // Team: team_create_entry, team_get_recent, team_search
     | 'codemode' // Code Mode: mj_execute_code (sandboxed JS execution)

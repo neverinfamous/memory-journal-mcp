@@ -49,6 +49,7 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 15. `test-usability-team-flags.md`
 16. `test-usability-team-rbac.md`
 17. `test-usability-workspace-isolation.md`
+18. `test-git.md`
 
 ## Finalization
 

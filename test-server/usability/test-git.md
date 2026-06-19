@@ -1,0 +1,19 @@
+# Usability Test — Git History Mining
+
+**Scope:** Evaluate the developer experience (DX) and heuristic fallbacks for Git tools.
+
+**Prerequisites:**
+- **Required Tool Groups:** `git`, `codemode`
+- Execute through `mj_execute_code` or direct tool calls as you prefer.
+
+**Tests:**
+
+1. **Schema Nuance**: Ensure `search_commits` handles missing parameters gracefully and errors are descriptive.
+2. **Path sanitization**: Ensure `simple-git` never leaks absolute paths in error messages or responses. Pass an invalid or extremely long path for `repo` to trigger an error and inspect the response payload.
+
+---
+
+## Success Criteria
+
+- Descriptive errors are returned for malformed queries.
+- No absolute paths leaked from `simple-git` operations.

@@ -16,7 +16,7 @@ import { createServerInstance } from './tool-registration.js'
 
 export async function createServer(options: ServerOptions): Promise<void> {
     const context = await initializeDependencies(options);
-    const { db, teamDb, runtime, vectorManager, teamVectorManager, github, configManager, scheduler, allowedIoRoots, activeMetricsPath } = context;
+    const { db, teamDb, runtime, vectorManager, teamVectorManager, github, gitClient, configManager, scheduler, allowedIoRoots, activeMetricsPath } = context;
     const { transport, defaultProjectNumber } = options;
 
     const filterConfig = configManager.getConfig().toolFilterConfig;
@@ -49,7 +49,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             baseConfig,
             undefined,
             teamDb ?? undefined,
-            teamVectorManager ?? undefined
+            teamVectorManager ?? undefined,
+            gitClient
         )
 
     const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
@@ -61,7 +62,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         github,
         customToolHandlerConfig,
         teamDb ?? undefined,
-        teamVectorManager ?? undefined
+        teamVectorManager ?? undefined,
+        gitClient
     )
     const allToolNames = new Set(allTools.map((t) => t.name))
 

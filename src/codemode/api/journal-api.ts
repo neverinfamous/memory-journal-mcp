@@ -32,6 +32,7 @@ export class JournalApi {
     readonly github: GroupApiRecord
     readonly backup: GroupApiRecord
     readonly team: GroupApiRecord
+    readonly git: GroupApiRecord
     readonly memory: GroupApiRecord // Alias for core to handle cross-server hallucinations
 
     private readonly toolsByGroup: Map<string, ToolDefinition[]>
@@ -66,6 +67,7 @@ export class JournalApi {
         this.github = createGroupApi('github', this.toolsByGroup.get('github') ?? [], dispatcher)
         this.backup = createGroupApi('backup', this.toolsByGroup.get('backup') ?? [], dispatcher)
         this.team = createGroupApi('team', this.toolsByGroup.get('team') ?? [], dispatcher)
+        this.git = createGroupApi('git', this.toolsByGroup.get('git') ?? [], dispatcher)
         this.memory = this.core
 
         // Smooth out common cross-group agent hallucinations
@@ -321,6 +323,8 @@ export class JournalApi {
             github: this.github,
             backup: this.backup,
             team: this.team,
+            git: this.git,
+            gitApi: this.git,
             memory: this.memory,
 
             // Top-level convenience aliases

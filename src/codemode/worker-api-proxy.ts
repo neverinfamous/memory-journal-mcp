@@ -8,8 +8,12 @@
 
 import { wrapResult } from './worker-result-proxy.js'
 import { METHOD_ALIASES } from './api-constants.js'
+import { applyGitInterceptions } from './api/git-api.js'
 
 export function applyArgInterceptions(methodName: string, args: unknown[]): { args: unknown[] } | { error: Record<string, unknown> } {
+    const gitIntercept = applyGitInterceptions(methodName, args);
+    if (gitIntercept) return gitIntercept;
+
     // Generic Parameter Aliases (Phase 31.1 Hallucination Smoothing)
     if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
         const obj = args[0] as Record<string, unknown>;
@@ -1326,15 +1330,15 @@ export function buildApiProxy(
                 }
 
                 if (resolvedKey === 'getConfig') {
-                    return () => Promise.reject(new Error(
+                    return () => wrapPromise(Promise.reject(new Error(
                         "Code Mode cannot directly read configuration via getConfig(). Use mj.core.listProjects() to discover active projects, or updateConfiguration() to change settings."
-                    ))
+                    )), 'getConfig')
                 }
 
                 if (resolvedKey === 'getBriefing') {
-                    return () => Promise.reject(new Error(
+                    return () => wrapPromise(Promise.reject(new Error(
                         "Code Mode cannot directly read the briefing resource via getBriefing(). Use mj.core.getRecentEntries() instead, or read the memory://briefing resource via standard MCP client requests outside of Code Mode."
-                    ))
+                    )), 'getBriefing')
                 }
 
                 if (resolvedKey === 'readResource') {
@@ -1355,9 +1359,9 @@ export function buildApiProxy(
                                 hint = ` Try: ${match[1]}`
                             }
                         }
-                        return Promise.reject(new Error(
+                        return wrapPromise(Promise.reject(new Error(
                             `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
-                        ))
+                        )), 'readResource')
                     }
                 }
 
@@ -1429,6 +1433,7 @@ export function buildApiProxy(
         get(target, prop) {
             if (typeof prop === 'symbol') return undefined
             if (prop in target) return target[prop]
+            if (prop === 'gitApi') return target['git']
             if (prop === 'then') return undefined
 
             if (typeof prop === 'string') {

@@ -21,6 +21,7 @@ import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
 import type { BriefingConfig } from '../../shared.js'
+import { GitHistoryClient, CommitAnalyzer } from '../../../../git/index.js'
 
 // ============================================================================
 // Types
@@ -227,18 +228,48 @@ export function parseTestHealth(content: string): TestHealth | null {
 let cachedUnreleased: UnreleasedSummary | null | undefined
 let cachedTestHealth: TestHealth | null | undefined
 
-function loadCachedUnreleased(): UnreleasedSummary | null {
+async function loadCachedUnreleased(): Promise<UnreleasedSummary | null> {
     if (cachedUnreleased !== undefined) return cachedUnreleased
 
     try {
         const root = resolveProjectRoot()
-        const filePath = path.join(root, 'UNRELEASED.md')
-        const content = fs.readFileSync(filePath, 'utf-8')
-        cachedUnreleased = parseUnreleasedSummary(content)
+        const gitClient = new GitHistoryClient(root)
+        // Fetch up to 50 recent commits assuming they are unreleased
+        const commits = await gitClient.getCommitHistory({ maxCount: 50 })
+        const analyzer = new CommitAnalyzer()
+        const analyzed = analyzer.analyze(commits)
+
+        const counts: UnreleasedSummary = {
+            added: 0,
+            changed: 0,
+            fixed: 0,
+            security: 0,
+            removed: 0,
+            keyItems: [],
+        }
+
+        const categories = new Set<string>()
+
+        for (const commit of analyzed) {
+            const type = commit.type?.toLowerCase()
+            if (type === 'added') counts.added++
+            else if (type === 'changed') counts.changed++
+            else if (type === 'fixed') counts.fixed++
+            else if (type === 'security') counts.security++
+            else if (type === 'removed') counts.removed++
+
+            if (['added', 'changed', 'fixed'].includes(type) && commit.trailers?.['Category']) {
+                categories.add(commit.trailers['Category'])
+            }
+        }
+        
+        counts.keyItems = [...categories].slice(0, 3)
+        const total = counts.added + counts.changed + counts.fixed + counts.security + counts.removed
+        cachedUnreleased = total > 0 ? counts : null
     } catch {
-        logger.debug('UNRELEASED.md not found or unreadable (non-critical)', {
+        logger.debug('Failed to get unreleased commits via GitClient (non-critical)', {
             module: 'BRIEFING',
-            operation: 'unreleased-parse',
+            operation: 'unreleased-git',
         })
         cachedUnreleased = null
     }
@@ -309,14 +340,7 @@ function loadCachedTestHealth(): TestHealth | null {
 
 let cachedLastReleaseDaysAgo: number | null | undefined
 
-/**
- * Parse the first versioned release header from CHANGELOG.md to compute
- * days elapsed since the last tagged release.
- *
- * Expects Keep-a-Changelog headers: `## [x.y.z](url) - YYYY-MM-DD`
- */
 export function parseLastReleaseAge(content: string): number | null {
-    // Match: ## [7.7.1](url) - 2026-05-15  OR  ## [7.7.1] - 2026-05-15
     const match = /^## \[[\d.]+\].*?-\s*(\d{4}-\d{2}-\d{2})/m.exec(content)
     if (!match?.[1]) return null
     const releaseDate = new Date(match[1] + 'T00:00:00Z')
@@ -324,23 +348,24 @@ export function parseLastReleaseAge(content: string): number | null {
     return Math.max(0, Math.floor(elapsed / 86_400_000))
 }
 
-function loadCachedLastReleaseDaysAgo(): number | null {
+async function loadCachedLastReleaseDaysAgo(): Promise<number | null> {
     if (cachedLastReleaseDaysAgo !== undefined) return cachedLastReleaseDaysAgo
 
     try {
         const root = resolveProjectRoot()
-        const filePath = path.join(root, 'CHANGELOG.md')
-        // Only read the first 1KB — the latest release header is near the top
-        const fd = fs.openSync(filePath, 'r')
-        const buf = Buffer.alloc(1024)
-        const bytesRead = fs.readSync(fd, buf, 0, 1024, 0)
-        fs.closeSync(fd)
-        const content = buf.toString('utf-8', 0, bytesRead)
-        cachedLastReleaseDaysAgo = parseLastReleaseAge(content)
+        const gitClient = new GitHistoryClient(root)
+        const commits = await gitClient.getReleaseInfo()
+        if (commits.length > 0 && commits[0]?.date) {
+            const releaseDate = new Date(commits[0].date)
+            const elapsed = Date.now() - releaseDate.getTime()
+            cachedLastReleaseDaysAgo = Math.max(0, Math.floor(elapsed / 86_400_000))
+        } else {
+            cachedLastReleaseDaysAgo = null
+        }
     } catch {
-        logger.debug('CHANGELOG.md not found or unreadable (non-critical)', {
+        logger.debug('Failed to get release info via GitClient (non-critical)', {
             module: 'BRIEFING',
-            operation: 'release-age-parse',
+            operation: 'release-age-git',
         })
         cachedLastReleaseDaysAgo = null
     }
@@ -440,14 +465,14 @@ export async function buildSystemContext(
         resourceCount: await getResourceCount(),
         promptCount: getPrompts().length,
         localTime,
-        unreleasedSummary: loadCachedUnreleased(),
+        unreleasedSummary: await loadCachedUnreleased(),
         testHealth: loadCachedTestHealth(),
         filterSummary,
         isReadonly,
         registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,
-        lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(),
+        lastReleaseDaysAgo: await loadCachedLastReleaseDaysAgo(),
         localCheck,
         workspaceId: config?.defaultWorkspaceId,
     }

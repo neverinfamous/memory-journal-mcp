@@ -373,7 +373,16 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
         toolIndexModule ??= await import('../../handlers/tools/index.js')
         if (toolIndexModule === null) return []
 
-        const tools = toolIndexModule.getTools(context.db, null)
+        const tools = toolIndexModule.getTools(
+            context.db,
+            null,
+            context.vectorManager,
+            context.github ?? undefined,
+            undefined,
+            context.teamDb,
+            undefined,
+            context.gitClient ?? undefined
+        )
         return tools.map((t) => ({
             name: t.name,
             title: t.title ?? t.name,
@@ -463,6 +472,12 @@ function inferGroupFromName(name: string): string {
         close_github_issue_with_entry: 'github',
         get_repo_insights: 'github',
         get_copilot_reviews: 'github',
+        // git (5)
+        get_commit_history: 'git',
+        search_commits: 'git',
+        get_release_info: 'git',
+        get_unreleased_commits: 'git',
+        analyze_commit_patterns: 'git',
     }
 
     return groupMap[name] ?? 'core'
