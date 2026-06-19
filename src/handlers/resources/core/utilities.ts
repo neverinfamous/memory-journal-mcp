@@ -1,16 +1,13 @@
-import type { Tag } from '../../../types/index.js'
+
 import {
     ICON_CLOCK,
     ICON_STAR,
-    ICON_TAG,
-    ICON_ANALYTICS,
     ICON_BRIEFING,
 } from '../../../constants/icons.js'
 // removed ENTRY_COLUMNS
 import {
     withPriority,
     ASSISTANT_FOCUSED,
-    LOW_PRIORITY,
     MEDIUM_PRIORITY,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
@@ -98,37 +95,7 @@ export const significantResource: InternalResourceDef = {
     },
 }
 
-export const tagsResource: InternalResourceDef = {
-    uri: 'memory://tags',
-    name: 'All Tags',
-    title: 'Tag List',
-    description: 'All available tags with usage counts',
-    mimeType: 'application/json',
-    icons: [ICON_TAG],
-    annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
-    handler: (_uri: string, context: ResourceContext) => {
-        const tags: Tag[] = context.db.listTags()
-        const mappedTags = tags.map((t) => ({
-            id: t.id,
-            name: t.name,
-            count: t.usageCount,
-        }))
-        return { tags: mappedTags, count: mappedTags.length }
-    },
-}
 
-export const statisticsResource: InternalResourceDef = {
-    uri: 'memory://statistics',
-    name: 'Statistics',
-    title: 'Journal Statistics',
-    description: 'Overall journal statistics',
-    mimeType: 'application/json',
-    icons: [ICON_ANALYTICS],
-    annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
-    handler: (_uri: string, context: ResourceContext) => {
-        return context.db.getStatistics('week')
-    },
-}
 
 interface CachedRuleEntry {
     content: string

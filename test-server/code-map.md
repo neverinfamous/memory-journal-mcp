@@ -347,17 +347,12 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://metrics/latency` | Metrics Latency |
 | `memory://recent` | Recent Entries |
 | `memory://significant` | Significant Entries |
-| `memory://tags` | All Tags |
-| `memory://statistics` | Statistics |
 | `memory://rules` | Rules File |
 | `memory://workflows` | Workflows |
 | `memory://skills` | Skills |
 | `memory://github/status` | GitHub Status |
-| `memory://github/insights` | Repository Insights |
 | `memory://github/milestones` | GitHub Milestones |
 | `memory://milestones/{number}` | Milestone Detail |
-| `memory://graph/recent` | Recent Relationship Graph |
-| `memory://graph/actions` | Actions Graph |
 | `memory://actions/recent` | Recent Actions |
 | `memory://help` | Help — Tool Groups |
 | `memory://help/{group}` | Help — Tool Group Detail |
@@ -379,7 +374,6 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://commits/{project_number}/by-issue` | Commits by Issue |
 | `memory://commits/{project_number}/by-pr` | Commits by PR |
 | `memory://kanban/{project_number}` | Kanban Board |
-| `memory://kanban/{project_number}/diagram` | Kanban Diagram |
 
 <!-- END: RESOURCES -->
 

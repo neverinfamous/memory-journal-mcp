@@ -4,11 +4,10 @@
  * Resources: github/status, github/insights, github/milestones, milestones/{number}
  */
 
-import { ICON_GITHUB, ICON_ANALYTICS, ICON_MILESTONE } from '../../constants/icons.js'
+import { ICON_GITHUB, ICON_MILESTONE } from '../../constants/icons.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
-    LOW_PRIORITY,
     MEDIUM_PRIORITY,
 } from '../../utils/resource-annotations.js'
 import type {
@@ -263,57 +262,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 }
             },
         },
-        // Repository insights resource
-        {
-            uri: 'memory://github/insights',
-            name: 'Repository Insights',
-            title: 'Repository Stars & Traffic Summary',
-            description: 'Compact repo insights: stars, forks, 14-day traffic totals (~150 tokens)',
-            mimeType: 'application/json',
-            icons: [ICON_ANALYTICS],
-            annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/github\/insights\/?(.*)?/.exec(uri)
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const resolved = await resolveGitHubRepo(
-                    context.github,
-                    context.briefingConfig,
-                    targetRepo,
-                    context.runtime
-                )
-                if (isResourceError(resolved)) return resolved
-                const { owner, repo, lastModified, github } = resolved
 
-                const stats = await github.getRepoStats(owner, repo)
-
-                let traffic: { clones14d: number; views14d: number } | null = null
-                try {
-                    const trafficData = await github.getTrafficData(owner, repo)
-                    if (trafficData) {
-                        traffic = {
-                            clones14d: trafficData.clones.total,
-                            views14d: trafficData.views.total,
-                        }
-                    }
-                } catch {
-                    // Traffic data requires push access
-                }
-
-                return {
-                    data: {
-                        repository: `${owner}/${repo}`,
-                        stars: stats?.stars ?? null,
-                        forks: stats?.forks ?? null,
-                        watchers: stats?.watchers ?? null,
-                        ...(traffic ?? {}),
-                        hint: !traffic
-                            ? 'Traffic data requires push access to the repository.'
-                            : undefined,
-                    },
-                    annotations: { lastModified },
-                }
-            },
-        },
         // Milestone resources
         {
             uri: 'memory://github/milestones',

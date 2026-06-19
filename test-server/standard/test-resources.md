@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Resources
 
-**Scope:** All 40 resources — 32 static resources, 8 template resources (happy path + error paths).
+**Scope:** All 34 resources — 27 static resources, 7 template resources (happy path + error paths).
 
 **Prerequisites:**
 
@@ -32,14 +32,9 @@
 | Recent entries    | `memory://recent`                      | Read, verify 10 entries with typed fields                                                                                           |
 | Significant       | `memory://significant`                 | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                             |
 | Significant order | `memory://significant`                 | Compare adjacent entries: `entries[0].importance >= entries[1].importance` etc.                                                     |
-| Tags              | `memory://tags`                        | Read, verify tag counts match `list_tags` output                                                                                    |
-| Statistics        | `memory://statistics`                  | Read, verify structured stats match `get_statistics` output                                                                         |
 | Health            | `memory://health`                      | Shows DB stats, tool filter status, vector index health                                                                             |
 | GitHub status     | `memory://github/status`               | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary (includes milestones)                                               |
-| Repo insights     | `memory://github/insights`             | Compact summary of stars, forks, and 14-day traffic                                                                                 |
 | GitHub milestones | `memory://github/milestones`           | Open milestones with completion percentages                                                                                         |
-| Graph recent      | `memory://graph/recent`                | Mermaid diagram with harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)                                                        |
-| Graph actions     | `memory://graph/actions`               | CI/CD narrative graph (verify graceful output when no workflow entries exist)                                                       |
 | Actions recent    | `memory://actions/recent`              | Recent workflow runs (verify graceful output when no workflow entries exist)                                                        |
 | Team recent       | `memory://team/recent`                 | Author-enriched entries, `source: "team"`, `count`                                                                                  |
 | Team statistics   | `memory://team/statistics`             | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                      |
@@ -75,7 +70,6 @@
 | PR entries       | `memory://prs/67/entries`      | Entries linked to PR #67 (permanent test fixture)                                                                                   |
 | PR timeline      | `memory://prs/67/timeline`     | PR lifecycle with `prMetadata` (live state) and `timelineNote`                                                                      |
 | Kanban JSON      | `memory://kanban/5`            | Board JSON                                                                                                                          |
-| Kanban diagram   | `memory://kanban/5/diagram`    | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                                                                              |
 | Milestone detail | `memory://milestones/<N>`      | Milestone with completion %, `openIssues` + `closedIssues` counts, and hint to use `get_github_issues` for individual issue details |
 | Briefing by repo | `memory://briefing/<repo>`     | Repo-scoped briefing (test with `memory://briefing/memory-journal-mcp`) — same structure as `memory://briefing` but repo-filtered   |
 
@@ -88,7 +82,6 @@
 | Nonexistent PR             | `memory://prs/999999/entries`      | Empty entries array (no crash)                                  |
 | Nonexistent PR timeline    | `memory://prs/999999/timeline`     | Graceful response with empty/null `prMetadata`                  |
 | Nonexistent Kanban         | `memory://kanban/99999`            | Error or empty board (no crash)                                 |
-| Nonexistent Kanban diagram | `memory://kanban/99999/diagram`    | Error or empty diagram (no crash)                               |
 | Nonexistent milestone      | `memory://milestones/999999`       | Error or empty milestone data (no crash)                        |
 
 ---
@@ -98,14 +91,10 @@
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- All 32 static resources return valid data
-- All 8 template resources work with valid parameters
-- All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- All 27 static resources return valid data
+- All 7 template resources work with valid parameters
+- All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
-- `memory://tags` tag counts match `list_tags` output
-- `memory://statistics` structured stats match `get_statistics` output
-- `memory://github/insights` returns compact stats including traffic aggregates
-- `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
 - `memory://instructions` references all tools and key resources
 - `memory://flags` returns active flag dashboard (empty when no unresolved flags)
 - `memory://flags/vocabulary` returns configured vocabulary list
