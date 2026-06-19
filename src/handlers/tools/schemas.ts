@@ -165,6 +165,19 @@ export function healAgentHallucinations(val: unknown): unknown {
                 if (ac === 'none' || ac === '{}' || ac === '{"commits":[]}') {
                     delete obj['auto_context']
                     modified = true
+                } else if (ac.startsWith('{') && ac.includes("'")) {
+                    try {
+                        JSON.parse(obj['auto_context'])
+                    } catch {
+                        try {
+                            const fixed = obj['auto_context'].replace(/'/g, '"')
+                            const parsed = JSON.parse(fixed) as Record<string, unknown>
+                            obj['auto_context'] = JSON.stringify(parsed)
+                            modified = true
+                        } catch {
+                            // Ignore
+                        }
+                    }
                 }
             }
         }

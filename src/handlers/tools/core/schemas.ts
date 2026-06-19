@@ -61,9 +61,9 @@ export const CreateEntrySchema = z.preprocess(
                         path: ['auto_context'],
                         message: [
                             "[ANTI-HALLUCINATION] Entries tagged 'commit-narrative' or 'session-summary' (when providing auto_context) MUST include an auto_context with a non-empty 'commits' array.",
-                            "In Code Mode, pass it as a plain object: { commits: ['<sha>'] }",
-                            "or as a pre-stringified JSON string: JSON.stringify({ commits: ['<sha>'] }).",
-                            "Example: await mj.core.create_entry({ ..., auto_context: { commits: ['abc1234'] } })",
+                            "In Code Mode, pass it as a plain object: { \"commits\": [\"<sha>\"] }",
+                            "or as a pre-stringified JSON string: JSON.stringify({ \"commits\": [\"<sha>\"] }).",
+                            "Example: await mj.core.create_entry({ ..., auto_context: { \"commits\": [\"abc1234\"] } })",
                         ].join(' '),
                     });
                 }
@@ -71,7 +71,7 @@ export const CreateEntrySchema = z.preprocess(
                 ctx.addIssue({
                     code: "custom",
                     path: ['auto_context'],
-                    message: "[ANTI-HALLUCINATION] auto_context must be a valid JSON string or plain object for commit narratives. Example: { commits: ['<sha>'] }",
+                    message: "[ANTI-HALLUCINATION] auto_context must be a valid JSON string or plain object for commit narratives. Example: { \"commits\": [\"<sha>\"] }",
                 });
             }
         }

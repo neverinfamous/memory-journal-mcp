@@ -36,7 +36,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 
                 try {
                     const input = ExecuteCodeSchema.parse(params)
-                    const executionCode = input.code || input.script || input.source
+                    let executionCode = input.code || input.script || input.source
+
+                    // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
+                    if (executionCode) {
+                        executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
+                        executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
+                        executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
+                        executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
+                    }
 
                     // 1. Configuration Validation
                     if (context.config?.codemodeEnabled !== true) {
