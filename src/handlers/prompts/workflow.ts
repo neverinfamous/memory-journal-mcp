@@ -405,11 +405,14 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
 
 ## Context for Next Session
 - [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+
+## Commits
+- [List commit SHAs made during the session, or "None"]
 \`\`\`
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the three required sections
+- Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - If commits were made, populate \`auto_context\` with the commit metadata JSON
@@ -475,11 +478,14 @@ ${markUntrustedContent(entrySummary)}`,
 
 ## Context for Next Session
 - [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+
+## Commits
+- [List commit SHAs made during the session, or "None"]
 \`\`\`
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the three required sections
+- Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - If commits were made, populate \`auto_context\` with the commit metadata JSON

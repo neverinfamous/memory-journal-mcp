@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **105 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **107 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -18,7 +18,7 @@ Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*
 
 ---
 
-## core (8 tools + Code Mode)
+## core (9 tools + Code Mode)
 
 Entry lifecycle — create, retrieve, tags, and test.
 
@@ -32,6 +32,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 | `test_error_handling`  | Test tool for validating error handler responses.                                  |
 | `trigger_progress`     | Test tool to trigger an MCP progress notification sequence.                        |
 | `list_tags`            | List all available tags.                                                           |
+| `mark_anchors_stale`   | Mark explicit relationships between entries as stale or out-of-date.               |
 
 ---
 
@@ -132,7 +133,7 @@ GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights
 
 ---
 
-## git (5 tools + Code Mode)
+## git (6 tools + Code Mode)
 
 Commit history mining, release tracking, and commit analytics using `simple-git`.
 
@@ -143,6 +144,7 @@ Commit history mining, release tracking, and commit analytics using `simple-git`
 | `get_release_info`        | Retrieve information about a specific release tag, including commit count and timestamp.                                                   |
 | `get_unreleased_commits`  | Track commits that have been merged since the last release tag.                                                                            |
 | `analyze_commit_patterns` | Analyze commit history to identify frequent contributors and frequently modified files.                                                    |
+| `check_entry_staleness`   | Evaluate journal entry staleness by cross-referencing with recent git commits or branch activity.                                          |
 
 ---
 
@@ -270,7 +272,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 105   | All tools (default)      |
+| `full`               | 107   | All tools (default)      |
 | `starter`            | 15    | Core + search + codemode |
 | `essential`          | 9     | Minimal footprint        |
 | `readonly`           | 23    | Disable all mutations    |
