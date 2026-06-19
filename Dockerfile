@@ -5,7 +5,7 @@ FROM node:26.2.0-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
-# Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, etc.)
+# Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, libcrypto3 CVE-2026-45447)
 RUN apk add --no-cache python3 make g++ gettext git sqlite-dev && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache
@@ -68,6 +68,7 @@ WORKDIR /app
 # Use Alpine edge for curl with CVE fixes (and nghttp2-libs for CVE-2026-27135)
 # Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
+# Explicit libcrypto3/libssl3 upgrade for CVE-2026-45447 (HIGH)
 RUN apk add --no-cache git ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache && \
