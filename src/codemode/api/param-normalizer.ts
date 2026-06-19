@@ -348,6 +348,52 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         });
     }
 
+    // Heal session summary headers hallucination (Layer 2 Dispatcher Healing)
+    if ('tags' in result && Array.isArray(result['tags']) && result['tags'].includes('session-summary') && 'content' in result && typeof result['content'] === 'string') {
+        const c = result['content'];
+        let healedContent = c;
+        const requiredHeaders = [
+            '## Accomplished',
+            '## Unfinished / Blocked',
+            '## Context for Next Session',
+            '## Commits'
+        ];
+        
+        let changed = false;
+        for (const header of requiredHeaders) {
+            // Check for loose match (case insensitive)
+            const regex = new RegExp(`#+\\s+${header.replace(/^#+\\s+/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\ /g, '\\s*')}`, 'i');
+            if (!regex.test(healedContent)) {
+                healedContent += `\n\n${header}\n- None.`;
+                changed = true;
+            }
+        }
+        
+        if (changed) {
+            result['content'] = healedContent.trim();
+        }
+    }
+
+    // Heal auto_context 'commits' hallucination (e.g. passing a string instead of an array)
+    if ('auto_context' in result) {
+        const ac = result['auto_context'];
+        if (typeof ac === 'string') {
+            try {
+                // Try to parse, fix, and re-stringify if it has a string commits field
+                const parsed = JSON.parse(ac.replace(/'/g, '"')) as Record<string, unknown>;
+                if ('commits' in parsed && typeof parsed['commits'] === 'string') {
+                    parsed['commits'] = [parsed['commits']];
+                    result['auto_context'] = JSON.stringify(parsed);
+                }
+            } catch { /* empty */ }
+        } else if (typeof ac === 'object' && ac !== null) {
+            const acObj = ac as Record<string, unknown>;
+            if ('commits' in acObj && typeof acObj['commits'] === 'string') {
+                acObj['commits'] = [acObj['commits']];
+            }
+        }
+    }
+
     return result
 }
 
