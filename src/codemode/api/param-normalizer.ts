@@ -70,6 +70,32 @@ const PARAM_ALIASES: Record<string, string> = {
 }
 
 /**
+ * Common hallucinated entry types -> canonical types
+ */
+const ENTRY_TYPE_ALIASES: Record<string, string> = {
+    'session-summary': 'retrospective',
+    'session_summary': 'retrospective',
+    'summary': 'retrospective',
+    'bug': 'bug_fix',
+    'feature': 'feature_implementation',
+    'note': 'technical_note',
+    'technical-note': 'technical_note',
+    'reflection': 'personal_reflection',
+    'decision': 'project_decision',
+    'review': 'code_review',
+}
+
+/**
+ * Common hallucinated tags -> canonical tags
+ */
+const TAG_ALIASES: Record<string, string> = {
+    'session_summary': 'session-summary',
+    'commit_narrative': 'commit-narrative',
+    'bug_fix': 'bug-fix',
+    'feature_implementation': 'feature',
+}
+
+/**
  * Convert camelCase object keys to snake_case
  */
 export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?: string): Record<string, unknown> {
@@ -260,6 +286,15 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             continue
         }
 
+        // Heal hallucinated entry types
+        if (snakeKey === 'entry_type' && typeof value === 'string') {
+            const valLower = value.toLowerCase()
+            if (ENTRY_TYPE_ALIASES[valLower]) {
+                result[snakeKey] = ENTRY_TYPE_ALIASES[valLower]
+                continue
+            }
+        }
+
         result[snakeKey] = value
     }
 
@@ -268,6 +303,17 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         const tagVal = result['tag']
         result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]
         delete result['tag']
+    }
+
+    // Heal hallucinated tags
+    if ('tags' in result && Array.isArray(result['tags'])) {
+        result['tags'] = result['tags'].map((tag: unknown) => {
+            if (typeof tag === 'string') {
+                const tagLower = tag.trim().toLowerCase()
+                return TAG_ALIASES[tagLower] || tag
+            }
+            return tag
+        })
     }
 
     // Coerce top-level 'commits' array into auto_context for session summaries / commit narratives
