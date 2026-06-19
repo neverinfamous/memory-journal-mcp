@@ -8,7 +8,8 @@ const healthStatusFile = join(testOutputDir, 'health-status.json')
 const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
 
 function runCommand(command: string, args: string[]) {
-    const result = spawnSync(command, args, { stdio: 'inherit', shell: true })
+    const fullCommand = `${command} ${args.join(' ')}`
+    const result = spawnSync(fullCommand, { stdio: 'inherit', shell: true })
     return result.status === 0
 }
 
