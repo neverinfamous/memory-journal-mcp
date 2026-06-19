@@ -4,9 +4,9 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = join(__dirname, '..', '..')
-const proc = spawn(process.execPath, ['dist/cli.js', '--instruction-level', 'essential'], {
+const proc = spawn(process.execPath, ['dist/cli.js'], {
     cwd: projectDir,
-    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db' },
+    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_DB_PATH: 'test-prompts.db', JOURNAL_CONFIG_DIR: 'test-server' },
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -74,36 +74,33 @@ async function main() {
 
     const testCases = [
         // 8.1 No-argument prompts
-        { name: 'prepare-standup', args: {}, expect: 'standup' },
-        { name: 'weekly-digest', args: {}, expect: 'weekly' },
         { name: 'goal-tracker', args: {}, expect: 'goal' },
-        { name: 'get-context-bundle', args: {}, expect: 'context' },
-        { name: 'confirm-briefing', args: {}, expect: 'session' },
         { name: 'session-summary', args: {}, expect: 'session' },
-        { name: 'team-session-summary', args: {}, expect: 'team session' },
         // 8.1 Required-argument prompts
-        { name: 'find-related', args: { query: 'architecture' }, expect: 'architecture' },
         {
-            name: 'analyze-period',
-            args: { start_date: '2026-01-01', end_date: '2026-12-31' },
+            name: 'time-period-analysis',
+            args: { period_type: 'custom', start_date: '2026-01-01', end_date: '2026-12-31' },
             expect: '2026',
         },
-        // 8.1 Optional-argument prompts
-        { name: 'prepare-retro', args: {}, expect: 'retrospective' },
-        { name: 'prepare-retro', args: { days: '7' }, expect: '7' },
-        { name: 'get-recent-entries', args: {}, expect: '' },
-        { name: 'get-recent-entries', args: { limit: '3' }, expect: '' },
         // 8.2 GitHub prompts
-        { name: 'project-status-summary', args: { project_number: '5' }, expect: '5' },
-        { name: 'pr-summary', args: { pr_number: '67' }, expect: '67' },
-        { name: 'code-review-prep', args: { pr_number: '67' }, expect: '67' },
-        { name: 'pr-retrospective', args: { pr_number: '67' }, expect: '67' },
-        { name: 'project-milestone-tracker', args: { project_number: '5' }, expect: '5' },
+        { name: 'issue-commander', args: { project_number: '5' }, expect: '5' },
+        { name: 'pr-commander', args: { pr_number: '67' }, expect: '67' },
         { name: 'actions-failure-digest', args: {}, expect: '' },
         // 8.3 Adversarial and flag prompts
         { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: 'migration' },
+        { name: 'audit-code-quality', args: { target: 'src/main.ts' }, expect: 'src/main.ts' },
+        { name: 'audit-security', args: { target: 'auth.ts' }, expect: 'auth.ts' },
+        { name: 'audit-performance', args: { target: 'index.ts' }, expect: 'index.ts' },
+        { name: 'audit-seo-docs', args: { target: 'README.md' }, expect: 'README.md' },
+        { name: 'audit-skill', args: { target: 'my-skill' }, expect: 'my-skill' },
+        { name: 'audit-workflow', args: { target: 'ci.yml' }, expect: 'ci.yml' },
         { name: 'flag-dashboard', args: {}, expect: '' },
         { name: 'flag-dashboard', args: { flag_type: 'blocker' }, expect: 'blocker' },
+        // 8.4 Git History prompts
+        { name: 'commit', args: {}, expect: 'Commit Workflow' },
+        { name: 'quick-commit', args: {}, expect: 'Quick Commit' },
+        // 8.5 Optimizer prompts
+        { name: 'optimize-journal', args: {}, expect: 'Optimizer' },
     ]
 
     console.log(`\n=== TESTING ${testCases.length} PROMPT CALLS ===\n`)
@@ -167,18 +164,7 @@ async function main() {
         fail++
     }
 
-    try {
-        const resp = await rpc('prompts/get', { name: 'find-related', arguments: {} })
-        if (resp.error) {
-            console.log(`PASS find-related(no args): error returned`)
-        } else {
-            console.log(`PASS find-related(no args): handled gracefully`)
-        }
-        pass++
-    } catch (err) {
-        console.log(`FAIL find-related(no args): ${err.message}`)
-        fail++
-    }
+
 
     console.log(`\n=== RESULTS: ${pass} pass, ${fail} fail (${pass + fail} total) ===`)
     proc.kill()
