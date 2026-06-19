@@ -208,9 +208,13 @@ Address every finding with a disposition:
 
 Journal: \`create_entry({ content: "<refinement>", entry_type: "plan_refinement", tags: ["adversarial-planner", "refinement"] })\`
 
-### Phase 4: Present to User
+### Phase 4: External Validation (Copilot)
 
-Present the refined plan for approval with the final score and all disposition decisions.
+Run \`gh copilot suggest -t shell "Review this plan for correctness and edge cases"\` in NON-INTERACTIVE mode. If unavailable, skip gracefully. Note findings.
+
+### Phase 5: Present to User
+
+Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback.
 
 ## Link Entries
 
@@ -237,5 +241,102 @@ Review prior entries for recurring findings and reusable patterns before draftin
                 }
             },
         },
+        {
+            name: 'audit-code-quality',
+            description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency)',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'text',
+                        text: `# Adversarial Code Quality Audit
+Target: ${args['target']}
+
+1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, and boundary validation.
+2. Group findings by category and severity (Critical, Moderate, Low).
+3. Present a summary table to the user and await approval.
+4. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests), and commit with descriptive messages.
+Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "code-quality"]\`.`
+                    }
+                }]
+            })
+        },
+        {
+            name: 'audit-security',
+            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces)',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'text',
+                        text: `# Adversarial Security Audit\nTarget: ${args['target']}\n\n1. Perform a multi-pass security audit looking for injection vectors, auth/authz gaps, data boundary issues.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                    }
+                }]
+            })
+        },
+        {
+            name: 'audit-performance',
+            description: 'Multi-pass adversarial performance audit (profiling, stress-testing)',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'text',
+                        text: `# Adversarial Performance Audit\nTarget: ${args['target']}\n\n1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                    }
+                }]
+            })
+        },
+        {
+            name: 'audit-seo-docs',
+            description: 'Adversarial SEO and documentation audit (markup, E-E-A-T, marketing)',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'text',
+                        text: `# Adversarial SEO & Docs Audit\nTarget: ${args['target']}\n\n1. Perform a multi-pass audit checking technical SEO, semantic HTML, ARIA, and marketing documentation clarity.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                    }
+                }]
+            })
+        },
+        {
+            name: 'audit-skill',
+            description: 'Multi-pass adversarial skill audit (evaluate triggers, stress-test)',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'target', description: 'Skill name or path', required: true }],
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'text',
+                        text: `# Adversarial Skill Audit\nTarget: ${args['target']}\n\n1. Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                    }
+                }]
+            })
+        },
+        {
+            name: 'audit-workflow',
+            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention)',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'target', description: 'Workflow name or path', required: true }],
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'text',
+                        text: `# Adversarial Workflow Audit\nTarget: ${args['target']}\n\n1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                    }
+                }]
+            })
+        }
     ]
 }

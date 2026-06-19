@@ -95,11 +95,13 @@ async function executeCode(
                         return codemodeGroup['mjExecuteCode'] ?? codemodeGroup['executeCode']
                     }
                     return () =>
-                        Promise.reject(
-                            new Error(
-                                'You are already inside Code Mode execution. You do not need to call executeCode again. Just write your logic directly (e.g., return await mj.core.createEntry(...)).'
-                            )
-                        )
+                        Promise.resolve({
+                            success: false,
+                            error: 'You are already inside Code Mode execution. You do not need to call executeCode again. Just write your logic directly (e.g., return await mj.core.createEntry(...)).',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true
+                        })
                 }
                 if (prop === 'readResource') {
                     return (uri?: string) => {
@@ -118,11 +120,13 @@ async function executeCode(
                                 hint = ` Try: ${match[1]}`
                             }
                         }
-                        return Promise.reject(
-                            new Error(
-                                `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
-                            )
-                        )
+                        return Promise.resolve({
+                            success: false,
+                            error: `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true
+                        })
                     }
                 }
                 // Handle `memory.journal.addEntry` natural hallucination

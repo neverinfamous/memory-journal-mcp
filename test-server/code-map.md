@@ -405,11 +405,24 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | Prompt | Description |
 | ------ | ----------- |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
-| `project-workflow` | Project status and milestone tracking |
-| `workflow_type` | status | milestone |
-| `pr-workflow` | Pull request summary, review prep, and retrospectives |
-| `workflow_type` | summary | review | retro |
+| `audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency) |
+| `target` | File, folder, or component to audit |
+| `audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
+| `target` | File, folder, or component to audit |
+| `audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
+| `target` | File, folder, or component to audit |
+| `audit-seo-docs` | Adversarial SEO and documentation audit (markup, E-E-A-T, marketing) |
+| `target` | File, folder, or component to audit |
+| `audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
+| `target` | Skill name or path |
+| `audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
+| `target` | Workflow name or path |
+| `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
+| `workflow_type` | triage | milestone | roadmap |
+| `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
+| `workflow_type` | summary | review | deps | changelog |
 | `actions-failure-digest` | CI/CD failure analysis with root cause identification |
+| `optimize-journal` | Guided database pruning and optimization workflow with live metrics |
 | `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
 | `time-period-analysis` | Analyze entries over a specific time period (standup, weekly, retro) |
 | `period_type` | standup | weekly | retro | custom |

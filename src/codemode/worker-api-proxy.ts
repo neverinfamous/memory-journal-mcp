@@ -1379,15 +1379,23 @@ export function buildApiProxy(
                 }
 
                 if (resolvedKey === 'getConfig') {
-                    return () => wrapPromise(Promise.reject(new Error(
-                        "Code Mode cannot directly read configuration via getConfig(). Use mj.core.listProjects() to discover active projects, or updateConfiguration() to change settings."
-                    )), 'getConfig')
+                    return () => wrapPromise(Promise.resolve(wrapResult({
+                        success: false,
+                        error: "Code Mode cannot directly read configuration via getConfig(). Use mj.core.listProjects() to discover active projects, or updateConfiguration() to change settings.",
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true
+                    })), 'getConfig')
                 }
 
                 if (resolvedKey === 'getBriefing') {
-                    return () => wrapPromise(Promise.reject(new Error(
-                        "Code Mode cannot directly read the briefing resource via getBriefing(). Use mj.core.getRecentEntries() instead, or read the memory://briefing resource via standard MCP client requests outside of Code Mode."
-                    )), 'getBriefing')
+                    return () => wrapPromise(Promise.resolve(wrapResult({
+                        success: false,
+                        error: "Code Mode cannot directly read the briefing resource via getBriefing(). Use mj.core.getRecentEntries() instead, or read the memory://briefing resource via standard MCP client requests outside of Code Mode.",
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true
+                    })), 'getBriefing')
                 }
 
                 if (resolvedKey === 'readResource') {
@@ -1408,9 +1416,13 @@ export function buildApiProxy(
                                 hint = ` Try: ${match[1]}`
                             }
                         }
-                        return wrapPromise(Promise.reject(new Error(
-                            `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
-                        )), 'readResource')
+                        return wrapPromise(Promise.resolve(wrapResult({
+                            success: false,
+                            error: `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true
+                        })), 'readResource')
                     }
                 }
 

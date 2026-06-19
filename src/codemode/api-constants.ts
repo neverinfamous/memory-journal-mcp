@@ -47,7 +47,14 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         revisions: 'getEntryHistory',
         listEntries: 'searchEntries',
         sessionSummary: 'createEntry',
-    },
+    
+        create_entry: 'createEntry',
+        get_entry_by_id: 'getEntryById',
+        get_recent_entries: 'getRecentEntries',
+        create_entry_minimal: 'createEntryMinimal',
+        list_tags: 'listTags',
+        get_entry_history: 'getEntryHistory',
+        search_audit_log: 'searchAuditLog',},
     search: {
         find: 'searchEntries',
         search: 'searchEntries',
@@ -63,7 +70,13 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         crossSearch: 'crossTeamSearch',
         readQuery: 'searchEntries',
         read_query: 'searchEntries',
-    },
+    
+        search_entries: 'searchEntries',
+        search_by_date_range: 'searchByDateRange',
+        semantic_search: 'semanticSearch',
+        get_vector_index_stats: 'getVectorIndexStats',
+        list_deleted_entries: 'listDeletedEntries',
+        cross_team_search: 'crossTeamSearch',},
     analytics: {
         stats: 'getStatistics',
         getStats: 'getStatistics',
@@ -72,18 +85,26 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         getProjects: 'getCrossProjectInsights',
         listProjects: 'getCrossProjectInsights',
         projects: 'getCrossProjectInsights',
-    },
+    
+        get_statistics: 'getStatistics',
+        get_cross_project_insights: 'getCrossProjectInsights',},
     relationships: {
         link: 'linkEntries',
         graph: 'visualizeRelationships',
-    },
+    
+        link_entries: 'linkEntries',
+        visualize_relationships: 'visualizeRelationships',},
     io: {
         dump: 'exportEntries',
         md: 'exportMarkdown',
         importMd: 'importMarkdown',
         importNotion: 'importExternal',
         importObsidian: 'importExternal',
-    },
+    
+        export_entries: 'exportEntries',
+        export_markdown: 'exportMarkdown',
+        import_markdown: 'importMarkdown',
+        import_external: 'importExternal',},
     admin: {
         edit: 'updateEntry',
         update: 'updateEntry',
@@ -112,7 +133,18 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         configure: 'updateConfiguration',
         auditLog: 'searchAuditLog',
         audit: 'searchAuditLog',
-    },
+    
+        update_entry: 'updateEntry',
+        delete_entry: 'deleteEntry',
+        restore_entry: 'restoreEntry',
+        rebuild_vector_index: 'rebuildVectorIndex',
+        add_to_vector_index: 'addToVectorIndex',
+        merge_tags: 'mergeTags',
+        batch_create_entries: 'batchCreateEntries',
+        batch_update_entries: 'batchUpdateEntries',
+        batch_delete_entries: 'batchDeleteEntries',
+        update_configuration: 'updateConfiguration',
+        search_audit_log: 'searchAuditLog',},
     github: {
         issues: 'getGithubIssues',
         issue: 'getGithubIssue',
@@ -132,7 +164,25 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         createIssue: 'createGithubIssueWithEntry',
         closeIssue: 'closeGithubIssueWithEntry',
         copilotReviews: 'getCopilotReviews',
-    },
+    
+        get_github_issues: 'getGithubIssues',
+        get_github_issue: 'getGithubIssue',
+        get_github_prs: 'getGithubPrs',
+        get_github_pr: 'getGithubPr',
+        get_github_context: 'getGithubContext',
+        get_kanban_board: 'getKanbanBoard',
+        move_kanban_item: 'moveKanbanItem',
+        add_kanban_item: 'addKanbanItem',
+        delete_kanban_item: 'deleteKanbanItem',
+        get_github_milestones: 'getGithubMilestones',
+        get_github_milestone: 'getGithubMilestone',
+        create_github_milestone: 'createGithubMilestone',
+        update_github_milestone: 'updateGithubMilestone',
+        delete_github_milestone: 'deleteGithubMilestone',
+        get_repo_insights: 'getRepoInsights',
+        create_github_issue_with_entry: 'createGithubIssueWithEntry',
+        close_github_issue_with_entry: 'closeGithubIssueWithEntry',
+        get_copilot_reviews: 'getCopilotReviews',},
     backup: {
         save: 'backupJournal',
         create: 'backupJournal',
@@ -140,7 +190,11 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         list: 'listBackups',
         restore: 'restoreBackup',
         cleanup: 'cleanupBackups',
-    },
+    
+        backup_journal: 'backupJournal',
+        list_backups: 'listBackups',
+        restore_backup: 'restoreBackup',
+        cleanup_backups: 'cleanupBackups',},
     team: {
         create: 'teamCreateEntry',
         createEntry: 'teamCreateEntry',
@@ -242,7 +296,12 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         release: 'getReleaseInfo',
         unreleased: 'getUnreleasedCommits',
         analyze: 'analyzeCommitPatterns',
-    },
+    
+        get_commit_history: 'getCommitHistory',
+        search_commits: 'searchCommits',
+        get_release_info: 'getReleaseInfo',
+        get_unreleased_commits: 'getUnreleasedCommits',
+        analyze_commit_patterns: 'analyzeCommitPatterns',},
 }
 
 // =============================================================================

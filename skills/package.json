@@ -6,20 +6,7 @@
     "main": "README.md",
     "files": [
         "README.md",
-        "adversarial-code-quality/",
-        "adversarial-docs-marketer/",
-        "adversarial-github-actions/",
-        "adversarial-performance/",
-        "adversarial-planner/",
-        "adversarial-security/",
-        "adversarial-seo/",
-        "adversarial-skill-audit/",
-        "adversarial-skill-builder/",
-        "adversarial-workflow-audit/",
-        "github-issue-commander/",
-        "github-pr-commander/",
-        "mj-mcp-heal/",
-        "mj-mcp-optimize/"
+        "adversarial-skill-builder/"
     ],
     "keywords": [
         "agent",

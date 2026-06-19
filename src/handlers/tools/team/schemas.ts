@@ -58,12 +58,20 @@ export const TeamCreateEntrySchema = z.preprocess(
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
-            const c = data.content || '';
+            const c = data.content ?? '';
             if (!/#+\s+Accomplished/i.test(c) || !/#+\s+Unfinished \/ Blocked/i.test(c) || !/#+\s+Context for Next Session/i.test(c) || !/#+\s+Commits/i.test(c)) {
                 ctx.addIssue({
                     code: "custom",
                     path: ['content'],
                     message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure. Do not add or remove any top-level headers. You must rewrite the entire content field conforming to this exact structure.",
+                });
+            }
+            const countHeaders = (regex: RegExp): number => (c.match(regex) ?? []).length;
+            if (countHeaders(/#+\s+Accomplished/gi) > 1 || countHeaders(/#+\s+Unfinished \/ Blocked/gi) > 1 || countHeaders(/#+\s+Context for Next Session/gi) > 1 || countHeaders(/#+\s+Commits/gi) > 1) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ['content'],
+                    message: "[ANTI-HALLUCINATION] Session summaries must NOT contain duplicate section headers. Each of the 4 required headers must appear EXACTLY ONCE.",
                 });
             }
         }
@@ -112,8 +120,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
             'unless the entry is genuinely a personal note.'
         ),
         tags: z.array(z.string()).optional().default([]).describe(
-            'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
-            'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit"). ' +
+            'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". DO NOT hallucinate fake tags. Only use tags that genuinely match the content or existing repository vocabulary, domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit"). ' +
             '[ANTI-HALLUCINATION] MUST be an array of strings, e.g. ["tag1", "tag2"]. NEVER pass a single string.'
         ),
         significance_type: z.string().optional(),

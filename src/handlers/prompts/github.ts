@@ -37,16 +37,16 @@ function formatPromptEntries(
 export function getGitHubPromptDefinitions(): InternalPromptDef[] {
     return [
         {
-            name: 'project-workflow',
-            description: 'Project status and milestone tracking',
+            name: 'issue-commander',
+            description: 'Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints',
             icons: [ICON_PROMPT],
             arguments: [
                 { name: 'project_number', description: 'GitHub Project number', required: true },
-                { name: 'workflow_type', description: 'status | milestone', required: false },
+                { name: 'workflow_type', description: 'triage | milestone | roadmap', required: false },
             ],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => {
                 const projectNumber = parseInt(args['project_number'] ?? '0', 10)
-                const type = args['workflow_type'] ?? 'status'
+                const type = args['workflow_type'] ?? 'triage'
 
                 return {
                     messages: [
@@ -54,12 +54,24 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Execute a ${type} workflow for Project #${String(projectNumber)}.
+                                text: `# GitHub Issue Commander
+Execute a ${type} workflow for Project #${String(projectNumber)}.
 To complete this task, you MUST first read the following resource to obtain the project's context:
 \`memory://projects/${String(projectNumber)}/timeline\`
 
-If doing a status summary: Provide overview, recent activity, blockers, next steps.
-If doing a milestone tracker: Provide progress summary, upcoming milestones, timeline.`,
+## Core Rules & Validation Gates
+1. **Validation Pipeline**: Before completing, you MUST pass these gates sequentially:
+   Gate 1: Lint + Typecheck → Gate 2: Build → Gate 3: Tests → Gate 4: E2E → Gate 5: Security (npm-audit, codeql, trivy, docker-scout, gitleaks)
+2. **Auto-fix**: Attempt to auto-fix errors (lint/types) up to 2 times.
+3. **Journaling**: Create a journal entry for EVERY significant action using tags: \`["commander", "triage", "gate_pass" | "gate_fail", "security"]\`.
+4. **HITL Checkpoints**: Pause and request human approval:
+   - Before \`git push\`
+   - On critical security findings
+   - Unfixable test failures (after 2 attempts)
+   - Large changesets (>10 files touched)
+
+If doing a triage: Provide overview, recent activity, blockers, next steps.
+If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
                             },
                         },
                     ],
@@ -67,12 +79,12 @@ If doing a milestone tracker: Provide progress summary, upcoming milestones, tim
             },
         },
         {
-            name: 'pr-workflow',
-            description: 'Pull request summary, review prep, and retrospectives',
+            name: 'pr-commander',
+            description: 'Pull request summary, review prep, and dependency updates with validation gates',
             icons: [ICON_PROMPT],
             arguments: [
                 { name: 'pr_number', description: 'Pull request number', required: true },
-                { name: 'workflow_type', description: 'summary | review | retro', required: false },
+                { name: 'workflow_type', description: 'summary | review | deps | changelog', required: false },
             ],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
@@ -84,14 +96,26 @@ If doing a milestone tracker: Provide progress summary, upcoming milestones, tim
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Execute a ${type} workflow for PR #${String(prNumber)}.
+                                text: `# GitHub PR Commander
+Execute a ${type} workflow for PR #${String(prNumber)}.
 To complete this task, you MUST first read the following resources to obtain the PR's context:
 - \`memory://prs/${String(prNumber)}/entries\`
 - \`memory://prs/${String(prNumber)}/timeline\`
 
+## Core Rules & Validation Gates
+1. **Validation Pipeline**: Before approving/merging, you MUST pass these gates sequentially:
+   Gate 1: Lint + Typecheck → Gate 2: Build → Gate 3: Tests → Gate 4: E2E → Gate 5: Security
+2. **Auto-fix**: Attempt to auto-fix errors up to 2 times.
+3. **Journaling**: Create a journal entry for EVERY significant action using tags: \`["commander", "review", "gate_pass" | "gate_fail"]\`.
+4. **HITL Checkpoints**: Pause and request human approval:
+   - Before \`git push\` or merging
+   - On critical security findings
+   - Unfixable test failures (after 2 attempts)
+   - Large changesets (>10 files touched)
+
 If doing a summary: Provide summary of changes, decisions made, testing done.
 If doing a review: Provide review checklist, areas of concern, testing recommendations.
-If doing a retro: Provide what went well, challenges, lessons learned.`,
+If doing deps/changelog: Audit updates and backfill SHA provenance.`,
                             },
                         },
                     ],
