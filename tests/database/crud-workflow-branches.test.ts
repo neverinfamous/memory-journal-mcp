@@ -351,54 +351,20 @@ describe('Workflow prompts — branch coverage', () => {
         } as unknown as IDatabaseAdapter
     }
 
-    it('should generate prepare-standup prompt', () => {
+    it('should generate time-period-analysis prompt for standup', () => {
         const prompts = getWorkflowPromptDefinitions()
-        const standup = prompts.find((p) => p.name === 'prepare-standup')!
-        const db = createMockDb([mockEntry({ content: 'worked on auth' })])
-        const result = standup.handler({}, db)
+        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
+        const db = createMockDb()
+        const result = analysis.handler({ period_type: 'standup' }, db)
         expect(result.messages[0]!.content.text).toContain('standup')
     })
 
-    it('should generate prepare-retro prompt with default 14 days', () => {
+    it('should generate time-period-analysis prompt for retro', () => {
         const prompts = getWorkflowPromptDefinitions()
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
-        const db = createMockDb([mockEntry()])
-        const result = retro.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('14 days')
-    })
-
-    it('should generate prepare-retro prompt with custom days', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
+        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
         const db = createMockDb()
-        const result = retro.handler({ days: '7' }, db)
-        expect(result.messages[0]!.content.text).toContain('7 days')
-    })
-
-    it('should generate weekly-digest prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const digest = prompts.find((p) => p.name === 'weekly-digest')!
-        const db = createMockDb([mockEntry()])
-        const result = digest.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('weekly')
-    })
-
-    it('should generate analyze-period prompt with dates', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-        const db = createMockDb()
-        // Uses start_date and end_date arg names
-        const result = analyze.handler({ start_date: '2025-01-01', end_date: '2025-02-01' }, db)
-        expect(result.messages[0]!.content.text).toContain('2025-01-01')
-        expect(result.messages[0]!.content.text).toContain('2025-02-01')
-    })
-
-    it('should generate analyze-period prompt without dates', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-        const db = createMockDb()
-        const result = analyze.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('Analyze')
+        const result = analysis.handler({ period_type: 'retro' }, db)
+        expect(result.messages[0]!.content.text).toContain('retrospective')
     })
 
     it('should generate goal-tracker prompt', () => {
@@ -409,29 +375,6 @@ describe('Workflow prompts — branch coverage', () => {
         expect(result.messages[0]!.content.text).toContain('progress')
     })
 
-    it('should generate get-context-bundle prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const bundle = prompts.find((p) => p.name === 'get-context-bundle')!
-        const db = createMockDb()
-        const result = bundle.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('Project context bundle')
-    })
-
-    it('should generate get-recent-entries prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const recent = prompts.find((p) => p.name === 'get-recent-entries')!
-        const db = createMockDb([mockEntry()])
-        const result = recent.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('entries')
-    })
-
-    it('should generate confirm-briefing prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-        const db = createMockDb([mockEntry()])
-        const result = confirm.handler({}, db)
-        expect(result.messages.length).toBeGreaterThan(0)
-    })
 
     it('should generate session-summary prompt', () => {
         const prompts = getWorkflowPromptDefinitions()

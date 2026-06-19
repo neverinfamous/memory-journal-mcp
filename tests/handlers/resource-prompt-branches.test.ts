@@ -57,152 +57,28 @@ describe('Workflow prompts — branch coverage', () => {
         prompts = getWorkflowPromptDefinitions()
     })
 
-    it('find-related: should handle empty query fallback', () => {
-        const findRelated = prompts.find((p) => p.name === 'find-related')!
+    it('time-period-analysis: should format standup entries', () => {
+        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
         const db = createMockDb()
-        const result = findRelated.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('Find entries related to: ""')
+        const result = analysis.handler({ period_type: 'standup' }, db as never)
+        expect(result.messages[0]!.content.text).toContain('standup')
     })
 
-    it('prepare-standup: should format entries', () => {
-        const standup = prompts.find((p) => p.name === 'prepare-standup')!
-        const db = createMockDb({
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'Did things' },
-                ]}),
-        })
-        const result = standup.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('Did things')
-    })
-
-    it('prepare-retro: should use default days when not provided', () => {
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
+    it('time-period-analysis: should use provided dates for custom period', () => {
+        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
         const db = createMockDb()
-        retro.handler({}, db as never)
-        expect(db.searchByDateRange).toHaveBeenCalledTimes(1)
-    })
-
-    it('prepare-retro: should use custom days', () => {
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
-        const db = createMockDb({
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(250) },
-                ]}),
-        })
-        const result = retro.handler({ days: '7' }, db as never)
-        expect(result.messages[0]!.content.text).toContain('last 7 days')
-    })
-
-    it('weekly-digest: should format entries with content truncation', () => {
-        const digest = prompts.find((p) => p.name === 'weekly-digest')!
-        const db = createMockDb({
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(200) },
-                ]}),
-        })
-        const result = digest.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('weekly digest')
-    })
-
-    it('analyze-period: should use provided dates', () => {
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-        const db = createMockDb()
-        const result = analyze.handler(
-            { start_date: '2025-01-01', end_date: '2025-01-31' },
+        const result = analysis.handler(
+            { period_type: 'custom', start_date: '2025-01-01', end_date: '2025-01-31' },
             db as never
         )
         expect(result.messages[0]!.content.text).toContain('2025-01-01 to 2025-01-31')
     })
 
-    it('analyze-period: should handle missing date args', () => {
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
+    it('time-period-analysis: should handle missing date args for custom', () => {
+        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
         const db = createMockDb()
-        const result = analyze.handler({}, db as never)
+        const result = analysis.handler({ period_type: 'custom' }, db as never)
         expect(result.messages[0]!.content.text).toContain('Analyze the period')
-    })
-
-    it('goal-tracker: should format significant entries', () => {
-        const goalTracker = prompts.find((p) => p.name === 'goal-tracker')!
-        const db = createMockDb({
-            getSignificantEntries: vi.fn().mockReturnValue([]),
-        })
-        const result = goalTracker.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('goals')
-    })
-
-    it('get-context-bundle: should truncate content over 60 chars', () => {
-        const contextBundle = prompts.find((p) => p.name === 'get-context-bundle')!
-        const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue({ entries: [
-                { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(70) },
-                { id: 2, entryType: 'note', timestamp: '2025-01-02', content: 'short' },
-            ]}),
-        })
-        const result = contextBundle.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('...')
-    })
-
-    it('get-recent-entries: should use default limit', () => {
-        const recent = prompts.find((p) => p.name === 'get-recent-entries')!
-        const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue({ entries: [
-                {
-                    id: 1,
-                    entryType: 'note',
-                    timestamp: '2025-01-01',
-                    content: 'test',
-                    tags: ['a'],
-                },
-            ]}),
-        })
-        const result = recent.handler({}, db as never)
-        expect(db.getRecentEntries).toHaveBeenCalledWith(10)
-        expect(result.messages[0]!.content.text).toContain('a')
-    })
-
-    it('get-recent-entries: should use custom limit and handle empty tags', () => {
-        const recent = prompts.find((p) => p.name === 'get-recent-entries')!
-        const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue({ entries: [
-                {
-                    id: 1,
-                    entryType: 'note',
-                    timestamp: '2025-01-01',
-                    content: 'test',
-                    tags: [],
-                },
-            ]}),
-        })
-        const result = recent.handler({ limit: '5' }, db as never)
-        expect(db.getRecentEntries).toHaveBeenCalledWith(5)
-        expect(result.messages[0]!.content.text).toContain('none')
-    })
-
-    it('confirm-briefing: should handle no entries', () => {
-        const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-        const db = createMockDb()
-        const result = confirm.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('No entries yet')
-    })
-
-    it('confirm-briefing: should format entries when present', () => {
-        const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-        const db = createMockDb({
-            getRecentEntries: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(50) },
-                ]}),
-            getStatistics: vi.fn().mockReturnValue({ totalEntries: 42 }),
-        })
-        const result = confirm.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('42 total entries')
     })
 
     it('session-summary: should handle no entries', () => {

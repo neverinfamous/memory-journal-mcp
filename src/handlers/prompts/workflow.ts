@@ -13,8 +13,6 @@ import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 import { parseFlagContext } from '../../types/auto-context.js'
 
-/** Milliseconds in one day */
-const MS_PER_DAY = 86_400_000
 
 /**
  * Get workflow prompt definitions
@@ -22,171 +20,40 @@ const MS_PER_DAY = 86_400_000
 export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
     return [
         {
-            name: 'find-related',
-            description: 'Discover connected entries via semantic similarity',
+            name: 'time-period-analysis',
+            description: 'Analyze entries over a specific time period (standup, weekly, retro)',
             icons: [ICON_PROMPT],
             arguments: [
                 {
-                    name: 'query',
-                    description: 'Search query for finding related entries',
+                    name: 'period_type',
+                    description: 'standup | weekly | retro | custom',
                     required: true,
                 },
-            ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const query = args['query'] ?? ''
-                const { entries } = db.searchEntries(query, { limit: 5 })
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Find entries related to: "${query}"
-
-Recent matching entries:
-${markUntrustedContent(entries.map((e) => `- [${String(e.id)}] ${e.content.slice(0, 100)}...`).join('\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'prepare-standup',
-            description: 'Daily standup summaries',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (
-                _args: Record<string, string>,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
-            ) => {
-                const today = new Date().toISOString().split('T')[0] ?? ''
-                const yesterday =
-                    new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
-
-                const { entries } = db.searchByDateRange(yesterday, today)
-
-                // Inject digest signals when available
-                const digestSignal = buildDigestSignalForPrompt(db)
-                const flagSignal = buildFlagSignalForPrompt(teamDb)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}${flagSignal}Prepare a standup summary based on these recent entries.
-Format as:
-- Yesterday: <summary>
-- Today: <planned work>
-- Blockers: <any blockers>
-
-Sources:
-${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content}`).join('\n\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'prepare-retro',
-            description: 'Sprint retrospectives',
-            icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'days',
-                    description: 'Number of days to include (default: 14)',
-                    required: false,
-                },
+                { name: 'start_date', description: 'Start date (YYYY-MM-DD)', required: false },
+                { name: 'end_date', description: 'End date (YYYY-MM-DD)', required: false },
             ],
             handler: (
                 args: Record<string, string>,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter
             ) => {
-                const days = parseInt(args['days'] ?? '14', 10)
-                const endDate = new Date().toISOString().split('T')[0] ?? ''
-                const startDate =
-                    new Date(Date.now() - days * MS_PER_DAY).toISOString().split('T')[0] ?? ''
-
-                const { entries } = db.searchByDateRange(startDate, endDate)
-
-                // Inject digest signals when available
-                const digestSignal = buildDigestSignalForPrompt(db)
-                const flagSignal = buildFlagSignalForPrompt(teamDb)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}${flagSignal}Prepare a retrospective for the last ${String(days)} days based on these entries.
-Format as:
-- What went well
-- What could improve
-- Action items
-
-Sources:
-${markUntrustedContent(
-    entries
-        .slice(0, 20)
-        .map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 200)}`)
-        .join('\n\n')
-)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'weekly-digest',
-            description: 'Day-by-day weekly summaries',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const endDate = new Date().toISOString().split('T')[0] ?? ''
-                const startDate =
-                    new Date(Date.now() - 7 * MS_PER_DAY).toISOString().split('T')[0] ?? ''
-
-                const { entries } = db.searchByDateRange(startDate, endDate)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Create a weekly digest from these entries.
-Format as day-by-day summary with highlights.
-
-Sources:
-${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 150)}`).join('\n\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'analyze-period',
-            description: 'Deep period analysis with insights',
-            icons: [ICON_PROMPT],
-            arguments: [
-                { name: 'start_date', description: 'Start date (YYYY-MM-DD)', required: true },
-                { name: 'end_date', description: 'End date (YYYY-MM-DD)', required: true },
-            ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
+                const type = args['period_type'] ?? 'custom'
                 const startDate = args['start_date'] ?? ''
                 const endDate = args['end_date'] ?? ''
 
-                const { entries } = db.searchByDateRange(startDate, endDate)
-                const stats = db.getStatistics('day')
+                const digestSignal = buildDigestSignalForPrompt(db)
+                const flagSignal = buildFlagSignalForPrompt(teamDb)
+
+                let instructions: string
+                if (type === 'standup') {
+                    instructions = 'Prepare a daily standup summary (Yesterday, Today, Blockers).'
+                } else if (type === 'retro') {
+                    instructions = 'Prepare a sprint retrospective (What went well, What could improve, Action items).'
+                } else if (type === 'weekly') {
+                    instructions = 'Create a weekly digest formatted day-by-day.'
+                } else {
+                    instructions = `Analyze the period from ${startDate} to ${endDate}.`
+                }
 
                 return {
                     messages: [
@@ -194,19 +61,10 @@ ${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Analyze the period ${startDate} to ${endDate}:
+                                text: `${digestSignal}${flagSignal}Execute a ${type} analysis.
+${instructions}
 
-Statistics: ${JSON.stringify(stats, null, 2)}
-
-Provide insights on patterns, productivity, and recommendations.
-
-Sources (${String(entries.length)} total):
-${markUntrustedContent(
-    entries
-        .slice(0, 15)
-        .map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 100)}`)
-        .join('\n')
-)}`,
+To complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
                             },
                         },
                     ],
@@ -248,200 +106,29 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             },
         },
         {
-            name: 'get-context-bundle',
-            description: 'Project context with recent entries, statistics, and GitHub status hints',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const { entries: recent } = db.getRecentEntries(5)
-                const stats = db.getStatistics('week')
-
-                const entrySummaries = recent.map((e) => ({
-                    id: e.id,
-                    type: e.entryType,
-                    timestamp: e.timestamp,
-                    preview: e.content.slice(0, 60) + (e.content.length > 60 ? '...' : ''),
-                }))
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Project context bundle:
-
-**Statistics:** ${JSON.stringify(stats)}
-
-**For full GitHub status:** Fetch \`memory://github/status\`
-**For full entry details:** Use \`get_entry_by_id\` with entry ID
-
-**Recent Entries (${String(recent.length)}):**
-${markUntrustedContent(entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join('\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'get-recent-entries',
-            description: 'Formatted recent entries',
+            name: 'session-summary',
+            description: 'Create a formatted session summary entry',
             icons: [ICON_PROMPT],
             arguments: [
-                { name: 'limit', description: 'Number of entries (default: 10)', required: false },
+                {
+                    name: 'target',
+                    description: 'personal | team (default: personal)',
+                    required: false,
+                },
             ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const limit = parseInt(args['limit'] ?? '10', 10)
-                const { entries } = db.getRecentEntries(limit)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Recent ${String(limit)} entries:
-
-${markUntrustedContent(entries.map((e) => `## ${e.timestamp} (${e.entryType})\n\n${e.content}\n\nTags: ${e.tags.join(', ') || 'none'}`).join('\n\n---\n\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'confirm-briefing',
-            description:
-                'Acknowledge session context received from memory://briefing to inform the user',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const { entries: recent } = db.getRecentEntries(3)
-                const stats = db.getStatistics('week')
-                const totalEntries = (stats as { totalEntries?: number }).totalEntries ?? 0
-
-                const entrySummary =
-                    recent.length > 0
-                        ? recent
-                              .map(
-                                  (e) =>
-                                      `  - #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 40)}...`
-                              )
-                              .join('\n')
-                        : '  - No entries yet'
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Generate a briefing acknowledgment for the user with this context:
-
-**Session Context Received:**
-- **Journal**: ${String(totalEntries)} total entries
-- **Latest Entries**:
-${markUntrustedContent(entrySummary)}
-
-**My Behaviors:**
-- Create entries for: implementations, decisions, bug fixes, milestones
-- Search before: major decisions, referencing prior work
-- Link entries: implementation→spec, bugfix→issue
-
-**For More Context:**
-- Full entries: \`memory://recent\` or \`get_entry_by_id(ID)\`
-- GitHub status: \`memory://github/status\`
-- Repo insights: \`memory://github/insights\` (stars, traffic, clones)
-- Full health: \`memory://health\`
-
-Please confirm this context to the user in a concise, friendly format. Use a table if helpful.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'session-summary',
-            description:
-                'Create a session summary entry capturing what was accomplished, pending items, and context for the next session',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const { entries: recent } = db.getRecentEntries(5)
-
-                const entrySummary =
-                    recent.length > 0
-                        ? recent
-                              .map(
-                                  (e) =>
-                                      `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
-                              )
-                              .join('\n')
-                        : '- No entries yet'
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Create a session summary journal entry using EXACTLY this template:
-
-**Required Parameters:**
-- \`entry_type: "retrospective"\`
-- \`tags: ["session-summary"]\` (plus relevant domain tags)
-- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`auto_context\`: [OPTIONAL] JSON string of commit metadata if any commits were made (e.g., \`{"commits":["sha1"],"branch":"main","pr":123,"repo":"owner/repo"}\`)
-
-**Required Content Structure (use EXACTLY these section headers):**
-\`\`\`
-## Accomplished
-- [List concrete items: changes made, decisions taken, files modified, PRs submitted]
-
-## Unfinished / Blocked
-- [List pending items, blockers, open questions — or "None" if everything is complete]
-
-## Context for Next Session
-- [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
-
-## Commits
-- [List commit SHAs made during the session, or "None"]
-\`\`\`
-
-**Rules:**
-- Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the four required sections
-- Use bullet points within each section
-- Reference specific entry IDs, file names, and PR numbers where relevant
-- If commits were made, populate \`auto_context\` with the commit metadata JSON
-- If in Code Mode, use \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`
-
-**Recent Entries (for context):**
-${markUntrustedContent(entrySummary)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'team-session-summary',
-            description:
-                'Create a session summary entry for the team capturing what was accomplished, pending items, and context for the next team session',
-            icons: [ICON_PROMPT],
-            arguments: [],
             handler: (
-                _args: Record<string, string>,
-                _db: IDatabaseAdapter,
+                args: Record<string, string>,
+                db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter
             ) => {
-                if (!teamDb) {
+                const target = args['target'] ?? 'personal'
+                
+                if (target === 'team' && !teamDb) {
                     throw new ConfigurationError('Team database not configured')
                 }
 
-                const { entries: recent } = teamDb.getRecentEntries(5)
+                const targetDb = target === 'team' && teamDb ? teamDb : db
+                const { entries: recent } = targetDb.getRecentEntries(5)
 
                 const entrySummary =
                     recent.length > 0
@@ -450,8 +137,12 @@ ${markUntrustedContent(entrySummary)}`,
                                   (e) =>
                                       `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
                               )
-                              .join('\n')
+                              .join('\\n')
                         : '- No entries yet'
+
+                const dbHint = target === 'team' 
+                    ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
+                    : 'Use `create_entry` or `await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })` via `mj_execute_code`'
 
                 return {
                     messages: [
@@ -459,14 +150,14 @@ ${markUntrustedContent(entrySummary)}`,
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Create a team session summary journal entry using EXACTLY this template:
+                                text: `Create a ${target === 'team' ? 'team ' : ''}session summary journal entry using EXACTLY this template:
 
 **Required Parameters:**
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain tags)
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`auto_context\`: [OPTIONAL] JSON string of commit metadata if any commits were made (e.g., \`{"commits":["sha1"],"branch":"main","pr":123,"repo":"owner/repo"}\`)
-- YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
+- \`auto_context\`: [OPTIONAL] JSON string of commit metadata if any commits were made
+- ${dbHint}
 
 **Required Content Structure (use EXACTLY these section headers):**
 \`\`\`
@@ -488,10 +179,8 @@ ${markUntrustedContent(entrySummary)}`,
 - Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
-- If commits were made, populate \`auto_context\` with the commit metadata JSON
-- If in Code Mode, use \`await mj.team.teamCreateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`
 
-**Recent Team Entries (for context):**
+**Recent Entries (for context):**
 ${markUntrustedContent(entrySummary)}`,
                             },
                         },

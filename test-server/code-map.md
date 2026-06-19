@@ -405,24 +405,17 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | Prompt | Description |
 | ------ | ----------- |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
-| `project-status-summary` | GitHub Project status reports |
-| `pr-summary` | Pull request journal activity summary |
-| `code-review-prep` | Comprehensive PR review preparation |
-| `pr-retrospective` | Completed PR analysis with learnings |
+| `project-workflow` | Project status and milestone tracking |
+| `workflow_type` | status | milestone |
+| `pr-workflow` | Pull request summary, review prep, and retrospectives |
+| `workflow_type` | summary | review | retro |
 | `actions-failure-digest` | CI/CD failure analysis with root cause identification |
-| `project-milestone-tracker` | Milestone progress tracking |
 | `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
-| `find-related` | Discover connected entries via semantic similarity |
-| `prepare-standup` | Daily standup summaries |
-| `prepare-retro` | Sprint retrospectives |
-| `weekly-digest` | Day-by-day weekly summaries |
-| `analyze-period` | Deep period analysis with insights |
+| `time-period-analysis` | Analyze entries over a specific time period (standup, weekly, retro) |
+| `period_type` | standup | weekly | retro | custom |
 | `goal-tracker` | Milestone and achievement tracking |
-| `get-context-bundle` | Project context with recent entries, statistics, and GitHub status hints |
-| `get-recent-entries` | Formatted recent entries |
-| `confirm-briefing` | Acknowledge session context received from memory://briefing to inform the user |
-| `session-summary` | Create a session summary entry capturing what was accomplished, pending items, a... |
-| `team-session-summary` | Create a session summary entry for the team capturing what was accomplished, pen... |
+| `session-summary` | Create a formatted session summary entry |
+| `target` | personal | team (default: personal) |
 
 <!-- END: PROMPTS -->
 

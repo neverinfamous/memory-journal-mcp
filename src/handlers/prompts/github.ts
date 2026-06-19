@@ -37,15 +37,16 @@ function formatPromptEntries(
 export function getGitHubPromptDefinitions(): InternalPromptDef[] {
     return [
         {
-            name: 'project-status-summary',
-            description: 'GitHub Project status reports',
+            name: 'project-workflow',
+            description: 'Project status and milestone tracking',
             icons: [ICON_PROMPT],
             arguments: [
                 { name: 'project_number', description: 'GitHub Project number', required: true },
+                { name: 'workflow_type', description: 'status | milestone', required: false },
             ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => {
                 const projectNumber = parseInt(args['project_number'] ?? '0', 10)
-                const { entries } = db.searchEntries('', { projectNumber, limit: 20 })
+                const type = args['workflow_type'] ?? 'status'
 
                 return {
                     messages: [
@@ -53,11 +54,12 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Generate a status summary for Project #${String(projectNumber)}.
-Provide: overview, recent activity, blockers, next steps.
+                                text: `Execute a ${type} workflow for Project #${String(projectNumber)}.
+To complete this task, you MUST first read the following resource to obtain the project's context:
+\`memory://projects/${String(projectNumber)}/timeline\`
 
-Sources:
-${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
+If doing a status summary: Provide overview, recent activity, blockers, next steps.
+If doing a milestone tracker: Provide progress summary, upcoming milestones, timeline.`,
                             },
                         },
                     ],
@@ -65,13 +67,16 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
             },
         },
         {
-            name: 'pr-summary',
-            description: 'Pull request journal activity summary',
+            name: 'pr-workflow',
+            description: 'Pull request summary, review prep, and retrospectives',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
+            arguments: [
+                { name: 'pr_number', description: 'Pull request number', required: true },
+                { name: 'workflow_type', description: 'summary | review | retro', required: false },
+            ],
+            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = db.searchEntries('', { prNumber, limit: 100 }).entries.reverse()
+                const type = args['workflow_type'] ?? 'summary'
 
                 return {
                     messages: [
@@ -79,63 +84,14 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Summarize PR #${String(prNumber)} activity.
-Provide: summary of changes, decisions made, testing done.
+                                text: `Execute a ${type} workflow for PR #${String(prNumber)}.
+To complete this task, you MUST first read the following resources to obtain the PR's context:
+- \`memory://prs/${String(prNumber)}/entries\`
+- \`memory://prs/${String(prNumber)}/timeline\`
 
-Sources:
-${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'code-review-prep',
-            description: 'Comprehensive PR review preparation',
-            icons: [ICON_PROMPT],
-            arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = db.searchEntries('', { prNumber, limit: 100 }).entries.reverse()
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Prepare for code review of PR #${String(prNumber)}.
-Provide: review checklist, areas of concern, testing recommendations.
-
-Sources:
-${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'pr-retrospective',
-            description: 'Completed PR analysis with learnings',
-            icons: [ICON_PROMPT],
-            arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = db.searchEntries('', { prNumber, limit: 100 }).entries.reverse()
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Retrospective for PR #${String(prNumber)}.
-Provide: what went well, challenges, lessons learned.
-
-Sources:
-${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
+If doing a summary: Provide summary of changes, decisions made, testing done.
+If doing a review: Provide review checklist, areas of concern, testing recommendations.
+If doing a retro: Provide what went well, challenges, lessons learned.`,
                             },
                         },
                     ],
@@ -158,34 +114,6 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                                 type: 'text',
                                 text: `Analyze CI/CD failures from these workflow entries.
 Provide: failure patterns, root causes, remediation steps.
-
-Sources:
-${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'project-milestone-tracker',
-            description: 'Milestone progress tracking',
-            icons: [ICON_PROMPT],
-            arguments: [
-                { name: 'project_number', description: 'GitHub Project number', required: true },
-            ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const projectNumber = parseInt(args['project_number'] ?? '0', 10)
-                const entries = db.getSignificantEntries(100, projectNumber)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Track milestones for Project #${String(projectNumber)}.
-Provide: progress summary, upcoming milestones, timeline.
 
 Sources:
 ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,

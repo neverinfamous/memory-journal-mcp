@@ -126,30 +126,14 @@ describe('Prompt Handlers', () => {
             expect(() => getPrompt('nonexistent_prompt_xyz', {}, db)).toThrow()
         })
 
-        it('should return messages for analyze-period with date arguments', () => {
+        it('should return messages for time-period-analysis with date arguments', () => {
             const today = new Date().toISOString().split('T')[0]!
-            const result = getPrompt('analyze-period', { start_date: today, end_date: today }, db)
+            const result = getPrompt('time-period-analysis', { period_type: 'custom', start_date: today, end_date: today }, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
             const text = (result.messages[0]?.content as { text: string }).text
             expect(text).toContain(today)
-        })
-
-        it('should return messages for find-related with query argument', () => {
-            const result = getPrompt('find-related', { query: 'test' }, db)
-
-            expect(result.messages).toBeDefined()
-            expect(result.messages.length).toBeGreaterThan(0)
-            const text = (result.messages[0]?.content as { text: string }).text
-            expect(text).toContain('test')
-        })
-
-        it('should return messages for get-context-bundle prompt', () => {
-            const result = getPrompt('get-context-bundle', {}, db)
-
-            expect(result.messages).toBeDefined()
-            expect(result.messages.length).toBeGreaterThan(0)
         })
 
         it('should return messages for goal-tracker prompt', () => {
@@ -159,25 +143,18 @@ describe('Prompt Handlers', () => {
             expect(result.messages.length).toBeGreaterThan(0)
         })
 
-        it('should return messages for prepare-retro with days argument', () => {
-            const result = getPrompt('prepare-retro', { days: '14' }, db)
-
-            expect(result.messages).toBeDefined()
-            expect(result.messages.length).toBeGreaterThan(0)
-        })
-
-        it('should return messages for team-session-summary prompt', () => {
-            const result = getPrompt('team-session-summary', {}, db, teamDb)
+        it('should return messages for session-summary prompt with team target', () => {
+            const result = getPrompt('session-summary', { target: 'team' }, db, teamDb)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
             const text = (result.messages[0]?.content as { text: string }).text
             expect(text).toContain('Team test entry')
-            expect(text).toContain('mj.team.create')
+            expect(text).toContain('team_create_entry')
         })
 
-        it('should throw ConfigurationError if teamDb is omitted for team-session-summary', () => {
-            expect(() => getPrompt('team-session-summary', {}, db)).toThrow(
+        it('should throw ConfigurationError if teamDb is omitted for session-summary with team target', () => {
+            expect(() => getPrompt('session-summary', { target: 'team' }, db)).toThrow(
                 'Team database not configured'
             )
         })

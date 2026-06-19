@@ -2,69 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
 
 describe('Workflow Prompts', () => {
-    it('covers prepare-standup', () => {
+    it('covers time-period-analysis', () => {
         const prompts = getWorkflowPromptDefinitions()
-        const standup = prompts.find((p) => p.name === 'prepare-standup')!
+        const analyze = prompts.find((p) => p.name === 'time-period-analysis')!
 
-        const mockDb = {
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'test note' },
-                ]}),
-        }
+        const mockDb = {}
 
-        const result = standup.handler({}, mockDb as any)
-        expect(mockDb.searchByDateRange).toHaveBeenCalled()
-        expect(result.messages[0].content).toBeDefined()
-    })
-
-    it('covers prepare-retro', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
-
-        const mockDb = {
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'retro note' },
-                ]}),
-        }
-
-        const result = retro.handler({ days: '10' }, mockDb as any)
-        expect(mockDb.searchByDateRange).toHaveBeenCalled()
-        expect(result.messages[0].content).toBeDefined()
-    })
-
-    it('covers weekly-digest', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const digest = prompts.find((p) => p.name === 'weekly-digest')!
-
-        const mockDb = {
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'digest note' },
-                ]}),
-        }
-
-        const result = digest.handler({}, mockDb as any)
-        expect(mockDb.searchByDateRange).toHaveBeenCalled()
-        expect(result.messages[0].content).toBeDefined()
-    })
-
-    it('covers analyze-period', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-
-        const mockDb = {
-            searchByDateRange: vi.fn().mockReturnValue({ entries: [] }),
-            getStatistics: vi.fn().mockReturnValue({}),
-        }
-
-        const result = analyze.handler({ start_date: '2025', end_date: '2025' }, mockDb as any)
-        expect(mockDb.searchByDateRange).toHaveBeenCalled()
-        expect(mockDb.getStatistics).toHaveBeenCalled()
+        const result = analyze.handler({ period_type: 'custom', start_date: '2025', end_date: '2025' }, mockDb as any)
         expect(result.messages[0].content).toBeDefined()
     })
 
@@ -87,9 +31,9 @@ describe('Workflow Prompts', () => {
         expect(result.messages[0].content).toBeDefined()
     })
 
-    it('covers get-context-bundle', () => {
+    it('covers session-summary', () => {
         const prompts = getWorkflowPromptDefinitions()
-        const bundle = prompts.find((p) => p.name === 'get-context-bundle')!
+        const summary = prompts.find((p) => p.name === 'session-summary')!
 
         const mockDb = {
             getRecentEntries: vi.fn().mockReturnValue({ entries: [
@@ -97,30 +41,12 @@ describe('Workflow Prompts', () => {
                     id: 1,
                     entryType: 'note',
                     timestamp: 'test',
-                    content: 'test content '.repeat(10),
+                    content: 'test content ',
                 },
             ]}),
-            getStatistics: vi.fn().mockReturnValue({}),
         }
 
-        const result = bundle.handler({}, mockDb as any)
-        expect(result.messages[0].content).toBeDefined()
-    })
-
-    it('covers confirm-briefing', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-
-        const mockDb = {
-            getRecentEntries: vi
-                .fn()
-                .mockReturnValue({ entries: [
-                    { id: 1, entryType: 'note', timestamp: 'test', content: 'test' },
-                ]}),
-            getStatistics: vi.fn().mockReturnValue({ totalEntries: 1 }),
-        }
-
-        const result = confirm.handler({}, mockDb as any)
+        const result = summary.handler({}, mockDb as any)
         expect(result.messages[0].content).toBeDefined()
     })
 })
