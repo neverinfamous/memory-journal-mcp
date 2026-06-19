@@ -348,6 +348,23 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         });
     }
 
+    // Auto-detect and heal forgotten session summary tags/entry_type based on content headers
+    if ('content' in result && typeof result['content'] === 'string') {
+        const c = result['content'];
+        if (/#+\s+Accomplished/i.test(c) && /#+\s+Unfinished \/ Blocked/i.test(c)) {
+            if (!('entry_type' in result)) result['entry_type'] = 'retrospective';
+            
+            let tags = result['tags'];
+            if (!Array.isArray(tags)) {
+                tags = tags !== undefined && tags !== null ? [tags] : [];
+                result['tags'] = tags;
+            }
+            if (!(tags as unknown[]).includes('session-summary')) {
+                (tags as unknown[]).push('session-summary');
+            }
+        }
+    }
+
     // Heal session summary headers hallucination (Layer 2 Dispatcher Healing)
     if ('tags' in result && Array.isArray(result['tags']) && result['tags'].includes('session-summary') && 'content' in result && typeof result['content'] === 'string') {
         const c = result['content'];
@@ -362,7 +379,8 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         let changed = false;
         for (const header of requiredHeaders) {
             // Check for loose match (case insensitive)
-            const regex = new RegExp(`#+\\s+${header.replace(/^#+\\s+/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\ /g, '\\s*')}`, 'i');
+            const cleanHeader = header.replace(/^#+\s+/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s*');
+            const regex = new RegExp(`#+\\s+${cleanHeader}`, 'i');
             if (!regex.test(healedContent)) {
                 healedContent += `\n\n${header}\n- None.`;
                 changed = true;

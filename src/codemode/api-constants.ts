@@ -46,6 +46,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         history: 'getEntryHistory',
         revisions: 'getEntryHistory',
         listEntries: 'searchEntries',
+        sessionSummary: 'createEntry',
     },
     search: {
         find: 'searchEntries',
@@ -229,6 +230,8 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         resolveAuthor: 'teamResolveAuthor',
         consolidate: 'teamConsolidateAuthors',
         consolidateAuthors: 'teamConsolidateAuthors',
+        sessionSummary: 'teamCreateEntry',
+        teamSessionSummary: 'teamCreateEntry',
     },
     git: {
         history: 'getCommitHistory',

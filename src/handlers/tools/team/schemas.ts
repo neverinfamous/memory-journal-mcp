@@ -117,7 +117,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
             '[ANTI-HALLUCINATION] MUST be an array of strings, e.g. ["tag1", "tag2"]. NEVER pass a single string.'
         ),
         significance_type: z.string().optional(),
-        project_number: relaxedNumber().optional(),
+        project_number: relaxedNumber().optional().describe('REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row (registry: repoName (#N)) or use get_statistics. Do NOT pass a repo name string.'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
         project_owner: z.string().optional(),
         issue_number: relaxedNumber().optional(),

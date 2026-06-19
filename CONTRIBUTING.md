@@ -227,9 +227,9 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # 100 tool handlers (10 groups)
-│   ├── resources/              # 57 resource handlers (51 core + 6 aliases)
-│   └── prompts/                # 19 prompt handlers
+│   ├── tools/                  # 107 tool handlers (11 groups)
+│   ├── resources/              # 60 resource handlers
+│   └── prompts/                # 8 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/

@@ -42,7 +42,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**107 MCP Tools** · **19 Workflow Prompts** · **62 Resources (56 core + 6 aliases)** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**107 MCP Tools** · **8 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -117,7 +117,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **19 Workflow Prompts**
+### 🎯 **8 Workflow Prompts**
 
 Standups, retrospectives, PR summaries, weekly digests, period analysis, milestone tracking, context bundles, session summaries, adversarial plan reviews, and flag triage dashboards. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 

@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**105 MCP Tools** · **19 Workflow Prompts** · **62 Resources (56 core + 6 aliases)** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**107 MCP Tools** · **8 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -195,33 +195,20 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **19 Workflow Prompts**
+### 🎯 **8 Workflow Prompts**
 
-- `find-related` - Discover connected entries via semantic similarity
-- `prepare-standup` - Daily standup summaries
-- `prepare-retro` - Sprint retrospectives
-- `weekly-digest` - Day-by-day weekly summaries
-- `analyze-period` - Deep period analysis with insights
+- `pr-workflow` - Unified PR review, summary, and retrospective workflow
+- `project-workflow` - Unified GitHub Project tracking and milestone workflow
+- `time-period-analysis` - Unified daily standup, weekly digest, and sprint retro workflow
+- `session-summary` - Create a comprehensive session summary entry
 - `goal-tracker` - Milestone and achievement tracking
-- `get-context-bundle` - Project context with Git/GitHub/Kanban
-- `get-recent-entries` - Formatted recent entries
-- `project-status-summary` - GitHub Project status reports
-- `pr-summary` - Pull request journal activity summary
-- `code-review-prep` - Comprehensive PR review preparation
-- `pr-retrospective` - Completed PR analysis with learnings
 - `actions-failure-digest` - CI/CD failure analysis
-- `project-milestone-tracker` - Milestone progress tracking
-- `confirm-briefing` - Acknowledge session context to user
-- `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
-- `team-session-summary` - Create a retrospective team session summary entry securely isolated to the team database
-- `adversarial-plan-review` - Multi-pass adversarial plan review with structured dimensions, scoring rubric, and prior plan context
+- `adversarial-plan-review` - Multi-pass adversarial plan review with structured dimensions
 - `flag-dashboard` - Triage active flags with priority assessment and resolution guidance
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **56 Resources** (34 Static + 22 Template)
-
-**34 Static Resources** (appear in resource lists):
+### 📡 **60 Resources**
 
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
@@ -858,7 +845,7 @@ flowchart TB
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 73 Tools"]
         Resources["📡 47 Resources"]
-        Prompts["💬 19 Prompts"]
+        Prompts["💬 8 Prompts"]
     end
 
     subgraph Storage["Persistence Layer"]
@@ -885,7 +872,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (73)      │  │ Resources (47)  │  │ Prompts (19)│  │
+│  │ Tools (107)      │  │ Resources (60)  │  │ Prompts (8)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
