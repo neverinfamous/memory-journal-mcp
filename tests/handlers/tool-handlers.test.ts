@@ -155,7 +155,7 @@ describe('Tool Handlers', () => {
         it('should create entry in specific workspace', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Workspace entry', workspace_id: 'test-ws-1' },
+                { content: 'Workspace entry', workspace_id: 'test-ws-1', project_number: 1 },
                 db
             )) as { success: boolean; entry: { id: number; workspaceId: string } }
 
@@ -215,7 +215,7 @@ describe('Tool Handlers', () => {
         })
 
         it('should filter by workspace_id and use default if omitted', async () => {
-            await callTool('create_entry', { content: 'WS-Alpha entry', workspace_id: 'ws-alpha' }, db)
+            await callTool('create_entry', { content: 'WS-Alpha entry', workspace_id: 'ws-alpha', project_number: 1 }, db)
             
             const alphaResult = (await callTool('get_recent_entries', { limit: 10, workspace_id: 'ws-alpha' }, db)) as { entries: { content: string }[] }
             expect(alphaResult.entries.some(e => e.content === 'WS-Alpha entry')).toBe(true)
