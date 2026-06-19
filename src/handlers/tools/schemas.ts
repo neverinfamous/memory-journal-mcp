@@ -239,6 +239,13 @@ export function healAgentHallucinations(val: unknown): unknown {
             } else if (etLower === 'meeting') {
                 obj['entry_type'] = 'meeting_notes'
                 modified = true
+            } else if (!ENTRY_TYPES.some(t => t === obj['entry_type'])) {
+                obj['tags'] ??= []
+                if (Array.isArray(obj['tags']) && !obj['tags'].includes(etLower)) {
+                    obj['tags'].push(etLower)
+                }
+                obj['entry_type'] = 'other'
+                modified = true
             }
         }
 
@@ -246,6 +253,18 @@ export function healAgentHallucinations(val: unknown): unknown {
         if ('significance_type' in obj) {
             const originalSigType = obj['significance_type']
             coerceSignificanceAlias(obj)
+            
+            if (obj['significance_type'] !== undefined && obj['significance_type'] !== null && typeof obj['significance_type'] === 'string') {
+                if (!SIGNIFICANCE_TYPES.some(t => t === obj['significance_type'])) {
+                    const badSig = obj['significance_type'].toLowerCase().trim()
+                    obj['tags'] ??= []
+                    if (Array.isArray(obj['tags'])) {
+                        obj['tags'].push(`significance:${badSig}`)
+                    }
+                    delete obj['significance_type']
+                }
+            }
+
             if (originalSigType !== obj['significance_type']) {
                 modified = true
             }

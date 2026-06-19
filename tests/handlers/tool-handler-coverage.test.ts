@@ -125,15 +125,18 @@ describe('Tool Handler Coverage', () => {
             expect(vectorManager.addEntry).toHaveBeenCalled()
         })
 
-        it('should handle invalid entry_type with Zod error', async () => {
+        it('should auto-heal invalid entry_type with Zod error', async () => {
             const entry = db.createEntry({ content: 'For invalid type test' })
             const result = (await callTool(
                 'update_entry',
                 { entry_id: entry.id, project_number: 1, entry_type: 'completely_invalid_type' },
                 db
-            )) as { error: string }
+            )) as { success: boolean; entry: { entryType: string; tags: string[] }; error?: string }
 
-            expect(result.error).toBeDefined()
+            if (!result.success) console.error('update_entry failed:', result.error)
+            expect(result.success).toBe(true)
+            expect(result.entry.entryType).toBe('other')
+            expect(result.entry.tags).toContain('completely-invalid-type')
         })
     })
 
@@ -498,25 +501,28 @@ describe('Tool Handler Coverage', () => {
     // ========================================================================
 
     describe('create_entry - Zod errors', () => {
-        it('should return error for invalid entry_type', async () => {
+        it('should auto-heal invalid entry_type into other and tag it', async () => {
             const result = (await callTool(
                 'create_entry',
                 { project_number: 1, content: 'Test', entry_type: 'invalid_type_xyz' },
                 db
-            )) as { error: string }
+            )) as { success: boolean; entry: { entryType: string; tags: string[] } }
 
-            expect(result.error).toBeDefined()
+            expect(result.success).toBe(true)
+            expect(result.entry.entryType).toBe('other')
+            expect(result.entry.tags).toContain('invalid-type-xyz')
         })
 
-        it('should reject invalid significance_type with validation error', async () => {
+        it('should auto-heal invalid significance_type into a tag', async () => {
             const result = (await callTool(
                 'create_entry',
                 { project_number: 1, content: 'Test', significance_type: 'invalid_sig' },
                 db
-            )) as { success: boolean; error: string; code?: string }
+            )) as { success: boolean; entry: { significanceType: string | null | undefined; tags: string[] } }
 
-            expect(result.success).toBe(false)
-            expect(result.error).toContain('significance_type')
+            expect(result.success).toBe(true)
+            expect(result.entry.tags).toContain('significance:invalid-sig')
+            expect(result.entry.significanceType).toBeNull() // Missing property normalizes to null in Entry schema output
         })
 
         it('should return error for empty content', async () => {

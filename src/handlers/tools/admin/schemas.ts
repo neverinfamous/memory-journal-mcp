@@ -6,6 +6,7 @@ import {
     relaxedNumber,
     MAX_BATCH_SIZE,
     BatchResultOutputSchema,
+    healAgentHallucinations,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from '../core/index.js'
@@ -16,8 +17,9 @@ import { CreateEntrySchema, CreateEntrySchemaMcp } from '../core/index.js'
 /** Strict schema — used inside handler for structured Zod errors */
 export const UpdateEntrySchema = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healedVal = healAgentHallucinations(val);
+        if (typeof healedVal === 'object' && healedVal !== null) {
+            const obj = { ...(healedVal as Record<string, unknown>) };
             let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
@@ -38,9 +40,9 @@ export const UpdateEntrySchema = z.preprocess(
                 delete obj['title'];
                 modified = true;
             }
-            return modified ? obj : val;
+            return modified ? obj : healedVal;
         }
-        return val;
+        return healedVal;
     },
     z.object({
         entry_id: z.number(),
@@ -81,8 +83,9 @@ export const UpdateEntrySchema = z.preprocess(
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 export const UpdateEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
+        const healedVal = healAgentHallucinations(val);
+        if (typeof healedVal === 'object' && healedVal !== null) {
+            const obj = { ...(healedVal as Record<string, unknown>) };
             let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
@@ -103,9 +106,9 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 delete obj['title'];
                 modified = true;
             }
-            return modified ? obj : val;
+            return modified ? obj : healedVal;
         }
-        return val;
+        return healedVal;
     },
     z.object({
         entry_id: relaxedNumber().optional(),
