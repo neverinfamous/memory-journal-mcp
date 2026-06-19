@@ -87,31 +87,123 @@ export function coerceSignificanceAlias(params: unknown): void {
 
 /**
  * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
- * Addresses `tag` vs `tags`, stringified array elements, and invalid `entry_type` / `significance_type`.
+ * Addresses `tag` vs `tags`, stringified array elements, invalid `entry_type` / `significance_type`,
+ * hallucinated parameter keys, and missing `content` fields.
  */
 export function healAgentHallucinations(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) }
         let modified = false
 
-        // Heal 'tag' -> 'tags'
+        // 1. Heal hallucinated parameter keys
+        const keyMap: Record<string, string> = {
+            id: 'entry_id',
+            ids: 'entry_ids',
+            project_id: 'project_number',
+            projectId: 'project_number',
+            projectNumber: 'project_number',
+            workspaceId: 'workspace_id',
+            isPersonal: 'is_personal',
+            entryType: 'entry_type',
+            significanceType: 'significance_type',
+            autoContext: 'auto_context',
+            impactScore: 'impact_score',
+            trustScore: 'trust_score',
+            validationStatus: 'validation_status',
+            workflowRunId: 'workflow_run_id',
+            workflowName: 'workflow_name',
+            workflowStatus: 'workflow_status',
+            prNumber: 'pr_number',
+            prUrl: 'pr_url',
+            prStatus: 'pr_status',
+            issueNumber: 'issue_number',
+            issueUrl: 'issue_url',
+            projectOwner: 'project_owner',
+            shareWithTeam: 'share_with_team',
+            anchorPath: 'anchor_path',
+            anchorType: 'anchor_type',
+        }
+        for (const [badKey, goodKey] of Object.entries(keyMap)) {
+            if (badKey in obj && !(goodKey in obj)) {
+                obj[goodKey] = obj[badKey]
+                Reflect.deleteProperty(obj, badKey)
+                modified = true
+            }
+        }
+
+        // 2. Heal 'text', 'message', 'description', 'title' -> 'content'
+        for (const key of ['text', 'message', 'description']) {
+            if (key in obj && !('content' in obj)) {
+                obj['content'] = obj[key]
+                Reflect.deleteProperty(obj, key)
+                modified = true
+                break
+            }
+        }
+        if ('title' in obj) {
+            if (!('content' in obj)) {
+                obj['content'] = obj['title']
+            } else {
+                obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`
+            }
+            delete obj['title']
+            modified = true
+        }
+
+        // 3. Heal auto_context
+        if ('auto_context' in obj) {
+            if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+                try {
+                    obj['auto_context'] = JSON.stringify(obj['auto_context'])
+                    modified = true
+                } catch {
+                    // Ignore stringify errors
+                }
+            }
+            if (typeof obj['auto_context'] === 'string') {
+                const ac = obj['auto_context'].trim().toLowerCase()
+                if (ac === 'none' || ac === '{}' || ac === '{"commits":[]}') {
+                    delete obj['auto_context']
+                    modified = true
+                }
+            }
+        }
+
+        // 4. Heal 'tag' -> 'tags'
         if ('tag' in obj && !('tags' in obj)) {
             obj['tags'] = obj['tag']
             delete obj['tag']
             modified = true
         }
 
-        // Heal string tags into arrays
+        // 5. Heal string tags into arrays
         if ('tags' in obj && typeof obj['tags'] === 'string') {
             obj['tags'] = obj['tags'].split(',').map((t: string) => t.trim()).filter(Boolean)
             modified = true
         }
 
-        // Heal hallucinated entry types
+        // 6. Heal array tags normalization (e.g. 'session summary' -> 'session-summary')
+        if ('tags' in obj && Array.isArray(obj['tags'])) {
+            const healedTags = obj['tags'].map((t: unknown) => {
+                if (typeof t === 'string') {
+                    const lower = t.toLowerCase().trim()
+                    if (lower === 'session summary' || lower === 'session_summary' || lower === 'team-session-summary' || lower === 'team_session_summary' || lower === 'team session summary') return 'session-summary'
+                    if (lower === 'commit narrative' || lower === 'commit_narrative') return 'commit-narrative'
+                }
+                return t
+            })
+            // Only update if something changed
+            if (JSON.stringify(obj['tags']) !== JSON.stringify(healedTags)) {
+                obj['tags'] = healedTags
+                modified = true
+            }
+        }
+
+        // 7. Heal hallucinated entry types
         if ('entry_type' in obj && typeof obj['entry_type'] === 'string') {
             const et = obj['entry_type']
             const etLower = et.toLowerCase()
-            if (etLower === 'session-summary' || etLower === 'session_summary') {
+            if (etLower === 'session-summary' || etLower === 'session_summary' || etLower === 'team-session-summary' || etLower === 'team_session_summary' || etLower === 'team session summary') {
                 obj['entry_type'] = 'retrospective'
                 obj['tags'] ??= []
                 if (Array.isArray(obj['tags']) && !obj['tags'].includes('session-summary')) {
@@ -137,7 +229,7 @@ export function healAgentHallucinations(val: unknown): unknown {
             }
         }
 
-        // Heal significance type alias
+        // 8. Heal significance type alias
         if ('significance_type' in obj) {
             const originalSigType = obj['significance_type']
             coerceSignificanceAlias(obj)

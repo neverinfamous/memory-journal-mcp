@@ -75,6 +75,9 @@ const PARAM_ALIASES: Record<string, string> = {
 const ENTRY_TYPE_ALIASES: Record<string, string> = {
     'session-summary': 'retrospective',
     'session_summary': 'retrospective',
+    'team-session-summary': 'retrospective',
+    'team_session_summary': 'retrospective',
+    'team session summary': 'retrospective',
     'summary': 'retrospective',
     'bug': 'bug_fix',
     'feature': 'feature_implementation',
@@ -90,6 +93,9 @@ const ENTRY_TYPE_ALIASES: Record<string, string> = {
  */
 const TAG_ALIASES: Record<string, string> = {
     'session_summary': 'session-summary',
+    'team_session_summary': 'session-summary',
+    'team-session-summary': 'session-summary',
+    'team session summary': 'session-summary',
     'commit_narrative': 'commit-narrative',
     'bug_fix': 'bug-fix',
     'feature_implementation': 'feature',

@@ -12,29 +12,7 @@ const MAX_SEARCH_LIMIT = 500
 // ============================================================================
 
 export const CreateEntrySchema = z.preprocess(
-    (val: unknown) => {
-        const healed = healAgentHallucinations(val);
-        if (typeof healed === 'object' && healed !== null) {
-            const obj = { ...(healed as Record<string, unknown>) };
-            let modified = false;
-            if ('text' in obj && !('content' in obj)) {
-                obj['content'] = obj['text'];
-                delete obj['text'];
-                modified = true;
-            }
-            if ('title' in obj) {
-                if (!('content' in obj)) {
-                    obj['content'] = obj['title'];
-                } else {
-                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
-                }
-                delete obj['title'];
-                modified = true;
-            }
-            return modified ? obj : healed;
-        }
-        return healed;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
         content: z.string().min(1),
@@ -69,7 +47,7 @@ export const CreateEntrySchema = z.preprocess(
                 ctx.addIssue({
                     code: "custom",
                     path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure. Do not add or remove any top-level headers. You must rewrite the entire content field conforming to this exact structure.",
                 });
             }
         }
@@ -82,7 +60,7 @@ export const CreateEntrySchema = z.preprocess(
                         code: "custom",
                         path: ['auto_context'],
                         message: [
-                            "Entries tagged 'commit-narrative' or 'session-summary' (when providing auto_context) MUST include an auto_context with a non-empty 'commits' array.",
+                            "[ANTI-HALLUCINATION] Entries tagged 'commit-narrative' or 'session-summary' (when providing auto_context) MUST include an auto_context with a non-empty 'commits' array.",
                             "In Code Mode, pass it as a plain object: { commits: ['<sha>'] }",
                             "or as a pre-stringified JSON string: JSON.stringify({ commits: ['<sha>'] }).",
                             "Example: await mj.core.create_entry({ ..., auto_context: { commits: ['abc1234'] } })",
@@ -93,7 +71,7 @@ export const CreateEntrySchema = z.preprocess(
                 ctx.addIssue({
                     code: "custom",
                     path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string or plain object for commit narratives. Example: { commits: ['<sha>'] }",
+                    message: "[ANTI-HALLUCINATION] auto_context must be a valid JSON string or plain object for commit narratives. Example: { commits: ['<sha>'] }",
                 });
             }
         }
@@ -101,37 +79,7 @@ export const CreateEntrySchema = z.preprocess(
 )
 
 export const CreateEntrySchemaMcp = z.preprocess(
-    (val: unknown) => {
-        const healed = healAgentHallucinations(val);
-        if (typeof healed === 'object' && healed !== null) {
-            const obj = { ...(healed as Record<string, unknown>) };
-            let modified = false;
-            if ('text' in obj && !('content' in obj)) {
-                obj['content'] = obj['text'];
-                delete obj['text'];
-                modified = true;
-            }
-            if ('title' in obj) {
-                if (!('content' in obj)) {
-                    obj['content'] = obj['title'];
-                } else {
-                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
-                }
-                delete obj['title'];
-                modified = true;
-            }
-            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
-                try {
-                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
-                    modified = true;
-                } catch {
-                    // Ignore stringify errors, validation will handle it
-                }
-            }
-            return modified ? obj : healed;
-        }
-        return healed;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_type: z.string().optional().default('personal_reflection').describe(
             'Entry type. Use "retrospective" for session summaries, "bug_fix" for bugs, ' +
@@ -148,7 +96,8 @@ export const CreateEntrySchemaMcp = z.preprocess(
         ),
         tags: z.array(z.string()).optional().describe(
             'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
-            'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
+            'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit"). ' +
+            '[ANTI-HALLUCINATION] MUST be an array of strings, e.g. ["tag1", "tag2"]. NEVER pass a single string.'
         ),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.string().optional(),

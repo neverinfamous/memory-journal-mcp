@@ -37,31 +37,7 @@ export const TeamEntryOutputSchema = EntryOutputSchema.extend({
 
 /** team_create_entry — strict */
 export const TeamCreateEntrySchema = z.preprocess(
-    (val: unknown) => {
-        const healed = healAgentHallucinations(val);
-        if (typeof healed === 'object' && healed !== null) {
-            const obj = { ...(healed as Record<string, unknown>) };
-            let modified = false;
-            for (const key of ['text', 'message', 'description']) {
-                if (key in obj && !('content' in obj)) {
-                    obj['content'] = obj[key];
-                    Reflect.deleteProperty(obj, key);
-                    modified = true;
-                    break;
-                }
-            }
-            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
-                try {
-                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
-                    modified = true;
-                } catch {
-                    // Ignore stringify errors
-                }
-            }
-            return modified ? obj : healed;
-        }
-        return healed;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         content: z.string().min(1).max(MAX_CONTENT_LENGTH),
         entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
@@ -87,7 +63,7 @@ export const TeamCreateEntrySchema = z.preprocess(
                 ctx.addIssue({
                     code: "custom",
                     path: ['content'],
-                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure.",
+                    message: "[ANTI-HALLUCINATION] Session summaries MUST contain exactly these 4 exact headers: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. Please correct the structure. Do not add or remove any top-level headers. You must rewrite the entire content field conforming to this exact structure.",
                 });
             }
         }
@@ -99,14 +75,14 @@ export const TeamCreateEntrySchema = z.preprocess(
                     ctx.addIssue({
                         code: "custom",
                         path: ['auto_context'],
-                        message: "Entries tagged 'commit-narrative' or 'session-summary' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
+                        message: "[ANTI-HALLUCINATION] Entries tagged 'commit-narrative' or 'session-summary' MUST include an auto_context JSON string containing a 'commits' array with at least one SHA.",
                     });
                 }
             } catch {
                 ctx.addIssue({
                     code: "custom",
                     path: ['auto_context'],
-                    message: "auto_context must be a valid JSON string for commit narratives or session summaries.",
+                    message: "[ANTI-HALLUCINATION] auto_context must be a valid JSON string for commit narratives or session summaries. Example: { commits: ['<sha>'] }",
                 });
             }
         }
@@ -115,31 +91,7 @@ export const TeamCreateEntrySchema = z.preprocess(
 
 /** team_create_entry — relaxed for MCP SDK */
 export const TeamCreateEntrySchemaMcp = z.preprocess(
-    (val: unknown) => {
-        const healed = healAgentHallucinations(val);
-        if (typeof healed === 'object' && healed !== null) {
-            const obj = { ...(healed as Record<string, unknown>) };
-            let modified = false;
-            for (const key of ['text', 'message', 'description']) {
-                if (key in obj && !('content' in obj)) {
-                    obj['content'] = obj[key];
-                    Reflect.deleteProperty(obj, key);
-                    modified = true;
-                    break;
-                }
-            }
-            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
-                try {
-                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
-                    modified = true;
-                } catch {
-                    // Ignore stringify errors
-                }
-            }
-            return modified ? obj : healed;
-        }
-        return healed;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         content: z.string().optional().describe(
             'Markdown-formatted entry content. Use ## section headers to organize content. ' +
@@ -156,7 +108,8 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         ),
         tags: z.array(z.string()).optional().default([]).describe(
             'Tags for categorization (kebab-case). Session summaries MUST include "session-summary". ' +
-            'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit").'
+            'Add domain tags (e.g., "security", "performance") and activity tags (e.g., "refactor", "audit"). ' +
+            '[ANTI-HALLUCINATION] MUST be an array of strings, e.g. ["tag1", "tag2"]. NEVER pass a single string.'
         ),
         significance_type: z.string().optional(),
         project_number: relaxedNumber().optional(),
@@ -210,7 +163,7 @@ export const TeamSearchSchema = z.preprocess(
         if (typeof healed === 'object' && healed !== null) {
             const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
-            for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode']) {
+            for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode', 'content']) {
                 if (key in obj && !('query' in obj)) {
                     obj['query'] = obj[key];
                     Reflect.deleteProperty(obj, key);
@@ -246,7 +199,7 @@ export const TeamSearchSchemaMcp = z.preprocess(
         if (typeof healed === 'object' && healed !== null) {
             const obj = { ...(healed as Record<string, unknown>) };
             let modified = false;
-            for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode']) {
+            for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode', 'content']) {
                 if (key in obj && !('query' in obj)) {
                     obj['query'] = obj[key];
                     Reflect.deleteProperty(obj, key);
@@ -393,36 +346,7 @@ export const TeamSearchByDateRangeSchemaMcp = z.preprocess(
 
 /** team_update_entry — strict */
 export const TeamUpdateEntrySchema = z.preprocess(
-    (val: unknown) => {
-        const healed = healAgentHallucinations(val);
-        if (typeof healed === 'object' && healed !== null) {
-            const obj = { ...(healed as Record<string, unknown>) };
-            let modified = false;
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id'];
-                Reflect.deleteProperty(obj, 'id');
-                modified = true;
-            }
-            for (const key of ['text', 'message', 'description']) {
-                if (key in obj && !('content' in obj)) {
-                    obj['content'] = obj[key];
-                    Reflect.deleteProperty(obj, key);
-                    modified = true;
-                    break;
-                }
-            }
-            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
-                try {
-                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
-                    modified = true;
-                } catch {
-                    // Ignore stringify errors
-                }
-            }
-            return modified ? obj : healed;
-        }
-        return healed;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_id: z.number(),
         content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional().refine(
@@ -460,36 +384,7 @@ export const TeamUpdateEntrySchema = z.preprocess(
 
 /** team_update_entry — relaxed */
 export const TeamUpdateEntrySchemaMcp = z.preprocess(
-    (val: unknown) => {
-        const healed = healAgentHallucinations(val);
-        if (typeof healed === 'object' && healed !== null) {
-            const obj = { ...(healed as Record<string, unknown>) };
-            let modified = false;
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id'];
-                Reflect.deleteProperty(obj, 'id');
-                modified = true;
-            }
-            for (const key of ['text', 'message', 'description']) {
-                if (key in obj && !('content' in obj)) {
-                    obj['content'] = obj[key];
-                    Reflect.deleteProperty(obj, key);
-                    modified = true;
-                    break;
-                }
-            }
-            if ('auto_context' in obj && typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
-                try {
-                    obj['auto_context'] = JSON.stringify(obj['auto_context']);
-                    modified = true;
-                } catch {
-                    // Ignore stringify errors
-                }
-            }
-            return modified ? obj : healed;
-        }
-        return healed;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_id: relaxedNumber().optional(),
         content: z.string().optional().describe(
@@ -523,17 +418,7 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
 
 /** team_delete_entry — strict */
 export const TeamDeleteEntrySchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id'];
-                Reflect.deleteProperty(obj, 'id');
-                return obj;
-            }
-        }
-        return val;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_id: z.number(),
         project_number: StrictProjectNumberSchema.optional(),
@@ -544,17 +429,7 @@ export const TeamDeleteEntrySchema = z.preprocess(
 
 /** team_delete_entry — relaxed */
 export const TeamDeleteEntrySchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id'];
-                Reflect.deleteProperty(obj, 'id');
-                return obj;
-            }
-        }
-        return val;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_id: relaxedNumber().optional(),
         project_number: relaxedNumber().optional(),
@@ -565,17 +440,7 @@ export const TeamDeleteEntrySchemaMcp = z.preprocess(
 
 /** team_restore_entry — strict */
 export const TeamRestoreEntrySchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id'];
-                Reflect.deleteProperty(obj, 'id');
-                return obj;
-            }
-        }
-        return val;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_id: z.number(),
         project_number: StrictProjectNumberSchema.optional(),
@@ -585,17 +450,7 @@ export const TeamRestoreEntrySchema = z.preprocess(
 
 /** team_restore_entry — relaxed */
 export const TeamRestoreEntrySchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            if ('id' in obj && !('entry_id' in obj)) {
-                obj['entry_id'] = obj['id'];
-                Reflect.deleteProperty(obj, 'id');
-                return obj;
-            }
-        }
-        return val;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_id: relaxedNumber().optional(),
         project_number: relaxedNumber().optional(),
@@ -714,24 +569,7 @@ export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
 )
 
 export const TeamBatchDeleteEntriesSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-            if ('ids' in obj && !('entry_ids' in obj)) {
-                obj['entry_ids'] = obj['ids'];
-                Reflect.deleteProperty(obj, 'ids');
-                modified = true;
-            }
-            if ('id' in obj && !('entry_ids' in obj)) {
-                obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
-                Reflect.deleteProperty(obj, 'id');
-                modified = true;
-            }
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
         project_number: StrictProjectNumberSchema.optional(),
@@ -741,24 +579,7 @@ export const TeamBatchDeleteEntriesSchema = z.preprocess(
 )
 
 export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) };
-            let modified = false;
-            if ('ids' in obj && !('entry_ids' in obj)) {
-                obj['entry_ids'] = obj['ids'];
-                Reflect.deleteProperty(obj, 'ids');
-                modified = true;
-            }
-            if ('id' in obj && !('entry_ids' in obj)) {
-                obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']];
-                Reflect.deleteProperty(obj, 'id');
-                modified = true;
-            }
-            return modified ? obj : val;
-        }
-        return val;
-    },
+    (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_ids: z.array(relaxedNumber().optional()).optional(),
         project_number: relaxedNumber().optional(),
