@@ -63,6 +63,12 @@ export interface SystemContext {
     workspaceId?: string
 }
 
+export interface BuildSystemContextOptions {
+    config?: BriefingConfig
+    filterConfig?: ToolFilterConfig | null
+    targetRepoPath?: string
+}
+
 // ============================================================================
 // Lazy Resource Count (replaces former hardcoded RESOURCE_COUNT constant)
 // ============================================================================
@@ -135,14 +141,15 @@ export function parseTestHealth(content: string): TestHealth | null {
     }
 }
 
-let cachedGitHistory: GitHistorySummary | null | undefined
-let cachedTestHealth: TestHealth | null | undefined
+const cachedGitHistory = new Map<string, GitHistorySummary | null>()
+const cachedTestHealth = new Map<string, TestHealth | null>()
 
-async function loadCachedGitHistory(): Promise<GitHistorySummary | null> {
-    if (cachedGitHistory !== undefined) return cachedGitHistory
+async function loadCachedGitHistory(targetPath?: string): Promise<GitHistorySummary | null> {
+    const root = targetPath || resolveProjectRoot()
+    const existing = cachedGitHistory.get(root)
+    if (existing !== undefined) return existing
 
     try {
-        const root = resolveProjectRoot()
         const gitClient = new GitHistoryClient(root)
         // Fetch the 5 most recent commits
         const commits = await gitClient.getCommitHistory({ maxCount: 5 })
@@ -158,23 +165,25 @@ async function loadCachedGitHistory(): Promise<GitHistorySummary | null> {
             })
         }
         
-        cachedGitHistory = result.commits.length > 0 ? result : null
+        const resultVal = result.commits.length > 0 ? result : null
+        cachedGitHistory.set(root, resultVal)
     } catch {
         logger.debug('Failed to get git history via GitClient (non-critical)', {
             module: 'BRIEFING',
             operation: 'git-history',
         })
-        cachedGitHistory = null
+        cachedGitHistory.set(root, null)
     }
 
-    return cachedGitHistory
+    return cachedGitHistory.get(root) ?? null
 }
 
-function loadCachedTestHealth(): TestHealth | null {
-    if (cachedTestHealth !== undefined) return cachedTestHealth
+function loadCachedTestHealth(targetPath?: string): TestHealth | null {
+    const root = targetPath || resolveProjectRoot()
+    const existing = cachedTestHealth.get(root)
+    if (existing !== undefined) return existing
 
     try {
-        const root = resolveProjectRoot()
 
         // Primary: read structured coverage data from vitest json-summary output
         const coveragePath = path.join(root, '.test-output', 'coverage', 'coverage-summary.json')
@@ -205,7 +214,7 @@ function loadCachedTestHealth(): TestHealth | null {
             } catch {
                 // Ignore error if README.md doesn't exist or is unreadable
             }
-            cachedTestHealth = { unitTests, e2eTests, coverage }
+            cachedTestHealth.set(root, { unitTests, e2eTests, coverage })
         } else {
             // Fallback: parse everything from README badges (legacy path)
             const readmePath = path.join(root, 'README.md')
@@ -214,24 +223,25 @@ function loadCachedTestHealth(): TestHealth | null {
             const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
             fs.closeSync(fd)
             const content = buf.toString('utf-8', 0, bytesRead)
-            cachedTestHealth = parseTestHealth(content)
+            cachedTestHealth.set(root, parseTestHealth(content))
         }
     } catch {
         logger.debug('Test health data not found or unreadable (non-critical)', {
             module: 'BRIEFING',
             operation: 'test-health-parse',
         })
-        cachedTestHealth = null
+        cachedTestHealth.set(root, null)
     }
 
-    return cachedTestHealth
+    const final = cachedTestHealth.get(root)
+    return final !== undefined ? final : null
 }
 
 // ============================================================================
 // Last Release Age (from CHANGELOG.md)
 // ============================================================================
 
-let cachedLastReleaseDaysAgo: number | null | undefined
+const cachedLastReleaseDaysAgo = new Map<string, number | null>()
 
 export function parseLastReleaseAge(content: string): number | null {
     const match = /^## \[[\d.]+\].*?-\s*(\d{4}-\d{2}-\d{2})/m.exec(content)
@@ -241,29 +251,30 @@ export function parseLastReleaseAge(content: string): number | null {
     return Math.max(0, Math.floor(elapsed / 86_400_000))
 }
 
-async function loadCachedLastReleaseDaysAgo(): Promise<number | null> {
-    if (cachedLastReleaseDaysAgo !== undefined) return cachedLastReleaseDaysAgo
+async function loadCachedLastReleaseDaysAgo(targetPath?: string): Promise<number | null> {
+    const root = targetPath || resolveProjectRoot()
+    const existing = cachedLastReleaseDaysAgo.get(root)
+    if (existing !== undefined) return existing
 
     try {
-        const root = resolveProjectRoot()
         const gitClient = new GitHistoryClient(root)
         const commits = await gitClient.getReleaseInfo()
         if (commits.length > 0 && commits[0]?.date) {
             const releaseDate = new Date(commits[0].date)
             const elapsed = Date.now() - releaseDate.getTime()
-            cachedLastReleaseDaysAgo = Math.max(0, Math.floor(elapsed / 86_400_000))
+            cachedLastReleaseDaysAgo.set(root, Math.max(0, Math.floor(elapsed / 86_400_000)))
         } else {
-            cachedLastReleaseDaysAgo = null
+            cachedLastReleaseDaysAgo.set(root, null)
         }
     } catch {
         logger.debug('Failed to get release info via GitClient (non-critical)', {
             module: 'BRIEFING',
             operation: 'release-age-git',
         })
-        cachedLastReleaseDaysAgo = null
+        cachedLastReleaseDaysAgo.set(root, null)
     }
 
-    return cachedLastReleaseDaysAgo
+    return cachedLastReleaseDaysAgo.get(root) ?? null
 }
 
 // ============================================================================
@@ -280,7 +291,8 @@ async function loadCachedLastReleaseDaysAgo(): Promise<number | null> {
  */
 export async function buildSystemContext(
     config?: BriefingConfig,
-    filterConfig?: ToolFilterConfig | null
+    filterConfig?: ToolFilterConfig | null,
+    targetRepoPath?: string
 ): Promise<SystemContext> {
     const now = new Date()
 
@@ -330,7 +342,7 @@ export async function buildSystemContext(
     // Check for code-map.md in project root
     let hasCodeMap = false
     try {
-        const root = resolveProjectRoot()
+        const root = targetRepoPath || resolveProjectRoot()
         hasCodeMap = fs.existsSync(path.join(root, 'test-server', 'code-map.md'))
     } catch {
         // Non-critical — code-map indicator is best-effort
@@ -339,7 +351,7 @@ export async function buildSystemContext(
     // Check for local health status
     let localCheck: boolean | null = null
     try {
-        const root = resolveProjectRoot()
+        const root = targetRepoPath || resolveProjectRoot()
         const healthPath = path.join(root, '.test-output', 'health-status.json')
         if (fs.existsSync(healthPath)) {
             const content = fs.readFileSync(healthPath, 'utf-8')
@@ -358,14 +370,14 @@ export async function buildSystemContext(
         resourceCount: await getResourceCount(),
         promptCount: getPrompts().length,
         localTime,
-        gitHistory: await loadCachedGitHistory(),
-        testHealth: loadCachedTestHealth(),
+        gitHistory: await loadCachedGitHistory(targetRepoPath),
+        testHealth: loadCachedTestHealth(targetRepoPath),
         filterSummary,
         isReadonly,
         registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,
-        lastReleaseDaysAgo: await loadCachedLastReleaseDaysAgo(),
+        lastReleaseDaysAgo: await loadCachedLastReleaseDaysAgo(targetRepoPath),
         localCheck,
         workspaceId: config?.defaultWorkspaceId,
     }

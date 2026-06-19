@@ -211,7 +211,8 @@ export function formatUserMessage(opts: {
     }
     if (summaryPreviews && summaryPreviews.length > 0) {
         for (const s of summaryPreviews) {
-            journalParts.push(`Summary: ${escapeCell(s)}`)
+            const cleaned = s.replace(/#+\s/g, '').replace(/\*\*/g, '').replace(/[-*]\s/g, '• ')
+            journalParts.push(`Summary: ${escapeCell(cleaned)}`)
         }
     }
 
@@ -229,9 +230,9 @@ export function formatUserMessage(opts: {
     if (opts.toolCount !== undefined) {
         if (opts.filterSummary) {
             const isCodeMode = opts.filterSummary.includes('codemode')
-            const codeModeNote = isCodeMode ? ' (100KB cap) — use mj.* API' : ''
+            const codeModeNote = isCodeMode ? ' | 100KB Cap | Prefers: mj.* API' : ''
             sysLines.push(
-                `${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`
+                `${String(opts.toolCount)} tools | Filter: ${escapeCell(opts.filterSummary)}${codeModeNote}`
             )
         } else {
             sysLines.push(`${String(opts.toolCount)} tools`)
@@ -366,13 +367,18 @@ export function formatUserMessage(opts: {
     // ========================================================================
     const gitHistoryLines: string[] = []
     if (opts.gitHistory && opts.gitHistory.commits.length > 0) {
+        const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
         for (const c of opts.gitHistory.commits) {
-            let line = `\`${c.hash}\``
+            const shaLink = repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
+            let line = shaLink;
             if (c.category && c.entry) {
-                line += ` **${escapeCell(c.category)}**: ${escapeCell(c.entry)}`
+                let entryText = c.entry;
+                if (entryText.length > 80) entryText = entryText.substring(0, 80) + '...';
+                line += ` **${escapeCell(c.category)}**: ${escapeCell(entryText)}`
             } else {
                 // Fallback to first line of commit message
-                const msg = c.message.split('\n')[0] ?? ''
+                let msg = c.message.split('\n')[0] ?? ''
+                if (msg.length > 80) msg = msg.substring(0, 80) + '...';
                 line += ` ${escapeCell(msg)}`
             }
             gitHistoryLines.push(line)

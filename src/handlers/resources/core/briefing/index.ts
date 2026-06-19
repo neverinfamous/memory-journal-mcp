@@ -70,6 +70,7 @@ export async function buildBriefingData(
 
     let activeGithub = context.github
     let activeProjectNumber = config.defaultProjectNumber
+    let activeRepoPath: string | undefined
 
     if (targetRepo) {
         let resolvedRepo = targetRepo
@@ -80,6 +81,7 @@ export async function buildBriefingData(
         const registryEntry = config.projectRegistry?.[resolvedRepo]
         if (registryEntry) {
             const repoPath = registryEntry.path
+            activeRepoPath = repoPath
             activeGithub = getGitHubIntegration(repoPath, context.runtime)
             activeProjectNumber = registryEntry.project_number ?? undefined
         }
@@ -101,7 +103,7 @@ export async function buildBriefingData(
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
-    const system = await buildSystemContext(config, context.filterConfig)
+    const system = await buildSystemContext(config, context.filterConfig, activeRepoPath)
 
     // Build registry paths map for non-IDE agent context
     const registryPaths = config.projectRegistry
