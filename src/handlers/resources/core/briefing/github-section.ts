@@ -35,7 +35,7 @@ export interface BriefingGitHub {
         failing: number
         pending: number
         cancelled: number
-        runs?: { name: string; conclusion: string }[]
+        runs?: { name: string; conclusion: string; url?: string }[]
     }
     copilotReviews?: {
         reviewed: number
@@ -354,6 +354,7 @@ async function fetchCiStatus(
                                   r.status !== 'completed'
                                       ? 'pending'
                                       : (r.conclusion ?? 'unknown'),
+                              url: r.url,
                           })),
                       }
                     : {}),

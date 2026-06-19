@@ -498,34 +498,30 @@ describe('formatUserMessage', () => {
     })
 
     // ========================================================================
-    // Unreleased Summary
+    // Git History
     // ========================================================================
 
-    it('should include unreleased summary in Analytics', () => {
+    it('should include git history in Analytics', () => {
         const result = formatUserMessage({
             ...baseOpts(),
-            unreleasedSummary: {
-                added: 5,
-                changed: 3,
-                fixed: 2,
-                security: 1,
-                removed: 0,
-                keyItems: ['feature-a', 'config'],
+            gitHistory: {
+                commits: [
+                    { hash: 'abc1234', category: 'Feature', entry: 'New cool feature', message: 'feat: add stuff' },
+                    { hash: 'def5678', message: 'fix: annoying bug' }
+                ]
             },
         })
 
-        expect(result).toContain('**Unreleased**')
-        expect(result).toContain('5 added')
-        expect(result).toContain('3 changed')
-        expect(result).toContain('2 fixed')
-        expect(result).toContain('1 security')
-        expect(result).not.toContain('removed')
-        expect(result).toContain('Recent focus: feature-a, config')
+        expect(result).toContain('**Git History**')
+        expect(result).toContain('abc1234')
+        expect(result).toContain('**Feature**: New cool feature')
+        expect(result).toContain('def5678')
+        expect(result).toContain('fix: annoying bug')
     })
 
-    it('should omit unreleased when not provided', () => {
+    it('should omit git history when not provided', () => {
         const result = formatUserMessage(baseOpts())
-        expect(result).not.toContain('**Unreleased**')
+        expect(result).not.toContain('**Git History**')
     })
 
     // ========================================================================

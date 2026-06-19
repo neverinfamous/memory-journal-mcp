@@ -7,7 +7,6 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import {
-    parseUnreleasedSummary,
     parseTestHealth,
     buildSystemContext,
 } from '../../src/handlers/resources/core/briefing/system-section.js'
@@ -17,123 +16,7 @@ vi.mock('../../src/handlers/resources/index.js', () => ({
     getResources: () => new Array(42),
 }))
 
-// ============================================================================
-// parseUnreleasedSummary
-// ============================================================================
 
-describe('parseUnreleasedSummary', () => {
-    it('should parse a standard UNRELEASED.md with all categories', () => {
-        const content = `# Unreleased
-
-### Added
-- Feature A
-- Feature B
-- Feature C
-
-### Changed
-- Change 1
-- Change 2
-
-### Fixed
-- Fix 1
-
-### Security
-- Security patch 1
-- Security patch 2
-
-### Removed
-- Removed item 1
-`
-        const result = parseUnreleasedSummary(content)
-
-        expect(result).toEqual({
-            added: 3,
-            changed: 2,
-            fixed: 1,
-            security: 2,
-            removed: 1,
-            keyItems: [],
-        })
-    })
-
-    it('should return null for empty file', () => {
-        expect(parseUnreleasedSummary('')).toBeNull()
-    })
-
-    it('should return null when no bullet items exist', () => {
-        const content = `# Unreleased
-
-### Added
-
-### Changed
-
-`
-        expect(parseUnreleasedSummary(content)).toBeNull()
-    })
-
-    it('should handle partial categories', () => {
-        const content = `# Unreleased
-
-### Fixed
-- Fix 1
-- Fix 2
-- Fix 3
-`
-        const result = parseUnreleasedSummary(content)
-
-        expect(result).toEqual({
-            added: 0,
-            changed: 0,
-            fixed: 3,
-            security: 0,
-            removed: 0,
-            keyItems: [],
-        })
-    })
-
-    it('should ignore non-standard headers', () => {
-        const content = `# Unreleased
-
-### Added
-- Feature A
-
-### Deprecated
-- Old API
-`
-        const result = parseUnreleasedSummary(content)
-
-        expect(result).toEqual({
-            added: 1,
-            changed: 0,
-            fixed: 0,
-            security: 0,
-            removed: 0,
-            keyItems: [],
-        })
-    })
-
-    it('should handle nested bullet points under items', () => {
-        const content = `# Unreleased
-
-### Added
-- Feature A
-  - Sub-detail (not counted)
-  - Another sub-detail
-- Feature B
-`
-        const result = parseUnreleasedSummary(content)
-
-        // Only top-level bullets starting at column 0 are counted
-        expect(result).toEqual({
-            added: 2,
-            changed: 0,
-            fixed: 0,
-            security: 0,
-            removed: 0,
-            keyItems: [],
-        })
-    })
-})
 
 // ============================================================================
 // parseTestHealth
@@ -216,17 +99,12 @@ describe('buildSystemContext', () => {
         expect(result.localTime.length).toBeGreaterThan(0)
     })
 
-    it('should include unreleased summary when UNRELEASED.md exists', async () => {
+    it('should include git history summary', async () => {
         const result = await buildSystemContext()
 
-        // In dev environment, UNRELEASED.md should exist with content
-        // In npm-installed scenarios, this may be null — both are valid
-        if (result.unreleasedSummary !== null) {
-            expect(result.unreleasedSummary).toHaveProperty('added')
-            expect(result.unreleasedSummary).toHaveProperty('changed')
-            expect(result.unreleasedSummary).toHaveProperty('fixed')
-            expect(result.unreleasedSummary).toHaveProperty('security')
-            expect(result.unreleasedSummary).toHaveProperty('removed')
+        if (result.gitHistory !== null) {
+            expect(result.gitHistory).toHaveProperty('commits')
+            expect(Array.isArray(result.gitHistory.commits)).toBe(true)
         }
     })
 

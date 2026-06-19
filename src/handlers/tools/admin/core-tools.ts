@@ -62,6 +62,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         expectedVersion: input.expected_version,
                         autoContext: input.auto_context,
                         workspaceId: wsId,
+                        impactScore: input.impact_score,
+                        trustScore: input.trust_score,
+                        validationStatus: input.validation_status,
                     })
                     if (!entry) {
                         return {

@@ -142,7 +142,7 @@ export async function buildBriefingData(
         resourceCount: system.resourceCount,
         promptCount: system.promptCount,
         localTime: system.localTime,
-        unreleasedSummary: system.unreleasedSummary ?? undefined,
+        gitHistory: system.gitHistory ?? undefined,
         testHealth: system.testHealth ?? undefined,
         filterSummary: system.filterSummary,
         isReadonly: system.isReadonly,

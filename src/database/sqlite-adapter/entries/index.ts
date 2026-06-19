@@ -92,6 +92,9 @@ export class EntriesManager {
             workflowStatus?: string | null
             expectedVersion?: number
             workspaceId?: string
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
         }
     ): JournalEntry | null {
         return updateEntry(this.sharedContext, id, input)
@@ -126,6 +129,9 @@ export class EntriesManager {
             workflowStatus?: string | null
             expectedVersion?: number
             workspaceId?: string
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return updateEntries(this.sharedContext, updates)

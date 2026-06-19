@@ -81,6 +81,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
                         autoContext: input.auto_context,
                         workspaceId: wsId,
+                        impactScore: input.impact_score,
+                        trustScore: input.trust_score,
+                        validationStatus: input.validation_status,
                     })
                     const id = createdEntry.id
 
@@ -150,6 +153,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
                                 author: author,
                                 workspaceId: wsId,
+                                impactScore: input.impact_score,
+                                trustScore: input.trust_score,
+                                validationStatus: input.validation_status,
                             })
                             context.teamDb.flushSave()
                             sharedWithTeam = true

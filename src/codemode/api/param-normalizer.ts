@@ -60,6 +60,10 @@ const PARAM_ALIASES: Record<string, string> = {
     order: 'sort_by',
     keep: 'keep_count',
     path: 'source_dir', // common fallback, handled contextually
+    // Aliases for missing MCP Code Mode mapping fields
+    impactScore: 'impact_score',
+    trustScore: 'trust_score',
+    validationStatus: 'validation_status',
 }
 
 /**
@@ -220,6 +224,16 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         if (snakeKey === 'role' && typeof value === 'string' && value.toLowerCase() === 'contributor') {
             result[snakeKey] = 'member'
             continue
+        }
+
+        // Coerce hallucinated significance types
+        if (snakeKey === 'significance_type' && typeof value === 'string') {
+            const valLower = value.toLowerCase();
+            const validTypes = new Set(['milestone', 'breakthrough', 'decision', 'architecture', 'lesson_learned', 'blocker_resolved', 'release', 'security']);
+            if (!validTypes.has(valLower)) {
+                // If it's invalid, skip assigning it entirely to prevent strict schema failure
+                continue
+            }
         }
 
         // Coerce string numbers for ID fields

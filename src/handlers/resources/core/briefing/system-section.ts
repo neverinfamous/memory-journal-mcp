@@ -21,20 +21,14 @@ import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
 import type { BriefingConfig } from '../../shared.js'
-import { GitHistoryClient, CommitAnalyzer } from '../../../../git/index.js'
+import { GitHistoryClient } from '../../../../git/index.js'
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface UnreleasedSummary {
-    added: number
-    changed: number
-    fixed: number
-    security: number
-    removed: number
-    /** Top 3 bold-prefixed category names from Added/Changed/Fixed sections */
-    keyItems: string[]
+export interface GitHistorySummary {
+    commits: { hash: string; category?: string; entry?: string; message: string }[]
 }
 
 export interface TestHealth {
@@ -49,7 +43,7 @@ export interface SystemContext {
     resourceCount: number
     promptCount: number
     localTime: string
-    unreleasedSummary: UnreleasedSummary | null
+    gitHistory: GitHistorySummary | null
     testHealth: TestHealth | null
     /** Compact filter summary, e.g. "codemode (1/70)", or null when all tools exposed */
     filterSummary: string | null
@@ -115,89 +109,9 @@ function resolveProjectRoot(): string {
     return path.dirname(pkgPath)
 }
 
-/**
- * Parse `UNRELEASED.md` into category counts.
- *
- * Expects Keep-a-Changelog format with `### Added`, `### Changed`, etc.
- * Each `-` prefixed line under a header counts as one change.
- */
-export function parseUnreleasedSummary(content: string): UnreleasedSummary | null {
-    const counts: UnreleasedSummary = {
-        added: 0,
-        changed: 0,
-        fixed: 0,
-        security: 0,
-        removed: 0,
-        keyItems: [],
-    }
-
-    /** Count-only fields of UnreleasedSummary (excludes keyItems) */
-    type CountKey = 'added' | 'changed' | 'fixed' | 'security' | 'removed'
-
-    const headerMap: Record<string, CountKey> = {
-        added: 'added',
-        changed: 'changed',
-        fixed: 'fixed',
-        security: 'security',
-        removed: 'removed',
-    }
-
-    let currentCategory: CountKey | null = null
-
-    for (const line of content.split('\n')) {
-        const trimmed = line.trim()
-
-        // Detect category headers: ### Added, ### Changed, etc.
-        const headerMatch = /^###\s+(\w+)/.exec(trimmed)
-        if (headerMatch?.[1]) {
-            const key = headerMap[headerMatch[1].toLowerCase()]
-            currentCategory = key ?? null
-            continue
-        }
-
-        // Count only top-level bullet items (no leading whitespace)
-        if (currentCategory !== null && line.startsWith('- ')) {
-            counts[currentCategory]++
-        }
-    }
-
-    const total = counts.added + counts.changed + counts.fixed + counts.security + counts.removed
-    return total > 0 ? { ...counts, keyItems: parseUnreleasedKeyItems(content) } : null
-}
-
-/**
- * Extract the top 3 unique bold-prefixed category names from UNRELEASED.md.
- *
- * Looks for lines matching `- **category**: description` under Added/Changed/Fixed
- * headers and returns deduplicated category names.
- */
-export function parseUnreleasedKeyItems(content: string): string[] {
-    const categories = new Set<string>()
-    let inRelevantSection = false
-
-    for (const line of content.split('\n')) {
-        const trimmed = line.trim()
-
-        // Track if we're under Added, Changed, or Fixed headers
-        const headerMatch = /^###\s+(\w+)/.exec(trimmed)
-        if (headerMatch?.[1]) {
-            const section = headerMatch[1].toLowerCase()
-            inRelevantSection = section === 'added' || section === 'changed' || section === 'fixed'
-            continue
-        }
-
-        // Extract bold prefix from top-level bullets: - **prefix**: ...
-        if (inRelevantSection && line.startsWith('- ')) {
-            const boldMatch = /^-\s+\*\*([^*]+)\*\*/.exec(line)
-            if (boldMatch?.[1]) {
-                categories.add(boldMatch[1].trim())
-            }
-        }
-    }
-
-    // Return top 3 unique items
-    return [...categories].slice(0, 3)
-}
+// ============================================================================
+// Cached Startup Data
+// ============================================================================
 
 /**
  * Parse README.md badge lines for test counts and coverage.
@@ -221,60 +135,39 @@ export function parseTestHealth(content: string): TestHealth | null {
     }
 }
 
-// ============================================================================
-// Cached Startup Data
-// ============================================================================
-
-let cachedUnreleased: UnreleasedSummary | null | undefined
+let cachedGitHistory: GitHistorySummary | null | undefined
 let cachedTestHealth: TestHealth | null | undefined
 
-async function loadCachedUnreleased(): Promise<UnreleasedSummary | null> {
-    if (cachedUnreleased !== undefined) return cachedUnreleased
+async function loadCachedGitHistory(): Promise<GitHistorySummary | null> {
+    if (cachedGitHistory !== undefined) return cachedGitHistory
 
     try {
         const root = resolveProjectRoot()
         const gitClient = new GitHistoryClient(root)
-        // Fetch up to 50 recent commits assuming they are unreleased
-        const commits = await gitClient.getCommitHistory({ maxCount: 50 })
-        const analyzer = new CommitAnalyzer()
-        const analyzed = analyzer.analyze(commits)
+        // Fetch the 5 most recent commits
+        const commits = await gitClient.getCommitHistory({ maxCount: 5 })
 
-        const counts: UnreleasedSummary = {
-            added: 0,
-            changed: 0,
-            fixed: 0,
-            security: 0,
-            removed: 0,
-            keyItems: [],
-        }
+        const result: GitHistorySummary = { commits: [] }
 
-        const categories = new Set<string>()
-
-        for (const commit of analyzed) {
-            const type = commit.type?.toLowerCase()
-            if (type === 'added') counts.added++
-            else if (type === 'changed') counts.changed++
-            else if (type === 'fixed') counts.fixed++
-            else if (type === 'security') counts.security++
-            else if (type === 'removed') counts.removed++
-
-            if (['added', 'changed', 'fixed'].includes(type) && commit.trailers?.['Category']) {
-                categories.add(commit.trailers['Category'])
-            }
+        for (const commit of commits) {
+            result.commits.push({
+                hash: commit.hash.substring(0, 7),
+                category: commit.trailers?.['History-Category'] || commit.trailers?.['Changelog-Category'],
+                entry: commit.trailers?.['History-Entry'] || commit.trailers?.['Changelog-Entry'],
+                message: commit.message
+            })
         }
         
-        counts.keyItems = [...categories].slice(0, 3)
-        const total = counts.added + counts.changed + counts.fixed + counts.security + counts.removed
-        cachedUnreleased = total > 0 ? counts : null
+        cachedGitHistory = result.commits.length > 0 ? result : null
     } catch {
-        logger.debug('Failed to get unreleased commits via GitClient (non-critical)', {
+        logger.debug('Failed to get git history via GitClient (non-critical)', {
             module: 'BRIEFING',
-            operation: 'unreleased-git',
+            operation: 'git-history',
         })
-        cachedUnreleased = null
+        cachedGitHistory = null
     }
 
-    return cachedUnreleased
+    return cachedGitHistory
 }
 
 function loadCachedTestHealth(): TestHealth | null {
@@ -465,7 +358,7 @@ export async function buildSystemContext(
         resourceCount: await getResourceCount(),
         promptCount: getPrompts().length,
         localTime,
-        unreleasedSummary: await loadCachedUnreleased(),
+        gitHistory: await loadCachedGitHistory(),
         testHealth: loadCachedTestHealth(),
         filterSummary,
         isReadonly,

@@ -137,13 +137,19 @@ describe('Tool Handlers', () => {
                     tags: ['tool-tag-a', 'tool-tag-b'],
                     is_personal: false,
                     significance_type: 'milestone',
+                    trust_score: 0.9,
+                    impact_score: 0.5,
+                    validation_status: 'passed',
                 },
                 db
-            )) as { success: boolean; entry: { entryType: string; tags: string[] } }
+            )) as { success: boolean; entry: { entryType: string; tags: string[]; trustScore: number; impactScore: number; validationStatus: string } }
 
             expect(result.success).toBe(true)
             expect(result.entry.entryType).toBe('project_decision')
             expect(result.entry.tags).toContain('tool-tag-a')
+            expect(result.entry.trustScore).toBe(0.9)
+            expect(result.entry.impactScore).toBe(0.5)
+            expect(result.entry.validationStatus).toBe('passed')
         })
 
         it('should create entry in specific workspace', async () => {
@@ -709,6 +715,38 @@ describe('Tool Handlers', () => {
     // ========================================================================
     // callTool - cross project insights
     // ========================================================================
+
+    describe('callTool - mark_anchors_stale', () => {
+        it('should update anchor status', async () => {
+            const entry = (await callTool(
+                'create_entry',
+                { project_number: 1, content: 'Anchor test entry' },
+                db
+            )) as { entry: { id: number } }
+
+            // Directly add an anchor to the db since there is no standard tool to create anchors (only happens via git hooks typically)
+            db.executeInTransaction(() => {
+                const nativeDb = (db as any).connection.getNativeDb();
+                nativeDb.prepare('INSERT INTO entry_anchors (entry_id, anchor_type, anchor_path, status) VALUES (?, ?, ?, ?)').run(entry.entry.id, 'file', 'src/test.ts', 'valid')
+            })
+
+            const anchors = db.getAnchorsByEntryId(entry.entry.id)
+            expect(anchors.length).toBe(1)
+            const anchorId = anchors[0]!.id
+
+            const result = (await callTool(
+                'mark_anchors_stale',
+                { updates: [{ id: anchorId, status: 'stale' }] },
+                db
+            )) as { success: boolean; updated_count: number }
+
+            expect(result.success).toBe(true)
+            expect(result.updated_count).toBe(1)
+
+            const updatedAnchors = db.getAnchorsByEntryId(entry.entry.id)
+            expect(updatedAnchors[0]!.status).toBe('stale')
+        })
+    })
 
     describe('callTool - get_cross_project_insights', () => {
         it('should return insights structure', async () => {

@@ -146,6 +146,9 @@ export interface IDatabaseAdapter {
             isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
@@ -198,6 +201,9 @@ export interface IDatabaseAdapter {
             isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }
     deleteEntries(

@@ -11,7 +11,7 @@
 import type { BriefingGitHub } from './github-section.js'
 import type { RulesFile, SkillsDir, FlagSummary, GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
-import type { UnreleasedSummary, TestHealth } from './system-section.js'
+import type { GitHistorySummary, TestHealth } from './system-section.js'
 
 const escapeContent = (text: string): string =>
     text.replace(/<\/?untrusted_remote_content[^>]*>/gi, '').replace(/\r?\n/g, ' ')
@@ -58,7 +58,7 @@ export function formatUserMessage(opts: {
     resourceCount?: number
     promptCount?: number
     localTime?: string
-    unreleasedSummary?: UnreleasedSummary
+    gitHistory?: GitHistorySummary | null
     testHealth?: TestHealth
     filterSummary?: string | null
     isReadonly?: boolean
@@ -101,7 +101,7 @@ export function formatUserMessage(opts: {
                 cancelled: '⛔',
                 unknown: '❓',
             }
-            ciDisplay = ws.runs.map((r) => `${icons[r.conclusion] ?? '❓'} ${r.name}`).join(' · ')
+            ciDisplay = ws.runs.map((r) => `${icons[r.conclusion] ?? '❓'} ${r.url ? `[${r.name}](${r.url})` : r.name}`).join(' · ')
         } else {
             const parts: string[] = []
             if (ws.passing > 0) parts.push(`${String(ws.passing)} passing`)
@@ -374,27 +374,20 @@ export function formatUserMessage(opts: {
     }
 
     // ========================================================================
-    // TABLE ROW 8: Unreleased
+    // TABLE ROW 8: Git History
     // ========================================================================
-    const unreleasedLines: string[] = []
-    if (opts.unreleasedSummary) {
-        const u = opts.unreleasedSummary
-        const parts: string[] = []
-        if (u.added > 0) parts.push(`${String(u.added)} added`)
-        if (u.changed > 0) parts.push(`${String(u.changed)} changed`)
-        if (u.fixed > 0) parts.push(`${String(u.fixed)} fixed`)
-        if (u.security > 0) parts.push(`${String(u.security)} security`)
-        if (u.removed > 0) parts.push(`${String(u.removed)} removed`)
-        if (parts.length > 0) {
-            const ageStr =
-                opts.lastReleaseDaysAgo !== undefined
-                    ? `(${String(opts.lastReleaseDaysAgo)}d) `
-                    : ''
-            let line = `${ageStr}${parts.join(' · ')}`
-            if ((u.keyItems?.length ?? 0) > 0) {
-                line += `<br>Recent focus: ${escapeCell(u.keyItems.join(', '))}`
+    const gitHistoryLines: string[] = []
+    if (opts.gitHistory && opts.gitHistory.commits.length > 0) {
+        for (const c of opts.gitHistory.commits) {
+            let line = `\`${c.hash}\``
+            if (c.category && c.entry) {
+                line += ` **${escapeCell(c.category)}**: ${escapeCell(c.entry)}`
+            } else {
+                // Fallback to first line of commit message
+                const msg = c.message.split('\n')[0] ?? ''
+                line += ` ${escapeCell(msg)}`
             }
-            unreleasedLines.push(line)
+            gitHistoryLines.push(line)
         }
     }
 
@@ -489,8 +482,8 @@ export function formatUserMessage(opts: {
     if (graphLines.length > 0) {
         tableRows.push(`| **Graph** | ${graphLines.join('<br>')} |`)
     }
-    if (unreleasedLines.length > 0) {
-        tableRows.push(`| **Unreleased** | ${unreleasedLines.join('<br>')} |`)
+    if (gitHistoryLines.length > 0) {
+        tableRows.push(`| **Git History** | ${gitHistoryLines.join('<br>')} |`)
     }
     if (workspacesLines.length > 0) {
         tableRows.push(`| **Workspaces** | ${workspacesLines.join('<br>')} |`)

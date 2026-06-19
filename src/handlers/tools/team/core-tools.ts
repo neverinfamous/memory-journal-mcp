@@ -149,6 +149,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         author,
                         autoContext: input.auto_context,
                         workspaceId: wsId,
+                        impactScore: input.impact_score,
+                        trustScore: input.trust_score,
+                        validationStatus: input.validation_status,
                     })
 
                     teamDb.flushSave()

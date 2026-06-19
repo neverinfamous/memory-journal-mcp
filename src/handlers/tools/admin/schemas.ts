@@ -72,6 +72,9 @@ export const UpdateEntrySchema = z.preprocess(
         expected_version: z.number().optional(),
         auto_context: z.string().nullable().optional(),
         workspace_id: z.string().optional(),
+        impact_score: z.number().min(0).max(1).optional(),
+        trust_score: z.number().min(0).max(1).optional(),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional(),
     }).strict()
 )
 
@@ -139,6 +142,9 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         expected_version: relaxedNumber().optional(),
         auto_context: z.string().nullable().optional(),
         workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
+        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional().describe('Current validation status of the entry.'),
     }).strict()
 )
 

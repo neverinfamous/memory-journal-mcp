@@ -143,6 +143,9 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
@@ -261,6 +264,9 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.entriesMgr.updateEntries(updates)

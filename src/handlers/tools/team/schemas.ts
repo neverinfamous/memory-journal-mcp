@@ -67,6 +67,9 @@ export const TeamCreateEntrySchema = z.preprocess(
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
         author: z.string().optional(),
         auto_context: z.string().optional(),
+        impact_score: z.number().min(0).max(1).optional(),
+        trust_score: z.number().min(0).max(1).optional(),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content || '';
@@ -147,6 +150,9 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         pr_status: z.string().optional(),
         author: z.string().optional(),
         auto_context: z.string().optional(),
+        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
+        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional().describe('Current validation status of the entry.'),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content || '';
@@ -444,6 +450,9 @@ export const TeamUpdateEntrySchema = z.preprocess(
         is_archived: z.boolean().optional(),
         expected_version: z.number().optional(),
         auto_context: z.string().nullable().optional(),
+        impact_score: z.number().min(0).max(1).optional(),
+        trust_score: z.number().min(0).max(1).optional(),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional(),
     }).strict()
 )
 
@@ -504,6 +513,9 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
         is_archived: z.boolean().optional(),
         expected_version: relaxedNumber().optional(),
         auto_context: z.string().nullable().optional(),
+        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
+        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
+        validation_status: z.enum(['passed', 'none', 'failed']).optional().describe('Current validation status of the entry.'),
     }).strict()
 )
 

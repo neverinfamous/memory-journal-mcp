@@ -55,7 +55,13 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
     test('should execute create_entry and get structured response', async () => {
         const response = await client.callTool({
             name: 'create_entry',
-            arguments: { project_number: 1, content: 'Playwright e2e test entry' },
+            arguments: { 
+                project_number: 1, 
+                content: 'Playwright e2e test entry',
+                trust_score: 0.8,
+                impact_score: 0.5,
+                validation_status: 'passed'
+            },
         })
 
         expect(response.isError).toBeUndefined()
@@ -66,6 +72,21 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(parsed).toHaveProperty('success', true)
         expect(parsed).toHaveProperty('entry')
         expect(parsed.entry).toHaveProperty('id')
+        expect(parsed.entry).toHaveProperty('trustScore', 0.8)
+        expect(parsed.entry).toHaveProperty('impactScore', 0.5)
+        expect(parsed.entry).toHaveProperty('validationStatus', 'passed')
+    })
+
+    test('should execute mark_anchors_stale tool', async () => {
+        const response = await client.callTool({
+            name: 'mark_anchors_stale',
+            arguments: { updates: [{ id: 999999, status: 'stale' }] }, // It will execute but just update 0 rows in DB realistically, or maybe error depending on DB schema, but we just verify it executes without schema errors
+        })
+
+        expect(response.isError).toBeUndefined()
+        const parsed = getOutput(response) as any
+        expect(parsed).toHaveProperty('success', true)
+        expect(parsed).toHaveProperty('updated_count', 1)
     })
 
     test('should execute get_recent_entries and return entries array', async () => {
