@@ -1195,6 +1195,36 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         }
     }
 
+    // Session Summary Hallucination Healing
+    const sessionSummaryMethods = ['create_entry', 'createEntry', 'team_create_entry', 'teamCreateEntry', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'];
+    if (sessionSummaryMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as Record<string, unknown>;
+        const tags = obj['tags'] as string[] | undefined;
+        const entryType = obj['entry_type'] as string | undefined;
+        
+        if (typeof obj['content'] === 'string' && (tags?.includes('session-summary') || entryType === 'retrospective')) {
+            let content = obj['content'];
+            
+            // Normalize mangled headers
+            content = content.replace(/^#+\s+(?:Accomplishments|Completed|Done|What I did|What we did)\s*$/gim, '## Accomplished');
+            content = content.replace(/^#+\s+(?:Blockers|Unfinished|Unfinished\/?Blocked|Blocked)\s*$/gim, '## Unfinished / Blocked');
+            content = content.replace(/^#+\s+(?:Next Session|Context|Next steps)\s*$/gim, '## Context for Next Session');
+            
+            // Append missing headers
+            const hasAccomplished = /#+\s+Accomplished/i.test(content);
+            const hasUnfinished = /#+\s+Unfinished \/ Blocked/i.test(content);
+            const hasContext = /#+\s+Context for Next Session/i.test(content);
+            const hasCommits = /#+\s+Commits/i.test(content);
+            
+            if (!hasAccomplished) content += '\n\n## Accomplished\n- \n';
+            if (!hasUnfinished) content += '\n\n## Unfinished / Blocked\n- None\n';
+            if (!hasContext) content += '\n\n## Context for Next Session\n- \n';
+            if (!hasCommits) content += '\n\n## Commits\n- None\n';
+            
+            obj['content'] = content.trim();
+        }
+    }
+
     return { args };
 }
 

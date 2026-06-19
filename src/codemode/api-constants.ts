@@ -142,6 +142,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     },
     team: {
         create: 'teamCreateEntry',
+        createEntry: 'teamCreateEntry',
+        create_entry: 'teamCreateEntry',
+        addEntry: 'teamCreateEntry',
         recent: 'teamGetRecent',
         find: 'teamSearch',
         search: 'teamSearch',
