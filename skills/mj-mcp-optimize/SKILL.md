@@ -16,6 +16,10 @@ memory-journal-mcp database. Every operation uses the soft-delete system
 as a safe first pass — entries remain recoverable via `restore_backup`
 until explicitly purged.
 
+## Session Start Routine
+
+When initiated, **ALWAYS** begin by creating a comprehensive `implementation_plan.md` artifact. This plan must outline a strategy to run **all** relevant optimization workflows (Importance Audit, Orphan Cleanup, Duplicate Detection, Type-Based Cleanup, etc.) concurrently rather than asking the user to run them one by one. Do not modify the database until the user approves the consolidated plan.
+
 ## When to Load
 
 Load this skill when any of these apply:
@@ -90,16 +94,17 @@ For all destructive workflows (2–5), execute this exact sequence once the cand
 
 ## Optimizer Workflows
 
-For detailed instructions, step-by-step guidance, and interpretation tables for the 6 available optimization workflows, read:
+For detailed instructions, step-by-step guidance, and interpretation tables for the 7 available optimization workflows, read:
 **[references/optimizer-workflows.md](references/optimizer-workflows.md)**
 
-The 6 available workflows are:
+The 7 available workflows are:
 1. **Importance Audit (Dry Run)**
 2. **Targeted Cleanup (Interactive)**
 3. **Orphan Cleanup**
 4. **Duplicate Detection**
 5. **Type-Based Cleanup**
 6. **Test Artifact Cleanup**
+7. **Deep Context Optimization (Manual Pass)**
 
 ---
 
