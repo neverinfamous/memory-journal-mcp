@@ -11,7 +11,7 @@
  */
 
 import * as fs from 'node:fs'
-import { createRequire } from 'node:module'
+
 import * as path from 'node:path'
 
 import { VERSION } from '../../../../version.js'
@@ -110,9 +110,18 @@ async function getResourceCount(): Promise<number> {
  * breaks when tsup flattens the directory structure.
  */
 function resolveProjectRoot(): string {
-    const require = createRequire(import.meta.url)
-    const pkgPath = require.resolve('../package.json')
-    return path.dirname(pkgPath)
+    let current = new URL(import.meta.url).pathname
+    if (process.platform === 'win32' && current.startsWith('/')) {
+        current = current.slice(1)
+    }
+    current = path.dirname(current)
+    while (current !== path.dirname(current)) {
+        if (fs.existsSync(path.join(current, 'package.json'))) {
+            return current
+        }
+        current = path.dirname(current)
+    }
+    return process.cwd()
 }
 
 // ============================================================================
