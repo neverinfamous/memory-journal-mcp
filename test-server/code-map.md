@@ -417,6 +417,8 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `target` | Skill name or path |
 | `audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
 | `target` | Workflow name or path |
+| `commit` | High-integrity procedure for committing code changes with validation gates |
+| `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
 | `workflow_type` | triage | milestone | roadmap |
 | `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
