@@ -42,17 +42,17 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
     })
 
     // --- GitHub prompts ---
-    test('project-workflow prompt', async () => {
+    test('issue-commander prompt', async () => {
         const response = await client.getPrompt({
-            name: 'project-workflow',
+            name: 'issue-commander',
             arguments: { project_number: '1' },
         })
         expectValidPrompt(response)
     })
 
-    test('pr-workflow prompt', async () => {
+    test('pr-commander prompt', async () => {
         const response = await client.getPrompt({
-            name: 'pr-workflow',
+            name: 'pr-commander',
             arguments: { pr_number: '1' },
         })
         expectValidPrompt(response)

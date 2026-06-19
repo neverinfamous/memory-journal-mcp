@@ -92,11 +92,8 @@ describe('WorkerSandbox', () => {
         // Non-existent group: the worker proxy doesn't create nested proxies
         // for unknown groups, so accessing mj.nonexistent returns undefined
         const code = `
-            try {
-                await mj.nonexistent.method();
-            } catch(e) {
-                return e.message;
-            }
+            const res = await mj.nonexistent.method();
+            return res.error;
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
@@ -114,11 +111,8 @@ describe('WorkerSandbox', () => {
             },
         }
         const code = `
-            try {
-                await mj.core.doesNotExist();
-            } catch(e) {
-                return e.message;
-            }
+            const res = await mj.core.doesNotExist();
+            return res.error;
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
