@@ -92,11 +92,7 @@
         "typescript-eslint": "^8.61.1",
         "vitest": "^4.1.9"
     },
-    "pnpm.overrides": {
-        "esbuild": "0.28.1",
-        "tsup>esbuild": "0.28.1",
-        "tsup>bundle-require>esbuild": "0.28.1"
-    },
+
     "overrides": {
         "axios": "^1.13.6",
         "brace-expansion": "^2.0.2",
@@ -110,6 +106,8 @@
         "tmp": "^0.2.5",
         "vite": "^8.0.5",
         "ip-address": "10.2.0",
-        "esbuild": "0.28.1"
+        "esbuild": "0.28.1",
+        "tsup>esbuild": "0.28.1",
+        "tsup>bundle-require>esbuild": "0.28.1"
     }
 }
