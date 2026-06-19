@@ -104,7 +104,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(Array.isArray(parsed.entries)).toBe(true)
     })
 
-    test('should return structured error for invalid entry_type', async () => {
+    test('should heal invalid entry_type to other', async () => {
         const response = await client.callTool({
             name: 'create_entry',
             arguments: {
@@ -119,8 +119,8 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(Array.isArray(response.content)).toBe(true)
 
         const parsed = getOutput(response) as any
-        expect(parsed).toHaveProperty('success', false)
-        expect(parsed).toHaveProperty('error')
-        expect(parsed.error).toContain('entry_type')
+        expect(parsed).toHaveProperty('success', true)
+        expect(parsed.entry.entryType).toBe('other')
+        expect(parsed.entry.tags).toContain('invalid-type')
     })
 })

@@ -1210,6 +1210,25 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             content = content.replace(/^#+\s+(?:Blockers|Unfinished|Unfinished\/?Blocked|Blocked)\s*$/gim, '## Unfinished / Blocked');
             content = content.replace(/^#+\s+(?:Next Session|Context|Next steps)\s*$/gim, '## Context for Next Session');
             
+            // Strip duplicate empty sections
+            content = content.replace(/(?:^#+\s+Accomplished\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Accomplished\n- None.\n');
+            content = content.replace(/(?:^#+\s+Unfinished \/ Blocked\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Unfinished / Blocked\n- None.\n');
+            content = content.replace(/(?:^#+\s+Context for Next Session\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Context for Next Session\n- None.\n');
+            content = content.replace(/(?:^#+\s+Commits\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Commits\n- None.\n');
+            
+            // Remove subsequent heading text if duplicates still exist
+            const deduplicate = (str: string, headerRegexStr: string): string => {
+                let count = 0;
+                return str.replace(new RegExp(headerRegexStr, 'gim'), (match) => {
+                    count++;
+                    return count === 1 ? match : '';
+                });
+            };
+            content = deduplicate(content, '^#+\\s+Accomplished');
+            content = deduplicate(content, '^#+\\s+Unfinished \\/ Blocked');
+            content = deduplicate(content, '^#+\\s+Context for Next Session');
+            content = deduplicate(content, '^#+\\s+Commits');
+            
             // Append missing headers
             const hasAccomplished = /#+\s+Accomplished/i.test(content);
             const hasUnfinished = /#+\s+Unfinished \/ Blocked/i.test(content);

@@ -69,7 +69,7 @@ test.describe('Errors: Core', () => {
         }
     })
 
-    test('create_entry with invalid entry_type → structured error or Zod error', async () => {
+    test('create_entry with invalid entry_type → heals to other', async () => {
         const client = await createClient()
         try {
             const response = await callToolRaw(client, 'create_entry', {
@@ -80,19 +80,17 @@ test.describe('Errors: Core', () => {
             const structural =
                 'structuredContent' in response ? response.structuredContent : undefined
 
-            // Use structured object if present
+            // Verify that the invalid entry type was healed
             if (text === '[Structured output attached]' && structural) {
                 const parsed = structural as any
-                expect(parsed.success).toBe(false)
+                expect(parsed.success).toBe(true)
+                expect(parsed.entry.entryType).toBe('other')
+                expect(parsed.entry.tags).toContain('e2e-invalid-type-xyz')
             } else {
-                // Try JSON, fallback to raw text verification
-                try {
-                    const parsed = JSON.parse(text)
-                    expect(parsed.success).toBe(false)
-                } catch {
-                    expect(text).not.toContain('-32602')
-                    expect(text.toLowerCase()).toContain('error')
-                }
+                const parsed = JSON.parse(text)
+                expect(parsed.success).toBe(true)
+                expect(parsed.entry.entryType).toBe('other')
+                expect(parsed.entry.tags).toContain('e2e-invalid-type-xyz')
             }
         } finally {
             await client.close()

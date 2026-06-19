@@ -377,6 +377,26 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         ];
         
         let changed = false;
+        
+        // Strip duplicate empty sections
+        healedContent = healedContent.replace(/(?:^#+\s+Accomplished\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Accomplished\n- None.\n');
+        healedContent = healedContent.replace(/(?:^#+\s+Unfinished \/ Blocked\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Unfinished / Blocked\n- None.\n');
+        healedContent = healedContent.replace(/(?:^#+\s+Context for Next Session\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Context for Next Session\n- None.\n');
+        healedContent = healedContent.replace(/(?:^#+\s+Commits\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Commits\n- None.\n');
+        
+        // Remove subsequent heading text if duplicates still exist
+        const deduplicate = (str: string, headerRegexStr: string): string => {
+            let count = 0;
+            return str.replace(new RegExp(headerRegexStr, 'gim'), (match) => {
+                count++;
+                return count === 1 ? match : '';
+            });
+        };
+        healedContent = deduplicate(healedContent, '^#+\\s+Accomplished');
+        healedContent = deduplicate(healedContent, '^#+\\s+Unfinished \\/ Blocked');
+        healedContent = deduplicate(healedContent, '^#+\\s+Context for Next Session');
+        healedContent = deduplicate(healedContent, '^#+\\s+Commits');
+
         for (const header of requiredHeaders) {
             // Check for loose match (case insensitive)
             const cleanHeader = header.replace(/^#+\s+/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s*');
@@ -387,7 +407,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             }
         }
         
-        if (changed) {
+        if (changed || healedContent !== c) {
             result['content'] = healedContent.trim();
         }
     }

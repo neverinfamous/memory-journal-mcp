@@ -1,10 +1,9 @@
 /**
  * E2E Tests: Expanded Prompt Coverage
  *
- * Tests 13 prompts not individually exercised by prompts.spec.ts:
- * session-summary, weekly-digest, prepare-retro, analyze-period,
- * goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
- * and 6 GitHub prompts.
+ * Tests the remaining prompts not individually exercised by prompts.spec.ts:
+ * goal-tracker, project-workflow, pr-workflow, actions-failure-digest,
+ * adversarial-plan-review, and flag-dashboard.
  */
 
 import { test, expect } from './test-fixture.js'
@@ -37,86 +36,23 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
     }
 
     // --- Workflow prompts ---
-    test('session-summary prompt', async () => {
-        const response = await client.getPrompt({ name: 'session-summary', arguments: {} })
-        expectValidPrompt(response)
-    })
-
-    test('weekly-digest prompt', async () => {
-        const response = await client.getPrompt({ name: 'weekly-digest', arguments: {} })
-        expectValidPrompt(response)
-    })
-
-    test('prepare-retro prompt', async () => {
-        const response = await client.getPrompt({
-            name: 'prepare-retro',
-            arguments: {},
-        })
-        expectValidPrompt(response)
-    })
-
-    test('analyze-period prompt', async () => {
-        const response = await client.getPrompt({
-            name: 'analyze-period',
-            arguments: {
-                start_date: new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0]!,
-                end_date: new Date().toISOString().split('T')[0]!,
-            },
-        })
-        expectValidPrompt(response)
-    })
-
     test('goal-tracker prompt', async () => {
         const response = await client.getPrompt({ name: 'goal-tracker', arguments: {} })
         expectValidPrompt(response)
     })
 
-    test('get-context-bundle prompt', async () => {
-        const response = await client.getPrompt({
-            name: 'get-context-bundle',
-            arguments: { query: 'architecture' },
-        })
-        expectValidPrompt(response)
-    })
-
-    test('get-recent-entries prompt', async () => {
-        const response = await client.getPrompt({ name: 'get-recent-entries', arguments: {} })
-        expectValidPrompt(response)
-    })
-
-    test('confirm-briefing prompt', async () => {
-        const response = await client.getPrompt({ name: 'confirm-briefing', arguments: {} })
-        expectValidPrompt(response)
-    })
-
     // --- GitHub prompts ---
-    test('project-status-summary prompt', async () => {
+    test('project-workflow prompt', async () => {
         const response = await client.getPrompt({
-            name: 'project-status-summary',
+            name: 'project-workflow',
             arguments: { project_number: '1' },
         })
         expectValidPrompt(response)
     })
 
-    test('pr-summary prompt', async () => {
+    test('pr-workflow prompt', async () => {
         const response = await client.getPrompt({
-            name: 'pr-summary',
-            arguments: { pr_number: '1' },
-        })
-        expectValidPrompt(response)
-    })
-
-    test('code-review-prep prompt', async () => {
-        const response = await client.getPrompt({
-            name: 'code-review-prep',
-            arguments: { pr_number: '1' },
-        })
-        expectValidPrompt(response)
-    })
-
-    test('pr-retrospective prompt', async () => {
-        const response = await client.getPrompt({
-            name: 'pr-retrospective',
+            name: 'pr-workflow',
             arguments: { pr_number: '1' },
         })
         expectValidPrompt(response)
@@ -127,11 +63,17 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
         expectValidPrompt(response)
     })
 
-    test('project-milestone-tracker prompt', async () => {
+    // --- Adversarial & Team prompts ---
+    test('adversarial-plan-review prompt', async () => {
         const response = await client.getPrompt({
-            name: 'project-milestone-tracker',
-            arguments: { project_number: '1' },
+            name: 'adversarial-plan-review',
+            arguments: { topic: 'testing' },
         })
+        expectValidPrompt(response)
+    })
+
+    test('flag-dashboard prompt', async () => {
+        const response = await client.getPrompt({ name: 'flag-dashboard', arguments: {} })
         expectValidPrompt(response)
     })
 })
