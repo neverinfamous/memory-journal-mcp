@@ -177,7 +177,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **105 MCP Tools** (11 Groups)
+### 🛠️ **107 MCP Tools** (11 Groups)
 
 | Group           | Tools | Description                                                                                                                                                                                 |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
