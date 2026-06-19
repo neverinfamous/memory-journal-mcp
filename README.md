@@ -202,8 +202,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and flag triage dashboards. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **60 Resources**
-
+### 📡 **60 Resources** (33 Static + 12 Template + 9 Dynamic Repo + 6 Aliases)
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries
@@ -220,7 +219,6 @@ Time period analysis, goal tracking, PR & issue command, session summaries, adve
 - `memory://github/status` - GitHub repository status overview
 - `memory://github/insights` - Repository stars, forks, and 14-day traffic summary
 - `memory://github/milestones` - Open milestones with completion percentages
-- `memory://github/rate-limit` - Current GitHub API rate limit status
 - `memory://team/recent` - Recent team entries with author attribution
 - `memory://team/statistics` - Team entry counts, types, and author breakdown
 - `memory://help` - Tool group index with descriptions and tool counts
@@ -255,7 +253,7 @@ Time period analysis, goal tracking, PR & issue command, session summaries, adve
 - `memory://help/{group}` - Per-group tool reference with parameters and annotations
 - `memory://briefing/{repo}` - Context targeted to a specific repository
 
-_Note: The `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, and `memory://milestones/{number}` resources also accept an optional `/{repo}` path suffix for cross-repo targeting._
+_Note: The `memory://briefing`, `memory://graph/actions`, `memory://actions/recent`, `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, `memory://milestones/{number}`, `memory://kanban/{project_number}`, and `memory://kanban/{project_number}/diagram` resources also accept an optional `/{repo}` path suffix for cross-repo targeting._
 
 ---
 
