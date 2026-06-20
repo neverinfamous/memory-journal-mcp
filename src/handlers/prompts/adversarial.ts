@@ -110,7 +110,7 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const topic = args?.['topic'] ?? '[Please specify topic in chat]'
+                const topic = args?.['topic'] ?? '{topic}'
                 const rawDepth = args?.['depth'] ?? 'standard'
                 const depth: ReviewDepth = VALID_DEPTHS.has(rawDepth)
                     ? (rawDepth as ReviewDepth)
@@ -146,6 +146,8 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
                             content: {
                                 type: 'text',
                                 text: `# Adversarial Plan Review: "${topic}"
+
+If the topic is '{topic}', determine it from the user's request. If the user hasn't specified a topic, ask them for it now.
 
 **Depth**: ${depth}
 
@@ -239,7 +241,9 @@ Review prior entries for recurring findings and reusable patterns before draftin
                     content: {
                         type: 'text',
                         text: `# Adversarial Code Quality Audit
-Target: ${args?.['target'] ?? '[Please specify target in chat]'}
+Target: ${args?.['target'] ?? '{target}'}
+
+If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, and boundary validation.
 2. Group findings by category and severity (Critical, Moderate, Low).
@@ -260,7 +264,14 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Security Audit\nTarget: ${args?.['target'] ?? '[Please specify target in chat]'}\n\n1. Perform a multi-pass security audit looking for injection vectors, auth/authz gaps, data boundary issues.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Security Audit
+Target: ${args?.['target'] ?? '{target}'}
+
+If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
+
+1. Perform a multi-pass security audit looking for injection vectors, auth/authz gaps, data boundary issues.
+2. Present findings table.
+3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -275,7 +286,14 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Performance Audit\nTarget: ${args?.['target'] ?? '[Please specify target in chat]'}\n\n1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Performance Audit
+Target: ${args?.['target'] ?? '{target}'}
+
+If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
+
+1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.
+2. Present findings table.
+3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -290,7 +308,14 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial SEO & Docs Audit\nTarget: ${args?.['target'] ?? '[Please specify target in chat]'}\n\n1. Perform a multi-pass audit checking technical SEO, semantic HTML, ARIA, and marketing documentation clarity.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial SEO & Docs Audit
+Target: ${args?.['target'] ?? '{target}'}
+
+If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
+
+1. Perform a multi-pass audit checking technical SEO, semantic HTML, ARIA, and marketing documentation clarity.
+2. Present findings table.
+3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -305,7 +330,14 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Skill Audit\nTarget: ${args?.['target'] ?? '[Please specify skill in chat]'}\n\n1. Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Skill Audit
+Target: ${args?.['target'] ?? '{target}'}
+
+If the target is '{target}', determine it from the user's request. If the user hasn't specified a target skill, ask them for it now.
+
+1. Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
+2. Present findings table.
+3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -320,7 +352,14 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Workflow Audit\nTarget: ${args?.['target'] ?? '[Please specify workflow in chat]'}\n\n1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Workflow Audit
+Target: ${args?.['target'] ?? '{target}'}
+
+If the target is '{target}', determine it from the user's request. If the user hasn't specified a target workflow, ask them for it now.
+
+1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.
+2. Present findings table.
+3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
