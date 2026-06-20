@@ -86,7 +86,11 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
                 { name: 'pr_number', description: 'Pull request number', required: true },
                 { name: 'workflow_type', description: 'summary | review | deps | changelog', required: false },
             ],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => {
+            handler: (
+                args: Record<string, string>,
+                _db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter
+            ) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
                 const type = args['workflow_type'] ?? 'summary'
 

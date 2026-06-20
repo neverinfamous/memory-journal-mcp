@@ -418,7 +418,6 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `period_type` | standup | weekly | retro | custom |
 | `goal-tracker` | Milestone and achievement tracking |
 | `session-summary` | Create a formatted session summary entry |
-| `target` | personal | team (default: personal) |
 
 <!-- END: PROMPTS -->
 

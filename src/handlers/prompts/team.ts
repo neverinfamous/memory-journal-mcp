@@ -155,16 +155,9 @@ export function getTeamPromptDefinitions(): InternalPromptDef[] {
             name: 'flag-dashboard',
             description: 'Triage active flags with priority assessment and resolution guidance',
             icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'flag_type',
-                    description:
-                        'Filter to a specific flag type (e.g., blocker, needs_review). Omit to show all.',
-                    required: false,
-                },
-            ],
+            arguments: [],
             handler: (
-                args: Record<string, string>,
+                args: Record<string, string> | undefined,
                 _db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter
             ) => {
@@ -172,7 +165,7 @@ export function getTeamPromptDefinitions(): InternalPromptDef[] {
                     throw new ConfigurationError('Team database not configured')
                 }
 
-                const flagTypeFilter = args['flag_type'] || undefined
+                const flagTypeFilter = args?.['flag_type'] || undefined
                 const { active, recentlyResolved } = partitionFlags(teamDb, flagTypeFilter)
 
                 const filterNote = flagTypeFilter

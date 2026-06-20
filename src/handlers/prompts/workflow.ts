@@ -109,19 +109,13 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'session-summary',
             description: 'Create a formatted session summary entry',
             icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'target',
-                    description: 'personal | team (default: personal)',
-                    required: false,
-                },
-            ],
+            arguments: [],
             handler: (
-                args: Record<string, string>,
+                args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter
             ) => {
-                const target = args['target'] ?? 'personal'
+                const target = args?.['target'] ?? 'personal'
                 
                 if (target === 'team' && !teamDb) {
                     throw new ConfigurationError('Team database not configured')
