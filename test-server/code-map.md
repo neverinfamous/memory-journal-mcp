@@ -253,7 +253,7 @@ src/
     │   ├── index.ts                # Resource registration barrel
     │   ├── shared.ts               # Shared resource helpers (formatters, entry rendering, BriefingConfig)
     │   ├── staleness.ts            # Staleness detection resources (memory://staleness)
-    │   ├── github.ts               # GitHub static resources (status, insights, milestones)
+    │   ├── github.ts               # GitHub static resources (status, milestones)
     │   ├── graph.ts                # Graph resources (recent relationships, actions narrative)
     │   ├── insights.ts             # Insights resources (digest, team-collaboration)
     │   ├── team.ts                 # Team resources (recent, statistics)
@@ -263,13 +263,13 @@ src/
     │       ├── index.ts            # Core static resources barrel
     │       ├── health.ts           # memory://health resource
     │       ├── instructions.ts     # memory://instructions resource
-    │       ├── utilities.ts        # memory://recent, memory://significant, memory://tags, memory://statistics, memory://rules, memory://workflows, memory://skills
+    │       ├── utilities.ts        # memory://recent, memory://significant, memory://rules, memory://workflows, memory://skills
     │       └── briefing/
     │           ├── index.ts        # memory://briefing resource (assembles sections)
     │           ├── context-section.ts   # Journal context section (entry count, recent entries)
     │           ├── system-section.ts    # System section (server config, registry, workspace context)
     │           ├── insights-section.ts  # Insights section (digest summary, orphan stats, graph hubs)
-    │           ├── github-section.ts    # GitHub context section (repo, CI, issues, PRs, milestones, insights)
+    │           ├── github-section.ts    # GitHub context section (repo, CI, issues, PRs, milestones)
     │           └── user-message.ts      # User message section (rules, skills awareness)
     │
     └── prompts/                    # Prompt handlers
@@ -385,7 +385,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | -------------------- | ------------------------------------------------------------------------------------------------- |
 | `index.ts`           | Assembles all sections, respects instruction level                                                |
 | `context-section.ts` | Journal context (entry count, recent entries, team DB)                                            |
-| `github-section.ts`  | GitHub context (repo, CI, issues, PRs, milestones, insights)                                      |
+| `github-section.ts`  | GitHub context (repo, CI, issues, PRs, milestones)                                      |
 | `user-message.ts`    | User message (rules file, skills directory awareness)                                             |
 | `system-section.ts`  | System context (version, tool/resource/prompt counts, test health, unreleased summary, localTime) |
 
@@ -400,17 +400,11 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | ------ | ----------- |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
 | `audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency) |
-| `target` | File, folder, or component to audit |
 | `audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
-| `target` | File, folder, or component to audit |
 | `audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
-| `target` | File, folder, or component to audit |
 | `audit-seo-docs` | Adversarial SEO and documentation audit (markup, E-E-A-T, marketing) |
-| `target` | File, folder, or component to audit |
 | `audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
-| `target` | Skill name or path |
 | `audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
-| `target` | Workflow name or path |
 | `commit` | High-integrity procedure for committing code changes with validation gates |
 | `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
