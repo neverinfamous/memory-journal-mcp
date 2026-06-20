@@ -27,19 +27,19 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 {
                     name: 'period_type',
                     description: 'standup | weekly | retro | custom',
-                    required: true,
+                    required: false,
                 },
                 { name: 'start_date', description: 'Start date (YYYY-MM-DD)', required: false },
                 { name: 'end_date', description: 'End date (YYYY-MM-DD)', required: false },
             ],
             handler: (
-                args: Record<string, string>,
+                args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter
             ) => {
-                const type = args['period_type'] ?? 'custom'
-                const startDate = args['start_date'] ?? ''
-                const endDate = args['end_date'] ?? ''
+                const type = args?.['period_type'] ?? 'custom'
+                const startDate = args?.['start_date'] ?? ''
+                const endDate = args?.['end_date'] ?? ''
 
                 const digestSignal = buildDigestSignalForPrompt(db)
                 const flagSignal = buildFlagSignalForPrompt(teamDb)
