@@ -158,12 +158,18 @@ async function main() {
     }
 
     proc.kill()
-    cleanup()
+    
+    // Wait briefly to allow process to release file locks
+    setTimeout(() => {
+        cleanup()
+    }, 500)
 }
 
 main().catch((err) => {
     console.error('Script failed:', err)
     proc.kill()
-    cleanup()
-    process.exitCode = 1
+    setTimeout(() => {
+        cleanup()
+        process.exitCode = 1
+    }, 500)
 })
