@@ -13,18 +13,29 @@ const cleanup = () => {
         rmSync(dbPath, { force: true })
         rmSync(`${dbPath}-shm`, { force: true })
         rmSync(`${dbPath}-wal`, { force: true })
+        
+        const teamDbPath = resolve(__dirname, "test-subscribe-team-prompts.db")
+        rmSync(teamDbPath, { force: true })
+        rmSync(`${teamDbPath}-shm`, { force: true })
+        rmSync(`${teamDbPath}-wal`, { force: true })
     } catch {}
 }
 
 cleanup()
 
-const proc = spawn('node', ['dist/cli.js', '--log-level', 'error'], {
+const proc = spawn('node', [
+    'dist/cli.js', 
+    '--log-level', 'error',
+    '--db', dbPath,
+    '--team-db', 'test-subscribe-team-prompts.db'
+], {
     cwd: projectDir,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {
         ...process.env,
         DB_PATH: dbPath,
         PROJECT_NUMBER: "5",
+        MEMORY_JOURNAL_MCP_TOOL_FILTER: "full",
     }
 })
 
