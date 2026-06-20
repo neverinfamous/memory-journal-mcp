@@ -21,8 +21,17 @@ export function killProcessTree(child: ChildProcess) {
     }
   } else {
     try {
-      // Attempt to kill the process group on Unix to prevent zombies
-      process.kill(-child.pid, 'SIGKILL');
+      // Graceful degradation: Attempt SIGTERM first to allow daemons to clean up
+      try {
+        process.kill(-child.pid, 'SIGTERM');
+      } catch { /* ignore */ }
+      
+      // Fallback to SIGKILL process group on Unix to prevent zombies after a brief delay
+      setTimeout(() => {
+        try {
+          process.kill(-child.pid!, 'SIGKILL');
+        } catch { /* ignore */ }
+      }, 50).unref();
     } catch {
       // Fallback if process group killing fails
       try {
