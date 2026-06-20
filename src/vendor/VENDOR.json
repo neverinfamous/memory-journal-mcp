@@ -1,0 +1,37 @@
+{
+  "libs": {
+    "lib-git-history": {
+      "source": ".agents/scripts/lib-git-history",
+      "syncedAt": "2026-06-20T21:56:02.694Z",
+      "syncedFromCommit": "0da8f4b6ee46a7678d6b8d9359d967ee3b374692",
+      "files": [
+        "cli.ts",
+        "git-runner.ts",
+        "parser.ts",
+        "schema.ts",
+        "AGENT_README.md"
+      ]
+    },
+    "lib-agent-exec": {
+      "source": ".agents/scripts/lib-agent-exec",
+      "syncedAt": "2026-06-20T21:56:02.708Z",
+      "syncedFromCommit": "0da8f4b6ee46a7678d6b8d9359d967ee3b374692",
+      "files": [
+        "schema.ts",
+        "environment.ts",
+        "command-builder.ts",
+        "stream-manager.ts",
+        "process-manager.ts",
+        "interceptors/index.ts",
+        "interceptors/types.ts",
+        "interceptors/git-interceptor.ts",
+        "interceptors/docker-interceptor.ts",
+        "interceptors/package-manager-interceptor.ts",
+        "interceptors/cloud-cli-interceptor.ts",
+        "interceptors/repl-tui-interceptor.ts",
+        "interceptors/system-interceptor.ts",
+        "AGENT_README.md"
+      ]
+    }
+  }
+}
