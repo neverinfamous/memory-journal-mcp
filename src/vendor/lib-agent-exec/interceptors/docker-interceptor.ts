@@ -136,6 +136,12 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
       console.error(`   Auto-healing: Automatically appending '-d' flag to prevent indefinite blocking...`);
       args.push('-d');
     }
+    const watchIdx = args.findIndex(a => a === '--watch');
+    if (watchIdx !== -1) {
+      console.error(`\n   💡 AGENT HINT: 'docker compose up --watch' runs indefinitely and will cause a timeout.`);
+      console.error(`   Auto-healing: Automatically stripping '--watch' flag...`);
+      args.splice(watchIdx, 1);
+    }
   }
 
   const isWatchCmd = 

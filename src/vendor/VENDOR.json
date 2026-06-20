@@ -14,8 +14,8 @@
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
-      "syncedAt": "2026-06-20T21:56:02.708Z",
-      "syncedFromCommit": "0da8f4b6ee46a7678d6b8d9359d967ee3b374692",
+      "syncedAt": "2026-06-20T22:15:28.234Z",
+      "syncedFromCommit": "d11ffa272c4b31509d3330c71ecad07fd25a069e",
       "files": [
         "schema.ts",
         "environment.ts",

@@ -10,15 +10,16 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
     console.error(`   To use shell features, please use a 'script' payload type instead.`);
   }
 
-  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'sh'].includes(cmdBasename) && payload.type === 'command') {
+  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(cmdBasename) && payload.type === 'command') {
     const isInline = args.some(a => ['-c', '-command', '/c'].includes(a.toLowerCase()));
     if (isInline) {
        const inlineIdx = args.findIndex(a => ['-c', '-command', '/c'].includes(a.toLowerCase()));
        const innerCmdStr = args[inlineIdx + 1];
        if (innerCmdStr) {
-           const innerCmdBasename = innerCmdStr.trim().split(/[ \t]/)[0].toLowerCase();
-           const stdTools = ['git', 'git.exe', 'docker', 'docker.exe', 'docker-compose', 'gh', 'gh.exe', 'npm', 'npm.cmd', 'pnpm', 'pnpm.cmd', 'yarn', 'yarn.cmd', 'bun', 'bun.exe', 'cargo', 'cargo.exe', 'aws', 'gcloud', 'az', 'terraform', 'tofu', 'kubectl', 'kubectl.exe'];
-           if (stdTools.includes(innerCmdBasename)) {
+           const stdToolsRegex = /(?:^|;|&&|\|\||\|)\s*\b(git|docker|docker-compose|gh|npm|pnpm|yarn|bun|cargo|aws|gcloud|az|terraform|tofu|kubectl)\b/i;
+           const match = stdToolsRegex.exec(innerCmdStr);
+           if (match) {
+               const innerCmdBasename = match[1].toLowerCase();
                console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline shell (${cmdBasename} ${args[inlineIdx]}).`);
                console.error(`   This bypasses the agent-exec robustness interceptors for ${innerCmdBasename} and risks hanging the process.`);
                console.error(`   Please run ${innerCmdBasename} directly in the payload: {"type": "command", "command": "${innerCmdBasename}", "args": [...]}`);
