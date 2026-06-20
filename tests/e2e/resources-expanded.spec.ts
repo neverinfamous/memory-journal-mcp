@@ -29,7 +29,7 @@ test.describe('E2E Resource Reads: Expanded', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         // Instructions should be a substantial text block
         expect(text.length).toBeGreaterThan(100)
         // Should mention memory journal or MCP
@@ -42,7 +42,7 @@ test.describe('E2E Resource Reads: Expanded', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         // Should return a valid structure (may be empty if no significant entries)
         expect(typeof parsed).toBe('object')
