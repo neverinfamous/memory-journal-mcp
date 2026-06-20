@@ -18,20 +18,28 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 let statsSnippet = '_Could not fetch database statistics_'
                 try {
-                    const stats = db.getStatistics()
-                    const totalEntries = typeof stats['totalEntries'] === 'number' ? stats['totalEntries'] : 'Unknown'
-                    const deletedEntries = typeof stats['deletedEntries'] === 'number' ? stats['deletedEntries'] : 'Unknown'
-                    const totalRelationships = typeof stats['totalRelationships'] === 'number' ? stats['totalRelationships'] : 'Unknown'
-                    const orphanCount = typeof stats['orphanCount'] === 'number' ? stats['orphanCount'] : 'Unknown'
-                    const densityRaw = stats['density']
-                    const density = typeof densityRaw === 'number' ? densityRaw.toFixed(2) : 'Unknown'
+                    interface Stats {
+                        totalEntries?: unknown;
+                        relationshipComplexity?: {
+                            totalRelationships?: unknown;
+                            avgPerEntry?: unknown;
+                        };
+                    }
+                    const stats = db.getStatistics() as Stats
+                    const totalEntries = typeof stats.totalEntries === 'number' ? stats.totalEntries : 'Unknown'
+                    
+                    let totalRelationships: number | string = 'Unknown'
+                    let avgPerEntry: number | string = 'Unknown'
+                    const rc = stats.relationshipComplexity
+                    if (rc !== null && typeof rc === 'object') {
+                        totalRelationships = typeof rc.totalRelationships === 'number' ? rc.totalRelationships : 'Unknown'
+                        avgPerEntry = typeof rc.avgPerEntry === 'number' ? rc.avgPerEntry : 'Unknown'
+                    }
 
                     statsSnippet = `**Live Database Health:**
 - Total Entries: ${totalEntries}
-- Soft-Deleted: ${deletedEntries}
-- Active Relationships: ${totalRelationships}
-- Orphans (0 edges): ${orphanCount}
-- Graph Density: ${density}`
+- Active Relationships: ${totalRelationships} (Avg: ${avgPerEntry}/entry)
+- Orphans & Density: *Requires Code Mode sweep to calculate (see snippet below)*`
                 } catch {
                     // ignore
                 }
@@ -49,7 +57,9 @@ You are initiating a guided workflow for intelligently pruning and optimizing th
 ${statsSnippet}
 
 ## Importance Score Guide
-Entries scoring \`0.00\` have zero structural value (no links, low length, etc) and are safe to soft-delete. Entries \`0.01-0.14\` should be reviewed.
+Entries have an \`importance\` score (0.00 to 1.00), which includes a baseline **recency boost** (usually \`+0.15\` for recent entries).
+- **Base Importance**: To find truly low-value entries, look at their base score by checking \`importanceBreakdown.recency\`.
+- **Review Threshold**: Recent orphans will score around \`0.15\` due to the recency boost. Consider \`baseScore === 0\` as the true threshold for soft-deletion.
 
 ## Safety Rules (MANDATORY)
 1. **NEVER** use \`permanent: true\` unless explicitly asked to "hard delete".
@@ -59,17 +69,38 @@ Entries scoring \`0.00\` have zero structural value (no links, low length, etc) 
 5. Max batch size: 50 entries.
 6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
 
+## Identifying Orphans Safely
+Do NOT use \`search_entries\` to dump the database. Use this pre-optimized Code Mode script in \`mj_execute_code\` to safely extract true orphans without hitting API limits:
+
+\`\`\`javascript
+const orphans = [];
+let cursor = undefined;
+for(let i=0; i<10; i++) { // limit batch size
+  const res = await mj.core.getRecentEntries({ limit: 50, cursor });
+  if (!res.entries) break;
+  for (const entry of res.entries) {
+    const full = await mj.core.getEntryById({ id: entry.id });
+    if (full.success && full.relationships && full.relationships.length === 0) {
+      const baseScore = full.importance - (full.importanceBreakdown?.recency || 0);
+      if (baseScore === 0) orphans.push({ id: entry.id, type: entry.entryType });
+    }
+  }
+  cursor = res.pagination?.nextCursor;
+  if (!cursor) break;
+}
+return orphans;
+\`\`\`
+
 ## Optimization Workflows
 
 Select one or more workflows to run:
-1. **Importance Audit**: Find all active entries with importance = 0.0. Review for soft-deletion.
-2. **Orphan Cleanup**: Find active entries with 0 relationships and low importance.
-3. **Type-Based Cleanup**: e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
+1. **Importance Audit**: Find older orphans with a base importance of 0.0. Review for soft-deletion.
+2. **Type-Based Cleanup**: e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
 
 To proceed:
 1. Review the live stats.
 2. Tell the user your plan (which workflow you'll run).
-3. Identify candidates using \`search_entries\` or \`mj_execute_code\`.
+3. Identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
 4. Ask for user confirmation before deleting!`,
                             },
                         },
