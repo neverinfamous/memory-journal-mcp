@@ -127,8 +127,8 @@ export function createProgram(): Command {
             'Comma-separated absolute paths or JSON array of paths for strict filesystem jailing (env: ALLOWED_IO_ROOTS)'
         )
         .option(
-            '--codemode-internal-full-access',
-            'Bypass tool filter constraints within the Code Mode sandbox (env: CODEMODE_INTERNAL_FULL_ACCESS)'
+            '--no-codemode-internal-full-access',
+            'Enforce tool filter constraints within the Code Mode sandbox (env: CODEMODE_INTERNAL_FULL_ACCESS)'
         )
         // Auto-prune
         .option(

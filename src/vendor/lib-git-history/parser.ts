@@ -2,7 +2,10 @@
 import { z } from 'zod';
 import { entrySchema, fileStatusSchema, type CommitEntry } from './schema.js';
 import type { CliArgs } from './cli.js';
-import { getNumstatMap, getPatchMap } from './git-runner.js';
+import { getNumstatMap } from './git-numstat.js';
+import { getPatchMap } from './git-patch.js';
+import { FIELD_SEPARATOR } from './git-runner.js';
+import { isNoiseFile, extractIssues } from './parser-utils.js';
 
 export type RawCommitBatchItem = {
   sha: string; parents: string[]; refs: string[]; tags: string[]; authorName: string; authorEmail: string; date: string;
@@ -13,9 +16,7 @@ export type RawCommitBatchItem = {
   coAuthors: string[]; reviewers: string[]; issuesMap: Map<string, string | null>;
 };
 
-const isNoiseFile = (file: string) => {
-  return /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|bun\.lockb|uv\.lock|Cargo\.lock|Gemfile\.lock|poetry\.lock|go\.sum|CHANGELOG\.md|test-server\/tool-reference\.md|test-server\/code-map\.md|\.pnp\.[^/]+|\.eslintrc\.[^/]+|prettier\.config\.[^/]+|tsconfig(\.[^/]+)?\.json|jest\.config\.[^/]+|vite\.config\.[^/]+|\.gitignore|\.gitattributes|flake\.lock|deno\.lock|mix\.lock|Podfile\.lock|Cartfile\.resolved)$|(^|\/)\.?dist\/|(^|\/)\.?build\/|(^|\/)\.?coverage\/|(^|\/)\.yarn\/|(^|\/)vendor\/|(^|\/)__snapshots__\/|\.snap$|(^|\/)\.DS_Store|(^|\/)\.vercel\/|(^|\/)\.next\/|(^|\/)\.nuxt\/|(^|\/)\.husky\//i.test(file);
-};
+
 
 export async function processBatch(
   batch: RawCommitBatchItem[],
@@ -219,7 +220,6 @@ export function parseGitRecord(
   commitBlock: string,
   args: CliArgs
 ): RawCommitBatchItem | null {
-  const FIELD_SEPARATOR = '\x1F\x1E';
   const parts: string[] = [];
   let currentStr = commitBlock;
   
@@ -323,7 +323,7 @@ export function parseGitRecord(
           break;
         }
         
-        const isValidStatus = /^[A-Z\d]+$/.test(statusRaw) && statusRaw.length <= 20;
+        const isValidStatus = /^[A-Z][A-Z\d]*$/.test(statusRaw) && statusRaw.length <= 20;
         if (!isValidStatus) {
           break; // Desynced or invalid status. Stop parsing files for this commit.
         }
@@ -441,7 +441,7 @@ export function parseGitRecord(
         isBreaking = true;
         if (val.trim()) breakingChangeDescription = val;
       }
-      else if (key === 'co-authored-by') coAuthors.push(val);
+      else if (key === 'co-authored-by') coAuthors.push(...val.split(',').map(s => s.trim()).filter(Boolean));
       else if (key === 'reviewed-by') reviewers.push(val);
       else if (key.match(/^(acked-by|bug|cc|closes|depends-on|fixes|related-to|reported-by|resolves|see-also|signed-off-by|tested-by)$/)) {
         const niceKey = key.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-');
@@ -479,7 +479,7 @@ export function parseGitRecord(
   if (bcMatch) {
     isBreaking = true;
     breakingChangeDescription = bcMatch[1].trim();
-  } else if (!isBreaking && /BREAKING[\s-]CHANGES?:/im.test(body)) {
+  } else if (!isBreaking && /BREAKING[\s-]CHANGES?(?::|$)/im.test(body)) {
     isBreaking = true;
   }
 
@@ -505,72 +505,8 @@ export function parseGitRecord(
   }
 
   const issuesMap = new Map<string, string | null>();
-  const extractIssues = (text: string) => {
-    if (!text) return;
-    const safeText = text.length > 50000 ? text.slice(0, 50000) : text;
-    const actionRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}(?:([@\w.-]+\/[\w.-]+)?#(\d+)|([A-Z][A-Z0-9_]+-\d+))\b/ig;
-    let match;
-    let lastAction: string | null = null;
-    let lastIndex = 0;
-    
-    while ((match = actionRegex.exec(safeText)) !== null) {
-      if (match.index === actionRegex.lastIndex) actionRegex.lastIndex++;
-      const textBetween = safeText.slice(lastIndex, match.index);
-      const isSimpleList = /^\s*(?:and|&|,|or|\()?\s*$/i.test(textBetween);
-      if (!isSimpleList && (/[.;\n]/.test(textBetween) || textBetween.trim().split(/\s+/).length > 2)) {
-        lastAction = null;
-      }
-      const action = match[1] ? match[1].toLowerCase() : lastAction;
-      if (match[1]) lastAction = match[1].toLowerCase();
-      lastIndex = actionRegex.lastIndex;
-      
-      let issue = '';
-      if (match[3]) {
-        let repo = match[2];
-        const num = match[3];
-        if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
-        issue = repo ? `${repo}#${num}` : `#${num}`;
-      } else if (match[4]) {
-        const potentialIssue = match[4].toUpperCase();
-        if (!/^(UTF|ISO|SHA|RFC|CVE|MAC|IP|IPV4|IPV6|X86|AMD64)-/.test(potentialIssue)) {
-          // Ignore Jira-style tickets if they look like they are part of a URL path (e.g. /PROJ-123)
-          if (safeText[match.index] === '/') continue;
-          issue = match[4];
-        }
-      }
-      if (issue) {
-        if (!issuesMap.has(issue) || (action && !issuesMap.get(issue))) {
-           issuesMap.set(issue, action);
-        }
-      }
-    }
-    
-    const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}https?:\/\/(?:github\.com|gitlab\.com|bitbucket\.org)\/([\w.-]+\/[\w.-]+)\/(?:issues|pull|merge_requests|pull-requests)\/(\d+)\b/ig;
-    lastAction = null;
-    lastIndex = 0;
-    while ((match = urlRegex.exec(safeText)) !== null) {
-      if (match.index === urlRegex.lastIndex) urlRegex.lastIndex++;
-      const textBetween = safeText.slice(lastIndex, match.index);
-      const isSimpleList = /^\s*(?:and|&|,|or|\()?\s*$/i.test(textBetween);
-      if (!isSimpleList && (/[.;\n]/.test(textBetween) || textBetween.trim().split(/\s+/).length > 2)) {
-        lastAction = null;
-      }
-      const action = match[1] ? match[1].toLowerCase() : lastAction;
-      if (match[1]) lastAction = match[1].toLowerCase();
-      lastIndex = urlRegex.lastIndex;
-      
-      let repo = match[2];
-      const num = match[3];
-      if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
-      const issue = `${repo}#${num}`;
-      if (!issuesMap.has(issue) || (action && !issuesMap.get(issue))) {
-        issuesMap.set(issue, action);
-      }
-    }
-  };
-
-  extractIssues(subject);
-  extractIssues(body);
+  extractIssues(subject, issuesMap);
+  extractIssues(body, issuesMap);
 
   return {
     sha, parents, refs, tags, authorName, authorEmail, date, committerName, committerEmail, committerDate,

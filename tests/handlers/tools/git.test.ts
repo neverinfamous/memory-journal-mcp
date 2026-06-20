@@ -10,6 +10,7 @@ vi.mock('../../../src/git/index.js', () => {
                 getCommitHistory: vi.fn(),
                 searchCommits: vi.fn(),
                 getReleaseInfo: vi.fn(),
+                getUnreleasedChangelog: vi.fn(),
             }
         }),
         CommitAnalyzer: vi.fn().mockImplementation(function() {
@@ -71,15 +72,15 @@ describe('Git Tool Handlers', () => {
     })
 
     it('should get unreleased commits', async () => {
-        mockGitClient.getCommitHistory.mockResolvedValue([{ hash: '123' }])
+        mockGitClient.getUnreleasedChangelog.mockResolvedValue({ totalCount: 1, categories: { feat: [{ hash: '123' }] } })
         const tools = getGitTools(mockContext)
         const getUnreleasedCommitsTool = tools.find(t => t.name === 'get_unreleased_commits')
         expect(getUnreleasedCommitsTool).toBeDefined()
 
         const result = await getUnreleasedCommitsTool!.handler({}) as any
         expect(result.success).toBe(true)
-        expect(result.commits).toEqual([{ hash: '123' }])
-        expect(mockGitClient.getCommitHistory).toHaveBeenCalledWith({ maxCount: 50 })
+        expect(result.changelog).toEqual({ totalCount: 1, categories: { feat: [{ hash: '123' }] } })
+        expect(mockGitClient.getUnreleasedChangelog).toHaveBeenCalled()
     })
 
     it('should analyze commit patterns', async () => {

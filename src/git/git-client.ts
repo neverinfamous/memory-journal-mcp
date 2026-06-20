@@ -7,14 +7,21 @@ import {
     type GitSearchOptions,
     type GitReleaseInfoOptions,
     GitRefSchema,
-    GitPathSchema
+    GitPathSchema,
+    type UnreleasedChangelog
 } from "./types.js";
 import { parseTrailers } from "./trailer-parser.js";
+import { getNativeCommitHistory, getUnreleasedChangelog, NativeGitError } from "./native-git-engine.js";
 
 export class GitHistoryClient {
     private git: SimpleGit;
+    public useNativeEngine: boolean;
+    public baseDir: string;
 
-    constructor(baseDir?: string) {
+    constructor(baseDir?: string, options: { useNativeEngine?: boolean } = {}) {
+        this.baseDir = baseDir || process.cwd();
+        this.useNativeEngine = options.useNativeEngine ?? true;
+
         if (baseDir && !fs.existsSync(baseDir)) {
             // Fallback for tests or invalid paths
             this.git = simpleGit({ timeout: { block: 30_000 } });
@@ -40,6 +47,18 @@ export class GitHistoryClient {
             }
             if (options.path) {
                 GitPathSchema.parse(options.path);
+            }
+
+            if (this.useNativeEngine) {
+                try {
+                    return await getNativeCommitHistory(this.baseDir, options);
+                } catch (err) {
+                    if (err instanceof NativeGitError) {
+                        // Fall through to simple-git
+                    } else {
+                        throw err;
+                    }
+                }
             }
 
             const logArgs: string[] = [];
@@ -83,6 +102,18 @@ export class GitHistoryClient {
                 throw new Error("Invalid query format. Regex control characters are not allowed.");
             }
 
+            if (this.useNativeEngine) {
+                try {
+                    return await getNativeCommitHistory(this.baseDir, { query, maxCount: options.maxCount });
+                } catch (err) {
+                    if (err instanceof NativeGitError) {
+                        // Fall through to simple-git
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+
             const logArgs: string[] = [
                 "--grep", query,
                 "-i"
@@ -112,6 +143,18 @@ export class GitHistoryClient {
                 GitRefSchema.parse(options.ref);
             }
 
+            if (this.useNativeEngine) {
+                try {
+                    return await getNativeCommitHistory(this.baseDir, { ref: options.ref, maxCount: 10 });
+                } catch (err) {
+                    if (err instanceof NativeGitError) {
+                        // Fall through to simple-git
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+
             const logArgs: string[] = ["-n", "10"];
             if (options.ref) {
                 logArgs.push(options.ref);
@@ -127,6 +170,14 @@ export class GitHistoryClient {
                 body: c.body,
                 trailers: parseTrailers(c.body)
             }));
+        } catch (error) {
+            throw this.sanitizeError(error);
+        }
+    }
+
+    public async getUnreleasedChangelog(): Promise<UnreleasedChangelog> {
+        try {
+            return await getUnreleasedChangelog(this.baseDir);
         } catch (error) {
             throw this.sanitizeError(error);
         }

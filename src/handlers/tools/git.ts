@@ -41,6 +41,7 @@ export const GitReleaseInfoOptionsSchemaMcp = z.object({
 export const GitOutputSchema = z.object({
     success: z.boolean(),
     commits: z.array(z.any()).optional(),
+    changelog: z.any().optional(),
     error: z.string().optional(),
 }).extend(ErrorFieldsMixin.shape)
 
@@ -140,9 +141,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!gitClient) throw new Error('Git client not available')
                     await sendProgress(progress, 0, 1, 'Fetching unreleased commits...')
-                    // Simulate getUnreleasedCommits by getting recent history
-                    const commits = await gitClient.getCommitHistory({ maxCount: 50 })
-                    return { success: true, commits }
+                    const changelog = await gitClient.getUnreleasedChangelog()
+                    return { success: true, changelog }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

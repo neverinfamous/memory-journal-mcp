@@ -28,3 +28,21 @@ export interface GitSearchOptions {
 export interface GitReleaseInfoOptions {
     ref?: string;
 }
+
+export interface UnreleasedChangelog {
+    range: { from: string; to: string; isFallback: boolean };
+    categories: Record<string, ChangelogEntry[]>;
+    totalCount: number;
+}
+
+export interface ChangelogEntry {
+    hash: string;
+    shortHash: string;
+    message: string;
+    category: string;
+    entry: string;
+    date: string;
+    author: string;
+    isBreaking: boolean;
+    scope?: string;
+}

@@ -366,22 +366,32 @@ export function formatUserMessage(opts: {
     // TABLE ROW 8: Git History
     // ========================================================================
     const gitHistoryLines: string[] = []
-    if (opts.gitHistory && opts.gitHistory.commits.length > 0) {
-        const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
-        for (const c of opts.gitHistory.commits) {
-            const shaLink = repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
-            let line = shaLink;
-            if (c.category && c.entry) {
-                let entryText = c.entry;
-                if (entryText.length > 80) entryText = entryText.substring(0, 80) + '...';
-                line += ` **${escapeCell(c.category)}**: ${escapeCell(entryText)}`
-            } else {
-                // Fallback to first line of commit message
-                let msg = c.message.split('\n')[0] ?? ''
-                if (msg.length > 80) msg = msg.substring(0, 80) + '...';
-                line += ` ${escapeCell(msg)}`
+    if (opts.gitHistory) {
+        if (opts.gitHistory.changelog && opts.gitHistory.changelog.totalCount > 0) {
+            const cl = opts.gitHistory.changelog;
+            const catSummary = Object.entries(cl.categories)
+                .map(([cat, entries]) => `${escapeCell(cat)} (${String(entries.length)})`)
+                .join(' · ');
+            gitHistoryLines.push(`**Unreleased (${String(cl.totalCount)}):** ${catSummary}`);
+        }
+
+        if (opts.gitHistory.commits.length > 0) {
+            const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
+            for (const c of opts.gitHistory.commits) {
+                const shaLink = repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
+                let line = shaLink;
+                if (c.category && c.entry) {
+                    let entryText = c.entry;
+                    if (entryText.length > 80) entryText = entryText.substring(0, 80) + '...';
+                    line += ` **${escapeCell(c.category)}**: ${escapeCell(entryText)}`
+                } else {
+                    // Fallback to first line of commit message
+                    let msg = c.message.split('\n')[0] ?? ''
+                    if (msg.length > 80) msg = msg.substring(0, 80) + '...';
+                    line += ` ${escapeCell(msg)}`
+                }
+                gitHistoryLines.push(line)
             }
-            gitHistoryLines.push(line)
         }
     }
 

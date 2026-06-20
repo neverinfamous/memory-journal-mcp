@@ -25,6 +25,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage && npx tsx scripts/update-badges.ts",
+        "test:vendor": "bun test src/vendor/",
+        "sync:vendor": "bun scripts/sync-vendor.ts",
         "bench": "vitest bench --run",
         "pretest:e2e": "node -e \"fs.rmSync('.test-output/e2e', { recursive: true, force: true })\"",
         "test:e2e": "playwright test",

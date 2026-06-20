@@ -67,11 +67,12 @@ export function parseArguments(): CliArgs {
     return values as CliArgs;
   } catch (err: unknown) {
     console.error(err instanceof Error ? err.message : String(err));
-    showHelpAndExit();
+    showHelpAndExit(1);
   }
 }
 
-export function showHelpAndExit(): never {
-  console.log(`Usage: bun get-git-history-json.ts [options]`);
-  process.exit(0);
+export function showHelpAndExit(exitCode: number = 0): never {
+  const logFn = exitCode === 0 ? console.log : console.error;
+  logFn(`Usage: bun get-git-history-json.ts [options]`);
+  process.exit(exitCode);
 }

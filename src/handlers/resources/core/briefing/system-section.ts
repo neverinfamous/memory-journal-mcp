@@ -22,6 +22,7 @@ import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
 import type { BriefingConfig } from '../../shared.js'
 import { GitHistoryClient } from '../../../../git/index.js'
+import type { UnreleasedChangelog } from '../../../../git/types.js'
 
 // ============================================================================
 // Types
@@ -29,6 +30,7 @@ import { GitHistoryClient } from '../../../../git/index.js'
 
 export interface GitHistorySummary {
     commits: { hash: string; category?: string; entry?: string; message: string }[]
+    changelog?: UnreleasedChangelog
 }
 
 export interface TestHealth {
@@ -160,22 +162,43 @@ async function loadCachedGitHistory(targetPath?: string): Promise<GitHistorySumm
 
     try {
         const gitClient = new GitHistoryClient(root)
-        // Fetch the 5 most recent commits
-        const commits = await gitClient.getCommitHistory({ maxCount: 5 })
+        
+        let result: GitHistorySummary | null = null;
+        try {
+            const unreleased = await gitClient.getUnreleasedChangelog()
+            const commits = [];
+            for (const cat of Object.values(unreleased.categories)) {
+                for (const commit of cat) {
+                    commits.push({
+                        hash: commit.shortHash,
+                        category: commit.category,
+                        entry: commit.entry,
+                        message: commit.message
+                    });
+                }
+            }
+            if (commits.length > 0 || unreleased.totalCount > 0) {
+                result = { commits: commits.slice(0, 5), changelog: unreleased }
+            }
+        } catch {
+            // Fallback to legacy
+        }
 
-        const result: GitHistorySummary = { commits: [] }
-
-        for (const commit of commits) {
-            result.commits.push({
-                hash: commit.hash.substring(0, 7),
-                category: commit.trailers?.['History-Category'] || commit.trailers?.['Changelog-Category'],
-                entry: commit.trailers?.['History-Entry'] || commit.trailers?.['Changelog-Entry'],
-                message: commit.message
-            })
+        if (!result) {
+            const commits = await gitClient.getCommitHistory({ maxCount: 5 })
+            result = { commits: [] }
+            for (const commit of commits) {
+                result.commits.push({
+                    hash: commit.hash.substring(0, 7),
+                    category: commit.trailers?.['History-Category'] || commit.trailers?.['Changelog-Category'],
+                    entry: commit.trailers?.['History-Entry'] || commit.trailers?.['Changelog-Entry'],
+                    message: commit.message
+                })
+            }
+            result = result.commits.length > 0 ? result : null
         }
         
-        const resultVal = result.commits.length > 0 ? result : null
-        cachedGitHistory.set(root, resultVal)
+        cachedGitHistory.set(root, result)
     } catch {
         logger.debug('Failed to get git history via GitClient (non-critical)', {
             module: 'BRIEFING',
@@ -266,8 +289,19 @@ async function loadCachedLastReleaseDaysAgo(targetPath?: string): Promise<number
     if (existing !== undefined) return existing
 
     try {
+        const history = await loadCachedGitHistory(targetPath)
         const gitClient = new GitHistoryClient(root)
-        const commits = await gitClient.getReleaseInfo()
+        let commits = []
+        if (history?.changelog && !history.changelog.range.isFallback && history.changelog.range.from) {
+            try {
+                commits = await gitClient.getReleaseInfo({ ref: history.changelog.range.from })
+            } catch {
+                commits = await gitClient.getReleaseInfo()
+            }
+        } else {
+            commits = await gitClient.getReleaseInfo()
+        }
+        
         if (commits.length > 0 && commits[0]?.date) {
             const releaseDate = new Date(commits[0].date)
             const elapsed = Date.now() - releaseDate.getTime()

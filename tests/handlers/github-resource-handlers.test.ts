@@ -9,6 +9,14 @@ import { readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
+vi.mock('../../src/git/index.js', () => ({
+    GitHistoryClient: vi.fn().mockImplementation(() => ({
+        getCommitHistory: vi.fn().mockResolvedValue([]),
+        getReleaseInfo: vi.fn().mockResolvedValue([]),
+        getUnreleasedChangelog: vi.fn().mockRejectedValue(new Error('unreleased not supported')),
+    })),
+}))
+
 /**
  * Creates a minimal mock GitHubIntegration with sensible defaults.
  */

@@ -31,7 +31,7 @@ describe("GitHistoryClient", () => {
             log: mockLog
         });
 
-        client = new GitHistoryClient();
+        client = new GitHistoryClient(undefined, { useNativeEngine: false });
     });
 
     it("should fetch commit history", async () => {

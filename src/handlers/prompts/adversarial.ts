@@ -199,7 +199,7 @@ Journal: \`create_entry({ content: "<refinement>", entry_type: "plan_refinement"
 
 ### Phase 4: External Validation (Copilot)
 
-Run \`gh copilot suggest -t shell "Review this plan for correctness and edge cases"\` in NON-INTERACTIVE mode. If unavailable, skip gracefully. Note findings.
+Run \`gh copilot -p "Review this plan for correctness and edge cases" --allow-all\` in NON-INTERACTIVE mode. If unavailable, skip gracefully. Note findings.
 
 ### Phase 5: Present to User
 

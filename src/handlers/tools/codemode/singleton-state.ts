@@ -9,6 +9,7 @@ import { getRelationshipTools } from '../relationships.js'
 import { getIoTools } from '../io/index.js'
 import { getAdminTools } from '../admin/index.js'
 import { getGitHubTools } from '../github.js'
+import { getGitTools } from '../git.js'
 import { getBackupTools } from '../backup.js'
 import { getTeamTools } from '../team/index.js'
 
@@ -52,6 +53,7 @@ export function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] 
         ...getGitHubTools(context),
         ...getBackupTools(context),
         ...getTeamTools(context),
+        ...getGitTools(context),
     ]
 
     cachedNonCodeModeTools = tools.filter((t) => t.name !== 'mj_execute_code')
