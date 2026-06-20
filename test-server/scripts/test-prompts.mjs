@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = join(__dirname, '..', '..')
-const proc = spawn(process.execPath, ['dist/cli.js'], {
+const proc = spawn(process.execPath, ['dist/cli.js', '--db', 'test-prompts.db', '--team-db', 'test-team-prompts.db'], {
     cwd: projectDir,
     env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_DB_PATH: 'test-prompts.db', JOURNAL_CONFIG_DIR: 'test-server' },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -80,17 +80,17 @@ async function main() {
         { name: 'prepare-retro', args: {}, expect: 'retrospective' },
         { name: 'weekly-digest', args: {}, expect: 'weekly digest' },
         // 8.2 GitHub prompts
-        { name: 'issue-commander', args: { project_number: '5' }, expect: '5' },
-        { name: 'pr-commander', args: { pr_number: '67' }, expect: '67' },
+        { name: 'issue-commander', args: { project_number: '5' }, expect: '{project_number}' },
+        { name: 'pr-commander', args: { pr_number: '67' }, expect: '{pr_number}' },
         { name: 'actions-failure-digest', args: {}, expect: '' },
         // 8.3 Adversarial and flag prompts
-        { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: 'migration' },
-        { name: 'audit-code-quality', args: { target: 'src/main.ts' }, expect: 'src/main.ts' },
-        { name: 'audit-security', args: { target: 'auth.ts' }, expect: 'auth.ts' },
-        { name: 'audit-performance', args: { target: 'index.ts' }, expect: 'index.ts' },
-        { name: 'audit-seo-docs', args: { target: 'README.md' }, expect: 'README.md' },
-        { name: 'audit-skill', args: { target: 'my-skill' }, expect: 'my-skill' },
-        { name: 'audit-workflow', args: { target: 'ci.yml' }, expect: 'ci.yml' },
+        { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: '[Please specify topic' },
+        { name: 'audit-code-quality', args: { target: 'src/main.ts' }, expect: '[Please specify target' },
+        { name: 'audit-security', args: { target: 'auth.ts' }, expect: '[Please specify target' },
+        { name: 'audit-performance', args: { target: 'index.ts' }, expect: '[Please specify target' },
+        { name: 'audit-seo-docs', args: { target: 'README.md' }, expect: '[Please specify target' },
+        { name: 'audit-skill', args: { target: 'my-skill' }, expect: '[Please specify skill' },
+        { name: 'audit-workflow', args: { target: 'ci.yml' }, expect: '[Please specify workflow' },
         { name: 'flag-dashboard', args: {}, expect: '' },
         { name: 'flag-dashboard', args: { flag_type: 'blocker' }, expect: 'blocker' },
         // 8.4 Git History prompts
