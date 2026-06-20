@@ -108,23 +108,10 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
             description:
                 'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal',
             icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'topic',
-                    description:
-                        'The feature, change, or system being planned (used to search for prior plans)',
-                    required: true,
-                },
-                {
-                    name: 'depth',
-                    description:
-                        'Review depth: "light" (correctness + security only), "standard" (all 5 dimensions), or "deep" (extended analysis). Default: standard',
-                    required: false,
-                },
-            ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const topic = args['topic'] ?? ''
-                const rawDepth = args['depth'] ?? 'standard'
+            arguments: [],
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+                const topic = args?.['topic'] ?? '[Please specify topic in chat]'
+                const rawDepth = args?.['depth'] ?? 'standard'
                 const depth: ReviewDepth = VALID_DEPTHS.has(rawDepth)
                     ? (rawDepth as ReviewDepth)
                     : 'standard'

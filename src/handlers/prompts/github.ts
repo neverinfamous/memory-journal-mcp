@@ -40,13 +40,11 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             name: 'issue-commander',
             description: 'Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints',
             icons: [ICON_PROMPT],
-            arguments: [
-                { name: 'project_number', description: 'GitHub Project number', required: true },
-                { name: 'workflow_type', description: 'triage | milestone | roadmap', required: false },
-            ],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => {
-                const projectNumber = parseInt(args['project_number'] ?? '0', 10)
-                const type = args['workflow_type'] ?? 'triage'
+            arguments: [],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const projectNumber = args?.['project_number']
+                const type = args?.['workflow_type'] ?? 'triage'
+                const projectStr = projectNumber ? String(parseInt(projectNumber, 10)) : '{project_number}'
 
                 return {
                     messages: [
@@ -55,9 +53,10 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             content: {
                                 type: 'text',
                                 text: `# GitHub Issue Commander
-Execute a ${type} workflow for Project #${String(projectNumber)}.
+Execute a ${type} workflow for Project #${projectStr}.
+If the project number is '{project_number}', determine it from the user's request. If the user hasn't specified a project number, ask them for it now.
 To complete this task, you MUST first read the following resource to obtain the project's context:
-\`memory://projects/${String(projectNumber)}/timeline\`
+\`memory://projects/${projectStr}/timeline\`
 
 ## Core Rules & Validation Gates
 1. **Validation Pipeline**: Before completing, you MUST pass these gates sequentially:
@@ -82,17 +81,15 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
             name: 'pr-commander',
             description: 'Pull request summary, review prep, and dependency updates with validation gates',
             icons: [ICON_PROMPT],
-            arguments: [
-                { name: 'pr_number', description: 'Pull request number', required: true },
-                { name: 'workflow_type', description: 'summary | review | deps | changelog', required: false },
-            ],
+            arguments: [],
             handler: (
-                args: Record<string, string>,
+                args: Record<string, string> | undefined,
                 _db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter
             ) => {
-                const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const type = args['workflow_type'] ?? 'summary'
+                const prNumber = args?.['pr_number']
+                const type = args?.['workflow_type'] ?? 'summary'
+                const prStr = prNumber ? String(parseInt(prNumber, 10)) : '{pr_number}'
 
                 return {
                     messages: [
@@ -101,10 +98,11 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
                             content: {
                                 type: 'text',
                                 text: `# GitHub PR Commander
-Execute a ${type} workflow for PR #${String(prNumber)}.
+Execute a ${type} workflow for PR #${prStr}.
+If the PR number is '{pr_number}', determine it from the user's request. If the user hasn't specified a PR number, ask them for it now.
 To complete this task, you MUST first read the following resources to obtain the PR's context:
-- \`memory://prs/${String(prNumber)}/entries\`
-- \`memory://prs/${String(prNumber)}/timeline\`
+- \`memory://prs/${prStr}/entries\`
+- \`memory://prs/${prStr}/timeline\`
 
 ## Core Rules & Validation Gates
 1. **Validation Pipeline**: Before approving/merging, you MUST pass these gates sequentially:
