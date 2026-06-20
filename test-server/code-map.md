@@ -414,8 +414,9 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `actions-failure-digest` | CI/CD failure analysis with root cause identification |
 | `optimize-journal` | Guided database pruning and optimization workflow with live metrics |
 | `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
-| `time-period-analysis` | Analyze entries over a specific time period (standup, weekly, retro) |
-| `period_type` | standup | weekly | retro | custom |
+| `prepare-standup` | Prepare a daily standup summary (Yesterday, Today, Blockers) |
+| `prepare-retro` | Prepare a sprint retrospective (What went well, What could improve, Action items... |
+| `weekly-digest` | Create a weekly digest formatted day-by-day |
 | `goal-tracker` | Milestone and achievement tracking |
 | `session-summary` | Create a formatted session summary entry |
 

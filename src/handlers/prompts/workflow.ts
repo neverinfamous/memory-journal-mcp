@@ -20,40 +20,17 @@ import { parseFlagContext } from '../../types/auto-context.js'
 export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
     return [
         {
-            name: 'time-period-analysis',
-            description: 'Analyze entries over a specific time period (standup, weekly, retro)',
+            name: 'prepare-standup',
+            description: 'Prepare a daily standup summary (Yesterday, Today, Blockers)',
             icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'period_type',
-                    description: 'standup | weekly | retro | custom',
-                    required: false,
-                },
-                { name: 'start_date', description: 'Start date (YYYY-MM-DD)', required: false },
-                { name: 'end_date', description: 'End date (YYYY-MM-DD)', required: false },
-            ],
+            arguments: [],
             handler: (
-                args: Record<string, string> | undefined,
+                _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter
             ) => {
-                const type = args?.['period_type'] ?? 'custom'
-                const startDate = args?.['start_date'] ?? ''
-                const endDate = args?.['end_date'] ?? ''
-
                 const digestSignal = buildDigestSignalForPrompt(db)
                 const flagSignal = buildFlagSignalForPrompt(teamDb)
-
-                let instructions: string
-                if (type === 'standup') {
-                    instructions = 'Prepare a daily standup summary (Yesterday, Today, Blockers).'
-                } else if (type === 'retro') {
-                    instructions = 'Prepare a sprint retrospective (What went well, What could improve, Action items).'
-                } else if (type === 'weekly') {
-                    instructions = 'Create a weekly digest formatted day-by-day.'
-                } else {
-                    instructions = `Analyze the period from ${startDate} to ${endDate}.`
-                }
 
                 return {
                     messages: [
@@ -61,8 +38,66 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}${flagSignal}Execute a ${type} analysis.
-${instructions}
+                                text: `${digestSignal}${flagSignal}Execute a standup analysis.
+Prepare a daily standup summary (Yesterday, Today, Blockers).
+
+To complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
+                            },
+                        },
+                    ],
+                }
+            },
+        },
+        {
+            name: 'prepare-retro',
+            description: 'Prepare a sprint retrospective (What went well, What could improve, Action items)',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                const digestSignal = buildDigestSignalForPrompt(db)
+                const flagSignal = buildFlagSignalForPrompt(teamDb)
+
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `${digestSignal}${flagSignal}Execute a retro analysis.
+Prepare a sprint retrospective (What went well, What could improve, Action items).
+
+To complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
+                            },
+                        },
+                    ],
+                }
+            },
+        },
+        {
+            name: 'weekly-digest',
+            description: 'Create a weekly digest formatted day-by-day',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                const digestSignal = buildDigestSignalForPrompt(db)
+                const flagSignal = buildFlagSignalForPrompt(teamDb)
+
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `${digestSignal}${flagSignal}Execute a weekly analysis.
+Create a weekly digest formatted day-by-day.
 
 To complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
                             },
