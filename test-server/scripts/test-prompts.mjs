@@ -76,12 +76,9 @@ async function main() {
         // 8.1 No-argument prompts
         { name: 'goal-tracker', args: {}, expect: 'goal' },
         { name: 'session-summary', args: {}, expect: 'session' },
-        // 8.1 Required-argument prompts
-        {
-            name: 'time-period-analysis',
-            args: { period_type: 'custom', start_date: '2026-01-01', end_date: '2026-12-31' },
-            expect: '2026',
-        },
+        { name: 'prepare-standup', args: {}, expect: 'standup' },
+        { name: 'prepare-retro', args: {}, expect: 'retrospective' },
+        { name: 'weekly-digest', args: {}, expect: 'weekly digest' },
         // 8.2 GitHub prompts
         { name: 'issue-commander', args: { project_number: '5' }, expect: '5' },
         { name: 'pr-commander', args: { pr_number: '67' }, expect: '67' },
