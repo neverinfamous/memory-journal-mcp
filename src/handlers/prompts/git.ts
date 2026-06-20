@@ -29,27 +29,31 @@ You are initiating a high-integrity procedure for committing code changes. You m
 ## 1. Validation Gates (MANDATORY)
 Before committing, you MUST pass validation. Run the appropriate verification commands for the current repository. For example:
 \`\`\`bash
-pwsh -c "pnpm run check ; pnpm run test:coverage ; pnpm run test:e2e"
+npm run check || pnpm run check
 \`\`\`
 If any gate fails, you must attempt to auto-fix the issue or request human-in-the-loop (HITL) assistance.
 
-## 2. Commit Script Invocation
-Once validation passes, stage your changes with \`git add\` and then use the \`commit.ts\` script via the \`agent-exec.ts\` runner. NEVER use raw \`git commit\`.
+## 2. Commit Invocation
+Once validation passes, stage your changes and commit using standard native Git tooling.
 
-Write a payload to \`scratch/commit-payload.json\` and execute it:
-\`\`\`json
-{
-  "type": "command",
-  "command": "bun",
-  "args": [
-    "C:\\\\Users\\\\chris\\\\Desktop\\\\adamic\\\\.agents\\\\scripts\\\\commit.ts",
-    "--msg", "feat(scope): conventional message here",
-    "--history-file", "C:\\\\path\\\\to\\\\scratch\\\\history.txt",
-    "--impact", "0.5",
-    "--trust", "0.9",
-    "--validation", "passed"
-  ]
-}
+> **Environment Note:** If your system environment has specific mandatory git workflows or wrappers (e.g., an \`agent-exec\` wrapper or custom \`commit.ts\` scripts defined in your global rules), you MUST defer to those rules instead of using raw \`git commit\`.
+
+Write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits and includes standard History trailers:
+\`\`\`text
+feat(scope): conventional message here
+
+History-Category: Changed
+History-Entry: Narrative explaining the change.
+
+History-Impact: 0.5
+History-Trust: 0.9
+History-Validation: passed
+\`\`\`
+
+Then execute:
+\`\`\`bash
+git add .
+git commit -F scratch/commit-msg.txt
 \`\`\`
 
 ## 3. Journal Entry (Optional but recommended for significance > 0.5)
@@ -79,26 +83,28 @@ You are initiating a fast procedure for committing code changes.
 > [!WARNING]
 > This workflow BYPASSES validation gates (lint, tests). It should ONLY be used when the code is known to be sound or for trivial changes (e.g., documentation, simple typo fixes).
 
-## 1. Commit Script Invocation
-Stage your changes with \`git add\` and then use the \`commit.ts\` script via the \`agent-exec.ts\` runner. NEVER use raw \`git commit\`.
+## 1. Commit Invocation
+Stage your changes and commit using standard native Git tooling.
 
-Write a payload to \`scratch/commit-payload.json\` and execute it:
-\`\`\`json
-{
-  "type": "command",
-  "command": "bun",
-  "args": [
-    "C:\\\\Users\\\\chris\\\\Desktop\\\\adamic\\\\.agents\\\\scripts\\\\commit.ts",
-    "--msg", "docs(scope): conventional message here",
-    "--no-history",
-    "--impact", "0.1",
-    "--trust", "1.0",
-    "--validation", "none"
-  ]
-}
+> **Environment Note:** If your system environment has specific mandatory git workflows or wrappers (e.g., an \`agent-exec\` wrapper or custom \`commit.ts\` scripts defined in your global rules), you MUST defer to those rules instead of using raw \`git commit\`.
+
+Write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits:
+\`\`\`text
+docs(scope): conventional message here
+
+History-Category: Changed
+History-Entry: Narrative explaining the change (optional for quick-commit).
+
+History-Impact: 0.1
+History-Trust: 1.0
+History-Validation: none
 \`\`\`
 
-If you choose to write history, use \`--history-file\` instead of \`--no-history\`.
+Then execute:
+\`\`\`bash
+git add .
+git commit -F scratch/commit-msg.txt
+\`\`\`
 
 ## 2. Journal Entry
 Since this is a quick commit, a journal entry is usually not required unless the change is structurally significant despite being quick.`,
