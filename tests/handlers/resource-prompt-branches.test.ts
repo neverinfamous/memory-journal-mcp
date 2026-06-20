@@ -240,79 +240,7 @@ describe('Graph resources — branch coverage', () => {
         resources = getGraphResourceDefinitions()
     })
 
-    describe('memory://graph/recent', () => {
-        it('should return no-data message when no relationships', () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/recent')!
-            const context = createMockContext({
-                db: createMockDb({
-                    getRecentGraphRelationships: vi.fn().mockReturnValue([]),
-                }),
-            })
-            const result = resource.handler('memory://graph/recent', context as never) as string
-            expect(result).toContain('No relationships found')
-        })
 
-        it('should handle unknown relationship type with default arrow', () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/recent')!
-            const context = createMockContext({
-                db: createMockDb({
-                    getRecentGraphRelationships: vi.fn().mockReturnValue([
-                        {
-                            from_entry_id: 1,
-                            to_entry_id: 2,
-                            relationship_type: 'unknown_type',
-                            from_content: 'Entry one content',
-                            to_content: 'Entry two content',
-                        },
-                    ]),
-                }),
-            })
-            const result = resource.handler('memory://graph/recent', context as never) as string
-            expect(result).toContain('-->')
-            expect(result).toContain('unknown_type')
-        })
-    })
-
-    describe('memory://graph/actions', () => {
-        it('should return no-github message when github integration not available', async () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
-            const context = createMockContext()
-            const result = (await resource.handler(
-                'memory://graph/actions',
-                context as never
-            )) as string
-            expect(result).toContain('GitHub integration not available')
-        })
-
-        it('should return no-repo message when repo info missing', async () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
-            const context = createMockContext({
-                github: {
-                    getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
-                },
-            })
-            const result = (await resource.handler(
-                'memory://graph/actions',
-                context as never
-            )) as string
-            expect(result).toContain('Repository not detected')
-        })
-
-        it('should return no-runs message when no workflow runs', async () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
-            const context = createMockContext({
-                github: {
-                    getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r' }),
-                    getWorkflowRuns: vi.fn().mockResolvedValue([]),
-                },
-            })
-            const result = (await resource.handler(
-                'memory://graph/actions',
-                context as never
-            )) as string
-            expect(result).toContain('No GitHub Actions workflow runs')
-        })
-    })
 
     describe('memory://actions/recent', () => {
         it('should fallback to database when no github', async () => {

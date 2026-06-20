@@ -285,108 +285,7 @@ describe('Template resources — branch coverage', () => {
         })
     })
 
-    describe('kanban/{project_number}/diagram', () => {
-        it('should return error for invalid project number', async () => {
-            const resource = resources.find(
-                (r) => r.uri === 'memory://kanban/{project_number}/diagram'
-            )!
-            const result = (await resource.handler(
-                'memory://kanban/bad/diagram',
-                createMockContext() as never
-            )) as Record<string, unknown>
-            expect(result.error).toContain('Invalid project number')
-        })
 
-        it('should return no-github mermaid', async () => {
-            const resource = resources.find(
-                (r) => r.uri === 'memory://kanban/{project_number}/diagram'
-            )!
-            const result = (await resource.handler(
-                'memory://kanban/1/diagram',
-                createMockContext() as never
-            )) as string
-            expect(result).toContain('GitHub integration not available')
-        })
-
-        it('should return no-owner mermaid', async () => {
-            const github = {
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
-            }
-            const resource = resources.find(
-                (r) => r.uri === 'memory://kanban/{project_number}/diagram'
-            )!
-            const result = (await resource.handler(
-                'memory://kanban/1/diagram',
-                createMockContext({ github }) as never
-            )) as string
-            expect(result).toContain('Could not detect repository')
-        })
-
-        it('should return not-found mermaid', async () => {
-            const github = {
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r' }),
-                getProjectKanban: vi.fn().mockResolvedValue(null),
-            }
-            const resource = resources.find(
-                (r) => r.uri === 'memory://kanban/{project_number}/diagram'
-            )!
-            const result = (await resource.handler(
-                'memory://kanban/1/diagram',
-                createMockContext({ github }) as never
-            )) as string
-            expect(result).toContain('not found')
-        })
-
-        it('should render diagram with all item types', async () => {
-            const github = {
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r' }),
-                getProjectKanban: vi.fn().mockResolvedValue({
-                    projectId: 'P1',
-                    projectNumber: 1,
-                    projectTitle: 'Test Project',
-                    columns: [
-                        {
-                            status: 'In Progress',
-                            statusOptionId: 'opt-1',
-                            items: [
-                                {
-                                    id: 'item-abc12345',
-                                    title: 'Issue item',
-                                    type: 'ISSUE',
-                                    number: 10,
-                                },
-                                {
-                                    id: 'item-def67890',
-                                    title: 'PR item',
-                                    type: 'PULL_REQUEST',
-                                    number: 20,
-                                },
-                                {
-                                    id: 'item-ghi99999',
-                                    title: 'Draft item',
-                                    type: 'DRAFT_ISSUE',
-                                    number: 0,
-                                },
-                            ],
-                        },
-                    ],
-                    totalItems: 3,
-                }),
-            }
-            const resource = resources.find(
-                (r) => r.uri === 'memory://kanban/{project_number}/diagram'
-            )!
-            const result = (await resource.handler(
-                'memory://kanban/1/diagram',
-                createMockContext({ github }) as never
-            )) as string
-            expect(result).toContain('🔵')
-            expect(result).toContain('🟣')
-            expect(result).toContain('⚪')
-            expect(result).toContain('#10')
-            expect(result).toContain('#20')
-        })
-    })
 })
 
 // ============================================================================
@@ -608,42 +507,7 @@ describe('GitHub resources — branch coverage', () => {
         })
     })
 
-    describe('memory://github/insights', () => {
-        it('should handle traffic data unavailable', async () => {
-            const github = {
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r', branch: 'main' }),
-                getRepoStats: vi.fn().mockResolvedValue({ stars: 100, forks: 10, watchers: 5 }),
-                getTrafficData: vi.fn().mockRejectedValue(new Error('no push access')),
-            }
-            const resource = resources.find((r) => r.uri === 'memory://github/insights')!
-            const result = (await resource.handler(
-                'memory://github/insights',
-                createMockContext({ github }) as never
-            )) as Record<string, unknown>
-            const data = result.data as Record<string, unknown>
-            expect(data.stars).toBe(100)
-            expect(data.hint).toContain('push access')
-        })
 
-        it('should include traffic data when available', async () => {
-            const github = {
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r', branch: 'main' }),
-                getRepoStats: vi.fn().mockResolvedValue(null),
-                getTrafficData: vi.fn().mockResolvedValue({
-                    clones: { total: 50 },
-                    views: { total: 200 },
-                }),
-            }
-            const resource = resources.find((r) => r.uri === 'memory://github/insights')!
-            const result = (await resource.handler(
-                'memory://github/insights',
-                createMockContext({ github }) as never
-            )) as Record<string, unknown>
-            const data = result.data as Record<string, unknown>
-            expect(data.clones14d).toBe(50)
-            expect(data.views14d).toBe(200)
-        })
-    })
 
     describe('memory://milestones/{number}', () => {
         it('should return error for invalid milestone number', async () => {

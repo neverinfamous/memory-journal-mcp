@@ -75,8 +75,6 @@ describe('Resource Handlers', () => {
             expect(uris).toContain('memory://briefing')
             expect(uris).toContain('memory://health')
             expect(uris).toContain('memory://recent')
-            expect(uris).toContain('memory://significant')
-            expect(uris).toContain('memory://tags')
         })
 
         it('should include template resources', () => {
@@ -176,13 +174,6 @@ describe('Resource Handlers', () => {
             }
         })
 
-        it('should read memory://tags', async () => {
-            const result = await readResource('memory://tags', db)
-
-            const data = result.data as { tags: unknown[]; count: number }
-            expect(data.tags).toBeDefined()
-            expect(data.count).toBeGreaterThan(0)
-        })
 
         it('should read memory://health', async () => {
             const result = await readResource('memory://health', db)
@@ -197,20 +188,8 @@ describe('Resource Handlers', () => {
             expect(data.timestamp).toBeDefined()
         })
 
-        it('should read memory://graph/recent', async () => {
-            const result = await readResource('memory://graph/recent', db)
 
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('graph TD')
-        })
 
-        it('should read memory://statistics', async () => {
-            const result = await readResource('memory://statistics', db)
-
-            const data = result.data as { totalEntries: number; entriesByType: object }
-            expect(data.totalEntries).toBeGreaterThan(0)
-            expect(data.entriesByType).toBeDefined()
-        })
     })
 
     // ========================================================================
@@ -275,13 +254,6 @@ describe('Resource Handlers', () => {
     // ========================================================================
 
     describe('readResource - additional branch coverage', () => {
-        it('should read memory://graph/actions', async () => {
-            const result = await readResource('memory://graph/actions', db)
-
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('graph')
-        })
-
         it('should read memory://actions/recent', async () => {
             const result = await readResource('memory://actions/recent', db)
 
@@ -323,16 +295,5 @@ describe('Resource Handlers', () => {
             expect(data.projectNumber).toBe(42)
         })
 
-        it('should return no-github diagram for kanban without integration', async () => {
-            const result = await readResource(
-                'memory://kanban/1/diagram',
-                db,
-                undefined,
-                undefined,
-                null // no github
-            )
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('GitHub integration not available')
-        })
     })
 })

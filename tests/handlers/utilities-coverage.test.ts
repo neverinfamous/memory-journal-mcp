@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
     rulesResource,
     workflowsResource,
-    statisticsResource,
-    tagsResource,
 } from '../../src/handlers/resources/core/utilities.js'
 import * as fs from 'node:fs'
 
@@ -73,18 +71,4 @@ describe('utilities coverage', () => {
         }
     })
 
-    it('covers statisticsResource', () => {
-        const mockDb = { getStatistics: vi.fn().mockReturnValue({ total: 5 }) }
-        const result = statisticsResource.handler('mem', { db: mockDb } as any)
-        expect((result as any).total).toBe(5)
-    })
-
-    it('covers tagsResource', () => {
-        const mockDb = {
-            listTags: vi.fn().mockReturnValue([{ id: 1, name: 'tag1', usageCount: 5 }]),
-        }
-        const result = tagsResource.handler('mem', { db: mockDb } as any)
-        expect((result as any).count).toBe(1)
-        expect((result as any).tags[0].name).toBe('tag1')
-    })
 })

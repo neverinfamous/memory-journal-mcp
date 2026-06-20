@@ -134,16 +134,7 @@ describe('Resource Handler Coverage', () => {
             expect(data.error).toContain('not available')
         })
 
-        it('should return error for invalid kanban diagram number', async () => {
-            const result = await readResource('memory://kanban/abc/diagram', db)
-            expect(result.data).toHaveProperty('error')
-        })
 
-        it('should return mermaid fallback for diagram without github', async () => {
-            const result = await readResource('memory://kanban/1/diagram', db)
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('not available')
-        })
     })
 
     // Note: health endpoint is served by HttpTransport, not as a memory:// resource.

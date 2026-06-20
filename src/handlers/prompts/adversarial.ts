@@ -245,14 +245,14 @@ Review prior entries for recurring findings and reusable patterns before draftin
             name: 'audit-code-quality',
             description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency)',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
                 messages: [{
                     role: 'user',
                     content: {
                         type: 'text',
                         text: `# Adversarial Code Quality Audit
-Target: ${args['target']}
+Target: ${args?.['target'] ?? '[Please specify target in chat]'}
 
 1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, and boundary validation.
 2. Group findings by category and severity (Critical, Moderate, Low).
@@ -267,13 +267,13 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
             name: 'audit-security',
             description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces)',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
                 messages: [{
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Security Audit\nTarget: ${args['target']}\n\n1. Perform a multi-pass security audit looking for injection vectors, auth/authz gaps, data boundary issues.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Security Audit\nTarget: ${args?.['target'] ?? '[Please specify target in chat]'}\n\n1. Perform a multi-pass security audit looking for injection vectors, auth/authz gaps, data boundary issues.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -282,13 +282,13 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
             name: 'audit-performance',
             description: 'Multi-pass adversarial performance audit (profiling, stress-testing)',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
                 messages: [{
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Performance Audit\nTarget: ${args['target']}\n\n1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Performance Audit\nTarget: ${args?.['target'] ?? '[Please specify target in chat]'}\n\n1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -297,13 +297,13 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
             name: 'audit-seo-docs',
             description: 'Adversarial SEO and documentation audit (markup, E-E-A-T, marketing)',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'target', description: 'File, folder, or component to audit', required: true }],
+            arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
                 messages: [{
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial SEO & Docs Audit\nTarget: ${args['target']}\n\n1. Perform a multi-pass audit checking technical SEO, semantic HTML, ARIA, and marketing documentation clarity.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial SEO & Docs Audit\nTarget: ${args?.['target'] ?? '[Please specify target in chat]'}\n\n1. Perform a multi-pass audit checking technical SEO, semantic HTML, ARIA, and marketing documentation clarity.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -312,13 +312,13 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
             name: 'audit-skill',
             description: 'Multi-pass adversarial skill audit (evaluate triggers, stress-test)',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'target', description: 'Skill name or path', required: true }],
+            arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
                 messages: [{
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Skill Audit\nTarget: ${args['target']}\n\n1. Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Skill Audit\nTarget: ${args?.['target'] ?? '[Please specify skill in chat]'}\n\n1. Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
@@ -327,13 +327,13 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
             name: 'audit-workflow',
             description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention)',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'target', description: 'Workflow name or path', required: true }],
+            arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
                 messages: [{
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial Workflow Audit\nTarget: ${args['target']}\n\n1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
+                        text: `# Adversarial Workflow Audit\nTarget: ${args?.['target'] ?? '[Please specify workflow in chat]'}\n\n1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.\n2. Present findings table.\n3. Await HITL approval before applying fixes.`
                     }
                 }]
             })
