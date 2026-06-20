@@ -143,27 +143,31 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
         if ((methodName === 'team_search' || methodName === 'teamSearch') && obj['project_number'] == null) {
             const tags = obj['tags'] as string[] | undefined;
-            if (tags && tags.length > 0 && tags.some(t => !t.startsWith('flag:'))) {
+            const entryType = obj['entry_type'] as string | undefined;
+            const isFlagSearch = Boolean(tags && tags.length > 0 && tags.every(t => typeof t === 'string' && t.startsWith('flag:'))) || entryType === 'flag';
+            if (!isFlagSearch) {
                 return { error: {
                     success: false,
-                    error: 'Cross-project team searches are only permitted for flags. Provide a project_number or use flag:* tags.',
+                    error: 'Cross-project team searches are only permitted for flags. Provide a project_number or filter by entry_type="flag" or flag:* tags.',
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
-                    suggestion: 'Provide a project_number, or use tags starting with "flag:"',
+                    suggestion: 'Provide a project_number, or use tags starting with "flag:" or entry_type="flag"',
                     recoverable: true
                 }};
             }
         }
 
         if ((methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') && obj['project_number'] == null) {
+            const tags = obj['tags'] as string[] | undefined;
             const entryType = obj['entry_type'] as string | undefined;
-            if (entryType && entryType !== 'flag') {
+            const isFlagSearch = Boolean(tags && tags.length > 0 && tags.every(t => typeof t === 'string' && t.startsWith('flag:'))) || entryType === 'flag';
+            if (!isFlagSearch) {
                 return { error: {
                     success: false,
-                    error: 'Cross-project team date range searches are only permitted for flags. Provide a project_number or use entry_type="flag".',
+                    error: 'Cross-project team date range searches are only permitted for flags. Provide a project_number or filter by entry_type="flag" or flag:* tags.',
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
-                    suggestion: 'Provide a project_number, or set entry_type to "flag"',
+                    suggestion: 'Provide a project_number, or use tags starting with "flag:" or entry_type="flag"',
                     recoverable: true
                 }};
             }
