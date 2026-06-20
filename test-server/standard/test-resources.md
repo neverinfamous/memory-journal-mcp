@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Resources
 
-**Scope:** All 34 resources — 27 static resources, 7 template resources (happy path + error paths).
+**Scope:** All 33 resources — 26 static resources, 7 template resources (happy path + error paths).
 
 **Prerequisites:**
 
@@ -91,7 +91,7 @@
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- All 27 static resources return valid data
+- All 26 static resources return valid data
 - All 7 template resources work with valid parameters
 - All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
@@ -102,7 +102,6 @@
 - `memory://briefing` includes local time for chronological grounding
 - `memory://briefing/<repo>` returns repo-scoped briefing
 - `memory://help/[group]` resources exist for all 10 API groups (`core`, `search`, `analytics`, `relationships`, `io`, `export`, `admin`, `github`, `backup`, `team`).
-- `memory://github/rate-limit` returns valid rate limit telemetry.
 - `memory://metrics/summary` returns session-level metrics
 - `memory://metrics/latency` returns per-tool latency percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields (or a graceful empty message if no tool calls have been made)
 - `memory://metrics/resources` returns read access counts and error counts for all accessed URIs, or a graceful empty message if no reads have occurred
