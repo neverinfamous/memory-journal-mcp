@@ -408,9 +408,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `commit` | High-integrity procedure for committing code changes with validation gates |
 | `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
-| `workflow_type` | triage | milestone | roadmap |
 | `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
-| `workflow_type` | summary | review | deps | changelog |
 | `actions-failure-digest` | CI/CD failure analysis with root cause identification |
 | `optimize-journal` | Guided database pruning and optimization workflow with live metrics |
 | `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
