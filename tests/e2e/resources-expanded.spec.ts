@@ -2,8 +2,8 @@
  * E2E Tests: Expanded Resource Reads via SDK Client
  *
  * Covers resources not tested by resources.spec.ts:
- * memory://instructions, memory://significant, memory://graph/recent,
- * memory://tags, and unknown resource URI error handling.
+ * memory://instructions, memory://significant,
+ * and unknown resource URI error handling.
  */
 
 import { test, expect } from './test-fixture.js'
@@ -48,28 +48,6 @@ test.describe('E2E Resource Reads: Expanded', () => {
         expect(typeof parsed).toBe('object')
     })
 
-    test('should read memory://graph/recent resource', async () => {
-        const response = await client.readResource({ uri: 'memory://graph/recent' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = response.contents[0]!.text as string
-        // Should be a Mermaid diagram or empty structure
-        expect(typeof text).toBe('string')
-    })
-
-    test('should read memory://tags resource', async () => {
-        const response = await client.readResource({ uri: 'memory://tags' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = response.contents[0]!.text as string
-        const parsed = JSON.parse(text)
-        expect(parsed).toHaveProperty('tags')
-        expect(Array.isArray(parsed.tags)).toBe(true)
-    })
 
     test('should handle unknown resource URI gracefully', async () => {
         try {

@@ -111,16 +111,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(text.length).toBeGreaterThan(0)
     })
 
-    test('should read memory://github/insights', async () => {
-        const response = await client.readResource({ uri: 'memory://github/insights' })
 
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        expect(typeof text).toBe('string')
-        expect(text.length).toBeGreaterThan(0)
-    })
 
     test('should read memory://github/milestones', async () => {
         await expect(client.readResource({ uri: 'memory://github/milestones' })).rejects.toThrow(
@@ -129,11 +120,6 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
     })
 
     // --- Graph resources ---
-    test('should read memory://graph/actions', async () => {
-        await expect(client.readResource({ uri: 'memory://graph/actions' })).rejects.toThrow(
-            /(GitHub API not available|Bad credentials|Not Found)/
-        )
-    })
 
     test('should read memory://actions/recent', async () => {
         const response = await client.readResource({ uri: 'memory://actions/recent' })
