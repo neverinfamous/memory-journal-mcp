@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { rmSync } from 'fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = join(__dirname, '..', '..')
@@ -165,7 +166,28 @@ async function main() {
 
     console.log(`\n=== RESULTS: ${pass} pass, ${fail} fail (${pass + fail} total) ===`)
     proc.kill()
-    process.exit(fail > 0 ? 1 : 0)
+    
+    // Clean up test databases
+    const filesToClean = [
+        'test-prompts.db',
+        'test-prompts.db-shm',
+        'test-prompts.db-wal',
+        'test-team-prompts.db',
+        'test-team-prompts.db-shm',
+        'test-team-prompts.db-wal'
+    ]
+    
+    // Wait briefly to allow process to release file locks
+    setTimeout(() => {
+        for (const file of filesToClean) {
+            try {
+                rmSync(join(projectDir, file), { force: true })
+            } catch (e) {
+                // Ignore cleanup errors (e.g., file still locked)
+            }
+        }
+        process.exit(fail > 0 ? 1 : 0)
+    }, 500)
 }
 
 main().catch((err) => {
