@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
 
 describe('Workflow Prompts', () => {
-    it('covers time-period-analysis', () => {
+    it('covers prepare-standup', () => {
         const prompts = getWorkflowPromptDefinitions()
-        const analyze = prompts.find((p) => p.name === 'time-period-analysis')!
+        const analyze = prompts.find((p) => p.name === 'prepare-standup')!
 
         const mockDb = {}
 
-        const result = analyze.handler({ period_type: 'custom', start_date: '2025', end_date: '2025' }, mockDb as any)
+        const result = analyze.handler({}, mockDb as any)
         expect(result.messages[0].content).toBeDefined()
     })
 

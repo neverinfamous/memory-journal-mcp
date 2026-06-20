@@ -126,14 +126,13 @@ describe('Prompt Handlers', () => {
             expect(() => getPrompt('nonexistent_prompt_xyz', {}, db)).toThrow()
         })
 
-        it('should return messages for time-period-analysis with date arguments', () => {
-            const today = new Date().toISOString().split('T')[0]!
-            const result = getPrompt('time-period-analysis', { period_type: 'custom', start_date: today, end_date: today }, db)
+        it('should return messages for prepare-standup', () => {
+            const result = getPrompt('prepare-standup', {}, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
             const text = (result.messages[0]?.content as { text: string }).text
-            expect(text).toContain(today)
+            expect(text).toContain('standup')
         })
 
         it('should return messages for goal-tracker prompt', () => {

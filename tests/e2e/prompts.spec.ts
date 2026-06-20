@@ -29,7 +29,7 @@ test.describe('E2E Prompts (via MCP SDK Client)', () => {
         expect(response.prompts.length).toBeGreaterThanOrEqual(8)
 
         const promptNames = response.prompts.map((p) => p.name)
-        expect(promptNames).toContain('time-period-analysis')
+        expect(promptNames).toContain('prepare-standup')
         expect(promptNames).toContain('session-summary')
         expect(promptNames).toContain('issue-commander')
         expect(promptNames).toContain('pr-commander')
@@ -37,8 +37,8 @@ test.describe('E2E Prompts (via MCP SDK Client)', () => {
         expect(promptNames).toContain('adversarial-plan-review')
     })
 
-    test('should get a specific prompt (time-period-analysis)', async () => {
-        const response = await client.getPrompt({ name: 'time-period-analysis', arguments: { period_type: 'daily' } })
+    test('should get a specific prompt (prepare-standup)', async () => {
+        const response = await client.getPrompt({ name: 'prepare-standup' })
 
         expect(response.messages).toBeDefined()
         expect(Array.isArray(response.messages)).toBe(true)

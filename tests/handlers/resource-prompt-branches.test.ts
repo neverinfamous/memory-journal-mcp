@@ -57,28 +57,25 @@ describe('Workflow prompts — branch coverage', () => {
         prompts = getWorkflowPromptDefinitions()
     })
 
-    it('time-period-analysis: should format standup entries', () => {
-        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
+    it('prepare-standup: should format standup entries', () => {
+        const analysis = prompts.find((p) => p.name === 'prepare-standup')!
         const db = createMockDb()
-        const result = analysis.handler({ period_type: 'standup' }, db as never)
+        const result = analysis.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('standup')
     })
 
-    it('time-period-analysis: should use provided dates for custom period', () => {
-        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
+    it('prepare-retro: should format retro entries', () => {
+        const analysis = prompts.find((p) => p.name === 'prepare-retro')!
         const db = createMockDb()
-        const result = analysis.handler(
-            { period_type: 'custom', start_date: '2025-01-01', end_date: '2025-01-31' },
-            db as never
-        )
-        expect(result.messages[0]!.content.text).toContain('2025-01-01 to 2025-01-31')
+        const result = analysis.handler({}, db as never)
+        expect(result.messages[0]!.content.text).toContain('retrospective')
     })
 
-    it('time-period-analysis: should handle missing date args for custom', () => {
-        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
+    it('weekly-digest: should format weekly digest', () => {
+        const analysis = prompts.find((p) => p.name === 'weekly-digest')!
         const db = createMockDb()
-        const result = analysis.handler({ period_type: 'custom' }, db as never)
-        expect(result.messages[0]!.content.text).toContain('Analyze the period')
+        const result = analysis.handler({}, db as never)
+        expect(result.messages[0]!.content.text).toContain('weekly digest')
     })
 
     it('session-summary: should handle no entries', () => {

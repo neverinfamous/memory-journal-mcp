@@ -103,8 +103,9 @@ function makeCtx(db: InstanceType<typeof Database>) {
 }
 
 function createContext(db: InstanceType<typeof Database>) {
-    const tagsMgr = new TagsManager(makeCtx(db))
-    return { db, tagsMgr }
+    const ctx = makeCtx(db)
+    const tagsMgr = new TagsManager(ctx)
+    return { ctx, db, tagsMgr }
 }
 
 // ============================================================================
@@ -154,13 +155,13 @@ describe('CRUD — branch coverage', () => {
                 prStatus: 'open',
                 workflowRunId: 100,
                 workflowName: 'CI',
-                workflowStatus: 'success',
+                workflowStatus: 'completed',
                 significanceType: 'decision',
                 autoContext: '1.0',
                 isPersonal: false,
-                entryType: 'decision',
+                entryType: 'project_decision',
             })
-            expect(entry.entryType).toBe('decision')
+            expect(entry.entryType).toBe('project_decision')
             expect(entry.isPersonal).toBe(false)
         })
     })
@@ -229,8 +230,8 @@ describe('CRUD — branch coverage', () => {
 
         it('should update entryType', () => {
             const entry = createEntry(context, { content: 'test' })
-            const updated = updateEntry(context, entry.id, { entryType: 'decision' })
-            expect(updated!.entryType).toBe('decision')
+            const updated = updateEntry(context, entry.id, { entryType: 'project_decision' })
+            expect(updated!.entryType).toBe('project_decision')
         })
 
         it('should update isPersonal', () => {
@@ -351,19 +352,19 @@ describe('Workflow prompts — branch coverage', () => {
         } as unknown as IDatabaseAdapter
     }
 
-    it('should generate time-period-analysis prompt for standup', () => {
+    it('should generate prepare-standup prompt for standup', () => {
         const prompts = getWorkflowPromptDefinitions()
-        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
+        const analysis = prompts.find((p) => p.name === 'prepare-standup')!
         const db = createMockDb()
-        const result = analysis.handler({ period_type: 'standup' }, db)
+        const result = analysis.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('standup')
     })
 
-    it('should generate time-period-analysis prompt for retro', () => {
+    it('should generate prepare-retro prompt for retro', () => {
         const prompts = getWorkflowPromptDefinitions()
-        const analysis = prompts.find((p) => p.name === 'time-period-analysis')!
+        const analysis = prompts.find((p) => p.name === 'prepare-retro')!
         const db = createMockDb()
-        const result = analysis.handler({ period_type: 'retro' }, db)
+        const result = analysis.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('retrospective')
     })
 
