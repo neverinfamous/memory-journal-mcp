@@ -184,7 +184,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
 
   if (payload.type === 'command') {
     const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd');
-    if (isWinBatch) {
+    if (isWinBatch && payload.target !== 'wsl2') {
       console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
       const escapedCmd = cmd.replace(/'/g, "''");
       const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
@@ -193,6 +193,45 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       args = ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-EncodedCommand', encoded];
       cmd = 'pwsh.exe';
     }
+  }
+
+  if (payload.target === 'wsl2') {
+    const convertToWslPath = (winPath: string): string => {
+      if (!winPath) return winPath;
+      const match = winPath.match(/^([a-zA-Z]):[/\\](.*)$/);
+      if (match) {
+        return `/mnt/${match[1].toLowerCase()}/${match[2].replace(/\\/g, '/')}`;
+      }
+      return winPath.replace(/\\/g, '/');
+    };
+
+    const wslCwd = convertToWslPath(cwd);
+    
+    const wslEnvArgs: string[] = [];
+    const payloadEnv = payload.env || {};
+    for (const [k, v] of Object.entries(payloadEnv)) {
+      wslEnvArgs.push(`${k}=${v}`);
+    }
+    for (const [k, v] of Object.entries(envOverrides)) {
+      wslEnvArgs.push(`${k}=${v}`);
+    }
+
+    const wslArgs = args.map(arg => {
+      if (/^[a-zA-Z]:[/\\]/.test(arg)) {
+        return convertToWslPath(arg);
+      }
+      return arg;
+    });
+
+    let wslCmd = cmd;
+    if (/^[a-zA-Z]:[/\\]/.test(wslCmd)) {
+      wslCmd = convertToWslPath(wslCmd);
+    } else if (wslCmd === 'python') {
+      wslCmd = 'python3';
+    }
+
+    args = ['--cd', wslCwd, '-e', 'env', ...wslEnvArgs, wslCmd, ...wslArgs];
+    cmd = 'wsl.exe';
   }
 
   return { cmd, args, tempScriptPath, envOverrides };
