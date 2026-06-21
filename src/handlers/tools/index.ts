@@ -40,6 +40,8 @@ import { wrapWithMetrics, injectTokenEstimate } from '../../observability/index.
 
 import { enforceAccessBoundary } from '../../auth/validation.js'
 import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
+import { z } from 'zod'
+import { requestContextStorage } from '../../utils/request-context.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -291,6 +293,11 @@ function ensureToolCache(
     // When audit logging is enabled, also wraps with the audit interceptor.
     // This is O(n) once per cache miss — production cost is negligible.
     const instrumentedDefs: ToolDefinition[] = rawDefs.map((t) => {
+        let schema = t.inputSchema
+        if (schema instanceof z.ZodObject) {
+            schema = schema.extend({ use_test_db: z.boolean().optional() })
+        }
+
         // Layer 1: Metrics collection (always active if runtime is provided)
         const metricsInstance = config?.runtime?.metrics
         const metricsWrapped =
@@ -305,14 +312,24 @@ function ensureToolCache(
         // Layer 2: Audit logging (only when initialized)
         const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
         const interceptor = runtimeAudit
-        const finalHandler =
+        const baseHandler =
             interceptor !== null && interceptor !== undefined
                 ? (args: Record<string, unknown>): Promise<unknown> =>
                       interceptor.around(t.name, args, () => metricsWrapped(args))
                 : metricsWrapped
 
+        const finalHandler = (args: Record<string, unknown>): Promise<unknown> => {
+            if (args['use_test_db'] === true) {
+                const cleanArgs = { ...args }
+                delete cleanArgs['use_test_db']
+                return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
+            }
+            return baseHandler(args)
+        }
+
         return {
             ...t,
+            inputSchema: schema,
             handler: finalHandler as (params: unknown) => unknown,
         }
     })
@@ -406,11 +423,20 @@ export async function callTool(
                     : null
             const interceptor = runtimeAudit
 
-            const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
+            const baseHandler = async (a: Record<string, unknown>): Promise<unknown> => {
                 if (interceptor !== null && interceptor !== undefined) {
                     return await interceptor.around(freshTool.name, a, () => metricsWrapped(a))
                 }
                 return await metricsWrapped(a)
+            }
+
+            const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
+                if (a['use_test_db'] === true) {
+                    const cleanArgs = { ...a }
+                    delete cleanArgs['use_test_db']
+                    return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
+                }
+                return baseHandler(a)
             }
 
             if (

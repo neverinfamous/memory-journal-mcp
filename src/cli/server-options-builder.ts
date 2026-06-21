@@ -32,9 +32,17 @@ export function buildServerOptions(
     const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath);
     const db = (rawDb === defaultDbPath && configDbPath) ? configDbPath : rawDb;
     
+    const configTestDbPath = catchConfig(() => resolver.resolve<string>('testDbPath'), undefined);
+    const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined);
+    const testDb = rawTestDb ?? configTestDbPath;
+
     const configTeamDbPath = catchConfig(() => resolver.resolve<string>('teamDbPath'), undefined);
     const rawTeamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH'), defaultTeamDbPath);
     const teamDb = (rawTeamDb === defaultTeamDbPath && configTeamDbPath) ? configTeamDbPath : rawTeamDb;
+
+    const configTestTeamDbPath = catchConfig(() => resolver.resolve<string>('testTeamDbPath'), undefined);
+    const rawTestTeamDb = catchConfig(() => resolver.resolve<string>('testTeamDb', 'TEST_TEAM_DB_PATH'), undefined);
+    const testTeamDb = rawTestTeamDb ?? configTestTeamDbPath;
 
     const codemodeMaxResultSize = catchConfig(() => resolver.resolve<string>('codemodeMaxResultSize', 'CODE_MODE_MAX_RESULT_SIZE'), undefined);
     if (codemodeMaxResultSize) {
@@ -58,7 +66,9 @@ export function buildServerOptions(
         host,
         statelessHttp: stateless,
         dbPath: db ?? defaultDbPath,
+        testDbPath: testDb,
         teamDbPath: teamDb,
+        testTeamDbPath: testTeamDb,
         teamDefaultRole: catchConfig(() => (resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied') as 'admin' | 'member' | 'viewer' | 'denied', 'denied'),
         teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
         toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined),

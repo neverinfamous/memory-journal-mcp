@@ -1,5 +1,7 @@
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
+import { DatabaseAdapterProxy } from '../../database/core/DatabaseAdapterProxy.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
+import { VectorSearchManagerProxy } from '../../vector/vector-search-manager/VectorSearchManagerProxy.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { logger } from '../../utils/logger.js'
 import { parseToolFilter, getToolFilterFromEnv, getFilterSummary, getAllToolNames } from '../../filtering/tool-filter.js'
@@ -14,12 +16,21 @@ import type { ServerOptions, ServerContext } from './types.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
-    const { transport, dbPath, teamDbPath } = options
+    const { transport, dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
 
     // Initialize database
-    const db = await DatabaseAdapterFactory.create(dbPath)
-    await db.initialize()
+    const primaryDb = await DatabaseAdapterFactory.create(dbPath)
+    await primaryDb.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath })
+
+    let testDb: IDatabaseAdapter | undefined
+    if (testDbPath) {
+        testDb = await DatabaseAdapterFactory.create(testDbPath)
+        await testDb.initialize()
+        logger.info('Test database initialized', { module: 'McpServer', testDbPath })
+    }
+
+    const db = DatabaseAdapterProxy.create(primaryDb, testDb)
 
     // Auto-prune low-importance old entries if configured
     const hasAutoPrune = ((options.archiveOlderThanDays ?? 0) > 0) ||
@@ -74,12 +85,23 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     }
 
     // Initialize team database if configured
+    let primaryTeamDb: IDatabaseAdapter | undefined
+    let testTeamDb: IDatabaseAdapter | undefined
     let teamDb: IDatabaseAdapter | undefined
     if (teamDbPath) {
-        teamDb = await DatabaseAdapterFactory.create(teamDbPath)
-        await teamDb.initialize()
-        teamDb.applyTeamSchema()
+        primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath)
+        await primaryTeamDb.initialize()
+        primaryTeamDb.applyTeamSchema()
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
+
+        if (testTeamDbPath) {
+            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath)
+            await testTeamDb.initialize()
+            testTeamDb.applyTeamSchema()
+            logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })
+        }
+
+        teamDb = DatabaseAdapterProxy.create(primaryTeamDb, testTeamDb)
 
         // Bootstrap team admin if configured and RBAC is not yet active (empty table)
         if (options.teamAdmin && teamDb.getTeamMemberCount !== undefined && teamDb.addTeamMember !== undefined) {
@@ -91,22 +113,33 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     }
 
     // Initialize vector search manager (lazy loading - model loads on first use)
-    const vectorManager = new VectorSearchManager(db, { modelName: options.embeddingModel })
+    const primaryVectorManager = new VectorSearchManager(primaryDb, { modelName: options.embeddingModel })
+    let testVectorManager: VectorSearchManager | undefined
+    if (testDb) {
+        testVectorManager = new VectorSearchManager(testDb, { modelName: options.embeddingModel })
+    }
+    const vectorManager = VectorSearchManagerProxy.create(primaryVectorManager, testVectorManager)
 
     // Initialize team vector search manager if team DB is configured
+    let primaryTeamVectorManager: VectorSearchManager | undefined
+    let testTeamVectorManager: VectorSearchManager | undefined
     let teamVectorManager: VectorSearchManager | undefined
-    if (teamDb) {
-        teamVectorManager = new VectorSearchManager(teamDb, { modelName: options.embeddingModel })
+    if (primaryTeamDb) {
+        primaryTeamVectorManager = new VectorSearchManager(primaryTeamDb, { modelName: options.embeddingModel })
+        if (testTeamDb) {
+            testTeamVectorManager = new VectorSearchManager(testTeamDb, { modelName: options.embeddingModel })
+        }
+        teamVectorManager = VectorSearchManagerProxy.create(primaryTeamVectorManager, testTeamVectorManager)
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
     // Auto-rebuild vector index if enabled (non-blocking)
     if (options.autoRebuildIndex) {
         logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
-        vectorManager
+        primaryVectorManager
             .initialize()
             .then(async () => {
-                const { indexed: count } = await vectorManager.rebuildIndex()
+                const { indexed: count } = await primaryVectorManager.rebuildIndex()
                 logger.info('Vector index rebuilt in background', {
                     module: 'McpServer',
                     entriesIndexed: count,
@@ -119,13 +152,24 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
                 })
             })
 
-        if (teamVectorManager) {
-            teamVectorManager.initialize().catch((err: unknown) => {
+        if (testVectorManager) {
+            testVectorManager.initialize().catch((err: unknown) => {
+                logger.error('Background test vector init failed', { module: 'McpServer', error: err })
+            })
+        }
+
+        if (primaryTeamVectorManager) {
+            primaryTeamVectorManager.initialize().catch((err: unknown) => {
                 logger.error('Background team vector init failed', {
                     module: 'McpServer',
                     error: err,
                 })
             })
+            if (testTeamVectorManager) {
+                testTeamVectorManager.initialize().catch((err: unknown) => {
+                    logger.error('Background test team vector init failed', { module: 'McpServer', error: err })
+                })
+            }
             logger.info('Team vector search manager eager initialization started in background', {
                 module: 'McpServer',
             })
@@ -135,16 +179,19 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         logger.info('Vector search manager eager initialization started in background', {
             module: 'McpServer',
         })
-        vectorManager
+        primaryVectorManager
             .initialize()
             .then(async () => {
+                if (testVectorManager) await testVectorManager.initialize()
+                
                 // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
-                if (teamVectorManager) {
+                if (primaryTeamVectorManager) {
                     logger.info(
                         'Team vector search manager eager initialization started in background',
                         { module: 'McpServer' }
                     )
-                    await teamVectorManager.initialize()
+                    await primaryTeamVectorManager.initialize()
+                    if (testTeamVectorManager) await testTeamVectorManager.initialize()
                 }
             })
             .catch((err: unknown) => {
@@ -294,7 +341,9 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
 
     return {
         db,
+        testDb,
         teamDb,
+        testTeamDb,
         runtime,
         vectorManager,
         teamVectorManager,

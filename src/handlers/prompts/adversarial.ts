@@ -199,7 +199,7 @@ Journal: \`create_entry({ content: "<refinement>", entry_type: "plan_refinement"
 
 ### Phase 4: External Validation (Copilot)
 
-Run \`gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. What did we miss?" --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
+Run \`gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the 'path' parameter correctly. What did we miss?" --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 
 ### Phase 5: Present to User
 

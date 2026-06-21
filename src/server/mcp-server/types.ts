@@ -8,7 +8,9 @@ export interface ServerOptions {
     port?: number
     host?: string
     dbPath: string
+    testDbPath?: string
     teamDbPath?: string
+    testTeamDbPath?: string
     teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
     teamAdmin?: string
     toolFilter?: string
@@ -75,7 +77,9 @@ import type { Scheduler } from '../scheduler.js'
 
 export interface ServerContext {
     db: IDatabaseAdapter;
+    testDb?: IDatabaseAdapter;
     teamDb?: IDatabaseAdapter;
+    testTeamDb?: IDatabaseAdapter;
     runtime: ServerRuntime;
     vectorManager: VectorSearchManager;
     teamVectorManager?: VectorSearchManager;

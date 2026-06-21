@@ -16,7 +16,7 @@ import { createServerInstance } from './tool-registration.js'
 
 export async function createServer(options: ServerOptions): Promise<void> {
     const context = await initializeDependencies(options);
-    const { db, teamDb, runtime, vectorManager, teamVectorManager, github, configManager, scheduler, allowedIoRoots, activeMetricsPath } = context;
+    const { db, testDb, teamDb, testTeamDb, runtime, vectorManager, teamVectorManager, github, configManager, scheduler, allowedIoRoots, activeMetricsPath } = context;
     const { transport, defaultProjectNumber } = options;
 
     const filterConfig = configManager.getConfig().toolFilterConfig;
@@ -106,8 +106,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         await server.connect(stdioTransport)
         logger.info('MCP server started on stdio', { module: 'McpServer' })
 
-        // Handle shutdown for stdio
-        process.on('SIGINT', () => {
+        const handleStdioShutdown = (): void => {
             logger.info('Shutting down...', { module: 'McpServer' })
             // Flush audit log before exit
             if (runtime.auditLogger) {
@@ -116,15 +115,23 @@ export async function createServer(options: ServerOptions): Promise<void> {
             if (activeMetricsPath) {
                 void runtime.metrics.saveToFile(activeMetricsPath).then(() => {
                     db.close()
+                    testDb?.close()
                     teamDb?.close()
+                    testTeamDb?.close()
                     process.exit(0)
                 })
             } else {
                 db.close()
+                testDb?.close()
                 teamDb?.close()
+                testTeamDb?.close()
                 process.exit(0)
             }
-        })
+        }
+
+        // Handle shutdown for stdio
+        process.on('SIGINT', handleStdioShutdown)
+        process.on('SIGTERM', handleStdioShutdown)
     } else {
         // HTTP transport
         const port = options.port ?? 3000
@@ -154,8 +161,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         await httpTransport.start(getServerInstance, scheduler, runtime)
 
-        // Handle shutdown
-        process.on('SIGINT', () => {
+        const handleHttpShutdown = (): void => {
             void (async () => {
                 await httpTransport.stop(scheduler)
                 // Flush audit log before exit
@@ -166,10 +172,16 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     await runtime.metrics.saveToFile(activeMetricsPath)
                 }
                 db.close()
+                testDb?.close()
                 teamDb?.close()
+                testTeamDb?.close()
                 process.exit(0)
             })()
-        })
+        }
+
+        // Handle shutdown
+        process.on('SIGINT', handleHttpShutdown)
+        process.on('SIGTERM', handleHttpShutdown)
     }
 }
 

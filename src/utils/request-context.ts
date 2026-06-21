@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 export interface RequestContext {
     ip?: string
     sessionId?: string
+    useTestDb?: boolean
 }
 
 export const requestContextStorage = new AsyncLocalStorage<RequestContext>()
