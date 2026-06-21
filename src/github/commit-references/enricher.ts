@@ -17,7 +17,7 @@ export async function enrichCommits(
     commitHashes: string[],
     github?: GitHubIntegration
 ): Promise<EnrichedCommit[]> {
-    const git = simpleGit({ baseDir: workingDir, spawnOptions: { windowsHide: true } })
+    const git = simpleGit({ baseDir: workingDir, spawnOptions: { windowsHide: true } } as any)
     const enriched: EnrichedCommit[] = []
 
     let defaultOwner: string | null = null
