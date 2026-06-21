@@ -3,7 +3,7 @@
  *
  * Prompts: find-related, prepare-standup, prepare-retro, weekly-digest,
  * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
- * session-summary
+ * session-summary, team-session-summary, create-entry, create-team-entry
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
@@ -17,6 +17,154 @@ import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 let isGeneratingCodeMap = false
+
+async function generateSummaryPrompt(
+    db: IDatabaseAdapter, 
+    teamDb: IDatabaseAdapter | undefined, 
+    target: 'personal' | 'team'
+) {
+    if (target === 'team' && !teamDb) {
+        throw new ConfigurationError('Team database not configured')
+    }
+
+    const dbHint = target === 'team' 
+        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
+        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\``
+
+    const targetDb = target === 'team' && teamDb ? teamDb : db
+    const { entries: recent } = targetDb.getRecentEntries(5)
+
+    const entrySummary =
+        recent.length > 0
+            ? recent
+                  .map(
+                      (e) =>
+                          `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
+                  )
+                  .join('\n')
+            : '- No entries yet'
+
+    let commitList = '- [List commit SHAs made during the session, or "None"]'
+    try {
+        const { execFileSync } = await import('node:child_process')
+        const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H %s'], { encoding: 'utf-8', windowsHide: true })
+        if (out) {
+            commitList = out.split('\n').map(l => `- ${l}`).join('\n')
+        }
+    } catch {
+        // Fallback to placeholder on error
+    }
+
+    try {
+        if (!isGeneratingCodeMap) {
+            const packageJsonUrl = new URL('../../../package.json', import.meta.url)
+            const packageJsonPath = fileURLToPath(packageJsonUrl)
+            
+            if (existsSync(packageJsonPath)) {
+                const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+                if (pkg !== null && typeof pkg === 'object' && 'name' in pkg && pkg.name === 'memory-journal-mcp') {
+                    isGeneratingCodeMap = true
+                    const scriptUrl = new URL('../../../scripts/update-code-map.ts', import.meta.url)
+                    const absoluteScriptPath = fileURLToPath(scriptUrl)
+                    const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+                    const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
+                        stdio: 'ignore', 
+                        shell: process.platform === 'win32',
+                        windowsHide: true
+                    })
+                    child.on('exit', () => { isGeneratingCodeMap = false })
+                    child.on('error', () => { isGeneratingCodeMap = false })
+                    child.unref()
+                }
+            }
+        }
+    } catch {
+        // Fail silently so we don't break the prompt fetch
+        isGeneratingCodeMap = false
+    }
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: `Create a ${target === 'team' ? 'team ' : ''}session summary journal entry using EXACTLY this template:
+
+**Required Parameters:**
+- \`entry_type: "retrospective"\`
+- \`tags\`: [REQUIRED] MUST include \`"session-summary"\` PLUS 2-3 specific domain/topological tags.
+- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
+- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"targetId": 123, "relationType": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
+- \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
+- \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
+- \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
+- \`auto_context\`: [REQUIRED] JSON string of commit metadata MUST EXACTLY match this shape: \`{"type":"session-commits","commits":["<sha>"],"branch":"<branch_name>","pr":<number>}\`
+- ${dbHint}
+
+**Required Content Structure (use EXACTLY these section headers):**
+\`\`\`
+## Accomplished
+- [List concrete items: changes made, decisions taken, files modified, PRs submitted]
+
+## Unfinished / Blocked
+- [List pending items, blockers, open questions — or "None" if everything is complete]
+
+## Context for Next Session
+- [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+
+## Commits
+${commitList}
+\`\`\`
+
+**Rules:**
+- Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
+- Do NOT omit any of the four required sections
+- Use bullet points within each section
+- Reference specific entry IDs, file names, and PR numbers where relevant
+- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
+
+**Recent Entries (for context):**
+${markUntrustedContent(entrySummary)}`,
+                },
+            },
+        ],
+    }
+}
+
+function generateEntryPrompt(target: 'personal' | 'team') {
+    const dbHint = target === 'team' 
+        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
+        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\``
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: `Create a ${target === 'team' ? 'team ' : ''}mid-thread journal entry using EXACTLY this template:
+
+**Required Parameters:**
+- \`entry_type\`: [REQUIRED] MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective").
+- \`tags\`: [REQUIRED] 1-3 specific domain/topological tags.
+- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context.
+- \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
+- \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
+- \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
+- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"targetId": 123, "relationType": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
+- ${dbHint}
+
+**Required Content Structure:**
+Just provide a concise markdown description of the specific action, decision, or fix you just completed. Do not include a full session retrospective. Keep it under 150 words. No top-level headers required.
+
+**Rules:**
+- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
+                }
+            }
+        ]
+    }
+}
 
 /**
  * Get workflow prompt definitions
@@ -115,7 +263,7 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
             description: 'Milestone and achievement tracking',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
+            handler: (_args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
                 const entries = db.getSignificantEntries(20)
 
                 const mappedEntries = entries.map((e) => ({
@@ -150,120 +298,44 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             icons: [ICON_PROMPT],
             arguments: [],
             handler: async (
-                args: Record<string, string> | undefined,
+                _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown
             ) => {
-                const target = args?.['target'] ?? 'personal'
-                
-                if (target === 'team' && !teamDb) {
-                    throw new ConfigurationError('Team database not configured')
-                }
-
-                const dbHint = target === 'team' 
-                    ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
-                    : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\``
-
-                const targetDb = target === 'team' && teamDb ? teamDb : db
-                const { entries: recent } = targetDb.getRecentEntries(5)
-
-                const entrySummary =
-                    recent.length > 0
-                        ? recent
-                              .map(
-                                  (e) =>
-                                      `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
-                              )
-                              .join('\n')
-                        : '- No entries yet'
-
-                let commitList = '- [List commit SHAs made during the session, or "None"]'
-                try {
-                    const { execFileSync } = await import('node:child_process')
-                    const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H %s'], { encoding: 'utf-8', windowsHide: true })
-                    if (out) {
-                        commitList = out.split('\n').map(l => `- ${l}`).join('\n')
-                    }
-                } catch {
-                    // Fallback to placeholder on error
-                }
-
-                try {
-                    if (!isGeneratingCodeMap) {
-                        const packageJsonUrl = new URL('../../../package.json', import.meta.url)
-                        const packageJsonPath = fileURLToPath(packageJsonUrl)
-                        
-                        if (existsSync(packageJsonPath)) {
-                            const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
-                            if (pkg !== null && typeof pkg === 'object' && 'name' in pkg && pkg.name === 'memory-journal-mcp') {
-                                isGeneratingCodeMap = true
-                                const scriptUrl = new URL('../../../scripts/update-code-map.ts', import.meta.url)
-                                const absoluteScriptPath = fileURLToPath(scriptUrl)
-                                const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
-                                const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
-                                    stdio: 'ignore', 
-                                    shell: process.platform === 'win32',
-                                    windowsHide: true
-                                })
-                                child.on('exit', () => { isGeneratingCodeMap = false })
-                                child.on('error', () => { isGeneratingCodeMap = false })
-                                child.unref()
-                            }
-                        }
-                    }
-                } catch {
-                    // Fail silently so we don't break the prompt fetch
-                    isGeneratingCodeMap = false
-                }
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Create a ${target === 'team' ? 'team ' : ''}session summary journal entry using EXACTLY this template:
-
-**Required Parameters:**
-- \`entry_type: "retrospective"\`
-- \`tags\`: [REQUIRED] MUST include \`"session-summary"\` PLUS 2-3 specific domain/topological tags.
-- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"targetId": 123, "relationType": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
-- \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
-- \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
-- \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
-- \`auto_context\`: [REQUIRED] JSON string of commit metadata MUST EXACTLY match this shape: \`{"type":"session-commits","commits":["<sha>"],"branch":"<branch_name>","pr":<number>}\`
-- ${dbHint}
-
-**Required Content Structure (use EXACTLY these section headers):**
-\`\`\`
-## Accomplished
-- [List concrete items: changes made, decisions taken, files modified, PRs submitted]
-
-## Unfinished / Blocked
-- [List pending items, blockers, open questions — or "None" if everything is complete]
-
-## Context for Next Session
-- [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
-
-## Commits
-${commitList}
-\`\`\`
-
-**Rules:**
-- Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the four required sections
-- Use bullet points within each section
-- Reference specific entry IDs, file names, and PR numbers where relevant
-- If you lose track of your project number, workspace, or agent ID, read the `memory://agent-context/{repo}` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
-
-**Recent Entries (for context):**
-${markUntrustedContent(entrySummary)}`,
-                            },
-                        },
-                    ],
-                }
+                return generateSummaryPrompt(db, teamDb, 'personal')
+            },
+        },
+        {
+            name: 'team-session-summary',
+            description: 'Create a formatted team session summary entry',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown
+            ) => {
+                return generateSummaryPrompt(db, teamDb, 'team')
+            },
+        },
+        {
+            name: 'create-entry',
+            description: 'Create a structured mid-thread journal entry',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: () => {
+                return generateEntryPrompt('personal')
+            },
+        },
+        {
+            name: 'create-team-entry',
+            description: 'Create a structured mid-thread team journal entry',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: () => {
+                return generateEntryPrompt('team')
             },
         },
         {
@@ -380,7 +452,7 @@ function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
 
     // Only return if we have actual signals beyond the header
     if (lines.length <= 1) return ''
-    return lines.join('\\n') + '\\n\\n'
+    return lines.join('\n') + '\n\n'
 }
 
 /**
@@ -433,7 +505,7 @@ function buildFlagSignalForPrompt(teamDb?: IDatabaseAdapter): string {
             lines.push(`🚩 ${f.flag_type}${target}: ${f.preview} (${f.age})`)
         }
 
-        return lines.join('\\n') + '\\n\\n'
+        return lines.join('\n') + '\n\n'
     } catch {
         // Graceful degradation — flags are supplementary context
         return ''
