@@ -136,11 +136,11 @@ function loadCachedGitHistory(targetPath?: string): GitHistorySummary | null {
     if (existing !== undefined) return existing
 
     try {
-        const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H%x09%s'], { cwd: root, encoding: 'utf-8' })
+        const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H%x09%s'], { cwd: root, encoding: 'utf-8', windowsHide: true })
         
         const unpushedHashes = new Set<string>()
         try {
-            const unpushedOut = execFileSync('git', ['log', '@{u}..HEAD', '--format=%H'], { cwd: root, encoding: 'utf-8' })
+            const unpushedOut = execFileSync('git', ['log', '@{u}..HEAD', '--format=%H'], { cwd: root, encoding: 'utf-8', windowsHide: true })
             unpushedOut.split('\n').filter(Boolean).forEach(h => unpushedHashes.add(h.trim()))
         } catch {
             // Ignore if no upstream tracking branch

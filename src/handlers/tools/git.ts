@@ -92,7 +92,7 @@ async function getUnreleasedChangelog(cwd: string): Promise<{ latestTag: string 
     const { execFileSync } = await import('node:child_process')
     // A simplified version to get latest tag, then get commits since then
     try {
-        const latestTag = execFileSync('git', ['describe', '--tags', '--abbrev=0'], { cwd, encoding: 'utf-8' }).trim()
+        const latestTag = execFileSync('git', ['describe', '--tags', '--abbrev=0'], { cwd, encoding: 'utf-8', windowsHide: true }).trim()
         const commits = await fetchCommits({ ref: `${latestTag}..HEAD` }, cwd)
         return { latestTag, commits }
     } catch {

@@ -181,7 +181,7 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                 let commitList = '- [List commit SHAs made during the session, or "None"]'
                 try {
                     const { execFileSync } = await import('node:child_process')
-                    const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H %s'], { encoding: 'utf-8' })
+                    const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H %s'], { encoding: 'utf-8', windowsHide: true })
                     if (out) {
                         commitList = out.split('\n').map(l => `- ${l}`).join('\n')
                     }
