@@ -259,7 +259,7 @@ export function parseGitRecord(
   
   const bodyEndIdx = parts.length - 3;
   let body = parts.slice(9, bodyEndIdx).join(FIELD_SEPARATOR);
-  body = body.replace(/\r$/, '');
+  body = body.replace(/\r/g, '');
   if (body.length > 100000) {
     let safeLen = 100000;
     while (safeLen > 0 && body.charCodeAt(safeLen - 1) >= 0xD800 && body.charCodeAt(safeLen - 1) <= 0xDBFF) {
@@ -404,11 +404,17 @@ export function parseGitRecord(
       const key = keyRaw.toLowerCase().replace(/\s+/g, '-');
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
       const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
-      const val = rawVal.replace(/\r?\n[ \t]+/g, '\n');
+      let val = rawVal.replace(/\r?\n[ \t]+/g, '\n');
+      
+      if (val.length > 5000) {
+        let safeLen = 5000;
+        while (safeLen > 0 && val.charCodeAt(safeLen - 1) >= 0xD800 && val.charCodeAt(safeLen - 1) <= 0xDBFF) { safeLen--; }
+        val = val.slice(0, safeLen) + '\n...[trailer truncated due to length]';
+      }
 
       if (key === 'history-category' || key === 'changelog-category' || key === 'category') {
         const titleCase = (s: string) => s.split(/[\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-        categories.push(...val.split(',').map(s => titleCase(s.trim())).filter(Boolean));
+        categories.push(...val.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(s => titleCase(s.replace(/^"|"$/g, '').trim())).filter(Boolean));
       }
       else if (key === 'history-entry' || key === 'changelog-entry' || key === 'entry') entriesParsed.push(val);
       else if (key === 'history-significance' || key === 'changelog-significance' || key === 'significance') metadataObj.significance = val;
@@ -419,7 +425,11 @@ export function parseGitRecord(
         else if (v === 'low') metadataObj.impact = 0.2;
         else {
           const num = Number(val.trim());
-          metadataObj.impact = (val.trim() === '' || !Number.isFinite(num)) ? val : num;
+          if (val.trim() !== '' && !Number.isNaN(num)) {
+            if (Number.isFinite(num)) metadataObj.impact = num;
+          } else if (val.trim() !== '') {
+            metadataObj.impact = val;
+          }
         }
       }
       else if (key === 'history-trust' || key === 'changelog-trust' || key === 'trust') {
@@ -429,7 +439,11 @@ export function parseGitRecord(
         else if (v === 'low') metadataObj.trust = 0.2;
         else {
           const num = Number(val.trim());
-          metadataObj.trust = (val.trim() === '' || !Number.isFinite(num)) ? val : num;
+          if (val.trim() !== '' && !Number.isNaN(num)) {
+            if (Number.isFinite(num)) metadataObj.trust = num;
+          } else if (val.trim() !== '') {
+            metadataObj.trust = val;
+          }
         }
       }
       else if (key.match(/^(validation|history-validation|changelog-validation)(-status)?$/)) {
@@ -448,16 +462,20 @@ export function parseGitRecord(
         const niceKey = key.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-');
         references.push(`${niceKey}: ${val}`);
       } else {
+        if (colonIdx === -1) continue; // Skip malformed custom trailers missing colons
         if (!customTrailers[key]) customTrailers[key] = [];
-        const maxTrailerLen = 5000;
-        let safeLen = maxTrailerLen;
-        while (safeLen > 0 && val.charCodeAt(safeLen - 1) >= 0xD800 && val.charCodeAt(safeLen - 1) <= 0xDBFF) {
-          safeLen--;
-        }
-        const safeVal = val.length > maxTrailerLen ? val.slice(0, safeLen) + '\n...[trailer truncated due to length]' : val;
-        customTrailers[key].push(safeVal);
+        customTrailers[key].push(val);
       }
     }
+  }
+
+  if (categories.length > 50) categories.length = 50;
+  if (entriesParsed.length > 50) entriesParsed.length = 50;
+  if (references.length > 50) references.length = 50;
+  if (coAuthors.length > 50) coAuthors.length = 50;
+  if (reviewers.length > 50) reviewers.length = 50;
+  for (const k of Object.keys(customTrailers)) {
+    if (customTrailers[k].length > 50) customTrailers[k].length = 50;
   }
 
   if (exactTrailerBlock) {

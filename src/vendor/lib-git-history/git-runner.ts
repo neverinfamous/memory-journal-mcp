@@ -49,6 +49,7 @@ export function getGitTagRange(cwd: string = process.cwd()): { range: string; is
 
 export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined): string[] {
   const gitArgs: string[] = [];
+  gitArgs.push('-M');
   if (args['include-merges']) gitArgs.push('--cc');
   else gitArgs.push('--no-merges');
 
@@ -110,10 +111,19 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
   } catch (err) {
     clearTimeout(idleTimeout);
     clearTimeout(absoluteTimeout);
+    if (err instanceof Error && ('code' in err) && err.code === 'ENOENT') {
+      throw new Error(JSON.stringify({ error: 'GitExecutableNotFound', message: 'The git binary is missing from the environment PATH.' }), { cause: err });
+    }
     throw err;
   }
   
-  if (!proc.stdout || !proc.stderr) throw new Error('Missing stdio');
+  if (!proc.stdout || !proc.stderr) {
+    activeProcesses.delete(proc);
+    try { proc.kill('SIGKILL'); } catch { /* ignore */ }
+    clearTimeout(idleTimeout);
+    clearTimeout(absoluteTimeout);
+    throw new Error('Missing stdio');
+  }
 
   proc.stdout.setEncoding('utf-8');
   proc.stderr.setEncoding('utf-8');
@@ -156,8 +166,12 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
     proc.on('error', err => {
       if (!resolved) {
         resolved = true;
-        streamError = err;
-        reject(err);
+        if (err instanceof Error && ('code' in err) && err.code === 'ENOENT') {
+          streamError = new Error(JSON.stringify({ error: 'GitExecutableNotFound', message: 'The git binary is missing from the environment PATH.' }), { cause: err });
+        } else {
+          streamError = err;
+        }
+        reject(streamError);
       }
     });
   });
@@ -178,7 +192,8 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
           const nextBoundary = buffer.indexOf(RECORD_SEPARATOR);
           if (nextBoundary !== -1) {
             droppingMassiveCommit = false;
-            lastSlice = nextBoundary + RECORD_SEPARATOR.length;
+            buffer = (' ' + buffer.slice(nextBoundary + RECORD_SEPARATOR.length)).slice(1);
+            lastSlice = 0;
           } else {
             buffer = buffer.length > RECORD_SEPARATOR.length ? buffer.slice(-(RECORD_SEPARATOR.length - 1)) : buffer;
             continue;
@@ -187,7 +202,11 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
 
         while ((sepIdx = buffer.indexOf(RECORD_SEPARATOR, lastSlice)) !== -1) {
           const record = buffer.slice(lastSlice, sepIdx);
-          if (record.trim()) yield record;
+          if (record.length < 100 * 1024 * 1024 && record.trim()) {
+            yield record;
+          } else if (record.length >= 100 * 1024 * 1024) {
+            console.warn('Warning: Git record exceeded 100MB. Dropping massive commit.');
+          }
           lastSlice = sepIdx + RECORD_SEPARATOR.length;
         }
         if (lastSlice > 0) {
@@ -208,7 +227,7 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
       }
     }
     await processComplete;
-    if (buffer.trim()) yield buffer;
+    if (!droppingMassiveCommit && buffer.trim() && buffer.length < 100 * 1024 * 1024) yield buffer;
   } finally {
     clearTimeout(idleTimeout);
     clearTimeout(absoluteTimeout);

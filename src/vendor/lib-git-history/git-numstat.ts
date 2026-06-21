@@ -30,7 +30,13 @@ export async function getNumstatMap(lockedArgs: string[], stdinShas?: string) {
     throw err;
   }
   
-  if (!proc.stdout || !proc.stderr || !proc.stdin) throw new Error('Missing stdio');
+  if (!proc.stdout || !proc.stderr || !proc.stdin) {
+    activeProcesses.delete(proc);
+    try { proc.kill('SIGKILL'); } catch { /* ignore */ }
+    clearTimeout(idleTimeout);
+    clearTimeout(absoluteTimeout);
+    throw new Error('Missing stdio');
+  }
 
   const outChunks: Buffer[] = [];
   const errChunks: string[] = [];
