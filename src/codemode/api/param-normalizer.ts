@@ -412,20 +412,39 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         }
     }
 
-    // Heal auto_context 'commits' hallucination (e.g. passing a string instead of an array)
+    // Heal auto_context 'commits' hallucination (e.g. passing a string instead of an array, or using 'commit_shas')
     if ('auto_context' in result) {
         const ac = result['auto_context'];
         if (typeof ac === 'string') {
             try {
                 // Try to parse, fix, and re-stringify if it has a string commits field
                 const parsed = JSON.parse(ac.replace(/'/g, '"')) as Record<string, unknown>;
+                let changed = false;
+
+                // Heal hallucinated key names
+                if ('commit_shas' in parsed) { parsed['commits'] = parsed['commit_shas']; delete parsed['commit_shas']; changed = true; }
+                if ('shas' in parsed) { parsed['commits'] = parsed['shas']; delete parsed['shas']; changed = true; }
+                if ('commit_sha' in parsed) { parsed['commits'] = parsed['commit_sha']; delete parsed['commit_sha']; changed = true; }
+                if ('commitShas' in parsed) { parsed['commits'] = parsed['commitShas']; delete parsed['commitShas']; changed = true; }
+
                 if ('commits' in parsed && typeof parsed['commits'] === 'string') {
                     parsed['commits'] = [parsed['commits']];
+                    changed = true;
+                }
+
+                if (changed) {
                     result['auto_context'] = JSON.stringify(parsed);
                 }
             } catch { /* empty */ }
         } else if (typeof ac === 'object' && ac !== null) {
             const acObj = ac as Record<string, unknown>;
+            
+            // Heal hallucinated key names
+            if ('commit_shas' in acObj) { acObj['commits'] = acObj['commit_shas']; delete acObj['commit_shas']; }
+            if ('shas' in acObj) { acObj['commits'] = acObj['shas']; delete acObj['shas']; }
+            if ('commit_sha' in acObj) { acObj['commits'] = acObj['commit_sha']; delete acObj['commit_sha']; }
+            if ('commitShas' in acObj) { acObj['commits'] = acObj['commitShas']; delete acObj['commitShas']; }
+
             if ('commits' in acObj && typeof acObj['commits'] === 'string') {
                 acObj['commits'] = [acObj['commits']];
             }
