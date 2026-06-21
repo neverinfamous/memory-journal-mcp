@@ -109,6 +109,7 @@ export async function readResource(
         scheduler,
         briefingConfig,
         runtime,
+        resourceCount: resources.length,
     }
 
     // Strip query parameters for matching, but pass full URI to handler

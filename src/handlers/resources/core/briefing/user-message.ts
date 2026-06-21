@@ -206,7 +206,7 @@ export function formatUserMessage(opts: {
         for (let i = 1; i < latestPreviews.length; i++) {
             journalParts.push(`Entry: ${escapeCell(latestPreviews[i] ?? '')}`)
         }
-    } else {
+    } else if (!summaryPreviews || summaryPreviews.length === 0) {
         journalParts.push('Latest: No entries yet')
     }
     if (summaryPreviews && summaryPreviews.length > 0) {
@@ -350,7 +350,7 @@ export function formatUserMessage(opts: {
                 .join(', ') || 'none'
         
         const orphanAlert = graphSummary.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2 ? '🔴 ' : ''
-        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
+        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Causal: ${escapeCell(topTypes)} (view: memory://graph/recent)`
         
         if (graphSummary.topHubs.length > 0) {
             const hubsStr = graphSummary.topHubs
@@ -373,25 +373,14 @@ export function formatUserMessage(opts: {
                 .map(([cat, entries]) => `${escapeCell(cat)} (${String(entries.length)})`)
                 .join(' · ');
             gitHistoryLines.push(`**Unreleased (${String(cl.totalCount)}):** ${catSummary}`);
-        }
-
-        if (opts.gitHistory.commits.length > 0) {
+        } else if (opts.gitHistory.commits.length > 0) {
+            // Only show fallback commits if we don't have the rich changelog categories
             const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
-            for (const c of opts.gitHistory.commits) {
+            const shortCommits = opts.gitHistory.commits.slice(0, 3).map(c => {
                 const shaLink = repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
-                let line = shaLink;
-                if (c.category && c.entry) {
-                    let entryText = c.entry;
-                    if (entryText.length > 80) entryText = entryText.substring(0, 80) + '...';
-                    line += ` **${escapeCell(c.category)}**: ${escapeCell(entryText)}`
-                } else {
-                    // Fallback to first line of commit message
-                    let msg = c.message.split('\n')[0] ?? ''
-                    if (msg.length > 80) msg = msg.substring(0, 80) + '...';
-                    line += ` ${escapeCell(msg)}`
-                }
-                gitHistoryLines.push(line)
-            }
+                return shaLink;
+            }).join(', ');
+            gitHistoryLines.push(`**Recent Commits:** ${shortCommits}`);
         }
     }
 

@@ -36,8 +36,7 @@ export interface ServerOptions {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     // Additional team database mappings (label -> path)
     additionalTeamDbs?: Record<string, string>
-    // Instruction level
-    instructionLevel?: 'essential' | 'standard' | 'full'
+
     // Audit configuration
     auditConfig?: AuditConfig
     // Hush Protocol flag vocabulary

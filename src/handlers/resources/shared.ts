@@ -233,6 +233,7 @@ export interface ResourceContext {
     scheduler?: Scheduler | null
     briefingConfig?: BriefingConfig
     runtime?: ServerRuntime
+    resourceCount?: number
 }
 
 /**

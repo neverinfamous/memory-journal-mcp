@@ -9,6 +9,7 @@ export interface DynamicConfig {
     rawToolFilter: string | undefined
     toolFilterConfig: ToolFilterConfig | null
     briefingConfig: BriefingConfig
+    codemodeInternalFullAccess?: boolean
 }
 
 export class ConfigManager extends EventEmitter {
@@ -62,6 +63,9 @@ export class ConfigManager extends EventEmitter {
 
             if (this.config.rawToolFilter !== undefined) {
                 parsed['toolFilter'] = this.config.rawToolFilter
+            }
+            if (this.config.codemodeInternalFullAccess !== undefined) {
+                parsed['codemodeInternalFullAccess'] = this.config.codemodeInternalFullAccess
             }
             if (this.config.briefingConfig.entryCount !== undefined) parsed['briefingEntries'] = this.config.briefingConfig.entryCount
             if (this.config.briefingConfig.summaryCount !== undefined) parsed['briefingSummaries'] = this.config.briefingConfig.summaryCount
@@ -128,6 +132,9 @@ export class ConfigManager extends EventEmitter {
             const updates: Partial<DynamicConfig> = {}
             if ('toolFilter' in parsed) {
                 updates.rawToolFilter = typeof parsed['toolFilter'] === 'string' ? parsed['toolFilter'] : undefined
+            }
+            if ('codemodeInternalFullAccess' in parsed) {
+                updates.codemodeInternalFullAccess = typeof parsed['codemodeInternalFullAccess'] === 'boolean' ? parsed['codemodeInternalFullAccess'] : undefined
             }
 
             // Update briefing config if present

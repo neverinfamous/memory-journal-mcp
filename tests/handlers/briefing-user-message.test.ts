@@ -513,10 +513,8 @@ describe('formatUserMessage', () => {
         })
 
         expect(result).toContain('**Git History**')
-        expect(result).toContain('abc1234')
-        expect(result).toContain('**Feature**: New cool feature')
-        expect(result).toContain('def5678')
-        expect(result).toContain('fix: annoying bug')
+        expect(result).toContain('`abc1234`')
+        expect(result).toContain('`def5678`')
     })
 
     it('should omit git history when not provided', () => {

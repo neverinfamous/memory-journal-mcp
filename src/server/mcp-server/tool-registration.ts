@@ -4,6 +4,8 @@ import { getEnabledGroups } from '../../filtering/tool-filter.js'
 import { callTool } from '../../handlers/tools/index.js'
 import { readResource, validateResourceSubscription } from '../../handlers/resources/index.js'
 import { generateStandardInstructions, generateCodeModeInstructions } from '../../constants/server-instructions.js'
+import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
+import type { ToolGroup } from '../../types/index.js'
 import { type DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { registerResources, registerPrompts } from '../registration.js'
 import type { ResourceDefinition, PromptDefinition } from '../registration.js'
@@ -35,14 +37,21 @@ export function createServerInstance(
             const isCodeModeOnly = enabledSet.size === 1 && enabledSet.has('mj_execute_code')
             
             if (isCodeModeOnly || currentConfig.toolFilterConfig?.raw === 'codemode') {
+                const finalGroups = currentConfig.codemodeInternalFullAccess === true
+                    ? new Set(Object.keys(TOOL_GROUPS) as ToolGroup[]) 
+                    : groups
+                const finalEnabledTools = currentConfig.codemodeInternalFullAccess === true
+                    ? allToolNames
+                    : enabledSet
+
                 return generateCodeModeInstructions(
-                    enabledSet,
+                    finalEnabledTools,
                     prompts.map((p) => {
                         const prompt = p as { name: string; description?: string }
                         return { name: prompt.name, description: prompt.description }
                     }),
                     undefined,
-                    groups,
+                    finalGroups,
                     currentConfig.briefingConfig
                 )
             }

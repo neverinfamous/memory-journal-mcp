@@ -230,7 +230,8 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     const configManager = new ConfigManager({
         rawToolFilter,
         toolFilterConfig: filterConfig,
-        briefingConfig: options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+        briefingConfig: options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG,
+        codemodeInternalFullAccess: options.codemodeInternalFullAccess
     }, options.configFilePath)
 
     runtime.configManager = configManager

@@ -10,6 +10,19 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { vi } from 'vitest'
+
+vi.mock('../../src/git/git-client.js', () => {
+    return {
+        GitHistoryClient: vi.fn().mockImplementation(() => ({
+            getUnreleasedChangelog: vi.fn().mockResolvedValue({
+                categories: {},
+                totalCount: 0
+            }),
+            getCommitHistory: vi.fn().mockResolvedValue([])
+        }))
+    }
+})
 
 describe('Resource Handler Coverage', () => {
     let db: DatabaseAdapter

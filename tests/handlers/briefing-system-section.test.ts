@@ -11,10 +11,18 @@ import {
     buildSystemContext,
 } from '../../src/handlers/resources/core/briefing/system-section.js'
 
-// Mock the index module to avoid circular dependency / dynamic import deadlocks during coverage tests
-vi.mock('../../src/handlers/resources/index.js', () => ({
-    getResources: () => new Array(42),
-}))
+
+vi.mock('../../src/git/git-client.js', () => {
+    return {
+        GitHistoryClient: vi.fn().mockImplementation(() => ({
+            getUnreleasedChangelog: vi.fn().mockResolvedValue({
+                categories: {},
+                totalCount: 0
+            }),
+            getCommitHistory: vi.fn().mockResolvedValue([])
+        }))
+    }
+})
 
 
 
@@ -76,7 +84,7 @@ No badges here.
 
 describe('buildSystemContext', () => {
     it('should return a complete SystemContext object', async () => {
-        const result = await buildSystemContext()
+        const result = await buildSystemContext(undefined, undefined, undefined, 42)
 
         expect(result).toHaveProperty('version')
         expect(typeof result.version).toBe('string')
@@ -100,7 +108,7 @@ describe('buildSystemContext', () => {
     })
 
     it('should include git history summary', async () => {
-        const result = await buildSystemContext()
+        const result = await buildSystemContext(undefined, undefined, undefined, 42)
 
         if (result.gitHistory !== null) {
             expect(result.gitHistory).toHaveProperty('commits')
@@ -109,7 +117,7 @@ describe('buildSystemContext', () => {
     })
 
     it('should format localTime as YYYY-MM-DD HH:MM TZ', async () => {
-        const result = await buildSystemContext()
+        const result = await buildSystemContext(undefined, undefined, undefined, 42)
 
         // Should match pattern like "2026-05-25 06:12 EDT" or "2026-05-25 06:12 UTC"
         expect(result.localTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \w+/)

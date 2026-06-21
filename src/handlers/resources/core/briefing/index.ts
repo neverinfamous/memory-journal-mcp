@@ -103,7 +103,7 @@ export async function buildBriefingData(
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
-    const system = await buildSystemContext(config, context.filterConfig, activeRepoPath)
+    const system = await buildSystemContext(config, context.filterConfig, activeRepoPath, context.resourceCount)
 
     // Build registry paths map for non-IDE agent context
     const registryPaths = config.projectRegistry

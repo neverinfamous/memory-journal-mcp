@@ -9,5 +9,6 @@
   "briefingWorkflows": 0,
   "briefingWorkflowStatus": false,
   "briefingCopilot": false,
-  "instructionLevel": "standard"
+  "instructionLevel": "standard",
+  "codemodeInternalFullAccess": false
 }

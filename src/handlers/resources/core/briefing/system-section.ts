@@ -71,33 +71,7 @@ export interface BuildSystemContextOptions {
     targetRepoPath?: string
 }
 
-// ============================================================================
-// Lazy Resource Count (replaces former hardcoded RESOURCE_COUNT constant)
-// ============================================================================
 
-/** Startup-cached resource count derived from live registry */
-let cachedResourceCount: number | undefined
-
-/**
- * Get the total resource count by lazy-loading the resource registry.
- * Uses dynamic import() to avoid a circular dependency:
- * system-section → resources/index → core/index → briefing/index → system-section
- */
-async function getResourceCount(): Promise<number> {
-    if (cachedResourceCount !== undefined) return cachedResourceCount
-
-    try {
-        const { getResources } = await import('../../index.js')
-        cachedResourceCount = getResources().length
-    } catch {
-        logger.debug('Failed to dynamically load resource count (non-critical)', {
-            module: 'BRIEFING',
-            operation: 'resource-count',
-        })
-        cachedResourceCount = 0
-    }
-    return cachedResourceCount
-}
 
 // ============================================================================
 // Startup-Cached Parsers
@@ -292,7 +266,7 @@ async function loadCachedLastReleaseDaysAgo(targetPath?: string): Promise<number
         const history = await loadCachedGitHistory(targetPath)
         const gitClient = new GitHistoryClient(root)
         let commits = []
-        if (history?.changelog && !history.changelog.range.isFallback && history.changelog.range.from) {
+        if (history?.changelog?.range?.from !== undefined && history.changelog.range.from !== '' && !history.changelog.range.isFallback) {
             try {
                 commits = await gitClient.getReleaseInfo({ ref: history.changelog.range.from })
             } catch {
@@ -335,7 +309,8 @@ async function loadCachedLastReleaseDaysAgo(targetPath?: string): Promise<number
 export async function buildSystemContext(
     config?: BriefingConfig,
     filterConfig?: ToolFilterConfig | null,
-    targetRepoPath?: string
+    targetRepoPath?: string,
+    resourceCount?: number
 ): Promise<SystemContext> {
     const now = new Date()
 
@@ -410,7 +385,7 @@ export async function buildSystemContext(
     return {
         version: VERSION,
         toolCount: totalTools,
-        resourceCount: await getResourceCount(),
+        resourceCount: resourceCount ?? 0,
         promptCount: getPrompts().length,
         localTime,
         gitHistory: await loadCachedGitHistory(targetRepoPath),

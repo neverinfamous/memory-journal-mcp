@@ -3,8 +3,7 @@
  *
  * Slim instructions are sent to MCP clients during initialization.
  * Detailed help is available on-demand via memory://help resources.
- * Instructions are dynamically generated based on enabled tool groups
- * and instruction level for token efficiency.
+ * Instructions are dynamically generated based on enabled tool groups.
  */
 
 import type { ToolGroup } from '../types/index.js'
@@ -72,9 +71,9 @@ Only help resources for your enabled tool groups are registered.
 
 ### Essential Session Start
 
-1. You **MUST** read the \`memory://briefing/{repo_name}\` at the start of each chat!
+1. You **MUST** read the \`memory://briefing/{+repo}\` at the start of each chat!
 2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
-3. Infer the \`repo_name\` from the user's prompt or your active workspace context.
+3. Infer the \`repo\` from the user's prompt or your active workspace context.
 4. **RENDER BRIEFING**: The briefing resource returns a pre-formatted Markdown string containing any active flags and a dense 2-column context table. You MUST output this exact string as your response without any modifications.
 5. **REVIEW ALERTS**: Pay special attention to any active flags listed at the top of the briefing. Do NOT truncate any summaries or issues.
 6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
@@ -92,11 +91,13 @@ Only help resources for your enabled tool groups are registered.
 - **Soft-Delete & Recovery**: Entries can be soft-deleted and restored via \`restore_entry\` or \`team_restore_entry\`. Use \`list_deleted_entries\` or \`team_list_deleted_entries\` to discover soft-deleted entries. Entries can also be archived (\`is_archived = 1\`) to preserve them in history while excluding them from normal search queries.
 - **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`rebuild_vector_index\` to rebuild the vector index for these entries.
 - **External Imports**: Use \`import_external\` and \`team_import_external\` to ingest knowledge management exports from Notion, Obsidian, or Logseq. These tools normalize wikilinks, YAML frontmatter, and block hierarchies seamlessly. Use \`dry_run\` to preview the parsed structure.
-- **Admin & Telemetry**: Use \`update_configuration\` to dynamically change the server's instruction level, tool filters, or briefing preferences without restarting. Use \`search_audit_log\` to query operational telemetry and investigate incidents across all active and rotated JSONL audit files. You can filter by \`tool_name\`, \`user\`, \`date_range\`, \`status\`, or \`category\`. Both the audit logs and the \`memory://metrics/summary\` resource reflect precise, content-type-aware token consumption estimates.
+- **Admin & Telemetry**: Use \`update_configuration\` to dynamically change the server's tool filters or briefing preferences without restarting. Use \`search_audit_log\` to query operational telemetry and investigate incidents across all active and rotated JSONL audit files. You can filter by \`tool_name\`, \`user\`, \`date_range\`, \`status\`, or \`category\`. Both the audit logs and the \`memory://metrics/summary\` resource reflect precise, content-type-aware token consumption estimates.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries. Use the \`mode\` parameter (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`) to control search strategy. The \`fts\` and \`hybrid\` modes include Levenshtein distance typo-tolerance fallback (via \`fuzzy_match\` and \`auto_correct\`), making searches more resilient to misspellings.
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) and cross-team search (\`cross_team_search\`) before defining architectures spanning multiple teams or DBs. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots. Access aggregate server metrics via \`memory://metrics/summary\`, per-tool telemetry and latency percentiles via \`memory://metrics/latency\`, and resource read frequency via \`memory://metrics/resources\`.
-- **Trust & Staleness**: Entries support heuristic-based \`impactScore\` (blast radius, e.g. architecture changes=0.9, doc fixes=0.1), \`trustScore\` (e.g. validated by test suite=0.9), and \`validationStatus\` (e.g. passed, failed, none). Entries can also be bound to Git paths via \`anchors\`. Use \`mark_anchors_stale\` if you suspect an entry's references are old. Anchors that have been modified or deleted will drop the entry's overall importance!
+- **Trust & Staleness**: ALL entries MUST define heuristic scores upon creation: \`impactScore\` (blast radius, e.g. architecture changes=0.9, doc fixes=0.1), \`trustScore\` (e.g. validated by test suite=0.9, unchecked=0.5), and \`validationStatus\` (\`verified\`, \`failed\`, or \`none\`). 
+- **Orphan Prevention**: ALL entries MUST be linked to previous context. You MUST provide a \`related_to\` array (list of entry IDs) during creation to weave the entry into the Knowledge Graph. Do not create isolated islands!
+- **Anchors**: Entries can also be bound to Git paths via \`anchors\`. Use \`mark_anchors_stale\` if you suspect an entry's references are old. Anchors that have been modified or deleted will drop the entry's overall importance!
 
 ### Auto-Prune
 
@@ -136,12 +137,18 @@ Use \`create_entry\` to record session summaries. Required fields:
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain/activity tags)
 - \`project_number\` from the briefing
+- \`impactScore\`, \`trustScore\`, and \`validationStatus\` MUST be evaluated and populated.
+- \`related_to\` MUST be populated with IDs of related tasks, architectural plans, or preceding summaries.
+- \`auto_context\` MUST be populated with a concise JSON payload representing the context (e.g. \`{ "commits": ["abc1234", "def5678"] }\`)
 
 Content MUST follow this EXACT structure (no extra top-level sections):
 
 \`\`\`
 ## Accomplished
 - [concrete items done this session]
+
+## Commits
+- [list of short commit SHAs generated this session]
 
 ## Unfinished / Blocked
 - [remaining items or "None"]
@@ -151,7 +158,7 @@ Content MUST follow this EXACT structure (no extra top-level sections):
 \`\`\`
 
 Do NOT add sections like "## Summary", "## Overview", "## Notes", or any other
-top-level headers. Do NOT omit any of the three required sections.
+top-level headers. Do NOT omit any of the four required sections.
 
 Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
 
@@ -234,7 +241,7 @@ const CODE_MODE_INSTRUCTIONS = `
 API: \`tool_name\` → \`mj.group.action()\` (e.g., \`search_entries\` → \`mj.search.searchEntries()\`)
 Globals: \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
 Positional: \`create("note")\`, \`searchEntries("performance")\`
-Aliases: Common parameter names are auto-corrected (\`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`q\`/\`search\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`mode\`→\`instruction_level\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`team\`/\`project\`→\`workspace_id\`/\`project_number\`).
+Aliases: Common parameter names are auto-corrected (\`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`q\`/\`search\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`team\`/\`project\`→\`workspace_id\`/\`project_number\`).
 Discovery: \`mj.help()\` → \`{groups, totalMethods}\`. \`mj.core.help()\` for group-specific.
 Sandbox: No network access (\`fetch\` is undefined). \`setTimeout\` and \`sleep(ms)\` are available for minor delays.
 Readonly: Pass \`readonly: true\` to \`mj_execute_code\` to restrict execution to read-only operations.
@@ -293,10 +300,6 @@ function buildActiveGroupsSummary(enabledTools: Set<string>): string {
  * Generate dynamic instructions based on enabled tool groups and instruction level.
  *
  * Sections are conditionally included based on which tool groups are enabled:
- * - Code Mode snippet → only with `codemode` group
- * - Help group listing → `standard`+ level, only lists enabled groups
- * - Active tools summary → `full` level only
- * - Prompts listing → `full` level only
  *
  * @param enabledTools - Set of enabled tool names
  * @param prompts - Available prompt definitions
@@ -388,7 +391,7 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - **Network:** Disabled. \`fetch()\` throws \`SandboxNetworkError\`. Node network modules are stripped.
 - **Globals:** \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
 - **Positional Arguments:** \`create("note")\`, \`searchEntries("performance")\`, \`mj.backup.backupJournal("snapshot")\`.
-- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`issue_id\`→\`issue_number\`, \`q\`/\`search\`→\`query\`, \`path\`/\`filepath\`→\`source_dir\`/\`output_dir\`, \`file\`→\`filename\`, \`mode\`→\`instruction_level\` or \`summary_only\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`version\`→\`expected_version\`, \`team\`/\`team_id\`→\`workspace_id\`).
+- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`issue_id\`→\`issue_number\`, \`q\`/\`search\`→\`query\`, \`path\`/\`filepath\`→\`source_dir\`/\`output_dir\`, \`file\`→\`filename\`, \`mode\`→\`summary_only\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`version\`→\`expected_version\`, \`team\`/\`team_id\`→\`workspace_id\`).
 - **Arrays & Methods:** Proxies seamlessly support native array properties/methods (e.g., \`.length\`, \`[0]\`, \`.map()\`, \`.filter()\`, \`.includes()\`, \`.shift()\`, \`.concat()\`). Calling an unsupported method returns an actionable \`VALIDATION_ERROR\` rather than crashing.
 - **Async/Await:** Do NOT access \`Promise\` objects synchronously. Always \`await\` async operations. Missing \`await\` statements will be intercepted and return an actionable \`VALIDATION_ERROR\`.
 
@@ -525,7 +528,7 @@ When the user has GitHub Copilot code review enabled:
 10. **Observability & Persistence**: If the server runs via HTTP with \`--metrics-export prometheus\` (or \`METRICS_EXPORT\`), a standard \`/metrics\` endpoint is exposed for external scrapers. Code Mode cannot natively fetch this endpoint; instead, use the \`memory://metrics/summary\`, \`memory://metrics/latency\`, and \`memory://metrics/resources\` resources to retrieve telemetry. **Metrics reset on restart** unless the \`--persist-metrics\` flag (or \`PERSIST_METRICS\` env var) is provided, which enables periodic JSON state snapshots for long-term trend analysis.
 11. **Multi-step Operations & Error Aggregation**: Tools performing batch actions (e.g., \`import_markdown\`, \`batch_create_entries\`, \`batch_update_entries\`, \`batch_delete_entries\`, \`rebuild_vector_index\`) will return a single \`ErrorResponse\` on partial failure (with \`success: false\`). This response contains an \`aggregated_errors\` array of objects (e.g. \`[{ "message": "Item at index 0 failed: UNIQUE constraint failed" }]\`) detailing individual item failures, while the top-level error message summarizes total success/failure counts.
 12. **Configuration Precedence & Debugging**: Server settings are resolved using strict precedence: CLI flags override Environment Variables, which override the Config File (\`memory-journal.config.yaml\` / \`.yml\` / \`.json\`), which overrides Defaults. If you encounter unexpected settings, you can run the server with the \`--dump-config\` flag. This command aggregates any startup configuration validation errors (printing them all at once rather than failing on the first one) or, if valid, prints the fully resolved configuration tree (with secrets automatically redacted as \`[REDACTED]\`) and exits cleanly. This is the primary method for diagnosing overriding issues.
-13. **Runtime Configuration Hot-Reloading**: You can use the \`update_configuration\` tool to dynamically change the \`instruction_level\`, \`tool_filter\`, or briefing variables on the fly without a server restart. This instantly modifies the configuration file and triggers a hot-reload, emitting a \`notifications/tools/list_changed\` event to the MCP client to refresh available tools and instructions immediately.
+13. **Runtime Configuration Hot-Reloading**: You can use the \`update_configuration\` tool to dynamically change the \`tool_filter\`, or briefing variables on the fly without a server restart. This instantly modifies the configuration file and triggers a hot-reload, emitting a \`notifications/tools/list_changed\` event to the MCP client to refresh available tools and instructions immediately.
 14. **Database Encryption**: If the database requires SQLCipher encryption at rest, you must set the \`DB_ENCRYPTION_KEY\` environment variable when starting the server. If this key is missing or incorrect for an encrypted database, any operations will fail with a "not a database" error.
 15. **Scheduled Reports**: The \`--report-interval\` scheduler job is HTTP-only and requires \`--report-webhook-url\` to actually deliver reports. Without a webhook URL, the job still generates and persists report snapshots (viewable via \`memory://insights/reports\`) but skips delivery. Report delivery failures are logged but never crash the server.
 16. **Token Estimation & Content-Type Heuristics**: To assist you in optimizing your context window consumption, every tool execution result includes a \`_meta.tokenEstimate\` field. This value uses dynamic, content-type-aware heuristics to closely estimate real token costs (Prose defaults to 4.0 bytes/token; JSON payloads to 2.8 bytes/token; Code blocks to 3.2 bytes/token). Leverage this telemetry to govern your batch sizes or fallback to paginated/throttled endpoints if usage spikes.
@@ -620,6 +623,9 @@ These templates define the REQUIRED structure for journal entry content by type.
 - [Concrete item: what was done, key files/PRs/entry IDs]
 - [Another concrete item]
 
+## Commits
+- [list of short commit SHAs generated this session]
+
 ## Unfinished / Blocked
 - [Item: why it's blocked or what remains — or "None" if complete]
 
@@ -628,7 +634,8 @@ These templates define the REQUIRED structure for journal entry content by type.
 \`\`\`
 
 Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes").
-Do NOT omit any of the three required sections.
+Do NOT omit any of the four required sections.
+Always remember to populate the \`auto_context\` payload parameter with the session's commit SHAs.
 
 ## Feature Implementation (entry\\_type: "feature\\_implementation")
 

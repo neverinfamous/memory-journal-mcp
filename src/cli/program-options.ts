@@ -34,9 +34,9 @@ export function createProgram(): Command {
         .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
         .option('--default-project <number>', 'Default GitHub Project number')
         .option('--default-workspace-id <string>', 'Default workspace ID for isolating journal entries (env: DEFAULT_WORKSPACE_ID)')
-        .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
-        .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: none)')
-        .option('--enable-hsts', 'Enable HSTS header for HTTP transport (use when behind HTTPS)')
+        .option('--auto-rebuild-index', 'Rebuild vector index on server startup (env: AUTO_REBUILD_INDEX)')
+        .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: none) (env: CORS_ORIGIN)')
+        .option('--enable-hsts', 'Enable HSTS header for HTTP transport (use when behind HTTPS) (env: MCP_ENABLE_HSTS)')
         .option(
             '--auth-token <token>',
             'Bearer token for HTTP transport authentication (env: MCP_AUTH_TOKEN)'
@@ -91,7 +91,7 @@ export function createProgram(): Command {
         .option('--oauth-jwks-uri <uri>', 'OAuth JWKS URI (env: OAUTH_JWKS_URI)')
         .option(
             '--oauth-clock-tolerance <seconds>',
-            'OAuth clock tolerance in seconds (default: 60)',
+            'OAuth clock tolerance in seconds (default: 60) (env: OAUTH_CLOCK_TOLERANCE)',
             '60'
         )
         .option(
@@ -127,8 +127,9 @@ export function createProgram(): Command {
             'Comma-separated absolute paths or JSON array of paths for strict filesystem jailing (env: ALLOWED_IO_ROOTS)'
         )
         .option(
-            '--no-codemode-internal-full-access',
-            'Enforce tool filter constraints within the Code Mode sandbox (env: CODEMODE_INTERNAL_FULL_ACCESS)'
+            '--codemode-internal-full-access',
+            'Bypass tool filter constraints within the Code Mode sandbox (all groups accessible via mj.*) (env: CODEMODE_INTERNAL_FULL_ACCESS)',
+            false
         )
         // Auto-prune
         .option(

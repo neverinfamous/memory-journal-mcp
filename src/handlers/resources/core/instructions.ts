@@ -3,6 +3,8 @@ import {
     generateStandardInstructions,
     generateCodeModeInstructions,
 } from '../../../constants/server-instructions.js'
+import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
+import type { ToolGroup } from '../../../types/index.js'
 import { getPrompts } from '../../prompts/index.js'
 import { ICON_BRIEFING } from '../../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
@@ -33,11 +35,23 @@ export const instructionsResource: InternalResourceDef = {
             ? generateCodeModeInstructions 
             : generateStandardInstructions;
 
+        let finalEnabledTools = enabledTools
+        let finalEnabledGroups = enabledGroups
+
+        if (isCodeModeOnly || context.filterConfig?.raw === 'codemode') {
+            const configManager = context.runtime?.configManager as { getConfig: () => { codemodeInternalFullAccess?: boolean } } | undefined
+            const currentConfig = configManager?.getConfig()
+            if (currentConfig?.codemodeInternalFullAccess === true) {
+                finalEnabledTools = allToolNames
+                finalEnabledGroups = new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
+            }
+        }
+
         const instructions = generatorFn(
-            enabledTools,
+            finalEnabledTools,
             prompts,
             undefined,
-            enabledGroups,
+            finalEnabledGroups,
             context.briefingConfig
         )
 
