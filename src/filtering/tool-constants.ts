@@ -9,7 +9,7 @@ import type { ToolGroup, MetaGroup } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 107 tools are categorized here for filtering support.
+ * All 108 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS = {
     core: [
@@ -46,6 +46,7 @@ export const TOOL_GROUPS = {
         'batch_update_entries',
         'batch_delete_entries',
         'search_audit_log',
+        'run_auto_prune',
     ],
     github: [
         'get_github_issues',

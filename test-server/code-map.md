@@ -298,18 +298,17 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 <!-- BEGIN: TOOL_MAPPING -->
 | Group | Tools |
 | ----- | ----- |
-| **admin** | `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `update_entry`, `delete_entry`, `restore_entry`, `update_configuration`, `run_auto_prune`, `merge_tags`, `search_audit_log`, `rebuild_vector_index`, `add_to_vector_index` |
-| **analytics** | `get_statistics`, `get_cross_project_insights` |
-| **backup** | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
-| **codemode** | `mj_execute_code` |
-| **core** | `mark_anchors_stale`, `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `trigger_progress`, `test_error_handling` |
-| **git** | `get_commit_history`, `search_commits`, `get_release_info`, `get_unreleased_commits`, `analyze_commit_patterns`, `check_entry_staleness` |
-| **github** | `get_copilot_reviews`, `get_repo_insights`, `create_github_issue_with_entry`, `close_github_issue_with_entry`, `get_kanban_board`, `move_kanban_item`, `add_kanban_item`, `delete_kanban_item`, `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`, `get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context` |
-| **io** | `export_entries`, `export_markdown`, `import_markdown`, `import_external` |
-| **relationships** | `link_entries`, `visualize_relationships` |
-| **search** | `cross_team_search`, `search_by_date_range`, `get_vector_index_stats`, `list_deleted_entries`, `search_entries`, `semantic_search` |
-| **team** | `team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`, `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_merge_tags`, `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`, `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`, `team_backup`, `team_list_backups`, `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`, `team_export_entries`, `team_get_flag_analytics`, `team_list_flags`, `team_update_flag`, `team_pass_flag`, `team_resolve_flag`, `team_export_markdown`, `team_import_markdown`, `team_import_external`, `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`, `team_link_entries`, `team_visualize_relationships`, `team_search`, `team_search_by_date_range`, `team_list_deleted_entries`, `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index` |
-
+| **Admin** | `update_entry`, `delete_entry`, `restore_entry`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `rebuild_vector_index`, `add_to_vector_index`, `merge_tags`, `search_audit_log`, `run_auto_prune`, `update_configuration` |
+| **Analytics** | `get_statistics`, `get_cross_project_insights` |
+| **Backup** | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
+| **Code Mode** | `mj_execute_code` |
+| **Git History** | `get_commit_history`, `search_commits`, `get_release_info`, `get_unreleased_commits`, `analyze_commit_patterns`, `check_entry_staleness` |
+| **GitHub** | `get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context`, `get_kanban_board`, `move_kanban_item`, `add_kanban_item`, `delete_kanban_item`, `create_github_issue_with_entry`, `close_github_issue_with_entry`, `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`, `get_repo_insights`, `get_copilot_reviews` |
+| **IO** | `export_entries`, `export_markdown`, `import_markdown`, `import_external` |
+| **Journal Core** | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `trigger_progress`, `test_error_handling`, `mark_anchors_stale` |
+| **Relationships** | `link_entries`, `visualize_relationships` |
+| **Search** | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`, `list_deleted_entries`, `cross_team_search` |
+| **Team** | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`, `team_search`, `team_search_by_date_range`, `team_list_deleted_entries`, `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_merge_tags`, `team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`, `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`, `team_link_entries`, `team_visualize_relationships`, `team_export_entries`, `team_export_markdown`, `team_import_markdown`, `team_import_external`, `team_backup`, `team_list_backups`, `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`, `team_pass_flag`, `team_resolve_flag`, `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`, `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`, `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors` |
 <!-- END: TOOL_MAPPING -->
 
 ### Utility Files (no tools, shared helpers)
@@ -335,46 +334,57 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 <!-- BEGIN: RESOURCES -->
 | URI | Name |
 | --- | ---- |
+| `memory://actions/recent` | Recent Actions |
+| `memory://actions/recent/{+repo}` | Recent Actions (Dynamic) |
+| `memory://audit` | Audit Log |
 | `memory://briefing` | Initial Briefing |
 | `memory://briefing/{+repo}` | Dynamic Briefing |
-| `memory://health` | Server Health |
-| `memory://instructions` | Server Instructions |
-| `memory://metrics/summary` | Metrics Summary |
-| `memory://metrics/tokens` | Metrics Tokens |
-| `memory://metrics/resources` | Metrics Resources |
-| `memory://metrics/system` | Metrics System |
-| `memory://metrics/users` | Metrics Users |
-| `memory://metrics/latency` | Metrics Latency |
-| `memory://recent` | Recent Entries |
-| `memory://significant` | Significant Entries |
-| `memory://rules` | Rules File |
-| `memory://workflows` | Workflows |
-| `memory://skills` | Skills |
-| `memory://github/status` | GitHub Status |
-| `memory://github/milestones` | GitHub Milestones |
-| `memory://milestones/{number}` | Milestone Detail |
-| `memory://actions/recent` | Recent Actions |
-| `memory://help` | Help — Tool Groups |
-| `memory://help/{group}` | Help — Tool Group Detail |
-| `memory://insights/digest` | Analytics Digest |
-| `memory://insights/team-collaboration` | Team Collaboration Matrix |
-| `memory://insights/reports` | Report History |
-| `memory://staleness` | Project Staleness |
-| `memory://staleness/{project_number}` | Project Staleness Details |
-| `memory://team/recent` | Recent Team Entries |
-| `memory://team/statistics` | Team Statistics |
-| `memory://flags` | Active Flags |
-| `memory://flags/vocabulary` | Flag Vocabulary |
-| `memory://flags/history` | Resolved Flags History |
-| `memory://projects/{number}/timeline` | Project Timeline |
-| `memory://issues/{issue_number}/entries` | Issue Entries |
-| `memory://prs/{pr_number}/entries` | PR Entries |
-| `memory://prs/{pr_number}/timeline` | PR Timeline |
 | `memory://commits/{project_number}` | Project Commits |
 | `memory://commits/{project_number}/by-issue` | Commits by Issue |
 | `memory://commits/{project_number}/by-pr` | Commits by PR |
+| `memory://entries/recent` | Recent Entries (alias) |
+| `memory://flags` | Active Flags |
+| `memory://flags/history` | Resolved Flags History |
+| `memory://flags/vocabulary` | Flag Vocabulary |
+| `memory://github/milestones` | GitHub Milestones |
+| `memory://github/milestones/{+repo}` | GitHub Milestones (Dynamic) |
+| `memory://github/status` | GitHub Status |
+| `memory://github/status/{+repo}` | GitHub Status (Dynamic) |
+| `memory://health` | Server Health |
+| `memory://help` | Help — Tool Groups |
+| `memory://help/{group}` | Help — Tool Group Detail |
+| `memory://insights/digest` | Analytics Digest |
+| `memory://insights/reports` | Report History |
+| `memory://insights/team-collaboration` | Team Collaboration Matrix |
+| `memory://instructions` | Server Instructions |
+| `memory://issues/{issue_number}/entries` | Issue Entries |
+| `memory://journal/briefing` | Initial Briefing (alias) |
+| `memory://journal/recent` | Recent Entries (alias) |
+| `memory://kanban/{+repo}/{project_number}` | Kanban Board (Dynamic) |
 | `memory://kanban/{project_number}` | Kanban Board |
-
+| `memory://metrics/latency` | Metrics Latency |
+| `memory://metrics/resources` | Metrics Resources |
+| `memory://metrics/summary` | Metrics Summary |
+| `memory://metrics/system` | Metrics System |
+| `memory://metrics/tokens` | Metrics Tokens |
+| `memory://metrics/users` | Metrics Users |
+| `memory://milestones/{+repo}/{number}` | Milestone Detail (Dynamic) |
+| `memory://milestones/{number}` | Milestone Detail |
+| `memory://projects/{number}/timeline` | Project Timeline |
+| `memory://prs/{pr_number}/entries` | PR Entries |
+| `memory://prs/{pr_number}/timeline` | PR Timeline |
+| `memory://recent` | Recent Entries |
+| `memory://rules` | Rules File |
+| `memory://server` | Server Health (alias) |
+| `memory://significant` | Significant Entries |
+| `memory://skills` | Skills |
+| `memory://staleness` | Project Staleness |
+| `memory://staleness/{project_number}` | Project Staleness Details |
+| `memory://status` | Server Health (alias) |
+| `memory://team/recent` | Recent Team Entries |
+| `memory://team/statistics` | Team Statistics |
+| `memory://tools` | Help — Tool Groups (alias) |
+| `memory://workflows` | Workflows |
 <!-- END: RESOURCES -->
 
 ### Briefing Assembly (`src/handlers/resources/core/briefing/`)
@@ -398,29 +408,27 @@ The `memory://briefing` resource is modular — each section is a separate file:
 <!-- BEGIN: PROMPTS -->
 | Prompt | Description |
 | ------ | ----------- |
-| `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
+| `actions-failure-digest` | CI/CD failure analysis with root cause identification |
 | `adversarial-audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency) |
-| `adversarial-audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
 | `adversarial-audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
+| `adversarial-audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
 | `adversarial-audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
 | `adversarial-audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
 | `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
-| `verify-work` | Audit a batch of recent journal entries (default 10) to verify accuracy, elimina... |
-| `lookback` | Number of recent entries to audit (default: 10, max: 50) |
+| `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
 | `commit` | High-integrity procedure for committing code changes with validation gates |
-| `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
-| `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
-| `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
-| `actions-failure-digest` | CI/CD failure analysis with root cause identification |
-| `optimize-journal` | Guided database pruning and optimization workflow with live metrics |
 | `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
-| `prepare-standup` | Prepare a daily standup summary (Yesterday, Today, Blockers) |
-| `prepare-retro` | Prepare a sprint retrospective (What went well, What could improve, Action items... |
-| `weekly-digest` | Create a weekly digest formatted day-by-day |
 | `goal-tracker` | Milestone and achievement tracking |
-| `session-summary` | Create a formatted session summary entry |
+| `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
 | `mcp-heal` | Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM ... |
-
+| `optimize-journal` | Guided database pruning and optimization workflow with live metrics |
+| `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
+| `prepare-retro` | Prepare a sprint retrospective (What went well, What could improve, Action items... |
+| `prepare-standup` | Prepare a daily standup summary (Yesterday, Today, Blockers) |
+| `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
+| `session-summary` | Create a formatted session summary entry |
+| `verify-work` | Audit a batch of recent journal entries (default 10) to verify accuracy, elimina... |
+| `weekly-digest` | Create a weekly digest formatted day-by-day |
 <!-- END: PROMPTS -->
 
 ---
