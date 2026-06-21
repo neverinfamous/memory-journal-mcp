@@ -166,36 +166,45 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
   let buffer = '';
   let droppingMassiveCommit = false;
   try {
-    for await (const chunk of proc.stdout) {
-      if (streamError) throw streamError;
-      resetTimeout();
-      buffer += chunk;
-      let sepIdx;
-      let lastSlice = 0;
+    try {
+      for await (const chunk of proc.stdout) {
+        if (streamError) throw streamError;
+        resetTimeout();
+        buffer += chunk;
+        let sepIdx;
+        let lastSlice = 0;
 
-      if (droppingMassiveCommit) {
-        const nextBoundary = buffer.indexOf(RECORD_SEPARATOR);
-        if (nextBoundary !== -1) {
-          droppingMassiveCommit = false;
-          lastSlice = nextBoundary + RECORD_SEPARATOR.length;
-        } else {
+        if (droppingMassiveCommit) {
+          const nextBoundary = buffer.indexOf(RECORD_SEPARATOR);
+          if (nextBoundary !== -1) {
+            droppingMassiveCommit = false;
+            lastSlice = nextBoundary + RECORD_SEPARATOR.length;
+          } else {
+            buffer = buffer.length > RECORD_SEPARATOR.length ? buffer.slice(-(RECORD_SEPARATOR.length - 1)) : buffer;
+            continue;
+          }
+        }
+
+        while ((sepIdx = buffer.indexOf(RECORD_SEPARATOR, lastSlice)) !== -1) {
+          const record = buffer.slice(lastSlice, sepIdx);
+          if (record.trim()) yield record;
+          lastSlice = sepIdx + RECORD_SEPARATOR.length;
+        }
+        if (lastSlice > 0) {
+          buffer = (' ' + buffer.slice(lastSlice)).slice(1);
+        }
+        if (buffer.length > 100 * 1024 * 1024) {
+          console.warn('Warning: Git record buffer exceeded 100MB. Dropping massive commit to prevent memory exhaustion.');
           buffer = buffer.length > RECORD_SEPARATOR.length ? buffer.slice(-(RECORD_SEPARATOR.length - 1)) : buffer;
-          continue;
+          droppingMassiveCommit = true;
         }
       }
-
-      while ((sepIdx = buffer.indexOf(RECORD_SEPARATOR, lastSlice)) !== -1) {
-        const record = buffer.slice(lastSlice, sepIdx);
-        if (record.trim()) yield record;
-        lastSlice = sepIdx + RECORD_SEPARATOR.length;
-      }
-      if (lastSlice > 0) {
-        buffer = (' ' + buffer.slice(lastSlice)).slice(1);
-      }
-      if (buffer.length > 100 * 1024 * 1024) {
-        console.warn('Warning: Git record buffer exceeded 100MB. Dropping massive commit to prevent memory exhaustion.');
-        buffer = buffer.length > RECORD_SEPARATOR.length ? buffer.slice(-(RECORD_SEPARATOR.length - 1)) : buffer;
-        droppingMassiveCommit = true;
+    } catch (err: unknown) {
+      if (streamError) throw streamError;
+      if (err instanceof Error && err.message === 'Premature close') {
+        await processComplete;
+      } else {
+        throw err;
       }
     }
     await processComplete;
