@@ -5,20 +5,52 @@ export function killProcessTree(child: ChildProcess) {
   if (!child.pid) return;
   
   if (process.platform === 'win32') {
+    let taskkillSuccess = false;
     try {
       const result = spawnSync('taskkill.exe', ['/pid', child.pid.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore' });
-      if (result.error || result.status !== 0) {
-        // Fallback to powershell CIM instance if taskkill fails or isn't available
-        try {
-          spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq ${child.pid} -or $_.ParentProcessId -eq ${child.pid} } | Invoke-CimMethod -MethodName Terminate`], { shell: false, timeout: 2000, stdio: 'ignore' });
-        } catch { /* ignore fallback errors */ }
-        throw result.error || new Error('taskkill returned non-zero');
+      if (!result.error && result.status === 0) {
+        taskkillSuccess = true;
       }
-    } catch {
+    } catch { /* ignore */ }
+
+    if (!taskkillSuccess) {
       try {
-         child.kill('SIGKILL');
-      } catch { /* ignore */ }
+        const wmic = spawnSync('wmic', ['process', 'get', 'processid,parentprocessid', '/format:csv'], { encoding: 'utf8' });
+        if (!wmic.error && wmic.stdout) {
+          const lines = wmic.stdout.split('\n');
+          const parentMap = new Map<number, number[]>();
+          for (const line of lines) {
+            const parts = line.trim().split(',');
+            if (parts.length >= 3) {
+              const ppid = parseInt(parts[parts.length - 2], 10);
+              const pid = parseInt(parts[parts.length - 1], 10);
+              if (!isNaN(ppid) && !isNaN(pid)) {
+                if (!parentMap.has(ppid)) parentMap.set(ppid, []);
+                parentMap.get(ppid)!.push(pid);
+              }
+            }
+          }
+          
+          const toKill = new Set<number>();
+          const queue = [child.pid];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            toKill.add(current);
+            const children = parentMap.get(current);
+            if (children) queue.push(...children);
+          }
+          
+          for (const pid of toKill) {
+            if (pid === child.pid) continue;
+            try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ }
+          }
+        }
+      } catch { /* ignore fallback errors */ }
     }
+
+    try {
+       child.kill('SIGKILL');
+    } catch { /* ignore */ }
   } else {
     try {
       // Graceful degradation: Attempt SIGTERM first to allow daemons to clean up

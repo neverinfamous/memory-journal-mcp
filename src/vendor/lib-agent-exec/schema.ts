@@ -6,11 +6,13 @@ const safeString = noNullString
   .refine(val => !val.includes('\r'), "Must not contain carriage returns")
   .refine(val => !val.includes('\uFEFF'), "Must not contain BOMs");
 
+const safeStringArrayOrString = z.union([z.array(safeString), safeString]).transform(val => Array.isArray(val) ? val : [val]);
+
 export const PayloadSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("command"),
     command: safeString.min(1, "command must not be empty"),
-    args: z.array(safeString).optional(),
+    args: safeStringArrayOrString.optional(),
     cwd: safeString.optional(),
     env: z.record(safeString, safeString).optional(),
     timeoutMs: z.number().int().nonnegative().optional(),
@@ -26,7 +28,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     type: z.literal("script"),
     scriptPath: safeString.min(1, "scriptPath must not be empty"),
     interpreter: safeString.optional(),
-    args: z.array(safeString).optional(),
+    args: safeStringArrayOrString.optional(),
     cwd: safeString.optional(),
     env: z.record(safeString, safeString).optional(),
     timeoutMs: z.number().int().nonnegative().optional(),
@@ -42,7 +44,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     type: z.literal("eval"),
     code: noNullString.min(1, "code must not be empty"),
     interpreter: safeString.optional(),
-    args: z.array(safeString).optional(),
+    args: safeStringArrayOrString.optional(),
     cwd: safeString.optional(),
     env: z.record(safeString, safeString).optional(),
     timeoutMs: z.number().int().nonnegative().optional(),

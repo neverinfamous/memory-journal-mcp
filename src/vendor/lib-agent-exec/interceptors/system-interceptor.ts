@@ -11,12 +11,17 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
   }
 
   if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(cmdBasename) && payload.type === 'command') {
-    const isInline = args.some(a => ['-c', '-command', '/c'].includes(a.toLowerCase()));
+    const isInline = args.some(a => ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'].includes(a.toLowerCase()));
     if (isInline) {
-       const inlineIdx = args.findIndex(a => ['-c', '-command', '/c'].includes(a.toLowerCase()));
+       const inlineIdx = args.findIndex(a => ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'].includes(a.toLowerCase()));
+       const isEncoded = ['-ec', '-encodedcommand', '-en'].includes(args[inlineIdx].toLowerCase());
+       if (isEncoded) {
+           console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.`);
+           process.exit(1);
+       }
        const innerCmdStr = args[inlineIdx + 1];
        if (innerCmdStr) {
-           const stdToolsRegex = /(?:^|;|&&|\|\||\|)\s*\b(git|docker|docker-compose|gh|npm|pnpm|yarn|bun|cargo|aws|gcloud|az|terraform|tofu|kubectl)\b/i;
+           const stdToolsRegex = /(?:^|;|&&|\|\||\||\{|&)\s*(?:'|")?(git|docker|docker-compose|gh|npm|pnpm|yarn|bun|cargo|aws|gcloud|az|terraform|tofu|kubectl)(?:'|")?\b/i;
            const match = stdToolsRegex.exec(innerCmdStr);
            if (match) {
                const innerCmdBasename = match[1].toLowerCase();

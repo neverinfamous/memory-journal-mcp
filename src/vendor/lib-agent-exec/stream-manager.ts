@@ -44,8 +44,7 @@ export class StreamManager {
     const chars: string[] = [];
     let cursor = 0;
     
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
+    for (const char of str) {
       if (char === '\r') {
         cursor = 0;
       } else if (char === '\b') {
@@ -91,10 +90,10 @@ export class StreamManager {
           if (isErr) this.stderrAnsiBuffer = ''; else this.stdoutAnsiBuffer = '';
         }
       } else if (potentialSeq.length < 3) {
-        safeStr = buffer.substring(0, lastEscapeIdx);
-        if (isErr) this.stderrAnsiBuffer = potentialSeq; else this.stdoutAnsiBuffer = potentialSeq;
+          safeStr = buffer.substring(0, lastEscapeIdx);
+          if (isErr) this.stderrAnsiBuffer = potentialSeq; else this.stdoutAnsiBuffer = potentialSeq;
       } else {
-        if (isErr) this.stderrAnsiBuffer = ''; else this.stdoutAnsiBuffer = '';
+          if (isErr) this.stderrAnsiBuffer = ''; else this.stdoutAnsiBuffer = '';
       }
     } else {
       if (isErr) this.stderrAnsiBuffer = ''; else this.stdoutAnsiBuffer = '';
