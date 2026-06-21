@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ExecutionContext } from './types.js';
 
 export function systemInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {

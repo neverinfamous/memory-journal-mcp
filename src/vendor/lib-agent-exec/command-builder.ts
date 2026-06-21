@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -218,6 +217,16 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   envOverrides['CI'] = '1'; // Instruct compliant CLI tools to run in non-interactive/headless mode
   envOverrides['npm_config_audit'] = 'false'; // Prevent npm audit noise/prompts
   envOverrides['npm_config_fund'] = 'false'; // Prevent npm fund noise/prompts
+
+  if (cmd === 'find' || cmd === 'find.exe') {
+    const isUnixFind = args.some(a => a.startsWith('-name') || a.startsWith('-type') || a.startsWith('-exec') || a.startsWith('-mtime') || a === '.' || a === '..');
+    if (isUnixFind) {
+       const originalArgs = args.map(a => a.includes(' ') || a.includes('"') || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ');
+       console.error(`\n   💡 AGENT HINT: Detected Unix-style 'find' command. Forwarding to 'sh -c' to bypass Windows find.exe limits.`);
+       cmd = 'sh';
+       args = ['-c', `find ${originalArgs}`];
+    }
+  }
 
   // integrationContext processed at the start of buildCommand
 
