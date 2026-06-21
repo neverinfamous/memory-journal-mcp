@@ -8,7 +8,7 @@ By pairing this deterministic history model with a deterministic execution bridg
 
 The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leveraging `NUL` byte delimiting to perfectly parse complex repository states (e.g., file renames, carriage returns, spaces in file names) without string escaping flaws.
 
-1. **`git-runner.ts`**: The execution bridge. It directly interfaces with `git` and handles low-level NUL-byte parsing to extract raw metric data (additions, deletions, statuses).
+1. **`git-runner.ts`**: The execution bridge. It directly interfaces with `git` and handles low-level NUL-byte parsing to extract raw metric data (additions, deletions, statuses). Accepts an optional `cwd` argument, allowing cross-repository and vendor execution contexts without pathing errors.
 2. **`parser.ts`**: The semantic engine. It batches commits and maps raw headers into structured conventional commit shapes. It natively parses `feat(scope)!`, `BREAKING CHANGE:` trailers, issue references, co-authors, and computes qualitative sizes (XS, S, M, L, XL).
 3. **`schema.ts`**: The contract. Uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics). **Always consult this schema** if modifying the data returned by the parser.
 4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history.
@@ -25,7 +25,7 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 ## 🛠️ Usage Guidelines for Agents
 
-- **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous Vitest suite in `tests/get-git-history-json.test.ts` to prevent regressions.
+- **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous test suite using **Bun** (`bun test`) to prevent regressions. Do NOT attempt to run Vitest or Playwright.
 - **Data Coercion**: Metrics inside `totalInsertions`, `similarityScore`, etc., are explicitly strict integers. Do not attempt to parse them loosely or pass floating point decimals.
 - **File Renames**: Be aware that file renames (status `R`) are structured with both an `oldFile` and `file` property in the file status object.
 - **Validation**: Any changes to this module **must** pass `pwsh -c "bun run check"`. The tests depend on carefully constructed mock Git histories.

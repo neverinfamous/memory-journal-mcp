@@ -7,6 +7,14 @@ You no longer need to manually craft JSON payloads for most standard commands! T
 
 You only need to manually pass a JSON payload (as described below) if you are executing complex scripts or raw `eval` code snippets that are not natively intercepted. By pairing this deterministic execution with a deterministic repository model (`lib-git-history`), we eliminate the two largest sources of friction in agentic workflows.
 
+## ⚠️ The `&&` Pipeline Chaining Rule
+
+> [!WARNING]
+> Native commands run in **PowerShell 5.1**, which **DOES NOT SUPPORT** `&&` or `||` operators. If you run `run_command("bun check && bun test")`, the parser will instantly throw a fatal syntax error. 
+> 
+> Whenever you must chain commands natively, you **MUST** wrap them in PowerShell 7 like this:
+> `pwsh -c "bun check && bun test"`
+
 ## 🧹 Scratch Workspace Protocol
 
 > [!CAUTION]
@@ -57,8 +65,9 @@ Used for executing raw code snippets dynamically.
 
 ## Security & Reliability (Auto-Healing)
 
-To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging:
+To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging and false positives:
 
+- **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, and `diff` return exit code `1` when no matches/differences are found. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures.
 - **TTY Flag Stripping**: Docker TTY flags (`-t`, `--tty`) and interactive flags (`-i`) are automatically stripped.
 - **PowerShell Padding**: If `pwsh` is called, `-NonInteractive -NoProfile` flags are forcefully injected.
 - **Indefinite Blocking Prevention**: Commands like `docker logs -f` have their `-f`/`--follow` flags stripped. Utilities that inherently run indefinitely like `watch` or `tail -f` are blocked entirely.
