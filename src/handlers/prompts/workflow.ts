@@ -202,7 +202,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                                 const absoluteScriptPath = fileURLToPath(scriptUrl)
                                 const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
                                 const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
-                                    detached: true, 
                                     stdio: 'ignore', 
                                     shell: process.platform === 'win32',
                                     windowsHide: true
