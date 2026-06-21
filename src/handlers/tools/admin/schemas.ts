@@ -136,9 +136,9 @@ export const UpdateEntrySchemaMcp = z.preprocess(
         expected_version: relaxedNumber().optional(),
         auto_context: z.string().nullable().optional(),
         workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
-        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
-        validation_status: z.string().optional().describe('Current validation status of the entry.'),
+        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating blast radius (0.9+ for core architecture, 0.1 for simple docs).'),
+        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence (0.3-0.5 for unverified, 0.9+ for verified).'),
+        validation_status: z.string().optional().describe('Current validation status of the entry (passed, none, failed).'),
     }).strict()
 )
 
@@ -399,6 +399,22 @@ export const SearchAuditLogSchema = z.preprocess(
         project_number: z.number().int().optional(),
     }).strict()
 )
+
+export const RunAutoPruneSchema = z.object({
+    dry_run: z.boolean().optional().default(false),
+    archive_older_than_days: z.number().int().min(0).optional(),
+    prune_older_than_days: z.number().int().min(0).optional(),
+    hard_delete_older_than_days: z.number().int().min(0).optional(),
+    importance_threshold: z.number().min(0).max(1).optional(),
+}).strict()
+
+export const RunAutoPruneSchemaMcp = z.object({
+    dry_run: z.boolean().optional().describe('If true, simulates the pruning process and returns the counts without making actual changes.'),
+    archive_older_than_days: relaxedNumber().optional().describe('Override the number of days before active entries are archived.'),
+    prune_older_than_days: relaxedNumber().optional().describe('Override the number of days before archived entries are soft-deleted.'),
+    hard_delete_older_than_days: relaxedNumber().optional().describe('Override the number of days before soft-deleted entries are permanently removed.'),
+    importance_threshold: relaxedNumber().optional().describe('Override the importance score threshold (0.0 - 1.0) below which entries are eligible for pruning.'),
+}).strict()
 // ============================================================================
 // Output Schemas
 // ============================================================================
@@ -475,6 +491,18 @@ export const SearchAuditLogOutputSchema = z
         success: z.boolean().optional(),
         results: z.array(z.record(z.string(), z.unknown())).optional(),
         count: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const RunAutoPruneOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        archivedCount: z.number().optional(),
+        prunedCount: z.number().optional(),
+        hardDeletedCount: z.number().optional(),
+        backupFile: z.string().optional(),
+        dryRun: z.boolean().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
+import { runAutoPrune } from './auto-prune.js'
 import { VERSION } from '../version.js'
 
 // ============================================================================
@@ -34,6 +35,16 @@ export interface SchedulerOptions {
     reportIntervalMinutes: number
     /** Webhook options for report delivery */
     reportDeliveryOptions?: ReportDeliveryOptions
+    /** Automated pruning interval in minutes (0 = disabled; recommended: 1440 for daily) */
+    pruneIntervalMinutes: number
+    
+    // Auto-prune configuration
+    archiveOlderThanDays?: number
+    pruneOlderThanDays?: number
+    hardDeleteOlderThanDays?: number
+    pruneImportanceThreshold?: number
+    pruneDryRun?: boolean
+    pruneExcludeTags?: string[]
 }
 
 /** Status of a single scheduled job */
@@ -78,6 +89,7 @@ interface JobTimer {
  * - **vacuum**: Runs `PRAGMA optimize` and flushes database to disk.
  * - **rebuild-index**: Rebuilds vector search index from all entries.
  * - **digest**: Computes and persists an analytics snapshot for proactive insights.
+ * - **prune**: Cleans up old, low-importance entries based on configuration.
  */
 export class Scheduler {
     private readonly options: SchedulerOptions
@@ -127,6 +139,10 @@ export class Scheduler {
                 this.runVacuumOptimize()
                 return Promise.resolve()
             })
+        }
+
+        if (this.options.pruneIntervalMinutes > 0) {
+            this.scheduleJob('prune', this.options.pruneIntervalMinutes, () => this.runPrune())
         }
 
         if (rebuildIndexIntervalMinutes > 0) {
@@ -339,6 +355,31 @@ export class Scheduler {
             module: 'Scheduler',
             operation: 'rebuild-index',
             context: { entriesIndexed: count },
+        })
+    }
+
+    // ========================================================================
+    // Private — Prune job
+    // ========================================================================
+
+    /**
+     * Prune job: auto-prune low-importance old entries.
+     */
+    private async runPrune(): Promise<void> {
+        const pruneResult = await runAutoPrune(this.db, {
+            archiveOlderThanDays: this.options.archiveOlderThanDays ?? 0,
+            pruneOlderThanDays: this.options.pruneOlderThanDays ?? 0,
+            hardDeleteOlderThanDays: this.options.hardDeleteOlderThanDays ?? 0,
+            importanceThreshold: this.options.pruneImportanceThreshold ?? 0.15,
+            dryRun: this.options.pruneDryRun,
+            excludeTags: this.options.pruneExcludeTags,
+        })
+        logger.info('Scheduled auto-prune completed', {
+            module: 'Scheduler',
+            operation: 'prune',
+            archivedCount: pruneResult.archivedCount,
+            prunedCount: pruneResult.prunedCount,
+            hardDeletedCount: pruneResult.hardDeletedCount,
         })
     }
 

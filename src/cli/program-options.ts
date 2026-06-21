@@ -133,6 +133,11 @@ export function createProgram(): Command {
         )
         // Auto-prune
         .option(
+            '--auto-prune-interval <minutes>',
+            'Interval to run autonomous pruning in background (env: AUTO_PRUNE_INTERVAL_MINUTES, 0 = disabled)',
+            '0'
+        )
+        .option(
             '--archive-older-than-days <days>',
             'Archive active entries older than N days with importance below threshold (env: ARCHIVE_OLDER_THAN_DAYS, 0 = disabled)',
             '0'

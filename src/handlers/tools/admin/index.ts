@@ -3,6 +3,7 @@ import { getCoreTools } from './core-tools.js'
 import { getBatchTools } from './batch-tools.js'
 import { getVectorTools } from './vector-tools.js'
 import { getMiscTools } from './misc-tools.js'
+import { getLifecycleTools } from './lifecycle-tools.js'
 import { updateConfigurationSchema, handleUpdateConfiguration } from './update_configuration.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
@@ -14,6 +15,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         ...getBatchTools(context),
         ...getVectorTools(context),
         ...getMiscTools(context),
+        ...getLifecycleTools(context),
         {
             name: 'update_configuration',
             title: 'Update Server Configuration',

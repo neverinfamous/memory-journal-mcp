@@ -77,6 +77,7 @@ export function buildServerOptions(
             vacuumIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('vacuumInterval', 'VACUUM_INTERVAL', 0), 0),
             rebuildIndexIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0), 0),
             digestIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('digestInterval', 'DIGEST_INTERVAL', 0), 0),
+            pruneIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0), 0),
             reportIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('reportInterval', 'REPORT_INTERVAL', 0), 0),
             reportDeliveryOptions: {
                 webhookUrl: catchConfig(() => resolver.resolve<string>('reportWebhookUrl', 'REPORT_WEBHOOK_URL') ?? '', ''),
@@ -209,6 +210,7 @@ export function buildServerOptions(
         },
         auditConfig,
         flagVocabulary: catchConfig(() => resolver.resolveStringArray('flagVocabulary', 'FLAG_VOCABULARY'), undefined),
+        autoPruneIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0), 0),
         archiveOlderThanDays: catchConfig(() => resolver.resolveIntRequired('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0), 0),
         pruneOlderThanDays: catchConfig(() => resolver.resolveIntRequired('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0), 0),
         hardDeleteOlderThanDays: catchConfig(() => resolver.resolveIntRequired('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0), 0),

@@ -63,7 +63,7 @@ export function buildImportanceSqlExpression(): string {
         + MAX(0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0) * ${String(w.recency)}
     ) 
     * CASE COALESCE(ans.worst_status_rank, 3) WHEN 1 THEN 0.1 WHEN 2 THEN 0.8 ELSE 1.0 END
-    * (0.5 + COALESCE(e.trust_score, 0.5))
+    * (0.5 + COALESCE(e.trust_score, 0.5) + CASE e.validation_status WHEN 'passed' THEN 0.5 WHEN 'failed' THEN -0.4 ELSE 0.0 END)
   )`
 }
 
@@ -78,6 +78,7 @@ export function calculateImportance(
         m.significance_type as significanceType,
         m.impact_score as impactScore,
         m.trust_score as trustScore,
+        m.validation_status as validationStatus,
         m.timestamp,
         (SELECT COUNT(*) FROM relationships
          WHERE from_entry_id = ? OR to_entry_id = ?) AS rel_count,
@@ -106,6 +107,7 @@ export function calculateImportance(
     const significanceType = row['significanceType'] as string | null
     const impactScore = (row['impactScore'] as number) ?? 0.0
     const trustScore = (row['trustScore'] as number) ?? 0.5
+    const validationStatus = (row['validationStatus'] as string) ?? 'none'
     const timestamp = row['timestamp'] as string
     const relCount = (row['rel_count'] as number) ?? 0
     const causalCount = (row['causal_count'] as number) ?? 0
@@ -121,7 +123,8 @@ export function calculateImportance(
     const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
     const anchorMultiplier = worstStatusRank === 1 ? 0.1 : (worstStatusRank === 2 ? 0.8 : 1.0)
-    const trustMultiplier = 0.5 + trustScore
+    const validationMultiplier = validationStatus === 'passed' ? 0.5 : (validationStatus === 'failed' ? -0.4 : 0.0)
+    const trustMultiplier = 0.5 + trustScore + validationMultiplier
     const totalModifier = anchorMultiplier * trustMultiplier
 
     const w = IMPORTANCE_WEIGHTS

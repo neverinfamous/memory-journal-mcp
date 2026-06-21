@@ -245,6 +245,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
             options.scheduler.vacuumIntervalMinutes > 0 ||
             options.scheduler.rebuildIndexIntervalMinutes > 0 ||
             options.scheduler.digestIntervalMinutes > 0 ||
+            options.scheduler.pruneIntervalMinutes > 0 ||
             options.scheduler.reportIntervalMinutes > 0
 
         if (hasAnyJob && transport === 'stdio') {
@@ -254,6 +255,14 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
                 { module: 'Scheduler' }
             )
         } else if (hasAnyJob) {
+            // Inherit auto-prune thresholds for the scheduler's prune job
+            options.scheduler.archiveOlderThanDays = options.archiveOlderThanDays
+            options.scheduler.pruneOlderThanDays = options.pruneOlderThanDays
+            options.scheduler.hardDeleteOlderThanDays = options.hardDeleteOlderThanDays
+            options.scheduler.pruneImportanceThreshold = options.pruneImportanceThreshold
+            options.scheduler.pruneDryRun = options.pruneDryRun
+            options.scheduler.pruneExcludeTags = options.pruneExcludeTags
+            
             scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
         }
     }
