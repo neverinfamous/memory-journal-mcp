@@ -52,7 +52,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ## 🎯 What Sets Us Apart
 
-**107 MCP Tools** · **20 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**107 MCP Tools** · **21 Workflow Prompts** · **48 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -196,11 +196,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **20 Workflow Prompts**
+### 🎯 **21 Workflow Prompts**
 
 Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, flag triage dashboards, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **60 Resources** (33 Static + 12 Template + 9 Dynamic Repo + 6 Aliases)
+### 📡 **48 Resources**
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries
@@ -603,6 +603,7 @@ memory-journal-mcp --transport http --port 3000 \
 | `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
 | `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
 | `--report-interval <min>`        | 0 (off) | Scheduled report generation interval in minutes                      |
+| `--digest-interval <min>`        | 0 (off) | Scheduled periodic digest analysis report                            |
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
@@ -614,7 +615,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MEMORY_JOURNAL_CONFIG`           | Path to configuration file (.yaml, .yml, .json) (CLI: `--config`)                                                                                     |
 | `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                                                  |
-| `WORKSPACE_ID`                    | Default workspace for multi-tenant data isolation (CLI: `--workspace-id`; default: `default`)                                                         |
+| `DEFAULT_WORKSPACE_ID`            | Default workspace for multi-tenant data isolation (CLI: `--default-workspace-id`; default: `default`)                                 |
 | `DB_ENCRYPTION_KEY`               | Encryption key for SQLCipher encrypted databases (at-rest encryption)                                                                                 |
 | `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                                                        |
 | `ADDITIONAL_TEAM_DBS`             | Additional team database mappings (label -> path) as JSON for cross-team discovery (CLI: `--additional-team-dbs`)                                     |
@@ -628,10 +629,18 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `EMBEDDING_MODEL`                 | Swappable HuggingFace feature extraction model for semantic search embeddings (CLI: `--embedding-model`; default: `Xenova/all-MiniLM-L6-v2`)          |
 | `ARCHIVE_OLDER_THAN_DAYS`         | Archive active entries older than N days with importance below threshold (CLI: `--archive-older-than-days`; `0` = disabled)                           |
 | `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold (CLI: `--prune-older-than-days`; `0` = disabled)                                |
+| `PRUNE_DRY_RUN`                   | If `true`, the auto-prune task will only log candidates, not actually soft-delete them (default: `false`)                                             |
+| `PRUNE_EXCLUDE_TAGS`              | Comma-separated list of tags to permanently exclude from pruning/archival jobs (e.g. `architecture,design`)                                           |
 | `HARD_DELETE_OLDER_THAN_DAYS`     | Permanently delete soft-deleted entries that have been dead for N days (CLI: `--hard-delete-older-than-days`; `0` = disabled)                         |
 | `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold for pruning (CLI: `--prune-importance-threshold`; default: `0.15`)                                                         |
+| `BRIEFING_IMPORTANCE_THRESHOLD`   | Minimum importance score to be automatically included in standard briefing payloads (default: `0.3`)                                                  |
+| `STALENESS_ACTIVE_HOURS`          | Number of hours before an active flag triggers a staleness warning (default: `48`)                                                                    |
+| `STALENESS_RECENT_DAYS`           | Number of days before a resolved flag is excluded from recent history resources (default: `7`)                                                        |
+| `STALENESS_STALE_DAYS`            | Number of days before a stale active flag triggers high-priority briefing alerts (default: `7`)                                                       |
+| `MAX_STATEFUL_SESSIONS`           | Maximum number of concurrent stateful HTTP sessions allowed in memory (default: `1000`)                                                               |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
+| `MCP_AUTH_SCOPES`                 | Required OAuth scopes if using token-based HTTP auth                                                                                                  |
 | `ALLOWED_IO_ROOTS`                | **Critical Security Boundary**: Comma-separated absolute paths granting filesystem access to Code Mode and export tools (default: none / fail-closed) |
 | `CORS_ORIGIN`                     | Allowed CORS origins for HTTP transport, comma-separated (default: blank, strict opt-in)                                                              |
 | `TRUST_PROXY`                     | Trust proxy headers for rate limiting and origin checks (CLI: `--trust-proxy`; default: `false`)                                                      |
@@ -834,8 +843,8 @@ flowchart TB
 
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 73 Tools"]
-        Resources["📡 47 Resources"]
-        Prompts["💬 8 Prompts"]
+        Resources["📡 48 Resources"]
+        Prompts["💬 21 Prompts"]
     end
 
     subgraph Storage["Persistence Layer"]
@@ -862,7 +871,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (107)      │  │ Resources (60)  │  │ Prompts (8)│  │
+│  │ Tools (107)      │  │ Resources (48)  │  │ Prompts (21)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
