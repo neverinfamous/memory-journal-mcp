@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     workspace_id TEXT DEFAULT 'default',
     trust_score REAL DEFAULT 0.5,
     validation_status TEXT DEFAULT 'none',
-    impact_score REAL DEFAULT 0.0
+    impact_score REAL DEFAULT 0.0,
+    session_id TEXT
 );
 
 -- Anchor references table
@@ -199,6 +200,7 @@ export interface CreateEntryInput {
     impactScore?: number
     validationStatus?: 'passed' | 'failed' | 'none'
     anchors?: { anchorPath: string; anchorType: string }[]
+    sessionId?: string
 }
 
 /**

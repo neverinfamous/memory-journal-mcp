@@ -53,7 +53,8 @@ function createTestDb() {
             share_with_team INTEGER DEFAULT 0,
             is_archived INTEGER DEFAULT 0,
             version INTEGER DEFAULT 1,
-            workspace_id TEXT DEFAULT 'default'
+            workspace_id TEXT DEFAULT 'default',
+            session_id TEXT DEFAULT NULL
         );
         CREATE TABLE entry_anchors (
             id INTEGER PRIMARY KEY,

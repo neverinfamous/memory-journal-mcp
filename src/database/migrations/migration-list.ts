@@ -10,6 +10,7 @@ import { Migration009AddEntryVersion } from './009-add-entry-version.js'
 import { Migration010AddAuthorAliases } from './010-add-author-aliases.js'
 import { Migration011AddWorkspaceId } from './011-add-workspace-id.js'
 import { Migration012AddTrustAndAnchors } from './012-add-trust-and-anchors.js'
+import { Migration013AddSessionId } from './013-add-session-id.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -25,4 +26,5 @@ export const MIGRATIONS: Migration[] = [
     Migration010AddAuthorAliases,
     Migration011AddWorkspaceId,
     Migration012AddTrustAndAnchors,
+    Migration013AddSessionId,
 ]

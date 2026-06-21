@@ -12,7 +12,8 @@ export const ENTRY_COLUMNS =
     'workflow_run_id as workflowRunId, workflow_name as workflowName, ' +
     'workflow_status as workflowStatus, deleted_at as deletedAt, ' +
     'is_archived as isArchived, version, workspace_id as workspaceId, ' +
-    'trust_score as trustScore, validation_status as validationStatus, impact_score as impactScore'
+    'trust_score as trustScore, validation_status as validationStatus, impact_score as impactScore, ' +
+    'session_id as sessionId'
 
 export const ALIASED_ENTRY_COLUMNS =
     'e.id, e.entry_type as entryType, e.content, e.timestamp, ' +
@@ -23,7 +24,8 @@ export const ALIASED_ENTRY_COLUMNS =
     'e.pr_status as prStatus, e.workflow_run_id as workflowRunId, ' +
     'e.workflow_name as workflowName, e.workflow_status as workflowStatus, ' +
     'e.deleted_at as deletedAt, e.is_archived as isArchived, e.version, e.workspace_id as workspaceId, ' +
-    'e.trust_score as trustScore, e.validation_status as validationStatus, e.impact_score as impactScore'
+    'e.trust_score as trustScore, e.validation_status as validationStatus, e.impact_score as impactScore, ' +
+    'e.session_id as sessionId'
 
 /**
  * Shared context for entries manager operations

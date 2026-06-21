@@ -149,6 +149,7 @@ export interface IDatabaseAdapter {
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            sessionId?: string
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean
@@ -204,6 +205,7 @@ export interface IDatabaseAdapter {
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            sessionId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }
     deleteEntries(

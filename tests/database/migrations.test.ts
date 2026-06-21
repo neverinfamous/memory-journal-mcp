@@ -19,11 +19,11 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(11) // 1 to 6, plus 8, 9, 10, 11, 12
+        expect(applied.length).toBe(12) // 1 to 6, plus 8, 9, 10, 11, 12, 13
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
-        expect(applied[10].version).toBe(12)
-        expect(applied[10].name).toBe('012-add-trust-and-anchors')
+        expect(applied[11].version).toBe(13)
+        expect(applied[11].name).toBe('013-add-session-id')
 
         // Verify tables exist
         const tables = db
@@ -66,7 +66,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(12)
+        expect(applied.length).toBe(13)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
 
@@ -159,12 +159,12 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(11)
+        expect(applied.length).toBe(12)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
         expect(applied[6].version).toBe(8) // applied in run
-        expect(applied[10].version).toBe(12) // applied in run
+        expect(applied[11].version).toBe(13) // applied in run
 
         // Verify newer tables like entry_revisions exist now
         const tables = db
@@ -196,8 +196,8 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(11)
-        expect(count2).toBe(11)
+        expect(count1).toBe(12)
+        expect(count2).toBe(12)
 
         db.close()
     })

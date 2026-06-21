@@ -53,7 +53,8 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             'workspace_id',
             'trust_score',
             'validation_status',
-            'impact_score'
+            'impact_score',
+            'session_id'
         ]
         const values = [
             input.entryType ?? 'personal_reflection',
@@ -76,7 +77,8 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.workspaceId ?? 'default',
             input.trustScore ?? 0.5,
             input.validationStatus ?? 'none',
-            input.impactScore ?? 0.0
+            input.impactScore ?? 0.0,
+            input.sessionId ?? null
         ]
 
         if (input.author !== undefined) {
@@ -227,6 +229,7 @@ export function updateEntry(
         trustScore?: number
         validationStatus?: 'passed' | 'failed' | 'none'
         impactScore?: number
+        sessionId?: string | null
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
@@ -308,6 +311,10 @@ export function updateEntry(
     if (input.impactScore !== undefined) {
         updates.push('impact_score = ?')
         values.push(input.impactScore)
+    }
+    if (input.sessionId !== undefined) {
+        updates.push('session_id = ?')
+        values.push(input.sessionId)
     }
 
     if (updates.length > 0) {
@@ -444,6 +451,7 @@ export function updateEntries(
         trustScore?: number
         validationStatus?: 'passed' | 'failed' | 'none'
         impactScore?: number
+        sessionId?: string | null
     }[]
 ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
     if (updates.length === 0) return { updated: [], notFound: [], errors: [] }
