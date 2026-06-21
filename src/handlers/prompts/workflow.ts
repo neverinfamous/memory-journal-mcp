@@ -217,8 +217,7 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
 - \`impact_score\`: [REQUIRED] Decimal score (e.g., 0.5)
 - \`trust_score\`: [REQUIRED] Decimal score (e.g., 0.9 if verified)
-- \`validation_status\`: [REQUIRED] Validation outcome (e.g., "verified")
-- \`related_to\`: [REQUIRED] List of related entry IDs, anchor to previous context if applicable
+- \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
 - \`auto_context\`: [REQUIRED] JSON string of commit metadata representing the session's work.
 - ${dbHint}
 
