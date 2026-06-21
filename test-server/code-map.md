@@ -339,8 +339,6 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://agent-context/{+repo}` | Agent Context |
 | `memory://audit` | Audit Log |
 | `memory://briefing` | Initial Briefing |
-| `memory://briefing` | Initial Briefing |
-| `memory://briefing/{+repo}` | Dynamic Briefing |
 | `memory://briefing/{+repo}` | Dynamic Briefing |
 | `memory://commits/{project_number}` | Project Commits |
 | `memory://commits/{project_number}/by-issue` | Commits by Issue |
