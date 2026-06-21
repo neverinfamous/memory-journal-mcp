@@ -5,6 +5,19 @@ export function killProcessTree(child: ChildProcess) {
   if (!child.pid) return;
   
   if (process.platform === 'win32') {
+    const childWithArgs = child as unknown as { spawnfile?: string, spawnargs?: string[] };
+    const spawnfile = childWithArgs.spawnfile || '';
+    const spawnargs = childWithArgs.spawnargs || [];
+    if (spawnfile.toLowerCase().endsWith('wsl.exe')) {
+      const uuidArg = spawnargs.find((a: string) => a.startsWith('AGENT_EXEC_WSL_UUID='));
+      if (uuidArg) {
+        try {
+          const killScript = `pids=$(grep -l -z '${uuidArg}' /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3); if [ -n "$pids" ]; then for pid in $pids; do kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null; done; fi`;
+          spawnSync('wsl.exe', ['-u', 'root', '-e', 'sh', '-c', killScript], { stdio: 'ignore' });
+        } catch { /* ignore */ }
+      }
+    }
+
     let taskkillSuccess = false;
     try {
       const result = spawnSync('taskkill.exe', ['/pid', child.pid.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore' });

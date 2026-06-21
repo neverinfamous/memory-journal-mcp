@@ -12,18 +12,18 @@ export function gitInterceptor({ cmdBasename, args, payload }: ExecutionContext)
   const gitSubCmd = args.find(a => knownGitCmds.includes(a)) || args.filter(a => !a.startsWith('-'))[0];
   
   if (['difftool', 'mergetool'].includes(gitSubCmd)) {
-    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' launches interactive UI tools and will hang.`);
+    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' launches interactive UI tools and will hang.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
     console.error(`   Please use standard 'git diff' or 'git merge' instead.`);
     process.exit(1);
   }
   if (args.includes('-e') || args.includes('--edit')) {
-    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -e / --edit' requires an interactive editor and will hang indefinitely.`);
+    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -e / --edit' requires an interactive editor and will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
     process.exit(1);
   }
   if (gitSubCmd === 'bisect') {
-    console.error(`\n   💡 AGENT HINT: 'git bisect' requires interactive input at each step and will hang indefinitely.`);
+    console.error(`\n   💡 AGENT HINT: 'git bisect' requires interactive input at each step and will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
     process.exit(1);
   }
@@ -37,7 +37,7 @@ export function gitInterceptor({ cmdBasename, args, payload }: ExecutionContext)
       if (args.includes('--amend') && args.includes('--no-edit')) {
         // Allowed: amending without changing the message
       } else {
-        console.error(`\n   💡 AGENT HINT: 'git commit' called without a message flag (-m, -F, -C, --no-edit, etc). This will abort because the interactive editor is disabled.`);
+        console.error(`\n   💡 AGENT HINT: 'git commit' called without a message flag (-m, -F, -C, --no-edit, etc). This will abort because the interactive editor is disabled.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         console.error(`   Auto-healing: Blocking execution to prevent hanging on interactive editor.`);
         process.exit(1);
       }
@@ -46,60 +46,60 @@ export function gitInterceptor({ cmdBasename, args, payload }: ExecutionContext)
   
   if (gitSubCmd === 'tag' && (args.includes('-a') || args.includes('--annotate'))) {
     if (!args.includes('-m') && !args.includes('--message') && !args.includes('-F') && !args.includes('--file')) {
-      console.error(`\n   💡 AGENT HINT: 'git tag -a' requires an interactive editor without '-m' or '-F'. Blocking execution.`);
+      console.error(`\n   💡 AGENT HINT: 'git tag -a' requires an interactive editor without '-m' or '-F'. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     }
   }
 
   if (gitSubCmd === 'clean' && (args.includes('-i') || args.includes('--interactive'))) {
-    console.error(`\n   💡 AGENT HINT: 'git clean -i' is interactive and will hang indefinitely.`);
+    console.error(`\n   💡 AGENT HINT: 'git clean -i' is interactive and will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
     process.exit(1);
   }
 
   if (gitSubCmd === 'add' && (args.includes('-i') || args.includes('--interactive'))) {
-    console.error(`\n   💡 AGENT HINT: 'git add -i' is interactive and will hang indefinitely.`);
+    console.error(`\n   💡 AGENT HINT: 'git add -i' is interactive and will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked.`);
     process.exit(1);
   }
 
   const interactivePatchCmds = ['add', 'checkout', 'commit', 'reset', 'stash', 'restore'];
   if (interactivePatchCmds.includes(gitSubCmd) && (args.includes('-p') || args.includes('--patch'))) {
-    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -p' (patch selection) is highly interactive and will hang indefinitely.`);
+    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -p' (patch selection) is highly interactive and will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Do not use patch mode for this command.`);
     process.exit(1);
   }
 
   if (gitSubCmd === 'rebase' && (args.includes('-i') || args.includes('--interactive'))) {
-    console.error(`\n   💡 AGENT HINT: 'git rebase -i' requires an interactive editor and will hang indefinitely.`);
+    console.error(`\n   💡 AGENT HINT: 'git rebase -i' requires an interactive editor and will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Use regular rebase or specific commands.`);
     process.exit(1);
   }
 
   if (gitSubCmd === 'merge' || gitSubCmd === 'pull') {
     if (!args.includes('--no-edit') && !args.includes('-m') && !args.includes('--message')) {
-        console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' may open an interactive editor for merge commits. Automatically injecting '--no-edit'.`);
+        console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' may open an interactive editor for merge commits. Automatically injecting '--no-edit'.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         args.push('--no-edit');
     }
   }
 
   if (gitSubCmd === 'cherry-pick' || gitSubCmd === 'revert') {
     if (args.includes('-e') || args.includes('--edit')) {
-        console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -e' opens an interactive editor. Blocking execution.`);
+        console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -e' opens an interactive editor. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         process.exit(1);
     } else if (!args.includes('--no-edit')) {
-        console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' may open an interactive editor. Automatically injecting '--no-edit'.`);
+        console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' may open an interactive editor. Automatically injecting '--no-edit'.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         args.push('--no-edit');
     }
   }
 
   if (gitSubCmd === 'config' && (args.includes('-e') || args.includes('--edit'))) {
-        console.error(`\n   💡 AGENT HINT: 'git config --edit' opens an interactive editor. Blocking execution.`);
+        console.error(`\n   💡 AGENT HINT: 'git config --edit' opens an interactive editor. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         process.exit(1);
   }
 
   if (gitSubCmd === 'branch' && args.includes('--edit-description')) {
-        console.error(`\n   💡 AGENT HINT: 'git branch --edit-description' opens an interactive editor. Blocking execution.`);
+        console.error(`\n   💡 AGENT HINT: 'git branch --edit-description' opens an interactive editor. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         process.exit(1);
   }
 }

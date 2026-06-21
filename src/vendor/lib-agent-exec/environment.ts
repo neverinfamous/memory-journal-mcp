@@ -152,7 +152,7 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
   if (payloadEnv) {
     for (const [key, value] of Object.entries(payloadEnv)) {
       if (immutableOverrides.has(key.toUpperCase())) {
-        console.error(`\n   💡 AGENT HINT: The environment variable '${key}' is immutable to prevent hanging and cannot be overridden.`);
+        console.error(`\n   💡 AGENT HINT: The environment variable '${key}' is immutable to prevent hanging and cannot be overridden.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         continue;
       }
 

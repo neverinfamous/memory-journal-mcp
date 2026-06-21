@@ -7,13 +7,12 @@ You no longer need to manually craft JSON payloads for most standard commands! T
 
 You only need to manually pass a JSON payload (as described below) if you are executing complex scripts or raw `eval` code snippets that are not natively intercepted. By pairing this deterministic execution with a deterministic repository model (`lib-git-history`), we eliminate the two largest sources of friction in agentic workflows.
 
-## ⚠️ The `&&` Pipeline Chaining Rule
+## ⚠️ The `&&` Pipeline Chaining Rule & WSL2 Linux Support
 
 > [!WARNING]
 > Native commands run in **PowerShell 5.1**, which **DOES NOT SUPPORT** `&&` or `||` operators. If you run `run_command("bun check && bun test")`, the parser will instantly throw a fatal syntax error. 
 > 
-> Whenever you must chain commands natively, you **MUST** wrap them in PowerShell 7 like this:
-> `pwsh -c "bun check && bun test"`
+> Whenever you must chain commands natively or utilize robust Unix pipelines, you **MUST** leverage WSL2 execution by creating a JSON payload with `"target": "wsl2"` and running it via `agent-exec`. This routes the command seamlessly into the Linux VM environment, fully supporting `&&`, `||`, `|`, and other POSIX shell features.
 
 ## 🧹 Scratch Workspace Protocol
 
@@ -38,7 +37,8 @@ Used for executing standard CLI binaries.
   "args": ["log", "-n", "5"],
   "cwd": "C:\\path\\to\\dir", // Optional
   "env": { "CUSTOM_VAR": "value" }, // Optional
-  "timeoutMs": 30000 // Optional
+  "timeoutMs": 30000, // Optional
+  "target": "wsl2" // Optional (routes execution natively into the WSL2 Linux VM)
 }
 ```
 **CRITICAL**: Do NOT pass arguments containing spaces as part of the `command` string. Use the `args` array. (e.g. `{"command": "gh pr view"}` is invalid. Use `{"command": "gh", "args": ["pr", "view"]}`).
@@ -73,7 +73,7 @@ To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and m
 - **Indefinite Blocking Prevention**: Commands like `docker logs -f` have their `-f`/`--follow` flags stripped. Utilities that inherently run indefinitely like `watch` or `tail -f` are blocked entirely.
 - **Interactive REPL Blocks**: Attempting to launch `node`, `python`, or `bash` without arguments or a script file will be intercepted and terminated immediately to prevent hanging.
 - **Shell Wrapper Blocking**: Wrapping standard tools (`git`, `docker`, `gh`, `npm`, etc.) inside inline shell invocations (e.g., `pwsh -c "git log"`) bypasses the interceptor pipeline and is strictly blocked. Use a `script` payload or invoke the tool directly via a `command` payload.
-- **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` `? Prompt:` flows, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging.
+- **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging.
 - **Quote Stripping**: Spurious quotes around arguments are stripped since the shell execution is bypassed.
 
 ## Environment Variables & Immutability

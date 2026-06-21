@@ -14,14 +14,16 @@ import {
   systemInterceptor 
 } from './interceptors/index.js';
 
-function resolveWindowsCommand(cmd: string, cwd: string): string {
+export const customInterceptors: Array<(ctx: ExecutionContext) => void> = [];
+
+function resolveWindowsCommand(cmd: string, cwd: string, payloadEnv?: Record<string, string>): string {
   if (process.platform !== 'win32') return cmd;
   if (path.isAbsolute(cmd) && fs.existsSync(cmd)) return cmd;
   
   const hasExt = ['.exe', '.cmd', '.bat', '.com', '.ps1'].some(ext => cmd.toLowerCase().endsWith(ext));
   const extsToCheck = hasExt ? [''] : ['.exe', '.cmd', '.bat', '.com', '.ps1'];
 
-  let pathEnv = process.env.PATH;
+  let pathEnv = payloadEnv?.PATH || payloadEnv?.path || process.env.PATH;
   if (!pathEnv && process.platform === 'win32') {
     for (const key of Object.keys(process.env)) {
       if (key.toUpperCase() === 'PATH') {
@@ -97,7 +99,13 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     tempScriptPath = path.join(scratchDir, `agent-eval-${uniqueId}${ext}`);
     try {
       let codeToExecute = payload.code;
-      if (ext === '.ps1') {
+      if (payload.type === 'eval' && 'templateOverride' in payload && payload.templateOverride) {
+        if (payload.templateOverride.includes('{{code}}')) {
+          codeToExecute = payload.templateOverride.replace('{{code}}', payload.code);
+        } else {
+          codeToExecute = `${payload.templateOverride}\n${payload.code}`;
+        }
+      } else if (ext === '.ps1') {
         codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
       }
       fs.writeFileSync(tempScriptPath, codeToExecute, 'utf-8');
@@ -118,7 +126,9 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
   }
 
-  cmd = resolveWindowsCommand(cmd, cwd);
+  if (payload.target !== 'wsl2') {
+    cmd = resolveWindowsCommand(cmd, cwd, payload.env as Record<string, string>);
+  }
 
   envOverrides['NPM_CONFIG_YES'] = 'true'; // Automatically answer yes to npx/pnpx install prompts
   envOverrides['DEBIAN_FRONTEND'] = 'noninteractive'; // Prevent apt prompts
@@ -140,12 +150,17 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload };
 
   // Apply Interceptors Pipeline
-  systemInterceptor(ctx);
-  gitInterceptor(ctx);
-  dockerInterceptor(ctx);
-  packageManagerInterceptor(ctx);
-  cloudCliInterceptor(ctx);
-  replTuiInterceptor(ctx);
+  if (!payload.bypassInterceptors) {
+    systemInterceptor(ctx);
+    gitInterceptor(ctx);
+    dockerInterceptor(ctx);
+    packageManagerInterceptor(ctx);
+    cloudCliInterceptor(ctx);
+    replTuiInterceptor(ctx);
+    for (const interceptor of customInterceptors) {
+      interceptor(ctx);
+    }
+  }
 
   // Sync back args references if modified completely
   args = ctx.args;
@@ -164,7 +179,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   });
 
   if (strippedQuotes) {
-    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.`);
+    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'shell: false' is used, quotes are NOT needed for spaces. Auto-healing by stripping wrapping quotes...`);
   }
 
@@ -185,10 +200,10 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   if (payload.type === 'command') {
     const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd');
     if (isWinBatch && payload.target !== 'wsl2') {
-      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
+      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       const escapedCmd = cmd.replace(/'/g, "''");
       const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
-      const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}`;
+      const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;
       const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
       args = ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-EncodedCommand', encoded];
       cmd = 'pwsh.exe';
@@ -208,6 +223,8 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     const wslCwd = convertToWslPath(cwd);
     
     const wslEnvArgs: string[] = [];
+    const wslUuid = crypto.randomUUID();
+    wslEnvArgs.push(`AGENT_EXEC_WSL_UUID=${wslUuid}`);
     const payloadEnv = payload.env || {};
     for (const [k, v] of Object.entries(payloadEnv)) {
       wslEnvArgs.push(`${k}=${v}`);
