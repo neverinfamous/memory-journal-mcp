@@ -183,14 +183,14 @@ export class StreamManager {
        const fileHint = fileName ? ` Use ${fileName} to capture full output.` : ` Specify 'stdoutFile' or 'stderrFile' in the payload to capture full output.`;
        const truncMsg = `\n... [${isErr ? 'STDERR' : 'STDOUT'} truncated to ${this.truncateOutputLength} chars.${fileHint}]\n`;
        
-       if (!stdStream.destroyed) {
+       if (!targetStream && !stdStream.destroyed) {
          const canWriteStd = stdStream.write(toWrite + truncMsg);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }
 
        if (isErr) this.stderrTruncated = true; else this.stdoutTruncated = true;
     } else {
-       if (!stdStream.destroyed) {
+       if (!targetStream && !stdStream.destroyed) {
          const canWriteStd = stdStream.write(str);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }

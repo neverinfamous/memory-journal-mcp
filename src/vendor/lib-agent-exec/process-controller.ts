@@ -284,6 +284,12 @@ export class ProcessController {
             process.exit(0);
           } else {
             console.error(`\n❌ Command exited with code ${code}`);
+            if (process.platform === 'win32') {
+                const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
+                if (builtIns.includes(this.cmd.toLowerCase())) {
+                    console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+                }
+            }
             process.exit(code);
           }
         }
