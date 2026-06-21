@@ -2,11 +2,14 @@
   "libs": {
     "lib-git-history": {
       "source": ".agents/scripts/lib-git-history",
-      "syncedAt": "2026-06-20T22:53:34.277Z",
-      "syncedFromCommit": "2658a81be96b4ffc5e222204b59c186c78fa6dde",
+      "syncedAt": "2026-06-21T00:33:31.190Z",
+      "syncedFromCommit": "953feadd3990430e72f65f1b1be8d147a7912622",
       "files": [
         "cli.ts",
+        "git-numstat.ts",
+        "git-patch.ts",
         "git-runner.ts",
+        "parser-utils.ts",
         "parser.ts",
         "schema.ts",
         "AGENT_README.md"

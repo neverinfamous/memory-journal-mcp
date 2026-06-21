@@ -400,9 +400,10 @@ export function parseGitRecord(
     const trailerList = rawTrailers.split('\x1C').filter(Boolean);
     for (const t of trailerList) {
       const colonIdx = t.indexOf(':');
-      if (colonIdx === -1) continue;
-      const key = t.slice(0, colonIdx).trim().toLowerCase();
-      const rawVal = t.slice(colonIdx + 1).trim();
+      const keyRaw = colonIdx === -1 ? t.trim() : t.slice(0, colonIdx).trim();
+      const key = keyRaw.toLowerCase().replace(/\s+/g, '-');
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+      const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
       const val = rawVal.replace(/\r?\n[ \t]+/g, '\n');
 
       if (key === 'history-category' || key === 'changelog-category' || key === 'category') {
@@ -418,7 +419,7 @@ export function parseGitRecord(
         else if (v === 'low') metadataObj.impact = 0.2;
         else {
           const num = Number(val.trim());
-          metadataObj.impact = (val.trim() === '' || isNaN(num)) ? val : num;
+          metadataObj.impact = (val.trim() === '' || !Number.isFinite(num)) ? val : num;
         }
       }
       else if (key === 'history-trust' || key === 'changelog-trust' || key === 'trust') {
@@ -428,7 +429,7 @@ export function parseGitRecord(
         else if (v === 'low') metadataObj.trust = 0.2;
         else {
           const num = Number(val.trim());
-          metadataObj.trust = (val.trim() === '' || isNaN(num)) ? val : num;
+          metadataObj.trust = (val.trim() === '' || !Number.isFinite(num)) ? val : num;
         }
       }
       else if (key.match(/^(validation|history-validation|changelog-validation)(-status)?$/)) {
@@ -475,7 +476,7 @@ export function parseGitRecord(
     }
   }
 
-  const bcMatch = body.match(/BREAKING[\s-]CHANGES?:?\s+([\s\S]*)$/i);
+  const bcMatch = body.match(/BREAKING[\s-]CHANGES?:?\s+([\s\S]*?)(?:\n\n|$)/i);
   if (bcMatch) {
     isBreaking = true;
     breakingChangeDescription = bcMatch[1].trim();

@@ -130,15 +130,24 @@ export async function* streamGitRecords(args: string[]): AsyncGenerator<string> 
     }
   });
 
+  let streamError: Error | null = null;
   const processComplete = new Promise<void>((resolve, reject) => {
     let resolved = false;
     proc.on('close', (code, signal) => {
       if (!resolved) {
         resolved = true;
         if (ac.signal.aborted) {
-          reject(new Error(`Git process timed out and was aborted: ${errChunks.join('')}`));
-        } else if ((code !== 0 && code !== null && code !== 141) || (signal && signal !== 'SIGTERM' && signal !== 'SIGKILL' && signal !== 'SIGPIPE')) {
-          reject(new Error(`Git failed with code ${code} and signal ${signal}: ${errChunks.join('')}`));
+          const err = new Error(`Git process timed out and was aborted: ${errChunks.join('')}`);
+          streamError = err;
+          reject(err);
+        } else if (signal === 'SIGKILL' || signal === 'SIGTERM') {
+          const err = new Error(`Git process was killed with signal ${signal}`);
+          streamError = err;
+          reject(err);
+        } else if ((code !== 0 && code !== null && code !== 141) || (signal && signal !== 'SIGPIPE')) {
+          const err = new Error(`Git failed with code ${code} and signal ${signal}: ${errChunks.join('')}`);
+          streamError = err;
+          reject(err);
         } else {
           resolve();
         }
@@ -147,6 +156,7 @@ export async function* streamGitRecords(args: string[]): AsyncGenerator<string> 
     proc.on('error', err => {
       if (!resolved) {
         resolved = true;
+        streamError = err;
         reject(err);
       }
     });
@@ -157,6 +167,7 @@ export async function* streamGitRecords(args: string[]): AsyncGenerator<string> 
   let droppingMassiveCommit = false;
   try {
     for await (const chunk of proc.stdout) {
+      if (streamError) throw streamError;
       resetTimeout();
       buffer += chunk;
       let sepIdx;

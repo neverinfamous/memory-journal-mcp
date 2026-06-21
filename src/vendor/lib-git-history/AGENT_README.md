@@ -1,6 +1,8 @@
 # 🤖 Agent README: lib-git-history
 
-**Purpose**: This module serves as the **Single Source of Truth (SSoT)** for Git history extraction within the `adamic` repository. It is designed to replace manual changelogs by programmatically pulling rich, structured metadata directly from raw `git log` and `git diff` outputs.
+**Purpose**: This module serves as a **structured repository intelligence layer**, elevating raw version control data far beyond a simple changelog parser into an actionable, semantic model. It is the **Single Source of Truth (SSoT)** for Git history extraction within the `adamic` repository.
+
+By pairing this deterministic history model with a deterministic execution bridge (`lib-agent-exec`), we eliminate the two largest sources of friction in agentic workflows: unpredictable command execution and opaque repository state. 
 
 ## Architecture
 
