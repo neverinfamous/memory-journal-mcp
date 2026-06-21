@@ -416,7 +416,21 @@ export function parseGitRecord(
 
       if (key === 'history-category' || key === 'changelog-category' || key === 'category') {
         const titleCase = (s: string) => s.split(/[\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-        categories.push(...val.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(s => titleCase(s.replace(/^"|"$/g, '').trim())).filter(Boolean));
+        const splitVals: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < val.length; i++) {
+          const char = val[i];
+          if (char === '"') inQuotes = !inQuotes;
+          if (char === ',' && !inQuotes) {
+            splitVals.push(current);
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        splitVals.push(current);
+        categories.push(...splitVals.map(s => titleCase(s.replace(/^"|"$/g, '').trim())).filter(Boolean));
       }
       else if (key === 'history-entry' || key === 'changelog-entry' || key === 'entry') entriesParsed.push(val);
       else if (key === 'history-significance' || key === 'changelog-significance' || key === 'significance') metadataObj.significance = val;
