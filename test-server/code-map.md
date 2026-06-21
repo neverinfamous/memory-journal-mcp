@@ -402,7 +402,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency) |
 | `audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
 | `audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
-| `audit-seo-docs` | Adversarial SEO and documentation audit (markup, E-E-A-T, marketing) |
+| `audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
 | `audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
 | `audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
 | `commit` | High-integrity procedure for committing code changes with validation gates |
