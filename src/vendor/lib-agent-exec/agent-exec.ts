@@ -41,23 +41,6 @@ try {
 
   const env = buildEnvironment(payload.env);
   
-  if (payload.plugins && payload.plugins.length > 0) {
-    const { customInterceptors } = await import('./command-builder.js');
-    for (const plugin of payload.plugins) {
-      try {
-        const pluginPath = path.resolve(cwd, plugin);
-        const pluginModule = await import(pluginPath);
-        if (typeof pluginModule.default === 'function') {
-          customInterceptors.push(pluginModule.default);
-        } else if (typeof pluginModule.interceptor === 'function') {
-          customInterceptors.push(pluginModule.interceptor);
-        }
-      } catch (err) {
-        console.error(`❌ Error: Failed to load plugin '${plugin}': ${err}`);
-      }
-    }
-  }
-
   const { cmd, args, tempScriptPath, envOverrides } = buildCommand(payload, cwd);
   
   const finalEnv = { ...env };

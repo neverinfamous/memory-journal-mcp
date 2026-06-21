@@ -11,8 +11,11 @@ import { ExecPayload } from './schema.js';
 export class IOController {
   private stdoutDecoder = new StringDecoder('utf8');
   private stderrDecoder = new StringDecoder('utf8');
-  private stdoutTail = '';
-  private stderrTail = '';
+  private _stdoutTail = '';
+  private _stderrTail = '';
+  
+  public get stdoutTail() { return this._stdoutTail; }
+  public get stderrTail() { return this._stderrTail; }
   
   private outStream?: fs.WriteStream;
   private errStream?: fs.WriteStream;
@@ -174,7 +177,7 @@ export class IOController {
 
   private evaluatePromptStall() {
     if (!this.payload.stdin || this.isStdinClosed) {
-      if (this.hasTuiSequence(this.stdoutTail) || this.hasTuiSequence(this.stderrTail)) {
+      if (this.hasTuiSequence(this._stdoutTail) || this.hasTuiSequence(this._stderrTail)) {
         this.onStall('Execution stalled: Process attempted to enter an interactive alternate screen buffer or TUI.');
         return;
       }
@@ -184,8 +187,8 @@ export class IOController {
         this.promptStallTimer = null;
       }
       
-      const isStdoutPrompt = checkPrompt(this.stdoutTail);
-      const isStderrPrompt = checkPrompt(this.stderrTail);
+      const isStdoutPrompt = checkPrompt(this._stdoutTail);
+      const isStderrPrompt = checkPrompt(this._stderrTail);
       
       if (isStdoutPrompt || isStderrPrompt) {
         this.promptStallTimer = setTimeout(() => {
@@ -221,11 +224,11 @@ export class IOController {
     
     // Robust sliding window for ANSI checking
     if (isErr) {
-      this.stderrTail += decoded;
-      if (this.stderrTail.length > 2048) this.stderrTail = this.stderrTail.slice(-1024);
+      this._stderrTail += decoded;
+      if (this._stderrTail.length > 2048) this._stderrTail = this._stderrTail.slice(-1024);
     } else {
-      this.stdoutTail += decoded;
-      if (this.stdoutTail.length > 2048) this.stdoutTail = this.stdoutTail.slice(-1024);
+      this._stdoutTail += decoded;
+      if (this._stdoutTail.length > 2048) this._stdoutTail = this._stdoutTail.slice(-1024);
     }
 
     this.evaluatePromptStall();

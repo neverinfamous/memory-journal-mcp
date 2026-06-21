@@ -18,7 +18,7 @@ export const customInterceptors: Array<(ctx: ExecutionContext) => void> = [];
 
 function tokenizeArgs(str: string): string[] {
   const args: string[] = [];
-  const regex = /(".*?"|'.*?'|[^\s]+)/g;
+  const regex = /("[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|[^\s]+)/g;
   let match;
   while ((match = regex.exec(str)) !== null) {
     args.push(match[1]);
@@ -68,11 +68,24 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
     envOverrides['integrationContext'] = contextStr;
 
+    const replaceTemplates = (str: string) => {
+      return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
+        if (!pathStr) return contextStr;
+        let current: unknown = payload.integrationContext;
+        const keys = pathStr.split('.');
+        for (const key of keys) {
+          if (current == null || typeof current !== 'object') return match;
+          current = (current as Record<string, unknown>)[key];
+        }
+        return typeof current === 'object' ? JSON.stringify(current) : String(current);
+      });
+    };
+
     if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
-      payload.templateOverride = payload.templateOverride.replace(/\{\{integrationContext\}\}/g, contextStr);
+      payload.templateOverride = replaceTemplates(payload.templateOverride);
     }
     if (payload.args) {
-      payload.args = payload.args.map(a => typeof a === 'string' ? a.replace(/\{\{integrationContext\}\}/g, contextStr) : a);
+      payload.args = payload.args.map(a => typeof a === 'string' ? replaceTemplates(a) : a);
     }
   }
   

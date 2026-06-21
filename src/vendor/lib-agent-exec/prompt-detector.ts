@@ -6,11 +6,11 @@ export function checkPrompt(tail: string): boolean {
   
   const hasStrictPrompt = /(?:^|\n)[ \t]*\+?(?:password|passphrase|username|email|token|prompt|choice|select|selection|question|confirm|answer|login|authentication|user|id|pass|y\/n|yes\/no|repository|branch|commit|version|author)[ \t]*[:>?][ \t]*$/i.test(lower);
   const hasActionPrompt = /(?:enter|provide|type|input)(?: \w+){0,3} (?:password|passphrase|username|email|token|user|id|pass|name|code|value|title|body)[ \t:]*$/i.test(lower);
-  const hasInquirerPrompt = /^\s*\?\s+.*?(?:›|»|:|\[.*?\]|\(.*?\))\s*$/m.test(lower) || /^\s*\?\s+.*?\s*$/m.test(lower) || /[✔?].*(?:…|\.\.\.)/m.test(lower);
+  const hasInquirerPrompt = /^\s*\?\s+.*?(?:›|»|:|\[.*?\]|\(.*?\))\s*$/m.test(lower) || /^\s*\?\s+.*?\s*$/m.test(lower) || /[✔?].*(?:…|\.\.\.)/m.test(lower) || /^\s*[❯›]\s+.*$/m.test(lower);
 
   return hasStrictPrompt || hasActionPrompt || hasInquirerPrompt ||
          /waiting for emacs/i.test(lower) || /hit enter to proceed/i.test(lower) ||
-         /bash-[\d.]+\$/m.test(lower) || /sh-[\d.]+#\s*$/m.test(lower) || /ps [a-z]:\\[^>]+>\s*$/m.test(lower) ||
+         /bash-[\d.]+\$/m.test(lower) || /sh-[\d.]+#\s*$/m.test(lower) || /ps [a-z]:\\[^>]+>\s*$/m.test(lower) || /^(?:node|bash|python|ruby)> \s*$/m.test(lower) ||
          /(?:please enter|press enter|press return|press any key|do you want to|are you sure|type "yes"|type yes|type y|continue\?|proceed\?|would you like to|shall we|do you accept|to proceed, type)/i.test(lower) ||
          /\(?(?:yes|y)\s*\/\s*(?:no|n)\)?\s*[?:]?\s*$/i.test(lower) || /(?:enter|select|choose) .*:/i.test(lower) ||
          /\[y\]\s*yes.*\[n\]\s*no/i.test(lower) || /\(default is ".*"\):/i.test(lower) ||
@@ -22,8 +22,8 @@ export function checkPrompt(tail: string): boolean {
          /are you sure you want to continue/i.test(lower) || /press any key to continue/i.test(lower) || /type 'yes' to confirm/i.test(lower) ||
          /terminate batch job \(y\/n\)?/i.test(lower) ||
          /^(?:>>>|\.\.\.|>|\$)\s*$/m.test(lower) ||
-         /(?:user|root)@.*?(?:\$|#)\s*$/m.test(lower) ||
-         /^[a-zA-Z0-9_.-]+@.*?(?:\$|#)\s*$/m.test(lower) ||
+         /(?:user|root)@.*?(?:\$|#|%)\s*$/m.test(lower) ||
+         /^[a-zA-Z0-9_.-]+@.*?(?:\$|#|%)\s*$/m.test(lower) ||
          /\([yY].*?\/.*?[nN].*?\)\s*[?:]?\s*$/i.test(lower) ||
          /\[[yY].*?\/.*?[nN].*?\]\s*[?:]?\s*$/i.test(lower) ||
          /(?:press|hit) (?:any key|enter|return) to (?:continue|exit|quit|abort)/i.test(lower) ||
@@ -43,7 +43,7 @@ export function checkPrompt(tail: string): boolean {
          /(?:overwrite|replace|override)\s*\??\s*$/i.test(lower) ||
          // GitHub device login and generic pauses
          /press enter to .*?\s*$/i.test(lower) ||
-         /hint: waiting for your editor to close the file/i.test(lower) ||
+         /(?:hint:\s*)?waiting for (?:your editor|vi|nano|vim|emacs)/i.test(lower) ||
          // Generic password prompts
          /password for '.*?':\s*$/i.test(lower) ||
          // Y/n without colons

@@ -1,1 +1,0 @@
-{"type":"eval","interpreter":"node","code":"\n    for(let i=0; i<1000; i++) {\n       process.stdout.write(\"O\".repeat(10));\n       process.stderr.write(\"E\".repeat(10));\n    }\n  ","truncateOutputLength":500,"keepPayload":true}

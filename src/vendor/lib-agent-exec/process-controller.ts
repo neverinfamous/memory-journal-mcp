@@ -258,7 +258,15 @@ export class ProcessController {
       if (code !== 0) {
         if (this.payload.onFailure) {
           const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
-          try { await fetch(this.payload.onFailure, { method: 'POST', headers, body: JSON.stringify({ code, signal }), signal: AbortSignal.timeout(5000) }).catch(() => { /* ignore */ }); } catch { /* ignore */ }
+          let body = JSON.stringify({ code, signal, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+          if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
+            body = this.payload.webhookPayloadTemplate
+              .replace(/\{\{stdout\}\}/g, JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
+              .replace(/\{\{stderr\}\}/g, JSON.stringify(this.ioController.stderrTail).slice(1, -1))
+              .replace(/\{\{code\}\}/g, String(code))
+              .replace(/\{\{signal\}\}/g, String(signal));
+          }
+          try { await fetch(this.payload.onFailure, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
         }
         if (code === null && signal) {
           console.error(`\n❌ Command was terminated by signal ${signal}`);
@@ -284,7 +292,14 @@ export class ProcessController {
       console.error(`\n✅ Command succeeded${isDaemon ? ' (background process detached)' : ''}.`);
       if (this.payload.onSuccess) {
         const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
-        try { await fetch(this.payload.onSuccess, { method: 'POST', headers, body: JSON.stringify({ success: true }), signal: AbortSignal.timeout(5000) }).catch(() => { /* ignore */ }); } catch { /* ignore */ }
+        let body = JSON.stringify({ success: true, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+        if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
+          body = this.payload.webhookPayloadTemplate
+            .replace(/\{\{stdout\}\}/g, JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
+            .replace(/\{\{stderr\}\}/g, JSON.stringify(this.ioController.stderrTail).slice(1, -1))
+            .replace(/\{\{success\}\}/g, 'true');
+        }
+        try { await fetch(this.payload.onSuccess, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
       }
       process.exit(0);
     });
