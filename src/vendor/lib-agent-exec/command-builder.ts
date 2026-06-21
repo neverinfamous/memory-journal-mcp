@@ -16,6 +16,16 @@ import {
 
 export const customInterceptors: Array<(ctx: ExecutionContext) => void> = [];
 
+function tokenizeArgs(str: string): string[] {
+  const args: string[] = [];
+  const regex = /(".*?"|'.*?'|[^\s]+)/g;
+  let match;
+  while ((match = regex.exec(str)) !== null) {
+    args.push(match[1]);
+  }
+  return args;
+}
+
 function resolveWindowsCommand(cmd: string, cwd: string, payloadEnv?: Record<string, string>): string {
   if (process.platform !== 'win32') return cmd;
   if (path.isAbsolute(cmd) && fs.existsSync(cmd)) return cmd;
@@ -56,8 +66,8 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       const prefix = parts[0].trim();
       const suffix = parts.length > 1 ? parts[1].trim() : '';
       
-      const prefixArgs = prefix ? prefix.split(/\s+/) : [];
-      const suffixArgs = suffix ? suffix.split(/\s+/) : [];
+      const prefixArgs = prefix ? tokenizeArgs(prefix) : [];
+      const suffixArgs = suffix ? tokenizeArgs(suffix) : [];
       
       if (prefixArgs.length > 0) {
         cmd = prefixArgs[0];
@@ -103,8 +113,8 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       const prefix = parts[0].trim();
       const suffix = parts.length > 1 ? parts[1].trim() : '';
       
-      const prefixArgs = prefix ? prefix.split(/\s+/) : [];
-      const suffixArgs = suffix ? suffix.split(/\s+/) : [];
+      const prefixArgs = prefix ? tokenizeArgs(prefix) : [];
+      const suffixArgs = suffix ? tokenizeArgs(suffix) : [];
       
       if (prefixArgs.length > 0) {
         const originalCmd = cmd;
@@ -181,7 +191,12 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   envOverrides['npm_config_fund'] = 'false'; // Prevent npm fund noise/prompts
 
   if ('integrationContext' in payload && payload.integrationContext) {
-    envOverrides['integrationContext'] = JSON.stringify(payload.integrationContext);
+    const contextStr = JSON.stringify(payload.integrationContext);
+    if (contextStr.length > 32000) {
+      console.error('❌ Error: integrationContext stringified size exceeds 32KB limit on Windows.');
+      process.exit(1);
+    }
+    envOverrides['integrationContext'] = contextStr;
   }
 
   const cmdBasename = path.basename(cmd).toLowerCase();

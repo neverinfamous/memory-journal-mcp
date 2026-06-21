@@ -27,6 +27,9 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     keepPayload: z.boolean().optional(),
     stallTimeoutMs: z.number().int().nonnegative().optional(),
     bypassInterceptors: z.boolean().optional(),
+    plugins: safeStringArray.optional(),
+    onSuccess: safeString.optional(),
+    onFailure: safeString.optional(),
   }),
   z.object({
     type: z.literal("script"),
@@ -47,6 +50,9 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     keepPayload: z.boolean().optional(),
     stallTimeoutMs: z.number().int().nonnegative().optional(),
     bypassInterceptors: z.boolean().optional(),
+    plugins: safeStringArray.optional(),
+    onSuccess: safeString.optional(),
+    onFailure: safeString.optional(),
   }),
   z.object({
     type: z.literal("eval"),
@@ -67,6 +73,9 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     keepPayload: z.boolean().optional(),
     stallTimeoutMs: z.number().int().nonnegative().optional(),
     bypassInterceptors: z.boolean().optional(),
+    plugins: safeStringArray.optional(),
+    onSuccess: safeString.optional(),
+    onFailure: safeString.optional(),
   })
 ]);
 
