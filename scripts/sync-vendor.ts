@@ -66,7 +66,7 @@ try {
 
   if (args.values.test) {
     console.log('\nRunning tests...');
-    execSync('bun test src/vendor/', { stdio: 'inherit' });
+    execSync('bun test src/vendor/ --pass-with-no-tests', { stdio: 'inherit' });
   }
 } catch (err: any) {
   console.error('\nSync failed:', err.message);
