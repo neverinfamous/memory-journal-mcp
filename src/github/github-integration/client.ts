@@ -41,7 +41,11 @@ export class GitHubClient {
             cwd: process.cwd(),
         })
 
-        this.git = simpleGit({ baseDir: effectiveDir, spawnOptions: { windowsHide: true } } as any)
+        const gitOptions = {
+            baseDir: effectiveDir,
+            spawnOptions: { windowsHide: true }
+        } as unknown as simpleGitImport.SimpleGitOptions
+        this.git = simpleGit(gitOptions)
 
         if (resolvedToken) {
             this.octokit = new Octokit({ auth: resolvedToken })

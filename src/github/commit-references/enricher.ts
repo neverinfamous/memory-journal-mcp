@@ -1,4 +1,4 @@
-import { simpleGit } from 'simple-git'
+import { simpleGit, type SimpleGitOptions } from 'simple-git'
 import type { GitHubIntegration } from '../github-integration/index.js'
 import { parseCommitReferences } from './parser.js'
 import { resolveReferences, type ResolvedReference } from './resolver.js'
@@ -17,7 +17,11 @@ export async function enrichCommits(
     commitHashes: string[],
     github?: GitHubIntegration
 ): Promise<EnrichedCommit[]> {
-    const git = simpleGit({ baseDir: workingDir, spawnOptions: { windowsHide: true } } as any)
+    const gitOptions = {
+        baseDir: workingDir,
+        spawnOptions: { windowsHide: true }
+    } as unknown as SimpleGitOptions
+    const git = simpleGit(gitOptions)
     const enriched: EnrichedCommit[] = []
 
     let defaultOwner: string | null = null
