@@ -53,7 +53,7 @@ const PARAM_ALIASES: Record<string, string> = {
     resolution_comment: 'resolution',
     // §1.3: Severity escalation alias (agents say "escalate severity")
     severity: 'flag_type',
-    mode: 'instruction_level',
+
     // §1.5: Sort/order aliases
     sort: 'sort_by',
     order_by: 'sort_by',

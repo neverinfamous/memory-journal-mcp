@@ -28,7 +28,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             else if (obj['message'] !== undefined) { obj['content'] = obj['message']; delete obj['message']; }
         }
         if (obj['search'] !== undefined && obj['query'] === undefined) { obj['query'] = obj['search']; delete obj['search']; }
-        if ((methodName === 'config' || methodName === 'update_configuration' || methodName === 'updateConfiguration') && obj['mode'] !== undefined && obj['instruction_level'] === undefined) { obj['instruction_level'] = obj['mode']; delete obj['mode']; }
+        // (Other param normalization logic was here previously but removed for instruction_level)
         if ((methodName === 'import_external' || methodName === 'importExternal' || methodName === 'team_import_external' || methodName === 'teamImportExternal') && obj['source_dir'] === undefined) {
             if (obj['filename'] !== undefined) { obj['source_dir'] = obj['filename']; delete obj['filename']; }
         }
@@ -811,7 +811,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     // update_configuration hallucination: passing string directly or nested config object
     if (methodName === 'update_configuration' || methodName === 'updateConfiguration' || methodName === 'config' || methodName === 'configure') {
         if (args.length === 1 && typeof args[0] === 'string') {
-            args[0] = { instruction_level: args[0] };
+            // instruction_level is deprecated, no fallback needed
         } else if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
             const obj = { ...(args[0] as Record<string, unknown>) };
             if (typeof obj['config'] === 'object' && obj['config'] !== null) {
@@ -821,10 +821,10 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             if (obj['maxTokens'] !== undefined || obj['max_tokens'] !== undefined || obj['temperature'] !== undefined || obj['model'] !== undefined || obj['top_p'] !== undefined) {
                 return { error: {
                     success: false,
-                    error: `update_configuration is for configuring the memory-journal-mcp server (e.g., instruction_level). It does not configure the LLM context (like maxTokens or temperature).`,
+                    error: `update_configuration is for configuring the memory-journal-mcp server. It does not configure the LLM context (like maxTokens or temperature).`,
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
-                    suggestion: 'Remove LLM parameters. Server configuration only accepts instruction_level.',
+                    suggestion: 'Remove LLM parameters. Server configuration does not accept LLM generation parameters.',
                     recoverable: true
                 }};
             }
@@ -1191,7 +1191,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                         error: `Unrecognized key: "${hasContextParam}". update_configuration does not support changing LLM context parameters.`,
                         code: "VALIDATION_ERROR",
                         category: "validation",
-                        suggestion: `Remove '${hasContextParam}' from the payload. Only instruction_level, tool_filter, and briefing preferences are supported.`,
+                        suggestion: `Remove '${hasContextParam}' from the payload. Only tool_filter and briefing preferences are supported.`,
                         recoverable: false
                     }
                 };

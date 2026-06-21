@@ -34,7 +34,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_batch_create_entries',
             title: 'Team Batch Create Entries',
-            description: 'Create multiple team journal entries at once. Max 50 per batch.',
+            description: 'Create multiple team journal entries at once. Max 50 per batch. Select the most accurate entry_type for each. REQUIRED: You MUST include project_number. REQUIRED: You MUST include impact_score, trust_score, and validation_status. REQUIRED: You MUST use related_to to anchor entries to previous context.',
             group: 'team',
             inputSchema: TeamBatchCreateEntriesSchemaMcp,
             outputSchema: TeamBatchCreateEntriesOutputSchema,

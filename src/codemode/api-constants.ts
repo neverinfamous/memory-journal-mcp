@@ -447,7 +447,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     batchUpdateEntries: 'updates',
     batchDeleteEntries: 'entry_ids',
     searchAuditLog: 'tool_name',
-    updateConfiguration: 'instruction_level',
+    updateConfiguration: 'tool_filter',
 
     // GitHub
     getGithubIssue: 'issue_number',

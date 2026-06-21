@@ -41,9 +41,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Create an entry in the team database for sharing with collaborators. ' +
                 'ONLY use when explicitly requested by the user. Default to personal create_entry instead. ' +
-                'Content must be well-structured markdown using ## section headers. ' +
+                'Content must be well-structured markdown using ## section headers. Select the most accurate entry_type (e.g., retrospective, technical_note). ' +
                 'For session summaries, use entry_type "retrospective" with tag "session-summary" and ' +
                 'structure content as: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+                'REQUIRED: You MUST include project_number. ' +
+                'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
+                'REQUIRED: You MUST use related_to to anchor the entry to a session summary or nearby context. ' +
                 'Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamCreateEntrySchemaMcp,
