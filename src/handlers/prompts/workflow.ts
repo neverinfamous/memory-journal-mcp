@@ -15,7 +15,6 @@ import { parseFlagContext } from '../../types/auto-context.js'
 import { spawn } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { join } from 'node:path'
 
 let isGeneratingCodeMap = false
 
@@ -192,14 +191,17 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
 
                 try {
                     if (!isGeneratingCodeMap) {
-                        const packageJsonPath = join(process.cwd(), 'package.json')
+                        const packageJsonUrl = new URL('../../../package.json', import.meta.url)
+                        const packageJsonPath = fileURLToPath(packageJsonUrl)
+                        
                         if (existsSync(packageJsonPath)) {
                             const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
                             if (pkg !== null && typeof pkg === 'object' && 'name' in pkg && pkg.name === 'memory-journal-mcp') {
                                 isGeneratingCodeMap = true
                                 const scriptUrl = new URL('../../../scripts/update-code-map.ts', import.meta.url)
                                 const absoluteScriptPath = fileURLToPath(scriptUrl)
-                                const child = spawn('npx', ['tsx', absoluteScriptPath], { 
+                                const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+                                const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
                                     detached: true, 
                                     stdio: 'ignore', 
                                     shell: process.platform === 'win32' 
