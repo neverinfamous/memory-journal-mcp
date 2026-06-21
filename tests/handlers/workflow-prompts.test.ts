@@ -31,7 +31,7 @@ describe('Workflow Prompts', () => {
         expect(result.messages[0].content).toBeDefined()
     })
 
-    it('covers session-summary', () => {
+    it('covers session-summary', async () => {
         const prompts = getWorkflowPromptDefinitions()
         const summary = prompts.find((p) => p.name === 'session-summary')!
 
@@ -46,7 +46,7 @@ describe('Workflow Prompts', () => {
             ]}),
         }
 
-        const result = summary.handler({}, mockDb as any)
+        const result = await summary.handler({}, mockDb as any)
         expect(result.messages[0].content).toBeDefined()
     })
 })

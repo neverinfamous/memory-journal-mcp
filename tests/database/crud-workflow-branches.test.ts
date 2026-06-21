@@ -377,11 +377,11 @@ describe('Workflow prompts — branch coverage', () => {
     })
 
 
-    it('should generate session-summary prompt', () => {
+    it('should generate session-summary prompt', async () => {
         const prompts = getWorkflowPromptDefinitions()
         const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb([mockEntry({ content: 'debug session' })])
-        const result = summary.handler({}, db)
+        const result = await summary.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('session summary')
     })
 })

@@ -78,14 +78,14 @@ describe('Workflow prompts — branch coverage', () => {
         expect(result.messages[0]!.content.text).toContain('weekly digest')
     })
 
-    it('session-summary: should handle no entries', () => {
+    it('session-summary: should handle no entries', async () => {
         const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb()
-        const result = summary.handler({}, db as never)
+        const result = await summary.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('No entries yet')
     })
 
-    it('session-summary: should truncate long content', () => {
+    it('session-summary: should truncate long content', async () => {
         const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb({
             getRecentEntries: vi.fn().mockReturnValue({ entries: [
@@ -93,7 +93,7 @@ describe('Workflow prompts — branch coverage', () => {
                 { id: 2, entryType: 'note', content: 'short' },
             ]}),
         })
-        const result = summary.handler({}, db as never)
+        const result = await summary.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('...')
         // The short entry should NOT have '...'
         expect(result.messages[0]!.content.text).toContain('short')

@@ -99,12 +99,12 @@ describe('Prompt Handlers', () => {
     // ========================================================================
 
     describe('getPrompt', () => {
-        it('should return messages for each known prompt', () => {
+        it('should return messages for each known prompt', async () => {
             const prompts = getPrompts()
             const names = prompts.map((p) => (p as { name: string }).name)
 
             for (const name of names) {
-                const result = getPrompt(
+                const result = await getPrompt(
                     name,
                     { pr_number: '42', project_number: '42' },
                     db,
@@ -126,8 +126,8 @@ describe('Prompt Handlers', () => {
             expect(() => getPrompt('nonexistent_prompt_xyz', {}, db)).toThrow()
         })
 
-        it('should return messages for prepare-standup', () => {
-            const result = getPrompt('prepare-standup', {}, db)
+        it('should return messages for prepare-standup', async () => {
+            const result = await getPrompt('prepare-standup', {}, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
@@ -135,15 +135,15 @@ describe('Prompt Handlers', () => {
             expect(text).toContain('standup')
         })
 
-        it('should return messages for goal-tracker prompt', () => {
-            const result = getPrompt('goal-tracker', {}, db)
+        it('should return messages for goal-tracker prompt', async () => {
+            const result = await getPrompt('goal-tracker', {}, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })
 
-        it('should return messages for session-summary prompt with team target', () => {
-            const result = getPrompt('session-summary', { target: 'team' }, db, teamDb)
+        it('should return messages for session-summary prompt with team target', async () => {
+            const result = await getPrompt('session-summary', { target: 'team' }, db, teamDb)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
@@ -152,17 +152,18 @@ describe('Prompt Handlers', () => {
             expect(text).toContain('team_create_entry')
         })
 
-        it('should throw ConfigurationError if teamDb is omitted for session-summary with team target', () => {
-            expect(() => getPrompt('session-summary', { target: 'team' }, db)).toThrow(
+        it('should throw ConfigurationError if teamDb is omitted for session-summary with team target', async () => {
+            await expect(getPrompt('session-summary', { target: 'team' }, db)).rejects.toThrow(
                 'Team database not configured'
             )
         })
 
-        it('should return messages for flag-dashboard prompt with flag_type filter', () => {
+        it('should return messages for flag-dashboard prompt with flag_type filter', async () => {
             // Add some flags to teamDb
             teamDb.createEntry({
                 content: 'Blocker flag',
                 entryType: 'flag',
+                tags: ['needs-attention'],
                 autoContext: JSON.stringify({
                     flag_type: 'blocker',
                     target_user: 'alice',
@@ -190,7 +191,7 @@ describe('Prompt Handlers', () => {
                 entryType: 'flag',
             })
 
-            const result = getPrompt('flag-dashboard', { flag_type: 'blocker' }, db, teamDb)
+            const result = await getPrompt('flag-dashboard', { flag_type: 'blocker' }, db, teamDb)
 
             expect(result.messages).toBeDefined()
             const text = (result.messages[0]?.content as { text: string }).text

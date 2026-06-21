@@ -1,5 +1,6 @@
 import * as path from 'node:path'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { GitHistoryClient } from '../../../git/index.js'
 import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
@@ -171,6 +172,31 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         const parsed = Number(projectId)
                         if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
                             projectId = parsed
+                        }
+                    }
+
+                    // Dynamically inject Git and GitHub context for the resolved project
+                    if (projectId !== undefined && sessionContext.config?.projectRegistry) {
+                        const registryEntry = Object.values(sessionContext.config.projectRegistry).find(
+                            (r) => r.project_number === projectId
+                        )
+                        if (registryEntry?.path) {
+                            try {
+                                const injectedGithub = getGitHubIntegration(
+                                    registryEntry.path,
+                                    undefined,
+                                    process.env['GITHUB_TOKEN']
+                                )
+                                const injectedGitClient = new GitHistoryClient(registryEntry.path)
+                                
+                                sessionContext = {
+                                    ...sessionContext,
+                                    github: injectedGithub,
+                                    gitClient: injectedGitClient
+                                }
+                            } catch {
+                                // Ignore injection failures; tools will fallback to global context or throw
+                            }
                         }
                     }
 

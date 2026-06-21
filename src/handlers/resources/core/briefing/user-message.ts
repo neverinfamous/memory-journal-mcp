@@ -354,7 +354,7 @@ export function formatUserMessage(opts: {
         
         if (graphSummary.topHubs.length > 0) {
             const hubsStr = graphSummary.topHubs
-                .map(h => `#${h.id} ${h.preview}`)
+                .map(h => `#${String(h.id)}${h.preview ? ` ${h.preview}` : ''}`.trim())
                 .join(', ')
             graphText += `<br>Context Hubs: ${escapeCell(hubsStr)}`
         }

@@ -26,14 +26,29 @@ const PREVIEW_LENGTH = 120
 
 function cleanPreview(content: string | undefined | null, length: number): string {
     if (!content) return ''
-    const clean = content.trim().replace(/\s+/g, ' ')
-    if (clean.length <= length) return clean
+    
+    // Path Truncation and Noise Reduction
+    const cleaned = content
+        .replace(/## Accomplished - /g, '')
+        .replace(/## Accomplished\n?/g, '')
+        // Windows paths
+        .replace(/C:\\Users\\[^\\]+\\.gemini\\antigravity(?:-ide)?\\brain/g, '<appDataDir>\\brain')
+        .replace(/C:\\Users\\[^\\]+\\Desktop/g, '<desktop>')
+        // Linux/Mac paths
+        .replace(/\/home\/[^/]+\/\.gemini\/antigravity(?:-ide)?\/brain/g, '<appDataDir>/brain')
+        .replace(/\/home\/[^/]+\/Desktop/g, '<desktop>')
+        .replace(/\/Users\/[^/]+\/\.gemini\/antigravity(?:-ide)?\/brain/g, '<appDataDir>/brain')
+        .replace(/\/Users\/[^/]+\/Desktop/g, '<desktop>')
+        .replace(/\r?\n/g, ' ')
+        .trim()
+        
+    if (cleaned.length <= length) return cleaned
 
     // Truncate at a word boundary to avoid cutting mid-word
-    const truncated = clean.slice(0, length)
+    const truncated = cleaned.slice(0, length)
     const lastSpace = truncated.lastIndexOf(' ')
     const boundary = lastSpace > length * 0.6 ? lastSpace : length
-    return clean.slice(0, boundary) + '…'
+    return cleaned.slice(0, boundary) + '…'
 }
 
 export interface JournalContext {
@@ -129,7 +144,7 @@ export function buildJournalContext(
                 latestPreviewStr += `<br> • Unfinished: ${markUntrustedContentInline(cleanPreview(unfinished, 60))}`
             }
             if (nextSession) {
-                latestPreviewStr += `<br> • Next Session: ${markUntrustedContentInline(cleanPreview(nextSession, 60))}`
+                latestPreviewStr += `<br> • Next Session: ${markUntrustedContentInline(cleanPreview(nextSession, 120))}`
             }
             
             const commitCtx = parseSessionCommitContext(firstEntry.autoContext)
@@ -415,7 +430,7 @@ export function buildGraphContext(context: ResourceContext): GraphSummary | unde
             topHubs = hubs.map(hub => ({
                 id: hub.entryId,
                 count: hub.totalLinks,
-                preview: cleanPreview(hub.content, 30)
+                preview: ''
             }))
 
             if (totalEntries > 0) {

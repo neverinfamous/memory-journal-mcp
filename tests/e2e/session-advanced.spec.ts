@@ -10,10 +10,12 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 
+import { getServerUrl } from './helpers.js'
+
 test.describe('Advanced Session Management', () => {
     test('should reject SSE session ID on /mcp (cross-protocol guard)', async () => {
         // Connect via Legacy SSE to get an SSE session ID
-        const sseTransport = new SSEClientTransport(new URL('http://localhost:3100/sse'))
+        const sseTransport = new SSEClientTransport(getServerUrl('/sse'))
         const sseClient = new Client(
             { name: 'cross-protocol-test', version: '1.0.0' },
             { capabilities: {} }
@@ -29,7 +31,7 @@ test.describe('Advanced Session Management', () => {
             // by trying to POST to /mcp with a session ID that doesn't exist in the
             // Streamable HTTP transport map.
 
-            const response = await fetch('http://localhost:3100/mcp', {
+            const response = await fetch(getServerUrl('/mcp').toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -57,7 +59,7 @@ test.describe('Advanced Session Management', () => {
 
         for (let i = 0; i < 3; i++) {
             const transport = new StreamableHTTPClientTransport(
-                new URL('http://localhost:3100/mcp')
+                getServerUrl('/mcp')
             )
             const client = new Client(
                 { name: `sequential-test-${i}`, version: '1.0.0' },
@@ -87,7 +89,7 @@ test.describe('Advanced Session Management', () => {
     })
 
     test('should reject request with non-existent session ID', async () => {
-        const response = await fetch('http://localhost:3100/mcp', {
+        const response = await fetch(getServerUrl('/mcp').toString(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

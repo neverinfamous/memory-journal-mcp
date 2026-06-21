@@ -143,7 +143,9 @@ export function registerPrompts(
     prompts: PromptDefinition[],
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
-    runtime?: ServerRuntime
+    runtime?: ServerRuntime,
+    github?: unknown,
+    gitClient?: unknown
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
@@ -173,20 +175,20 @@ export function registerPrompts(
                 const auditLog = runtime.auditLogger
                 enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
                 return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
-                    const executePrompt = (): Promise<{
+                    const executePrompt = async (): Promise<{
                         messages: {
                             role: 'user' | 'assistant'
                             content: { type: 'text'; text: string }
                         }[]
                     }> => {
                         const args = providedArgs as Record<string, string>
-                        const promptResult = getPrompt(promptDef.name, args, db, teamDb)
-                        return Promise.resolve({
+                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github, gitClient)
+                        return {
                             messages: promptResult.messages.map((m) => ({
                                 role: m.role as 'user' | 'assistant',
                                 content: m.content as { type: 'text'; text: string },
                             })),
-                        })
+                        }
                     }
 
                     return await runtime.maintenanceManager.withActiveJob(executePrompt)

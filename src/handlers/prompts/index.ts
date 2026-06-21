@@ -41,32 +41,34 @@ export interface InternalPromptDef {
     handler: (
         args: Record<string, string>,
         db: IDatabaseAdapter,
-        teamDb?: IDatabaseAdapter
-    ) => { messages: PromptMessage[] }
+        teamDb?: IDatabaseAdapter,
+        github?: unknown,
+        gitClient?: unknown
+    ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
 
 /**
  * Get all prompt definitions for MCP list
  */
 export function getPrompts(): object[] {
-    const prompts = getAllPromptDefinitions()
-    return prompts.map((p) => ({
-        name: p.name,
-        description: p.description,
-        arguments: p.arguments,
-        icons: p.icons,
-    }))
+    return getAllPromptDefinitions().map((def) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { handler: _handler, ...rest } = def
+        return rest
+    })
 }
 
 /**
- * Get a prompt by name
+ * Execute a prompt by name
  */
 export function getPrompt(
     name: string,
     args: Record<string, string>,
     db: IDatabaseAdapter,
-    teamDb?: IDatabaseAdapter
-): { messages: PromptMessage[] } {
+    teamDb?: IDatabaseAdapter,
+    github?: unknown,
+    gitClient?: unknown
+): { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }> {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
 
@@ -74,7 +76,7 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return prompt.handler(args, db, teamDb)
+    return prompt.handler(args, db, teamDb, github, gitClient)
 }
 
 /**

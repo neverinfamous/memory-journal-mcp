@@ -12,6 +12,7 @@ import type { InternalPromptDef } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 import { parseFlagContext } from '../../types/auto-context.js'
+import type { GitHistoryClient } from '../../git/index.js'
 
 
 /**
@@ -145,16 +146,22 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             description: 'Create a formatted session summary entry',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (
+            handler: async (
                 args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                gitClient?: unknown
             ) => {
                 const target = args?.['target'] ?? 'personal'
                 
                 if (target === 'team' && !teamDb) {
                     throw new ConfigurationError('Team database not configured')
                 }
+
+                const dbHint = target === 'team' 
+                    ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
+                    : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\``
 
                 const targetDb = target === 'team' && teamDb ? teamDb : db
                 const { entries: recent } = targetDb.getRecentEntries(5)
@@ -166,12 +173,35 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                                   (e) =>
                                       `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
                               )
-                              .join('\\n')
+                              .join('\n')
                         : '- No entries yet'
 
-                const dbHint = target === 'team' 
-                    ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
-                    : 'Use `create_entry` or `await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })` via `mj_execute_code`'
+                let commitList = '- [List commit SHAs made during the session, or "None"]'
+                const typedGitClient = gitClient as GitHistoryClient | undefined | null
+                if (typedGitClient) {
+                    try {
+                        const history = await typedGitClient.getUnreleasedChangelog()
+                        if (history.totalCount > 0) {
+                            const entries: string[] = []
+                            for (const category of Object.values(history.categories)) {
+                                if (Array.isArray(category)) {
+                                    for (const commit of category) {
+                                        entries.push(`- ${commit.hash.substring(0,7)}: ${commit.message}`)
+                                    }
+                                }
+                            }
+                            if (entries.length > 0) {
+                                commitList = entries.join('\n')
+                            } else {
+                                commitList = '- None'
+                            }
+                        } else {
+                            commitList = '- None'
+                        }
+                    } catch {
+                        // Fallback to placeholder on error
+                    }
+                }
 
                 return {
                     messages: [
@@ -200,7 +230,7 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
 - [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
 
 ## Commits
-- [List commit SHAs made during the session, or "None"]
+${commitList}
 \`\`\`
 
 **Rules:**

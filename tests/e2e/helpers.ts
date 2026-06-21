@@ -37,6 +37,15 @@ export function getBaseURL(testInfo: TestInfo): string {
 }
 
 /**
+ * Get the server URL based on the current worker's port assignment.
+ * Useful for tests that need to construct their own URLs outside of Playwright's native baseURL.
+ */
+export function getServerUrl(path = ''): URL {
+    const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
+    return new URL(`http://localhost:${DEFAULT_PORT + workerIndex}${path}`)
+}
+
+/**
  * Create and connect a Streamable HTTP MCP client.
  * Caller is responsible for calling client.close() in afterAll.
  */

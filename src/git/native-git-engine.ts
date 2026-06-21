@@ -52,11 +52,8 @@ export function toGitCommit(entry: CommitEntry): GitCommit {
 }
 
 async function runStreamingQuery(baseDir: string, args: CliArgs, targetRange?: string, limit?: number): Promise<CommitEntry[]> {
-  const cwdBackup = process.cwd();
   const results: CommitEntry[] = [];
   try {
-    process.chdir(baseDir);
-
     const baseGitArgs = buildGitBaseArgs(args, targetRange);
     const formattingFlags: string[] = [];
     let inPath = false;
@@ -78,7 +75,7 @@ async function runStreamingQuery(baseDir: string, args: CliArgs, targetRange?: s
     let batch: RawCommitBatchItem[] = [];
     let yieldedCount = 0;
 
-    for await (const commitBlock of streamGitRecords(mainArgs)) {
+    for await (const commitBlock of streamGitRecords(mainArgs, baseDir)) {
       const record = parseGitRecord(commitBlock, args);
       if (!record) continue;
       batch.push(record);
@@ -110,8 +107,6 @@ async function runStreamingQuery(baseDir: string, args: CliArgs, targetRange?: s
   } catch (error) {
     cleanupProcesses();
     throw new NativeGitError(error instanceof Error ? error.message : String(error));
-  } finally {
-    process.chdir(cwdBackup);
   }
 }
 
@@ -122,11 +117,8 @@ export async function getNativeCommitHistory(baseDir: string, options: { maxCoun
 }
 
 export async function getUnreleasedChangelog(baseDir: string): Promise<UnreleasedChangelog> {
-  const cwdBackup = process.cwd();
   try {
-    process.chdir(baseDir);
-
-    const tagRangeInfo = getGitTagRange();
+    const tagRangeInfo = getGitTagRange(baseDir);
     const args: CliArgs = { 'changelog-only': true };
     
     const rangeParts = tagRangeInfo.range.split('..');
@@ -175,7 +167,5 @@ export async function getUnreleasedChangelog(baseDir: string): Promise<Unrelease
   } catch (error) {
     cleanupProcesses();
     throw new NativeGitError(error instanceof Error ? error.message : String(error));
-  } finally {
-    process.chdir(cwdBackup);
   }
 }
