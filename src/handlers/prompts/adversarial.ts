@@ -299,8 +299,8 @@ If the target is '{target}', determine it from the user's request. If the user h
             })
         },
         {
-            name: 'audit-seo-docs',
-            description: 'Adversarial SEO and documentation audit (markup, E-E-A-T, marketing)',
+            name: 'audit-seo',
+            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals)',
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
@@ -308,12 +308,16 @@ If the target is '{target}', determine it from the user's request. If the user h
                     role: 'user',
                     content: {
                         type: 'text',
-                        text: `# Adversarial SEO & Docs Audit
+                        text: `# Adversarial SEO Audit
 Target: ${args?.['target'] ?? '{target}'}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Perform a multi-pass audit checking technical SEO, semantic HTML, ARIA, and marketing documentation clarity.
+1. Perform a multi-pass audit checking:
+   - Technical SEO (meta tags, Open Graph, canonicals, viewport).
+   - Semantic HTML and accessibility (ARIA, alt text, structural hierarchy).
+   - Core Web Vitals implications (DOM size, layout shifts, LCP elements).
+   - Structured data (JSON-LD) and E-E-A-T signals.
 2. Present findings table.
 3. Await HITL approval before applying fixes.`
                     }
