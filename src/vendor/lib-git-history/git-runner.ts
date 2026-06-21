@@ -18,9 +18,9 @@ export const FIELD_SEPARATOR = `\x1E<GIT_FIELD_BOUNDARY_${UNIQUE_ID}>\x1E`;
 export const NUMSTAT_BOUNDARY_STR = `\x1E<GIT_NUMSTAT_BOUNDARY_${UNIQUE_ID}>\x1E`;
 export const PATCH_BOUNDARY_STR = `\x1E<GIT_PATCH_BOUNDARY_${UNIQUE_ID}>\x1E`;
 
-export function getGitTagRange(cwd?: string): { range: string; isFallback: boolean; headSha: string } {
+export function getGitTagRange(cwd: string = process.cwd()): { range: string; isFallback: boolean; headSha: string } {
   let headSha = 'HEAD';
-  const execOpts = { encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: 10000, maxBuffer: 10 * 1024 * 1024, windowsHide: true, cwd };
+  const execOpts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: 10000, maxBuffer: 10 * 1024 * 1024, windowsHide: true };
   try {
     headSha = execFileSync('git', ['--no-pager', 'rev-parse', 'HEAD'], execOpts).trim();
     let tagName = execFileSync('git', ['--no-pager', 'describe', '--tags', '--abbrev=0'], execOpts).trim();
@@ -88,7 +88,7 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   return gitArgs;
 }
 
-export async function* streamGitRecords(args: string[], cwd?: string): AsyncGenerator<string> {
+export async function* streamGitRecords(args: string[], cwd: string = process.cwd()): AsyncGenerator<string> {
   const ac = new AbortController();
   let idleTimeout = setTimeout(() => ac.abort(), 300000);
   idleTimeout.unref();
@@ -105,7 +105,7 @@ export async function* streamGitRecords(args: string[], cwd?: string): AsyncGene
   
   let proc: ReturnType<typeof spawn>;
   try {
-    proc = spawn('git', ['--no-pager', ...args], { signal: ac.signal, windowsHide: true, cwd });
+    proc = spawn('git', ['--no-pager', ...args], { cwd, signal: ac.signal, windowsHide: true });
     activeProcesses.add(proc);
   } catch (err) {
     clearTimeout(idleTimeout);

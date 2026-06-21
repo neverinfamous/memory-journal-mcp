@@ -63,9 +63,10 @@ export function gitInterceptor({ cmdBasename, args, payload }: ExecutionContext)
     process.exit(1);
   }
 
-  if (args.includes('-p') || args.includes('--patch')) {
-    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -p' (patch mode) is highly interactive and will hang indefinitely.`);
-    console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Do not use patch mode.`);
+  const interactivePatchCmds = ['add', 'checkout', 'commit', 'reset', 'stash', 'restore'];
+  if (interactivePatchCmds.includes(gitSubCmd) && (args.includes('-p') || args.includes('--patch'))) {
+    console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd} -p' (patch selection) is highly interactive and will hang indefinitely.`);
+    console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Do not use patch mode for this command.`);
     process.exit(1);
   }
 
