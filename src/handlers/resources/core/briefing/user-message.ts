@@ -256,7 +256,7 @@ export function formatUserMessage(opts: {
     if (rulesFile)
         sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
     if (skillsDir)
-        sysLine3.push(`🧠 ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
+        sysLine3.push(`🧠 [${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}](file:///${skillsDir.absolutePath.replace(/\\/g, '/')})`)
     if (sysLine3.length) sysLines.push(sysLine3.join(' · '))
 
     if (opts.hasCodeMap) {
@@ -376,11 +376,7 @@ export function formatUserMessage(opts: {
             gitHistoryLines.push(`**Unreleased (${String(cl.totalCount)}):** ${catSummary}`);
         } else if (opts.gitHistory.commits.length > 0) {
             // Only show fallback commits if we don't have the rich changelog categories
-            const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
-            const shortCommits = opts.gitHistory.commits.slice(0, 3).map(c => {
-                const shaLink = repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
-                return shaLink;
-            }).join(', ');
+            const shortCommits = opts.gitHistory.commits.slice(0, 3).map(c => `\`${c.hash}\``).join(', ');
             gitHistoryLines.push(`**Recent Commits:** ${shortCommits}`);
         }
     }

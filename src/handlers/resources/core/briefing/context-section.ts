@@ -266,6 +266,7 @@ export interface RulesFile {
 
 export interface SkillsDir {
     path: string
+    absolutePath: string
     count: number
     names: string[]
 }
@@ -323,6 +324,7 @@ export function buildSkillsDirInfo(
         const skillDirs = entries.filter((e) => e.isDirectory())
         return {
             path: path.basename(skillsDirPath),
+            absolutePath: skillsDirPath,
             count: skillDirs.length,
             names: skillDirs.map((d) => d.name),
         }
