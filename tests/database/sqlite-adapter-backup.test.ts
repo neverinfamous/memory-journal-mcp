@@ -9,9 +9,14 @@ describe('Backup Manager Edge Cases', () => {
     let db: DatabaseAdapter
 
     beforeAll(async () => {
-        if (!fs.existsSync(testDir)) {
-            fs.mkdirSync(testDir, { recursive: true })
+        try {
+            if (fs.existsSync(testDir)) {
+                fs.rmSync(testDir, { recursive: true, force: true })
+            }
+        } catch {
+            // ignore
         }
+        fs.mkdirSync(testDir, { recursive: true })
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })

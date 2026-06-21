@@ -2,8 +2,8 @@
   "libs": {
     "lib-git-history": {
       "source": ".agents/scripts/lib-git-history",
-      "syncedAt": "2026-06-21T10:40:19.016Z",
-      "syncedFromCommit": "796c9e0273432d541fcc646b0d5a8ee175883402",
+      "syncedAt": "2026-06-21T18:46:24.846Z",
+      "syncedFromCommit": "7d4b808643389e76af338cda277b79299ad65d70",
       "files": [
         "cli.ts",
         "git-numstat.ts",
@@ -17,14 +17,19 @@
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
-      "syncedAt": "2026-06-21T14:02:44.079Z",
-      "syncedFromCommit": "b0142aa542b7936e8ce2c9d37c5a92d21749ef40",
+      "syncedAt": "2026-06-21T18:46:24.920Z",
+      "syncedFromCommit": "7d4b808643389e76af338cda277b79299ad65d70",
       "files": [
         "schema.ts",
         "environment.ts",
         "command-builder.ts",
         "stream-manager.ts",
         "process-manager.ts",
+        "io-controller.ts",
+        "prompt-detector.ts",
+        "agent-exec.ts",
+        "execution-engine.ts",
+        "process-controller.ts",
         "interceptors/index.ts",
         "interceptors/types.ts",
         "interceptors/git-interceptor.ts",

@@ -9,7 +9,7 @@
  */
 
 import type { BriefingGitHub } from './github-section.js'
-import type { RulesFile, SkillsDir, FlagSummary, GraphSummary } from './context-section.js'
+import type { FlagSummary, GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 import type { GitHistorySummary, TestHealth } from './system-section.js'
 
@@ -48,8 +48,7 @@ export function formatUserMessage(opts: {
     summaryPreviews?: string[] | null
     github: BriefingGitHub | null
     teamTotalEntries?: number
-    rulesFile?: RulesFile
-    skillsDir?: SkillsDir
+
     analyticsInsights?: BriefingInsights
     flagSummary?: FlagSummary
     graphSummary?: GraphSummary
@@ -83,8 +82,6 @@ export function formatUserMessage(opts: {
         latestPreviews,
         summaryPreviews,
         github,
-        rulesFile,
-        skillsDir,
         analyticsInsights,
         graphSummary,
     } = opts
@@ -252,12 +249,7 @@ export function formatUserMessage(opts: {
     }
     if (testLines.length) sysLines.push(testLines.join(' · '))
 
-    const sysLine3 = []
-    if (rulesFile)
-        sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
-    if (skillsDir)
-        sysLine3.push(`🧠 [${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}](file:///${skillsDir.absolutePath.replace(/\\/g, '/')})`)
-    if (sysLine3.length) sysLines.push(sysLine3.join(' · '))
+
 
     if (opts.hasCodeMap) {
         sysLines.push(

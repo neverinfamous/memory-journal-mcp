@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
 import { executeCommand } from './execution-engine.js';

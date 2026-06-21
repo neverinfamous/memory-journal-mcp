@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ExecutionContext } from './types.js';
 
 export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {

@@ -18,8 +18,6 @@ import { buildGitHubSection } from './github-section.js'
 import {
     buildJournalContext,
     buildTeamContext,
-    buildRulesFileInfo,
-    buildSkillsDirInfo,
     buildFlagsContext,
     buildGraphContext,
 } from './context-section.js'
@@ -91,8 +89,6 @@ export async function buildBriefingData(
     const journal = buildJournalContext(context, config, activeProjectNumber)
     const github = await buildGitHubSection(activeGithub, config)
     const team = buildTeamContext(context, config, activeProjectNumber)
-    const rulesFile = buildRulesFileInfo(config.rulesFilePath, config.allowedIoRoots)
-    const skillsDir = buildSkillsDirInfo(config.skillsDirPath, config.allowedIoRoots)
     const insights = buildInsightsSection(context)
     const flags = buildFlagsContext(context)
     const graphStats = buildGraphContext(context)
@@ -134,8 +130,6 @@ export async function buildBriefingData(
         summaryPreviews,
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,
-        rulesFile,
-        skillsDir,
         analyticsInsights: insights ?? undefined,
         flagSummary: flags,
         graphSummary: graphStats,

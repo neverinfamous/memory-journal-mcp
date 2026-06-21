@@ -5,15 +5,11 @@
  * context sections for the briefing resource.
  */
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 import { parseFlagContext, parseSessionCommitContext } from '../../../../types/auto-context.js'
 import {
     markUntrustedContentInline,
-    assertSafeFilePath,
-    assertSafeDirectoryPath,
 } from '../../../../utils/security-utils.js'
 import type { JournalEntry } from '../../../../types/index.js'
 
@@ -163,17 +159,18 @@ export function buildJournalContext(
         }
     }
 
-    // ── Latest entries (deduplicated against summaries) ──────────────
+    // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
+    const fetchLimit = config.entryCount + (config.summaryCount ?? 0) + 10
     let recentEntries =
         typeof projectNumber === 'number'
-            ? extractEntries(context.db.searchEntries('', { limit: config.entryCount, projectNumber }))
-            : extractEntries(context.db.getRecentEntries(config.entryCount))
+            ? extractEntries(context.db.searchEntries('', { limit: fetchLimit, projectNumber }))
+            : extractEntries(context.db.getRecentEntries(fetchLimit))
             
     recentEntries = recentEntries.filter(isImportant)
 
     // Exclude entries already shown in the Summary slot to diversify briefing content
     const summaryIds = new Set(finalSummaryEntries.map((e: JournalEntry) => e.id))
-    const dedupedRecent = recentEntries.filter((e: JournalEntry) => !summaryIds.has(e.id))
+    const dedupedRecent = recentEntries.filter((e: JournalEntry) => !summaryIds.has(e.id)).slice(0, config.entryCount)
 
     const latestEntries = dedupedRecent.map((e: JournalEntry) => {
         return {
@@ -263,86 +260,7 @@ export function buildTeamContext(
 // Rules & Skills Awareness
 // ============================================================================
 
-export interface RulesFile {
-    path: string
-    name: string
-    sizeKB: number
-    lastModified: string
-}
 
-export interface SkillsDir {
-    path: string
-    absolutePath: string
-    count: number
-    names: string[]
-}
-
-/** Milliseconds per hour / per day for age formatting */
-const MS_PER_HOUR = 3_600_000
-const MS_PER_DAY = 86_400_000
-
-export function buildRulesFileInfo(
-    rulesFilePath: string | undefined,
-    allowedIoRoots: string[] = []
-): RulesFile | undefined {
-    if (!rulesFilePath) return undefined
-
-    try {
-        const expandedRoots = [...allowedIoRoots, path.dirname(rulesFilePath)]
-        assertSafeFilePath(rulesFilePath, expandedRoots)
-        const stat = fs.statSync(rulesFilePath)
-        const ageMs = Date.now() - stat.mtimeMs
-        const ageHours = Math.floor(ageMs / MS_PER_HOUR)
-        const ageDays = Math.floor(ageMs / MS_PER_DAY)
-        const agoStr =
-            ageDays > 0
-                ? `${String(ageDays)}d ago`
-                : ageHours > 0
-                  ? `${String(ageHours)}h ago`
-                  : 'just now'
-
-        return {
-            path: path.basename(rulesFilePath),
-            name: path.basename(rulesFilePath),
-            sizeKB: Math.round(stat.size / 1024),
-            lastModified: agoStr,
-        }
-    } catch (error) {
-        logger.debug('Failed to read rules file', {
-            module: 'BRIEFING',
-            operation: 'rules-file',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
-    }
-}
-
-export function buildSkillsDirInfo(
-    skillsDirPath: string | undefined,
-    allowedIoRoots: string[] = []
-): SkillsDir | undefined {
-    if (!skillsDirPath) return undefined
-
-    try {
-        const expandedRoots = [...allowedIoRoots, skillsDirPath]
-        assertSafeDirectoryPath(skillsDirPath, expandedRoots)
-        const entries = fs.readdirSync(skillsDirPath, { withFileTypes: true })
-        const skillDirs = entries.filter((e) => e.isDirectory())
-        return {
-            path: path.basename(skillsDirPath),
-            absolutePath: skillsDirPath,
-            count: skillDirs.length,
-            names: skillDirs.map((d) => d.name),
-        }
-    } catch (error) {
-        logger.debug('Failed to read skills directory', {
-            module: 'BRIEFING',
-            operation: 'skills-dir',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
-    }
-}
 
 // ============================================================================
 // Flags Context (Hush Protocol)

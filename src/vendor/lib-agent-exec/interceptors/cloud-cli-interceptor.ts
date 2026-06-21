@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ExecutionContext } from './types.js';
 
 export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { stripVTControlCharacters } from 'node:util';
 
 export function checkPrompt(tail: string): boolean {

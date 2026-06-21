@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ExecutionContext } from './types.js';
 
 export function packageManagerInterceptor({ cmdBasename, args, envOverrides }: ExecutionContext): void {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ChildProcess, spawnSync } from 'node:child_process';
 
 export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];

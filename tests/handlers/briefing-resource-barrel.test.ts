@@ -30,8 +30,7 @@ vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => (
         sessionSummaries: [{ id: 1, type: 'summary', preview: 'test' }],
     }),
     buildTeamContext: vi.fn().mockReturnValue(null),
-    buildRulesFileInfo: vi.fn().mockReturnValue(null),
-    buildSkillsDirInfo: vi.fn().mockReturnValue(null),
+
     buildFlagsContext: vi.fn().mockReturnValue(undefined),
     buildGraphContext: vi.fn().mockReturnValue(undefined),
 }))
