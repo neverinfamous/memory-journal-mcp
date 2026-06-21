@@ -173,7 +173,6 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     const originalCmdAndArgs = args.slice(1);
     const commandLine = originalCmdAndArgs.map(arg => {
       if (/[ \t&|<>^"]/.test(arg)) {
-        if (arg.startsWith('"') && arg.endsWith('"') && arg.length >= 2) return arg;
         // Properly escape inner double quotes by replacing " with \" so cmd.exe toggle state isn't confused,
         // while also wrapping the argument in quotes for cmd.exe.
         return `"${arg.replace(/"/g, '\\"')}"`;

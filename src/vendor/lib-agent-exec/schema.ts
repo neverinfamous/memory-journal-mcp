@@ -1,7 +1,10 @@
 // @ts-nocheck
 import { z } from 'zod';
 
-const safeString = z.string().refine(val => !val.includes('\0'), "Must not contain null bytes");
+const noNullString = z.string().refine(val => !val.includes('\0'), "Must not contain null bytes");
+const safeString = noNullString
+  .refine(val => !val.includes('\r'), "Must not contain carriage returns")
+  .refine(val => !val.includes('\uFEFF'), "Must not contain BOMs");
 
 export const PayloadSchema = z.discriminatedUnion("type", [
   z.object({
@@ -11,9 +14,9 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     cwd: safeString.optional(),
     env: z.record(safeString, safeString).optional(),
     timeoutMs: z.number().int().nonnegative().optional(),
-    stdin: z.string().optional(),
-    stdoutFile: z.string().optional(),
-    stderrFile: z.string().optional(),
+    stdin: noNullString.optional(),
+    stdoutFile: safeString.optional(),
+    stderrFile: safeString.optional(),
     maxBuffer: z.number().positive().optional(),
     truncateOutputLength: z.number().positive().optional(),
     keepPayload: z.boolean().optional(),
@@ -21,15 +24,15 @@ export const PayloadSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("script"),
-    scriptPath: z.string().min(1, "scriptPath must not be empty"),
-    interpreter: z.string().optional(),
-    args: z.array(z.string()).optional(),
-    cwd: z.string().optional(),
-    env: z.record(z.string(), z.string()).optional(),
+    scriptPath: safeString.min(1, "scriptPath must not be empty"),
+    interpreter: safeString.optional(),
+    args: z.array(safeString).optional(),
+    cwd: safeString.optional(),
+    env: z.record(safeString, safeString).optional(),
     timeoutMs: z.number().int().nonnegative().optional(),
-    stdin: z.string().optional(),
-    stdoutFile: z.string().optional(),
-    stderrFile: z.string().optional(),
+    stdin: noNullString.optional(),
+    stdoutFile: safeString.optional(),
+    stderrFile: safeString.optional(),
     maxBuffer: z.number().positive().optional(),
     truncateOutputLength: z.number().positive().optional(),
     keepPayload: z.boolean().optional(),
@@ -37,15 +40,15 @@ export const PayloadSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("eval"),
-    code: z.string().min(1, "code must not be empty"),
-    interpreter: z.string().optional(),
-    args: z.array(z.string()).optional(),
-    cwd: z.string().optional(),
-    env: z.record(z.string(), z.string()).optional(),
+    code: noNullString.min(1, "code must not be empty"),
+    interpreter: safeString.optional(),
+    args: z.array(safeString).optional(),
+    cwd: safeString.optional(),
+    env: z.record(safeString, safeString).optional(),
     timeoutMs: z.number().int().nonnegative().optional(),
-    stdin: z.string().optional(),
-    stdoutFile: z.string().optional(),
-    stderrFile: z.string().optional(),
+    stdin: noNullString.optional(),
+    stdoutFile: safeString.optional(),
+    stderrFile: safeString.optional(),
     maxBuffer: z.number().positive().optional(),
     truncateOutputLength: z.number().positive().optional(),
     keepPayload: z.boolean().optional(),
