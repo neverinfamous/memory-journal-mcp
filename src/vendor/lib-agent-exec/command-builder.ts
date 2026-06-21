@@ -51,8 +51,25 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   const envOverrides: Record<string, string> = {};
   
   if (payload.type === 'command') {
-    cmd = payload.command;
-    args = [...(payload.args || [])];
+    if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
+      const parts = payload.templateOverride.split('{{code}}');
+      const prefix = parts[0].trim();
+      const suffix = parts.length > 1 ? parts[1].trim() : '';
+      
+      const prefixArgs = prefix ? prefix.split(/\s+/) : [];
+      const suffixArgs = suffix ? suffix.split(/\s+/) : [];
+      
+      if (prefixArgs.length > 0) {
+        cmd = prefixArgs[0];
+        args = [...prefixArgs.slice(1), payload.command, ...(payload.args || []), ...suffixArgs];
+      } else {
+        cmd = payload.command;
+        args = [...(payload.args || []), ...suffixArgs];
+      }
+    } else {
+      cmd = payload.command;
+      args = [...(payload.args || [])];
+    }
   } else if (payload.type === 'script') {
     const scriptFile = path.resolve(payload.scriptPath);
     if (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile()) {
@@ -211,13 +228,25 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   }
 
   if (payload.target === 'wsl2') {
+    if (payload.type === 'command') {
+      const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
+      if (builtIns.includes(payload.command.toLowerCase())) {
+        console.error(`\n   💡 AGENT HINT: '${payload.command}' is a shell built-in, not an executable file.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+        console.error(`   Because 'agent-exec.ts' uses \`shell: false\` for security, built-ins cannot be run directly.`);
+        console.error(`   Use standard agent filesystem tools (list_dir, view_file, etc.) instead.`);
+        process.exit(1);
+      }
+    }
+
     const convertToWslPath = (winPath: string): string => {
       if (!winPath) return winPath;
-      const match = winPath.match(/^([a-zA-Z]):[/\\](.*)$/);
-      if (match) {
-        return `/mnt/${match[1].toLowerCase()}/${match[2].replace(/\\/g, '/')}`;
+      let converted = winPath;
+      if (/[a-zA-Z]:[/\\]/.test(winPath)) {
+        converted = winPath.replace(/([a-zA-Z]):[/\\]([^"';=,\s]*)/g, (match, drive, rest) => {
+          return `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`;
+        });
       }
-      return winPath.replace(/\\/g, '/');
+      return converted.replace(/\\/g, '/');
     };
 
     const wslCwd = convertToWslPath(cwd);
@@ -227,10 +256,10 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     wslEnvArgs.push(`AGENT_EXEC_WSL_UUID=${wslUuid}`);
     const payloadEnv = payload.env || {};
     for (const [k, v] of Object.entries(payloadEnv)) {
-      wslEnvArgs.push(`${k}=${v}`);
+      wslEnvArgs.push(`${k}=${convertToWslPath(v as string)}`);
     }
     for (const [k, v] of Object.entries(envOverrides)) {
-      wslEnvArgs.push(`${k}=${v}`);
+      wslEnvArgs.push(`${k}=${convertToWslPath(v)}`);
     }
 
     const wslArgs = args.map(arg => {

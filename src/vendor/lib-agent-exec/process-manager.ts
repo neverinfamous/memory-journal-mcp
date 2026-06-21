@@ -1,8 +1,16 @@
 // @ts-nocheck
 import { ChildProcess, spawnSync } from 'node:child_process';
 
+export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];
+
 export function killProcessTree(child: ChildProcess) {
   if (!child.pid) return;
+  
+  for (const hook of processManagerHooks) {
+    if (hook.onKill) {
+      try { hook.onKill(child.pid); } catch { /* ignore */ }
+    }
+  }
   
   if (process.platform === 'win32') {
     const childWithArgs = child as unknown as { spawnfile?: string, spawnargs?: string[] };
