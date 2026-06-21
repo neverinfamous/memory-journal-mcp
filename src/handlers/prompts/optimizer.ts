@@ -36,10 +36,21 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                         avgPerEntry = typeof rc.avgPerEntry === 'number' ? rc.avgPerEntry : 'Unknown'
                     }
 
+                    let orphanCount: number | string = 'Unknown'
+                    let orphanDensity = 'Unknown'
+                    try {
+                        orphanCount = db.getOrphanCount()
+                        if (typeof totalEntries === 'number' && totalEntries > 0) {
+                            orphanDensity = Math.round((orphanCount / totalEntries) * 100) + '%'
+                        }
+                    } catch {
+                        // fallback
+                    }
+
                     statsSnippet = `**Live Database Health:**
 - Total Entries: ${totalEntries}
 - Active Relationships: ${totalRelationships} (Avg: ${avgPerEntry}/entry)
-- Orphans & Density: *Requires Code Mode sweep to calculate (see snippet below)*`
+- Orphans: ${orphanCount} (${orphanDensity} density)`
                 } catch {
                     // ignore
                 }
@@ -70,14 +81,17 @@ Entries have an \`importance\` score (0.00 to 1.00), which includes a baseline *
 6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
 
 ## Identifying Orphans Safely
-Do NOT use \`search_entries\` to dump the database. Use this pre-optimized Code Mode script in \`mj_execute_code\` to safely extract true orphans without hitting API limits:
+Do NOT use \`search_entries\` to dump the database. Use this pre-optimized Code Mode script in \`mj_execute_code\`. Because Code Mode executes directly against the sandboxed SQLite adapter, you can safely perform 500+ read iterations in milliseconds without triggering RPC serialization limits:
 
 \`\`\`javascript
 const orphans = [];
 let cursor = undefined;
-for(let i=0; i<10; i++) { // limit batch size
-  const res = await mj.core.getRecentEntries({ limit: 50, cursor });
-  if (!res.entries) break;
+let processed = 0;
+
+while (processed < 500) {
+  const res = await mj.core.getRecentEntries({ limit: 50, cursor, workspace_id: 'default' });
+  if (!res.entries || res.entries.length === 0) break;
+  
   for (const entry of res.entries) {
     const full = await mj.core.getEntryById({ id: entry.id });
     if (full.success && full.relationships && full.relationships.length === 0) {
@@ -85,8 +99,10 @@ for(let i=0; i<10; i++) { // limit batch size
       if (baseScore === 0) orphans.push({ id: entry.id, type: entry.entryType });
     }
   }
-  cursor = res.pagination?.nextCursor;
-  if (!cursor) break;
+  
+  processed += res.entries.length;
+  if (!res.hasMore) break;
+  cursor = res.next_cursor;
 }
 return orphans;
 \`\`\`
@@ -94,7 +110,7 @@ return orphans;
 ## Optimization Workflows
 
 Select one or more workflows to run:
-1. **Importance Audit**: Find older orphans with a base importance of 0.0. Review for soft-deletion.
+1. **Importance Audit**: Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
 2. **Type-Based Cleanup**: e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
 
 To proceed:

@@ -215,7 +215,11 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain tags)
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`auto_context\`: [OPTIONAL] JSON string of commit metadata if any commits were made
+- \`impact_score\`: [REQUIRED] Decimal score (e.g., 0.5)
+- \`trust_score\`: [REQUIRED] Decimal score (e.g., 0.9 if verified)
+- \`validation_status\`: [REQUIRED] Validation outcome (e.g., "verified")
+- \`related_to\`: [REQUIRED] List of related entry IDs, anchor to previous context if applicable
+- \`auto_context\`: [REQUIRED] JSON string of commit metadata representing the session's work.
 - ${dbHint}
 
 **Required Content Structure (use EXACTLY these section headers):**
