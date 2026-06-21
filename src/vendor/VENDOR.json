@@ -2,8 +2,8 @@
   "libs": {
     "lib-git-history": {
       "source": ".agents/scripts/lib-git-history",
-      "syncedAt": "2026-06-21T10:16:46.681Z",
-      "syncedFromCommit": "ed15c815879ae86b8d720d8ab1d68620dea2a61d",
+      "syncedAt": "2026-06-21T10:40:19.016Z",
+      "syncedFromCommit": "796c9e0273432d541fcc646b0d5a8ee175883402",
       "files": [
         "cli.ts",
         "git-numstat.ts",

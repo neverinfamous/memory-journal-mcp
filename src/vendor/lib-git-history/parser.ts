@@ -395,8 +395,8 @@ export function parseGitRecord(
   const references: string[] = [];
   const coAuthors: string[] = [];
   const reviewers: string[] = [];
-  const metadataObj: Record<string, unknown> = {};
-  const customTrailers: Record<string, string[]> = {};
+  const metadataObj: Record<string, unknown> = Object.create(null);
+  const customTrailers: Record<string, string[]> = Object.create(null);
 
   if (rawTrailers) {
     const trailerList = rawTrailers.split('\x1C').filter(Boolean);
@@ -441,8 +441,8 @@ export function parseGitRecord(
         else if (v === 'low') metadataObj.impact = 0.2;
         else {
           const num = Number(val.trim());
-          if (val.trim() !== '' && !Number.isNaN(num)) {
-            if (Number.isFinite(num)) metadataObj.impact = num;
+          if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
+            metadataObj.impact = num;
           } else if (val.trim() !== '') {
             metadataObj.impact = val;
           }
@@ -455,8 +455,8 @@ export function parseGitRecord(
         else if (v === 'low') metadataObj.trust = 0.2;
         else {
           const num = Number(val.trim());
-          if (val.trim() !== '' && !Number.isNaN(num)) {
-            if (Number.isFinite(num)) metadataObj.trust = num;
+          if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
+            metadataObj.trust = num;
           } else if (val.trim() !== '') {
             metadataObj.trust = val;
           }
@@ -495,8 +495,8 @@ export function parseGitRecord(
   }
 
   if (exactTrailerBlock) {
-    const normalizedBody = body.replace(/\r\n/g, '\n');
-    const trailerTrimmed = exactTrailerBlock.replace(/\r\n/g, '\n').trim();
+    const normalizedBody = body.replace(/\r/g, '');
+    const trailerTrimmed = exactTrailerBlock.replace(/\r/g, '').trim();
     if (trailerTrimmed.length > 0) {
       const trimmedBody = normalizedBody.trimEnd();
       if (trimmedBody.endsWith(trailerTrimmed)) {
@@ -544,8 +544,15 @@ export function parseGitRecord(
   extractIssues(body, issuesMap, args['issue-pattern']);
 
   return {
-    sha, parents, refs, tags, authorName, authorEmail, date, committerName, committerEmail, committerDate,
-    subject, body, cleanSubject, type, scope, isBreaking, isRevert, revertedCommit, breakingChangeDescription,
+    sha: (' ' + sha).slice(1), parents, refs, tags, 
+    authorName: (' ' + authorName).slice(1), authorEmail: (' ' + authorEmail).slice(1), 
+    date: (' ' + date).slice(1), committerName: (' ' + committerName).slice(1), 
+    committerEmail: (' ' + committerEmail).slice(1), committerDate: (' ' + committerDate).slice(1),
+    subject: (' ' + subject).slice(1), body, cleanSubject: (' ' + cleanSubject).slice(1), 
+    type: type ? (' ' + type).slice(1) : undefined, scope: scope ? (' ' + scope).slice(1) : undefined, 
+    isBreaking, isRevert, 
+    revertedCommit: revertedCommit ? (' ' + revertedCommit).slice(1) : undefined, 
+    breakingChangeDescription: breakingChangeDescription ? (' ' + breakingChangeDescription).slice(1) : undefined,
     rawFiles, metadataObj, references, coAuthors, reviewers, issuesMap
   };
 }
