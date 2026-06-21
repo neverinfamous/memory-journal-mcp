@@ -50,7 +50,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   
   if (payload.type === 'command') {
     cmd = payload.command;
-    args = payload.args || [];
+    args = [...(payload.args || [])];
   } else if (payload.type === 'script') {
     const scriptFile = path.resolve(payload.scriptPath);
     if (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile()) {
@@ -96,10 +96,11 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
     tempScriptPath = path.join(scratchDir, `agent-eval-${uniqueId}${ext}`);
     try {
+      let codeToExecute = payload.code;
       if (ext === '.ps1') {
-        payload.code = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${payload.code}`;
+        codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
       }
-      fs.writeFileSync(tempScriptPath, payload.code, 'utf-8');
+      fs.writeFileSync(tempScriptPath, codeToExecute, 'utf-8');
     } catch (err) {
       console.error(`❌ Error: Failed to write eval code to temporary file ${tempScriptPath}`);
       console.error(err instanceof Error ? err.message : String(err));

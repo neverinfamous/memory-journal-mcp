@@ -1,8 +1,11 @@
 # Agent Execution Bridge (`agent-exec.ts`)
 
-This module provides the core non-interactive command execution bridge for AI agents in the repository. It is designed to safely execute commands, shell scripts, and JavaScript/TypeScript evaluations without hanging or requiring interactive terminal access. 
+**Purpose**: This module functions as a **hardened, deterministic execution substrate** for AI agents. It shields you from the inherent unreliability of interactive shell environments (hanging processes, TTY bugs, quoting flaws) by providing a robust, non-interactive execution bridge.
 
-Agents **must** use `agent-exec.ts` by passing a JSON payload instead of directly running complex, multi-line, or quote-sensitive shell commands via the native `run_command` terminal bridge.
+✨ **NEW: PowerShell Proxy Interceptors** ✨
+You no longer need to manually craft JSON payloads for most standard commands! The PowerShell environment now automatically intercepts native CLI tools (`git`, `docker`, `bun`, `npm`, `gh`, `node`, `python`, etc.) via proxy functions. When you execute `run_command("bun run check")`, the proxy seamlessly intercepts it and routes it through `lib-agent-exec` securely under the hood.
+
+You only need to manually pass a JSON payload (as described below) if you are executing complex scripts or raw `eval` code snippets that are not natively intercepted. By pairing this deterministic execution with a deterministic repository model (`lib-git-history`), we eliminate the two largest sources of friction in agentic workflows.
 
 ## 🧹 Scratch Workspace Protocol
 
