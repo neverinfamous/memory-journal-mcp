@@ -231,7 +231,7 @@ Review prior entries for recurring findings and reusable patterns before draftin
             },
         },
         {
-            name: 'audit-code-quality',
+            name: 'adversarial-audit-code-quality',
             description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency)',
             icons: [ICON_PROMPT],
             arguments: [],
@@ -255,7 +255,7 @@ Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "
             })
         },
         {
-            name: 'audit-security',
+            name: 'adversarial-audit-security',
             description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces)',
             icons: [ICON_PROMPT],
             arguments: [],
@@ -277,7 +277,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             })
         },
         {
-            name: 'audit-performance',
+            name: 'adversarial-audit-performance',
             description: 'Multi-pass adversarial performance audit (profiling, stress-testing)',
             icons: [ICON_PROMPT],
             arguments: [],
@@ -299,7 +299,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             })
         },
         {
-            name: 'audit-seo',
+            name: 'adversarial-audit-seo',
             description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals)',
             icons: [ICON_PROMPT],
             arguments: [],
@@ -325,7 +325,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             })
         },
         {
-            name: 'audit-skill',
+            name: 'adversarial-audit-skill',
             description: 'Multi-pass adversarial skill audit (evaluate triggers, stress-test)',
             icons: [ICON_PROMPT],
             arguments: [],
@@ -347,7 +347,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             })
         },
         {
-            name: 'audit-workflow',
+            name: 'adversarial-audit-workflow',
             description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention)',
             icons: [ICON_PROMPT],
             arguments: [],
@@ -405,7 +405,7 @@ ${e.content}
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `# Adversarial Work Verification
+                                text: `# Work Verification
 You are an adversarial auditor. Your task is to verify the accuracy of the recent Memory Journal entries provided in the context below. For each entry, cross-reference its claims against available telemetry, git logs, or related entries.
 
 ## Verification Checklist
@@ -415,8 +415,13 @@ For each entry in the batch, systematically verify:
 - [ ] **Heuristics Justification**: Are the \`impact_score\`, \`trust_score\`, and \`validation_status\` accurate and fully justified by the work actually performed?
 - [ ] **Context Alignment**: Does the summary accurately reflect the actual work performed?
 
+## Scoring Mutation Protocol
+As the auditor, you are responsible for updating confidence scores based on your findings:
+- **Verified**: If you successfully verify an entry's claims, you MUST use \`mj_execute_code\` (e.g. \`mj.updateEntry(id, payload)\`) to increase its \`trust_score\` to \`0.9\` or \`1.0\` and set \`validation_status\` to \`"passed"\`.
+- **Failed**: If claims are false or hallucinatory, you MUST reduce \`trust_score\` to \`0.1\` and set \`validation_status\` to \`"failed"\`.
+
 ## Deliverables
-Provide a structured report of your findings. For any entries with severe hallucinations, misaligned heuristics, or omissions, output the corrected payload and use the \`mj_execute_code\` tool to overwrite the corrupted entries (e.g., \`mj.updateEntry(id, payload)\`).
+Provide a structured report of your findings. For any entries with severe hallucinations, misaligned heuristics, or omissions, output the corrected payload and use the \`mj_execute_code\` tool to overwrite the corrupted entries (e.g., \`mj.updateEntry(id, payload)\`). Ensure you apply the Scoring Mutation Protocol to verified entries.
 
 ## Recent Entries Context
 ${markUntrustedContent(formattedEntries)}`

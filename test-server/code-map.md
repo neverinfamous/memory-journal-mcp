@@ -276,7 +276,7 @@ src/
         ├── index.ts                # Prompt registration barrel
         ├── workflow.ts             # 11 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
         ├── github.ts               # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
-        ├── adversarial.ts          # 1 adversarial prompt (adversarial-plan-review)
+        ├── adversarial.ts          # 8 adversarial prompts (adversarial-plan-review, adversarial-audit-code-quality, etc)
         └── team.ts                 # 1 team prompt (flag-dashboard)
 
 skills/
@@ -298,7 +298,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 <!-- BEGIN: TOOL_MAPPING -->
 | Group | Tools |
 | ----- | ----- |
-| **admin** | `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `update_entry`, `delete_entry`, `restore_entry`, `update_configuration`, `merge_tags`, `search_audit_log`, `rebuild_vector_index`, `add_to_vector_index` |
+| **admin** | `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `update_entry`, `delete_entry`, `restore_entry`, `update_configuration`, `run_auto_prune`, `merge_tags`, `search_audit_log`, `rebuild_vector_index`, `add_to_vector_index` |
 | **analytics** | `get_statistics`, `get_cross_project_insights` |
 | **backup** | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
 | **codemode** | `mj_execute_code` |
@@ -393,18 +393,18 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-20 prompts total (12 workflow + 6 GitHub + 1 adversarial + 1 team).
+27 prompts total (12 workflow + 6 GitHub + 8 adversarial + 1 team).
 
 <!-- BEGIN: PROMPTS -->
 | Prompt | Description |
 | ------ | ----------- |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
-| `audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency) |
-| `audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
-| `audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
-| `audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
-| `audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
-| `audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
+| `adversarial-audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency) |
+| `adversarial-audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
+| `adversarial-audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
+| `adversarial-audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
+| `adversarial-audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
+| `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
 | `verify-work` | Audit a batch of recent journal entries (default 10) to verify accuracy, elimina... |
 | `lookback` | Number of recent entries to audit (default: 10, max: 50) |
 | `commit` | High-integrity procedure for committing code changes with validation gates |

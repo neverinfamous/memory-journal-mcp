@@ -86,12 +86,12 @@ async function main() {
         { name: 'actions-failure-digest', args: {}, expect: '' },
         // 8.3 Adversarial and flag prompts
         { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: '[Please specify topic' },
-        { name: 'audit-code-quality', args: { target: 'src/main.ts' }, expect: '[Please specify target' },
-        { name: 'audit-security', args: { target: 'auth.ts' }, expect: '[Please specify target' },
-        { name: 'audit-performance', args: { target: 'index.ts' }, expect: '[Please specify target' },
-        { name: 'audit-seo', args: { target: 'index.html' }, expect: '[Please specify target' },
-        { name: 'audit-skill', args: { target: 'my-skill' }, expect: '[Please specify skill' },
-        { name: 'audit-workflow', args: { target: 'ci.yml' }, expect: '[Please specify workflow' },
+        { name: 'adversarial-audit-code-quality', args: { target: 'src/main.ts' }, expect: '[Please specify target' },
+        { name: 'adversarial-audit-security', args: { target: 'auth.ts' }, expect: '[Please specify target' },
+        { name: 'adversarial-audit-performance', args: { target: 'index.ts' }, expect: '[Please specify target' },
+        { name: 'adversarial-audit-seo', args: { target: 'index.html' }, expect: '[Please specify target' },
+        { name: 'adversarial-audit-skill', args: { target: 'my-skill' }, expect: '[Please specify skill' },
+        { name: 'adversarial-audit-workflow', args: { target: 'ci.yml' }, expect: '[Please specify workflow' },
         { name: 'flag-dashboard', args: {}, expect: '' },
         { name: 'flag-dashboard', args: { flag_type: 'blocker' }, expect: 'blocker' },
         // 8.4 Git History prompts
