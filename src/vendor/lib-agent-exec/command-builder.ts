@@ -97,6 +97,23 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     } else {
       args = [scriptFile.replace(/\\/g, '/'), ...(payload.args || [])];
     }
+
+    if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
+      const parts = payload.templateOverride.split('{{code}}');
+      const prefix = parts[0].trim();
+      const suffix = parts.length > 1 ? parts[1].trim() : '';
+      
+      const prefixArgs = prefix ? prefix.split(/\s+/) : [];
+      const suffixArgs = suffix ? suffix.split(/\s+/) : [];
+      
+      if (prefixArgs.length > 0) {
+        const originalCmd = cmd;
+        cmd = prefixArgs[0];
+        args = [...prefixArgs.slice(1), originalCmd, ...args, ...suffixArgs];
+      } else {
+        args = [...args, ...suffixArgs];
+      }
+    }
   } else {
     // payload.type === 'eval'
     const uniqueId = crypto.randomUUID().split('-')[0];
@@ -162,6 +179,10 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   envOverrides['CI'] = '1'; // Instruct compliant CLI tools to run in non-interactive/headless mode
   envOverrides['npm_config_audit'] = 'false'; // Prevent npm audit noise/prompts
   envOverrides['npm_config_fund'] = 'false'; // Prevent npm fund noise/prompts
+
+  if ('integrationContext' in payload && payload.integrationContext) {
+    envOverrides['integrationContext'] = JSON.stringify(payload.integrationContext);
+  }
 
   const cmdBasename = path.basename(cmd).toLowerCase();
   const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload };
