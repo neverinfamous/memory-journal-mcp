@@ -1,8 +1,7 @@
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import type { InternalResourceDef, BriefingConfig } from '../shared.js'
+import type { InternalResourceDef, ResourceContext } from '../shared.js'
 
-export function getAgentContextResource(config?: BriefingConfig, defaultProjectNumber?: number): InternalResourceDef {
-    const registry = config?.projectRegistry ?? {}
+export function getAgentContextResource(): InternalResourceDef {
     return {
         uri: 'memory://agent-context/{+repo}',
         name: 'Agent Context',
@@ -13,7 +12,11 @@ export function getAgentContextResource(config?: BriefingConfig, defaultProjectN
             audience: ['assistant'],
             priority: 1.0,
         },
-        handler: (uri: string) => {
+        handler: (uri: string, context: ResourceContext) => {
+            const config = context?.briefingConfig
+            const registry = config?.projectRegistry ?? {}
+            const defaultProjectNumber = config?.defaultProjectNumber
+
             const match = /^memory:\/\/agent-context\/(.+)$/.exec(uri)
             const repo = match?.[1] ?? 'default'
 

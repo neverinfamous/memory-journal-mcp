@@ -209,7 +209,7 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         ...getDynamicGraphResourceDefinitions(),
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
-        getAgentContextResource((runtime?.cachedContextRefs as { config?: { briefingConfig?: BriefingConfig; defaultProjectNumber?: number } })?.config?.briefingConfig, (runtime?.cachedContextRefs as { config?: { briefingConfig?: BriefingConfig; defaultProjectNumber?: number } })?.config?.defaultProjectNumber),
+        getAgentContextResource(),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
         ...getInsightResourceDefinitions(),
