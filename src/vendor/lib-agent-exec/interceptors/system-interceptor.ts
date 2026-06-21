@@ -5,7 +5,7 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
   const shellChars = ['|', '>', '<', '&&', '||', ';', '$(', '`'];
   const hasShellChars = args.some(a => shellChars.some(c => a.includes(c)));
   if (hasShellChars && payload.type === 'command') {
-    console.error(`\n   💡 AGENT HINT: Shell operators (|, >, <, &&, ||, ;, $(, \`) detected in arguments.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    console.error(`\n   💡 AGENT HINT: Shell operators (|, >, <, &&, ||, ;, $(, \`) detected in arguments.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings.`);
     console.error(`   To use shell features, please use a 'script' payload type instead.`);
     process.exit(1);
@@ -17,7 +17,7 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
        const inlineIdx = args.findIndex(a => ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'].includes(a.toLowerCase()));
        const isEncoded = ['-ec', '-encodedcommand', '-en'].includes(args[inlineIdx].toLowerCase());
        if (isEncoded) {
-           console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+           console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
            process.exit(1);
        }
        const innerCmdStr = args[inlineIdx + 1];
@@ -26,7 +26,7 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
            const match = stdToolsRegex.exec(innerCmdStr);
            if (match) {
                const innerCmdBasename = match[1].toLowerCase();
-               console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline shell (${cmdBasename} ${args[inlineIdx]}).\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+               console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline shell (${cmdBasename} ${args[inlineIdx]}).\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
                console.error(`   This bypasses the agent-exec robustness interceptors for ${innerCmdBasename} and risks hanging the process.`);
                console.error(`   Please run ${innerCmdBasename} directly in the payload: {"type": "command", "command": "${innerCmdBasename}", "args": [...]}`);
                console.error(`   If you need shell pipes/redirects with this tool, write a script file to the scratch directory and use a 'script' payload.`);
@@ -37,13 +37,13 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
   }
 
   if (['su', 'su.exe', 'passwd', 'passwd.exe', 'chsh', 'chsh.exe'].includes(cmdBasename)) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
   }
 
   if (cmdBasename === 'ssh-keygen' || cmdBasename === 'ssh-keygen.exe') {
     if (!args.includes('-f') || !args.includes('-N')) {
-      console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       console.error(`   Please provide '-f <path>' and '-N ""' to run non-interactively. Blocking execution.`);
       process.exit(1);
     }
@@ -51,7 +51,7 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
   if (['ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe'].includes(cmdBasename)) {
     if (!args.some(a => a.includes('BatchMode=yes'))) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       args.unshift('-o', 'BatchMode=yes');
     }
     if (!args.some(a => a.includes('StrictHostKeyChecking='))) {
@@ -60,50 +60,50 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
   }
 
   if (cmdBasename === 'watch' || cmdBasename === 'watch.exe') {
-    console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     process.exit(1);
   }
 
   if (cmdBasename === 'tail' || cmdBasename === 'tail.exe') {
     if (args.includes('-f') || args.includes('--follow') || args.some(a => a.startsWith('--follow='))) {
-      console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     }
   }
 
   if (['journalctl', 'journalctl.exe'].includes(cmdBasename) && (args.includes('-f') || args.includes('--follow'))) {
-      console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
   }
 
   if (cmdBasename === 'ping' || cmdBasename === 'ping.exe') {
     if (process.platform === 'win32' || cmdBasename === 'ping.exe') {
       if (args.includes('-t')) {
-        console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+        console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         for (let i = args.length - 1; i >= 0; i--) {
           if (args[i] === '-t') args.splice(i, 1);
         }
       }
     } else {
       if (!args.includes('-c')) {
-        console.error(`\n   💡 AGENT HINT: 'ping' on Unix runs indefinitely without '-c'. Injecting '-c 4'.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+        console.error(`\n   💡 AGENT HINT: 'ping' on Unix runs indefinitely without '-c'. Injecting '-c 4'.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         args.unshift('-c', '4');
       }
     }
   }
 
   if (['runas', 'runas.exe'].includes(cmdBasename)) {
-      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
   }
 
   if (cmdBasename === 'sudo' || cmdBasename === 'sudo.exe') {
     if (process.platform === 'win32') {
-      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     }
     if (!args.includes('-n') && !args.includes('--non-interactive')) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-n' (non-interactive) into sudo command to prevent password prompt hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: Automatically injecting '-n' (non-interactive) into sudo command to prevent password prompt hanging.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       args.unshift('-n');
     }
   }
@@ -113,12 +113,12 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (!payload.stdin && payload.type === 'command') {
     const filters0 = ['cat', 'cat.exe', 'wc', 'wc.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe', 'find', 'find.exe', 'findstr', 'findstr.exe', 'gpg', 'gpg.exe'];
     if (filters0.includes(cmdBasename) && positionalArgs.length === 0) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' called without file arguments and no stdin. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' called without file arguments and no stdin. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     }
 
     if (['xargs', 'xargs.exe'].includes(cmdBasename)) {
-      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     }
 
@@ -131,14 +131,14 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
       } else if (['awk', 'gawk'].includes(cmdBasename) && (args.includes('-V') || args.includes('--version') || args.includes('-W') || args.includes('--help'))) {
         // help doesn't hang
       } else {
-        console.error(`\n   💡 AGENT HINT: '${cmdBasename}' called without file arguments and no stdin. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+        console.error(`\n   💡 AGENT HINT: '${cmdBasename}' called without file arguments and no stdin. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         process.exit(1);
       }
     }
 
     const grepCmds = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'];
     if (grepCmds.includes(cmdBasename) && positionalArgs.length <= 1 && !args.some(a => ['-r', '-R', '--recursive', '--files', '--help', '-h'].includes(a))) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' called without file arguments, no recursive flag, and no stdin. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' called without file arguments, no recursive flag, and no stdin. It will hang indefinitely.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     }
   }

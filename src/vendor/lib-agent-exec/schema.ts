@@ -30,6 +30,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     plugins: safeStringArray.optional(),
     onSuccess: safeString.optional(),
     onFailure: safeString.optional(),
+    webhookHeaders: z.record(safeString, safeString).optional(),
   }),
   z.object({
     type: z.literal("script"),
@@ -53,6 +54,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     plugins: safeStringArray.optional(),
     onSuccess: safeString.optional(),
     onFailure: safeString.optional(),
+    webhookHeaders: z.record(safeString, safeString).optional(),
   }),
   z.object({
     type: z.literal("eval"),
@@ -76,6 +78,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     plugins: safeStringArray.optional(),
     onSuccess: safeString.optional(),
     onFailure: safeString.optional(),
+    webhookHeaders: z.record(safeString, safeString).optional(),
   })
 ]);
 

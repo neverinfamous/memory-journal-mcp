@@ -59,22 +59,48 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   let args: string[];
   let tempScriptPath: string | null = null;
   const envOverrides: Record<string, string> = {};
+
+  if ('integrationContext' in payload && payload.integrationContext) {
+    const contextStr = JSON.stringify(payload.integrationContext);
+    if (contextStr.length > 32000) {
+      console.error('❌ Error: integrationContext stringified size exceeds 32KB limit on Windows.');
+      process.exit(1);
+    }
+    envOverrides['integrationContext'] = contextStr;
+
+    if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
+      payload.templateOverride = payload.templateOverride.replace(/\{\{integrationContext\}\}/g, contextStr);
+    }
+    if (payload.args) {
+      payload.args = payload.args.map(a => typeof a === 'string' ? a.replace(/\{\{integrationContext\}\}/g, contextStr) : a);
+    }
+  }
   
   if (payload.type === 'command') {
+    const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
+    if (builtIns.includes(payload.command.toLowerCase())) {
+      console.error(`\n   💡 AGENT HINT: '${payload.command}' is a shell built-in, not an executable file.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`   Because 'agent-exec.ts' uses \`shell: false\` for security, built-ins cannot be run directly.`);
+      console.error(`   Use standard agent filesystem tools (list_dir, view_file, etc.) instead.`);
+      process.exit(1);
+    }
+
     if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
-      const parts = payload.templateOverride.split('{{code}}');
-      const prefix = parts[0].trim();
-      const suffix = parts.length > 1 ? parts[1].trim() : '';
+      const innerCmdStr = [payload.command, ...(payload.args || [])]
+        .map(a => a.includes(' ') || a.includes('"') || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a)
+        .join(' ');
       
-      const prefixArgs = prefix ? tokenizeArgs(prefix) : [];
-      const suffixArgs = suffix ? tokenizeArgs(suffix) : [];
-      
-      if (prefixArgs.length > 0) {
-        cmd = prefixArgs[0];
-        args = [...prefixArgs.slice(1), payload.command, ...(payload.args || []), ...suffixArgs];
+      const fullOverride = payload.templateOverride.includes('{{code}}') 
+        ? payload.templateOverride.replace('{{code}}', innerCmdStr)
+        : `${payload.templateOverride} ${innerCmdStr}`;
+        
+      const allArgs = tokenizeArgs(fullOverride);
+      if (allArgs.length > 0) {
+        cmd = allArgs[0];
+        args = allArgs.slice(1);
       } else {
         cmd = payload.command;
-        args = [...(payload.args || []), ...suffixArgs];
+        args = [...(payload.args || [])];
       }
     } else {
       cmd = payload.command;
@@ -109,22 +135,21 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
 
     if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
-      const parts = payload.templateOverride.split('{{code}}');
-      const prefix = parts[0].trim();
-      const suffix = parts.length > 1 ? parts[1].trim() : '';
+      const innerCmdStr = [cmd, ...args]
+        .map(a => a.includes(' ') || a.includes('"') || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a)
+        .join(' ');
       
-      const prefixArgs = prefix ? tokenizeArgs(prefix) : [];
-      const suffixArgs = suffix ? tokenizeArgs(suffix) : [];
-      
-      if (prefixArgs.length > 0) {
-        const originalCmd = cmd;
-        cmd = prefixArgs[0];
-        args = [...prefixArgs.slice(1), originalCmd, ...args, ...suffixArgs];
-      } else {
-        args = [...args, ...suffixArgs];
+      const fullOverride = payload.templateOverride.includes('{{code}}') 
+        ? payload.templateOverride.replace('{{code}}', innerCmdStr)
+        : `${payload.templateOverride} ${innerCmdStr}`;
+        
+      const allArgs = tokenizeArgs(fullOverride);
+      if (allArgs.length > 0) {
+        cmd = allArgs[0];
+        args = allArgs.slice(1);
       }
     }
-  } else {
+  } else if (payload.type === 'eval') {
     // payload.type === 'eval'
     const uniqueId = crypto.randomUUID().split('-')[0];
     const scratchDir = path.join(os.tmpdir(), 'agent-exec-scratch');
@@ -168,6 +193,10 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     } else {
       args = [tempScriptPath.replace(/\\/g, '/'), ...(payload.args || [])];
     }
+  } else {
+    const p = payload as Record<string, unknown>;
+    console.error(`❌ Error: Unsupported payload type '${String(p.type)}'.`);
+    process.exit(1);
   }
 
   if (payload.target !== 'wsl2') {
@@ -190,14 +219,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   envOverrides['npm_config_audit'] = 'false'; // Prevent npm audit noise/prompts
   envOverrides['npm_config_fund'] = 'false'; // Prevent npm fund noise/prompts
 
-  if ('integrationContext' in payload && payload.integrationContext) {
-    const contextStr = JSON.stringify(payload.integrationContext);
-    if (contextStr.length > 32000) {
-      console.error('❌ Error: integrationContext stringified size exceeds 32KB limit on Windows.');
-      process.exit(1);
-    }
-    envOverrides['integrationContext'] = contextStr;
-  }
+  // integrationContext processed at the start of buildCommand
 
   const cmdBasename = path.basename(cmd).toLowerCase();
   const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload };
@@ -232,7 +254,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   });
 
   if (strippedQuotes) {
-    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'shell: false' is used, quotes are NOT needed for spaces. Auto-healing by stripping wrapping quotes...`);
   }
 
@@ -253,7 +275,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   if (payload.type === 'command') {
     const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd');
     if (isWinBatch && payload.target !== 'wsl2') {
-      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       const escapedCmd = cmd.replace(/'/g, "''");
       const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
       const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;
@@ -264,16 +286,6 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   }
 
   if (payload.target === 'wsl2') {
-    if (payload.type === 'command') {
-      const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
-      if (builtIns.includes(payload.command.toLowerCase())) {
-        console.error(`\n   💡 AGENT HINT: '${payload.command}' is a shell built-in, not an executable file.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST autonomously investigate and heal the underlying issue so the system becomes self-improving. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
-        console.error(`   Because 'agent-exec.ts' uses \`shell: false\` for security, built-ins cannot be run directly.`);
-        console.error(`   Use standard agent filesystem tools (list_dir, view_file, etc.) instead.`);
-        process.exit(1);
-      }
-    }
-
     const convertToWslPath = (winPath: string): string => {
       if (!winPath) return winPath;
       let converted = winPath;

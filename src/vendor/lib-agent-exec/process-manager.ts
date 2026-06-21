@@ -4,7 +4,8 @@ import { ChildProcess, spawnSync } from 'node:child_process';
 export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];
 
 export function killProcessTree(child: ChildProcess) {
-  if (!child.pid) return;
+  if (!child.pid || child.killed || child.exitCode !== null || child.signalCode !== null) return;
+
   
   for (const hook of processManagerHooks) {
     if (hook.onKill) {
