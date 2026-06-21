@@ -675,16 +675,6 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                                                    |
 | `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                                                                       |
 | `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)                                                     |
-| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `pnpm run lint`)                                                                 |
-| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `pnpm run typecheck`; empty = skip)                                                                               |
-| `PROJECT_BUILD_CMD`               | Project build command (default: `pnpm run build`; empty = skip)                                                                                       |
-| `PROJECT_TEST_CMD`                | Project test command (default: `pnpm run test`)                                                                                                       |
-| `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                                                                      |
-| `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)                                                           |
-| `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                                                                      |
-| `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                                                                               |
-| `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                                                                         |
-| `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                                                                         |
 | `AUDIT_LOG_PATH`                  | Path for the JSONL operational telemetry log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable telemetry logging.       |
 | `AUDIT_REDACT`                    | Set to `false` to include tool arguments in telemetry log entries (default: `true`)                                                                   |
 | `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                                                        |
@@ -795,7 +785,6 @@ memory-journal-mcp --transport http --port 3000
 | `MCP_METRICS_ENABLED` / `PERSIST_METRICS`      | In-memory and disk-persisted operational metrics           |
 | `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings and exclusion tags                     |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
-| `PROJECT_LINT_CMD` / `PROJECT_TEST_CMD`        | Local GitHub Commander Validation commands                 |
 
 ### GitHub Integration (Optional)
 
