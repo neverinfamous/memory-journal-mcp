@@ -204,7 +204,8 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                                 const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
                                     detached: true, 
                                     stdio: 'ignore', 
-                                    shell: process.platform === 'win32' 
+                                    shell: process.platform === 'win32',
+                                    windowsHide: true
                                 })
                                 child.on('exit', () => { isGeneratingCodeMap = false })
                                 child.on('error', () => { isGeneratingCodeMap = false })
