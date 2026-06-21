@@ -28,7 +28,7 @@ import type { BriefingConfig } from '../../shared.js'
 // ============================================================================
 
 export interface GitHistorySummary {
-    commits: { hash: string; category?: string; entry?: string; message: string }[]
+    commits: { hash: string; category?: string; entry?: string; message: string; isPushed?: boolean }[]
     changelog?: unknown // legacy support if anything checks it
 }
 
@@ -137,10 +137,24 @@ function loadCachedGitHistory(targetPath?: string): GitHistorySummary | null {
 
     try {
         const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H%x09%s'], { cwd: root, encoding: 'utf-8' })
+        
+        const unpushedHashes = new Set<string>()
+        try {
+            const unpushedOut = execFileSync('git', ['log', '@{u}..HEAD', '--format=%H'], { cwd: root, encoding: 'utf-8' })
+            unpushedOut.split('\n').filter(Boolean).forEach(h => unpushedHashes.add(h.trim()))
+        } catch {
+            // Ignore if no upstream tracking branch
+        }
+
         const lines = out.split('\n').filter(Boolean)
         const commits: GitHistorySummary['commits'] = lines.map(l => {
             const [hash, msg] = l.split('\t')
-            return { hash: (hash || '').substring(0, 7), message: msg || '' }
+            const fullHash = hash || ''
+            return { 
+                hash: fullHash.substring(0, 7), 
+                message: msg || '',
+                isPushed: !unpushedHashes.has(fullHash)
+            }
         })
         const result = { commits }
         cachedGitHistory.set(root, result)
