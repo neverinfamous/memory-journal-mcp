@@ -238,8 +238,8 @@ export function formatUserMessage(opts: {
             sysLines.push(`${String(opts.toolCount)} tools`)
         }
     }
-
     sysLines.push('📊 memory://metrics/summary')
+    sysLines.push('📍 memory://agent-context/{repo}')
 
     const testLines: string[] = []
     if (opts.testHealth) {
