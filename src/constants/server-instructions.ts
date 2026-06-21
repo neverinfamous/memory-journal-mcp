@@ -201,6 +201,26 @@ Every entry MUST have at least one tag. Use kebab-case exclusively.
 - _Tool group_: Name of the tool group being worked on (e.g., \`core\`, \`search\`, \`github\`, \`admin\`)
 - _Pattern_: \`split-schema\`, \`zod\`, \`error-handling\`, \`dual-schema\`
 
+### Heuristic Scoring Criteria
+
+ALL entries MUST define heuristic scores. Use these explicit thresholds:
+
+- **\`validation_status\`**: 
+  - \`none\`: Work completed but not yet explicitly tested/verified.
+  - \`passed\`: Work explicitly validated via tests, manual confirmation, or peer review.
+  - \`failed\`: Work that failed verification or was found to be hallucinatory.
+- **\`trust_score\` (Confidence)**:
+  - \`0.0 - 0.2\`: Suspected hallucination or failed validation.
+  - \`0.3 - 0.5\`: Unverified work, draft plans, or assumptions (Baseline for unverified work).
+  - \`0.6 - 0.8\`: Partially verified or low-risk routine changes.
+  - \`0.9 - 1.0\`: Rigorously verified via automated tests, peer review, or explicitly confirmed by the user.
+  - *Note: \`trust_score\` acts as a multiplier on the entry's importance. Low trust entries will decay and be auto-pruned faster.*
+- **\`impact_score\` (Blast Radius)**:
+  - \`0.0 - 0.2\`: Trivial changes, typos, minor doc updates.
+  - \`0.3 - 0.5\`: Standard feature work, isolated bug fixes.
+  - \`0.6 - 0.8\`: Major new features, cross-module changes.
+  - \`0.9 - 1.0\`: Core architectural shifts, destructive operations, critical security patches.
+
 ### Significance Marking
 
 Mark important entries with \`significance_type\`:

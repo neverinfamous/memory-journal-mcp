@@ -134,9 +134,9 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         pr_status: z.string().optional(),
         author: z.string().optional(),
         auto_context: z.string().optional(),
-        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
-        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
-        validation_status: z.string().optional().describe('Current validation status of the entry.'),
+        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating blast radius (0.9+ for core architecture, 0.1 for simple docs).'),
+        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence (0.3-0.5 for unverified, 0.9+ for verified).'),
+        validation_status: z.string().optional().describe('Current validation status of the entry (passed, none, failed).'),
     }).strict()
 )
 
@@ -422,9 +422,9 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
         is_archived: z.boolean().optional(),
         expected_version: relaxedNumber().optional(),
         auto_context: z.string().nullable().optional(),
-        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating the blast radius of this change. E.g. core architecture changes = 0.9, simple doc fixes = 0.1.'),
-        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence in the entry. E.g. verified by test suite = 0.9.'),
-        validation_status: z.string().optional().describe('Current validation status of the entry.'),
+        impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating blast radius (0.9+ for core architecture, 0.1 for simple docs).'),
+        trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence (0.3-0.5 for unverified, 0.9+ for verified).'),
+        validation_status: z.string().optional().describe('Current validation status of the entry (passed, none, failed).'),
     }).strict()
 )
 

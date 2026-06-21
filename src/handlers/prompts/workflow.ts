@@ -215,8 +215,8 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
 - \`entry_type: "retrospective"\`
 - \`tags: ["session-summary"]\` (plus relevant domain tags)
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`impact_score\`: [REQUIRED] Decimal score (e.g., 0.5)
-- \`trust_score\`: [REQUIRED] Decimal score (e.g., 0.9 if verified)
+- \`impact_score\`: [REQUIRED] Decimal score indicating blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
+- \`trust_score\`: [REQUIRED] Decimal score. MUST start lower (e.g., 0.3-0.5) for unverified work, and scale higher (0.8-1.0) only if rigorously verified.
 - \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
 - \`auto_context\`: [REQUIRED] JSON string of commit metadata representing the session's work.
 - ${dbHint}
