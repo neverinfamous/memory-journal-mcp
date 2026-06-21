@@ -42,8 +42,7 @@ export interface InternalPromptDef {
         args: Record<string, string>,
         db: IDatabaseAdapter,
         teamDb?: IDatabaseAdapter,
-        github?: unknown,
-        gitClient?: unknown
+        github?: unknown
     ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
 
@@ -66,9 +65,8 @@ export function getPrompt(
     args: Record<string, string>,
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
-    github?: unknown,
-    gitClient?: unknown
-): { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }> {
+    github?: unknown
+): Promise<{ messages: PromptMessage[] }> {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
 
@@ -76,7 +74,7 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return prompt.handler(args, db, teamDb, github, gitClient)
+    return Promise.resolve(prompt.handler(args, db, teamDb, github))
 }
 
 /**

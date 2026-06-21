@@ -12,8 +12,6 @@ import type { InternalPromptDef } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 import { parseFlagContext } from '../../types/auto-context.js'
-import type { GitHistoryClient } from '../../git/index.js'
-
 
 /**
  * Get workflow prompt definitions
@@ -150,8 +148,7 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                 args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
-                _github?: unknown,
-                gitClient?: unknown
+                _github?: unknown
             ) => {
                 const target = args?.['target'] ?? 'personal'
                 
@@ -177,30 +174,14 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                         : '- No entries yet'
 
                 let commitList = '- [List commit SHAs made during the session, or "None"]'
-                const typedGitClient = gitClient as GitHistoryClient | undefined | null
-                if (typedGitClient) {
-                    try {
-                        const history = await typedGitClient.getUnreleasedChangelog()
-                        if (history.totalCount > 0) {
-                            const entries: string[] = []
-                            for (const category of Object.values(history.categories)) {
-                                if (Array.isArray(category)) {
-                                    for (const commit of category) {
-                                        entries.push(`- ${commit.hash.substring(0,7)}: ${commit.message}`)
-                                    }
-                                }
-                            }
-                            if (entries.length > 0) {
-                                commitList = entries.join('\n')
-                            } else {
-                                commitList = '- None'
-                            }
-                        } else {
-                            commitList = '- None'
-                        }
-                    } catch {
-                        // Fallback to placeholder on error
+                try {
+                    const { execFileSync } = await import('node:child_process')
+                    const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H %s'], { encoding: 'utf-8' })
+                    if (out) {
+                        commitList = out.split('\n').map(l => `- ${l}`).join('\n')
                     }
+                } catch {
+                    // Fallback to placeholder on error
                 }
 
                 return {
