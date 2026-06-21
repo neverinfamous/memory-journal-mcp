@@ -367,6 +367,64 @@ If the target is '{target}', determine it from the user's request. If the user h
                     }
                 }]
             })
+        },
+        {
+            name: 'verify-work',
+            description: 'Audit a batch of recent journal entries (default 10) to verify accuracy, eliminate hallucinations, and ensure heuristic scores are justified.',
+            icons: [ICON_PROMPT],
+            arguments: [
+                {
+                    name: 'lookback',
+                    description: 'Number of recent entries to audit (default: 10, max: 50)',
+                    required: false
+                }
+            ],
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+                const lookbackRaw = args?.['lookback']
+                let limit = 10
+                if (lookbackRaw) {
+                    const parsed = parseInt(lookbackRaw, 10)
+                    if (!isNaN(parsed) && parsed > 0) {
+                        limit = Math.min(parsed, 50)
+                    }
+                }
+
+                const { entries } = db.getRecentEntries(limit)
+
+                const formattedEntries = entries.map(e => {
+                    return `ID: ${e.id} | Type: ${e.entryType} | Tags: ${e.tags.join(', ')}
+Trust: ${e.trustScore} | Impact: ${e.impactScore} | Validation: ${e.validationStatus}
+Content:
+${e.content}
+---`
+                }).join('\n')
+
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# Adversarial Work Verification
+You are an adversarial auditor. Your task is to verify the accuracy of the recent Memory Journal entries provided in the context below. For each entry, cross-reference its claims against available telemetry, git logs, or related entries.
+
+## Verification Checklist
+For each entry in the batch, systematically verify:
+- [ ] **Hallucinations**: Does it claim work that wasn't actually done or doesn't exist in the codebase/commits?
+- [ ] **Omissions**: Did it fail to document significant architectural changes or commits?
+- [ ] **Heuristics Justification**: Are the \`impact_score\`, \`trust_score\`, and \`validation_status\` accurate and fully justified by the work actually performed?
+- [ ] **Context Alignment**: Does the summary accurately reflect the actual work performed?
+
+## Deliverables
+Provide a structured report of your findings. For any entries with severe hallucinations, misaligned heuristics, or omissions, output the corrected payload and use the \`mj_execute_code\` tool to overwrite the corrupted entries (e.g., \`mj.updateEntry(id, payload)\`).
+
+## Recent Entries Context
+${markUntrustedContent(formattedEntries)}`
+                            }
+                        }
+                    ]
+                }
+            }
         }
     ]
 }

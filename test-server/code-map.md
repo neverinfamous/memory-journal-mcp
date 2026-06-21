@@ -405,6 +405,8 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
 | `audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
 | `audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
+| `verify-work` | Audit a batch of recent journal entries (default 10) to verify accuracy, elimina... |
+| `lookback` | Number of recent entries to audit (default: 10, max: 50) |
 | `commit` | High-integrity procedure for committing code changes with validation gates |
 | `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
