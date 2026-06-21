@@ -12,6 +12,12 @@ import type { InternalPromptDef } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 import { parseFlagContext } from '../../types/auto-context.js'
+import { spawn } from 'node:child_process'
+import { readFileSync, existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+
+let isGeneratingCodeMap = false
 
 /**
  * Get workflow prompt definitions
@@ -182,6 +188,31 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                     }
                 } catch {
                     // Fallback to placeholder on error
+                }
+
+                try {
+                    if (!isGeneratingCodeMap) {
+                        const packageJsonPath = join(process.cwd(), 'package.json')
+                        if (existsSync(packageJsonPath)) {
+                            const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+                            if (pkg !== null && typeof pkg === 'object' && 'name' in pkg && pkg.name === 'memory-journal-mcp') {
+                                isGeneratingCodeMap = true
+                                const scriptUrl = new URL('../../../scripts/update-code-map.ts', import.meta.url)
+                                const absoluteScriptPath = fileURLToPath(scriptUrl)
+                                const child = spawn('npx', ['tsx', absoluteScriptPath], { 
+                                    detached: true, 
+                                    stdio: 'ignore', 
+                                    shell: process.platform === 'win32' 
+                                })
+                                child.on('exit', () => { isGeneratingCodeMap = false })
+                                child.on('error', () => { isGeneratingCodeMap = false })
+                                child.unref()
+                            }
+                        }
+                    }
+                } catch {
+                    // Fail silently so we don't break the prompt fetch
+                    isGeneratingCodeMap = false
                 }
 
                 return {
