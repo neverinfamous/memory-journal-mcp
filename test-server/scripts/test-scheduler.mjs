@@ -3,7 +3,7 @@
  *
  * Prerequisites:
  *   npm run build
- *   node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
+ *   node dist/cli.js --transport http --port 3099 --db .test-output/test-memory-journal.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
  *
  * Usage:
  *   node test-server/test-scheduler.mjs              # full test (130s wait)
@@ -180,7 +180,7 @@ main().catch((err) => {
         console.error('\nPrerequisite: Start the HTTP server first:')
         console.error('  npm run build')
         console.error(
-            '  node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2'
+            '  node dist/cli.js --transport http --port 3099 --db .test-output/test-memory-journal.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2'
         )
     } else {
         console.error('Fatal:', err.message)

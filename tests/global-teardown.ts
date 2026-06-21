@@ -21,8 +21,8 @@ export async function teardown() {
         // Clean up root test databases that tests failed to clean up (e.g., due to missing db.close())
         const files = fs.readdirSync(process.cwd())
         for (const file of files) {
-            if ((file.includes('test') || file.includes('uninit')) && 
-                (file.endsWith('.db') || file.endsWith('.db-wal') || file.endsWith('.db-shm'))) {
+            const isTestDb = file.includes('test') || file.includes('uninit') || file.startsWith('memory_journal.db')
+            if (isTestDb && (file.endsWith('.db') || file.endsWith('.db-wal') || file.endsWith('.db-shm'))) {
                 try {
                     fs.unlinkSync(path.resolve(process.cwd(), file))
                 } catch {
