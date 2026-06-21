@@ -251,6 +251,74 @@ ${markUntrustedContent(entrySummary)}`,
                 }
             },
         },
+        {
+            name: 'mcp-heal',
+            description: 'Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM hallucinations',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: () => {
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# MCP Server Optimization & Anti-Hallucination Guardrails
+
+The primary philosophy of this workflow is: **When you (the agent) encounter a hallucination, confusion, or are forced to use introspection to figure out an API, DO NOT just work around it.**
+
+You MUST modify the server codebase to ensure future agents never face the same issue.
+
+## 1. Workflow Initialization
+
+1. Identify the specific hallucination or confusion error that occurred.
+2. Formulate a plan to heal the codebase using the strict hierarchy below.
+
+## 2. Phase 1: Determine the Layer of Healing
+
+There is a strict hierarchy of how you should heal the codebase:
+1. **Prevent (Highest Preference):** Modify the API schemas or the dispatcher to silently catch and transform the hallucinatory payload into a valid format so the execution succeeds automatically without the agent even noticing.
+2. **Mitigate (Fallback):** If the input cannot be safely inferred or coerced, intercept it and throw a highly actionable custom error explicitly guiding the agent on how to fix it immediately.
+
+Determine which of the 4 layers needs modification:
+
+### Layer 1: Schema & Instruction Hardening (The First Line of Defense)
+The most robust way to prevent a hallucination is to explicitly instruct the agent via the tools list or initialization payload.
+
+* **Schema \`.describe()\` Tags:** When an agent hallucinates a property, update the Zod schema. Add an explicit "Anti-Hallucination Hint" in the \`.describe()\` string. These surface directly in the JSON Schema that agents see on \`tools/list\`.
+* **Server Instructions:** If a structural hallucination persists, update \`src/constants/server-instructions.ts\` (or equivalent). This is the single source of truth for all instruction content.
+
+### Layer 2: Dispatcher Healing (Frictionless Recovery)
+If agents consistently hallucinate inputs that can be logically inferred or normalized, heal them silently in the dispatcher (\`src/codemode/api/group-factory.ts\` or \`param-normalizer.ts\`) before they reach Zod validation.
+
+* **Type Coercion:** If agents pass strings instead of numbers, auto-resolve them.
+* **Case Normalization:** Catch and heal \`camelCase\` variations automatically.
+* **Explicit Interception:** If a string cannot be coerced, intercept it before validation and throw a highly actionable custom error.
+
+### Layer 3: Sandbox Proxy Interceptors (Actionable Errors)
+When agents execute code in Code Mode, they often make standard Javascript mistakes. Instead of cryptic V8 runtime failures, add Proxy interceptors (e.g., \`worker-api-proxy.ts\`, \`worker-result-proxy.ts\`) to throw explicit guidance.
+
+* **Missing \`await\` Catching:** Wrap all RPC Promise returns in an additional Proxy to catch synchronous access to async properties.
+* **Array Method Healing:** Bind array methods dynamically to inner arrays if tools return objects containing arrays.
+
+### Layer 4: Alias Management (The Shadowing Trap)
+Agents commonly extrapolate method names based on patterns (e.g., trying to call \`mj.listEntries()\` instead of \`mj.searchEntries()\`).
+
+* **Adding Aliases:** Add entries to the \`METHOD_ALIASES\` constant in \`src/codemode/api-constants.ts\`.
+* **CRITICAL:** \`METHOD_ALIASES\` entries must point to either (a) a real tool method in the same group, or (b) another alias that eventually resolves to a real tool in the same group.
+
+## 3. Phase 2: Implementation
+
+1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
+2. Run automated tests to verify the changes don't break existing functionality (e.g., \`pnpm run check\`, \`pnpm run test\`, \`pnpm run test:e2e\`).
+3. Commit the changes locally.
+`,
+                            },
+                        },
+                    ],
+                }
+            },
+        },
     ]
 }
 

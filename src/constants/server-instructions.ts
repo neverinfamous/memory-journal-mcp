@@ -84,6 +84,7 @@ Only help resources for your enabled tool groups are registered.
 
 ### Journal Behaviors
 
+- **Anti-Hallucination & Healing**: If you encounter an MCP API hallucination, confusion, or are forced to use introspection to figure out an API, DO NOT just work around it. Use the \`mcp-heal\` prompt immediately to generate a plan to fix the server codebase so future agents don't face the same issue.
 - **Dual-Schema Nuance**: The system uses a dual-schema pattern. MCP SDK schemas are intentionally relaxed (all fields optional) to bypass strict \`-32602\` SDK errors. However, the internal handlers still strictly enforce validation. Always provide all required parameters!
 - **Strict Validation**: The \`project_number\` parameter is STRICTLY REQUIRED for all mutation operations (Create, Update, Delete). It must be a **numeric** ID (e.g., \`1\`, \`14\`), not a repo name string. Find it in the briefing's Config row (\`registry: repoName (#N)\`) or via \`get_statistics\`. In Code Mode, string repo names (e.g., \`"mysql-mcp"\`) are auto-resolved to numeric IDs via the project registry, but direct MCP tool calls require the numeric value.
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.

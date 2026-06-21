@@ -326,9 +326,9 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ---
 
-## Resources (57 total)
+## Resources (60 total)
 
-> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 57, though they map to the 51 capabilities listed below.
+> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 60, though they map to the 54 capabilities listed below.
 
 ### Static Resources
 
@@ -393,7 +393,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-19 prompts total (11 workflow + 6 GitHub + 1 adversarial + 1 team).
+20 prompts total (12 workflow + 6 GitHub + 1 adversarial + 1 team).
 
 <!-- BEGIN: PROMPTS -->
 | Prompt | Description |
@@ -417,6 +417,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `weekly-digest` | Create a weekly digest formatted day-by-day |
 | `goal-tracker` | Milestone and achievement tracking |
 | `session-summary` | Create a formatted session summary entry |
+| `mcp-heal` | Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM ... |
 
 <!-- END: PROMPTS -->
 

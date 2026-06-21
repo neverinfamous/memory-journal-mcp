@@ -437,9 +437,9 @@ export function formatUserMessage(opts: {
     // ========================================================================
     // Assembly
     // ========================================================================
-    let flagsAlert = ''
+    let flagsAlert = '💡 **Anti-Hallucination:** If you encounter MCP API confusion or hallucinations, immediately run the `mcp-heal` prompt to fix the codebase.\n\n'
     if (opts.flagSummary && opts.flagSummary.count > 0) {
-        flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
+        flagsAlert += `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
     }
 
     if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
