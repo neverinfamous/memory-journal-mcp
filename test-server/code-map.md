@@ -336,8 +336,11 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | --- | ---- |
 | `memory://actions/recent` | Recent Actions |
 | `memory://actions/recent/{+repo}` | Recent Actions (Dynamic) |
+| `memory://agent-context/{+repo}` | Agent Context |
 | `memory://audit` | Audit Log |
 | `memory://briefing` | Initial Briefing |
+| `memory://briefing` | Initial Briefing |
+| `memory://briefing/{+repo}` | Dynamic Briefing |
 | `memory://briefing/{+repo}` | Dynamic Briefing |
 | `memory://commits/{project_number}` | Project Commits |
 | `memory://commits/{project_number}/by-issue` | Commits by Issue |
@@ -576,6 +579,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | **ErrorFieldsMixin**    | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation. Canonical SSoT at `utils/errors/error-response-fields.ts`; handler layer re-export stub preserved.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Barrel Re-exports**   | Every directory has `index.ts` barrel. Import from `./module/index.js` (with `.js` extension for ESM).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Team Database**       | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 20 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup, vector). Cross-DB isolation with dedicated `teamVectorManager`.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **lib-git-history**     | Git integration is provided by synchronizing `lib-git-history` from `adamic` into `src/vendor/lib-git-history/`. This replaces the legacy `GitHistoryClient`.                                                                                                                                                                                                                                          |
 
 ---
 
