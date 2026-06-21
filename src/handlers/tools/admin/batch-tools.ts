@@ -54,6 +54,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowRunId: e.workflow_run_id,
                         workflowName: e.workflow_name,
                         workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                        sessionId: e.session_id,
                         workspaceId: resolveWorkspaceId(e.workspace_id || input.workspace_id, e.project_number ?? input.project_number, context.config),
                     })))
                     
@@ -130,6 +131,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: u.workflow_status,
                         isArchived: u.is_archived,
                         expectedVersion: u.expected_version,
+                        sessionId: u.session_id ?? undefined,
                         workspaceId: resolveWorkspaceId(u.workspace_id || input.workspace_id, u.project_number ?? input.project_number, context.config),
                     }))
 

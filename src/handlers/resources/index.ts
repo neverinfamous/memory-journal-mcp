@@ -22,6 +22,8 @@ import { getCoreResourceDefinitions } from './core/index.js'
 import { getDynamicGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
+import { briefingResource, dynamicBriefingResource } from './core/briefing/index.js'
+import { getAgentContextResource } from './core/agent-context.js'
 import { getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import { getInsightResourceDefinitions } from './insights.js'
@@ -208,6 +210,9 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         ...getDynamicGraphResourceDefinitions(),
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
+        briefingResource,
+        dynamicBriefingResource,
+        getAgentContextResource((runtime?.cachedContextRefs as { config?: { briefingConfig?: BriefingConfig; defaultProjectNumber?: number } })?.config?.briefingConfig, (runtime?.cachedContextRefs as { config?: { briefingConfig?: BriefingConfig; defaultProjectNumber?: number } })?.config?.defaultProjectNumber),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
         ...getInsightResourceDefinitions(),

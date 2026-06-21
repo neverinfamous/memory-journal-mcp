@@ -72,7 +72,6 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ConfigManager } from '../../utils/config-manager.js'
 import type { Scheduler } from '../scheduler.js'
-import type { GitHistoryClient } from '../../git/index.js'
 
 export interface ServerContext {
     db: IDatabaseAdapter;
@@ -81,7 +80,6 @@ export interface ServerContext {
     vectorManager: VectorSearchManager;
     teamVectorManager?: VectorSearchManager;
     github: GitHubIntegration;
-    gitClient?: GitHistoryClient;
     configManager: ConfigManager;
     scheduler: Scheduler | null;
     allowedIoRoots: string[];

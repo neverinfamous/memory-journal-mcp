@@ -40,6 +40,7 @@ export const CreateEntrySchema = z.preprocess(
         })).optional(),
         share_with_team: z.boolean().optional().default(false),
         auto_context: z.string().optional(),
+        session_id: z.string().optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content ?? '';
@@ -132,6 +133,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
         })).optional().describe('Files or lines of code that this entry is fundamentally anchored to. If the anchor becomes stale/invalid, the entry importance score drops.'),
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
+        session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
     }).strict()
 )
 

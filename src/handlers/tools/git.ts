@@ -2,8 +2,11 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext, AnchorStatus } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { CommitAnalyzer } from '../../git/index.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import { buildGitBaseArgs, streamGitRecords } from '../../vendor/lib-git-history/git-runner.js'
+import { parseGitRecord, processBatch } from '../../vendor/lib-git-history/parser.js'
+import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
+import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
 
 // --- Schemas ---
 export const GitHistoryOptionsSchema = z.object({
@@ -45,8 +48,62 @@ export const GitOutputSchema = z.object({
     error: z.string().optional(),
 }).extend(ErrorFieldsMixin.shape)
 
+interface FetchCommitsInput {
+    maxCount?: number
+    path?: string
+    since?: string
+    query?: string
+    ref?: string
+}
+
+async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<CommitEntry[]> {
+    const cliArgs: CliArgs = {
+        limit: input.maxCount?.toString(),
+        path: input.path,
+        since: input.since,
+        grep: input.query,
+    }
+    const gitArgs = buildGitBaseArgs(cliArgs, input.ref || 'HEAD')
+    
+    // Formatting args required by parseGitRecord
+    gitArgs.push(
+        '--name-status',
+        '-z',
+        '--format=%x1E<GIT_RECORD_BOUNDARY_TODO>%x1E%H%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%D%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%an%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%ae%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cn%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%ce%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%s%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%b%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold,only)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%P'
+    )
+    // Actually we should just fetch the basic BOUNDARY constants from git-runner
+    const { RECORD_SEPARATOR, FIELD_SEPARATOR } = await import('../../vendor/lib-git-history/git-runner.js')
+    
+    // pop the fake format and push the real one
+    gitArgs.pop()
+    gitArgs.push(`--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ae${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cn${FIELD_SEPARATOR}%ce${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`)
+
+    const records = streamGitRecords(gitArgs, cwd)
+    const batch = []
+    for await (const record of records) {
+        const parsed = parseGitRecord(record, cliArgs)
+        if (parsed) batch.push(parsed)
+    }
+    const commits = await processBatch(batch, cliArgs, [])
+    return commits
+}
+
+async function getUnreleasedChangelog(cwd: string): Promise<{ latestTag: string | null; commits: CommitEntry[] }> {
+    const { execFileSync } = await import('node:child_process')
+    // A simplified version to get latest tag, then get commits since then
+    try {
+        const latestTag = execFileSync('git', ['describe', '--tags', '--abbrev=0'], { cwd, encoding: 'utf-8' }).trim()
+        const commits = await fetchCommits({ ref: `${latestTag}..HEAD` }, cwd)
+        return { latestTag, commits }
+    } catch {
+        // Fallback if no tags
+        const commits = await fetchCommits({ maxCount: 100 }, cwd)
+        return { latestTag: null, commits }
+    }
+}
+
 export function getGitTools(context: ToolContext): ToolDefinition[] {
-    const { gitClient, progress } = context
+    const { progress } = context
 
     return [
         {
@@ -64,10 +121,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    if (!gitClient) throw new Error('Git client not available')
+                    const cwd = process.cwd()
                     const input = GitHistoryOptionsSchema.parse(params)
                     await sendProgress(progress, 0, 1, 'Fetching commit history...')
-                    const commits = await gitClient.getCommitHistory(input)
+                    const commits = await fetchCommits(input, cwd)
                     return { success: true, commits }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -89,10 +146,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    if (!gitClient) throw new Error('Git client not available')
+                    const cwd = process.cwd()
                     const input = GitSearchOptionsSchema.parse(params)
                     await sendProgress(progress, 0, 1, `Searching commits for "${input.query}"...`)
-                    const commits = await gitClient.searchCommits(input.query, input)
+                    const commits = await fetchCommits({ query: input.query, maxCount: input.maxCount }, cwd)
                     return { success: true, commits }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -114,10 +171,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    if (!gitClient) throw new Error('Git client not available')
+                    const cwd = process.cwd()
                     const input = GitReleaseInfoOptionsSchema.parse(params)
                     await sendProgress(progress, 0, 1, 'Fetching release info...')
-                    const commits = await gitClient.getReleaseInfo(input)
+                    const commits = await fetchCommits({ ref: input.ref, maxCount: 10 }, cwd)
                     return { success: true, commits }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -139,9 +196,9 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async () => {
                 try {
-                    if (!gitClient) throw new Error('Git client not available')
+                    const cwd = process.cwd()
                     await sendProgress(progress, 0, 1, 'Fetching unreleased commits...')
-                    const changelog = await gitClient.getUnreleasedChangelog()
+                    const changelog = await getUnreleasedChangelog(cwd)
                     return { success: true, changelog }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -169,13 +226,31 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    if (!gitClient) throw new Error('Git client not available')
+                    const cwd = process.cwd()
                     const input = z.object({ maxCount: z.number().optional().default(50) }).parse(params)
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
-                    const commits = await gitClient.getCommitHistory({ maxCount: input.maxCount })
+                    const commits = await fetchCommits({ maxCount: input.maxCount }, cwd)
                     await sendProgress(progress, 1, 2, 'Analyzing commits...')
-                    const analyzer = new CommitAnalyzer()
-                    const analysis = analyzer.analyze(commits)
+                    
+                    const analysis = {
+                        totalCommits: commits.length,
+                        byType: {} as Record<string, number>,
+                        byAuthor: {} as Record<string, number>,
+                        breakingCount: 0,
+                    }
+                    
+                    for (const c of commits) {
+                        if (c.type) {
+                            analysis.byType[c.type] = (analysis.byType[c.type] ?? 0) + 1
+                        }
+                        if (c.author) {
+                            analysis.byAuthor[c.author] = (analysis.byAuthor[c.author] ?? 0) + 1
+                        }
+                        if (c.isBreaking) {
+                            analysis.breakingCount++
+                        }
+                    }
+                    
                     return { success: true, analysis }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -211,7 +286,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const { db } = context
-                    if (!gitClient) throw new Error('Git client not available')
+                    const cwd = process.cwd()
                     const input = z.object({ entryId: z.number() }).parse(params)
                     
                     const entry = db.getEntryByIdIncludeDeleted(input.entryId)
@@ -224,7 +299,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                     const fs = await import('node:fs')
                     const path = await import('node:path')
-                    const workspaceRoot = process.cwd() // Assuming running in workspace
+                    const workspaceRoot = process.cwd()
 
                     const results = []
                     
@@ -244,10 +319,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             if (isDeleted) {
                                 newStatus = 'invalidated'
                             } else {
-                                const commits = await gitClient.getCommitHistory({
+                                const commits = await fetchCommits({
                                     path: anchor.anchorPath,
                                     since: entry.timestamp
-                                })
+                                }, cwd)
                                 commitsSince = commits.length
                                 if (commitsSince > 0) {
                                     newStatus = 'stale'

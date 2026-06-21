@@ -205,8 +205,7 @@ export function createServerInstance(
                         customToolHandlerConfig,
                         progressContext,
                         teamDb ?? undefined,
-                        teamVectorManager ?? undefined,
-                        context.gitClient ?? undefined
+                        teamVectorManager ?? undefined
                     )
 
                     const isSuccess = typeof result === 'object' && result !== null && (result as Record<string, unknown>)['success'] === true
@@ -378,7 +377,7 @@ export function createServerInstance(
         })
 
         // Register prompts (reusing prompts from instruction generation)
-        registerPrompts(server, prompts, db, teamDb ?? undefined, runtime, context.github, context.gitClient)
+        registerPrompts(server, prompts, db, teamDb ?? undefined, runtime, context.github)
 
         // Intercept SDK-level Zod validation errors to return structured error responses
         const serverObj = server.server as unknown as {

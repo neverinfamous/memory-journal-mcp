@@ -380,8 +380,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             context.github ?? undefined,
             undefined,
             context.teamDb,
-            undefined,
-            context.gitClient ?? undefined
+            undefined
         )
         return tools.map((t) => ({
             name: t.name,

@@ -367,9 +367,10 @@ export function formatUserMessage(opts: {
     // ========================================================================
     const gitHistoryLines: string[] = []
     if (opts.gitHistory) {
-        if (opts.gitHistory.changelog && opts.gitHistory.changelog.totalCount > 0) {
-            const cl = opts.gitHistory.changelog;
-            const catSummary = Object.entries(cl.categories)
+        const changelog = opts.gitHistory.changelog as { totalCount?: number; categories?: Record<string, unknown[]> } | undefined;
+        if (changelog && typeof changelog.totalCount === 'number' && changelog.totalCount > 0 && changelog.categories) {
+            const cl = changelog;
+            const catSummary = Object.entries(cl.categories ?? {})
                 .map(([cat, entries]) => `${escapeCell(cat)} (${String(entries.length)})`)
                 .join(' · ');
             gitHistoryLines.push(`**Unreleased (${String(cl.totalCount)}):** ${catSummary}`);

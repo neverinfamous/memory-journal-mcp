@@ -86,6 +86,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             prStatus: e.pr_status,
                             isPersonal: false,
                             author: e.author ?? currentUser,
+                            sessionId: e.session_id,
                             workspaceId: resolveWorkspaceId(e.workspace_id ?? input.workspace_id, e.project_number ?? input.project_number, context.config),
                         }
                     })
@@ -211,6 +212,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             workflowStatus: u.workflow_status,
                             isArchived: u.is_archived,
                             expectedVersion: u.expected_version,
+                            sessionId: u.session_id ?? undefined,
                             workspaceId: resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config),
                         })
                     }

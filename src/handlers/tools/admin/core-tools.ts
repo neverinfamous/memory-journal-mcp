@@ -65,6 +65,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         impactScore: input.impact_score,
                         trustScore: input.trust_score,
                         validationStatus: input.validation_status,
+                        sessionId: input.session_id ?? undefined,
                     })
                     if (!entry) {
                         return {

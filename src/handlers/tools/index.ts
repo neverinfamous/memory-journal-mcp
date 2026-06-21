@@ -23,7 +23,6 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import type { ProjectRegistryEntry } from '../../types/index.js'
-import type { GitHistoryClient } from '../../git/index.js'
 
 import { getCoreTools, getStalenessTools } from './core/index.js'
 import { getSearchTools } from './search/index.js'
@@ -159,11 +158,10 @@ export function getTools(
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
     teamDb?: IDatabaseAdapter,
-    teamVectorManager?: VectorSearchManager,
-    gitClient?: GitHistoryClient
+    teamVectorManager?: VectorSearchManager
 ): ToolRegistration[] {
     // Ensure tool map is built / up-to-date (shared cache with callTool)
-    ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager, gitClient)
+    ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
     const mapTool = (t: ToolDefinition): ToolRegistration => ({
         name: t.name,
@@ -215,7 +213,6 @@ let cachedContextRefs: {
     config?: ToolHandlerConfig
     teamDb?: IDatabaseAdapter
     teamVectorManager?: VectorSearchManager
-    gitClient?: GitHistoryClient
 } | null = null
 
 function safeIsAvailable(gh: GitHubIntegration | undefined | null): boolean | undefined {
@@ -242,8 +239,7 @@ function ensureToolCache(
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
     teamDb?: IDatabaseAdapter,
-    teamVectorManager?: VectorSearchManager,
-    gitClient?: GitHistoryClient
+    teamVectorManager?: VectorSearchManager
 ): void {
     if (config?.runtime) {
         const rt = config.runtime
@@ -254,7 +250,6 @@ function ensureToolCache(
             config?: ToolHandlerConfig
             teamDb?: IDatabaseAdapter
             teamVectorManager?: VectorSearchManager
-            gitClient?: GitHistoryClient
         } | null
         if (
             rt.toolMapCache &&
@@ -266,8 +261,7 @@ function ensureToolCache(
             refs?.config === config &&
             refs?.teamDb === teamDb &&
             (refs?.teamVectorManager === teamVectorManager ||
-                safeIsInitialized(refs?.teamVectorManager) === safeIsInitialized(teamVectorManager)) &&
-            refs?.gitClient === gitClient
+                safeIsInitialized(refs?.teamVectorManager) === safeIsInitialized(teamVectorManager))
         ) {
             return
         }
@@ -284,14 +278,13 @@ function ensureToolCache(
             cachedContextRefs.teamDb === teamDb &&
             (cachedContextRefs.teamVectorManager === teamVectorManager ||
                 safeIsInitialized(cachedContextRefs.teamVectorManager) ===
-                    safeIsInitialized(teamVectorManager)) &&
-            cachedContextRefs.gitClient === gitClient
+                    safeIsInitialized(teamVectorManager))
         ) {
             return // Cache is valid
         }
     }
 
-    const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config, gitClient }
+    const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
     const rawDefs = getAllToolDefinitions(context)
 
     // Wrap every handler with the metrics interceptor at cache-build time.
@@ -333,13 +326,12 @@ function ensureToolCache(
             vectorManager,
             config,
             teamDb,
-            teamVectorManager,
-            gitClient
+            teamVectorManager
         }
     } else {
         toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
         mappedToolsCache = null // Invalidate mapped cache when definitions change
-        cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager, gitClient }
+        cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
     }
 }
 
@@ -355,10 +347,9 @@ export async function callTool(
     config?: ToolHandlerConfig,
     progress?: ProgressContext,
     teamDb?: IDatabaseAdapter,
-    teamVectorManager?: VectorSearchManager,
-    gitClient?: GitHistoryClient
+    teamVectorManager?: VectorSearchManager
 ): Promise<unknown> {
-    ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager, gitClient)
+    ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
     const tool = mapToUse.get(name)
@@ -393,8 +384,7 @@ export async function callTool(
             teamVectorManager,
             github,
             config,
-            progress,
-            gitClient
+            progress
         }
         const freshTools = getAllToolDefinitions(context)
         const freshTool = freshTools.find((t) => t.name === name)

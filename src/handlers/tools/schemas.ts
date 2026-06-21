@@ -371,6 +371,7 @@ export const EntryOutputSchema = z
         impactScore: z.number().optional(),
         validationStatus: z.string().optional(),
         version: z.number().optional(),
+        sessionId: z.string().nullable().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 

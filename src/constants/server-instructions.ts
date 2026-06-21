@@ -59,6 +59,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 | Resource reads  | \`memory://metrics/resources\`|
 | Project staleness| \`memory://staleness\`        |
 | Report history  | \`memory://insights/reports\` |
+| Agent context   | \`memory://agent-context/{repo}\` |
 | Full context    | \`get-context-bundle\` prompt |
 
 ## Help Resources
@@ -77,10 +78,11 @@ Only help resources for your enabled tool groups are registered.
 4. **RENDER BRIEFING**: The briefing resource returns a pre-formatted Markdown string containing any active flags and a dense 2-column context table. You MUST output this exact string as your response without any modifications.
 5. **REVIEW ALERTS**: Pay special attention to any active flags listed at the top of the briefing. Do NOT truncate any summaries or issues.
 6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
+7. **SESSION ISOLATION**: You MUST pass your AntiGravity Conversation ID as the \`session_id\` parameter to all journal mutation tools (\`create_entry\`, \`update_entry\`, etc.) to prevent cross-agent thread collisions.
+8. **MID-THREAD CONTEXT**: If you lose track of your \`project_number\` or workspace during a long session, do NOT read \`memory://briefing\` again as it costs too many tokens. Instead, read \`memory://agent-context/{repo}\` (or \`memory://agent-context/default\`) to reorient yourself efficiently.
 
-- **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
-- **Cursor**: Tools are \`user-{name}-{tool}\` → server name = \`user-memory-journal-mcp\`
-- **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
+- **Session Identity**: You MUST pass your Conversation ID as the \`session_id\` parameter for all journal mutation tool calls (e.g. \`create_entry\`, \`update_entry\`).
+- **Context Reorientation**: If you lose track of your active project number or workspace path mid-thread, do NOT query the expensive \`memory://briefing/{repo}\` again. Instead, use \`read_resource\` on \`memory://agent-context/{repo}\` to retrieve a lightweight, token-efficient Key-Value payload containing your Project Number, Workspace ID, and current Session Instructions.
 
 ### Journal Behaviors
 

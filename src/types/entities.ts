@@ -103,6 +103,7 @@ export interface JournalEntry {
     // Concurrency versioning
     version: number
     workspaceId?: string
+    sessionId?: string | null
 }
 
 /**

@@ -1,6 +1,5 @@
 import * as path from 'node:path'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { GitHistoryClient } from '../../../git/index.js'
 import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
@@ -187,12 +186,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     undefined,
                                     process.env['GITHUB_TOKEN']
                                 )
-                                const injectedGitClient = new GitHistoryClient(registryEntry.path)
-                                
                                 sessionContext = {
                                     ...sessionContext,
-                                    github: injectedGithub,
-                                    gitClient: injectedGitClient
+                                    github: injectedGithub
                                 }
                             } catch {
                                 // Ignore injection failures; tools will fallback to global context or throw

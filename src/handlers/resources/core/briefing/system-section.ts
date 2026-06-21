@@ -21,8 +21,7 @@ import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
 import type { BriefingConfig } from '../../shared.js'
-import { GitHistoryClient } from '../../../../git/index.js'
-import type { UnreleasedChangelog } from '../../../../git/types.js'
+
 
 // ============================================================================
 // Types
@@ -30,7 +29,7 @@ import type { UnreleasedChangelog } from '../../../../git/types.js'
 
 export interface GitHistorySummary {
     commits: { hash: string; category?: string; entry?: string; message: string }[]
-    changelog?: UnreleasedChangelog
+    changelog?: unknown // legacy support if anything checks it
 }
 
 export interface TestHealth {
@@ -129,52 +128,24 @@ export function parseTestHealth(content: string): TestHealth | null {
 const cachedGitHistory = new Map<string, GitHistorySummary | null>()
 const cachedTestHealth = new Map<string, TestHealth | null>()
 
-async function loadCachedGitHistory(targetPath?: string): Promise<GitHistorySummary | null> {
+import { execFileSync } from 'node:child_process'
+
+function loadCachedGitHistory(targetPath?: string): GitHistorySummary | null {
     const root = targetPath || resolveProjectRoot()
     const existing = cachedGitHistory.get(root)
     if (existing !== undefined) return existing
 
     try {
-        const gitClient = new GitHistoryClient(root)
-        
-        let result: GitHistorySummary | null = null;
-        try {
-            const unreleased = await gitClient.getUnreleasedChangelog()
-            const commits = [];
-            for (const cat of Object.values(unreleased.categories)) {
-                for (const commit of cat) {
-                    commits.push({
-                        hash: commit.shortHash,
-                        category: commit.category,
-                        entry: commit.entry,
-                        message: commit.message
-                    });
-                }
-            }
-            if (commits.length > 0 || unreleased.totalCount > 0) {
-                result = { commits: commits.slice(0, 5), changelog: unreleased }
-            }
-        } catch {
-            // Fallback to legacy
-        }
-
-        if (!result) {
-            const commits = await gitClient.getCommitHistory({ maxCount: 5 })
-            result = { commits: [] }
-            for (const commit of commits) {
-                result.commits.push({
-                    hash: commit.hash.substring(0, 7),
-                    category: commit.trailers?.['History-Category'] || commit.trailers?.['Changelog-Category'],
-                    entry: commit.trailers?.['History-Entry'] || commit.trailers?.['Changelog-Entry'],
-                    message: commit.message
-                })
-            }
-            result = result.commits.length > 0 ? result : null
-        }
-        
+        const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H%x09%s'], { cwd: root, encoding: 'utf-8' })
+        const lines = out.split('\n').filter(Boolean)
+        const commits: GitHistorySummary['commits'] = lines.map(l => {
+            const [hash, msg] = l.split('\t')
+            return { hash: (hash || '').substring(0, 7), message: msg || '' }
+        })
+        const result = { commits }
         cachedGitHistory.set(root, result)
     } catch {
-        logger.debug('Failed to get git history via GitClient (non-critical)', {
+        logger.debug('Failed to get git history via child_process (non-critical)', {
             module: 'BRIEFING',
             operation: 'git-history',
         })
@@ -257,36 +228,24 @@ export function parseLastReleaseAge(content: string): number | null {
     return Math.max(0, Math.floor(elapsed / 86_400_000))
 }
 
-async function loadCachedLastReleaseDaysAgo(targetPath?: string): Promise<number | null> {
+function loadCachedLastReleaseDaysAgo(targetPath?: string): number | null {
     const root = targetPath || resolveProjectRoot()
     const existing = cachedLastReleaseDaysAgo.get(root)
     if (existing !== undefined) return existing
 
     try {
-        const history = await loadCachedGitHistory(targetPath)
-        const gitClient = new GitHistoryClient(root)
-        let commits = []
-        if (history?.changelog?.range?.from !== undefined && history.changelog.range.from !== '' && !history.changelog.range.isFallback) {
-            try {
-                commits = await gitClient.getReleaseInfo({ ref: history.changelog.range.from })
-            } catch {
-                commits = await gitClient.getReleaseInfo()
-            }
-        } else {
-            commits = await gitClient.getReleaseInfo()
-        }
-        
-        if (commits.length > 0 && commits[0]?.date) {
-            const releaseDate = new Date(commits[0].date)
-            const elapsed = Date.now() - releaseDate.getTime()
-            cachedLastReleaseDaysAgo.set(root, Math.max(0, Math.floor(elapsed / 86_400_000)))
+        const changelogPath = path.join(root, 'CHANGELOG.md')
+        if (fs.existsSync(changelogPath)) {
+            const content = fs.readFileSync(changelogPath, 'utf-8')
+            const age = parseLastReleaseAge(content)
+            cachedLastReleaseDaysAgo.set(root, age)
         } else {
             cachedLastReleaseDaysAgo.set(root, null)
         }
     } catch {
-        logger.debug('Failed to get release info via GitClient (non-critical)', {
+        logger.debug('Failed to get release info (non-critical)', {
             module: 'BRIEFING',
-            operation: 'release-age-git',
+            operation: 'release-age',
         })
         cachedLastReleaseDaysAgo.set(root, null)
     }
@@ -306,12 +265,12 @@ async function loadCachedLastReleaseDaysAgo(targetPath?: string): Promise<number
  * localTime provides chronological grounding for date-relative agent queries.
  * Filter, instruction level, and registry state are derived from runtime config.
  */
-export async function buildSystemContext(
+export function buildSystemContext(
     config?: BriefingConfig,
     filterConfig?: ToolFilterConfig | null,
     targetRepoPath?: string,
     resourceCount?: number
-): Promise<SystemContext> {
+): SystemContext {
     const now = new Date()
 
     // Format localTime compactly: "2026-05-25 06:12 EDT"
@@ -388,14 +347,14 @@ export async function buildSystemContext(
         resourceCount: resourceCount ?? 0,
         promptCount: getPrompts().length,
         localTime,
-        gitHistory: await loadCachedGitHistory(targetRepoPath),
+        gitHistory: loadCachedGitHistory(targetRepoPath),
         testHealth: loadCachedTestHealth(targetRepoPath),
         filterSummary,
         isReadonly,
         registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,
-        lastReleaseDaysAgo: await loadCachedLastReleaseDaysAgo(targetRepoPath),
+        lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(targetRepoPath),
         localCheck,
         workspaceId: config?.defaultWorkspaceId,
     }

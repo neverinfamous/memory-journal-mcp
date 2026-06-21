@@ -262,7 +262,7 @@ describe('Resource Handler Coverage', () => {
             expect(data.configured).toBe(true)
             expect(data.skills.length).toBeGreaterThanOrEqual(1)
             expect(
-                data.skills.some((s) => s.name === 'adversarial-skill-builder' && s.source === 'shipped')
+                data.skills.some((s) => s.name === 'typescript' && s.source === 'shipped')
             ).toBe(true)
 
             // Restore

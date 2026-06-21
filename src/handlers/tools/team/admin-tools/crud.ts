@@ -127,6 +127,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         impactScore: input.impact_score,
                         trustScore: input.trust_score,
                         validationStatus: input.validation_status,
+                        sessionId: input.session_id ?? undefined,
                     })
 
                     triggerTeamNotifications(context)

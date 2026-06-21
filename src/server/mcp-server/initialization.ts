@@ -1,7 +1,6 @@
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
-import { GitHistoryClient } from '../../git/index.js'
 import { logger } from '../../utils/logger.js'
 import { parseToolFilter, getToolFilterFromEnv, getFilterSummary, getAllToolNames } from '../../filtering/tool-filter.js'
 import { Scheduler } from '../scheduler.js'
@@ -170,24 +169,12 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         // rather than guessing the wrong project boundary.
     }
     const github = getGitHubIntegration(githubPath, runtime)
-    const gitClient = new GitHistoryClient(githubPath)
 
     try {
         // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
         await github.getRepoInfo()
     } catch (error: unknown) {
         logger.warning('Failed to pre-populate GitHub repository cache', {
-            module: 'McpServer',
-            path: githubPath,
-            error: error instanceof Error ? error.message : 'Unknown error',
-        })
-    }
-
-    try {
-        // Warm up getUnreleasedChanges cache / GitHistoryClient
-        await gitClient.getReleaseInfo()
-    } catch (error: unknown) {
-        logger.warning('Failed to warm up GitHistoryClient cache', {
             module: 'McpServer',
             path: githubPath,
             error: error instanceof Error ? error.message : 'Unknown error',
@@ -312,7 +299,6 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         vectorManager,
         teamVectorManager,
         github,
-        gitClient,
         configManager,
         scheduler,
         allowedIoRoots: finalAllowedIoRoots,

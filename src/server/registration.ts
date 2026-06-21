@@ -144,8 +144,7 @@ export function registerPrompts(
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
     runtime?: ServerRuntime,
-    github?: unknown,
-    gitClient?: unknown
+    github?: unknown
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
@@ -182,7 +181,7 @@ export function registerPrompts(
                         }[]
                     }> => {
                         const args = providedArgs as Record<string, string>
-                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github, gitClient)
+                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github)
                         return {
                             messages: promptResult.messages.map((m) => ({
                                 role: m.role as 'user' | 'assistant',

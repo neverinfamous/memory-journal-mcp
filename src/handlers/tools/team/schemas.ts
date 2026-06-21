@@ -56,6 +56,7 @@ export const TeamCreateEntrySchema = z.preprocess(
         impact_score: z.number().min(0).max(1).optional(),
         trust_score: z.number().min(0).max(1).optional(),
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),
+        session_id: z.string().optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content ?? '';
@@ -137,6 +138,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating blast radius (0.9+ for core architecture, 0.1 for simple docs).'),
         trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence (0.3-0.5 for unverified, 0.9+ for verified).'),
         validation_status: z.string().optional().describe('Current validation status of the entry (passed, none, failed).'),
+        session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
     }).strict()
 )
 
@@ -391,6 +393,7 @@ export const TeamUpdateEntrySchema = z.preprocess(
         impact_score: z.number().min(0).max(1).optional(),
         trust_score: z.number().min(0).max(1).optional(),
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),
+        session_id: z.string().optional(),
     }).strict()
 )
 
@@ -425,6 +428,7 @@ export const TeamUpdateEntrySchemaMcp = z.preprocess(
         impact_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating blast radius (0.9+ for core architecture, 0.1 for simple docs).'),
         trust_score: relaxedNumber().optional().describe('Heuristic score (0.0-1.0) indicating confidence (0.3-0.5 for unverified, 0.9+ for verified).'),
         validation_status: z.string().optional().describe('Current validation status of the entry (passed, none, failed).'),
+        session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
     }).strict()
 )
 
