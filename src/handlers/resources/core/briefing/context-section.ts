@@ -44,8 +44,14 @@ function cleanPreview(content: string | undefined | null, length: number): strin
         
     if (cleaned.length <= length) return cleaned
 
-    // Truncate at a word boundary to avoid cutting mid-word
+    // First try to truncate at the last full sentence or bullet point within the length limit
     const truncated = cleaned.slice(0, length)
+    const sentenceBoundaryMatch = /.*[.?!](?=\s|$)/.exec(truncated)
+    if (sentenceBoundaryMatch && sentenceBoundaryMatch[0].length > length * 0.4) {
+        return sentenceBoundaryMatch[0]
+    }
+
+    // Fallback: Truncate at a word boundary to avoid cutting mid-word
     const lastSpace = truncated.lastIndexOf(' ')
     const boundary = lastSpace > length * 0.6 ? lastSpace : length
     return cleaned.slice(0, boundary) + '…'

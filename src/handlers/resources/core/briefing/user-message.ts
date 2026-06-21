@@ -230,7 +230,7 @@ export function formatUserMessage(opts: {
     if (opts.toolCount !== undefined) {
         if (opts.filterSummary) {
             const isCodeMode = opts.filterSummary.includes('codemode')
-            const codeModeNote = isCodeMode ? ' | 100KB Cap | Prefers: mj.* API' : ''
+            const codeModeNote = isCodeMode ? ' (multiplexed to all tools) | 100KB Cap | Prefers: mj.* API' : ''
             sysLines.push(
                 `${String(opts.toolCount)} tools | Filter: ${escapeCell(opts.filterSummary)}${codeModeNote}`
             )
@@ -438,7 +438,7 @@ export function formatUserMessage(opts: {
     // ========================================================================
     // Assembly
     // ========================================================================
-    let flagsAlert = '💡 **Anti-Hallucination:** If you encounter MCP API confusion or hallucinations, immediately run the `mcp-heal` prompt to fix the codebase.\n\n'
+    let flagsAlert = '💡 **Anti-Hallucination:** If you encounter MCP API confusion or hallucinations, note the item in your task list and tell the user with a prominent notice/warning on the first opportunity. Do not interrupt long and complex work to run `mcp-heal` immediately.\n\n'
     if (opts.flagSummary && opts.flagSummary.count > 0) {
         flagsAlert += `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
     }

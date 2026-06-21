@@ -162,7 +162,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
                         db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
                         db.close();
                     `
-                    execFile('node', ['-e', code, this.dbPath], (err, _stdout, stderr) => {
+                    execFile('node', ['-e', code, this.dbPath], { windowsHide: true }, (err, _stdout, stderr) => {
                         if (err) {
                             logger.error('Failed to rebuild FTS5 index in background process', {
                                 module: 'NativeConnectionManager',

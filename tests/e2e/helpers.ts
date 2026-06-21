@@ -218,7 +218,8 @@ export async function startServer(
                         : '10000',
                     ...options?.env,
                 }).filter(([, v]) => v !== undefined)
-            ),
+            ) as Record<string, string>,
+            windowsHide: true,
         }
     )
 

@@ -258,12 +258,9 @@ describe('Resource Handler Coverage', () => {
                 skills: { name: string; source: string }[]
                 count: number
             }
-            // Shipped skills are always discovered
-            expect(data.configured).toBe(true)
-            expect(data.skills.length).toBeGreaterThanOrEqual(1)
-            expect(
-                data.skills.some((s) => s.name === 'typescript' && s.source === 'shipped')
-            ).toBe(true)
+            // No shipped skills exist natively anymore
+            expect(data.configured).toBe(false)
+            expect(data.skills).toBeUndefined()
 
             // Restore
             if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv

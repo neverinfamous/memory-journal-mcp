@@ -22,14 +22,14 @@ export function killProcessTree(child: ChildProcess) {
       if (uuidArg) {
         try {
           const killScript = `pids=$(grep -l -z '${uuidArg}' /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3); if [ -n "$pids" ]; then for pid in $pids; do kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null; done; fi`;
-          spawnSync('wsl.exe', ['-u', 'root', '-e', 'sh', '-c', killScript], { stdio: 'ignore' });
+          spawnSync('wsl.exe', ['-u', 'root', '-e', 'sh', '-c', killScript], { stdio: 'ignore', windowsHide: true });
         } catch { /* ignore */ }
       }
     }
 
     let taskkillSuccess = false;
     try {
-      const result = spawnSync('taskkill.exe', ['/pid', child.pid.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore' });
+      const result = spawnSync('taskkill.exe', ['/pid', child.pid.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore', windowsHide: true });
       if (!result.error && result.status === 0) {
         taskkillSuccess = true;
       }
@@ -37,7 +37,7 @@ export function killProcessTree(child: ChildProcess) {
 
     if (!taskkillSuccess) {
       try {
-        const wmic = spawnSync('wmic', ['process', 'get', 'processid,parentprocessid', '/format:csv'], { encoding: 'utf8' });
+        const wmic = spawnSync('wmic', ['process', 'get', 'processid,parentprocessid', '/format:csv'], { encoding: 'utf8', windowsHide: true });
         if (!wmic.error && wmic.stdout) {
           const lines = wmic.stdout.split('\n');
           const parentMap = new Map<number, number[]>();

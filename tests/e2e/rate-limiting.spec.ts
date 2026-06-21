@@ -48,6 +48,7 @@ test.describe('Rate Limiting', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: { ...process.env, ALLOWED_IO_ROOTS: process.cwd() },
+                windowsHide: true,
             }
         )
 
@@ -121,6 +122,7 @@ test.describe('Rate Limiting', () => {
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '5',
                 },
+                windowsHide: true,
             }
         )
 
@@ -193,6 +195,7 @@ test.describe('Rate Limiting', () => {
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '3',
                 },
+                windowsHide: true,
             }
         )
 
@@ -265,6 +268,7 @@ test.describe('Rate Limiting', () => {
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '2',
                 },
+                windowsHide: true,
             }
         )
 

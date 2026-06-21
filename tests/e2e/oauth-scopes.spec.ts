@@ -104,6 +104,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                 },
+                windowsHide: true,
             }
         )
 

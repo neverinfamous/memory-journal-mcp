@@ -53,6 +53,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                     TEAM_AUTHOR: 'Alice',
                     MCP_AUTH_SCOPES: 'read,write,team',
                 },
+                windowsHide: true,
             }
         )
 

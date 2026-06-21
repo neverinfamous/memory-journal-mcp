@@ -62,6 +62,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                     }),
                     MCP_AUTH_SCOPES: 'read,write,team',
                 },
+                windowsHide: true,
             }
         )
 

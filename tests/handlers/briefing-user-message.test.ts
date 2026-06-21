@@ -376,6 +376,7 @@ describe('formatUserMessage', () => {
             ...baseOpts(),
             skillsDir: {
                 path: '/path/to/skills',
+                absolutePath: 'C:\\Users\\chris\\Desktop\\adamic\\skills',
                 count: 3,
                 names: ['cloudflare', 'mcp-builder', 'next'],
             },
@@ -389,6 +390,7 @@ describe('formatUserMessage', () => {
             ...baseOpts(),
             skillsDir: {
                 path: '/path/to/skills',
+                absolutePath: 'C:\\Users\\chris\\Desktop\\adamic\\skills',
                 count: 1,
                 names: ['cloudflare'],
             },
@@ -409,6 +411,7 @@ describe('formatUserMessage', () => {
             },
             skillsDir: {
                 path: '/path/to/skills',
+                absolutePath: 'C:\\Users\\chris\\Desktop\\adamic\\skills',
                 count: 41,
                 names: [],
             },
