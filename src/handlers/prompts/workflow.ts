@@ -227,12 +227,13 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
 
 **Required Parameters:**
 - \`entry_type: "retrospective"\`
-- \`tags: ["session-summary"]\` (plus relevant domain tags)
+- \`tags\`: [REQUIRED] MUST include \`"session-summary"\` PLUS 2-3 specific domain/topological tags.
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`impact_score\`: [REQUIRED] Decimal score indicating blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
-- \`trust_score\`: [REQUIRED] Decimal score. MUST start lower (e.g., 0.3-0.5) for unverified work, and scale higher (0.8-1.0) only if rigorously verified.
+- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"targetId": 123, "relationType": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
+- \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
+- \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
 - \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
-- \`auto_context\`: [REQUIRED] JSON string of commit metadata representing the session's work.
+- \`auto_context\`: [REQUIRED] JSON string of commit metadata MUST EXACTLY match this shape: \`{"type":"session-commits","commits":["<sha>"],"branch":"<branch_name>","pr":<number>}\`
 - ${dbHint}
 
 **Required Content Structure (use EXACTLY these section headers):**

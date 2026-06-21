@@ -14,8 +14,8 @@ export function createProgram(): Command {
         .version(VERSION)
         .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
         .option('--port <number>', 'HTTP port (for http transport)', '3000')
-        .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost)')
-        .option('--stateless', 'Use stateless HTTP mode (no session management)')
+        .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost) (env: MCP_HOST)')
+        .option('--stateless', 'Use stateless HTTP mode (no session management) (env: STATELESS)')
         .option('--db <path>', 'Database path (env: DB_PATH)', defaultDbPath)
         .option('--team-db <path>', 'Team database path (env: TEAM_DB_PATH)', defaultTeamDbPath)
         .option(
@@ -31,8 +31,8 @@ export function createProgram(): Command {
             '--team-admin <author>',
             'Bootstrap this author as admin if team_members table is empty (env: TEAM_ADMIN)'
         )
-        .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
-        .option('--default-project <number>', 'Default GitHub Project number')
+        .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search") (env: MEMORY_JOURNAL_MCP_TOOL_FILTER)')
+        .option('--default-project <number>', 'Default GitHub Project number (env: DEFAULT_PROJECT_NUMBER)')
         .option('--default-workspace-id <string>', 'Default workspace ID for isolating journal entries (env: DEFAULT_WORKSPACE_ID)')
         .option('--auto-rebuild-index', 'Rebuild vector index on server startup (env: AUTO_REBUILD_INDEX)')
         .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: none) (env: CORS_ORIGIN)')

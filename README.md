@@ -33,7 +33,7 @@ When managing large projects with AI assistance, you face a critical challenge:
 - **Repeated Work** - AI suggests solutions you've already tried or abandoned.
 - **Context Overload** - Manually copying project history into every new conversation.
 
-Memory Journal solves this by acting as your project's **long-term memory**, bridging the gap between fragmented AI sessions.
+Memory Journal acts as your project's **long-term memory**. It bridges fragmented AI sessions.
 
 ---
 
@@ -43,7 +43,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 - _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
 - _"I'm stuck on this database error. Raise a 'blocker' flag for @sarah so her agent sees it next session."_ (Hush Protocol)
-- _"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."_ (Context lifecycles)
+- _"Close issue #42. Log an entry detailing the parsing bug fix."_ (Context lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
