@@ -130,7 +130,7 @@ async function executeCode(
                     }
                 }
                 // Handle `memory.journal.addEntry` natural hallucination
-                if (prop === 'addEntry' && 'core' in target) {
+                if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry') && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['create_entry'] ?? coreGroup['createEntry']
                 }
@@ -235,7 +235,9 @@ async function executeCode(
             mysql: shimMj,
             db: shimMj,
             memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
-            sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'],
+            sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
+            create_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
+            createEntry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
             context: frozenContext,
             console: consoleShim,
             fetch: undefined,
