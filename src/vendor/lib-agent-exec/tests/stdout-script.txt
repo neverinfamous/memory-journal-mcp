@@ -1,0 +1,3 @@
+script_works
+/mnt/c
+/mnt/c/some/windows/path

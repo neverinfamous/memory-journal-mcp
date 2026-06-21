@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ExecutionContext } from './types.js';
 
 export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {

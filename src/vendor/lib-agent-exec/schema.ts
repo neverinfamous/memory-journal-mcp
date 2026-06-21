@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { z } from 'zod';
 
 const noNullString = z.string().refine(val => !val.includes('\0'), "Must not contain null bytes");
