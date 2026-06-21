@@ -9,6 +9,7 @@ export const fileStatusSchema = z.object({
   insertions: z.number().int().optional(),
   deletions: z.number().int().optional(),
   isBinary: z.boolean().optional(),
+  language: z.string().optional(),
 });
 
 export const entrySchema = z.object({

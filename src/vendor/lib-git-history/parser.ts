@@ -5,7 +5,7 @@ import type { CliArgs } from './cli.js';
 import { getNumstatMap } from './git-numstat.js';
 import { getPatchMap } from './git-patch.js';
 import { FIELD_SEPARATOR } from './git-runner.js';
-import { isNoiseFile, extractIssues } from './parser-utils.js';
+import { isNoiseFile, extractIssues, getLanguage } from './parser-utils.js';
 
 export type RawCommitBatchItem = {
   sha: string; parents: string[]; refs: string[]; tags: string[]; authorName: string; authorEmail: string; date: string;
@@ -357,8 +357,10 @@ export function parseGitRecord(
         const file = getNextFilePart();
         
         if (file) {
+          const lang = getLanguage(file);
           rawFiles.push({
              status, file, ...(oldFile ? { oldFile } : {}),
+             ...(lang ? { language: lang } : {}),
              ...(similarityScore !== undefined ? { similarityScore } : {})
           });
         }
@@ -524,8 +526,8 @@ export function parseGitRecord(
   }
 
   const issuesMap = new Map<string, string | null>();
-  extractIssues(subject, issuesMap);
-  extractIssues(body, issuesMap);
+  extractIssues(subject, issuesMap, args['issue-pattern']);
+  extractIssues(body, issuesMap, args['issue-pattern']);
 
   return {
     sha, parents, refs, tags, authorName, authorEmail, date, committerName, committerEmail, committerDate,

@@ -29,6 +29,10 @@ export type CliArgs = {
   'diff-filter'?: string;
   reverse?: boolean;
   'no-body'?: boolean;
+  'issue-tracker'?: string;
+  'issue-pattern'?: string;
+  cache?: boolean;
+  mailmap?: string;
 };
 
 export function parseArguments(): CliArgs {
@@ -60,6 +64,10 @@ export function parseArguments(): CliArgs {
     'diff-filter': { type: 'string' },
     reverse: { type: 'boolean' },
     'no-body': { type: 'boolean' },
+    'issue-tracker': { type: 'string' },
+    'issue-pattern': { type: 'string' },
+    cache: { type: 'boolean' },
+    mailmap: { type: 'string' },
   } as const;
 
   try {
