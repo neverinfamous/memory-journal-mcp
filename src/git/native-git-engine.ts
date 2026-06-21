@@ -1,5 +1,5 @@
 
-import { getGitTagRange, streamGitRecords, cleanupProcesses, buildGitBaseArgs, RECORD_SEPARATOR } from '../vendor/lib-git-history/git-runner.js';
+import { getGitTagRange, streamGitRecords, cleanupProcesses, buildGitBaseArgs, RECORD_SEPARATOR, FIELD_SEPARATOR } from '../vendor/lib-git-history/git-runner.js';
 import { parseGitRecord, processBatch, type RawCommitBatchItem } from '../vendor/lib-git-history/parser.js';
 import type { CliArgs } from '../vendor/lib-git-history/cli.js';
 import type { CommitEntry } from '../vendor/lib-git-history/schema.js';
@@ -68,7 +68,7 @@ async function runStreamingQuery(baseDir: string, args: CliArgs, targetRange?: s
       'log',
       '-z',
       '--name-status',
-      `--pretty=format:${RECORD_SEPARATOR}%H%x1F%x1E%D%x1F%x1E%an%x1F%x1E%ae%x1F%x1E%aI%x1F%x1E%cn%x1F%x1E%ce%x1F%x1E%cI%x1F%x1E%s%x1F%x1E%b%x1F%x1E%(trailers)%x1F%x1E%(trailers:separator=%x1C)%x1F%x1E%P`,
+      `--pretty=format:${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ae${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cn${FIELD_SEPARATOR}%ce${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers)${FIELD_SEPARATOR}%(trailers:separator=%x1C)${FIELD_SEPARATOR}%P`,
       ...baseGitArgs
     ];
 

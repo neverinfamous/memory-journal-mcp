@@ -8,7 +8,8 @@ vi.mock('../../src/vendor/lib-git-history/git-runner.js', () => ({
     streamGitRecords: vi.fn(),
     cleanupProcesses: vi.fn(),
     buildGitBaseArgs: vi.fn(),
-    RECORD_SEPARATOR: 'SEP'
+    RECORD_SEPARATOR: 'SEP',
+    FIELD_SEPARATOR: 'FSEP'
 }));
 
 vi.mock('../../src/vendor/lib-git-history/parser.js', () => ({
