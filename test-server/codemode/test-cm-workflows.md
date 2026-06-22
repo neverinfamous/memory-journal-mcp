@@ -6,6 +6,7 @@ Test multi-step workflow execution: read-only pipelines, conditional branching, 
 
 **Prerequisites:**
 
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.

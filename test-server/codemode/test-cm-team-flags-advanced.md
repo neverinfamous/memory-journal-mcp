@@ -6,6 +6,7 @@ Test the advanced Hush Protocol flag features (`team_list_flags`, `team_update_f
 
 **Prerequisites:**
 
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - **CRITICAL:** This test file depends on flags generated in `test-cm-team-flags-core.md` (Phases 28.12–28.14). Do not run this file until the core file has been run and completed successfully.

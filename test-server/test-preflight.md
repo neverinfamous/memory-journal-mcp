@@ -1,5 +1,8 @@
 # MCP Server Pre-Flight Check — memory-journal-mcp
 
+> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
+
+
 > **Purpose:** Validate that tiered instructions and resources are working correctly before running full test passes. Run this in a fresh conversation with the server enabled.
 
 Do NOT read any files from disk. Answer using ONLY what you received via MCP initialization and resource reads.

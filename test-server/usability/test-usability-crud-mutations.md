@@ -1,6 +1,8 @@
 # memory-journal-mcp Usability & Hallucination Test: CRUD Mutations
 
 > **This test is optimized for an autonomous agent.**
+>
+> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 
 This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of core CRUD operations using Code Mode (`mj_execute_code`). The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
 

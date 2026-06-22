@@ -1,5 +1,8 @@
 # Memory Journal MCP - Config Reload Test
 
+> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
+
+
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
 
 This document provides a guided walkthrough for testing the dynamic configuration update capabilities of the memory-journal-mcp server. 

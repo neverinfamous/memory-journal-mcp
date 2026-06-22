@@ -5,6 +5,8 @@ Test the Code Mode Sandbox resilience for Session Summary specific hallucination
 **Scope:** `mj_execute_code`, Phase 31.5 — Session Summary Auto-Healing and Team Aliases.
 
 **Prerequisites:**
+
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 

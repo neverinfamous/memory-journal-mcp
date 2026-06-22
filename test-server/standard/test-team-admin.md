@@ -4,6 +4,8 @@
 **Scope:** Team administration, analytics, relationships, vector search, backup, and IO operations.
 
 **Prerequisites:**
+
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - **Required Tool Groups:** `admin`, `team`, `codemode`
 - **Validation:** Ensure strict mode and boundary limits.
 - **Use direct MCP tools exclusively.**

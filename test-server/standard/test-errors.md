@@ -4,6 +4,7 @@
 
 **Prerequisites:**
 
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
 - **Required Tool Groups:** `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team`
 - MCP server instructions auto-received before starting.

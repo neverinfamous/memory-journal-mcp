@@ -1,6 +1,8 @@
 # memory-journal-mcp Usability & Hallucination Test: Code Mode Mechanics
 
 > **This test is optimized for an autonomous agent.**
+>
+> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 
 This prompt instructs you to organically test the core sandboxing and execution mechanics of `mj_execute_code`, intentionally fuzzing the inputs to discover generic LLM hallucinations and hardening the proxy/dispatcher against them.
 

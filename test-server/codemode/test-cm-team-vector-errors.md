@@ -6,6 +6,7 @@ Test team vector search, cross-project insights, and comprehensive cross-tool er
 
 **Prerequisites:**
 
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Seed data S15–S17 are team DB entries with `project_number: 5`, required for `team_get_cross_project_insights`.

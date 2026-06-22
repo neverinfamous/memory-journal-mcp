@@ -6,6 +6,7 @@ Test team CRUD operations, error paths, and date range search through Code Mode.
 
 **Prerequisites:**
 
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Seed data S13–S14 are personal journal entries with `project_number: 5`, S15–S17 are team DB entries with `project_number: 5`.
