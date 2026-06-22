@@ -189,3 +189,9 @@ logs/
 
 # Dependencies
 node_modules/
+
+# Adamic Workflows Copies
+.agents/workflows/git-audit-trust.md
+.agents/workflows/git-generate-changelog.md
+.agents/workflows/git-impact-search.md
+.agents/workflows/git-velocity-report.md
