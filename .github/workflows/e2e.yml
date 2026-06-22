@@ -22,9 +22,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9.15.4
+      - name: Install pnpm
+        run: npm install -g pnpm@9.15.4
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6

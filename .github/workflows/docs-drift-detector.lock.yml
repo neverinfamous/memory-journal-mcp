@@ -549,7 +549,6 @@ jobs:
           name: activation
           path: /tmp/gh-aw
       - name: Clean git credentials
-        continue-on-error: true
         run: bash ${RUNNER_TEMP}/gh-aw/actions/clean_git_credentials.sh
       - name: Execute GitHub Copilot CLI
         id: agentic_execution
@@ -586,7 +585,6 @@ jobs:
       - name: Detect inference access error
         id: detect-inference-error
         if: always()
-        continue-on-error: true
         run: bash ${RUNNER_TEMP}/gh-aw/actions/detect_inference_access_error.sh
       - name: Configure Git credentials
         env:
@@ -602,7 +600,6 @@ jobs:
           echo "Git configured with standard GitHub Actions identity"
       - name: Copy Copilot session state files to logs
         if: always()
-        continue-on-error: true
         run: |
           # Copy Copilot session state files to logs folder for artifact collection
           # This ensures they are in /tmp/gh-aw/ where secret redaction can scan them
@@ -619,7 +616,6 @@ jobs:
           fi
       - name: Stop MCP Gateway
         if: always()
-        continue-on-error: true
         env:
           MCP_GATEWAY_PORT: ${{ steps.start-mcp-gateway.outputs.gateway-port }}
           MCP_GATEWAY_API_KEY: ${{ steps.start-mcp-gateway.outputs.gateway-api-key }}
@@ -688,7 +684,6 @@ jobs:
             await main();
       - name: Print firewall logs
         if: always()
-        continue-on-error: true
         env:
           AWF_LOGS_DIR: /tmp/gh-aw/sandbox/firewall/logs
         run: |
@@ -709,7 +704,6 @@ jobs:
           fi
       - name: Upload agent artifacts
         if: always()
-        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: agent
@@ -726,7 +720,6 @@ jobs:
           if-no-files-found: ignore
       - name: Upload firewall audit logs
         if: always()
-        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: firewall-audit-logs
@@ -761,7 +754,6 @@ jobs:
           destination: ${{ runner.temp }}/gh-aw/actions
       - name: Download agent output artifact
         id: download-agent-output
-        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: agent
@@ -856,7 +848,6 @@ jobs:
           destination: ${{ runner.temp }}/gh-aw/actions
       - name: Download agent output artifact
         id: download-agent-output
-        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: agent
@@ -1033,7 +1024,6 @@ jobs:
           destination: ${{ runner.temp }}/gh-aw/actions
       - name: Download agent output artifact
         id: download-agent-output
-        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: agent
