@@ -91,7 +91,7 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
       let customMatch;
       while ((customMatch = customRegex.exec(safeText)) !== null) {
         if (customMatch.index === customRegex.lastIndex) customRegex.lastIndex++;
-        const potentialIssue = customMatch[0];
+        const potentialIssue = customMatch[1] || customMatch[0];
         if (!issuesMap.has(potentialIssue)) {
           issuesMap.set(potentialIssue, null);
         }

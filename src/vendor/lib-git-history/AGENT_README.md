@@ -34,3 +34,8 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 - If you need to write a commit using this system, use the `/mcp:memory-journal-mcp:commit` or `/mcp:memory-journal-mcp:quick-commit` prompts.
 - Do NOT edit `.agents/workflows/changelog.md` (or similar changelog files); always extract history using `get-git-history-json.ts` instead.
+
+## 🧪 Usability & Hallucination Testing
+
+If you are modifying the history parsing logic, you MUST run the usability testing suite to ensure LLMs do not hallucinate or break when piping large JSON responses.
+- **Run the Fuzzing Suite:** Ask the user to "Execute the usability testing coordinator workflow in adamic", or manually trigger the subagents defined in `.agents/scripts/usability/coordinator-workflow.md`.

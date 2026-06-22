@@ -33,6 +33,7 @@ export type CliArgs = {
   'issue-pattern'?: string;
   cache?: boolean;
   mailmap?: string;
+  'slack-map'?: string;
 };
 
 export function parseArguments(): CliArgs {
@@ -68,6 +69,7 @@ export function parseArguments(): CliArgs {
     'issue-pattern': { type: 'string' },
     cache: { type: 'boolean' },
     mailmap: { type: 'string' },
+    'slack-map': { type: 'string' },
   } as const;
 
   try {

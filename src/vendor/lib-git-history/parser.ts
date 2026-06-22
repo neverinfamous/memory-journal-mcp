@@ -359,9 +359,12 @@ export function parseGitRecord(
         const file = getNextFilePart();
         
         if (file) {
-          const lang = getLanguage(file);
+          const flatFile = (' ' + file).slice(1);
+          const flatStatus = (' ' + status).slice(1);
+          const flatOldFile = oldFile ? (' ' + oldFile).slice(1) : undefined;
+          const lang = getLanguage(flatFile);
           rawFiles.push({
-             status, file, ...(oldFile ? { oldFile } : {}),
+             status: flatStatus, file: flatFile, ...(flatOldFile ? { oldFile: flatOldFile } : {}),
              ...(lang ? { language: lang } : {}),
              ...(similarityScore !== undefined ? { similarityScore } : {})
           });
@@ -371,7 +374,7 @@ export function parseGitRecord(
     }
   }
 
-  subject = subject.replace(/\r$/, '');
+  subject = subject.replace(/\r\n?/g, '\n').replace(/\n$/, '');
   if (subject.length > 5000) {
     let safeLen = 5000;
     while (safeLen > 0 && subject.charCodeAt(safeLen - 1) >= 0xD800 && subject.charCodeAt(safeLen - 1) <= 0xDBFF) {
@@ -442,6 +445,8 @@ export function parseGitRecord(
         else if (v === 'medium') metadataObj.impact = 0.5;
         else if (v === 'low') metadataObj.impact = 0.2;
         else {
+          const vLower = val.trim().toLowerCase();
+          if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') continue;
           const num = Number(val.trim());
           if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
             metadataObj.impact = num;
@@ -456,6 +461,8 @@ export function parseGitRecord(
         else if (v === 'medium') metadataObj.trust = 0.5;
         else if (v === 'low') metadataObj.trust = 0.2;
         else {
+          const vLower = val.trim().toLowerCase();
+          if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') continue;
           const num = Number(val.trim());
           if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
             metadataObj.trust = num;
@@ -475,10 +482,10 @@ export function parseGitRecord(
         if (val.trim()) breakingChangeDescription = val;
       }
       else if (key === 'co-authored-by') coAuthors.push(...val.split(',').map(s => s.trim()).filter(Boolean));
-      else if (key === 'reviewed-by') reviewers.push(val);
+      else if (key === 'reviewed-by') { if (val) reviewers.push(val); }
       else if (key.match(/^(acked-by|bug|cc|closes|depends-on|fixes|related-to|reported-by|resolves|see-also|signed-off-by|tested-by)$/)) {
         const niceKey = key.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-');
-        references.push(`${niceKey}: ${val}`);
+        if (val) references.push(`${niceKey}: ${val}`);
       } else {
         if (colonIdx === -1) continue; // Skip malformed custom trailers missing colons
         if (!customTrailers[key]) customTrailers[key] = [];
@@ -503,11 +510,6 @@ export function parseGitRecord(
       const trimmedBody = normalizedBody.trimEnd();
       if (trimmedBody.endsWith(trailerTrimmed)) {
         body = trimmedBody.slice(0, -trailerTrimmed.length).trimEnd();
-      } else {
-        const idx = normalizedBody.lastIndexOf(trailerTrimmed);
-        if (idx !== -1) {
-           body = normalizedBody.slice(0, idx).trimEnd();
-        }
       }
     }
   }
