@@ -11,7 +11,7 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef, PromptMessage } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
-import { parseFlagContext } from '../../types/auto-context.js'
+
 import { spawn } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -178,11 +178,9 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             arguments: [],
             handler: (
                 _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
+                db: IDatabaseAdapter
             ) => {
                 const digestSignal = buildDigestSignalForPrompt(db)
-                const flagSignal = buildFlagSignalForPrompt(teamDb)
 
                 return {
                     messages: [
@@ -190,7 +188,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}${flagSignal}Execute a standup analysis.
+                                text: `${digestSignal}Execute a standup analysis.
 Prepare a daily standup summary (Yesterday, Today, Blockers).
 
 To complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
@@ -207,11 +205,9 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
             arguments: [],
             handler: (
                 _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
+                db: IDatabaseAdapter
             ) => {
                 const digestSignal = buildDigestSignalForPrompt(db)
-                const flagSignal = buildFlagSignalForPrompt(teamDb)
 
                 return {
                     messages: [
@@ -219,7 +215,7 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}${flagSignal}Execute a retro analysis.
+                                text: `${digestSignal}Execute a retro analysis.
 Prepare a sprint retrospective (What went well, What could improve, Action items).
 
 To complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
@@ -236,11 +232,9 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
             arguments: [],
             handler: (
                 _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
+                db: IDatabaseAdapter
             ) => {
                 const digestSignal = buildDigestSignalForPrompt(db)
-                const flagSignal = buildFlagSignalForPrompt(teamDb)
 
                 return {
                     messages: [
@@ -248,7 +242,7 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}${flagSignal}Execute a weekly analysis.
+                                text: `${digestSignal}Execute a weekly digest analysis.
 Create a weekly digest formatted day-by-day.
 
 To complete this task, you MUST first fetch the relevant entries using \`search_by_date_range\` or read \`memory://recent\`. Do not hallucinate entries.`,
@@ -453,61 +447,4 @@ function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
     // Only return if we have actual signals beyond the header
     if (lines.length <= 1) return ''
     return lines.join('\n') + '\n\n'
-}
-
-/**
- * Build a concise active-flags signal string for injection into standup/retro prompts.
- * Returns empty string when team DB is not configured or no active flags exist.
- */
-function buildFlagSignalForPrompt(teamDb?: IDatabaseAdapter): string {
-    if (!teamDb) return ''
-
-    try {
-        const { entries: flagEntries } = teamDb.searchEntries('', {
-            entryType: 'flag',
-            limit: 20,
-        })
-
-        const now = Date.now()
-        const activeFlags: {
-            flag_type: string
-            preview: string
-            target_user: string | null
-            age: string
-        }[] = []
-
-        for (const entry of flagEntries) {
-            const ctx = parseFlagContext(entry.autoContext)
-            if (!ctx || ctx.resolved) continue
-
-            const ageMs = now - new Date(entry.timestamp).getTime()
-            const hours = Math.floor(ageMs / 3_600_000)
-            const days = Math.floor(ageMs / 86_400_000)
-            const age =
-                days > 0 ? `${String(days)}d ago` : hours > 0 ? `${String(hours)}h ago` : 'just now'
-
-            const preview =
-                entry.content.length > 80 ? entry.content.slice(0, 80) + '…' : entry.content
-
-            activeFlags.push({
-                flag_type: ctx.flag_type,
-                preview,
-                target_user: ctx.target_user ?? null,
-                age,
-            })
-        }
-
-        if (activeFlags.length === 0) return ''
-
-        const lines: string[] = ['[Active Flags]']
-        for (const f of activeFlags) {
-            const target = f.target_user ? ` → @${f.target_user}` : ''
-            lines.push(`🚩 ${f.flag_type}${target}: ${f.preview} (${f.age})`)
-        }
-
-        return lines.join('\n') + '\n\n'
-    } catch {
-        // Graceful degradation — flags are supplementary context
-        return ''
-    }
 }

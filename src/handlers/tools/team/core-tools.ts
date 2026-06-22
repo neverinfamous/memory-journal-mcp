@@ -27,7 +27,6 @@ import {
 } from './schemas.js'
 import { coerceSignificanceAlias } from '../schemas.js'
 import type { RelationshipType } from '../../../types/index.js'
-import { parseFlagContext } from '../../../types/auto-context.js'
 
 // ============================================================================
 // Tool Definitions
@@ -181,12 +180,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
                     }
 
-                    const parsedFlagMetadata =
-                        entry.entryType === 'flag' ? parseFlagContext(entry.autoContext) : undefined
-
                     return {
                         success: true,
-                        entry: { ...entry, author, flagMetadata: parsedFlagMetadata },
+                        entry: { ...entry, author },
                         author,
                     }
                 } catch (err) {
@@ -236,9 +232,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const author = fetchAuthor(teamDb, entry_id)
-                    const parsedFlagMetadata =
-                        entry.entryType === 'flag' ? parseFlagContext(entry.autoContext) : undefined
-                    const enrichedEntry = { ...entry, author, flagMetadata: parsedFlagMetadata }
+                    const enrichedEntry = { ...entry, author }
 
                     const result: Record<string, unknown> = {
                         success: true,
@@ -297,8 +291,6 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const enriched = entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,
-                        flagMetadata:
-                            e.entryType === 'flag' ? parseFlagContext(e.autoContext) : undefined,
                     }))
 
                     return { entries: enriched, count: enriched.length, next_cursor: result.nextCursor }

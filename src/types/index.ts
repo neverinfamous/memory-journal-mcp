@@ -188,8 +188,7 @@ export interface ToolHandlerConfig {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Additional team database mappings (label -> path) for cross-team discovery */
     additionalTeamDbs?: Record<string, string>
-    /** Hush Protocol flag vocabulary */
-    flagVocabulary?: string[]
+
     /** Allowlisted roots for file IO */
     allowedIoRoots?: string[]
     /**
@@ -344,8 +343,7 @@ export interface ServerConfig {
     /** Sentence transformer model name */
     modelName: string
 
-    /** Hush Protocol flag vocabulary (defaults: blocker, needs_review, help_requested, fyi) */
-    flagVocabulary?: string[]
+
 
     /** Default role for un-registered authors (default: denied) */
     teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'

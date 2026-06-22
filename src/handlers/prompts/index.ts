@@ -10,8 +10,8 @@ import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getGitHubPromptDefinitions } from './github.js'
 import { getGitPromptDefinitions } from './git.js'
+
 import { getAdversarialPromptDefinitions } from './adversarial.js'
-import { getTeamPromptDefinitions } from './team.js'
 import { getOptimizerPromptDefinitions } from './optimizer.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 
@@ -86,7 +86,6 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         ...getGitHubPromptDefinitions(),
         ...getGitPromptDefinitions(),
         ...getAdversarialPromptDefinitions(),
-        ...getTeamPromptDefinitions(),
         ...getOptimizerPromptDefinitions(),
     ]
 }

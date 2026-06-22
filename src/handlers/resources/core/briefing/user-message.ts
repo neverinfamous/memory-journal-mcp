@@ -9,7 +9,7 @@
  */
 
 import type { BriefingGitHub } from './github-section.js'
-import type { FlagSummary, GraphSummary } from './context-section.js'
+import type { GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 import type { GitHistorySummary, TestHealth } from './system-section.js'
 
@@ -50,7 +50,6 @@ export function formatUserMessage(opts: {
     teamTotalEntries?: number
 
     analyticsInsights?: BriefingInsights
-    flagSummary?: FlagSummary
     graphSummary?: GraphSummary
     version?: string
     toolCount?: number
@@ -431,10 +430,6 @@ export function formatUserMessage(opts: {
     // Assembly
     // ========================================================================
     let flagsAlert = '💡 **Anti-Hallucination:** If you encounter MCP API confusion or hallucinations, note the item in your task list and tell the user with a prominent notice/warning on the first opportunity. Do not interrupt long and complex work to run `mcp-heal` immediately.\n\n'
-    if (opts.flagSummary && opts.flagSummary.count > 0) {
-        flagsAlert += `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
-    }
-
     if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
         const orphanPct = Math.round(graphSummary.orphanRatio * 100)
         flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`mj-mcp-optimize\`.\n\n`

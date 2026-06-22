@@ -18,7 +18,6 @@ import { buildGitHubSection } from './github-section.js'
 import {
     buildJournalContext,
     buildTeamContext,
-    buildFlagsContext,
     buildGraphContext,
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
@@ -90,7 +89,6 @@ export async function buildBriefingData(
     const github = await buildGitHubSection(activeGithub, config)
     const team = buildTeamContext(context, config, activeProjectNumber)
     const insights = buildInsightsSection(context)
-    const flags = buildFlagsContext(context)
     const graphStats = buildGraphContext(context)
 
     const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
@@ -131,7 +129,6 @@ export async function buildBriefingData(
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,
         analyticsInsights: insights ?? undefined,
-        flagSummary: flags,
         graphSummary: graphStats,
         version: system.version,
         toolCount: system.toolCount,

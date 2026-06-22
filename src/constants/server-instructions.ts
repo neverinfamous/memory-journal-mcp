@@ -75,8 +75,8 @@ Only help resources for your enabled tool groups are registered.
 1. You **MUST** read the \`memory://briefing/{+repo}\` at the start of each chat!
 2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
 3. Infer the \`repo\` from the user's prompt or your active workspace context.
-4. **RENDER BRIEFING**: The briefing resource returns a pre-formatted Markdown string containing any active flags and a dense 2-column context table. You MUST output this exact string as your response without any modifications.
-5. **REVIEW ALERTS**: Pay special attention to any active flags listed at the top of the briefing. Do NOT truncate any summaries or issues.
+4. **RENDER BRIEFING**: The briefing resource returns a pre-formatted Markdown string containing a dense 2-column context table. You MUST output this exact string as your response without any modifications.
+5. **REVIEW ALERTS**: Pay special attention to any alerts listed at the top of the briefing. Do NOT truncate any summaries or issues.
 6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
 7. **SESSION ISOLATION**: You MUST pass your AntiGravity Conversation ID as the \`session_id\` parameter to all journal mutation tools (\`create_entry\`, \`update_entry\`, etc.) to prevent cross-agent thread collisions.
 8. **MID-THREAD CONTEXT**: If you lose track of your \`project_number\` or workspace during a long session, do NOT read \`memory://briefing\` again as it costs too many tokens. Instead, read \`memory://agent-context/{repo}\` (or \`memory://agent-context/default\`) to reorient yourself efficiently.
@@ -274,14 +274,13 @@ Read \`memory://help/codemode\` for full namespace table, examples, and patterns
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","hush-protocol","skills","templates"]
+const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","skills","templates"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
  */
 function buildHelpPointers(groups: Set<ToolGroup>): string {
     const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => {
-        if (k === 'hush-protocol') return groups.has('team')
         if (k === 'skills') return true
         return groups.has(k as ToolGroup)
     })

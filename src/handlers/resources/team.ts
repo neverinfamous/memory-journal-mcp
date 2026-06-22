@@ -1,4 +1,4 @@
-import { ICON_CLOCK, ICON_TEAM, ICON_FLAG } from '../../constants/icons.js'
+import { ICON_CLOCK, ICON_TEAM } from '../../constants/icons.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
@@ -8,10 +8,7 @@ import type {
     InternalResourceDef,
     ResourceContext,
     ResourceResult,
-    BriefingConfig,
 } from './shared.js'
-import { DEFAULT_FLAG_VOCABULARY } from '../tools/team/schemas.js'
-import { parseFlagContext } from '../../types/auto-context.js'
 import { logger } from '../../utils/logger.js'
 import { markUntrustedContent, sanitizeAuthor } from '../../utils/security-utils.js'
 
@@ -126,187 +123,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
             },
         },
-        // ====================================================================
-        // Flag Resources (Hush Protocol)
-        // ====================================================================
-        {
-            uri: 'memory://flags',
-            name: 'Active Flags',
-            title: 'Active Team Flags Dashboard',
-            description:
-                'Active (unresolved) flags from the Hush Protocol. Shows machine-actionable developer signals that need attention. Requires TEAM_DB_PATH.',
-            mimeType: 'application/json',
-            icons: [ICON_FLAG],
-            annotations: withPriority(0.8, ASSISTANT_FOCUSED),
-            handler: (_uri: string, context: ResourceContext): ResourceResult => {
-                if (!context.teamDb) {
-                    return {
-                        data: {
-                            error: 'Team database not configured. Set TEAM_DB_PATH to enable.',
-                            activeFlags: [],
-                            count: 0,
-                        },
-                    }
-                }
 
-                // Query all flag entries, then filter by resolved status in auto_context
-                const { entries: flagEntries } = context.teamDb.searchEntries('', {
-                    entryType: 'flag',
-                    limit: 100,
-                })
-
-                const enriched = enrichWithAuthor(flagEntries, context)
-
-                const activeFlags = enriched
-                    .map((entry) => {
-                        const flagCtx = parseFlagContext(entry.autoContext)
-                        if (!flagCtx || flagCtx.resolved) return null
-                        return {
-                            id: entry.id,
-                            flag_type: flagCtx.flag_type,
-                            target_user: flagCtx.target_user,
-                            link: flagCtx.link,
-                            author: entry.author ? sanitizeAuthor(entry.author) : null,
-                            timestamp: entry.timestamp,
-                            preview: markUntrustedContent(
-                                entry.content.slice(0, 120) +
-                                    (entry.content.length > 120 ? '...' : '')
-                            ),
-                            tags: entry.tags,
-                            projectNumber: entry.projectNumber ?? null,
-                        }
-                    })
-                    .filter((f): f is NonNullable<typeof f> => f !== null)
-
-                const lastModified = activeFlags[0]?.timestamp ?? new Date().toISOString()
-
-                return {
-                    data: {
-                        activeFlags,
-                        count: activeFlags.length,
-                    },
-                    annotations: { lastModified },
-                }
-            },
-        },
-        {
-            uri: 'memory://flags/vocabulary',
-            name: 'Flag Vocabulary',
-            title: 'Hush Protocol Flag Vocabulary',
-            description:
-                'Returns the configured flag vocabulary for the Hush Protocol. Static resource reflecting server-wide configuration.',
-            mimeType: 'application/json',
-            icons: [ICON_FLAG],
-            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: (_uri: string, context: ResourceContext): ResourceResult => {
-                const config: BriefingConfig | undefined = context.briefingConfig
-                const custom: string[] | undefined = config?.flagVocabulary
-                const hasCustom = Array.isArray(custom) && custom.length > 0
-
-                const vocabulary: string[] = hasCustom
-                    ? custom.map(String)
-                    : [...DEFAULT_FLAG_VOCABULARY]
-
-                return {
-                    data: {
-                        vocabulary,
-                        count: vocabulary.length,
-                        isDefault: !hasCustom,
-                    },
-                }
-            },
-        },
-        {
-            uri: 'memory://flags/history',
-            name: 'Resolved Flags History',
-            title: 'Recently Resolved Team Flags',
-            description:
-                'Recently resolved flags from the Hush Protocol (last 7 days). Shows resolution details and time-to-resolution metrics. Requires TEAM_DB_PATH.',
-            mimeType: 'application/json',
-            icons: [ICON_FLAG],
-            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: (_uri: string, context: ResourceContext): ResourceResult => {
-                if (!context.teamDb) {
-                    return {
-                        data: {
-                            error: 'Team database not configured. Set TEAM_DB_PATH to enable.',
-                            resolved_flags: [],
-                            count: 0,
-                        },
-                    }
-                }
-
-                const now = Date.now()
-                const HISTORY_WINDOW_MS = 604_800_000 // 7 days
-
-                const { entries: flagEntries } = context.teamDb.searchEntries('', {
-                    entryType: 'flag',
-                    limit: 100,
-                })
-
-                const enriched = enrichWithAuthor(flagEntries, context)
-
-                const resolutionTimes: number[] = []
-                const resolvedFlags = enriched
-                    .map((entry) => {
-                        const flagCtx = parseFlagContext(entry.autoContext)
-                        if (!flagCtx?.resolved) return null
-
-                        const entryTime = new Date(entry.timestamp).getTime()
-                        const ageMs = now - entryTime
-                        if (ageMs > HISTORY_WINDOW_MS) return null
-
-                        // Calculate resolution time if resolved_at is available
-                        let resolutionHours: number | null = null
-                        if (flagCtx.resolved_at) {
-                            const resolvedTime = new Date(flagCtx.resolved_at).getTime()
-                            resolutionHours =
-                                Math.round(((resolvedTime - entryTime) / 3_600_000) * 10) / 10
-                            if (resolutionHours >= 0) {
-                                resolutionTimes.push(resolutionHours)
-                            }
-                        }
-
-                        return {
-                            id: entry.id,
-                            flag_type: flagCtx.flag_type,
-                            target_user: flagCtx.target_user ?? null,
-                            author: entry.author ? sanitizeAuthor(entry.author) : null,
-                            timestamp: entry.timestamp,
-                            resolved_at: flagCtx.resolved_at ?? null,
-                            resolution: flagCtx.resolution
-                                ? markUntrustedContent(flagCtx.resolution)
-                                : null,
-                            resolution_hours: resolutionHours,
-                            preview: markUntrustedContent(
-                                entry.content.slice(0, 120) +
-                                    (entry.content.length > 120 ? '...' : '')
-                            ),
-                            tags: entry.tags,
-                        }
-                    })
-                    .filter((f): f is NonNullable<typeof f> => f !== null)
-
-                // Calculate average resolution time
-                const avgResolutionHours =
-                    resolutionTimes.length > 0
-                        ? Math.round(
-                              (resolutionTimes.reduce((a, b) => a + b, 0) /
-                                  resolutionTimes.length) *
-                                  10
-                          ) / 10
-                        : null
-
-                return {
-                    data: {
-                        resolved_flags: resolvedFlags,
-                        count: resolvedFlags.length,
-                        window_days: 7,
-                        avg_resolution_hours: avgResolutionHours,
-                    },
-                }
-            },
-        },
     ]
 
     return resources.map((resource) => ({

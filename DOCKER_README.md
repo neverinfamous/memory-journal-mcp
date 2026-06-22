@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-58.62%25-orange.svg)
+![Coverage](https://img.shields.io/badge/Coverage-57.81%25-orange.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -32,7 +32,6 @@ Memory Journal acts as your project's **long-term memory**. It bridges fragmente
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
-- _"I'm stuck on this database error. Raise a 'blocker' flag for @sarah so her agent sees it next session."_ (Hush Protocol)
 - _"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."_ (Context lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
@@ -42,7 +41,7 @@ Memory Journal acts as your project's **long-term memory**. It bridges fragmente
 
 ## 🎯 What Sets Us Apart
 
-**107 MCP Tools** · **20 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**107 MCP Tools** · **20 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -50,7 +49,7 @@ Memory Journal acts as your project's **long-term memory**. It bridges fragmente
 | **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones, Copilot Reviews, and Insights. Switch contexts across multiple repositories seamlessly via `PROJECT_REGISTRY`.                                |
 | **Knowledge & Search**        | 8 relationship types with Mermaid graphs. Hybrid Search combines FTS5, semantic vector similarity, and heuristics. Auto-pruning maintains vector relevance by soft-deleting low-value entries.       |
 | **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API.                                                                                                          |
-| **Team & Hush Protocol**      | 44 tools for collaboration: cross-project insights, RBAC, matrix. Hush Protocol replaces chat noise with structured, actionable AI flags (blockers, reviews) that automatically surface in sessions. |
+| **Team Collaboration**      | 39 tools for collaboration: cross-project insights, RBAC, matrix. |
 | **Data & Architecture**       | Markdown roundtripping, unified IO namespace, JSON exports, automated backup/restore, SQLCipher encryption, OAuth 2.1 authentication, HTTP/SSE Transport, and structured error handling.             |
 | **Agent Collaboration**       | Agents share context, suggest reusable rules/skills, and triage issues, review PRs, and audit code via GitHub Commander.                                                                             |
 
@@ -113,17 +112,17 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
 | `git`           | 6     | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                                                    |
-| `team`          | 44    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags**, RBAC member management (requires `TEAM_DB_PATH`) |
+| `team`          | 39    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, RBAC member management (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
 ### 🎯 **20 Workflow Prompts**
 
-Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and flag triage dashboards. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **60 Resources** (33 Static + 12 Template + 9 Dynamic Repo + 6 Aliases)
 
-33 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://flags`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus 12 template resources, 9 dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`), and 6 alias resources. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+33 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus 12 template resources, 9 dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`), and 6 alias resources. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
 
@@ -134,20 +133,11 @@ Code executes in a **worker_threads sandbox** with multiple layers of security. 
 - **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
-- **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`, `mj.team.passTeamFlag()`)
+- **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured error response to the agent instead of a raw MCP protocol exception.
 
 ---
 
-## 🤫 Hush Protocol: Asynchronous Team Collaboration
-
-The **Hush Protocol** replaces noisy chat messages with structured, machine-actionable flags in the Team Database.
-
-- **Actionable Visibility**: Active flags (`blocker`, `needs_review`) automatically surface at the top of `memory://briefing`. Your agents can immediately see and resolve blockers autonomously.
-- **Searchable History**: Flags are permanent journal entries. Agents can query past flags to understand how architectural blockers were conquered.
-- **Full Lifecycle**: Filter by status, type, or assignee. Escalate severity, reassign, or reopen flags. Built-in analytics track resolution velocity and team workload.
-
-**[Complete Hush Protocol guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
 
 ## 🚀 Quick Start (2 Minutes)
 

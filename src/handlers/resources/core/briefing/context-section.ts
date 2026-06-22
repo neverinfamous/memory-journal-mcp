@@ -7,7 +7,7 @@
 
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-import { parseFlagContext, parseSessionCommitContext } from '../../../../types/auto-context.js'
+import { parseSessionCommitContext } from '../../../../types/auto-context.js'
 import {
     markUntrustedContentInline,
 } from '../../../../utils/security-utils.js'
@@ -262,66 +262,7 @@ export function buildTeamContext(
 
 
 
-// ============================================================================
-// Flags Context (Hush Protocol)
-// ============================================================================
 
-export interface FlagSummary {
-    count: number
-    flags: {
-        id: number
-        flag_type: string
-        target_user: string | null
-        preview: string
-        fullContent: string
-        timestamp: string
-    }[]
-}
-
-/**
- * Build active (unresolved) flag summary for the briefing.
- * Returns undefined if team DB is not configured or no active flags exist.
- */
-export function buildFlagsContext(context: ResourceContext): FlagSummary | undefined {
-    if (!context.teamDb) return undefined
-
-    try {
-        const flagEntries = extractEntries(context.teamDb.searchEntries('', {
-            entryType: 'flag',
-            limit: 20,
-        }))
-
-        const activeFlags = flagEntries
-            .map((entry) => {
-                const ctx = parseFlagContext(entry.autoContext)
-                if (!ctx || ctx.resolved) return null
-
-                return {
-                    id: entry.id,
-                    flag_type: ctx.flag_type,
-                    target_user: ctx.target_user ?? null,
-                    preview: markUntrustedContentInline(cleanPreview(entry.content, 80)),
-                    fullContent: markUntrustedContentInline(entry.content),
-                    timestamp: entry.timestamp,
-                }
-            })
-            .filter((f): f is NonNullable<typeof f> => f !== null)
-
-        if (activeFlags.length === 0) return undefined
-
-        return {
-            count: activeFlags.length,
-            flags: activeFlags,
-        }
-    } catch (error) {
-        logger.debug('Failed to build flags context', {
-            module: 'BRIEFING',
-            operation: 'flags-context',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
-    }
-}
 
 // ============================================================================
 // Graph Context

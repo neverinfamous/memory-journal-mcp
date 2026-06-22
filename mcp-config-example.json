@@ -36,7 +36,6 @@
                 "TEAM_AUTHOR": "",
                 "TEAM_DEFAULT_ROLE": "denied",
                 "TEAM_ADMIN": "",
-                "FLAG_VOCABULARY": "blocker,needs_review,help_requested,fyi",
                 "GITHUB_TOKEN": "",
                 "DEFAULT_PROJECT_NUMBER": "1",
                 "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1}}",

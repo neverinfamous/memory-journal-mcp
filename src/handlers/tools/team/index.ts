@@ -36,8 +36,6 @@ import { getTeamExportTools } from './export-tools.js'
 import { getTeamIoTools } from './io-tools.js'
 import { getTeamBackupTools } from './backup-tools.js'
 import { getTeamVectorTools } from './vector-tools.js'
-import { getTeamFlagTools } from './flag-tools.js'
-import { getTeamFlagExtensionTools } from './flag-extension-tools/index.js'
 import { getTeamMemberTools } from './member-tools.js'
 import { getTeamAliasTools } from './alias-tools.js'
 
@@ -55,8 +53,6 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
         ...getTeamIoTools(context),
         ...getTeamBackupTools(context),
         ...getTeamVectorTools(context),
-        ...getTeamFlagTools(context),
-        ...getTeamFlagExtensionTools(context),
         ...getTeamMemberTools(context),
         ...getTeamAliasTools(context),
     ]

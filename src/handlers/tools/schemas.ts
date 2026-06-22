@@ -39,7 +39,6 @@ export const ENTRY_TYPES = [
     'development_note',
     'enhancement',
     'milestone',
-    'flag',
     'system_integration_test',
     'test_entry',
     'plan_draft',

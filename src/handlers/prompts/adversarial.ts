@@ -168,7 +168,7 @@ Produce a plan with these sections:
 - **Risk Assessment**: Table with Risk, Likelihood, Impact, Mitigation
 - **Open Questions**: Anything requiring user input
 
-Journal: \`create_entry({ content: "<plan>", entry_type: "plan_draft", tags: ["adversarial-planner", "plan-draft"], impact_score: 0.8, trust_score: 0.5, validation_status: "pending" })\`
+Journal: \`create_entry({ content: "<plan>", entry_type: "plan_draft", tags: ["adversarial-planner", "plan-draft"], impact_score: 0.8, trust_score: 0.5, validation_status: "none" })\`
 
 ### Phase 2: Adversarial Review (Agent B)
 
@@ -183,7 +183,7 @@ Produce a findings table:
 
 List any **blocking issues** that must be addressed before proceeding.
 
-Journal: \`create_entry({ content: "<critique>", entry_type: "adversarial_review", tags: ["adversarial-planner", "review"], impact_score: 0.8, trust_score: 0.8, validation_status: "verified" })\`
+Journal: \`create_entry({ content: "<critique>", entry_type: "adversarial_review", tags: ["adversarial-planner", "review"], impact_score: 0.8, trust_score: 0.8, validation_status: "passed" })\`
 
 ### Phase 3: Refinement (Agent A)
 
@@ -195,7 +195,7 @@ Address every finding with a disposition:
 | **Reject** | Explain why it doesn't apply |
 | **Modify** | Accept the spirit, implement differently |
 
-Journal: \`create_entry({ content: "<refinement>", entry_type: "plan_refinement", tags: ["adversarial-planner", "refinement"], impact_score: 0.8, trust_score: 0.9, validation_status: "verified" })\`
+Journal: \`create_entry({ content: "<refinement>", entry_type: "plan_refinement", tags: ["adversarial-planner", "refinement"], impact_score: 0.8, trust_score: 0.9, validation_status: "passed" })\`
 
 ### Phase 4: External Validation (Copilot)
 

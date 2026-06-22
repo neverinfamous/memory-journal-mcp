@@ -53,17 +53,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const projectNumber = project_number
 
                     if (projectNumber == null) {
-                        // Search Isolation Bypass: allow pure flag searches, otherwise reject
-                        const isPureFlagSearch = tags && tags.length > 0 && tags.every((t: string) => t.startsWith('flag:'))
-                        if (!isPureFlagSearch) {
-                            return {
-                                success: false,
-                                error: 'Missing project_number. Cross-tenant searches without project_number are strictly limited to pure flag searches (tags starting with "flag:").',
-                                code: 'VALIDATION_ERROR',
-                                category: 'validation',
-                                suggestion: 'Specify a project_number, or use pure flag search tags.',
-                                recoverable: true,
-                            }
+                        return {
+                            success: false,
+                            error: 'Missing project_number. Cross-tenant searches without project_number are not allowed.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify a project_number.',
+                            recoverable: true,
                         }
                     }
 
@@ -84,10 +80,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     })
                     let entries = result.entries
 
-                    // Security: Enforce entryType constraint for cross-tenant searches
-                    if (projectNumber == null) {
-                        entries = entries.filter((e) => e.entryType === 'flag')
-                    }
+                    // Security: projectNumber is required for all searches now
 
                     // Filter by tags if provided (batch query instead of N+1)
                     if (tags && tags.length > 0) {
@@ -164,15 +157,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const projectNumber = project_number
 
                     if (projectNumber == null) {
-                        if (entry_type !== 'flag') {
-                            return {
-                                success: false,
-                                error: 'Missing project_number. Cross-tenant searches without project_number are strictly limited to entry_type: "flag".',
-                                code: 'VALIDATION_ERROR',
-                                category: 'validation',
-                                suggestion: 'Specify a project_number, or set entry_type to "flag".',
-                                recoverable: true,
-                            }
+                        return {
+                            success: false,
+                            error: 'Missing project_number. Cross-tenant searches without project_number are not allowed.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify a project_number.',
+                            recoverable: true,
                         }
                     }
 
@@ -189,8 +180,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const result = teamDb.searchByDateRange(start_date, end_date, {
-                        // Security: Enforce entryType constraint for cross-tenant searches
-                        entryType: projectNumber == null ? 'flag' : entry_type,
+                        entryType: entry_type,
                         tags,
                         limit,
                         cursor,

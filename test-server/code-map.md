@@ -234,8 +234,6 @@ src/
     │   │   ├── export-tools.ts     # Export team tool (export_entries)
     │   │   ├── io-tools.ts         # IO team tools (export_markdown, import_markdown)
     │   │   ├── backup-tools.ts     # Backup team tools (backup, list_backups)
-    │   │   ├── flag-tools.ts       # Flag team tools (team_pass_flag, team_resolve_flag)
-    │   │   ├── flag-extension-tools.ts # Flag query/mutation/analytics tools (team_list_flags, team_update_flag, team_get_flag_analytics)
     │   │   ├── member-tools.ts     # Team member tools (team_add_member, etc)
     │   │   ├── alias-tools.ts      # Author alias tools (team_add_author_alias, etc)
     │   │   └── vector-tools.ts     # Vector team tools (semantic_search, vector_index_stats, rebuild, add)
@@ -279,7 +277,6 @@ src/
         ├── workflow.ts             # 11 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
         ├── github.ts               # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
         ├── adversarial.ts          # 8 adversarial prompts (adversarial-plan-review, adversarial-audit-code-quality, etc)
-        └── team.ts                 # 1 team prompt (flag-dashboard)
 
 skills/
 ├── bun/                            # Bun ecosystem conventions and testing patterns
@@ -310,7 +307,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **Journal Core** | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `trigger_progress`, `test_error_handling`, `mark_anchors_stale` |
 | **Relationships** | `link_entries`, `visualize_relationships` |
 | **Search** | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`, `list_deleted_entries`, `cross_team_search` |
-| **Team** | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`, `team_search`, `team_search_by_date_range`, `team_list_deleted_entries`, `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_merge_tags`, `team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`, `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`, `team_link_entries`, `team_visualize_relationships`, `team_export_entries`, `team_export_markdown`, `team_import_markdown`, `team_import_external`, `team_backup`, `team_list_backups`, `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`, `team_pass_flag`, `team_resolve_flag`, `team_list_flags`, `team_update_flag`, `team_get_flag_analytics`, `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`, `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors` |
+| **Team** | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`, `team_search`, `team_search_by_date_range`, `team_list_deleted_entries`, `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_merge_tags`, `team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`, `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`, `team_link_entries`, `team_visualize_relationships`, `team_export_entries`, `team_export_markdown`, `team_import_markdown`, `team_import_external`, `team_backup`, `team_list_backups`, `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`, `team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`, `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors` |
 <!-- END: TOOL_MAPPING -->
 
 ### Utility Files (no tools, shared helpers)
@@ -346,9 +343,6 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://commits/{project_number}/by-issue` | Commits by Issue |
 | `memory://commits/{project_number}/by-pr` | Commits by PR |
 | `memory://entries/recent` | Recent Entries (alias) |
-| `memory://flags` | Active Flags |
-| `memory://flags/history` | Resolved Flags History |
-| `memory://flags/vocabulary` | Flag Vocabulary |
 | `memory://github/milestones` | GitHub Milestones |
 | `memory://github/milestones/{+repo}` | GitHub Milestones (Dynamic) |
 | `memory://github/status` | GitHub Status |
@@ -422,7 +416,6 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `commit` | High-integrity procedure for committing code changes with validation gates |
 | `create-entry` | Create a structured mid-thread journal entry |
 | `create-team-entry` | Create a structured mid-thread team journal entry |
-| `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
 | `goal-tracker` | Milestone and achievement tracking |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
 | `mcp-heal` | Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM ... |

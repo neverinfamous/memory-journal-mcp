@@ -25,7 +25,7 @@ export function enforceAccessBoundary(
     const isTeam =
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
-            ? targetName.startsWith('memory://team/') || targetName.startsWith('memory://flags')
+            ? targetName.startsWith('memory://team/')
             : targetName.startsWith('team_'))
 
     const isAdmin =

@@ -9,7 +9,7 @@ import type { ToolGroup, MetaGroup } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 108 tools are categorized here for filtering support.
+ * All 103 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS = {
     core: [
@@ -107,11 +107,6 @@ export const TOOL_GROUPS = {
         'team_add_to_vector_index',
         'team_get_cross_project_insights',
         'team_get_collaboration_matrix',
-        'team_pass_flag',
-        'team_resolve_flag',
-        'team_list_flags',
-        'team_update_flag',
-        'team_get_flag_analytics',
         'team_add_member',
         'team_remove_member',
         'team_update_member_role',

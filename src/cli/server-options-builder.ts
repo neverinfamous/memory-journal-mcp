@@ -219,7 +219,7 @@ export function buildServerOptions(
             }, 0.3),
         },
         auditConfig,
-        flagVocabulary: catchConfig(() => resolver.resolveStringArray('flagVocabulary', 'FLAG_VOCABULARY'), undefined),
+
         autoPruneIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0), 0),
         archiveOlderThanDays: catchConfig(() => resolver.resolveIntRequired('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0), 0),
         pruneOlderThanDays: catchConfig(() => resolver.resolveIntRequired('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0), 0),

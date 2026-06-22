@@ -318,7 +318,7 @@ export function createServerInstance(
                 defaultProjectNumber:
                     currentConfig.briefingConfig.defaultProjectNumber ?? defaultProjectNumber,
                 projectRegistry: options.projectRegistry,
-                flagVocabulary: options.flagVocabulary,
+
                 allowedIoRoots: allowedIoRoots,
             }
 

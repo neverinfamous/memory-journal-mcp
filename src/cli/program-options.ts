@@ -234,10 +234,7 @@ export function createProgram(): Command {
             '--workflow-summary <text>',
             'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
         )
-        .option(
-            '--flag-vocabulary <terms>',
-            'Comma-separated flag vocabulary for Hush Protocol (env: FLAG_VOCABULARY, default: blocker,needs_review,help_requested,fyi)'
-        )
+
         .option('--config <path>', 'Path to configuration file (.yaml, .yml, .json) (env: MEMORY_JOURNAL_CONFIG)')
         .option('--dump-config', 'Print effective configuration and exit')
 

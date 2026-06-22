@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-58.62%25-orange.svg)
+![Coverage](https://img.shields.io/badge/Coverage-57.81%25-orange.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -42,7 +42,6 @@ Memory Journal acts as your project's **long-term memory**. It bridges fragmente
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
-- _"I'm stuck on this database error. Raise a 'blocker' flag for @sarah so her agent sees it next session."_ (Hush Protocol)
 - _"Close issue #42. Log an entry detailing the parsing bug fix."_ (Context lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
@@ -52,7 +51,7 @@ Memory Journal acts as your project's **long-term memory**. It bridges fragmente
 
 ## 🎯 What Sets Us Apart
 
-**107 MCP Tools** · **21 Workflow Prompts** · **48 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**107 MCP Tools** · **21 Workflow Prompts** · **48 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -65,8 +64,7 @@ Memory Journal acts as your project's **long-term memory**. It bridges fragmente
 | **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens  |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                             |
 | **Heuristic Scoring**         | Compute `trust_score` (veracity) and `impact_score` (blast radius) for entries to optimize context delivery and vector prioritization                                                                |
-| **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                   |
-| **Team Collaboration**        | 44 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics), RBAC, and member management |
+| **Team Collaboration**        | 39 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, RBAC, and member management |
 | **Data Interoperability**     | Bidirectional Markdown roundtripping, unified IO namespace, and schema-safe JSON exports with hard bounds-checked path traversal defenses                                                            |
 | **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                |
 | **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                      |
@@ -192,13 +190,13 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `admin`         | 11    | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                      |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                        |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                                              |
-| `team`          | 44    | CRUD, search, cross-team search, stats, relationships, IO (imports/exports), backup, vector search, cross-project insights, matrix, **Hush Protocol flags**, RBAC (requires `TEAM_DB_PATH`) |
+| `team`          | 39    | CRUD, search, cross-team search, stats, relationships, IO (imports/exports), backup, vector search, cross-project insights, matrix, RBAC (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
 ### 🎯 **21 Workflow Prompts**
 
-Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, flag triage dashboards, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **48 Resources**
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
@@ -227,9 +225,6 @@ Time period analysis, goal tracking, PR & issue command, session summaries, adve
 - `memory://metrics/users` - Per-user call counts (populated when OAuth user identifiers are present) — LOW priority
 - `memory://metrics/latency` - Per-tool latency percentiles (p50/p95/p99) with min/max bounds — MEDIUM priority
 - `memory://audit` - Last 50 write/admin tool call entries from the JSONL operational telemetry log (requires `AUDIT_LOG_PATH`)
-- `memory://flags` - Active (unresolved) team flags dashboard (requires `TEAM_DB_PATH`)
-- `memory://flags/vocabulary` - Configured flag vocabulary terms
-- `memory://flags/history` - Recently resolved flags with resolution details and avg time-to-resolution (last 7 days)
 - `memory://staleness` - Project staleness overview
 - `memory://insights/digest` - Aggregate insights digest
 - `memory://insights/team-collaboration` - Team collaboration metrics
@@ -269,7 +264,7 @@ Code executes in a **worker_threads sandbox** designed as a secure multi-tenant 
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
 - **Egress boundary enforcement** — result serialization capped to prevent OOM via oversized payloads
-- **Full API access** — all 11 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`, `mj.team.passTeamFlag()`)
+- **Full API access** — all 11 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured `{ success: false, error: "..." }` response to the agent instead of a raw MCP protocol exception.
 
 ### ⚡ Code Mode Only (Maximum Token Savings)
@@ -300,79 +295,6 @@ If you prefer individual tool calls, exclude codemode:
 ```
 
 ---
-
-## 🤫 Hush Protocol: Asynchronous Team Collaboration
-
-The **Hush Protocol** reimagines team collaboration for AI-augmented workflows by replacing noisy Slack/Teams messages with structured, machine-actionable flags.
-
-When you encounter a blocker, need a review, or want to broadcast a milestone, your AI agent can raise a flag in the shared Team Database:
-
-- **Actionable Visibility**: Active flags automatically surface at the very top of the `memory://briefing` payload for all team members. When another developer's agent starts a session, it immediately sees your blockers and can help resolve them autonomously.
-- **Structured Types**: Raise specific flag types (`blocker`, `needs_review`, `help_requested`, `fyi`). You can customize your team's vocabulary via the `--flag-vocabulary` configuration.
-- **Searchable History**: Unlike chat messages that disappear into the void, Hush flags are permanent, query-able AI journal entries. Your agents can search past `needs_review` flags to understand how architectural blockers were conquered.
-- **Integrated Standup & Retro Signals**: Active flags automatically appear as contextual signals in the `prepare-standup` and `prepare-retro` prompts, so your daily standups and sprint retrospectives always surface outstanding blockers.
-- **Full Lifecycle Management**: List and filter flags by status, type, or assignee via `team_list_flags`. Update metadata (escalate severity, reassign, add links) or reopen resolved flags via `team_update_flag`. Track resolution velocity, per-user workload, and trends with `team_get_flag_analytics`.
-
-**Dashboard & Operations**: Read `memory://flags` for an active dashboard, `memory://flags/history` for recently resolved flags, use the `/flag-dashboard` prompt for guided triage with severity grouping and staleness detection, and use `mj.team.passTeamFlag()` / `mj.team.resolveTeamFlag()` / `mj.team.teamListFlags()` / `mj.team.teamUpdateFlag()` / `mj.team.teamGetFlagAnalytics()` to manage flags programmatically in Code Mode.
-
-**[Complete Hush Protocol guide and Mermaid sequence diagrams →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
-
----
-
-## 🚀 Quick Start
-
-### Option 1: npm (Recommended)
-
-```bash
-npm install -g memory-journal-mcp
-```
-
-### Option 2: From Source
-
-```bash
-git clone https://github.com/neverinfamous/memory-journal-mcp.git
-cd memory-journal-mcp
-pnpm install
-pnpm run build
-```
-
-### Add to MCP Config
-
-Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
-
-### Configuration File (Recommended)
-
-Instead of unwieldy `env` blocks in your MCP client config, you can define all settings in a `memory-journal.config.yaml` or `memory-journal.config.json` file placed in the root of your workspace:
-
-```yaml
-# memory-journal.config.yaml
-transport: stdio
-db: /path/to/your/memory_journal.db
-teamDb: /path/to/shared/team.db
-teamDefaultRole: denied
-autoRebuildIndex: true
-toolFilter: codemode
-codemodeInternalFullAccess: true
-briefingEntries: 3
-briefingSummaries: 1
-briefingIncludeTeam: true
-briefingIssues: 3
-briefingPrs: 3
-briefingPrStatus: true
-```
-
-Load it simply via:
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "memory-journal-mcp",
-      "args": ["--config", "/path/to/memory-journal.config.yaml"]
-    }
-  }
-}
-```
 
 _Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`._
 
@@ -441,7 +363,7 @@ The `memory://briefing` resource is **dynamically assembled** at each session st
 
 - **System State:** Server version, capability statuses, resource/tool counts, test health, and `memory://metrics/summary` breadcrumbs.
 - **Repository Context:** Git working tree status, unreleased changes, exact code-map paths, and prioritized gatekeeper CI workflows.
-- **Ambient Context:** Active workspace paths, local time, analytics, and active Hush Protocol flags.
+- **Ambient Context:** Active workspace paths, local time, analytics.
 
 You control exactly what additional content your agent sees across three dimensions:
 
@@ -634,9 +556,6 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `HARD_DELETE_OLDER_THAN_DAYS`     | Permanently delete soft-deleted entries that have been dead for N days (CLI: `--hard-delete-older-than-days`; `0` = disabled)                         |
 | `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold for pruning (CLI: `--prune-importance-threshold`; default: `0.15`)                                                         |
 | `BRIEFING_IMPORTANCE_THRESHOLD`   | Minimum importance score to be automatically included in standard briefing payloads (default: `0.3`)                                                  |
-| `STALENESS_ACTIVE_HOURS`          | Number of hours before an active flag triggers a staleness warning (default: `48`)                                                                    |
-| `STALENESS_RECENT_DAYS`           | Number of days before a resolved flag is excluded from recent history resources (default: `7`)                                                        |
-| `STALENESS_STALE_DAYS`            | Number of days before a stale active flag triggers high-priority briefing alerts (default: `7`)                                                       |
 | `MAX_STATEFUL_SESSIONS`           | Maximum number of concurrent stateful HTTP sessions allowed in memory (default: `1000`)                                                               |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
@@ -679,7 +598,6 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                                                        |
 | `AUDIT_LOG_MAX_SIZE`              | Maximum operational telemetry file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)                                   |
 | `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)                                                                  |
-| `FLAG_VOCABULARY`                 | Comma-separated flag types for Hush Protocol (CLI: `--flag-vocabulary`; default: `blocker,needs_review,help_requested,fyi`)                           |
 | `ARCHIVE_OLDER_THAN_DAYS`         | Archive active entries older than N days with importance below threshold; `0` = disabled (CLI: `--archive-older-than-days`; default: `0`)             |
 | `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold on startup; `0` = disabled (CLI: `--prune-older-than-days`; default: `0`)       |
 | `HARD_DELETE_OLDER_THAN_DAYS`     | Permanently delete soft-deleted entries that have been dead for N days; `0` = disabled (CLI: `--hard-delete-older-than-days`; default: `0`)           |

@@ -158,51 +158,6 @@ describe('Prompt Handlers', () => {
             )
         })
 
-        it('should return messages for flag-dashboard prompt with flag_type filter', async () => {
-            // Add some flags to teamDb
-            teamDb.createEntry({
-                content: 'Blocker flag',
-                entryType: 'flag',
-                tags: ['needs-attention'],
-                autoContext: JSON.stringify({
-                    flag_type: 'blocker',
-                    target_user: 'alice',
-                    resolved: false,
-                }),
-            })
-            teamDb.createEntry({
-                content: 'FYI flag',
-                entryType: 'flag',
-                autoContext: JSON.stringify({ flag_type: 'fyi', resolved: false }),
-            })
-            // Resolved flag
-            teamDb.createEntry({
-                content: 'Resolved blocker',
-                entryType: 'flag',
-                autoContext: JSON.stringify({
-                    flag_type: 'blocker',
-                    resolved: true,
-                    resolved_at: new Date().toISOString(),
-                }),
-            })
-            // Missing context flag
-            teamDb.createEntry({
-                content: 'No context',
-                entryType: 'flag',
-            })
 
-            const result = await getPrompt('flag-dashboard', { flag_type: 'blocker' }, db, teamDb)
-
-            expect(result.messages).toBeDefined()
-            const text = (result.messages[0]?.content as { text: string }).text
-            expect(text).toContain('Blocker flag')
-            expect(text).not.toContain('FYI flag') // Filtered out
-        })
-
-        it('should throw ConfigurationError if teamDb is omitted for flag-dashboard', () => {
-            expect(() => getPrompt('flag-dashboard', {}, db)).toThrow(
-                'Team database not configured'
-            )
-        })
     })
 })

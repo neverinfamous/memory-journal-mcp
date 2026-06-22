@@ -160,35 +160,7 @@ describe('Team Search Tool Handlers', () => {
             expect(result.code).toBe('VALIDATION_ERROR')
         })
 
-        it('should successfully search without project_number for pure flag queries', async () => {
-            // Seed a flag entry in teamDb first to search for
-            teamDb.createEntry({
-                content: 'flag:blocker: FK constraint prevents migration',
-                entryType: 'flag',
-                tags: ['flag:blocker'],
-                isPersonal: false,
-                autoContext: JSON.stringify({ flag_type: 'blocker', target_user: null, link: null, resolved: false, resolved_at: null, resolution: null }),
-                projectNumber: 1,
-            })
-            teamDb.flushSave()
 
-            const result = (await callTool(
-                'team_search',
-                {
-                    query: 'FK constraint',
-                    tags: ['flag:blocker'],
-                },
-                personalDb,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                teamDb
-            )) as any
-            expect(result.success).toBe(true)
-            expect(result.entries).toBeDefined()
-            expect(result.entries.length).toBeGreaterThan(0)
-        })
     })
 
 
@@ -266,24 +238,7 @@ describe('Team Search Tool Handlers', () => {
             expect(result.code).toBe('VALIDATION_ERROR')
         })
 
-        it('should successfully search by date range without project_number for flag entry_type queries', async () => {
-            const result = (await callTool(
-                'team_search_by_date_range',
-                {
-                    start_date: '2020-01-01',
-                    end_date: '2030-01-01',
-                    entry_type: 'flag',
-                },
-                personalDb,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                teamDb
-            )) as any
-            expect(result.success).toBe(true)
-            expect(result.entries).toBeDefined()
-        })
+
     })
 
 })

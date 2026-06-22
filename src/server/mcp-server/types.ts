@@ -41,8 +41,7 @@ export interface ServerOptions {
 
     // Audit configuration
     auditConfig?: AuditConfig
-    // Hush Protocol flag vocabulary
-    flagVocabulary?: string[]
+
     // Allowlisted roots for file IO
     allowedIoRoots?: string[]
     // Admin override for Code Mode
