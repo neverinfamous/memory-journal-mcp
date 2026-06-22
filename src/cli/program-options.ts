@@ -41,6 +41,7 @@ export function createProgram(): Command {
             '--auth-token <token>',
             'Bearer token for HTTP transport authentication (env: MCP_AUTH_TOKEN)'
         )
+        .option('--auth-scopes <scopes>', 'Comma-separated required OAuth scopes (env: MCP_AUTH_SCOPES)')
         .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
         .option(
             '--backup-interval <minutes>',
@@ -176,6 +177,14 @@ export function createProgram(): Command {
         .option('--persist-metrics', 'Persist metrics to disk across server restarts (env: PERSIST_METRICS)')
         .option('--metrics-path <path>', 'Custom path to the metrics JSON file (env: METRICS_PATH)')
         // Briefing configuration
+        .option(
+            '--briefing-importance-threshold <threshold>',
+            'Minimum importance score (0.0 to 1.0) for an entry to be included in the briefing (env: BRIEFING_IMPORTANCE_THRESHOLD)'
+        )
+        .option(
+            '--briefing-pr-count <count>',
+            'Number of PRs to include in briefing (env: BRIEFING_PR_COUNT)'
+        )
         .option(
             '--briefing-entries <count>',
             'Number of journal entries in briefing (env: BRIEFING_ENTRY_COUNT)',
