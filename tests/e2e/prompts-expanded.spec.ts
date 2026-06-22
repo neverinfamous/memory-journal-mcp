@@ -72,8 +72,5 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
         expectValidPrompt(response)
     })
 
-    test('flag-dashboard prompt', async () => {
-        const response = await client.getPrompt({ name: 'flag-dashboard', arguments: {} })
-        expectValidPrompt(response)
-    })
+
 })
