@@ -8,7 +8,7 @@
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
-import type { InternalPromptDef } from './index.js'
+import type { InternalPromptDef, PromptMessage } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 import { parseFlagContext } from '../../types/auto-context.js'
@@ -22,7 +22,7 @@ async function generateSummaryPrompt(
     db: IDatabaseAdapter, 
     teamDb: IDatabaseAdapter | undefined, 
     target: 'personal' | 'team'
-) {
+): Promise<{ messages: PromptMessage[] }> {
     if (target === 'team' && !teamDb) {
         throw new ConfigurationError('Team database not configured')
     }
@@ -132,7 +132,7 @@ ${markUntrustedContent(entrySummary)}`,
     }
 }
 
-function generateEntryPrompt(target: 'personal' | 'team') {
+function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team' 
         ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
         : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\``

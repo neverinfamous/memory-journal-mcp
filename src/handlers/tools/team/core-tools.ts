@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
@@ -32,7 +33,7 @@ import { parseFlagContext } from '../../../types/auto-context.js'
 // ============================================================================
 
 export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb } = context
+    const { teamDb, progress } = context
 
     return [
         {
@@ -128,6 +129,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             author = systemAuthor
                         }
                     }
+
+                    // Optional progress for long operations
+                    await sendProgress(progress, 0, 2, 'Creating team entry...')
 
                     const resolvedIssueUrl = await resolveIssueUrl(
                         context,
