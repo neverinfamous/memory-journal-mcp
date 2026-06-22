@@ -13,7 +13,7 @@
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
-🎯 Persistent AI project memory. Bridge disconnected sessions and auto-resume context seamlessly.
+🎯 Enable persistent AI project memory. Bridge disconnected sessions and auto-resume context seamlessly.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/blob/main/CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -25,7 +25,7 @@ When managing large projects with AI assistance, you face a critical challenge:
 - **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads.
 - **Repeated Work** - AI suggests solutions you've already tried or abandoned.
 
-Memory Journal solves this by acting as your project's **long-term memory**, bridging the gap between fragmented AI sessions.
+Memory Journal acts as your project's **long-term memory**. It bridges fragmented AI sessions.
 
 **Experience true context-aware development:**
 
@@ -261,7 +261,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 
 The `memory://briefing` resource is dynamically assembled at each session start, automatically providing ambient context like test health, workspace paths, unreleased changes, and git status. Control what your agent sees by tuning three dimensions via environment variables:
 
-- **Depth** — `INSTRUCTION_LEVEL`: `essential`, `standard` (default), or `full`
+- **Focus** — `TOOL_FILTER`: `full` (default), `starter`, or `essential`
 - **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`
 - **GitHub Enrichment** — `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS`
 

@@ -67,7 +67,6 @@
                 "RULES_FILE_PATH": "",
                 "SKILLS_DIR_PATH": "",
                 "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "",
-                "INSTRUCTION_LEVEL": "standard",
                 "PROJECT_LINT_CMD": "pnpm run lint",
                 "PROJECT_TYPECHECK_CMD": "pnpm run typecheck",
                 "PROJECT_BUILD_CMD": "pnpm run build",

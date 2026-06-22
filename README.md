@@ -447,7 +447,7 @@ You control exactly what additional content your agent sees across three dimensi
 
 | Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Depth**             | `INSTRUCTION_LEVEL`                                                                                                                                                              | Behavioral guidance verbosity: `essential`, `standard` (default), `full`            |
+| **Focus**             | `TOOL_FILTER`                                                                                                                                                                    | Control tool exposure: `full` (default), `starter`, `essential`                     |
 | **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`                                                                                                        | How many recent entries, session summaries, and whether team entries appear         |
 | **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing |
 
@@ -463,7 +463,7 @@ You control exactly what additional content your agent sees across three dimensi
 ```json
 "BRIEFING_ENTRY_COUNT": "1",
 "BRIEFING_SUMMARY_COUNT": "0",
-"INSTRUCTION_LEVEL": "essential"
+"TOOL_FILTER": "essential"
 ```
 
 **Full Context (onboarding agents)** — Maximize context for agents unfamiliar with the project:
@@ -476,7 +476,7 @@ You control exactly what additional content your agent sees across three dimensi
 "BRIEFING_PR_COUNT": "3",
 "BRIEFING_PR_STATUS": "true",
 "BRIEFING_COPILOT_REVIEWS": "true",
-"INSTRUCTION_LEVEL": "full"
+"TOOL_FILTER": "full"
 ```
 
 **DevOps-Heavy** — Emphasize CI/CD and GitHub state for infrastructure workflows:
@@ -674,7 +674,6 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                                                                     |
 | `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                                                    |
 | `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                                                                       |
-| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)                                                     |
 | `AUDIT_LOG_PATH`                  | Path for the JSONL operational telemetry log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable telemetry logging.       |
 | `AUDIT_REDACT`                    | Set to `false` to include tool arguments in telemetry log entries (default: `true`)                                                                   |
 | `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                                                        |
@@ -765,8 +764,7 @@ memory-journal-mcp --transport http --port 3000
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
 | **Security & Tooling** | |
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode filesystem boundaries  |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control exposed tools (e.g. `starter`, `full`, `readonly`) |
-| `INSTRUCTION_LEVEL`                            | Instruction depth (`essential`, `standard`, `full`)        |
+| `TOOL_FILTER`                                  | Control tool exposure (`full`, `starter`, `readonly`, `-github`) |
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
 | **Briefing & Context** | |
