@@ -259,6 +259,21 @@ export class ProcessController {
         if (this.payload.onFailure) {
           const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
           let body = JSON.stringify({ code, signal, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+          
+          const replaceCtx = (str: string) => {
+            if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
+            return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
+              if (!pathStr) return JSON.stringify(this.payload.integrationContext);
+              let current: unknown = this.payload.integrationContext;
+              const keys = pathStr.split('.');
+              for (const key of keys) {
+                if (current == null || typeof current !== 'object') return match;
+                current = (current as Record<string, unknown>)[key];
+              }
+              return typeof current === 'object' ? JSON.stringify(current) : String(current);
+            });
+          };
+
           if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
             body = this.payload.webhookPayloadTemplate
               .replace(/\{\{stdout\}\}/g, JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
@@ -266,7 +281,11 @@ export class ProcessController {
               .replace(/\{\{code\}\}/g, String(code))
               .replace(/\{\{signal\}\}/g, String(signal));
           }
-          try { await fetch(this.payload.onFailure, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+          
+          body = replaceCtx(body);
+          const targetUrl = replaceCtx(this.payload.onFailure);
+
+          try { await fetch(targetUrl, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
         }
         if (code === null && signal) {
           console.error(`\n❌ Command was terminated by signal ${signal}`);
@@ -299,13 +318,32 @@ export class ProcessController {
       if (this.payload.onSuccess) {
         const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
         let body = JSON.stringify({ success: true, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+        
+        const replaceCtx = (str: string) => {
+          if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
+          return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
+            if (!pathStr) return JSON.stringify(this.payload.integrationContext);
+            let current: unknown = this.payload.integrationContext;
+            const keys = pathStr.split('.');
+            for (const key of keys) {
+              if (current == null || typeof current !== 'object') return match;
+              current = (current as Record<string, unknown>)[key];
+            }
+            return typeof current === 'object' ? JSON.stringify(current) : String(current);
+          });
+        };
+
         if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
           body = this.payload.webhookPayloadTemplate
             .replace(/\{\{stdout\}\}/g, JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
             .replace(/\{\{stderr\}\}/g, JSON.stringify(this.ioController.stderrTail).slice(1, -1))
             .replace(/\{\{success\}\}/g, 'true');
         }
-        try { await fetch(this.payload.onSuccess, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+        
+        body = replaceCtx(body);
+        const targetUrl = replaceCtx(this.payload.onSuccess);
+
+        try { await fetch(targetUrl, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
       }
       process.exit(0);
     });
