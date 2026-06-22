@@ -260,7 +260,7 @@ export function parseGitRecord(
   
   const bodyEndIdx = parts.length - 3;
   let body = parts.slice(9, bodyEndIdx).join(FIELD_SEPARATOR);
-  body = body.replace(/\r/g, '');
+  body = body.replace(/\r\n?/g, '\n');
   if (body.length > 100000) {
     let safeLen = 100000;
     while (safeLen > 0 && body.charCodeAt(safeLen - 1) >= 0xD800 && body.charCodeAt(safeLen - 1) <= 0xDBFF) {
@@ -497,8 +497,8 @@ export function parseGitRecord(
   }
 
   if (exactTrailerBlock) {
-    const normalizedBody = body.replace(/\r/g, '');
-    const trailerTrimmed = exactTrailerBlock.replace(/\r/g, '').trim();
+    const normalizedBody = body.replace(/\r\n?/g, '\n');
+    const trailerTrimmed = exactTrailerBlock.replace(/\r\n?/g, '\n').trim();
     if (trailerTrimmed.length > 0) {
       const trimmedBody = normalizedBody.trimEnd();
       if (trimmedBody.endsWith(trailerTrimmed)) {

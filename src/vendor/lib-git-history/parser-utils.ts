@@ -42,7 +42,7 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
     }
   }
   
-  const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}https?:\/\/(?:[\w.-]+\.)*(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app)\/(?:([\w.-]+\/[\w.-]+)\/)?(?:-\/)?(?:issues|pull|merge_requests|pull-requests|browse|issue)\/([A-Z0-9_.-]+)\b/ig;
+  const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app|slack\.com|notion\.so)\/([A-Za-z0-9_./-]*[A-Za-z0-9_/-])/ig;
   lastAction = null;
   lastIndex = 0;
   while ((match = urlRegex.exec(safeText)) !== null) {
@@ -57,18 +57,30 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
     lastIndex = urlRegex.lastIndex;
     
     const domain = match[2];
-    let repo = match[3];
-    const num = match[4];
-    let issue: string;
+    const fullPath = match[3];
+    let issue: string | undefined;
     
     if (domain === 'github.com' || domain === 'gitlab.com' || domain === 'bitbucket.org') {
-      if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
-      issue = repo ? `${repo}#${num}` : `#${num}`;
-    } else {
-      issue = num;
+      const pathMatch = fullPath.match(/^(?:([\w.-]+\/[\w.-]+)\/)?(?:-\/)?(?:issues|pull|merge_requests|pull-requests)\/([A-Z0-9_.-]+)/i);
+      if (pathMatch) {
+        let repo = pathMatch[1];
+        const num = pathMatch[2];
+        if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
+        issue = repo ? `${repo}#${num}` : `#${num}`;
+      }
+    } else if (domain === 'atlassian.net') {
+      const pathMatch = fullPath.match(/browse\/([A-Z0-9_.-]+)/i);
+      if (pathMatch) issue = pathMatch[1];
+    } else if (domain === 'linear.app') {
+      const pathMatch = fullPath.match(/issue\/([A-Z0-9_.-]+)/i);
+      if (pathMatch) issue = pathMatch[1];
+    } else if (domain === 'slack.com' && fullPath.startsWith('archives/')) {
+      issue = fullPath;
+    } else if (domain === 'notion.so') {
+      issue = fullPath;
     }
     
-    if (!issuesMap.has(issue) || (action && !issuesMap.get(issue))) {
+    if (issue && (!issuesMap.has(issue) || (action && !issuesMap.get(issue)))) {
       issuesMap.set(issue, action);
     }
   }
