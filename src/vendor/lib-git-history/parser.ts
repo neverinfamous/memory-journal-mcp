@@ -244,9 +244,10 @@ export function parseGitRecord(
   // The remainder is the body
   parts.push(tempStr);
   parts.push(...endParts);
-
-  if (parts.length < 13) return null;
-
+  if (parts.length < 13) {
+    console.warn(`[lib-git-history] Warning: Dropping malformed git record with only ${parts.length} parts (expected at least 13).`);
+    return null;
+  }
   const sha = parts[0].trim();
   const refsRaw = parts[1].trim();
   const authorName = parts[2].trim();
@@ -325,6 +326,7 @@ export function parseGitRecord(
         
         const isValidStatus = /^[A-Z][A-Z\d]*$/.test(statusRaw) && statusRaw.length <= 20;
         if (!isValidStatus) {
+          console.warn(`[lib-git-history] Warning: Desynced or invalid file status "${statusRaw}" in commit ${sha}. Stopping file parsing for this commit.`);
           break; // Desynced or invalid status. Stop parsing files for this commit.
         }
         
@@ -415,7 +417,7 @@ export function parseGitRecord(
       }
 
       if (key === 'history-category' || key === 'changelog-category' || key === 'category') {
-        const titleCase = (s: string) => s.split(/[\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        const titleCase = (s: string) => s.split(/[\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         const splitVals: string[] = [];
         let current = '';
         let inQuotes = false;
@@ -430,7 +432,7 @@ export function parseGitRecord(
           }
         }
         splitVals.push(current);
-        categories.push(...splitVals.map(s => titleCase(s.replace(/^"|"$/g, '').trim())).filter(Boolean));
+        categories.push(...splitVals.map(s => titleCase(s.trim().replace(/^"|"$/g, ''))).filter(Boolean));
       }
       else if (key === 'history-entry' || key === 'changelog-entry' || key === 'entry') entriesParsed.push(val);
       else if (key === 'history-significance' || key === 'changelog-significance' || key === 'significance') metadataObj.significance = val;

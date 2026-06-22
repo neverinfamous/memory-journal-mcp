@@ -32,5 +32,5 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 ## 📖 Related Context
 
-- If you need to write a commit using this system, refer to the `C:\Users\chris\Desktop\adamic\.agents\workflows\commit.md` workflow.
+- If you need to write a commit using this system, use the `/mcp:memory-journal-mcp:commit` or `/mcp:memory-journal-mcp:quick-commit` prompts.
 - Do NOT edit `.agents/workflows/changelog.md` (or similar changelog files); always extract history using `get-git-history-json.ts` instead.
