@@ -6,7 +6,7 @@ export function checkPrompt(tail: string): boolean {
   
   const hasStrictPrompt = /(?:^|\n)[ \t]*\+?(?:password|passphrase|username|email|token|prompt|choice|select|selection|question|confirm|answer|login|authentication|user|id|pass|y\/n|yes\/no|repository|branch|commit|version|author)[ \t]*[:>?][ \t]*$/i.test(lower);
   const hasActionPrompt = /(?:enter|provide|type|input)(?: \w+){0,3} (?:password|passphrase|username|email|token|user|id|pass|name|code|value|title|body)[ \t:]*$/i.test(lower);
-  const hasInquirerPrompt = /^\s*\?\s+.*?(?:›|»|:|\[.*?\]|\(.*?\))\s*$/m.test(lower) || /^\s*\?\s+.*?\s*$/m.test(lower) || /[✔?].*(?:…|\.\.\.)/m.test(lower) || /^\s*❯\s+.*$/m.test(lower);
+  const hasInquirerPrompt = /^\s*\?\s+.*?(?:›|»|:|\[.*?\]|\(.*?\))\s*$/m.test(lower) || /^\s*\?\s+.*?\s*$/m.test(lower) || /[✔?].*(?:…|\.\.\.)/m.test(lower);
 
   return hasStrictPrompt || hasActionPrompt || hasInquirerPrompt ||
          /waiting for emacs/i.test(lower) || /hit enter to proceed/i.test(lower) ||

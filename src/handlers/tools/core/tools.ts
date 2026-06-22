@@ -23,6 +23,7 @@ import {
     TestSimpleOutputSchema,
 } from './schemas.js'
 import { EntryOutputSchema, coerceSignificanceAlias } from '../schemas.js'
+import type { RelationshipType } from '../../../types/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
 
@@ -104,6 +105,16 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         sessionId: input.session_id,
                     })
                     const id = createdEntry.id
+
+                    if (input.relationships && input.relationships.length > 0) {
+                        for (const rel of input.relationships) {
+                            try {
+                                db.linkEntries(id, rel.targetId, rel.relationType as RelationshipType)
+                            } catch {
+                                // Ignore link failures if target doesn't exist
+                            }
+                        }
+                    }
 
                     // Vectorize entry
                     try {

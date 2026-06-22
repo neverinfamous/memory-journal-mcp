@@ -26,6 +26,7 @@ import {
     TeamTagsListOutputSchema,
 } from './schemas.js'
 import { coerceSignificanceAlias } from '../schemas.js'
+import type { RelationshipType } from '../../../types/index.js'
 import { parseFlagContext } from '../../../types/auto-context.js'
 
 // ============================================================================
@@ -161,6 +162,16 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         validationStatus: input.validation_status,
                         sessionId: input.session_id,
                     })
+
+                    if (input.relationships && input.relationships.length > 0) {
+                        for (const rel of input.relationships) {
+                            try {
+                                teamDb.linkEntries(entry.id, rel.targetId, rel.relationType as RelationshipType)
+                            } catch {
+                                // Ignore link failures if target doesn't exist
+                            }
+                        }
+                    }
 
                     teamDb.flushSave()
 

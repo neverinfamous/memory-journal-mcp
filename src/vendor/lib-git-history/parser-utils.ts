@@ -42,7 +42,7 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
     }
   }
   
-  const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}https?:\/\/(?:github\.com|gitlab\.com|bitbucket\.org)\/([\w.-]+\/[\w.-]+)\/(?:issues|pull|merge_requests|pull-requests)\/(\d+)\b/ig;
+  const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}https?:\/\/(?:[\w.-]+\.)*(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app)\/(?:([\w.-]+\/[\w.-]+)\/)?(?:-\/)?(?:issues|pull|merge_requests|pull-requests|browse|issue)\/([A-Z0-9_.-]+)\b/ig;
   lastAction = null;
   lastIndex = 0;
   while ((match = urlRegex.exec(safeText)) !== null) {
@@ -56,10 +56,18 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
     if (match[1]) lastAction = match[1].toLowerCase();
     lastIndex = urlRegex.lastIndex;
     
-    let repo = match[2];
-    const num = match[3];
-    if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
-    const issue = `${repo}#${num}`;
+    const domain = match[2];
+    let repo = match[3];
+    const num = match[4];
+    let issue: string;
+    
+    if (domain === 'github.com' || domain === 'gitlab.com' || domain === 'bitbucket.org') {
+      if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
+      issue = repo ? `${repo}#${num}` : `#${num}`;
+    } else {
+      issue = num;
+    }
+    
     if (!issuesMap.has(issue) || (action && !issuesMap.get(issue))) {
       issuesMap.set(issue, action);
     }

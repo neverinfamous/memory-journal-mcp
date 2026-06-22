@@ -59,8 +59,8 @@ describe('Prompt Handlers - Coverage', () => {
             )
         })
 
-        it('should throw ConfigurationError if teamDb is missing for session-summary with target team', async () => {
-            await expect(getPrompt('session-summary', { target: 'team' }, db)).rejects.toThrow(
+        it('should throw ConfigurationError if teamDb is missing for team-session-summary', async () => {
+            await expect(getPrompt('team-session-summary', {}, db)).rejects.toThrow(
                 'Team database not configured'
             )
         })

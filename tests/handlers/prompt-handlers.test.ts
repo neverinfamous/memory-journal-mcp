@@ -142,8 +142,8 @@ describe('Prompt Handlers', () => {
             expect(result.messages.length).toBeGreaterThan(0)
         })
 
-        it('should return messages for session-summary prompt with team target', async () => {
-            const result = await getPrompt('session-summary', { target: 'team' }, db, teamDb)
+        it('should return messages for team-session-summary prompt with team target', async () => {
+            const result = await getPrompt('team-session-summary', undefined, db, teamDb)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
@@ -152,8 +152,8 @@ describe('Prompt Handlers', () => {
             expect(text).toContain('team_create_entry')
         })
 
-        it('should throw ConfigurationError if teamDb is omitted for session-summary with team target', async () => {
-            await expect(getPrompt('session-summary', { target: 'team' }, db)).rejects.toThrow(
+        it('should throw ConfigurationError if teamDb is omitted for team-session-summary', async () => {
+            await expect(getPrompt('team-session-summary', undefined, db)).rejects.toThrow(
                 'Team database not configured'
             )
         })
