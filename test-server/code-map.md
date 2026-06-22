@@ -420,6 +420,8 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
 | `commit` | High-integrity procedure for committing code changes with validation gates |
+| `create-entry` | Create a structured mid-thread journal entry |
+| `create-team-entry` | Create a structured mid-thread team journal entry |
 | `flag-dashboard` | Triage active flags with priority assessment and resolution guidance |
 | `goal-tracker` | Milestone and achievement tracking |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
@@ -430,6 +432,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `prepare-standup` | Prepare a daily standup summary (Yesterday, Today, Blockers) |
 | `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `session-summary` | Create a formatted session summary entry |
+| `team-session-summary` | Create a formatted team session summary entry |
 | `verify-work` | Audit a batch of recent journal entries (default 10) to verify accuracy, elimina... |
 | `weekly-digest` | Create a weekly digest formatted day-by-day |
 <!-- END: PROMPTS -->
