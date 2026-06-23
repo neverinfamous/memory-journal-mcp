@@ -69,8 +69,7 @@
 | Combined search      | `team_search(project_number: 5, query: "test", tags: ["team-test"])`  | Text + tag filtered results                      |
 | Hybrid search        | `team_search(project_number: 5, query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
 | No query/tags        | `team_search(project_number: 5)`                                      | Returns recent entries (fallback to `getRecent`) |
-| Pure flag search     | `team_search(query: "test", tags: ["flag:blocker"])`                  | `success: true` (bypasses project_number check)  |
-| Non-flag tag search  | `team_search(query: "test", tags: ["flag:blocker", "team-test"])`     | `{ success: false, code: "VALIDATION_ERROR" }`  |
+
 | Missing project no.  | `team_search(query: "test")`                                          | `{ success: false, code: "VALIDATION_ERROR" }`  |
 | Cross-team search    | `cross_team_search(query: "test")`                                    | Searches all configured team DBs, returns entries tagged with `team_db` |
 | Cross-team labels    | `cross_team_search(query: "test", team_dbs: ["primary"])`             | Restricts cross-team search to only the `primary` DB |
@@ -100,5 +99,3 @@
 | With entry_type  | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "standup")` | Only `standup` entries returned                      |
 | With tags filter | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
 | Invalid date     | `team_search_by_date_range(project_number: 5, start_date: "Jan 1", end_date: "Jan 31")`                                 | Structured error with YYYY-MM-DD hint                |
-| Pure flag range  | `team_search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "flag")`                       | `success: true` (bypasses project_number check)  |
-| Non-flag range   | `team_search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "standup")`                    | `{ success: false, code: "VALIDATION_ERROR" }`  |

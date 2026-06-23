@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **107 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **102 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -234,15 +234,6 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_rebuild_vector_index`   | Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH.      |
 | `team_add_to_vector_index`    | Add a specific team entry to the semantic search vector index. Requires TEAM_DB_PATH.                     |
 
-### Flags
-
-| Tool                      | Description                                                                                                                                               |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `team_pass_flag`          | Create a machine-actionable flag in the team database. Flags replace communication noise with structured, searchable signals.                             |
-| `team_resolve_flag`       | Mark a team flag as resolved with an optional resolution comment. Idempotent — safe to call on already-resolved flags.                                    |
-| `team_list_flags`         | List and filter flags with structured metadata. Filter by status (active/resolved/all), flag_type, target_user, or author. Sort by priority or timestamp. |
-| `team_update_flag`        | Update a flag's metadata without resolving it. Escalate severity, reassign target_user, edit message, add link, or reopen a resolved flag.                |
-| `team_get_flag_analytics` | Aggregate flag analytics: resolution velocity, type distribution, per-user workload, staleness counts, and period-over-period trend comparison.           |
 
 ### Members
 
@@ -272,7 +263,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 107   | All tools (default)      |
+| `full`               | 102   | All tools (default)      |
 | `starter`            | 15    | Core + search + codemode |
 | `essential`          | 9     | Minimal footprint        |
 | `readonly`           | 23    | Disable all mutations    |

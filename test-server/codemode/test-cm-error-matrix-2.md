@@ -85,8 +85,6 @@ const semanticEmpty = await mj.team.teamSemanticSearch({ project_number: 5 })
 const vecStatsEmpty = await mj.team.teamGetVectorIndexStats({})
 const statsEmpty = await mj.team.teamGetStatistics({})
 const insightsEmpty = await mj.team.teamGetCrossProjectInsights({})
-const passFlagEmpty = await mj.team.passTeamFlag({ project_number: 5 })
-const resolveFlagEmpty = await mj.team.resolveTeamFlag({})
 const crossTeamSearchTypeMismatch = await mj.search.crossTeamSearch({ team_dbs: "invalid_type" })
 
 // Type mismatches
@@ -99,7 +97,6 @@ const updateStrId = await mj.team.teamUpdateEntry({
   entry_id: 'abc',
   content: 'test',
 })
-const resolveFlagStrId = await mj.team.resolveTeamFlag({ flag_id: 'abc' })
 const teamSearchTypeMismatch = await mj.team.teamSearch({ project_number: 5, query: 123 })
 
 return {
@@ -117,11 +114,8 @@ return {
   semanticEmptyError: semanticEmpty.success === false,
   statsOk: statsEmpty.success === false || typeof statsEmpty.totalEntries === 'number',
   insightsOk: insightsEmpty.success === false || typeof insightsEmpty.project_count === 'number',
-  passFlagEmptyError: passFlagEmpty.success === false,
-  resolveFlagEmptyError: resolveFlagEmpty.success === false,
   createNumContentError: createNumContent.success === false,
   updateStrIdError: updateStrId.success === false,
-  resolveFlagStrIdError: resolveFlagStrId.success === false,
   teamSearchTypeMismatchError: teamSearchTypeMismatch.success === false,
   crossTeamSearchTypeMismatchError: crossTeamSearchTypeMismatch.success === false,
 }
@@ -138,10 +132,7 @@ return {
 | `deleteEmptyError`      | `true` (entry_id required)            |
 | `mergeEmptyError`       | `true` (source/target required)       |
 | `linkEmptyError`        | `true` (from/to entry_id required)    |
-| `passFlagEmptyError`    | `true` (flag_type + message required) |
-| `resolveFlagEmptyError` | `true` (flag_id required)             |
 | `createNumContentError` | `true` (content must be string)       |
-| `resolveFlagStrIdError` | `true` (flag_id must be number)       |
 | `teamSearchTypeMismatchError` | `true` (type mismatches caught) |
 | `crossTeamSearchTypeMismatchError` | `true` (type mismatches caught) |
 

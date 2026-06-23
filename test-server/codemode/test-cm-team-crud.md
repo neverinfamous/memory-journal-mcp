@@ -76,16 +76,6 @@ const noArgs = await mj.team.teamSearch({ project_number: 5 })
 const crossTeam = await mj.search.crossTeamSearch({ query: 'CM4 team' })
 const crossTeamSpecific = await mj.search.crossTeamSearch({ query: 'CM4 team', team_dbs: ['primary'] })
 
-// Search without project_number for pure flag search (bypasses project_number constraint)
-const searchPureFlag = await mj.team.teamSearch({
-  query: 'CM4',
-  tags: ['flag:blocker'],
-})
-// Search without project_number with non-flag tags (should return VALIDATION_ERROR)
-const searchNonFlagTags = await mj.team.teamSearch({
-  query: 'CM4',
-  tags: ['flag:blocker', 'frontend'],
-})
 
 // New: get by ID, list tags
 const detail = await mj.team.teamGetEntryById({
@@ -113,8 +103,7 @@ return {
   noArgsCount: noArgs.entries?.length ?? 0,
   crossTeamCount: crossTeam.entries?.length ?? 0,
   crossTeamSpecificCount: crossTeamSpecific.entries?.length ?? 0,
-  searchPureFlagSuccess: searchPureFlag.success === true,
-  searchNonFlagTagsError: searchNonFlagTags.success === false && searchNonFlagTags.code === 'VALIDATION_ERROR',
+
   detailHasEntry: !!detail.entry,
   detailHasImportance: !!detail.importance,
   detailNoRelsEmpty: !detailNoRels.relationships?.length,
@@ -134,8 +123,7 @@ return {
 | `forcedFtsCount`         | ≥ 1                               |
 | `crossTeamCount`         | ≥ 1                               |
 | `crossTeamSpecificCount` | ≥ 1                               |
-| `searchPureFlagSuccess`  | `true` (bypasses constraint)      |
-| `searchNonFlagTagsError` | `true` (VALIDATION_ERROR)         |
+
 | `detailHasEntry`         | `true`                            |
 | `tagCount`               | ≥ 1                               |
 
@@ -179,26 +167,13 @@ const tagged = await mj.team.teamSearchByDateRange({
 })
 if (!tagged.success) return { taggedCount: 0, error: tagged.error }
 
-// Search by date range without project_number for flag entry_type (bypasses constraint)
-const rangePureFlag = await mj.team.teamSearchByDateRange({
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
-  entry_type: 'flag',
-})
-// Search by date range without project_number for non-flag entry_type (should return VALIDATION_ERROR)
-const rangeNonFlag = await mj.team.teamSearchByDateRange({
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
-  entry_type: 'standup',
-})
 
 return {
   hasEntries: Array.isArray(results.entries),
   count: results.count ?? 0,
   typedFiltered: typed.entries?.every((e) => e.entryType === 'standup') ?? true,
   taggedCount: tagged.entries?.length ?? 0,
-  rangePureFlagSuccess: rangePureFlag.success === true,
-  rangeNonFlagError: rangeNonFlag.success === false && rangeNonFlag.code === 'VALIDATION_ERROR',
+
 }
 ```
 
@@ -206,8 +181,7 @@ return {
 | ---------------------- | ---------------------------- |
 | `hasEntries`           | `true`                       |
 | `typedFiltered`        | `true`                       |
-| `rangePureFlagSuccess` | `true` (bypasses constraint) |
-| `rangeNonFlagError`    | `true` (VALIDATION_ERROR)    |
+
 
 
 ---

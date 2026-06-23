@@ -50,15 +50,12 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 16. `test-cm-team-crud.md`
 17. `test-cm-team-admin.md`
 18. `test-cm-team-vector-errors.md` (Includes cleanup)
-19. `test-cm-team-flags-core.md`
-20. `test-cm-team-flags-advanced.md`
-21. `test-cm-team-flags-analytics.md`
-22. `test-cm-team-rbac.md`
-23. `test-cm-error-matrix.md`
-24. `test-cm-error-matrix-2.md`
-25. `test-cm-payload-optimization.md`
-26. `test-cm-hallucination-smoothing.md`
-27. `test-git.md`
+19. `test-cm-team-rbac.md`
+20. `test-cm-error-matrix.md`
+21. `test-cm-error-matrix-2.md`
+22. `test-cm-payload-optimization.md`
+23. `test-cm-hallucination-smoothing.md`
+24. `test-git.md`
 
 ## Telemetry Collection
 

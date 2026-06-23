@@ -28,7 +28,7 @@
 
 | Resource          | URI                                    | Test                                                                                                                                |
 | ----------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Briefing          | `memory://briefing`                    | Returns pre-formatted Markdown string containing any active flags and a dense 2-column context table                                |
+| Briefing          | `memory://briefing`                    | Returns pre-formatted Markdown string containing a dense 2-column context table                                |
 | Instructions      | `memory://instructions`                | Full server instructions — verify it references all 61 tools and key resources                                                      |
 | Recent entries    | `memory://recent`                      | Read, verify 10 entries with typed fields                                                                                           |
 | Significant       | `memory://significant`                 | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                             |
@@ -45,9 +45,7 @@
 | Rules             | `memory://rules`                       | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                          |
 | Workflows         | `memory://workflows`                   | Workflow summary (requires `MEMORY_JOURNAL_WORKFLOW_SUMMARY` or `--workflow-summary`); returns `{ configured: false }` when not set |
 | Skills            | `memory://skills`                      | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                      |
-| Active flags      | `memory://flags`                       | JSON with `activeFlags` array (unresolved flags); empty array when no active flags                                                  |
-| Flag vocabulary   | `memory://flags/vocabulary`            | JSON listing configured vocabulary: `blocker`, `needs_review`, `help_requested`, `fyi` (defaults)                                   |
-| Flag history      | `memory://flags/history`               | JSON with `resolved_flags` array (last 7 days), `count`, `avg_resolution_hours`; empty array when no recently resolved flags        |
+
 | Metrics summary   | `memory://metrics/summary`             | Session metrics: tool calls, token estimates, cache hits, uptime                                                                    |
 | Metrics tokens    | `memory://metrics/tokens`              | Token breakdown: per-tool token usage and totals                                                                                    |
 | Metrics system    | `memory://metrics/system`              | System metrics: memory usage, database stats, vector index health                                                                   |
@@ -97,9 +95,7 @@
 - All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
 - `memory://instructions` references all tools and key resources
-- `memory://flags` returns active flag dashboard (empty when no unresolved flags)
-- `memory://flags/vocabulary` returns configured vocabulary list
-- `memory://flags/history` returns resolved flags with resolution details or empty array when none recent
+
 - `memory://briefing` includes local time for chronological grounding
 - `memory://briefing/<repo>` returns repo-scoped briefing
 - `memory://help/[group]` resources exist for all 10 API groups (`core`, `search`, `analytics`, `relationships`, `io`, `export`, `admin`, `github`, `backup`, `team`).

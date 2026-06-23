@@ -27,27 +27,13 @@ Test that common agent hallucinations (`user`, `msg`, `severity`, `version`, `se
 
 ```javascript
 // Test code:
-// 1. user -> target_user, severity -> flag_type, msg -> message, sort -> sort_by
-const aliasFlag = await mj.team.passTeamFlag({
+// 1. sort -> sort_by
+const listSort = await mj.team.teamSearch({
   project_number: 5,
-  severity: 'fyi',
-  msg: 'CM param alias test',
-  user: '@sarah'
-})
-
-const listFlags = await mj.team.teamListFlags({
-  project_number: 5,
-  status: 'all',
   sort: 'priority'
 })
 
-// 2. comment -> resolution
-const resolved = await mj.team.resolveTeamFlag({
-  flag_id: aliasFlag.entry?.id,
-  comment: 'Resolved via alias'
-})
-
-// 3. version -> expected_version, text/message -> content
+// 2. version -> expected_version, text/message -> content
 const entry = await mj.core.createEntry({ project_number: 5, text: 'Alias entry' })
 const updated = await mj.core.updateEntry({
   entry_id: entry.id,
@@ -55,14 +41,14 @@ const updated = await mj.core.updateEntry({
   version: entry.version
 })
 
-// 4. search/q -> query, mode -> instruction_level
+// 3. search/q -> query, mode -> instruction_level
 const searched = await mj.core.searchEntries({
   project_number: 5,
   q: 'Alias'
 })
 const configMode = await mj.admin.config({ mode: 'standard' })
 
-// 5. filename -> source_dir (for io import)
+// 4. filename -> source_dir (for io import)
 let ioError = false;
 const ioRes = await mj.io.importExternal({ project_number: 5, filename: '/fake/dir' });
 if (!ioRes.success && !ioRes.error.includes('source_dir')) {
@@ -70,14 +56,10 @@ if (!ioRes.success && !ioRes.error.includes('source_dir')) {
 }
 
 // Cleanup
-await mj.team.teamDeleteEntry({ project_number: 5, entry_id: aliasFlag.entry?.id, permanent: true })
 await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
 
 return {
-  flagAliasSuccess: aliasFlag.success,
-  flagAliasUserMapped: aliasFlag.target_user === 'sarah',
-  listSortMapped: listFlags.success && typeof listFlags.count === 'number',
-  resolveCommentMapped: resolved.resolution === 'Resolved via alias',
+  listSortMapped: listSort.success && Array.isArray(listSort.entries),
   versionMapped: updated.success,
   searchMapped: searched.success && searched.count > 0,
   modeMapped: configMode.success,
@@ -87,10 +69,7 @@ return {
 
 | Check                  | Expected |
 | ---------------------- | -------- |
-| `flagAliasSuccess`     | `true`   |
-| `flagAliasUserMapped`  | `true`   |
 | `listSortMapped`       | `true`   |
-| `resolveCommentMapped` | `true`   |
 | `versionMapped`        | `true`   |
 | `searchMapped`         | `true`   |
 | `modeMapped`           | `true`   |
@@ -260,7 +239,7 @@ return result
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- Parameter aliases map successfully (`user` → `target_user`, `msg` → `message`, `severity` → `flag_type`, `comment` → `resolution`, `sort` → `sort_by`, `version` → `expected_version`, `search`/`q` → `query`, `text`/`message` → `content`, `mode` → `instruction_level`, `filename` → `source_dir`)
+- Parameter aliases map successfully (`sort` → `sort_by`, `version` → `expected_version`, `search`/`q` → `query`, `text`/`message` → `content`, `mode` → `instruction_level`, `filename` → `source_dir`)
 - Method aliases map successfully (`mj.admin.config`, `mj.core.history`, `mj.team.setRole`, `mj.team.aliases`, `mj.search.read_query`)
 - Cross-group constructor wiring works (`mj.core.semanticSearch`, `mj.core.vectorStats`, `mj.core.searchAuditLog`, `mj.core.listDeletedEntries`)
 - `sleep()` and `setTimeout` globals exist and resolve in Sandbox

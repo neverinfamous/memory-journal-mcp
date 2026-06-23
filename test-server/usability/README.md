@@ -35,5 +35,4 @@ Because testing and healing all tools at once exhausts an agent's context window
 - `test-usability-team-core.md`
 - `test-usability-team-search-analytics.md`
 - `test-usability-team-io-admin.md`
-- `test-usability-team-flags.md`
 - `test-usability-team-rbac.md`

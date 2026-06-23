@@ -46,17 +46,16 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 14. `test-kanban-lifecycle.md`
 15. `test-team-crud.md`
 16. `test-team-admin.md`
-17. `test-team-hush.md`
-18. `test-team-rbac.md`
-19. `test-tool-group-core.md`
-20. `test-tool-group-admin.md`
-21. `test-tool-group-backup.md`
-22. `test-tool-group-search.md`
-23. `test-tool-group-github.md`
-24. `test-tool-group-team.md`
-25. `test-payload-optimization.md`
-26. `test-workspace-isolation.md`
-27. `test-git.md`
+17. `test-team-rbac.md`
+18. `test-tool-group-core.md`
+19. `test-tool-group-admin.md`
+20. `test-tool-group-backup.md`
+21. `test-tool-group-search.md`
+22. `test-tool-group-github.md`
+23. `test-tool-group-team.md`
+24. `test-payload-optimization.md`
+25. `test-workspace-isolation.md`
+26. `test-git.md`
 
 ## Telemetry Collection
 
