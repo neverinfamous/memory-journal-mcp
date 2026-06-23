@@ -14,8 +14,7 @@
  *   Backup:        team_backup, team_list_backups
  *   Vector:        team_semantic_search, team_get_vector_index_stats,
  *                  team_rebuild_vector_index, team_add_to_vector_index
- *   Flags:         team_pass_flag, team_resolve_flag,
- *                  team_list_flags, team_update_flag, team_get_flag_analytics
+
  *   Members:       team_add_member, team_remove_member, team_update_member_role,
  *                  team_list_members, team_get_member
  *   Aliases:       team_add_author_alias, team_remove_author_alias, team_list_author_aliases,

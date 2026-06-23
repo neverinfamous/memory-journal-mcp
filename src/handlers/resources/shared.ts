@@ -196,8 +196,7 @@ export interface BriefingConfig {
     defaultWorkspaceId?: string
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
-    /** Hush Protocol flag vocabulary passed from CLI/env */
-    flagVocabulary?: string[]
+
     /** Allowlisted directory roots for strict filesystem jailing of agent read access */
     allowedIoRoots?: string[]
     /** Minimum significance score for entries to be included in the briefing (default: 0.3) */

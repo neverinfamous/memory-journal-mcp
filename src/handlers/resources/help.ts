@@ -265,7 +265,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 const tools = await getAllToolDefinitionsAsync(context)
                 const groupTools = tools.filter((t) => t.group === groupName)
 
-                // Check for static help content (codemode, github, hush-protocol, etc.)
+                // Check for static help content (codemode, github, etc.)
                 const staticContent = HELP_CONTENT.get(groupName)
 
                 // If the group has dynamic tools, always return JSON (with optional helpContent)

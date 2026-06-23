@@ -1,5 +1,5 @@
 /**
- * Search Excellence Tests — Phase 1 (Hush Protocol)
+ * Search Excellence Tests — Phase 1
  *
  * Unit tests for:
  * - Auto-mode query classifier (classifyQuery, resolveSearchMode)
