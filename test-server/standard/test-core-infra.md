@@ -97,6 +97,21 @@ node test-server/scripts/test-subscribe.mjs
 # Test K — Config Dump & Validation
 node test-server/scripts/test-dump-config.mjs
 
+# Test L — Config Reload
+node test-server/scripts/test-config-reload.mjs
+
+# Test M — Schema Verification
+node test-server/scripts/verify-schemas.mjs
+
+# Test N — Boundaries & Zod
+node test-server/scripts/test-team-zod.mjs
+node test-server/scripts/test-sdk-boundaries.mjs
+
+# Test O — Transport Limits
+node test-server/scripts/test-50k-boundary.mjs
+node test-server/scripts/test-http.mjs
+node test-server/scripts/test-long-mcp.mjs
+
 # Cleanup Test Artifacts
 rm test-team-prompts.db*
 rm *_metrics.json
@@ -105,9 +120,9 @@ rm *_metrics.json
 | Check               | Expected                                                             |
 | ------------------- | -------------------------------------------------------------------- |
 | Instruction levels  | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations    | 100 tools, all with `annotations`, 75 `false` + 25 `true` = 0 missing |
+| Tool annotations    | 103 tools, all with `annotations`                                    |
 | Filter instructions | Output confirms correct filtering of config sections                 |
-| Prompts API         | Successfully fetches and parses all 16 prompts                       |
+| Prompts API         | Successfully fetches and parses all 31 prompts                       |
 | Progress            | Both native and code-mode progress APIs successfully complete        |
 | Team DB Fallback    | Graceful rejection when TEAM_DB_PATH is missing                      |
 | Scheduler           | HTTP server executes backup, vacuum, index, and digest jobs          |
@@ -135,7 +150,7 @@ rm *_metrics.json
 - `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
-- 76 core/local tools have `openWorldHint: false`; 25 GitHub/filesystem tools have `openWorldHint: true` (101 total, 0 missing)
+- 103 tools total registered and annotated correctly
 - `get_statistics` returns all 4 enhanced analytics metrics
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
 - Verified that all composite and partial performance indexes exist and are valid in the database schema
