@@ -436,6 +436,29 @@ ${markUntrustedContent(formattedEntries)}`
                     ]
                 }
             }
+        },
+        {
+            name: 'flag-dashboard',
+            description: 'Dashboard overview of all active flags (blockers, critical, warnings)',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'flag_type', description: 'Filter by flag type (e.g., blocker, critical)', required: false }],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const flagType = args?.['flag_type']
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# Flag Dashboard
+Generate a dashboard overview of active flags${flagType ? ` for type: ${flagType}` : ''}.
+
+Please read the relevant journal entries or search for the active flags and provide a summary of the current blockers, critical issues, and warnings.`
+                            }
+                        }
+                    ]
+                }
+            }
         }
     ]
 }

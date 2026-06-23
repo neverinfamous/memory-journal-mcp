@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = join(__dirname, '..', '..')
 const proc = spawn(process.execPath, ['dist/cli.js', '--db', 'test-prompts.db', '--team-db', 'test-team-prompts.db'], {
     cwd: projectDir,
-    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_DB_PATH: 'test-prompts.db', JOURNAL_CONFIG_DIR: 'test-server' },
+    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_DB_PATH: 'test-prompts.db', TEST_DB_PATH: 'test-prompts.db', TEST_TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_CONFIG_DIR: 'test-server', MEMORY_JOURNAL_CONFIG: join(__dirname, 'test-server-config.json') },
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -80,20 +80,32 @@ async function main() {
         { name: 'prepare-standup', args: {}, expect: 'standup' },
         { name: 'prepare-retro', args: {}, expect: 'retrospective' },
         { name: 'weekly-digest', args: {}, expect: 'weekly digest' },
+        { name: 'create-entry', args: {}, expect: 'entry' },
+        { name: 'update-entry', args: {}, expect: 'entry' },
+        { name: 'create-team-entry', args: {}, expect: 'entry' },
+        { name: 'update-team-entry', args: {}, expect: 'entry' },
+        { name: 'team-session-summary', args: {}, expect: 'session' },
         // 8.2 GitHub prompts
         { name: 'issue-commander', args: { project_number: '5' }, expect: '{project_number}' },
+        { name: 'project-status-summary', args: { project_number: '5' }, expect: 'Project #5' },
+        { name: 'project-milestone-tracker', args: { project_number: '5' }, expect: 'Project #5' },
         { name: 'pr-commander', args: { pr_number: '67' }, expect: '{pr_number}' },
+        { name: 'pr-summary', args: { pr_number: '67' }, expect: 'PR #67' },
+        { name: 'code-review-prep', args: { pr_number: '67' }, expect: 'PR #67' },
+        { name: 'pr-retrospective', args: { pr_number: '67' }, expect: 'PR #67' },
         { name: 'actions-failure-digest', args: {}, expect: '' },
         // 8.3 Adversarial and flag prompts
-        { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: '[Please specify topic' },
-        { name: 'adversarial-audit-code-quality', args: { target: 'src/main.ts' }, expect: '[Please specify target' },
-        { name: 'adversarial-audit-security', args: { target: 'auth.ts' }, expect: '[Please specify target' },
-        { name: 'adversarial-audit-performance', args: { target: 'index.ts' }, expect: '[Please specify target' },
-        { name: 'adversarial-audit-seo', args: { target: 'index.html' }, expect: '[Please specify target' },
-        { name: 'adversarial-audit-skill', args: { target: 'my-skill' }, expect: '[Please specify skill' },
-        { name: 'adversarial-audit-workflow', args: { target: 'ci.yml' }, expect: '[Please specify workflow' },
+        { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-code-quality', args: { target: 'src/main.ts' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-security', args: { target: 'auth.ts' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-performance', args: { target: 'index.ts' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-seo', args: { target: 'index.html' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-skill', args: { target: 'my-skill' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-workflow', args: { target: 'ci.yml' }, expect: 'determine it from the user' },
         { name: 'flag-dashboard', args: {}, expect: '' },
         { name: 'flag-dashboard', args: { flag_type: 'blocker' }, expect: 'blocker' },
+        { name: 'mcp-heal', args: {}, expect: '' },
+        { name: 'verify-work', args: {}, expect: 'verification' },
         // 8.4 Git History prompts
         { name: 'commit', args: {}, expect: 'Commit Workflow' },
         { name: 'quick-commit', args: {}, expect: 'Quick Commit' },

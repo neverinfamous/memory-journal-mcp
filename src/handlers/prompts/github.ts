@@ -149,5 +149,153 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                 }
             },
         },
+        {
+            name: 'project-status-summary',
+            description: 'Generate a comprehensive status summary for a GitHub project',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'project_number', description: 'GitHub Project Number', required: true }],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const projectNumber = args?.['project_number'] ?? '{project_number}'
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# GitHub Project Status Summary
+Generate a comprehensive status summary for Project #${projectNumber}.
+To complete this task, you MUST first read the following resource to obtain the project's context:
+\`memory://projects/${projectNumber}/timeline\`
+
+Please provide:
+1. Overall Progress
+2. Blockers and Risks
+3. Recent Achievements
+4. Next Steps`
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            name: 'project-milestone-tracker',
+            description: 'Track progress against a specific project milestone',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'project_number', description: 'GitHub Project Number', required: true }],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const projectNumber = args?.['project_number'] ?? '{project_number}'
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# GitHub Project Milestone Tracker
+Analyze milestone progress for Project #${projectNumber}.
+To complete this task, you MUST first read the following resource to obtain the project's context:
+\`memory://projects/${projectNumber}/timeline\`
+
+Please provide:
+1. Current Milestone Status
+2. Velocity Analysis
+3. Scope Creep/Changes
+4. Confidence in Delivery Date`
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            name: 'pr-summary',
+            description: 'Generate an executive summary of a pull request',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const prNumber = args?.['pr_number'] ?? '{pr_number}'
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# Pull Request Summary
+Generate a summary for PR #${prNumber}.
+To complete this task, you MUST first read the following resources to obtain the PR's context:
+- \`memory://prs/${prNumber}/entries\`
+- \`memory://prs/${prNumber}/timeline\`
+
+Please provide:
+1. Summary of Changes
+2. Key Decisions Made
+3. Testing Performed
+4. Remaining Work`
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            name: 'code-review-prep',
+            description: 'Prepare a code review checklist and focus areas for a PR',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const prNumber = args?.['pr_number'] ?? '{pr_number}'
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# Code Review Preparation
+Prepare a code review plan for PR #${prNumber}.
+To complete this task, you MUST first read the following resources to obtain the PR's context:
+- \`memory://prs/${prNumber}/entries\`
+- \`memory://prs/${prNumber}/timeline\`
+
+Please provide:
+1. Review Checklist
+2. High-Risk Areas
+3. Testing Recommendations
+4. Architecture Verification`
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            name: 'pr-retrospective',
+            description: 'Conduct a retrospective analysis on a completed pull request',
+            icons: [ICON_PROMPT],
+            arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const prNumber = args?.['pr_number'] ?? '{pr_number}'
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# Pull Request Retrospective
+Conduct a retrospective analysis for PR #${prNumber}.
+To complete this task, you MUST first read the following resources to obtain the PR's context:
+- \`memory://prs/${prNumber}/entries\`
+- \`memory://prs/${prNumber}/timeline\`
+
+Please provide:
+1. What went well
+2. Friction points (CI, reviews, scope)
+3. Technical Debt incurred
+4. Learnings for future PRs`
+                            }
+                        }
+                    ]
+                }
+            }
+        }
     ]
 }
