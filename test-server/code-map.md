@@ -426,6 +426,8 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `session-summary` | Create a formatted session summary entry |
 | `team-session-summary` | Create a formatted team session summary entry |
+| `update-entry` | Safely update an existing mid-thread entry or session summary |
+| `update-team-entry` | Safely update an existing team entry or team session summary |
 | `verify-work` | Audit a batch of recent journal entries (default 10) to verify accuracy, elimina... |
 | `weekly-digest` | Create a weekly digest formatted day-by-day |
 <!-- END: PROMPTS -->

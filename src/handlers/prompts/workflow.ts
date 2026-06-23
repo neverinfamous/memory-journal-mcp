@@ -3,7 +3,9 @@
  *
  * Prompts: find-related, prepare-standup, prepare-retro, weekly-digest,
  * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
- * session-summary, team-session-summary, create-entry, create-team-entry
+ * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
+ * session-summary, team-session-summary, create-entry, create-team-entry,
+ * update-entry, update-team-entry
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
@@ -157,6 +159,49 @@ function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMes
 
 **Required Content Structure:**
 Just provide a concise markdown description of the specific action, decision, or fix you just completed. Do not include a full session retrospective. Keep it under 150 words. No top-level headers required.
+
+**Rules:**
+- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
+                }
+            }
+        ]
+    }
+}
+
+function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
+    const dbHint = target === 'team'
+        ? 'YOU MUST USE `team_update_entry` OR `mj.team.teamUpdateEntry` TO SAVE THIS ENTRY.'
+        : `Use \`update_entry\` or \`await mj.admin.updateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, entry_id: <ID>, ... })\` via \`mj_execute_code\``
+
+    const fetchHint = target === 'team'
+        ? '`team_get_entry_by_id` or `mj.team.teamGetEntryById`'
+        : '`get_entry_by_id` or `mj.core.getEntryById`'
+
+    const recentHint = target === 'team'
+        ? '`mj.team.teamGetRecentEntries({ limit: 1 })`'
+        : '`mj.core.getRecentEntries({ limit: 1 })`'
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: `Update an existing ${target === 'team' ? 'team ' : ''}journal entry safely.
+
+**Step 1: Identify the Target Entry**
+- If the user did not provide an entry ID, assume they want to update the most recent entry. Fetch it using ${recentHint} to get the target ID.
+- Once you have the ID, you MUST fetch the existing entry using ${fetchHint} to read its \`content\` and \`version\`.
+
+**Step 2: Apply Conditional Formatting Rules**
+Look at the tags and structure of the existing entry:
+- If it has the \`session-summary\` tag: You MUST preserve the exact 4-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`, \`## Commits\`). Do not flatten the text; only append or modify the relevant bullet points.
+- If it is a standard entry: Keep your modifications concise and under 150 words.
+
+**Step 3: Execute the Update**
+- ${dbHint}
+- You MUST pass the existing \`version\` as the \`expected_version\` parameter to prevent concurrent overwrites.
+- Ensure you pass the full updated \`content\` string. Do not nest it under an \`updates\` object if calling the raw tool.
 
 **Rules:**
 - If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
@@ -330,6 +375,24 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             arguments: [],
             handler: () => {
                 return generateEntryPrompt('team')
+            },
+        },
+        {
+            name: 'update-entry',
+            description: 'Safely update an existing mid-thread entry or session summary',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: () => {
+                return generateUpdateEntryPrompt('personal')
+            },
+        },
+        {
+            name: 'update-team-entry',
+            description: 'Safely update an existing team entry or team session summary',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: () => {
+                return generateUpdateEntryPrompt('team')
             },
         },
         {
