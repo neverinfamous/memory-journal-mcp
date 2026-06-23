@@ -9,7 +9,7 @@ describe('server-instructions generation', () => {
         const tools = new Set(['create_entry', 'search_entries'])
         const text = generateStandardInstructions(tools, [])
         expect(text).toContain('## Quick Access')
-        expect(text).toContain('Essential Session Start')
+        expect(text).toContain('Essential Behaviors')
         // Should NOT contain Code Mode section or API reference
         expect(text).not.toContain('## Code Mode')
         expect(text).not.toContain('# Code Mode API Reference')

@@ -43,7 +43,6 @@ export interface LatestEntrySnapshot {
 
 /**
  * Core instructions — always included regardless of enabled groups.
- * Contains quick access, help pointers, and essential behavioral guidance.
  */
 const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
@@ -65,186 +64,25 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 ## Help Resources
 
 Read \`memory://help\` for tool group index and available help resources.
+Read \`memory://help/gotchas\` for critical usage patterns, heuristics, and session summary rules.
 Read \`memory://help/{group}\` for per-group tool reference (parameters, annotations, examples).
 Only help resources for your enabled tool groups are registered.
 
-## Behaviors
+## Essential Behaviors
 
-### Essential Session Start
+1. **Briefing:** You **MUST** read the \`memory://briefing/{+repo}\` at the start of each chat!
+2. **Session Identity:** You MUST pass your AntiGravity Conversation ID as the \`session_id\` parameter for all journal mutation tools (e.g. \`create_entry\`, \`update_entry\`).
+3. **Workspace Isolation:** The \`project_number\` parameter is STRICTLY REQUIRED for mutations. Find it in the briefing's Config row.
+4. **Anti-Hallucination:** If confused by an API, read \`memory://help/{group}\` or \`memory://help/gotchas\` BEFORE guessing. Use \`mcp-heal\` if a structural hallucination persists.
+5. **Orphan Prevention:** ALWAYS link entries to previous context via \`related_to\` (array of entry IDs).
 
-1. You **MUST** read the \`memory://briefing/{+repo}\` at the start of each chat!
-2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
-3. Infer the \`repo\` from the user's prompt or your active workspace context.
-4. **RENDER BRIEFING**: The briefing resource returns a pre-formatted Markdown string containing a dense 2-column context table. You MUST output this exact string as your response without any modifications.
-5. **REVIEW ALERTS**: Pay special attention to any alerts listed at the top of the briefing. Do NOT truncate any summaries or issues.
-6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
-7. **SESSION ISOLATION**: You MUST pass your AntiGravity Conversation ID as the \`session_id\` parameter to all journal mutation tools (\`create_entry\`, \`update_entry\`, etc.) to prevent cross-agent thread collisions.
-8. **MID-THREAD CONTEXT**: If you lose track of your \`project_number\` or workspace during a long session, do NOT read \`memory://briefing\` again as it costs too many tokens. Instead, read \`memory://agent-context/{repo}\` (or \`memory://agent-context/default\`) to reorient yourself efficiently.
+## Essential Operations
 
-- **Session Identity**: You MUST pass your Conversation ID as the \`session_id\` parameter for all journal mutation tool calls (e.g. \`create_entry\`, \`update_entry\`).
-- **Context Reorientation**: If you lose track of your active project number or workspace path mid-thread, do NOT query the expensive \`memory://briefing/{repo}\` again. Instead, use \`read_resource\` on \`memory://agent-context/{repo}\` to retrieve a lightweight, token-efficient Key-Value payload containing your Project Number, Workspace ID, and current Session Instructions.
-
-### Journal Behaviors
-
-- **Anti-Hallucination & Healing**: If you encounter an MCP API hallucination, confusion, or are forced to use introspection to figure out an API, DO NOT just work around it. Use the \`mcp-heal\` prompt immediately to generate a plan to fix the server codebase so future agents don't face the same issue.
-- **Dual-Schema Nuance**: The system uses a dual-schema pattern. MCP SDK schemas are intentionally relaxed (all fields optional) to bypass strict \`-32602\` SDK errors. However, the internal handlers still strictly enforce validation. Always provide all required parameters!
-- **Strict Validation**: The \`project_number\` parameter is STRICTLY REQUIRED for all mutation operations (Create, Update, Delete). It must be a **numeric** ID (e.g., \`1\`, \`14\`), not a repo name string. Find it in the briefing's Config row (\`registry: repoName (#N)\`) or via \`get_statistics\`. In Code Mode, string repo names (e.g., \`"mysql-mcp"\`) are auto-resolved to numeric IDs via the project registry, but direct MCP tool calls require the numeric value.
-- **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
-- **Entry History**: Every modification to an entry creates a revision. Use \`get_entry_history\` to view past versions and changes of an entry. When updating entries, consider passing \`expected_version\` to use optimistic locking and avoid overwriting concurrent edits.
-- **Soft-Delete & Recovery**: Entries can be soft-deleted and restored via \`restore_entry\` or \`team_restore_entry\`. Use \`list_deleted_entries\` or \`team_list_deleted_entries\` to discover soft-deleted entries. Entries can also be archived (\`is_archived = 1\`) to preserve them in history while excluding them from normal search queries.
-- **Batch Operations**: Use \`batch_create_entries\`, \`batch_update_entries\`, and \`batch_delete_entries\` (or team equivalents) to process bulk data up to 50 entries per transaction. Use \`rebuild_vector_index\` to rebuild the vector index for these entries.
-- **External Imports**: Use \`import_external\` and \`team_import_external\` to ingest knowledge management exports from Notion, Obsidian, or Logseq. These tools normalize wikilinks, YAML frontmatter, and block hierarchies seamlessly. Use \`dry_run\` to preview the parsed structure.
-- **Admin & Telemetry**: Use \`update_configuration\` to dynamically change the server's tool filters or briefing preferences without restarting. Use \`search_audit_log\` to query operational telemetry and investigate incidents across all active and rotated JSONL audit files. You can filter by \`tool_name\`, \`user\`, \`date_range\`, \`status\`, or \`category\`. Both the audit logs and the \`memory://metrics/summary\` resource reflect precise, content-type-aware token consumption estimates.
-- **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
-- **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries. Use the \`mode\` parameter (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`) to control search strategy. The \`fts\` and \`hybrid\` modes include Levenshtein distance typo-tolerance fallback (via \`fuzzy_match\` and \`auto_correct\`), making searches more resilient to misspellings.
-- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) and cross-team search (\`cross_team_search\`) before defining architectures spanning multiple teams or DBs. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots. Access aggregate server metrics via \`memory://metrics/summary\`, per-tool telemetry and latency percentiles via \`memory://metrics/latency\`, and resource read frequency via \`memory://metrics/resources\`.
-- **Trust & Staleness**: ALL entries MUST define heuristic scores upon creation: \`impactScore\` (blast radius, e.g. architecture changes=0.9, doc fixes=0.1), \`trustScore\` (e.g. validated by test suite=0.9, unchecked=0.5), and \`validationStatus\` (\`verified\`, \`failed\`, or \`none\`). 
-- **Orphan Prevention**: ALL entries MUST be linked to previous context. You MUST provide a \`related_to\` array (list of entry IDs) during creation to weave the entry into the Knowledge Graph. Do not create isolated islands!
-- **Anchors**: Entries can also be bound to Git paths via \`anchors\`. Use \`mark_anchors_stale\` if you suspect an entry's references are old. Anchors that have been modified or deleted will drop the entry's overall importance!
-
-### Auto-Prune
-
-On server startup, the auto-prune system implements a graduated data lifecycle (Active → Archived → Soft-Deleted → Hard-Deleted) for old entries with low significance scores.
-- **Configurable Thresholds**: Controlled via \`--archive-older-than-days\`, \`--prune-older-than-days\` (soft-delete), \`--hard-delete-older-than-days\`, and \`--prune-importance-threshold\`.
-- **Exclusion Rules**: Specific tags can be exempted from auto-pruning using \`--prune-exclude-tags <tags>\` (e.g. \`architecture\`, \`never-prune\`).
-- **Dry Run**: Server administrators can preview what would be processed without mutating the database by using the \`--prune-dry-run\` flag.
-
-### Scheduled Reports
-
-When deployed in HTTP mode with \`--report-interval <minutes>\` and \`--report-webhook-url <url>\`, the server periodically generates digest reports and delivers them to the configured webhook. Reports include activity trends, significance highlights, stale project warnings, and top-importance entries.
-
-- **Formats**: \`slack\` (default, \`{"text":"<markdown>"}\`), \`discord\` (\`{"content":"<markdown>"}\`), or \`json\` (raw DigestSnapshot payload).
-- **Report history**: Read \`memory://insights/reports\` to view the last 5 generated reports and their delivery status.
-- **Independent from digest**: The \`report\` job is separate from the \`digest\` analytics job. You can run one without the other.
-
-### Real-Time Subscriptions
-
-The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data. Note that subscriptions are scope-authorized; your session must possess the required scope (e.g., \`team\` or \`admin\`) for the target resource, or the subscription will be rejected with a \`PermissionError\`.
-
-### Team RBAC & Access Control
-
-The team database features a Role-Based Access Control (RBAC) system for team members:
-- **Roles**: 
-  - \`viewer\`: Read-only access to all team data.
-  - \`member\`: Read all, Create/Edit/Delete *own* entries, resolve own flags.
-  - \`admin\`: Read/Write/Delete *all* entries and flags, manage team members, rebuild vector indexes, backup data.
-- **Bootstrap Workflow**: The RBAC system is inactive until the first member is added. The first time \`team_add_member\` is called, the caller is automatically registered as an \`admin\`. Alternatively, the server can be bootstrapped via the \`TEAM_ADMIN\` environment variable or \`--team-admin\` CLI flag. Unregistered authors fall back to the configured \`TEAM_DEFAULT_ROLE\`.
-- **Managing Members**: Admins can manage members using \`team_add_member\`, \`team_remove_member\`, \`team_update_member_role\`, \`team_list_members\`, and \`team_get_member\`. 
-- **Author Aliases**: Admins can manage author aliases to consolidate attribution for team analytics when one person uses multiple usernames using \`team_add_author_alias\`, \`team_list_author_aliases\`, \`team_resolve_author\`, \`team_remove_author_alias\`, and \`team_consolidate_authors\`.
-- **OAuth Scopes**: OAuth scopes (read/write/admin) govern broad HTTP endpoint access. RBAC roles govern fine-grained internal tool capabilities. Both must be satisfied when OAuth is active.
-
-### Session Summaries
-
-Use \`create_entry\` to record session summaries. Required fields:
-
-- \`entry_type: "retrospective"\`
-- \`tags: ["session-summary"]\` (plus relevant domain/activity tags)
-- \`project_number\` from the briefing
-- \`impactScore\`, \`trustScore\`, and \`validationStatus\` MUST be evaluated and populated.
-- \`related_to\` MUST be populated with IDs of related tasks, architectural plans, or preceding summaries.
-- \`auto_context\` MUST be populated with a concise JSON payload representing the context (e.g. \`{ "commits": ["abc1234", "def5678"] }\`)
-
-Content MUST follow this EXACT structure (no extra top-level sections):
-
-\`\`\`
-## Accomplished
-- [concrete items done this session]
-
-## Commits
-- [list of short commit SHAs generated this session]
-
-## Unfinished / Blocked
-- [remaining items or "None"]
-
-## Context for Next Session
-- [entry IDs, branch names, PR numbers, pending decisions]
-\`\`\`
-
-Do NOT add sections like "## Summary", "## Overview", "## Notes", or any other
-top-level headers. Do NOT omit any of the four required sections.
-
-Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
-
-### Entry Type Selection
-
-Choose the correct \`entry_type\` — do NOT default everything to \`personal_reflection\`:
-
-- \`retrospective\` — Session summaries, certification reports, any "what was accomplished" recap
-- \`bug_fix\` — Specific bug identification and/or resolution
-- \`project_decision\` — Architecture decisions, pattern adoptions, technology choices
-- \`planning\` — Roadmaps, sprint plans, project initialization
-- \`code_review\` — Security audits, code quality reviews, copilot findings
-- \`technical_note\` — Implementation notes, gotchas, reference documentation
-- \`feature_implementation\` — New feature completions
-- \`research\` — Investigation, benchmarking, evaluation of alternatives
-- \`meeting_notes\` — Meeting minutes, sync notes, discussion summaries
-- \`learning\` — Lessons learned, tutorials completed, skill acquisition
-- \`standup\` — Daily standup notes, status updates
-- \`milestone\` — Major project milestones, release checkpoints
-- \`technical_achievement\` — Significant technical accomplishments
-- \`enhancement\` — Incremental improvements, optimizations
-- \`development_note\` — Day-to-day development context and progress
-- \`other\` — Anything that doesn't fit the above categories
-- \`personal_reflection\` — Only for genuinely personal notes that don't fit above
-
-### Tag Taxonomy
-
-Every entry MUST have at least one tag. Use kebab-case exclusively.
-
-- _Activity_: \`session-summary\`, \`certification\`, \`stress-test\`, \`bug-fix\`, \`release\`, \`audit\`, \`remediation\`, \`refactor\`
-- _Domain_: \`security\`, \`performance\`, \`architecture\`, \`code-mode\`, \`documentation\`, \`ci-cd\`, \`github-integration\`
-- _Tool group_: Name of the tool group being worked on (e.g., \`core\`, \`search\`, \`github\`, \`admin\`)
-- _Pattern_: \`split-schema\`, \`zod\`, \`error-handling\`, \`dual-schema\`
-
-### Heuristic Scoring Criteria
-
-ALL entries MUST define heuristic scores. Use these explicit thresholds:
-
-- **\`validation_status\`**: 
-  - \`none\`: Work completed but not yet explicitly tested/verified.
-  - \`passed\`: Work explicitly validated via tests, manual confirmation, or peer review.
-  - \`failed\`: Work that failed verification or was found to be hallucinatory.
-- **\`trust_score\` (Confidence)**:
-  - \`0.0 - 0.2\`: Suspected hallucination or failed validation.
-  - \`0.3 - 0.5\`: Unverified work, draft plans, or assumptions (Baseline for unverified work).
-  - \`0.6 - 0.8\`: Partially verified or low-risk routine changes.
-  - \`0.9 - 1.0\`: Rigorously verified via automated tests, peer review, or explicitly confirmed by the user.
-  - *Note: \`trust_score\` acts as a multiplier on the entry's importance. Low trust entries will decay and be auto-pruned faster.*
-- **\`impact_score\` (Blast Radius)**:
-  - \`0.0 - 0.2\`: Trivial changes, typos, minor doc updates.
-  - \`0.3 - 0.5\`: Standard feature work, isolated bug fixes.
-  - \`0.6 - 0.8\`: Major new features, cross-module changes.
-  - \`0.9 - 1.0\`: Core architectural shifts, destructive operations, critical security patches.
-
-### Significance Marking
-
-Mark important entries with \`significance_type\`:
-
-- \`release\` — Version deployments
-- \`milestone\` — Major completions (full certification, security audit, feature launch)
-- \`decision\` — Technology or process decisions
-- \`architecture\` — Architecture decisions, pattern adoptions, structural changes
-- \`blocker_resolved\` — Critical blockers that were resolved
-- \`lesson_learned\` — Documented lessons from failures or unexpected outcomes
-- \`breakthrough\` — Significant technical or conceptual breakthroughs
-- \`security\` — Security audit completions, vulnerability remediations, hardening milestones
-
-Do NOT mark routine session summaries or pass-only testing results as significant.
-
-### Link Entries
-
-Create relationships to build traversable context chains:
-
-- \`implements\` — implementation→spec, remediation→audit findings
-- \`resolved\` — bugfix→issue that reported the bug
-- \`evolves_from\` — v2→v1, new iteration→prior version
-- \`references\` — cross-project parity work, related entries
-- \`clarifies\` — documentation→implementation it explains
-- \`response_to\` — reply to a question or issue raised in another entry
-- \`blocked_by\` — entry was blocked by another (blocker→resolution)
-- \`caused\` — entry caused or led to another outcome
-
-Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.`
+- **Creating Entries:** Use \`create_entry\` (or \`team_create_entry\`). ALL entries MUST define \`impactScore\`, \`trustScore\`, and \`validationStatus\`. See \`memory://help/core\` for criteria.
+- **Session Summaries:** Use \`create_entry\` (or \`team_create_entry\`) with \`entry_type: "retrospective"\` and \`tags: ["session-summary"]\`. See \`memory://help/templates\` for the exact 4-section format required.
+- **Updating/Deleting:** Use \`update_entry\` (pass \`expected_version\` to prevent concurrent overwrites) and \`delete_entry\` (soft-delete).
+- **Searching:** Use \`search_entries\` or \`search_by_date_range\`. Use \`sort_by: "importance"\` to surface structurally significant entries. Use phrase matching (e.g. \`"error handling"\`) for exact matches.
+- **Team DB:** Use \`team_*\` tools (e.g. \`team_create_entry\`) ONLY if explicitly requested or working on shared state. See \`memory://help/team\` for RBAC rules.\`ies. Do NOT create bulk relationships between unrelated entries that happen to share tags.`
 
 /**
  * Code Mode summary — only included when codemode group is enabled.
@@ -267,7 +105,7 @@ Read \`memory://help/codemode\` for full namespace table, examples, and patterns
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","skills","templates"]
+const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","skills","templates","team"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -393,11 +231,124 @@ export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
  */
 export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
   ["core", `# Core Operations
-- **Workspace Isolation**: When creating or reading entries, consider the \`workspace_id\` parameter. If a default workspace is active, entries are automatically scoped to it unless explicitly overridden.`],
+- **Workspace Isolation**: When creating or reading entries, consider the \`workspace_id\` parameter. If a default workspace is active, entries are automatically scoped to it unless explicitly overridden.
+
+### Session Summaries
+
+Use \`create_entry\` to record session summaries. Required fields:
+
+- \`entry_type: "retrospective"\`
+- \`tags: ["session-summary"]\` (plus relevant domain/activity tags)
+- \`project_number\` from the briefing
+- \`impactScore\`, \`trustScore\`, and \`validationStatus\` MUST be evaluated and populated.
+- \`related_to\` MUST be populated with IDs of related tasks, architectural plans, or preceding summaries.
+- \`auto_context\` MUST be populated with a concise JSON payload representing the context (e.g. \`{ "commits": ["abc1234", "def5678"] }\`)
+
+Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
+
+### Entry Type Selection
+
+Choose the correct \`entry_type\` — do NOT default everything to \`personal_reflection\`:
+
+- \`retrospective\` — Session summaries, certification reports, any "what was accomplished" recap
+- \`bug_fix\` — Specific bug identification and/or resolution
+- \`project_decision\` — Architecture decisions, pattern adoptions, technology choices
+- \`planning\` — Roadmaps, sprint plans, project initialization
+- \`code_review\` — Security audits, code quality reviews, copilot findings
+- \`technical_note\` — Implementation notes, gotchas, reference documentation
+- \`feature_implementation\` — New feature completions
+- \`research\` — Investigation, benchmarking, evaluation of alternatives
+- \`meeting_notes\` — Meeting minutes, sync notes, discussion summaries
+- \`learning\` — Lessons learned, tutorials completed, skill acquisition
+- \`standup\` — Daily standup notes, status updates
+- \`milestone\` — Major project milestones, release checkpoints
+- \`technical_achievement\` — Significant technical accomplishments
+- \`enhancement\` — Incremental improvements, optimizations
+- \`development_note\` — Day-to-day development context and progress
+- \`other\` — Anything that doesn't fit the above categories
+- \`personal_reflection\` — Only for genuinely personal notes that don't fit above
+
+### Tag Taxonomy
+
+Every entry MUST have at least one tag. Use kebab-case exclusively.
+
+- _Activity_: \`session-summary\`, \`certification\`, \`stress-test\`, \`bug-fix\`, \`release\`, \`audit\`, \`remediation\`, \`refactor\`
+- _Domain_: \`security\`, \`performance\`, \`architecture\`, \`code-mode\`, \`documentation\`, \`ci-cd\`, \`github-integration\`
+- _Tool group_: Name of the tool group being worked on (e.g., \`core\`, \`search\`, \`github\`, \`admin\`)
+- _Pattern_: \`split-schema\`, \`zod\`, \`error-handling\`, \`dual-schema\`
+
+### Heuristic Scoring Criteria
+
+ALL entries MUST define heuristic scores. Use these explicit thresholds:
+
+- **\`validation_status\`**: 
+  - \`none\`: Work completed but not yet explicitly tested/verified.
+  - \`passed\`: Work explicitly validated via tests, manual confirmation, or peer review.
+  - \`failed\`: Work that failed verification or was found to be hallucinatory.
+- **\`trust_score\` (Confidence)**:
+  - \`0.0 - 0.2\`: Suspected hallucination or failed validation.
+  - \`0.3 - 0.5\`: Unverified work, draft plans, or assumptions (Baseline for unverified work).
+  - \`0.6 - 0.8\`: Partially verified or low-risk routine changes.
+  - \`0.9 - 1.0\`: Rigorously verified via automated tests, peer review, or explicitly confirmed by the user.
+  - *Note: \`trust_score\` acts as a multiplier on the entry's importance. Low trust entries will decay and be auto-pruned faster.*
+- **\`impact_score\` (Blast Radius)**:
+  - \`0.0 - 0.2\`: Trivial changes, typos, minor doc updates.
+  - \`0.3 - 0.5\`: Standard feature work, isolated bug fixes.
+  - \`0.6 - 0.8\`: Major new features, cross-module changes.
+  - \`0.9 - 1.0\`: Core architectural shifts, destructive operations, critical security patches.
+
+### Significance Marking
+
+Mark important entries with \`significance_type\`:
+
+- \`release\` — Version deployments
+- \`milestone\` — Major completions (full certification, security audit, feature launch)
+- \`decision\` — Technology or process decisions
+- \`architecture\` — Architecture decisions, pattern adoptions, structural changes
+- \`blocker_resolved\` — Critical blockers that were resolved
+- \`lesson_learned\` — Documented lessons from failures or unexpected outcomes
+- \`breakthrough\` — Significant technical or conceptual breakthroughs
+- \`security\` — Security audit completions, vulnerability remediations, hardening milestones
+
+Do NOT mark routine session summaries or pass-only testing results as significant.
+
+### Link Entries
+
+Create relationships to build traversable context chains:
+
+- \`implements\` — implementation→spec, remediation→audit findings
+- \`resolved\` — bugfix→issue that reported the bug
+- \`evolves_from\` — v2→v1, new iteration→prior version
+- \`references\` — cross-project parity work, related entries
+- \`clarifies\` — documentation→implementation it explains
+- \`response_to\` — reply to a question or issue raised in another entry
+- \`blocked_by\` — entry was blocked by another (blocker→resolution)
+- \`caused\` — entry caused or led to another outcome
+
+Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.`],
   ["search", `# Search Operations
 - **Workspace Filtering**: All search and listing operations filter by \`workspace_id\` if configured. You can query across workspaces by explicitly omitting the workspace or passing an asterisk/wildcard if supported.`],
   ["admin", `# Admin Operations
-- **Workspace Bounds**: Batch updates, deletions, and rebuilding vector indexes require \`workspace_id\` awareness. Ensure you are targeting the correct workspace to avoid unintended cross-tenant mutations.`],
+- **Workspace Bounds**: Batch updates, deletions, and rebuilding vector indexes require \`workspace_id\` awareness. Ensure you are targeting the correct workspace to avoid unintended cross-tenant mutations.
+
+### Auto-Prune
+
+On server startup, the auto-prune system implements a graduated data lifecycle (Active → Archived → Soft-Deleted → Hard-Deleted) for old entries with low significance scores.
+- **Configurable Thresholds**: Controlled via \`--archive-older-than-days\`, \`--prune-older-than-days\` (soft-delete), \`--hard-delete-older-than-days\`, and \`--prune-importance-threshold\`.
+- **Exclusion Rules**: Specific tags can be exempted from auto-pruning using \`--prune-exclude-tags <tags>\` (e.g. \`architecture\`, \`never-prune\`).
+- **Dry Run**: Server administrators can preview what would be processed without mutating the database by using the \`--prune-dry-run\` flag.
+
+### Scheduled Reports
+
+When deployed in HTTP mode with \`--report-interval <minutes>\` and \`--report-webhook-url <url>\`, the server periodically generates digest reports and delivers them to the configured webhook. Reports include activity trends, significance highlights, stale project warnings, and top-importance entries.
+
+- **Formats**: \`slack\` (default, \`{"text":"<markdown>"}\`), \`discord\` (\`{"content":"<markdown>"}\`), or \`json\` (raw DigestSnapshot payload).
+- **Report history**: Read \`memory://insights/reports\` to view the last 5 generated reports and their delivery status.
+- **Independent from digest**: The \`report\` job is separate from the \`digest\` analytics job. You can run one without the other.
+
+### Real-Time Subscriptions
+
+The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data. Note that subscriptions are scope-authorized; your session must possess the required scope (e.g., \`team\` or \`admin\`) for the target resource, or the subscription will be rejected with a \`PermissionError\`.`],
   ["codemode", `# Code Mode API Reference
 
 In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You must orchestrate the server using the \`mj.*\` API inside the sandbox.
@@ -684,4 +635,17 @@ For any entry type not listed above, structure content with:
 1. A clear \`##\` heading describing the main topic
 2. Bullet points for discrete items
 3. No invented sections beyond what the content actually covers`],
+  ["team", `# Team Collaboration
+
+### Team RBAC & Access Control
+
+The team database features a Role-Based Access Control (RBAC) system for team members:
+- **Roles**: 
+  - \`viewer\`: Read-only access to all team data.
+  - \`member\`: Read all, Create/Edit/Delete *own* entries, resolve own flags.
+  - \`admin\`: Read/Write/Delete *all* entries and flags, manage team members, rebuild vector indexes, backup data.
+- **Bootstrap Workflow**: The RBAC system is inactive until the first member is added. The first time \`team_add_member\` is called, the caller is automatically registered as an \`admin\`. Alternatively, the server can be bootstrapped via the \`TEAM_ADMIN\` environment variable or \`--team-admin\` CLI flag. Unregistered authors fall back to the configured \`TEAM_DEFAULT_ROLE\`.
+- **Managing Members**: Admins can manage members using \`team_add_member\`, \`team_remove_member\`, \`team_update_member_role\`, \`team_list_members\`, and \`team_get_member\`. 
+- **Author Aliases**: Admins can manage author aliases to consolidate attribution for team analytics when one person uses multiple usernames using \`team_add_author_alias\`, \`team_list_author_aliases\`, \`team_resolve_author\`, \`team_remove_author_alias\`, and \`team_consolidate_authors\`.
+- **OAuth Scopes**: OAuth scopes (read/write/admin) govern broad HTTP endpoint access. RBAC roles govern fine-grained internal tool capabilities. Both must be satisfied when OAuth is active.`],
 ])

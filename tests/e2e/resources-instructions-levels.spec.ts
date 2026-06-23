@@ -56,9 +56,9 @@ test.describe('memory://instructions: core-only filter gating', () => {
         stopServer(CORE_ONLY_PORT)
     })
 
-    test('core-only: core section (Essential Session Start) is always present', async () => {
+    test('core-only: core section (Essential Behaviors) is always present', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('Essential Session Start')
+        expect(text).toContain('Essential Behaviors')
     })
 
     test('core-only: Active Tools section lists only core group', async () => {
@@ -115,7 +115,7 @@ test.describe('memory://instructions: -github filter gating', () => {
 
     test('-github: core section is present', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('Essential Session Start')
+        expect(text).toContain('Essential Behaviors')
     })
 
     test('-github: Code Mode section is present (codemode group enabled)', async () => {
