@@ -27,8 +27,9 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = resolve(__dirname, '../..')
 
-const proc = spawn('node', ['dist/cli.js', '--log-level', 'error'], {
+const proc = spawn('node', ['dist/cli.js', '--log-level', 'error', '--db', 'test-progress.db', '--team-db', 'test-team-progress.db'], {
     cwd: projectDir,
+    env: { ...process.env, MEMORY_JOURNAL_CONFIG: 'test-server/scripts/test-server-config.json' },
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -281,6 +282,101 @@ async function main() {
                 )
             } else {
                 console.error(`FAIL: Expected ≥ 6 progress notifications, got ${progressEvents.length}`)
+                failures++
+            }
+        } else {
+            failures++
+        }
+    }
+
+    // =========================================================================
+    // Phase 4: Team Batch Operation Progress (team_batch_delete_entries)
+    // =========================================================================
+    console.log('\n--- Phase 4: Team Batch Operation Progress (team_batch_delete_entries) ---')
+    progressEvents.length = 0
+
+    // 1. Batch Create Team Entries with Progress
+    const teamSeedBatch = await rpc('tools/call', {
+        name: 'team_batch_create_entries',
+        arguments: {
+            entries: [
+                { content: 'Team Delete me 1', entry_type: 'technical_note', project_number: 1 }, 
+                { content: 'Team Delete me 2', entry_type: 'technical_note', project_number: 1 }
+            ],
+            auto_index: true
+        },
+        _meta: { progressToken: 'phase4-team-batch' }
+    })
+    
+    let teamIds = []
+    if (teamSeedBatch.error) {
+        console.error('FAIL: Could not seed team batch entries:', teamSeedBatch.error)
+        failures++
+    } else {
+        try {
+            const content = teamSeedBatch.result?.content?.[0]?.text
+            const parsed = JSON.parse(content)
+            if (parsed.success) {
+                teamIds = parsed.entries.map(e => e.id)
+            } else {
+                console.error('FAIL: Team seed batch returned application error:', parsed.error)
+                failures++
+            }
+        } catch (err) {}
+    }
+
+    // 2. Batch Update Team Entries with Progress
+    if (teamIds.length > 0) {
+        const teamUpdateBatch = await rpc('tools/call', {
+            name: 'team_batch_update_entries',
+            arguments: {
+                updates: teamIds.map(id => ({
+                    entry_id: id,
+                    content: 'Updated team content'
+                }))
+            },
+            _meta: { progressToken: 'phase4-team-batch' }
+        })
+        
+        if (teamUpdateBatch.error) {
+            console.error('FAIL: team_batch_update_entries returned error:', teamUpdateBatch.error)
+            failures++
+        }
+    }
+
+    // 3. Batch Delete Team Entries with Progress
+    const teamBatchResponse = await rpc('tools/call', {
+        name: 'team_batch_delete_entries',
+        arguments: { entry_ids: teamIds, project_number: 1 },
+        _meta: { progressToken: 'phase4-team-batch' }
+    })
+    
+    if (teamBatchResponse.error) {
+        console.error('FAIL: team_batch_delete_entries returned error:', teamBatchResponse.error)
+        failures++
+    } else {
+        // Check for application-level error
+        const text = teamBatchResponse.result?.content?.[0]?.text
+        let success = true
+        try {
+            const parsed = JSON.parse(text)
+            if (parsed.success === false) {
+                console.error('FAIL: Application error:', parsed.error)
+                success = false
+            }
+        } catch(e) {}
+
+        if (success) {
+            // Wait briefly for any pending stdout data events to process
+            await new Promise(resolve => setTimeout(resolve, 500))
+            
+            console.log('\nTeam Batch operations finished successfully!')
+            if (progressEvents.length >= 6) {
+                console.log(
+                    `PASS: Received ${progressEvents.length} team progress notifications (expected ≥ 6)`
+                )
+            } else {
+                console.error(`FAIL: Expected ≥ 6 team progress notifications, got ${progressEvents.length}`)
                 failures++
             }
         } else {
