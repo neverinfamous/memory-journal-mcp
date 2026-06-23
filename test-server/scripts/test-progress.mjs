@@ -21,8 +21,9 @@
  * Duration: ~8s
  */
 import { spawn } from 'child_process'
-import { resolve, dirname } from 'path'
+import { resolve, dirname, join } from 'path'
 import { fileURLToPath } from 'url'
+import { rmSync } from 'fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = resolve(__dirname, '../..')
@@ -396,10 +397,62 @@ async function main() {
     }
 
     proc.kill()
+    
+    const filesToClean = [
+        'test-progress.db',
+        'test-progress.db-shm',
+        'test-progress.db-wal',
+        'test-team-progress.db',
+        'test-team-progress.db-shm',
+        'test-team-progress.db-wal',
+        'test-prompts-test.db',
+        'test-prompts-test.db-shm',
+        'test-prompts-test.db-wal',
+        'test-team-prompts-test.db',
+        'test-team-prompts-test.db-shm',
+        'test-team-prompts-test.db-wal'
+    ]
+    
+    // Wait briefly to allow process to release file locks
+    setTimeout(() => {
+        for (const file of filesToClean) {
+            try {
+                rmSync(join(projectDir, file), { force: true })
+            } catch (e) {
+                // Ignore cleanup errors
+            }
+        }
+        process.exit(process.exitCode)
+    }, 500)
 }
 
 main().catch((err) => {
     console.error('Script failed:', err)
     proc.kill()
-    process.exitCode = 1
+    
+    const filesToClean = [
+        'test-progress.db',
+        'test-progress.db-shm',
+        'test-progress.db-wal',
+        'test-team-progress.db',
+        'test-team-progress.db-shm',
+        'test-team-progress.db-wal',
+        'test-prompts-test.db',
+        'test-prompts-test.db-shm',
+        'test-prompts-test.db-wal',
+        'test-team-prompts-test.db',
+        'test-team-prompts-test.db-shm',
+        'test-team-prompts-test.db-wal'
+    ]
+    
+    setTimeout(() => {
+        for (const file of filesToClean) {
+            try {
+                rmSync(join(projectDir, file), { force: true })
+            } catch (e) {
+                // Ignore cleanup errors
+            }
+        }
+        process.exit(1)
+    }, 500)
 })

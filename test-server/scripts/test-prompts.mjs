@@ -186,7 +186,13 @@ async function main() {
         'test-prompts.db-wal',
         'test-team-prompts.db',
         'test-team-prompts.db-shm',
-        'test-team-prompts.db-wal'
+        'test-team-prompts.db-wal',
+        'test-prompts-test.db',
+        'test-prompts-test.db-shm',
+        'test-prompts-test.db-wal',
+        'test-team-prompts-test.db',
+        'test-team-prompts-test.db-shm',
+        'test-team-prompts-test.db-wal'
     ]
     
     // Wait briefly to allow process to release file locks
