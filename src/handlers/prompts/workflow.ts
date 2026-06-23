@@ -174,12 +174,12 @@ function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: Pro
         : `Use \`update_entry\` or \`await mj.admin.updateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, entry_id: <ID>, ... })\` via \`mj_execute_code\``
 
     const fetchHint = target === 'team'
-        ? '`team_get_entry_by_id` or `mj.team.teamGetEntryById`'
-        : '`get_entry_by_id` or `mj.core.getEntryById`'
+        ? '`await mj.team.teamGetEntryById` or `await team_get_entry_by_id`'
+        : '`await mj.core.getEntryById` or `await get_entry_by_id`'
 
     const recentHint = target === 'team'
-        ? '`mj.team.teamGetRecentEntries({ limit: 1 })`'
-        : '`mj.core.getRecentEntries({ limit: 1 })`'
+        ? '`await mj.team.teamGetRecentEntries({ limit: 1 })`'
+        : '`await mj.core.getRecentEntries({ limit: 1 })`'
 
     return {
         messages: [
