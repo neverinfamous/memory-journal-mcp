@@ -2,17 +2,33 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { executeCommand } from './execution-engine.js';
-import { buildCommand } from './command-builder.js';
+import { buildCommand, customInterceptors } from './command-builder.js';
 import { buildEnvironment } from './environment.js';
 import { PayloadSchema } from './schema.js';
 
-const payloadPath = process.argv[2];
+let payloadPath = process.argv[2];
+let interceptorsPath: string | null = null;
+
+if (payloadPath?.startsWith('--interceptors=')) {
+  interceptorsPath = payloadPath.substring(15);
+  payloadPath = process.argv[3];
+}
+
 if (!payloadPath) {
   console.error('❌ Error: Missing payload JSON file path.');
   process.exit(1);
 }
 
 try {
+  if (interceptorsPath) {
+    const plugin = await import(path.resolve(interceptorsPath));
+    if (plugin.default && Array.isArray(plugin.default)) {
+      customInterceptors.push(...plugin.default);
+    } else if (plugin.default && typeof plugin.default === 'function') {
+      customInterceptors.push(plugin.default);
+    }
+  }
+
   const stat = fs.statSync(payloadPath);
   if (stat.size > 10 * 1024 * 1024) {
     console.error('❌ Error: Payload file exceeds 10MB limit.');

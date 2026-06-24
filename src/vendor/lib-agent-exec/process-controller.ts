@@ -280,7 +280,7 @@ export class ProcessController {
                 if (current == null || typeof current !== 'object') return match;
                 current = (current as Record<string, unknown>)[key];
               }
-              return typeof current === 'object' ? JSON.stringify(current) : String(current);
+              return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
             });
           };
 
@@ -339,7 +339,7 @@ export class ProcessController {
               if (current == null || typeof current !== 'object') return match;
               current = (current as Record<string, unknown>)[key];
             }
-            return typeof current === 'object' ? JSON.stringify(current) : String(current);
+            return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
           });
         };
 

@@ -68,45 +68,46 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
     envOverrides['integrationContext'] = contextStr;
 
-    const replaceTemplates = (str: string) => {
+    const replaceTemplates = (str: string, escapeForTokenization: boolean = false) => {
       return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-        if (!pathStr) return contextStr;
+        if (!pathStr) return escapeForTokenization ? contextStr.replace(/(["\\])/g, '\\$1') : contextStr;
         let current: unknown = payload.integrationContext;
         const keys = pathStr.split('.');
         for (const key of keys) {
           if (current == null || typeof current !== 'object') return match;
           current = (current as Record<string, unknown>)[key];
         }
-        return typeof current === 'object' ? JSON.stringify(current) : String(current);
+        const strVal = typeof current === 'object' ? JSON.stringify(current) : String(current);
+        return escapeForTokenization ? strVal.replace(/(["\\])/g, '\\$1') : strVal;
       });
     };
 
     if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
-      payload.templateOverride = replaceTemplates(payload.templateOverride);
+      payload.templateOverride = replaceTemplates(payload.templateOverride, true);
     }
     if (payload.args) {
-      payload.args = payload.args.map(a => typeof a === 'string' ? replaceTemplates(a) : a);
+      payload.args = payload.args.map(a => typeof a === 'string' ? replaceTemplates(a, false) : a);
     }
     if (payload.env) {
       const newEnv: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.env)) {
-        newEnv[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
+        newEnv[k] = typeof v === 'string' ? replaceTemplates(v, false) : String(v);
       }
       payload.env = newEnv;
     }
     if ('command' in payload && typeof payload.command === 'string') {
-      payload.command = replaceTemplates(payload.command);
+      payload.command = replaceTemplates(payload.command, false);
     }
     if ('scriptPath' in payload && typeof payload.scriptPath === 'string') {
-      payload.scriptPath = replaceTemplates(payload.scriptPath);
+      payload.scriptPath = replaceTemplates(payload.scriptPath, false);
     }
     if ('code' in payload && typeof payload.code === 'string') {
-      payload.code = replaceTemplates(payload.code);
+      payload.code = replaceTemplates(payload.code, false);
     }
     if ('webhookHeaders' in payload && payload.webhookHeaders) {
       const newHeaders: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.webhookHeaders)) {
-        newHeaders[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
+        newHeaders[k] = typeof v === 'string' ? replaceTemplates(v, false) : String(v);
       }
       payload.webhookHeaders = newHeaders;
     }

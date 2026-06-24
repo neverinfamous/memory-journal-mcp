@@ -33,7 +33,7 @@ export class StreamManager {
     preProcessed = preProcessed.replace(ANSI_REGEX_H, '\n--- [Cursor Home] ---\n');
     
     // Node's stripVTControlCharacters restricts number length to 4 chars. Add a broad pass to catch overlong edge-cases.
-    const e=String.fromCharCode(27), c=String.fromCharCode(155); const longCsi = new RegExp(`[${e}${c}]\\[[()#;?]*[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
+    const e=String.fromCharCode(27), c=String.fromCharCode(155); const longCsi = new RegExp(`[${e}${c}]\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
     const osc = new RegExp(`[${e}${c}]][^\\x07${e}]*(?:\\x07|${e}\\\\)`, 'g');
     preProcessed = preProcessed.replace(longCsi, '');
     preProcessed = preProcessed.replace(osc, '');
