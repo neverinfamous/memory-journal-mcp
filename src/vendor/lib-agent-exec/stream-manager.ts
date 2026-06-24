@@ -48,6 +48,11 @@ export class StreamManager {
       str = str.slice(0, -1);
     }
     
+    let hasLeadingCr = false;
+    if (str.startsWith('\r')) {
+      hasLeadingCr = true;
+    }
+    
     const chars: string[] = [];
     let cursor = 0;
     
@@ -65,7 +70,7 @@ export class StreamManager {
       }
     }
     
-    return chars.join('') + (hasTrailingCr ? '\r' : '');
+    return (hasLeadingCr ? '\r' : '') + chars.join('') + (hasTrailingCr ? '\r' : '');
   }
 
   public processChunk(isErr: boolean, data: string): string {
@@ -91,6 +96,14 @@ export class StreamManager {
         // eslint-disable-next-line no-control-regex
         const isComplete = /^(?:[\u001b\u009b]\[|\u009b)[()#;?]*[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/.test(potentialSeq);
         if (!isComplete && potentialSeq.length < 50) {
+          safeStr = buffer.substring(0, lastEscapeIdx);
+          if (isErr) this.stderrAnsiBuffer = potentialSeq; else this.stdoutAnsiBuffer = potentialSeq;
+        } else {
+          if (isErr) this.stderrAnsiBuffer = ''; else this.stdoutAnsiBuffer = '';
+        }
+      } else if (/^[\u001b\u009b][PX^_]/.test(potentialSeq)) {
+        const isComplete = /^[\u001b\u009b][PX^_].*?(?:\x1b\\|\x07)/s.test(potentialSeq);
+        if (!isComplete && potentialSeq.length < 2048) {
           safeStr = buffer.substring(0, lastEscapeIdx);
           if (isErr) this.stderrAnsiBuffer = potentialSeq; else this.stdoutAnsiBuffer = potentialSeq;
         } else {

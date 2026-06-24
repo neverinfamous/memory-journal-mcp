@@ -239,7 +239,7 @@ export class IOController {
     this.streamManager.addLength(isErr, str.length);
     
     const fileForStream = isErr ? this.payload.stderrFile : this.payload.stdoutFile;
-    const defaultMaxBuffer = fileForStream ? 1024 * 1024 * 1024 : 10 * 1024 * 1024;
+    const defaultMaxBuffer = fileForStream ? 1024 * 1024 * 1024 : (this.payload.truncateOutputLength ? Infinity : 10 * 1024 * 1024);
     const maxBuffer = this.payload.maxBuffer ?? defaultMaxBuffer;
     
     if (this.streamManager.getLength(isErr) > maxBuffer) {

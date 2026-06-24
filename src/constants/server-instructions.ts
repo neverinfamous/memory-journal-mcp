@@ -97,6 +97,7 @@ Globals: \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`del
 Positional: \`create("note")\`, \`searchEntries("performance")\`
 Aliases: Common parameter names are auto-corrected (\`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`q\`/\`search\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`team\`/\`project\`→\`workspace_id\`/\`project_number\`).
 Discovery: \`mj.help()\` → \`{groups, totalMethods}\`. \`mj.core.help()\` for group-specific.
+Anti-Hallucination: DO NOT invoke \`mj_execute_code\` with an empty \`code\` payload to "list tools". You must provide valid JavaScript in the \`code\` parameter.
 Sandbox: No network access (\`fetch\` is undefined). \`setTimeout\` and \`sleep(ms)\` are available for minor delays.
 Readonly: Pass \`readonly: true\` to \`mj_execute_code\` to restrict execution to read-only operations.
 Read \`memory://help/codemode\` for full namespace table, examples, and patterns.

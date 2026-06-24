@@ -63,6 +63,9 @@ Used for executing raw code snippets dynamically.
 }
 ```
 
+### Note on Templates (`integrationContext`)
+If an `integrationContext` object is provided in the payload, you may use template string substitution (e.g. `{{integrationContext.slackToken}}`) across the `args`, `env`, and `templateOverride` properties. This simplifies injection of dynamic credentials and external configuration strings.
+
 ## 🛠️ Handling Autonomous Healing Hints
 
 When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` had to automatically intercept your command to prevent execution failure (e.g., blocking an interactive prompt, stripping a hanging flag).

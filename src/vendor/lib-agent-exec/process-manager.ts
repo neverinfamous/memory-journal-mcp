@@ -85,7 +85,7 @@ export function killProcessTree(child: ChildProcess) {
         try {
           process.kill(-child.pid!, 'SIGKILL');
         } catch { /* ignore */ }
-      }, 50).unref();
+      }, 5000).unref();
     } catch {
       // Fallback if process group killing fails
       try {

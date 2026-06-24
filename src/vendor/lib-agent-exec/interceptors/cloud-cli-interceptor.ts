@@ -17,8 +17,8 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
 
   const trackerCmds = ['jira', 'jira.exe', 'jira.cmd', 'linear', 'linear.exe', 'linear.cmd', 'slack', 'slack.exe', 'slack.cmd'];
   if (trackerCmds.includes(cmdBasename)) {
-    if (args.includes('login') || args.includes('auth')) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename} login/auth' is interactive. Blocking execution.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    if ((args.includes('login') || args.includes('auth')) && !args.includes('--token')) {
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename} login/auth' is interactive. Blocking execution. Use '--token' to bypass.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     }
   }

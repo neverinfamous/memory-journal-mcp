@@ -41,7 +41,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .string()
         .optional()
         .describe(
-            'The JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access. Anti-Hallucination Hint: Introspect groups (e.g. `Object.keys(mj.team)`) or inspect returned data structures (`return res[0]`) instead of guessing method names or schemas.'
+            'The JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access. Anti-Hallucination Hint: DO NOT call with an empty payload `{}` to "list tools" or introspect. If you want to see available tools, read the `memory://help` resource instead. Introspect groups (e.g. `Object.keys(mj.team)`) or inspect returned data structures (`return res[0]`) instead of guessing method names or schemas.'
         ),
     auto_version: z
         .boolean()

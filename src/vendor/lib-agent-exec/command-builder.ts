@@ -87,6 +87,13 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     if (payload.args) {
       payload.args = payload.args.map(a => typeof a === 'string' ? replaceTemplates(a) : a);
     }
+    if (payload.env) {
+      const newEnv: Record<string, string> = {};
+      for (const [k, v] of Object.entries(payload.env)) {
+        newEnv[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
+      }
+      payload.env = newEnv;
+    }
   }
   
   if (payload.type === 'command') {
@@ -197,7 +204,8 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
         } else {
           codeToExecute = `${payload.templateOverride}\n${payload.code}`;
         }
-      } else if (ext === '.ps1') {
+      }
+      if (ext === '.ps1') {
         codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
       }
       fs.writeFileSync(tempScriptPath, codeToExecute, 'utf-8');
@@ -358,14 +366,14 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
 
     const wslArgs = args.map(arg => {
-      if (/^[a-zA-Z]:[/\\]/.test(arg)) {
+      if (/[a-zA-Z]:[/\\]/.test(arg)) {
         return convertToWslPath(arg);
       }
       return arg;
     });
 
     let wslCmd = cmd;
-    if (/^[a-zA-Z]:[/\\]/.test(wslCmd)) {
+    if (/[a-zA-Z]:[/\\]/.test(wslCmd)) {
       wslCmd = convertToWslPath(wslCmd);
     } else if (wslCmd === 'python') {
       wslCmd = 'python3';
