@@ -7,8 +7,8 @@ export default defineConfig({
         environment: 'node',
         env: {
             TEAM_AUTHOR: 'test-author',
-            DB_PATH: './.test-output/vitest/memory_journal.db',
-            TEAM_DB_PATH: './.test-output/vitest/team_memory_journal.db',
+            DB_PATH: ':memory:',
+            TEAM_DB_PATH: ':memory:',
         },
         globalSetup: ['./tests/global-teardown.ts'],
         include: ['tests/**/*.test.ts'],
