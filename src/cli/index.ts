@@ -1,108 +1,56 @@
 #!/usr/bin/env node
-import { logger } from '../utils/logger.js'
-import { createServer } from '../server/mcp-server/index.js'
-import { ConfigResolver } from '../utils/config-resolver.js'
-import { createProgram } from './program-options.js'
-import { buildServerOptions } from './server-options-builder.js'
+import { createProgram, addServerOptions } from './program-options.js'
+import { serveAction } from './commands/serve.js'
+import { execAction } from './commands/exec.js'
+import { backupAction, restoreAction, vacuumAction, pruneAction } from './commands/admin.js'
 
 const program = createProgram()
 
-program.action(async (options: Record<string, unknown>, command: typeof program) => {
-    let resolver: ConfigResolver
-    const configPath =
-        (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const configErrors: string[] = []
+// Setup default 'serve' command
+const serveCmd = program
+    .command('serve', { isDefault: true })
+    .description('Start the Memory Journal MCP Server')
 
-    try {
-        resolver = new ConfigResolver(command, options, configPath)
-    } catch (err) {
-        configErrors.push(err instanceof Error ? err.message : String(err))
-        // We cannot continue without a resolver, so create a dummy one that just returns defaults
-        resolver = new ConfigResolver(command, {}, undefined)
-    }
+addServerOptions(serveCmd)
+serveCmd.action(serveAction)
 
-    // Set log level early
-    let logLevel = 'info'
-    try {
-        logLevel = resolver.resolve<string>('logLevel', 'LOG_LEVEL') ?? 'info'
-    } catch (e) {
-        configErrors.push(e instanceof Error ? e.message : String(e))
-    }
-    
-    if (options['dumpConfig'] !== true) {
-        logger.setLevel(logLevel as 'debug' | 'info' | 'warning' | 'error')
-    }
+// Setup 'exec' command
+const execCmd = program
+    .command('exec <file>')
+    .description('Execute a Code Mode script locally without starting a server')
+addServerOptions(execCmd)
+execCmd.action(execAction)
 
-    // Validate against default placeholder secrets
-    const sensitiveEnvVars = ['GITHUB_TOKEN', 'MCP_AUTH_TOKEN', 'OAUTH_ISSUER', 'OAUTH_JWKS_URI']
-    for (const envVar of sensitiveEnvVars) {
-        const envValue = process.env[envVar]
-        if (typeof envValue === 'string' && envValue.startsWith('CHANGEME_')) {
-            configErrors.push(
-                `FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`
-            )
-        }
-    }
+// Setup 'admin' command group
+const adminCmd = program
+    .command('admin')
+    .description('Database administration utilities')
 
-    const { serverOptions, transport, db, teamDb, host } = buildServerOptions(
-        resolver,
-        options,
-        command,
-        configErrors
-    )
+adminCmd
+    .command('backup')
+    .description('Export the database to a timestamped backup file')
+    .option('--dest <path>', 'Destination path or filename for the backup')
+    .action(backupAction)
 
-    if (configErrors.length > 0) {
-        process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exit(1)
-    }
+adminCmd
+    .command('restore <file>')
+    .description('Restore the database from a backup file')
+    .action(restoreAction)
 
-    if (options['dumpConfig'] === true) {
-        const redactedOptions = JSON.parse(JSON.stringify(serverOptions)) as Record<
-            string,
-            unknown
-        >
-        const maskSensitive = (obj: Record<string, unknown>): void => {
-            for (const key of Object.keys(obj)) {
-                const lowerKey = key.toLowerCase()
-                if (
-                    typeof obj[key] === 'string' &&
-                    (lowerKey.includes('token') ||
-                        lowerKey.includes('secret') ||
-                        lowerKey.includes('issuer') ||
-                        lowerKey.includes('uri') ||
-                        lowerKey.includes('password') ||
-                        lowerKey.includes('key'))
-                ) {
-                    obj[key] = '[REDACTED]'
-                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                    maskSensitive(obj[key] as Record<string, unknown>)
-                }
-            }
-        }
-        maskSensitive(redactedOptions)
-        process.stdout.write(JSON.stringify(redactedOptions, null, 2) + '\n')
-        process.exit(0)
-    }
+adminCmd
+    .command('vacuum')
+    .description('Optimize database query planner and flush WAL')
+    .action(vacuumAction)
 
-    logger.info('Starting Memory Journal MCP Server', {
-        module: 'CLI',
-        transport,
-        stateless: serverOptions.statelessHttp,
-        db,
-        ...(teamDb ? { teamDb } : {}),
-        ...(host ? { host } : {}),
-    })
-
-    try {
-        await createServer(serverOptions)
-    } catch (error) {
-        logger.error('Failed to start server', {
-            module: 'CLI',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        process.exit(1)
-    }
-})
+adminCmd
+    .command('prune')
+    .description('Run autonomous database pruning')
+    .option('--archive-older-than-days <days>', 'Archive entries older than N days')
+    .option('--prune-older-than-days <days>', 'Soft-delete entries older than N days')
+    .option('--hard-delete-older-than-days <days>', 'Permanently delete soft-deleted entries older than N days')
+    .option('--importance-threshold <score>', 'Score below which entries are pruned (default 0.15)')
+    .option('--dry-run', 'Log candidates without modifying the database')
+    .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
+    .action(pruneAction)
 
 program.parse()

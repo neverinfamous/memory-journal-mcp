@@ -12,6 +12,12 @@ export function createProgram(): Command {
         .name('memory-journal-mcp')
         .description('Project context management for AI-assisted development')
         .version(VERSION)
+
+    return program
+}
+
+export function addServerOptions(command: Command): Command {
+    command
         .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
         .option('--port <number>', 'HTTP port (for http transport)', '3000')
         .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost) (env: MCP_HOST)')
@@ -252,5 +258,5 @@ export function createProgram(): Command {
         .option('--config <path>', 'Path to configuration file (.yaml, .yml, .json) (env: MEMORY_JOURNAL_CONFIG)')
         .option('--dump-config', 'Print effective configuration and exit')
 
-    return program
+    return command
 }
