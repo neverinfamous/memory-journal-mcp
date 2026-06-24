@@ -33,7 +33,7 @@ Only help resources for your enabled tool groups are registered.
 ## Essential Operations
 
 - **Creating Entries:** Use the `memory-journal-mcp entry create` terminal command (or append `--team`). ALL entries MUST define `--impact-score`, `--trust-score`, and `--validation-status`. See `memory://help/core` for criteria.
-- **Session Summaries:** Use `memory-journal-mcp entry create` with `--type retrospective` and `--tags session-summary`. See `memory://help/templates` for the exact 4-section format required.
+- **Session Summaries:** Use `memory-journal-mcp entry create` with `--type retrospective` and `--tags session-summary`. You MUST provide the markdown content via `--content "<string>"` or `--file <path>` (or pipe to stdin). See `memory://help/templates` for the exact 4-section format required.
 - **Updating/Deleting:** Use `memory-journal-mcp entry update` (pass `--expected-version` to prevent concurrent overwrites) and use the `delete_entry` MCP tool for soft-deletes.
 - **Searching:** Use `search_entries` or `search_by_date_range`. Use `sort_by: "importance"` to surface structurally significant entries. Use phrase matching (e.g. `"error handling"`) for exact matches.
 - **Team DB:** Append the `--team` flag to your CLI commands for shared state. Use `team_*` MCP tools ONLY for searches or deletes. See `memory://help/team` for RBAC rules. Do NOT create bulk relationships between unrelated entries that happen to share tags.

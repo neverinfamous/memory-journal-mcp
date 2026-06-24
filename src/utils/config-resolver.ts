@@ -21,7 +21,39 @@ export class ConfigResolver {
         private cliOptions: Record<string, unknown>,
         configPathOverride?: string
     ) {
+        this.loadEnvFiles()
         this.loadConfigFile(configPathOverride)
+    }
+
+    private loadEnvFiles(): void {
+        const envPaths = [
+            path.resolve(process.cwd(), '.env'),
+            path.resolve(process.cwd(), 'secrets.env')
+        ]
+        
+        const loadedKeys = new Set<string>()
+
+        for (const filePath of envPaths) {
+            if (!fs.existsSync(filePath)) continue
+            
+            const content = fs.readFileSync(filePath, 'utf-8')
+            for (const line of content.split('\n')) {
+                const trimmed = line.trim()
+                if (trimmed && !trimmed.startsWith('#')) {
+                    const idx = trimmed.indexOf('=')
+                    if (idx > 0) {
+                        const key = trimmed.slice(0, idx).trim()
+                        const val = trimmed.slice(idx + 1).trim()
+                        // Only set if not already in env OR if we loaded it ourselves from this run
+                        if (!(key in process.env) || loadedKeys.has(key)) {
+                            // Strip surrounding quotes
+                            process.env[key] = val.replace(/^["'](.*)["']$/, '$1')
+                            loadedKeys.add(key)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private loadConfigFile(configPathOverride?: string): void {

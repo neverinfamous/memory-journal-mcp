@@ -149,7 +149,7 @@ describe('Prompt Handlers', () => {
             expect(result.messages.length).toBeGreaterThan(0)
             const text = (result.messages[0]?.content as { text: string }).text
             expect(text).toContain('Team test entry')
-            expect(text).toContain('team_create_entry')
+            expect(text).toContain('memory-journal-mcp entry create --team')
         })
 
         it('should throw ConfigurationError if teamDb is omitted for team-session-summary', async () => {

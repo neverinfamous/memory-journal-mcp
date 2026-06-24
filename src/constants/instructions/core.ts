@@ -3,7 +3,7 @@ export const CORE_HELP = `# Core Operations
 
 ### Session Summaries
 
-Use the \`memory-journal-mcp entry create\` terminal command to record session summaries. Required fields:
+Use the \`memory-journal-mcp entry create\` terminal command to record session summaries. You MUST provide the markdown content via \`--content "<string>"\` or \`--file <path>\` (or pipe to stdin). Required fields:
 
 - \`--type retrospective\`
 - \`--tags session-summary\` (plus relevant domain/activity tags, comma-separated)

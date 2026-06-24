@@ -40,7 +40,7 @@ async function getDb(options: Record<string, unknown>, command: Command): Promis
     return db
 }
 
-function parseContent(options: Record<string, unknown>): string {
+async function parseContent(options: Record<string, unknown>): Promise<string> {
     const file = options['file'] as string | undefined
     const contentStr = options['content'] as string | undefined
 
@@ -51,7 +51,17 @@ function parseContent(options: Record<string, unknown>): string {
         return contentStr
     }
 
-    process.stderr.write('Error: Must provide either --file or --content\n')
+    if (!process.stdin.isTTY) {
+        let stdinStr = ''
+        for await (const chunk of process.stdin) {
+            stdinStr += chunk
+        }
+        if (stdinStr.trim().length > 0) {
+            return stdinStr
+        }
+    }
+
+    process.stderr.write('Error: Must provide either --file, --content, or pipe data to stdin\n')
     process.exit(1)
 }
 
@@ -60,11 +70,27 @@ function parseRelatedTo(relatedToStr: unknown): number[] {
     return relatedToStr.split(',').map((s) => s.trim()).filter(Boolean).map(Number)
 }
 
+function parseRelationships(relationshipsStr: unknown): { target_id: number, relation_type: string }[] {
+    if (typeof relationshipsStr !== 'string') return []
+    try {
+        const parsed = JSON.parse(relationshipsStr)
+        if (Array.isArray(parsed)) {
+            return parsed.map((r: any) => ({
+                target_id: Number(r.target_id),
+                relation_type: String(r.relation_type)
+            })).filter(r => !isNaN(r.target_id) && r.relation_type)
+        }
+    } catch (e) {
+        process.stderr.write(`Warning: Failed to parse --relationships JSON: ${e instanceof Error ? e.message : String(e)}\n`)
+    }
+    return []
+}
+
 export async function createEntryAction(options: Record<string, unknown>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
 
     try {
-        const content = parseContent(options)
+        const content = await parseContent(options)
         
         const tagsStr = options['tags'] as string | undefined
         const tags = tagsStr !== undefined ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : undefined
@@ -94,6 +120,11 @@ export async function createEntryAction(options: Record<string, unknown>, comman
             db.linkEntries(newEntry.id, targetId, 'references')
         }
 
+        const relationships = parseRelationships(options['relationships'])
+        for (const rel of relationships) {
+            db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as any)
+        }
+
         db.flushSave()
         process.stdout.write(`Successfully created entry #${newEntry.id}\n`)
     } catch (e) {
@@ -120,9 +151,25 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
             process.exit(1)
         }
 
-        const content = parseContent(options)
+        const content = await parseContent(options)
         
-        const result = db.updateEntry(entryId, { content, expectedVersion: version })
+        const tagsStr = options['tags'] as string | undefined
+        const tags = tagsStr !== undefined ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : undefined
+        const projectNumber = options['project'] !== undefined ? Number(options['project']) : undefined
+        const trustScore = options['trustScore'] !== undefined ? Number(options['trustScore']) : undefined
+        const impactScore = options['impactScore'] !== undefined ? Number(options['impactScore']) : undefined
+        
+        const updates: any = { content, expectedVersion: version }
+        if (options['type'] !== undefined) updates.entryType = options['type']
+        if (tags !== undefined) updates.tags = tags
+        if (projectNumber !== undefined) updates.projectNumber = projectNumber
+        if (trustScore !== undefined) updates.trustScore = trustScore
+        if (impactScore !== undefined) updates.impactScore = impactScore
+        if (options['validationStatus'] !== undefined) updates.validationStatus = options['validationStatus']
+        if (options['sessionId'] !== undefined) updates.sessionId = options['sessionId']
+        if (options['autoContext'] !== undefined) updates.autoContext = options['autoContext']
+
+        const result = db.updateEntry(entryId, updates)
         
         if (result === null) {
              process.stderr.write(`Error: Entry #${entryId} not found or version mismatch.\n`)
@@ -132,6 +179,11 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
         const relatedIds = parseRelatedTo(options['relatedTo'])
         for (const targetId of relatedIds) {
             db.linkEntries(entryId, targetId, 'references')
+        }
+
+        const relationships = parseRelationships(options['relationships'])
+        for (const rel of relationships) {
+            db.linkEntries(entryId, rel.target_id, rel.relation_type as any)
         }
 
         db.flushSave()

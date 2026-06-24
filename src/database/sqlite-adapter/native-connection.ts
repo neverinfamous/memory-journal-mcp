@@ -39,8 +39,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
             const db = this.db
 
             // Decrypt if key is provided (must be done before any other PRAGMAs or queries)
-            if (process.env['DB_ENCRYPTION_KEY']) {
-                const key = process.env['DB_ENCRYPTION_KEY']
+            const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+            if (rawKey) {
+                const key = rawKey
                 if (key.startsWith("x'") && key.endsWith("'")) {
                     // Raw hex keys must not be wrapped in additional single quotes
                     db.pragma(`key = "${key}"`)
