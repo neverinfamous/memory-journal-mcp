@@ -32,9 +32,9 @@ COPY src/ ./src/
 RUN pnpm run build
 
 # Compile sqlite-vec native extension from source for Alpine (musl libc)
-# We use v0.1.7-alpha.2 to match the package.json version
-RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.7-alpha.2.tar.gz | tar -xz && \
-    cd sqlite-vec-0.1.7-alpha.2 && \
+# We use v0.1.9 to match the package.json version
+RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.9.tar.gz | tar -xz && \
+    cd sqlite-vec-0.1.9 && \
     sed -i 's/typedef u_int8_t uint8_t;//g' sqlite-vec.c && \
     sed -i 's/typedef u_int16_t uint16_t;//g' sqlite-vec.c && \
     sed -i 's/typedef u_int32_t uint32_t;//g' sqlite-vec.c && \
@@ -42,7 +42,7 @@ RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.7-alpha.
     make loadable && \
     cp dist/vec0.so /app/vec0.so && \
     cd .. && \
-    rm -rf sqlite-vec-0.1.7-alpha.2
+    rm -rf sqlite-vec-0.1.9
 
 # Install production-only dependencies in a separate directory for clean copy
 RUN mkdir /app/prod_modules && \
