@@ -45,6 +45,7 @@ export const entrySchema = z.object({
     significance: z.string().optional(),
     impact: z.union([z.number(), z.string()]).optional(),
     trust: z.union([z.number(), z.string()]).optional(),
+    confidence: z.union([z.number(), z.string()]).optional(),
     validation: z.string().optional(),
     customTrailers: z.record(z.string(), z.array(z.string())).optional(),
   }).optional(),

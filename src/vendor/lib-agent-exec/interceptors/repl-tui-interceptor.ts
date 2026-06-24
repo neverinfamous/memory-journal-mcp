@@ -91,6 +91,11 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     }
   }
 
+  if (['tail', 'tail.exe'].includes(cmdBasename) && (args.includes('-f') || args.includes('--follow'))) {
+    console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    process.exit(1);
+  }
+
   if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmdBasename)) {
     envOverrides['POWERSHELL_TELEMETRY_OPTOUT'] = '1';
     envOverrides['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1';

@@ -455,6 +455,22 @@ export function parseGitRecord(
           }
         }
       }
+      else if (key === 'history-confidence' || key === 'changelog-confidence' || key === 'confidence') {
+        const v = val.trim().toLowerCase();
+        if (v === 'high') metadataObj.confidence = 0.8;
+        else if (v === 'medium') metadataObj.confidence = 0.5;
+        else if (v === 'low') metadataObj.confidence = 0.2;
+        else {
+          const vLower = val.trim().toLowerCase();
+          if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') continue;
+          const num = Number(val.trim());
+          if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
+            metadataObj.confidence = num;
+          } else if (val.trim() !== '') {
+            metadataObj.confidence = val;
+          }
+        }
+      }
       else if (key === 'history-trust' || key === 'changelog-trust' || key === 'trust') {
         const v = val.trim().toLowerCase();
         if (v === 'high') metadataObj.trust = 0.8;

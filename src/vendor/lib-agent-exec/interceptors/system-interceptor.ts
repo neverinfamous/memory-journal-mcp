@@ -4,7 +4,8 @@ import { ExecutionContext } from './types.js';
 export function systemInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
   const hasExactShellChars = args.some(a => exactShellChars.includes(a.trim()));
-  if (hasExactShellChars && payload.type === 'command') {
+  const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe'];
+  if (hasExactShellChars && payload.type === 'command' && !patternTools.includes(cmdBasename)) {
     console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings and will fail.`);
     console.error(`   To use shell features, please use a 'script' payload type or pipe natively in PowerShell.`);

@@ -9,9 +9,9 @@ By pairing this deterministic history model with a deterministic execution bridg
 The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leveraging `NUL` byte delimiting to perfectly parse complex repository states (e.g., file renames, carriage returns, spaces in file names) without string escaping flaws.
 
 1. **`git-runner.ts`**: The execution bridge. It directly interfaces with `git` and handles low-level NUL-byte parsing to extract raw metric data (additions, deletions, statuses). Accepts an optional `cwd` argument, allowing cross-repository and vendor execution contexts without pathing errors.
-2. **`parser.ts`**: The semantic engine. It batches commits and maps raw headers into structured conventional commit shapes. It natively parses `feat(scope)!`, `BREAKING CHANGE:` trailers, issue references, co-authors, and computes qualitative sizes (XS, S, M, L, XL).
+2. **`parser.ts`**: The semantic engine. It batches commits and maps raw headers into structured conventional commit shapes. It natively parses `feat(scope)!`, `BREAKING CHANGE:` trailers, issue references, co-authors, and computes qualitative sizes (XS, S, M, L, XL). **Crucially**, it natively parses custom `Confidence:` and `Significance:` (or Impact) trailers from commit messages into the `metadata` object to power downstream **Velocity Summaries** and health dashboards.
 3. **`schema.ts`**: The contract. Uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics). **Always consult this schema** if modifying the data returned by the parser.
-4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history.
+4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve the `metadata` attributes without the heavy patch/body diffs.
 
 ## 🧹 Scratch Workspace Protocol
 
