@@ -23,8 +23,9 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
        }
        const innerCmdStr = args[inlineIdx + 1];
        if (innerCmdStr) {
-           const stdToolsRegex = /(?:^|;|&&|\|\||\||\{|&)\s*(?:'|")?(git|docker|docker-compose|gh|npm|pnpm|yarn|bun|cargo|aws|gcloud|az|terraform|tofu|kubectl)(?:'|")?\b/i;
-           const match = stdToolsRegex.exec(innerCmdStr);
+           const strippedCmdStr = innerCmdStr.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
+           const stdToolsRegex = /(?:^|;|&&|\|\||\||\{|&)\s*(git|docker|docker-compose|gh|npm|pnpm|yarn|bun|cargo|aws|gcloud|az|terraform|tofu|kubectl|tail|watch|pm2|python|python3|node|journalctl|vi|vim|nvim|nano|top|htop|less|more|tmux|screen)\b/i;
+           const match = stdToolsRegex.exec(strippedCmdStr);
            if (match) {
                const innerCmdBasename = match[1].toLowerCase();
                console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline shell (${cmdBasename} ${args[inlineIdx]}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);

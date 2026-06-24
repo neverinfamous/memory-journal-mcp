@@ -49,6 +49,7 @@ export const entrySchema = z.object({
     validation: z.string().optional(),
     customTrailers: z.record(z.string(), z.array(z.string())).optional(),
   }).optional(),
+  trailers: z.record(z.string(), z.string()).optional(),
   patch: z.string().optional(),
   isPatchTruncated: z.boolean().optional(),
   references: z.array(z.string()).optional(),

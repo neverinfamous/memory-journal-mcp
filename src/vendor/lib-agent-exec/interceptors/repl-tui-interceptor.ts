@@ -125,6 +125,18 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
         return `'${a.replace(/'/g, "''")}'`;
       });
       const scriptBody = scriptArgs.length === 1 ? scriptArgs[0] : safeArgs.join(' ');
+      
+      const strippedScriptBody = scriptBody.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
+      const tuiReplRegex = new RegExp(`(?:^|;|&&|\\|\\||\\||\\{|&)\\s*(${[...replCommands, ...tuiCommands, 'tail', 'watch', 'journalctl'].join('|')})\\b`, 'i');
+      const match = tuiReplRegex.exec(strippedScriptBody);
+      if (match) {
+          const innerCmdBasename = match[1].toLowerCase();
+          console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline PowerShell script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+          console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
+          console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
+          process.exit(1);
+      }
+
       const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n` + scriptBody;
       const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
       args.splice(cIndex, args.length - cIndex, '-EncodedCommand', encoded);

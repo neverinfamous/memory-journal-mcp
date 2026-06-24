@@ -12,7 +12,7 @@ export type RawCommitBatchItem = {
   committerName: string; committerEmail: string; committerDate: string;
   subject: string; body: string; cleanSubject: string; type: string | undefined;
   scope: string | undefined; isBreaking: boolean; breakingChangeDescription: string | undefined; isRevert: boolean; revertedCommit: string | undefined;
-  rawFiles: Array<{ status: string; file: string; oldFile?: string; similarityScore?: number }>; metadataObj: Record<string, unknown>; references: string[];
+  rawFiles: Array<{ status: string; file: string; oldFile?: string; similarityScore?: number }>; metadataObj: Record<string, unknown>; trailersObj?: Record<string, string>; references: string[];
   coAuthors: string[]; reviewers: string[]; issuesMap: Map<string, string | null>;
 };
 
@@ -51,7 +51,7 @@ export async function processBatch(
   const maxFilesPerCommit = 100;
 
   for (const b of batch) {
-    const { sha, parents, refs, tags, authorName, authorEmail, committerName, committerEmail, committerDate, date, type, scope, isBreaking, breakingChangeDescription, cleanSubject, subject, rawFiles, metadataObj, references, coAuthors, reviewers, issuesMap, isRevert, revertedCommit } = b;
+    const { sha, parents, refs, tags, authorName, authorEmail, committerName, committerEmail, committerDate, date, type, scope, isBreaking, breakingChangeDescription, cleanSubject, subject, rawFiles, metadataObj, trailersObj, references, coAuthors, reviewers, issuesMap, isRevert, revertedCommit } = b;
     let body = b.body;
 
     const parsedFiles: z.infer<typeof fileStatusSchema>[] = [];
@@ -150,6 +150,7 @@ export async function processBatch(
     if (references.length > 0) entryObj.references = references;
     if (coAuthors.length > 0) entryObj.coAuthors = coAuthors;
     if (reviewers.length > 0) entryObj.reviewers = reviewers;
+    if (trailersObj && Object.keys(trailersObj).length > 0) entryObj.trailers = trailersObj;
 
     if (isRevert) entryObj.isRevert = true;
     if (revertedCommit) entryObj.revertedCommit = revertedCommit;
@@ -402,6 +403,7 @@ export function parseGitRecord(
   const reviewers: string[] = [];
   const metadataObj: Record<string, unknown> = Object.create(null);
   const customTrailers: Record<string, string[]> = Object.create(null);
+  const trailersObj: Record<string, string> = Object.create(null);
 
   if (rawTrailers) {
     const trailerList = rawTrailers.split('\x1C').filter(Boolean);
@@ -412,6 +414,8 @@ export function parseGitRecord(
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
       const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
       let val = rawVal.replace(/\r?\n[ \t]+/g, '\n');
+      
+      trailersObj[keyRaw] = val;
       
       if (val.length > 5000) {
         let safeLen = 5000;
@@ -573,6 +577,6 @@ export function parseGitRecord(
     isBreaking, isRevert, 
     revertedCommit: revertedCommit ? (' ' + revertedCommit).slice(1) : undefined, 
     breakingChangeDescription: breakingChangeDescription ? (' ' + breakingChangeDescription).slice(1) : undefined,
-    rawFiles, metadataObj, references, coAuthors, reviewers, issuesMap
+    rawFiles, metadataObj, trailersObj, references, coAuthors, reviewers, issuesMap
   };
 }
