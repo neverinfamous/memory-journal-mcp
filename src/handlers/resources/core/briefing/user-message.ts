@@ -361,7 +361,20 @@ export function formatUserMessage(opts: {
         const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
         const shortCommits = opts.gitHistory.commits.map(c => {
             const shaText = c.isPushed && repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
-            return `${shaText} (${escapeCell(c.message)})`;
+            
+            const metaParts: string[] = [];
+            if (c.type) metaParts.push(c.type);
+            if (c.size) metaParts.push(c.size);
+            if (c.significance !== undefined) metaParts.push(`Sig:${c.significance}`);
+            if (c.confidence !== undefined) metaParts.push(`Conf:${c.confidence}`);
+            if (c.isBreaking) metaParts.push('🚨');
+            
+            const metaStr = metaParts.length > 0 ? ` [${metaParts.join('|')}]` : '';
+            const issuesStr = c.associatedIssues && c.associatedIssues.length > 0 
+                ? ` (${c.associatedIssues.map(i => escapeCell(i)).join(', ')})`
+                : '';
+                
+            return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}`;
         }).join('<br>');
         gitHistoryLines.push(`**Recent Commits:**<br>${shortCommits}`);
     }

@@ -13,6 +13,7 @@
 import * as fs from 'node:fs'
 
 import * as path from 'node:path'
+import { z } from 'zod'
 
 import { VERSION } from '../../../../version.js'
 import { getAllToolNames } from '../../../../filtering/tool-filter.js'
@@ -28,7 +29,17 @@ import type { BriefingConfig } from '../../shared.js'
 // ============================================================================
 
 export interface GitHistorySummary {
-    commits: { hash: string; category?: string; entry?: string; message: string; isPushed?: boolean }[]
+    commits: { 
+        hash: string; 
+        type?: string;
+        size?: string;
+        significance?: number | string;
+        confidence?: number | string;
+        isBreaking?: boolean;
+        message: string; 
+        isPushed?: boolean;
+        associatedIssues?: string[];
+    }[]
 }
 
 export interface TestHealth {
@@ -135,7 +146,33 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
     if (existing !== undefined) return existing
 
     try {
-        const out = execFileSync('git', ['log', '-n', String(Math.max(1, Math.min(50, commitCount))), '--pretty=format:%H%x09%s'], { cwd: root, encoding: 'utf-8', windowsHide: true })
+        const out = execFileSync('bun', [
+            'C:\\Users\\chris\\Desktop\\adamic\\.agents\\scripts\\get-git-history-json.ts',
+            '--limit', String(Math.max(1, Math.min(50, commitCount))),
+            '--summary'
+        ], { cwd: root, encoding: 'utf-8', windowsHide: true })
+        
+        const parsedData = JSON.parse(out) as unknown
+        
+        const gitHistorySchema = z.object({
+            commits: z.array(z.object({
+                commit: z.string().optional(),
+                type: z.string().optional(),
+                size: z.string().optional(),
+                isBreaking: z.boolean().optional(),
+                subject: z.string().optional(),
+                metadata: z.object({
+                    significance: z.union([z.number(), z.string()]).optional(),
+                    confidence: z.union([z.number(), z.string()]).optional(),
+                    trust: z.union([z.number(), z.string()]).optional()
+                }).optional(),
+                associatedIssues: z.array(z.object({
+                    issue: z.string()
+                })).optional()
+            }).loose()).optional()
+        }).loose()
+        
+        const parsed = gitHistorySchema.parse(parsedData)
         
         const unpushedHashes = new Set<string>()
         try {
@@ -145,22 +182,28 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
             // Ignore if no upstream tracking branch
         }
 
-        const lines = out.split('\n').filter(Boolean)
-        const commits: GitHistorySummary['commits'] = lines.map(l => {
-            const [hash, msg] = l.split('\t')
-            const fullHash = hash || ''
-            return { 
-                hash: fullHash.substring(0, 7), 
-                message: msg || '',
-                isPushed: !unpushedHashes.has(fullHash)
+        const commits: GitHistorySummary['commits'] = (parsed.commits ?? []).map(c => {
+            const fullHash = c.commit ?? ''
+            const issues = c.associatedIssues ? c.associatedIssues.map(i => i.issue) : []
+            return {
+                hash: fullHash.substring(0, 7),
+                type: c.type,
+                size: c.size,
+                significance: c.metadata?.significance,
+                confidence: c.metadata?.confidence ?? c.metadata?.trust,
+                isBreaking: !!c.isBreaking,
+                message: c.subject ?? '',
+                isPushed: !unpushedHashes.has(fullHash),
+                associatedIssues: issues.length > 0 ? issues : undefined
             }
         })
         const result = { commits }
         cachedGitHistory.set(root, result)
-    } catch {
+    } catch (err: unknown) {
         logger.debug('Failed to get git history via child_process (non-critical)', {
             module: 'BRIEFING',
             operation: 'git-history',
+            error: err instanceof Error ? err.message : String(err)
         })
         cachedGitHistory.set(root, null)
     }
