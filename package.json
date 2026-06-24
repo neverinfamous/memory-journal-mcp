@@ -20,6 +20,7 @@
         "lint:fix": "eslint src/ tests/ --fix && tsx scripts/run-checks.ts lint",
         "typecheck": "tsx scripts/run-checks.ts typecheck",
         "generate:code-map": "tsx scripts/update-code-map.ts",
+        "generate:instructions": "tsx scripts/generate-instructions.ts",
         "check": "tsx scripts/run-checks.ts && pnpm run test && pnpm run test:e2e",
         "test": "vitest run",
         "test:watch": "vitest",

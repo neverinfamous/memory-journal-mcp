@@ -1,2 +1,2 @@
 export const SEARCH_HELP = `# Search Operations
-- **Workspace Filtering**: All search and listing operations filter by \`workspace_id\` if configured. You can query across workspaces by explicitly omitting the workspace or passing an asterisk/wildcard if supported.`;
+- **Workspace Filtering**: All search and listing operations filter by \\\`workspace_id\\\` if configured. You can query across workspaces by explicitly omitting the workspace or passing an asterisk/wildcard if supported.`;
