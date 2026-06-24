@@ -413,16 +413,22 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `adversarial-audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
 | `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
+| `code-review-prep` | Prepare a code review checklist and focus areas for a PR |
 | `commit` | High-integrity procedure for committing code changes with validation gates |
 | `create-entry` | Create a structured mid-thread journal entry |
 | `create-team-entry` | Create a structured mid-thread team journal entry |
+| `flag-dashboard` | Dashboard overview of all active flags (blockers, critical, warnings) |
 | `goal-tracker` | Milestone and achievement tracking |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
 | `mcp-heal` | Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM ... |
 | `optimize-journal` | Guided database pruning and optimization workflow with live metrics |
 | `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
+| `pr-retrospective` | Conduct a retrospective analysis on a completed pull request |
+| `pr-summary` | Generate an executive summary of a pull request |
 | `prepare-retro` | Prepare a sprint retrospective (What went well, What could improve, Action items... |
 | `prepare-standup` | Prepare a daily standup summary (Yesterday, Today, Blockers) |
+| `project-milestone-tracker` | Track progress against a specific project milestone |
+| `project-status-summary` | Generate a comprehensive status summary for a GitHub project |
 | `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `session-summary` | Create a formatted session summary entry |
 | `team-session-summary` | Create a formatted team session summary entry |
