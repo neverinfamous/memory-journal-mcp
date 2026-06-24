@@ -2,9 +2,9 @@ export const TEMPLATES_HELP = `# Content Templates
 
 These templates define the REQUIRED structure for journal entry content by type. Do NOT invent additional top-level sections. Do NOT omit required sections.
 
-## Session Summary (entry\\\\_type: "retrospective", tag: "session-summary")
+## Session Summary (entry\\_type: "retrospective", tag: "session-summary")
 
-\\\`\\\`\\\`
+\`\`\`
 ## Accomplished
 - [Concrete item: what was done, key files/PRs/entry IDs]
 - [Another concrete item]
@@ -17,15 +17,15 @@ These templates define the REQUIRED structure for journal entry content by type.
 
 ## Context for Next Session
 - [Key context the next agent/session needs: branch names, PR numbers, entry IDs, pending decisions]
-\\\`\\\`\\\`
+\`\`\`
 
 Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes").
 Do NOT omit any of the four required sections.
-Always remember to populate the \\\`auto_context\\\` payload parameter with the session's commit SHAs.
+Always remember to populate the \`auto_context\` payload parameter with the session's commit SHAs.
 
-## Feature Implementation (entry\\\\_type: "feature\\\\_implementation")
+## Feature Implementation (entry\\_type: "feature\\_implementation")
 
-\\\`\\\`\\\`
+\`\`\`
 ## Summary
 [1-2 sentence description of the feature]
 
@@ -37,11 +37,11 @@ Always remember to populate the \\\`auto_context\\\` payload parameter with the 
 
 ## Notes
 - [Any gotchas, follow-ups, or related entries]
-\\\`\\\`\\\`
+\`\`\`
 
-## Bug Fix (entry\\\\_type: "bug\\\\_fix")
+## Bug Fix (entry\\_type: "bug\\_fix")
 
-\\\`\\\`\\\`
+\`\`\`
 ## Problem
 [What was broken and how it manifested]
 
@@ -53,11 +53,11 @@ Always remember to populate the \\\`auto_context\\\` payload parameter with the 
 
 ## Verification
 - [How the fix was verified]
-\\\`\\\`\\\`
+\`\`\`
 
-## Planning (entry\\\\_type: "planning")
+## Planning (entry\\_type: "planning")
 
-\\\`\\\`\\\`
+\`\`\`
 ## Goal
 [What this plan aims to achieve]
 
@@ -66,11 +66,11 @@ Always remember to populate the \\\`auto_context\\\` payload parameter with the 
 
 ## Open Questions
 - [Unresolved decisions or dependencies]
-\\\`\\\`\\\`
+\`\`\`
 
-## Technical Note (entry\\\\_type: "technical\\\\_note")
+## Technical Note (entry\\_type: "technical\\_note")
 
-\\\`\\\`\\\`
+\`\`\`
 ## Topic
 [What this note documents]
 
@@ -79,11 +79,11 @@ Always remember to populate the \\\`auto_context\\\` payload parameter with the 
 
 ## References
 - [Related entries, docs, or external links]
-\\\`\\\`\\\`
+\`\`\`
 
 ## General Rule
 
 For any entry type not listed above, structure content with:
-1. A clear \\\`##\\\` heading describing the main topic
+1. A clear \`##\` heading describing the main topic
 2. Bullet points for discrete items
 3. No invented sections beyond what the content actually covers`;
