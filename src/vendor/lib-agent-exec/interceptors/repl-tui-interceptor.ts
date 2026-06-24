@@ -12,7 +12,8 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     'ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe', 'openssl', 'openssl.exe'
   ];
 
-  const tuiCommands = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted'];
+  const baseTui = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted'];
+  const tuiCommands = [...baseTui, ...baseTui.map(c => `${c}.exe`)];
 
   if (replCommands.includes(cmdBasename) && payload.type === 'command' && !payload.stdin) {
     const explicitlyInteractive = args.includes('-i') || args.includes('--interactive') || (cmdBasename === 'php' && args.includes('-a'));
@@ -126,9 +127,14 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       });
       const scriptBody = scriptArgs.length === 1 ? scriptArgs[0] : safeArgs.join(' ');
       
-      const strippedScriptBody = scriptBody.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
-      const tuiReplRegex = new RegExp(`(?:^|;|&&|\\|\\||\\||\\{|&)\\s*(${[...replCommands, ...tuiCommands, 'tail', 'watch', 'journalctl'].join('|')})\\b`, 'i');
-      const match = tuiReplRegex.exec(strippedScriptBody);
+      const unquotedBody = scriptBody.replace(/^['"]|['"]$/g, '').trim();
+      const tuiReplRegex = new RegExp(`(?:^|;|&&|\\|\\||\\||\\{|&)\\s*(${[...replCommands, ...tuiCommands, 'tail', 'tail.exe', 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
+      let match = tuiReplRegex.exec(unquotedBody);
+      
+      if (!match) {
+        const strippedScriptBody = scriptBody.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
+        match = tuiReplRegex.exec(strippedScriptBody);
+      }
       if (match) {
           const innerCmdBasename = match[1].toLowerCase();
           console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline PowerShell script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
