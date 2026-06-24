@@ -31,7 +31,7 @@ async function generateSummaryPrompt(
 
     const dbHint = target === 'team' 
         ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
-        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\``
+        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`create_entry\` are globally injected.`
 
     const targetDb = target === 'team' && teamDb ? teamDb : db
     const { entries: recent } = targetDb.getRecentEntries(5)
@@ -97,7 +97,7 @@ async function generateSummaryPrompt(
 - \`entry_type: "retrospective"\`
 - \`tags\`: [REQUIRED] MUST include \`"session-summary"\` PLUS 2-3 specific domain/topological tags.
 - \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"targetId": 123, "relationType": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
+- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
 - \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
 - \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
 - \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
@@ -137,7 +137,7 @@ ${markUntrustedContent(entrySummary)}`,
 function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team' 
         ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
-        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\``
+        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`create_entry\` are globally injected.`
 
     return {
         messages: [
@@ -154,7 +154,7 @@ function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMes
 - \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
 - \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
 - \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
-- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"targetId": 123, "relationType": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
+- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
 - ${dbHint}
 
 **Required Content Structure:**
@@ -171,7 +171,7 @@ Just provide a concise markdown description of the specific action, decision, or
 function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team'
         ? 'YOU MUST USE `team_update_entry` OR `mj.team.teamUpdateEntry` TO SAVE THIS ENTRY.'
-        : `Use \`update_entry\` or \`await mj.admin.updateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, entry_id: <ID>, ... })\` via \`mj_execute_code\``
+        : `Use \`update_entry\` or \`await mj.admin.updateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, entry_id: <ID>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`update_entry\` are globally injected.`
 
     const fetchHint = target === 'team'
         ? '`await mj.team.teamGetEntryById` or `await team_get_entry_by_id`'

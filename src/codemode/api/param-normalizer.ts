@@ -322,6 +322,20 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         })
     }
 
+    // Heal hallucinated relationship keys
+    if ('relationships' in result && Array.isArray(result['relationships'])) {
+        result['relationships'] = result['relationships'].map((rel: unknown) => {
+            if (typeof rel === 'object' && rel !== null) {
+                const r = rel as Record<string, unknown>;
+                const healedRel: Record<string, unknown> = { ...r };
+                if ('targetId' in r) { healedRel['target_id'] = r['targetId']; delete healedRel['targetId']; }
+                if ('relationType' in r) { healedRel['relation_type'] = r['relationType']; delete healedRel['relationType']; }
+                return healedRel;
+            }
+            return rel;
+        });
+    }
+
     // Coerce top-level 'commits' array into auto_context for session summaries / commit narratives
     if ('commits' in result && Array.isArray(result['commits'])) {
         if (!('auto_context' in result) || typeof result['auto_context'] !== 'string') {
