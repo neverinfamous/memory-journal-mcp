@@ -268,8 +268,6 @@ export class ProcessController {
       if (code !== 0) {
         if (this.payload.onFailure) {
           const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
-          let body = JSON.stringify({ code, signal, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
-          
           const replaceCtx = (str: string) => {
             if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
             return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
@@ -284,18 +282,23 @@ export class ProcessController {
             });
           };
 
+          let body: string;
           if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
-            body = this.payload.webhookPayloadTemplate
-              .replace(/\{\{stdout\}\}/g, JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
-              .replace(/\{\{stderr\}\}/g, JSON.stringify(this.ioController.stderrTail).slice(1, -1))
+            body = replaceCtx(this.payload.webhookPayloadTemplate);
+            body = body.replace(/\{\{stdout\}\}/g, () => JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
+              .replace(/\{\{stderr\}\}/g, () => JSON.stringify(this.ioController.stderrTail).slice(1, -1))
               .replace(/\{\{code\}\}/g, String(code))
               .replace(/\{\{signal\}\}/g, String(signal));
+          } else {
+            body = JSON.stringify({ code, signal, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+            body = replaceCtx(body);
           }
           
-          body = replaceCtx(body);
           const targetUrl = replaceCtx(this.payload.onFailure);
+          const method = this.payload.webhookMethod || 'POST';
+          const timeoutMs = this.payload.webhookTimeoutMs || 5000;
 
-          try { await fetch(targetUrl, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+          try { await fetch(targetUrl, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
         }
         if (code === null && signal) {
           console.error(`\n❌ Command was terminated by signal ${signal}`);
@@ -305,11 +308,25 @@ export class ProcessController {
           const isGrepNoMatch = code === 1 && ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(baseCmd);
           const isDiffFound = code === 1 && ['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(baseCmd);
           
+          let isOutdatedInfo = false;
+          if (code === 1 && this.payload.type === 'command') {
+             const origCmd = path.basename(this.payload.command).toLowerCase();
+             if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(origCmd)) {
+                 const origArgs = this.payload.args || [];
+                 if (origArgs.includes('outdated')) {
+                     isOutdatedInfo = true;
+                 }
+             }
+          }
+          
           if (isGrepNoMatch) {
             console.error(`\nℹ️  No matches found (exit code 1).`);
             process.exit(0);
           } else if (isDiffFound) {
             console.error(`\nℹ️  Differences found (exit code 1).`);
+            process.exit(0);
+          } else if (isOutdatedInfo) {
+            console.error(`\nℹ️  Outdated packages found (exit code 1).`);
             process.exit(0);
           } else {
             console.error(`\n❌ Command exited with code ${code}`);
@@ -327,7 +344,6 @@ export class ProcessController {
       console.error(`\n✅ Command succeeded${isDaemon ? ' (background process detached)' : ''}.`);
       if (this.payload.onSuccess) {
         const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
-        let body = JSON.stringify({ success: true, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
         
         const replaceCtx = (str: string) => {
           if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
@@ -343,17 +359,22 @@ export class ProcessController {
           });
         };
 
+        let body: string;
         if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
-          body = this.payload.webhookPayloadTemplate
-            .replace(/\{\{stdout\}\}/g, JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
-            .replace(/\{\{stderr\}\}/g, JSON.stringify(this.ioController.stderrTail).slice(1, -1))
+          body = replaceCtx(this.payload.webhookPayloadTemplate);
+          body = body.replace(/\{\{stdout\}\}/g, () => JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
+            .replace(/\{\{stderr\}\}/g, () => JSON.stringify(this.ioController.stderrTail).slice(1, -1))
             .replace(/\{\{success\}\}/g, 'true');
+        } else {
+          body = JSON.stringify({ success: true, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+          body = replaceCtx(body);
         }
         
-        body = replaceCtx(body);
         const targetUrl = replaceCtx(this.payload.onSuccess);
+        const method = this.payload.webhookMethod || 'POST';
+        const timeoutMs = this.payload.webhookTimeoutMs || 5000;
 
-        try { await fetch(targetUrl, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+        try { await fetch(targetUrl, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
       }
       process.exit(0);
     });

@@ -57,6 +57,40 @@ export class IOController {
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
         let buffer: Buffer[] = [];
         let timer: NodeJS.Timeout | null = null;
+
+        const sendChunk = (data: Buffer): Promise<void> => {
+          const method = this.payload.webhookMethod || 'POST';
+          const headers: Record<string, string> = { ...this.payload.webhookHeaders };
+          let bodyPayload: BodyInit = data as unknown as BodyInit;
+
+          if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
+            const replaceCtx = (str: string) => {
+              if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
+              return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
+                if (!pathStr) return JSON.stringify(this.payload.integrationContext);
+                let current: unknown = this.payload.integrationContext;
+                const keys = pathStr.split('.');
+                for (const key of keys) {
+                  if (current == null || typeof current !== 'object') return match;
+                  current = (current as Record<string, unknown>)[key];
+                }
+                return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
+              });
+            };
+
+            headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+            let textBody = replaceCtx(this.payload.webhookPayloadTemplate);
+            const chunkStr = data.toString('utf8');
+            textBody = textBody.replace(/\{\{stdout\}\}/g, () => JSON.stringify(chunkStr).slice(1, -1))
+              .replace(/\{\{stderr\}\}/g, () => JSON.stringify(chunkStr).slice(1, -1))
+              .replace(/\{\{success\}\}/g, 'true')
+              .replace(/\{\{code\}\}/g, 'null')
+              .replace(/\{\{signal\}\}/g, 'null');
+            bodyPayload = textBody;
+          }
+          return fetch(filePath, { method, headers, body: bodyPayload }).then(() => {}).catch(() => {});
+        };
+
         return new Writable({
           write(chunk: Buffer, encoding: string, callback: (error?: Error | null) => void) {
             buffer.push(chunk);
@@ -65,7 +99,7 @@ export class IOController {
                 const data = Buffer.concat(buffer);
                 buffer = [];
                 timer = null;
-                fetch(filePath, { method: 'POST', body: data as unknown as BodyInit }).catch(() => {});
+                sendChunk(data);
               }, 100);
             }
             callback();
@@ -75,7 +109,7 @@ export class IOController {
               const data = Buffer.concat(buffer);
               buffer = [];
               if (timer) clearTimeout(timer);
-              fetch(filePath, { method: 'POST', body: data as unknown as BodyInit }).finally(() => callback());
+              sendChunk(data).finally(() => callback());
             } else {
               callback();
             }

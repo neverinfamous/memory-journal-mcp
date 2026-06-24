@@ -60,6 +60,21 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   let tempScriptPath: string | null = null;
   const envOverrides: Record<string, string> = {};
 
+  const replaceTemplates = (str: string) => {
+    if (!('integrationContext' in payload) || !payload.integrationContext) return str;
+    const contextStr = JSON.stringify(payload.integrationContext);
+    return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
+      if (!pathStr) return contextStr;
+      let current: unknown = payload.integrationContext;
+      const keys = pathStr.split('.');
+      for (const key of keys) {
+        if (current == null || typeof current !== 'object') return match;
+        current = (current as Record<string, unknown>)[key];
+      }
+      return typeof current === 'object' ? JSON.stringify(current) : String(current);
+    });
+  };
+
   if ('integrationContext' in payload && payload.integrationContext) {
     const contextStr = JSON.stringify(payload.integrationContext);
     if (contextStr.length > 32000) {
@@ -68,46 +83,29 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
     envOverrides['integrationContext'] = contextStr;
 
-    const replaceTemplates = (str: string, escapeForTokenization: boolean = false) => {
-      return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-        if (!pathStr) return escapeForTokenization ? contextStr.replace(/(["\\])/g, '\\$1') : contextStr;
-        let current: unknown = payload.integrationContext;
-        const keys = pathStr.split('.');
-        for (const key of keys) {
-          if (current == null || typeof current !== 'object') return match;
-          current = (current as Record<string, unknown>)[key];
-        }
-        const strVal = typeof current === 'object' ? JSON.stringify(current) : String(current);
-        return escapeForTokenization ? strVal.replace(/(["\\])/g, '\\$1') : strVal;
-      });
-    };
-
-    if ('templateOverride' in payload && typeof payload.templateOverride === 'string' && payload.templateOverride) {
-      payload.templateOverride = replaceTemplates(payload.templateOverride, true);
-    }
     if (payload.args) {
-      payload.args = payload.args.map(a => typeof a === 'string' ? replaceTemplates(a, false) : a);
+      payload.args = payload.args.map(a => typeof a === 'string' ? replaceTemplates(a) : a);
     }
     if (payload.env) {
       const newEnv: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.env)) {
-        newEnv[k] = typeof v === 'string' ? replaceTemplates(v, false) : String(v);
+        newEnv[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
       }
       payload.env = newEnv;
     }
     if ('command' in payload && typeof payload.command === 'string') {
-      payload.command = replaceTemplates(payload.command, false);
+      payload.command = replaceTemplates(payload.command);
     }
     if ('scriptPath' in payload && typeof payload.scriptPath === 'string') {
-      payload.scriptPath = replaceTemplates(payload.scriptPath, false);
+      payload.scriptPath = replaceTemplates(payload.scriptPath);
     }
     if ('code' in payload && typeof payload.code === 'string') {
-      payload.code = replaceTemplates(payload.code, false);
+      payload.code = replaceTemplates(payload.code);
     }
     if ('webhookHeaders' in payload && payload.webhookHeaders) {
       const newHeaders: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.webhookHeaders)) {
-        newHeaders[k] = typeof v === 'string' ? replaceTemplates(v, false) : String(v);
+        newHeaders[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
       }
       payload.webhookHeaders = newHeaders;
     }
@@ -141,7 +139,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
         ? payload.templateOverride.replace('{{code}}', innerCmdStr)
         : `${payload.templateOverride} ${innerCmdStr}`;
         
-      const allArgs = tokenizeArgs(fullOverride);
+      const allArgs = tokenizeArgs(fullOverride).map(a => replaceTemplates(a));
       if (allArgs.length > 0) {
         cmd = allArgs[0];
         args = allArgs.slice(1);
@@ -190,7 +188,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
         ? payload.templateOverride.replace('{{code}}', innerCmdStr)
         : `${payload.templateOverride} ${innerCmdStr}`;
         
-      const allArgs = tokenizeArgs(fullOverride);
+      const allArgs = tokenizeArgs(fullOverride).map(a => replaceTemplates(a));
       if (allArgs.length > 0) {
         cmd = allArgs[0];
         args = allArgs.slice(1);
@@ -347,7 +345,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   if (payload.type === 'command') {
     const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd');
     if (isWinBatch && payload.target !== 'wsl2') {
-      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
       const escapedCmd = cmd.replace(/'/g, "''");
       const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
       const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;

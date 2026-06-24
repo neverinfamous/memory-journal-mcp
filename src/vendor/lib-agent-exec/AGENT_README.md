@@ -71,15 +71,14 @@ If an `integrationContext` object is provided in the payload, you may use templa
 When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` had to automatically intercept your command to prevent execution failure (e.g., blocking an interactive prompt, stripping a hanging flag).
 
 **If you encounter this hint during an autonomous task:**
-1. **Do NOT stop or interrupt your current workflow.** Continue your primary task as normal.
-2. **Add the issue to your task list** (e.g., in your `task.md` or internal notes) to remind yourself to fix the payload.
-3. **Inform the user** at the first opportunity (when you respond to them) that your payload required auto-healing, and ask if they'd like you to update your approach for future invocations.
+1. **STOP IMMEDIATELY.** Do not just add it to your task list.
+2. **Notify the user** of the needed self-improvement so they can address it.
 
 ## Security & Reliability (Interception Rules)
 
 To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging and false positives:
 
-- **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, and `diff` return exit code `1` when no matches/differences are found. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures.
+- **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, and `diff` return exit code `1` when no matches/differences are found. Similarly, package manager commands like `npm outdated` or `pnpm outdated` return `1` when updates are available. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures.
 - **TTY Flag Stripping**: Docker TTY flags (`-t`, `--tty`) and interactive flags (`-i`) are automatically stripped.
 - **PowerShell Padding**: If `pwsh` is called, `-NonInteractive -NoProfile` flags are forcefully injected.
 - **Indefinite Blocking Prevention**: Commands like `docker logs -f` have their `-f`/`--follow` flags stripped. Utilities that inherently run indefinitely like `watch` or `tail -f` are blocked entirely.
