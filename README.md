@@ -567,6 +567,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                                                                     |
 | `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)                                                                 |
 | `METRICS_EXPORT`                  | Metrics export format (e.g. `prometheus`) (CLI: `--metrics-export`)                                                                                   |
+| `METRICS_PATH`                    | Custom path to the metrics JSON file (CLI: `--metrics-path`)                                                                                          |
 | `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)                                                                |
 | `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                                                                          |
 | `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                                                        |
@@ -581,6 +582,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`)                                       |
 | `CODEMODE_INTERNAL_FULL_ACCESS`   | Bypass tool filter constraints within the Code Mode sandbox (CLI: `--codemode-internal-full-access`; default: `false`)                                |
 | `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                                                                 |
+| `BRIEFING_COMMIT_COUNT`           | Number of commits to include in the briefing context (CLI: `--briefing-commits`; default: `5`)                                                        |
 | `BRIEFING_SUMMARY_COUNT`          | Session summaries to list in briefing (CLI: `--briefing-summaries`; default: `1`)                                                                     |
 | `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                                                                                |
 | `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                                                                           |

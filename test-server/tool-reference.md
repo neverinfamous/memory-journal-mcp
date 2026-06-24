@@ -14,7 +14,7 @@ Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*
 
 | Tool              | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mj_execute_code` | Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. Enables multi-step workflows in a single call, reducing token usage by 70-90%. API groups: `mj.core.*` (or `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.export.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`. Use `mj.help()` for method listing. Returns the last expression value. |
+| `mj_execute_code` | Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. Enables multi-step workflows in a single call, reducing token usage by 70-90%. API groups: `mj.core.*` (or `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.export.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`. Use `mj.help()` for method listing. Aliases: `query` (search, q), `output_dir` (path, filepath), `keep_count` (keep), `target_user` (user, assignee), `flag_type` (severity), `workspace_id` (team, project). Returns the last expression value. |
 
 ---
 
@@ -86,7 +86,7 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 ---
 
-## admin (11 tools + Code Mode)
+## admin (12 tools + Code Mode)
 
 Entry mutations, vector index management, tag maintenance, and audit log search.
 
@@ -102,6 +102,7 @@ Entry mutations, vector index management, tag maintenance, and audit log search.
 | `batch_create_entries` | Create multiple journal entries at once (Max 50 per batch). Ideal for data imports or bulk processing.                                                                  |
 | `batch_update_entries` | Update multiple existing journal entries in a single transaction (Max 50 per batch). Pass `expected_version` per entry for optimistic locking.                                                                                    |
 | `batch_delete_entries` | Delete multiple existing journal entries in a single transaction (Max 50 per batch).                                                                                    |
+| `run_auto_prune`       | Manually trigger the auto-prune background job to soft-delete or hard-delete stale entries based on importance thresholds and configured intervals.                    |
 | `search_audit_log`     | Search operational telemetry audit logs by tool name, user, date range, status, or category. Returns the most recent matches up to the limit.                          |
 
 ---

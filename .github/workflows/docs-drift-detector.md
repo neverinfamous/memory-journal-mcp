@@ -44,7 +44,7 @@ You are auditing documentation for the **memory-journal-mcp** project — a Type
 ## Step 1: Understand Recent Changes
 
 1. Read the PR diff to understand what code changed.
-2. Read the `UNRELEASED.md` file. **Never read the full `CHANGELOG.md`** — it is very long and only the unreleased section is relevant.
+2. Run `bun C:\Users\chris\Desktop\adamic\.agents\scripts\get-git-history-json.ts` to retrieve recent changelog data from git trailers. **Never read the full `CHANGELOG.md`** — it is very long and only the recent unreleased commits are relevant.
 3. Read the latest release notes file from `releases/` (the one with the highest version number).
 
 ## Step 2: Audit README.md
