@@ -6,7 +6,7 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
   const hasExactShellChars = args.some(a => exactShellChars.includes(a.trim()));
   const hasComplexEdgeCases = args.some(a => {
     if (a.includes('$(') || a.includes('`')) return true;
-    if (a.match(/\\(?:&&|\|\||\||>|<|;)/)) return true;
+    if (a.match(/\\(?:&&|\|\||\||>|<|;)/) || a.match(/\\[&|><;]/)) return true;
     if (a.match(/^[a-zA-Z0-9_-]+(?:&&|\|\||\||>|<|;)[a-zA-Z0-9_-]+$/)) return true;
     return false;
   });

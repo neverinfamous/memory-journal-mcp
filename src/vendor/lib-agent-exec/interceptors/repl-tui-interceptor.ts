@@ -162,4 +162,31 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       console.error(`\n   💡 AGENT HINT: Automatically injected [${newArgs.join(', ')}] into ${cmdBasename} command to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     }
   }
+
+  if (payload.type === 'eval' && typeof payload.code === 'string') {
+    const unquotedBody = payload.code.replace(/^['"]|['"]$/g, '').trim();
+    
+    // Check for TUI commands globally
+    const tuiRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${[...tuiCommands, 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
+    const tuiMatch = tuiRegex.exec(unquotedBody);
+    
+    // Check for REPL commands that have NO arguments (they appear at the end of a line/command or before terminators)
+    const replRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
+    const replMatch = replRegex.exec(unquotedBody);
+
+    // Also explicitly catch tail -f
+    const isTailF = (unquotedBody.includes('tail') || unquotedBody.includes('tail.exe')) && (unquotedBody.includes('-f') || unquotedBody.includes('--follow'));
+
+    if (tuiMatch || replMatch || isTailF) {
+        let innerCmdBasename = 'tail';
+        if (tuiMatch) innerCmdBasename = tuiMatch[1].toLowerCase();
+        else if (replMatch) innerCmdBasename = replMatch[1].toLowerCase();
+
+        console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
+        console.error(`   Please use standard terminal commands instead.`);
+        process.exit(1);
+    }
+  }
 }
+
