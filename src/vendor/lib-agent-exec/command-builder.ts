@@ -18,10 +18,44 @@ export const customInterceptors: Array<(ctx: ExecutionContext) => void> = [];
 
 function tokenizeArgs(str: string): string[] {
   const args: string[] = [];
-  const regex = /("[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|[^\s]+)/g;
-  let match;
-  while ((match = regex.exec(str)) !== null) {
-    args.push(match[1]);
+  let currentArg = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escapeNext = false;
+  
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (escapeNext) {
+      currentArg += char;
+      escapeNext = false;
+      continue;
+    }
+    if (char === '\\') {
+      currentArg += char;
+      escapeNext = true;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      currentArg += char;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      currentArg += char;
+      continue;
+    }
+    if (/\\s/.test(char) && !inSingleQuote && !inDoubleQuote) {
+      if (currentArg.length > 0) {
+        args.push(currentArg);
+        currentArg = '';
+      }
+    } else {
+      currentArg += char;
+    }
+  }
+  if (currentArg.length > 0) {
+    args.push(currentArg);
   }
   return args;
 }

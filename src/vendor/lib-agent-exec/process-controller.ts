@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { IOController } from './io-controller.js';
 import { killProcessTree } from './process-manager.js';
 import { ExecPayload } from './schema.js';
+import { renderWebhookTemplate } from './webhook-template.js';
 
 export class ProcessController {
   private child!: ChildProcess;
@@ -264,7 +265,18 @@ export class ProcessController {
     this.cleanupTempScript();
     this.ioController.flushAll();
 
-    this.ioController.closeFileStreams().then(async () => {
+    return this.ioController.closeFileStreams().then(async () => {
+      let computedCode = code;
+      const envData = typeof this.ioController.getParsedEnvelope === 'function' ? this.ioController.getParsedEnvelope() : null;
+      if (this.payload.expectJsonEnvelope && envData) {
+         if (envData.status === 'error' || (envData.exit_code !== undefined && envData.exit_code !== 0)) {
+             computedCode = typeof envData.exit_code === 'number' ? envData.exit_code : 1;
+         } else if (envData.status === 'success') {
+             computedCode = 0;
+         }
+      }
+      code = computedCode;
+
       if (code !== 0) {
         if (this.payload.onFailure) {
           const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
@@ -282,13 +294,22 @@ export class ProcessController {
             });
           };
 
+          const vars = {
+            stdout: this.ioController.stdoutTail,
+            stderr: this.ioController.stderrTail,
+            code,
+            signal,
+            success: false,
+            envData
+          };
+
           let body: string;
           if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
-            body = replaceCtx(this.payload.webhookPayloadTemplate);
-            body = body.replace(/\{\{stdout\}\}/g, () => JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
-              .replace(/\{\{stderr\}\}/g, () => JSON.stringify(this.ioController.stderrTail).slice(1, -1))
-              .replace(/\{\{code\}\}/g, String(code))
-              .replace(/\{\{signal\}\}/g, String(signal));
+            body = renderWebhookTemplate(
+              this.payload.webhookPayloadTemplate,
+              'integrationContext' in this.payload ? this.payload.integrationContext : null,
+              vars
+            );
           } else {
             body = JSON.stringify({ code, signal, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
             body = replaceCtx(body);
@@ -359,12 +380,22 @@ export class ProcessController {
           });
         };
 
+        const vars = {
+          stdout: this.ioController.stdoutTail,
+          stderr: this.ioController.stderrTail,
+          code: computedCode,
+          signal,
+          success: computedCode === 0,
+          envData
+        };
+
         let body: string;
         if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
-          body = replaceCtx(this.payload.webhookPayloadTemplate);
-          body = body.replace(/\{\{stdout\}\}/g, () => JSON.stringify(this.ioController.stdoutTail).slice(1, -1))
-            .replace(/\{\{stderr\}\}/g, () => JSON.stringify(this.ioController.stderrTail).slice(1, -1))
-            .replace(/\{\{success\}\}/g, 'true');
+          body = renderWebhookTemplate(
+            this.payload.webhookPayloadTemplate,
+            'integrationContext' in this.payload ? this.payload.integrationContext : null,
+            vars
+          );
         } else {
           body = JSON.stringify({ success: true, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
           body = replaceCtx(body);

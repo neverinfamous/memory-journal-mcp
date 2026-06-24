@@ -33,6 +33,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     webhookPayloadTemplate: safeString.optional(),
     webhookMethod: safeString.optional(),
     webhookTimeoutMs: z.number().int().nonnegative().optional(),
+    expectJsonEnvelope: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("script"),
@@ -59,6 +60,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     webhookPayloadTemplate: safeString.optional(),
     webhookMethod: safeString.optional(),
     webhookTimeoutMs: z.number().int().nonnegative().optional(),
+    expectJsonEnvelope: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("eval"),
@@ -85,6 +87,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
     webhookPayloadTemplate: safeString.optional(),
     webhookMethod: safeString.optional(),
     webhookTimeoutMs: z.number().int().nonnegative().optional(),
+    expectJsonEnvelope: z.boolean().optional(),
   })
 ]);
 

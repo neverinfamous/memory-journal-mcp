@@ -7,6 +7,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { StreamManager } from './stream-manager.js';
 import { checkPrompt } from './prompt-detector.js';
 import { ExecPayload } from './schema.js';
+import { renderWebhookTemplate } from './webhook-template.js';
 
 export class IOController {
   private stdoutDecoder = new StringDecoder('utf8');
@@ -16,6 +17,32 @@ export class IOController {
   
   public get stdoutTail() { return this._stdoutTail; }
   public get stderrTail() { return this._stderrTail; }
+  
+  public getParsedEnvelope(): Record<string, unknown> | null {
+    if (!this.payload.expectJsonEnvelope) return null;
+    if (!this._stdoutTail) return null;
+    const tail = this._stdoutTail.trim();
+    if (tail.length === 0) return null;
+    
+    let lastBrace = tail.lastIndexOf('}');
+    while (lastBrace !== -1) {
+      let firstBrace = tail.lastIndexOf('{', lastBrace);
+      while (firstBrace !== -1) {
+        try {
+          const candidate = tail.slice(firstBrace, lastBrace + 1);
+          const parsed = JSON.parse(candidate);
+          if (parsed && typeof parsed === 'object' && 'status' in parsed) {
+            return parsed;
+          }
+        } catch {
+          // ignore parsing failures and keep searching backward
+        }
+        firstBrace = tail.lastIndexOf('{', firstBrace - 1);
+      }
+      lastBrace = tail.lastIndexOf('}', lastBrace - 1);
+    }
+    return null;
+  }
   
   private outStream?: fs.WriteStream;
   private errStream?: fs.WriteStream;
@@ -64,29 +91,20 @@ export class IOController {
           let bodyPayload: BodyInit = data as unknown as BodyInit;
 
           if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
-            const replaceCtx = (str: string) => {
-              if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
-              return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-                if (!pathStr) return JSON.stringify(this.payload.integrationContext);
-                let current: unknown = this.payload.integrationContext;
-                const keys = pathStr.split('.');
-                for (const key of keys) {
-                  if (current == null || typeof current !== 'object') return match;
-                  current = (current as Record<string, unknown>)[key];
-                }
-                return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
-              });
-            };
-
             headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-            let textBody = replaceCtx(this.payload.webhookPayloadTemplate);
             const chunkStr = data.toString('utf8');
-            textBody = textBody.replace(/\{\{stdout\}\}/g, () => JSON.stringify(chunkStr).slice(1, -1))
-              .replace(/\{\{stderr\}\}/g, () => JSON.stringify(chunkStr).slice(1, -1))
-              .replace(/\{\{success\}\}/g, 'true')
-              .replace(/\{\{code\}\}/g, 'null')
-              .replace(/\{\{signal\}\}/g, 'null');
-            bodyPayload = textBody;
+            const vars = {
+              stdout: chunkStr,
+              stderr: chunkStr,
+              success: true,
+              code: null,
+              signal: null
+            };
+            bodyPayload = renderWebhookTemplate(
+              this.payload.webhookPayloadTemplate, 
+              'integrationContext' in this.payload ? this.payload.integrationContext : null, 
+              vars
+            );
           }
           return fetch(filePath, { method, headers, body: bodyPayload }).then(() => {}).catch(() => {});
         };

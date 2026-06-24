@@ -66,6 +66,12 @@ Used for executing raw code snippets dynamically.
 ### Note on Templates (`integrationContext`)
 If an `integrationContext` object is provided in the payload, you may use template string substitution (e.g. `{{integrationContext.slackToken}}`) across the `args`, `env`, and `templateOverride` properties. This simplifies injection of dynamic credentials and external configuration strings.
 
+### Structured JSON Envelopes (`expectJsonEnvelope`)
+All payload types (`command`, `script`, `eval`) support an optional boolean flag: `"expectJsonEnvelope": true`. 
+When enabled, the execution bridge will actively parse the final output line of `stdout` for a structured JSON envelope (e.g., `{"status": "success", "data": {...}}` or `{"status": "error", "exit_code": 1}`). 
+- **Smart Exit Codes**: If the envelope status is `"error"`, the physical process exit code is automatically overridden to a failure (even if the shell script exited `0`).
+- **Webhook Integration**: Exposes the `{{envelope.data}}` and `{{envelope.status}}` template variables for use within `webhookPayloadTemplate`.
+
 ## 🛠️ Handling Autonomous Healing Hints
 
 When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` had to automatically intercept your command to prevent execution failure (e.g., blocking an interactive prompt, stripping a hanging flag).
