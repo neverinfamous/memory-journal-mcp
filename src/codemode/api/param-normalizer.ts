@@ -328,8 +328,8 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             if (typeof rel === 'object' && rel !== null) {
                 const r = rel as Record<string, unknown>;
                 const healedRel: Record<string, unknown> = { ...r };
-                if ('targetId' in r) { healedRel['target_id'] = r['targetId']; delete healedRel['targetId']; }
-                if ('relationType' in r) { healedRel['relation_type'] = r['relationType']; delete healedRel['relationType']; }
+                if ('target_id' in r) { healedRel['targetId'] = r['target_id']; delete healedRel['target_id']; }
+                if ('relation_type' in r) { healedRel['relationType'] = r['relation_type']; delete healedRel['relation_type']; }
                 return healedRel;
             }
             return rel;
