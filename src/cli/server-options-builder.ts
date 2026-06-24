@@ -188,6 +188,7 @@ export function buildServerOptions(
         }, undefined),
 
         briefingConfig: {
+            commitCount: catchConfig(() => resolver.resolveIntRequired('briefingCommits', 'BRIEFING_COMMIT_COUNT'), 3),
             entryCount: catchConfig(() => resolver.resolveIntRequired('briefingEntries', 'BRIEFING_ENTRY_COUNT'), 3),
             summaryCount: catchConfig(() => resolver.resolveIntRequired('briefingSummaries', 'BRIEFING_SUMMARY_COUNT'), 1),
             includeTeam: catchConfig(() => resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false, false),

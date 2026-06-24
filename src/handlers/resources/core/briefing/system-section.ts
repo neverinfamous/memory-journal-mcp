@@ -29,7 +29,6 @@ import type { BriefingConfig } from '../../shared.js'
 
 export interface GitHistorySummary {
     commits: { hash: string; category?: string; entry?: string; message: string; isPushed?: boolean }[]
-    changelog?: unknown // legacy support if anything checks it
 }
 
 export interface TestHealth {
@@ -130,13 +129,13 @@ const cachedTestHealth = new Map<string, TestHealth | null>()
 
 import { execFileSync } from 'node:child_process'
 
-function loadCachedGitHistory(targetPath?: string): GitHistorySummary | null {
+function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHistorySummary | null {
     const root = targetPath || resolveProjectRoot()
     const existing = cachedGitHistory.get(root)
     if (existing !== undefined) return existing
 
     try {
-        const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H%x09%s'], { cwd: root, encoding: 'utf-8', windowsHide: true })
+        const out = execFileSync('git', ['log', '-n', String(Math.max(1, Math.min(50, commitCount))), '--pretty=format:%H%x09%s'], { cwd: root, encoding: 'utf-8', windowsHide: true })
         
         const unpushedHashes = new Set<string>()
         try {
@@ -361,7 +360,7 @@ export function buildSystemContext(
         resourceCount: resourceCount ?? 0,
         promptCount: getPrompts().length,
         localTime,
-        gitHistory: loadCachedGitHistory(targetRepoPath),
+        gitHistory: loadCachedGitHistory(config?.commitCount ?? 3, targetRepoPath),
         testHealth: loadCachedTestHealth(targetRepoPath),
         filterSummary,
         isReadonly,

@@ -357,23 +357,13 @@ export function formatUserMessage(opts: {
     // TABLE ROW 8: Git History
     // ========================================================================
     const gitHistoryLines: string[] = []
-    if (opts.gitHistory) {
-        const changelog = opts.gitHistory.changelog as { totalCount?: number; categories?: Record<string, unknown[]> } | undefined;
-        if (changelog && typeof changelog.totalCount === 'number' && changelog.totalCount > 0 && changelog.categories) {
-            const cl = changelog;
-            const catSummary = Object.entries(cl.categories ?? {})
-                .map(([cat, entries]) => `${escapeCell(cat)} (${String(entries.length)})`)
-                .join(' · ');
-            gitHistoryLines.push(`**Unreleased (${String(cl.totalCount)}):** ${catSummary}`);
-        } else if (opts.gitHistory.commits.length > 0) {
-            // Only show fallback commits if we don't have the rich changelog categories
-            const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
-            const shortCommits = opts.gitHistory.commits.slice(0, 3).map(c => {
-                const shaText = c.isPushed && repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
-                return `${shaText} (${escapeCell(c.message)})`;
-            }).join('<br>');
-            gitHistoryLines.push(`**Recent Commits:**<br>${shortCommits}`);
-        }
+    if (opts.gitHistory && opts.gitHistory.commits.length > 0) {
+        const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
+        const shortCommits = opts.gitHistory.commits.map(c => {
+            const shaText = c.isPushed && repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
+            return `${shaText} (${escapeCell(c.message)})`;
+        }).join('<br>');
+        gitHistoryLines.push(`**Recent Commits:**<br>${shortCommits}`);
     }
 
     // ========================================================================

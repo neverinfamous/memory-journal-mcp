@@ -191,6 +191,11 @@ export function createProgram(): Command {
             '3'
         )
         .option(
+            '--briefing-commits <count>',
+            'Number of commits to include in briefing (env: BRIEFING_COMMIT_COUNT)',
+            '3'
+        )
+        .option(
             '--briefing-summaries <count>',
             'Number of session summaries to show in briefing (env: BRIEFING_SUMMARY_COUNT)',
             '1'

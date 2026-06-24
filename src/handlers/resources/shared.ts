@@ -164,6 +164,8 @@ export function isResourceError(
  * All values have sensible defaults — users opt-in via env vars or CLI flags.
  */
 export interface BriefingConfig {
+    /** Number of recent commits to include in git history (default: 3) */
+    commitCount: number
     /** Number of recent journal entries to include (default: 3) */
     entryCount: number
     /** Number of recent session summaries to display (default: 1) */
@@ -205,6 +207,7 @@ export interface BriefingConfig {
 
 /** Default briefing configuration — preserves pre-existing behavior */
 export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
+    commitCount: 3,
     entryCount: 3,
     summaryCount: 1,
     includeTeam: false,
