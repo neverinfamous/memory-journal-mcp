@@ -30,8 +30,8 @@ function generateSummaryPrompt(
     }
 
     const dbHint = target === 'team' 
-        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY. Do NOT use `import` or `require`; `mj` and `team_create_entry` are globally injected.'
-        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`create_entry\` are globally injected.`
+        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create --team`. Do NOT use MCP tools for mutation.'
+        : `YOU MUST USE THE CLI TO SAVE THIS ENTRY: \`memory-journal-mcp entry create\`. Do NOT use MCP tools for mutation.`
 
     const targetDb = target === 'team' && teamDb ? teamDb : db
     const { entries: recent } = targetDb.getRecentEntries(5)
@@ -123,8 +123,8 @@ ${markUntrustedContent(entrySummary)}`,
 
 function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team' 
-        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY. Do NOT use `import` or `require`; `mj` and `team_create_entry` are globally injected.'
-        : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`create_entry\` are globally injected.`
+        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create --team`. Do NOT use MCP tools for mutation.'
+        : `YOU MUST USE THE CLI TO SAVE THIS ENTRY: \`memory-journal-mcp entry create\`. Do NOT use MCP tools for mutation.`
 
     return {
         messages: [
@@ -157,8 +157,8 @@ Just provide a concise markdown description of the specific architectural decisi
 
 function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team'
-        ? 'YOU MUST USE `team_update_entry` OR `mj.team.teamUpdateEntry` TO SAVE THIS ENTRY. Do NOT use `import` or `require`; `mj` and `team_update_entry` are globally injected.'
-        : `Use \`update_entry\` or \`await mj.admin.updateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, entry_id: <ID>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`update_entry\` are globally injected.`
+        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry update --team`. Do NOT use MCP tools for mutation.'
+        : 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry update`. Do NOT use MCP tools for mutation.'
 
     const fetchHint = target === 'team'
         ? '`await mj.team.teamGetEntryById` or `await team_get_entry_by_id`'
