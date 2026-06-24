@@ -14,7 +14,7 @@
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found, using `code-map.md` as source of truth.
-2. If code changed: update `UNRELEASED.md`, commit (no push). If clean pass: no changelog. Stop for **USER** to run `npm run lint`, `npm run typecheck`, `npm run test`, `npm run test:e2e`.
+2. If code changed: update `UNRELEASED.md`, commit (no push). If clean pass: no changelog. Stop for **USER** to run `pnpm run check`.
 3. After user verification, re-test fixes with direct MCP calls.
 4. Provide brief final summary with **Total Token Estimate** (sum `_meta.tokenEstimate` from all responses, or read `memory://metrics/summary`).
 
@@ -89,7 +89,7 @@ The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify th
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found, using `code-map.md` as source of truth.
-2. If code changed: update `UNRELEASED.md`, commit (no push). If clean pass: no changelog. Stop for **USER** to run `npm run lint`, `npm run typecheck`, `npm run test`, `npm run test:e2e`.
+2. If code changed: update `UNRELEASED.md`, commit (no push). If clean pass: no changelog. Stop for **USER** to run `pnpm run check`.
 3. After user verification, re-test fixes with direct MCP calls.
 4. Provide brief final summary with **Total Token Estimate** (sum `_meta.tokenEstimate` from all responses, or read `memory://metrics/summary`).
 
