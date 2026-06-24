@@ -247,7 +247,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 
 1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, and boundary validation.
 2. Group findings by category and severity (Critical, Moderate, Low).
-3. Run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, and magic values." --allow-all\` to get external validation. **CRITICAL**: Do NOT skip this step. Alert the user if it fails.
+3. Run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, and magic values." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 4. Present a summary table to the user (incorporating Copilot findings) and await approval.
 5. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests), and commit with descriptive messages.
 Journal findings with \`entry_type: "audit_finding"\` and tags \`["commander", "code-quality"]\`.`
@@ -271,7 +271,7 @@ Target: ${args?.['target'] ?? '{target}'}
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 1. Perform a multi-pass security audit looking for injection vectors, auth/authz gaps, data boundary issues.
-2. Run \`gh copilot -- -p "Perform a security audit on <target> looking for injection vectors, auth/authz gaps, and data boundary issues." --allow-all\` to get external validation. **CRITICAL**: Do NOT skip this step. Alert the user if it fails.
+2. Run \`gh copilot -- -p "Perform a security audit on <target> looking for injection vectors, auth/authz gaps, and data boundary issues." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.`
                     }
@@ -294,7 +294,7 @@ Target: ${args?.['target'] ?? '{target}'}
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.
-2. Run \`gh copilot -- -p "Perform a performance audit on <target> looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all\` to get external validation. **CRITICAL**: Do NOT skip this step. Alert the user if it fails.
+2. Run \`gh copilot -- -p "Perform a performance audit on <target> looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.`
                     }
@@ -321,7 +321,7 @@ If the target is '{target}', determine it from the user's request. If the user h
    - Semantic HTML and accessibility (ARIA, alt text, structural hierarchy).
    - Core Web Vitals implications (DOM size, layout shifts, LCP elements).
    - Structured data (JSON-LD) and E-E-A-T signals.
-2. Run \`gh copilot -- -p "Perform an SEO and Core Web Vitals audit on <target>." --allow-all\` to get external validation. **CRITICAL**: Do NOT skip this step. Alert the user if it fails.
+2. Run \`gh copilot -- -p "Perform an SEO and Core Web Vitals audit on <target>." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.`
                     }
@@ -344,7 +344,7 @@ Target: ${args?.['target'] ?? '{target}'}
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target skill, ask them for it now.
 
 1. Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
-2. Run \`gh copilot -- -p "Evaluate the agent skill <target> for trigger reliability, safety gates, and frontmatter compliance." --allow-all\` to get external validation. **CRITICAL**: Do NOT skip this step. Alert the user if it fails.
+2. Run \`gh copilot -- -p "Evaluate the agent skill at <target> for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.`
                     }
@@ -367,7 +367,7 @@ Target: ${args?.['target'] ?? '{target}'}
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target workflow, ask them for it now.
 
 1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.
-2. Run \`gh copilot -- -p "Evaluate the workflow <target> for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all\` to get external validation. **CRITICAL**: Do NOT skip this step. Alert the user if it fails.
+2. Run \`gh copilot -- -p "Evaluate the workflow <target> for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.`
                     }
