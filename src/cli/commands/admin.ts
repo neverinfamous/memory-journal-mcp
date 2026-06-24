@@ -3,15 +3,37 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { runAutoPrune } from '../../server/auto-prune.js'
 import type { Command } from 'commander'
 
-async function getDb(options: Record<string, unknown>): Promise<IDatabaseAdapter> {
-    const dbPath = (options['db'] as string) ?? process.env['DB_PATH'] ?? './memory_journal.db'
+import { ConfigResolver } from '../../utils/config-resolver.js'
+import { buildServerOptions } from '../server-options-builder.js'
+
+async function getDb(options: Record<string, unknown>, command: Command): Promise<IDatabaseAdapter> {
+    let resolver: ConfigResolver
+    const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const configErrors: string[] = []
+
+    try {
+        resolver = new ConfigResolver(command, options, configPath)
+    } catch (err) {
+        configErrors.push(err instanceof Error ? err.message : String(err))
+        resolver = new ConfigResolver(command, {}, undefined)
+    }
+
+    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+    
+    if (configErrors.length > 0) {
+        process.stderr.write('Startup Configuration Errors:\n')
+        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        process.exit(1)
+    }
+
+    const dbPath = serverOptions.dbPath
     const db = await DatabaseAdapterFactory.create(dbPath)
     await db.initialize()
     return db
 }
 
 export async function backupAction(options: Record<string, unknown>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals())
+    const db = await getDb(command.optsWithGlobals(), command)
     const dest = options['dest'] as string | undefined
     try {
         const result = await db.exportToFile(dest)
@@ -25,7 +47,7 @@ export async function backupAction(options: Record<string, unknown>, command: Co
 }
 
 export async function restoreAction(file: string, _options: Record<string, unknown>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals())
+    const db = await getDb(command.optsWithGlobals(), command)
     try {
         const result = await db.restoreFromFile(file)
         process.stdout.write(`Restore successful from ${result.restoredFrom}. Previous entries: ${result.previousEntryCount}, New entries: ${result.newEntryCount}\n`)
@@ -38,7 +60,7 @@ export async function restoreAction(file: string, _options: Record<string, unkno
 }
 
 export async function vacuumAction(_options: Record<string, unknown>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals())
+    const db = await getDb(command.optsWithGlobals(), command)
     try {
         db.pragma('optimize')
         db.flushSave()
@@ -52,7 +74,7 @@ export async function vacuumAction(_options: Record<string, unknown>, command: C
 }
 
 export async function pruneAction(options: Record<string, unknown>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals())
+    const db = await getDb(command.optsWithGlobals(), command)
     
     // Parse numeric options properly since commander might pass them as strings if not strongly typed
     const parseNumber = (val: unknown): number | undefined => {

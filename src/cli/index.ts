@@ -26,31 +26,31 @@ const adminCmd = program
     .command('admin')
     .description('Database administration utilities')
 
-adminCmd
+const backupCmd = adminCmd
     .command('backup')
     .description('Export the database to a timestamped backup file')
     .option('--dest <path>', 'Destination path or filename for the backup')
-    .action(backupAction)
+addServerOptions(backupCmd)
+backupCmd.action(backupAction)
 
-adminCmd
+const restoreCmd = adminCmd
     .command('restore <file>')
     .description('Restore the database from a backup file')
-    .action(restoreAction)
+addServerOptions(restoreCmd)
+restoreCmd.action(restoreAction)
 
-adminCmd
+const vacuumCmd = adminCmd
     .command('vacuum')
     .description('Optimize database query planner and flush WAL')
-    .action(vacuumAction)
+addServerOptions(vacuumCmd)
+vacuumCmd.action(vacuumAction)
 
-adminCmd
+const pruneCmd = adminCmd
     .command('prune')
     .description('Run autonomous database pruning')
-    .option('--archive-older-than-days <days>', 'Archive entries older than N days')
-    .option('--prune-older-than-days <days>', 'Soft-delete entries older than N days')
-    .option('--hard-delete-older-than-days <days>', 'Permanently delete soft-deleted entries older than N days')
-    .option('--importance-threshold <score>', 'Score below which entries are pruned (default 0.15)')
     .option('--dry-run', 'Log candidates without modifying the database')
     .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
-    .action(pruneAction)
+addServerOptions(pruneCmd)
+pruneCmd.action(pruneAction)
 
 program.parse()

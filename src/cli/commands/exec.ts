@@ -27,6 +27,10 @@ export async function execAction(scriptPath: string, options: Record<string, unk
         process.exit(1)
     }
 
+    // Override test databases for exec so it doesn't try to eagerly initialize them without encryption keys
+    serverOptions.testDbPath = undefined
+    serverOptions.testTeamDbPath = undefined
+
     const scriptContent = readFileSync(scriptPath, 'utf8')
 
     const context = await initializeDependencies(serverOptions)
