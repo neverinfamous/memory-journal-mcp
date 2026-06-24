@@ -465,6 +465,20 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         }
     }
 
+    // Heal hallucinated 'filter' wrapper (flatten it into top-level)
+    if ('filter' in result && typeof result['filter'] === 'object' && result['filter'] !== null && !Array.isArray(result['filter'])) {
+        const filterObj = result['filter'] as Record<string, unknown>
+        for (const [k, v] of Object.entries(filterObj)) {
+            let snakeK = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+            if (snakeK === 'id' && !('entry_id' in filterObj) && !('entryId' in filterObj)) snakeK = 'entry_id'
+            if (snakeK === 'project' || snakeK === 'project_id' || snakeK === 'proj') snakeK = 'project_number'
+            if (!(snakeK in result)) {
+                result[snakeK] = v
+            }
+        }
+        delete result['filter']
+    }
+
     return result
 }
 
