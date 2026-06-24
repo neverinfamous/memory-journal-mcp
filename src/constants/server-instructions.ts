@@ -18,7 +18,6 @@ import { CODEMODE_HELP } from './instructions/codemode.js';
 import { GIT_HELP } from './instructions/git.js';
 import { GITHUB_HELP } from './instructions/github.js';
 import { GOTCHAS_HELP } from './instructions/gotchas.js';
-import { SKILLS_HELP } from './instructions/skills.js';
 import { TEMPLATES_HELP } from './instructions/templates.js';
 import { TEAM_HELP } from './instructions/team.js';
 /**
@@ -55,14 +54,13 @@ export interface LatestEntrySnapshot {
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","skills","templates","team"]
+const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","templates","team"]
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
  */
 function buildHelpPointers(groups: Set<ToolGroup>): string {
     const enabledHelpGroups = HELP_GROUP_KEYS.filter((k) => {
-        if (k === 'skills') return true
         return groups.has(k as ToolGroup)
     })
     if (enabledHelpGroups.length === 0) {
@@ -187,7 +185,6 @@ export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
   ["git", GIT_HELP],
   ["github", GITHUB_HELP],
   ["gotchas", GOTCHAS_HELP],
-  ["skills", SKILLS_HELP],
   ["templates", TEMPLATES_HELP],
   ["team", TEAM_HELP]
 ])

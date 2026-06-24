@@ -104,11 +104,13 @@ Only link truly related entries. Do NOT create bulk relationships between unrela
 
 ### Git Commit Standards
 
-When committing changes to the repository, you MUST provide explicit guidance for \`History-Category\`, \`History-Entry\`, and \`History-Trust\` trailer syntax required by the changelog generation scripts.
+When committing changes to the repository, you MUST provide explicit guidance for \`History-Category\`, \`History-Entry\`, \`History-Confidence\`, and \`History-Impact\` trailer syntax required by the changelog generation scripts and Velocity Summary parsing.
 - \`History-Category\`: The category of the change (e.g., Added, Changed, Fixed, Removed, Security, Deprecated).
 - \`History-Entry\`: A clear description of the change for the changelog.
-- \`History-Trust\`: The trust score of the commit (0.0 to 1.0).
+- \`History-Confidence\`: Dynamic confidence score (0.0 to 1.0). **NEVER "rubber stamp" 1.0** without rigorous validation; accurately reflect verification.
+- \`History-Impact\`: The impact score/blast radius of the commit (0.0 to 1.0).
 Example:
 History-Category: Changed
 History-Entry: Refactored server instructions to adhere to 500-line modularity rule
-History-Trust: 0.9`;
+History-Confidence: 0.8
+History-Impact: 0.4`;
