@@ -101,8 +101,8 @@ export class StreamManager {
         } else {
           if (isErr) this.stderrAnsiBuffer = ''; else this.stdoutAnsiBuffer = '';
         }
-      } else if (/^[\u001b\u009b][PX^_]/.test(potentialSeq)) {
-        const isComplete = /^[\u001b\u009b][PX^_].*?(?:\x1b\\|\x07)/s.test(potentialSeq);
+      } else if (new RegExp('^[' + String.fromCharCode(0x1b) + String.fromCharCode(0x9b) + '][PX^_]').test(potentialSeq)) {
+        const isComplete = new RegExp('^[' + String.fromCharCode(0x1b) + String.fromCharCode(0x9b) + '][PX^_].*?(?:' + String.fromCharCode(0x1b) + '\\\\|' + String.fromCharCode(0x07) + ')', 's').test(potentialSeq);
         if (!isComplete && potentialSeq.length < 2048) {
           safeStr = buffer.substring(0, lastEscapeIdx);
           if (isErr) this.stderrAnsiBuffer = potentialSeq; else this.stdoutAnsiBuffer = potentialSeq;

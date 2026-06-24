@@ -94,6 +94,22 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       }
       payload.env = newEnv;
     }
+    if ('command' in payload && typeof payload.command === 'string') {
+      payload.command = replaceTemplates(payload.command);
+    }
+    if ('scriptPath' in payload && typeof payload.scriptPath === 'string') {
+      payload.scriptPath = replaceTemplates(payload.scriptPath);
+    }
+    if ('code' in payload && typeof payload.code === 'string') {
+      payload.code = replaceTemplates(payload.code);
+    }
+    if ('webhookHeaders' in payload && payload.webhookHeaders) {
+      const newHeaders: Record<string, string> = {};
+      for (const [k, v] of Object.entries(payload.webhookHeaders)) {
+        newHeaders[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
+      }
+      payload.webhookHeaders = newHeaders;
+    }
   }
   
   if (payload.type === 'command') {
@@ -309,7 +325,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   });
 
   if (strippedQuotes) {
-    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'shell: false' is used, quotes are NOT needed for spaces. Auto-healing by stripping wrapping quotes...`);
   }
 
@@ -330,7 +346,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   if (payload.type === 'command') {
     const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd');
     if (isWinBatch && payload.target !== 'wsl2') {
-      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       const escapedCmd = cmd.replace(/'/g, "''");
       const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
       const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;

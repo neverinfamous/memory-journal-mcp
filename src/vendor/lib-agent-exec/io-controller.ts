@@ -55,9 +55,30 @@ export class IOController {
 
     const getStream = (filePath: string) => {
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+        let buffer: Buffer[] = [];
+        let timer: NodeJS.Timeout | null = null;
         return new Writable({
           write(chunk: Buffer, encoding: string, callback: (error?: Error | null) => void) {
-            fetch(filePath, { method: 'POST', body: chunk as unknown as BodyInit }).then(() => callback()).catch(() => callback());
+            buffer.push(chunk);
+            if (!timer) {
+              timer = setTimeout(() => {
+                const data = Buffer.concat(buffer);
+                buffer = [];
+                timer = null;
+                fetch(filePath, { method: 'POST', body: data as unknown as BodyInit }).catch(() => {});
+              }, 100);
+            }
+            callback();
+          },
+          final(callback) {
+            if (buffer.length > 0) {
+              const data = Buffer.concat(buffer);
+              buffer = [];
+              if (timer) clearTimeout(timer);
+              fetch(filePath, { method: 'POST', body: data as unknown as BodyInit }).finally(() => callback());
+            } else {
+              callback();
+            }
           }
         }) as unknown as fs.WriteStream;
       }

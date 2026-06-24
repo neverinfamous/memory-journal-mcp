@@ -146,13 +146,14 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     'GIT_EDITOR', 'GH_EDITOR', 'EDITOR', 'VISUAL', 'GIT_SEQUENCE_EDITOR',
     'GIT_ASKPASS', 'SSH_ASKPASS', 'GH_PROMPT_DISABLED', 'GH_FORCE_TTY', 'GIT_TERMINAL_PROMPT',
     'CI', 'NO_COLOR', 'PAGER', 'PYTHONUNBUFFERED', 'FORCE_COLOR', 'TERM', 'GPG_TTY',
-    'NPM_CONFIG_INTERACTIVE', 'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE'
+    'NPM_CONFIG_INTERACTIVE', 'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE',
+    'POETRY_INTERACTIVE', 'PIP_NO_INPUT', 'PYTHON_TEST_NO_INPUT'
   ]);
 
   if (payloadEnv) {
     for (const [key, value] of Object.entries(payloadEnv)) {
       if (immutableOverrides.has(key.toUpperCase())) {
-        console.error(`\n   💡 AGENT HINT: The environment variable '${key}' is immutable to prevent hanging and cannot be overridden.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+        console.error(`\n   💡 AGENT HINT: The environment variable '${key}' is immutable to prevent hanging and cannot be overridden.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         continue;
       }
 
