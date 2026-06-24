@@ -36,9 +36,15 @@ If any gate fails, you must attempt to auto-fix the issue or request human-in-th
 ## 2. Commit Invocation
 Once validation passes, stage your changes and commit using standard native Git tooling.
 
-> **Environment Note:** If your system environment has specific mandatory git workflows or wrappers (e.g., an \`agent-exec\` wrapper or custom \`commit.ts\` scripts defined in your global rules), you MUST defer to those rules instead of using raw \`git commit\`.
+> **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them and pass the semantic flags appropriately instead of raw \`git commit\`. Note that \`commit.ts\` does not support the \`-F\` flag for the full message.
+> 
+> **Example \`commit.ts\` usage:**
+> \`\`\`bash
+> git add .
+> bun path/to/commit.ts --msg "feat(scope): message" --history-file scratch/narrative.txt --confidence 0.9 --impact 0.5 --validation passed
+> \`\`\`
 
-Write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits and includes standard History trailers:
+If using raw \`git\`, write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it includes the new semantic trailers:
 \`\`\`text
 feat(scope): conventional message here
 
@@ -46,7 +52,8 @@ History-Category: Changed
 History-Entry: Narrative explaining the change.
 
 History-Impact: 0.5
-History-Trust: 0.9
+History-Confidence: 0.9
+History-Significance: major
 History-Validation: passed
 \`\`\`
 
@@ -86,9 +93,15 @@ You are initiating a fast procedure for committing code changes.
 ## 1. Commit Invocation
 Stage your changes and commit using standard native Git tooling.
 
-> **Environment Note:** If your system environment has specific mandatory git workflows or wrappers (e.g., an \`agent-exec\` wrapper or custom \`commit.ts\` scripts defined in your global rules), you MUST defer to those rules instead of using raw \`git commit\`.
+> **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them instead of raw \`git commit\`.
+> 
+> **Example \`commit.ts\` usage for a quick commit:**
+> \`\`\`bash
+> git add .
+> bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence 1.0 --impact 0.1 --validation none
+> \`\`\`
 
-Write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits:
+If using raw \`git\`, write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits:
 \`\`\`text
 docs(scope): conventional message here
 
@@ -96,7 +109,7 @@ History-Category: Changed
 History-Entry: Narrative explaining the change (optional for quick-commit).
 
 History-Impact: 0.1
-History-Trust: 1.0
+History-Confidence: 1.0
 History-Validation: none
 \`\`\`
 
