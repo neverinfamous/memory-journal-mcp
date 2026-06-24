@@ -14,14 +14,23 @@ export class IOController {
   private stderrDecoder = new StringDecoder('utf8');
   private _stdoutTail = '';
   private _stderrTail = '';
+  private _lastParsedEnvelope: Record<string, unknown> | null = null;
   
   public get stdoutTail() { return this._stdoutTail; }
   public get stderrTail() { return this._stderrTail; }
   
   public getParsedEnvelope(): Record<string, unknown> | null {
     if (!this.payload.expectJsonEnvelope) return null;
-    if (!this._stdoutTail) return null;
-    const tail = this._stdoutTail.trim();
+    
+    const current = this.parseEnvelopeFromTail(this._stdoutTail);
+    if (current) return current;
+    
+    return this._lastParsedEnvelope;
+  }
+  
+  private parseEnvelopeFromTail(tailStr: string): Record<string, unknown> | null {
+    if (!tailStr) return null;
+    const tail = tailStr.trim();
     if (tail.length === 0) return null;
     
     let lastBrace = tail.lastIndexOf('}');
@@ -301,6 +310,12 @@ export class IOController {
       if (this._stderrTail.length > 2048) this._stderrTail = this._stderrTail.slice(-1024);
     } else {
       this._stdoutTail += decoded;
+      if (this.payload.expectJsonEnvelope) {
+         const parsed = this.parseEnvelopeFromTail(this._stdoutTail);
+         if (parsed) {
+            this._lastParsedEnvelope = parsed;
+         }
+      }
       if (this._stdoutTail.length > 2048) this._stdoutTail = this._stdoutTail.slice(-1024);
     }
 
