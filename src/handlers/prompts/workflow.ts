@@ -30,7 +30,7 @@ async function generateSummaryPrompt(
     }
 
     const dbHint = target === 'team' 
-        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
+        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY. Do NOT use `import` or `require`; `mj` and `team_create_entry` are globally injected.'
         : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`create_entry\` are globally injected.`
 
     const targetDb = target === 'team' && teamDb ? teamDb : db
@@ -136,7 +136,7 @@ ${markUntrustedContent(entrySummary)}`,
 
 function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team' 
-        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY.'
+        ? 'YOU MUST USE `team_create_entry` OR `mj.team.teamCreateEntry` TO SAVE THIS ENTRY. Do NOT use `import` or `require`; `mj` and `team_create_entry` are globally injected.'
         : `Use \`create_entry\` or \`await mj.core.createEntry({ project_number: <CURRENT_PROJECT_NUMBER>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`create_entry\` are globally injected.`
 
     return {
@@ -170,7 +170,7 @@ Just provide a concise markdown description of the specific action, decision, or
 
 function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team'
-        ? 'YOU MUST USE `team_update_entry` OR `mj.team.teamUpdateEntry` TO SAVE THIS ENTRY.'
+        ? 'YOU MUST USE `team_update_entry` OR `mj.team.teamUpdateEntry` TO SAVE THIS ENTRY. Do NOT use `import` or `require`; `mj` and `team_update_entry` are globally injected.'
         : `Use \`update_entry\` or \`await mj.admin.updateEntry({ project_number: <CURRENT_PROJECT_NUMBER>, entry_id: <ID>, ... })\` via \`mj_execute_code\`. Do NOT use \`import\` or \`require\`; \`mj\` and \`update_entry\` are globally injected.`
 
     const fetchHint = target === 'team'
