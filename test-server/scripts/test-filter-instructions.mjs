@@ -27,7 +27,7 @@ const PROJECT_DIR = resolve(__dirname, '../..')
 
 // Section markers — substrings we check for presence/absence in instructions
 const SECTIONS = {
-    CORE: 'Essential Session Start', // Always present
+    CORE: 'Essential Behaviors', // Always present
     CODE_MODE: '## Code Mode', // codemode group only
     HELP_POINTERS: 'Available Help', // standard+ level only
 }
@@ -114,12 +114,17 @@ const TEST_CONFIGS = [
 /** Spawn server with given filter/level, send initialize, capture instructions */
 function runConfig(filter) {
     return new Promise((resolve, reject) => {
-        const args = ['dist/cli.js']
+        const args = ['dist/cli.js', 'serve', '--db', ':memory:', '--team-db', ':memory:']
         if (filter) args.push('--tool-filter', filter)
 
         const proc = spawn('node', args, {
             cwd: PROJECT_DIR,
             stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+                ...process.env,
+                TEST_DB_PATH: ':memory:',
+                TEST_TEAM_DB_PATH: ':memory:'
+            }
         })
 
         let buffer = ''
