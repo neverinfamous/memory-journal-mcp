@@ -358,6 +358,11 @@ export function formatUserMessage(opts: {
     // ========================================================================
     const gitHistoryLines: string[] = []
     if (opts.gitHistory && opts.gitHistory.commits.length > 0) {
+        const stats = opts.gitHistory.stats;
+        if (stats) {
+            gitHistoryLines.push(`**Velocity (Last ${stats.total}):** ${stats.highImpact} High Impact | ${stats.lowImpact} Low Impact | Avg Conf: ${stats.avgConfidence.toFixed(2)}`);
+        }
+        
         const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
         const shortCommits = opts.gitHistory.commits.map(c => {
             const shaText = c.isPushed && repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
@@ -376,7 +381,7 @@ export function formatUserMessage(opts: {
                 
             return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}`;
         }).join('<br>');
-        gitHistoryLines.push(`**Recent Commits:**<br>${shortCommits}`);
+        gitHistoryLines.push(`**Recent Changes:**<br>${shortCommits}`);
     }
 
     // ========================================================================

@@ -20,11 +20,11 @@ import { fileURLToPath } from 'node:url'
 
 let isGeneratingCodeMap = false
 
-async function generateSummaryPrompt(
+function generateSummaryPrompt(
     db: IDatabaseAdapter, 
     teamDb: IDatabaseAdapter | undefined, 
     target: 'personal' | 'team'
-): Promise<{ messages: PromptMessage[] }> {
+): { messages: PromptMessage[] } {
     if (target === 'team' && !teamDb) {
         throw new ConfigurationError('Team database not configured')
     }
@@ -46,16 +46,6 @@ async function generateSummaryPrompt(
                   .join('\n')
             : '- No entries yet'
 
-    let commitList = '- [List commit SHAs made during the session, or "None"]'
-    try {
-        const { execFileSync } = await import('node:child_process')
-        const out = execFileSync('git', ['log', '-n', '5', '--pretty=format:%H %s'], { encoding: 'utf-8', windowsHide: true })
-        if (out) {
-            commitList = out.split('\n').map(l => `- ${l}`).join('\n')
-        }
-    } catch {
-        // Fallback to placeholder on error
-    }
 
     try {
         if (!isGeneratingCodeMap) {
@@ -107,21 +97,18 @@ async function generateSummaryPrompt(
 **Required Content Structure (use EXACTLY these section headers):**
 \`\`\`
 ## Accomplished
-- [List concrete items: changes made, decisions taken, files modified, PRs submitted]
+- [List non-code strategic items, decisions, and research. Do NOT list routine code changes or commits, as those belong in Git]
 
 ## Unfinished / Blocked
 - [List pending items, blockers, open questions — or "None" if everything is complete]
 
 ## Context for Next Session
 - [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
-
-## Commits
-${commitList}
 \`\`\`
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the four required sections
+- Do NOT omit any of the three required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
@@ -158,7 +145,7 @@ function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMes
 - ${dbHint}
 
 **Required Content Structure:**
-Just provide a concise markdown description of the specific action, decision, or fix you just completed. Do not include a full session retrospective. Keep it under 150 words. No top-level headers required.
+Just provide a concise markdown description of the specific architectural decision, strategic pivot, or blocker. Do NOT log routine code changes or bug fixes here; those belong strictly in Git. Keep it under 150 words. No top-level headers required.
 
 **Rules:**
 - If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
@@ -195,7 +182,7 @@ function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: Pro
 
 **Step 2: Apply Conditional Formatting Rules**
 Look at the tags and structure of the existing entry:
-- If it has the \`session-summary\` tag: You MUST preserve the exact 4-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`, \`## Commits\`). Do not flatten the text; only append or modify the relevant bullet points.
+- If it has the \`session-summary\` tag: You MUST preserve the exact 3-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`). Do not flatten the text; only append or modify the relevant bullet points.
 - If it is a standard entry: Keep your modifications concise and under 150 words.
 
 **Step 3: Execute the Update**
@@ -342,6 +329,7 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown
             ) => {
+                await Promise.resolve()
                 return generateSummaryPrompt(db, teamDb, 'personal')
             },
         },
@@ -356,6 +344,7 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown
             ) => {
+                await Promise.resolve()
                 return generateSummaryPrompt(db, teamDb, 'team')
             },
         },

@@ -37,12 +37,19 @@ If any gate fails, you must attempt to auto-fix the issue or request human-in-th
 Once validation passes, stage your changes and commit using standard native Git tooling.
 
 > **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them and pass the semantic flags appropriately instead of raw \`git commit\`. Note that \`commit.ts\` does not support the \`-F\` flag for the full message.
+> **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
+> - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
+> - \`confidence\`: 
+>   - 0.3-0.5: Unverified, experimental, or complex changes without tests.
+>   - 0.6-0.8: Standard changes, logic looks sound but full E2E validation was skipped.
+>   - 0.9-1.0: Rigorously tested, proven, or completely trivial (like a typo fix).
+> - \`validation\`: 'passed' (tests ran), 'none' (bypassed), or 'failed'
 > 
-> **Example \`commit.ts\` usage:**
+> **Example \`commit.ts\` usage (Single Command):**
 > \`\`\`bash
-> git add .
-> bun path/to/commit.ts --msg "feat(scope): message" --history-file scratch/narrative.txt --confidence 0.9 --impact 0.5 --validation passed
+> git add . ; bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation passed
 > \`\`\`
+> *(Note: Use \`--history-file scratch/narrative.txt\` instead of \`--history\` ONLY if your narrative is extremely long or contains complex quotes that risk shell-escaping issues)*
 
 If using raw \`git\`, write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it includes the new semantic trailers:
 \`\`\`text
@@ -51,9 +58,9 @@ feat(scope): conventional message here
 History-Category: Changed
 History-Entry: Narrative explaining the change.
 
-History-Impact: 0.5
-History-Confidence: 0.9
-History-Significance: major
+History-Impact: <IMPACT_SCORE>
+History-Confidence: <YOUR_SCORE_0.0_TO_1.0>
+History-Significance: milestone
 History-Validation: passed
 \`\`\`
 
@@ -63,7 +70,7 @@ git add .
 git commit -F scratch/commit-msg.txt
 \`\`\`
 
-## 3. Journal Entry (Optional but recommended for significance > 0.5)
+## 3. Journal Entry (Optional but recommended for impact > 0.5 or structural significance)
 Call \`mj_execute_code\` to create a \`technical_note\` entry documenting the commit. Tag it with \`["commit-narrative"]\`. Include the commit SHA, the rationale, and any architectural shifts.`,
                             },
                         },
@@ -94,11 +101,17 @@ You are initiating a fast procedure for committing code changes.
 Stage your changes and commit using standard native Git tooling.
 
 > **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them instead of raw \`git commit\`.
+> **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
+> - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
+> - \`confidence\`: 
+>   - 0.3-0.5: Unverified, experimental, or complex changes without tests.
+>   - 0.6-0.8: Standard changes, logic looks sound but full E2E validation was skipped.
+>   - 0.9-1.0: Rigorously tested, proven, or completely trivial (like a typo fix).
+> - \`validation\`: 'passed' (tests ran), 'none' (bypassed), or 'failed'
 > 
-> **Example \`commit.ts\` usage for a quick commit:**
+> **Example \`commit.ts\` usage for a quick commit (Single Command):**
 > \`\`\`bash
-> git add .
-> bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence 1.0 --impact 0.1 --validation none
+> git add . ; bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none
 > \`\`\`
 
 If using raw \`git\`, write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits:
@@ -108,8 +121,8 @@ docs(scope): conventional message here
 History-Category: Changed
 History-Entry: Narrative explaining the change (optional for quick-commit).
 
-History-Impact: 0.1
-History-Confidence: 1.0
+History-Impact: <IMPACT_SCORE>
+History-Confidence: <YOUR_SCORE_0.0_TO_1.0>
 History-Validation: none
 \`\`\`
 

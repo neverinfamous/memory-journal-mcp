@@ -29,6 +29,12 @@ import type { BriefingConfig } from '../../shared.js'
 // ============================================================================
 
 export interface GitHistorySummary {
+    stats?: {
+        total: number;
+        highImpact: number;
+        lowImpact: number;
+        avgConfidence: number;
+    }
     commits: { 
         hash: string; 
         type?: string;
@@ -146,9 +152,10 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
     if (existing !== undefined) return existing
 
     try {
+        const fetchLimit = Math.max(15, Math.min(50, commitCount))
         const out = execFileSync('bun', [
             'C:\\Users\\chris\\Desktop\\adamic\\.agents\\scripts\\get-git-history-json.ts',
-            '--limit', String(Math.max(1, Math.min(50, commitCount))),
+            '--limit', String(fetchLimit),
             '--summary'
         ], { cwd: root, encoding: 'utf-8', windowsHide: true })
         
@@ -163,6 +170,7 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
                 subject: z.string().optional(),
                 metadata: z.object({
                     significance: z.union([z.number(), z.string()]).optional(),
+                    impact: z.union([z.number(), z.string()]).optional(),
                     confidence: z.union([z.number(), z.string()]).optional(),
                     trust: z.union([z.number(), z.string()]).optional()
                 }).optional(),
@@ -189,7 +197,7 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
                 hash: fullHash.substring(0, 7),
                 type: c.type,
                 size: c.size,
-                significance: c.metadata?.significance,
+                significance: c.metadata?.significance ?? c.metadata?.impact,
                 confidence: c.metadata?.confidence ?? c.metadata?.trust,
                 isBreaking: !!c.isBreaking,
                 message: c.subject ?? '',
@@ -197,7 +205,40 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
                 associatedIssues: issues.length > 0 ? issues : undefined
             }
         })
-        const result = { commits }
+        
+        let highImpact = 0
+        let lowImpact = 0
+        let totalConf = 0
+        let confCount = 0
+        
+        for (const c of commits) {
+            const sig = typeof c.significance === 'number' ? c.significance : parseFloat(c.significance || '0')
+            if (sig >= 0.5 || c.isBreaking) {
+                highImpact++
+            } else {
+                lowImpact++
+            }
+            
+            if (c.confidence !== undefined) {
+                const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence)
+                if (!isNaN(conf)) {
+                    totalConf += conf
+                    confCount++
+                }
+            }
+        }
+        
+        const stats = {
+            total: commits.length,
+            highImpact,
+            lowImpact,
+            avgConfidence: confCount > 0 ? totalConf / confCount : 1.0
+        }
+        
+        const result = { 
+            stats, 
+            commits: commits.slice(0, Math.max(1, commitCount)) 
+        }
         cachedGitHistory.set(root, result)
     } catch (err: unknown) {
         logger.debug('Failed to get git history via child_process (non-critical)', {
