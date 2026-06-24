@@ -3,7 +3,7 @@ import { createProgram, addServerOptions } from './program-options.js'
 import { serveAction } from './commands/serve.js'
 import { execAction } from './commands/exec.js'
 import { backupAction, restoreAction, vacuumAction, pruneAction } from './commands/admin.js'
-
+import { createEntryAction, updateEntryAction } from './commands/entry.js'
 const program = createProgram()
 
 // Setup default 'serve' command
@@ -52,5 +52,40 @@ const pruneCmd = adminCmd
     .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
 addServerOptions(pruneCmd)
 pruneCmd.action(pruneAction)
+
+// Setup 'entry' command group
+const entryCmd = program
+    .command('entry')
+    .description('Manage journal entries')
+
+const createEntryCmd = entryCmd
+    .command('create')
+    .description('Create a new journal entry directly in the database')
+    .option('-f, --file <path>', 'Load markdown content from a file')
+    .option('-c, --content <string>', 'Raw markdown content string')
+    .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
+    .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
+    .option('--project <number>', 'Project number')
+    .option('--trust-score <number>', 'Trust score (0.0 to 1.0)')
+    .option('--impact-score <number>', 'Impact score (0.0 to 1.0)')
+    .option('--validation-status <status>', 'Validation status (passed|none|failed)')
+    .option('--session-id <id>', 'Session ID')
+    .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
+    .option('--auto-context <json>', 'JSON string for auto context')
+    .option('--team', 'Route to team database')
+addServerOptions(createEntryCmd)
+createEntryCmd.action(createEntryAction)
+
+const updateEntryCmd = entryCmd
+    .command('update')
+    .description('Update an existing journal entry')
+    .option('--id <number>', 'ID of the entry to update')
+    .option('--expected-version <number>', 'Expected version of the entry (for concurrent modification safety)')
+    .option('-f, --file <path>', 'Load new markdown content from a file')
+    .option('-c, --content <string>', 'Raw new markdown content string')
+    .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
+    .option('--team', 'Route to team database')
+addServerOptions(updateEntryCmd)
+updateEntryCmd.action(updateEntryAction)
 
 program.parse()

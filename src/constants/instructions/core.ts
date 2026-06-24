@@ -3,14 +3,14 @@ export const CORE_HELP = `# Core Operations
 
 ### Session Summaries
 
-Use \`create_entry\` to record session summaries. Required fields:
+Use the \`memory-journal-mcp entry create\` terminal command to record session summaries. Required fields:
 
-- \`entry_type: "retrospective"\`
-- \`tags: ["session-summary"]\` (plus relevant domain/activity tags)
-- \`project_number\` from the briefing
-- \`impactScore\`, \`trustScore\`, and \`validationStatus\` MUST be evaluated and populated.
-- \`related_to\` MUST be populated with IDs of related tasks, architectural plans, or preceding summaries.
-- \`auto_context\` MUST be populated with a concise JSON payload representing the context (e.g. \`{ "commits": ["abc1234", "def5678"] }\`)
+- \`--type retrospective\`
+- \`--tags session-summary\` (plus relevant domain/activity tags, comma-separated)
+- \`--project\` from the briefing
+- \`--impact-score\`, \`--trust-score\`, and \`--validation-status\` MUST be evaluated and populated.
+- \`--related-to\` MUST be populated with IDs of related tasks, architectural plans, or preceding summaries.
+- \`--auto-context\` MUST be populated with a concise JSON payload representing the context (e.g. \`{ "commits": ["abc1234", "def5678"] }\`)
 
 Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
 
