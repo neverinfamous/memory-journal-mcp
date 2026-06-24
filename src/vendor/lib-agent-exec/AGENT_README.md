@@ -63,7 +63,16 @@ Used for executing raw code snippets dynamically.
 }
 ```
 
-## Security & Reliability (Auto-Healing)
+## 🛠️ Handling Autonomous Healing Hints
+
+When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` had to automatically intercept your command to prevent execution failure (e.g., blocking an interactive prompt, stripping a hanging flag).
+
+**If you encounter this hint during an autonomous task:**
+1. **Do NOT stop or interrupt your current workflow.** Continue your primary task as normal.
+2. **Add the issue to your task list** (e.g., in your `task.md` or internal notes) to remind yourself to fix the payload.
+3. **Inform the user** at the first opportunity (when you respond to them) that your payload required auto-healing, and ask if they'd like you to update your approach for future invocations.
+
+## Security & Reliability (Interception Rules)
 
 To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging and false positives:
 
@@ -92,3 +101,8 @@ The bridge standardizes the environment to enforce non-interactive behaviors. Th
 - **Carriage Returns**: Backspaces (`\b`) and carriage returns (`\r`) from animated progress bars are automatically resolved linearly ($O(N)$) before output.
 - **Real-Time Flushing**: To ensure interactive prompts and paused progress bars are visible to agents, the `StreamManager` employs a 200ms inactivity timer to flush pending non-newline-terminated strings.
 - **Truncation**: Output is strictly capped. If a command exceeds the `maxBuffer` limit (default 10MB), the process tree will be forcibly terminated. You may specify `stdoutFile` or `stderrFile` in the payload to redirect massive outputs to disk and raise the buffer limit to 1GB.
+
+## 🧪 Usability & Hallucination Testing
+
+If you modify interceptors or execution logic, programmatic `bun test` passes are **not enough**. You MUST run the usability testing suite to ensure actual agents don't get trapped by false positives (e.g. `&&` chains or pipeline character bugs).
+- **Run the Fuzzing Suite:** Ask the user to "Execute the usability testing coordinator workflow in adamic", or manually trigger the subagents defined in `.agents/scripts/usability/coordinator-workflow.md`.

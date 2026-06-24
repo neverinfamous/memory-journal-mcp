@@ -2,12 +2,12 @@
 import { ExecutionContext } from './types.js';
 
 export function systemInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
-  const shellChars = ['|', '>', '<', '&&', '||', ';', '$(', '`'];
-  const hasShellChars = args.some(a => shellChars.some(c => a.includes(c)));
-  if (hasShellChars && payload.type === 'command') {
-    console.error(`\n   💡 AGENT HINT: Shell operators (|, >, <, &&, ||, ;, $(, \`) detected in arguments.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
-    console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings.`);
-    console.error(`   To use shell features, please use a 'script' payload type instead.`);
+  const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
+  const hasExactShellChars = args.some(a => exactShellChars.includes(a.trim()));
+  if (hasExactShellChars && payload.type === 'command') {
+    console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings and will fail.`);
+    console.error(`   To use shell features, please use a 'script' payload type or pipe natively in PowerShell.`);
     process.exit(1);
   }
 

@@ -32,6 +32,10 @@ export class ProcessController {
       this.setupTimeouts();
     } catch (err) {
       this.cleanupTempScript();
+      if (err instanceof Error && ('code' in err || ('syscall' in err && (err as NodeJS.ErrnoException).syscall === 'uv_spawn'))) {
+        this.onChildError(err as NodeJS.ErrnoException);
+        return;
+      }
       console.error(`❌ Unexpected error during spawn setup:`, err);
       process.exit(1);
     }
@@ -169,14 +173,14 @@ export class ProcessController {
     if (this.forceKillTimer) clearTimeout(this.forceKillTimer);
     this.cleanupTempScript();
 
-    this.ioController.closeFileStreams().then(() => {
+    const handleError = () => {
       console.error(`❌ Execution Error: ${error.message}`);
-      if (error.code === 'ENOENT') {
+      if (error.code === 'ENOENT' || error.code === 'EUNKNOWN' || (error as NodeJS.ErrnoException).syscall === 'uv_spawn') {
          console.error(`   Executable '${this.cmd}' was not found in PATH or working directory.`);
          if (process.platform === 'win32') {
              const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
              if (builtIns.includes(this.cmd.toLowerCase())) {
-                 console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+                 console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
              }
              if (this.cmd === 'npm' || this.cmd === 'npx' || this.cmd === 'tsc') {
                  console.error(`\n   💡 AGENT HINT: On Windows, '${this.cmd}' is usually a .cmd or .ps1 script, not an .exe.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
@@ -204,7 +208,13 @@ export class ProcessController {
          }
       }
       process.exit(1);
-    });
+    };
+
+    if (this.ioController) {
+      this.ioController.closeFileStreams().then(handleError);
+    } else {
+      handleError();
+    }
   }
 
   private setupTimeouts() {
@@ -306,7 +316,7 @@ export class ProcessController {
             if (process.platform === 'win32') {
                 const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
                 if (builtIns.includes(this.cmd.toLowerCase())) {
-                    console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+                    console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, do NOT interrupt your current workflow. Add the issue to your task list to investigate and heal later, and inform the user of the needed self-improvement at the first opportunity. (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
                 }
             }
             process.exit(code);
