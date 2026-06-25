@@ -16,9 +16,31 @@ import { markUntrustedContent, markUntrustedContentInline } from '../../utils/se
 
 import { spawn } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
+import * as path from 'node:path'
+import * as os from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 let isGeneratingCodeMap = false
+
+function getProjectRegistryHint(): string {
+    try {
+        const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+        if (existsSync(configPath)) {
+            const config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+            if ('projectRegistry' in config && config['projectRegistry'] != null) {
+                const projects = Object.entries(config['projectRegistry'] as Record<string, unknown>)
+                    .map(([name, data]: [string, unknown]) => `- ${name}: ${String((data as Record<string, unknown>)['project_number'])}`)
+                    .join('\n')
+                if (projects) {
+                    return `\n**Registered Projects & Numbers:**\n${projects}\nIf your active repository matches one of these, use its number instead of reading memory://agent-context/{repo}.\n`
+                }
+            }
+        }
+    } catch {
+        // fail silently
+    }
+    return ''
+}
 
 function generateSummaryPrompt(
     db: IDatabaseAdapter, 
@@ -30,8 +52,8 @@ function generateSummaryPrompt(
     }
 
     const dbHint = target === 'team' 
-        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create --team`. Do NOT use MCP tools for mutation.'
-        : `YOU MUST USE THE CLI TO SAVE THIS ENTRY: \`memory-journal-mcp entry create\`. Do NOT use MCP tools for mutation.`
+        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create --team`. You MUST pass the markdown content via the `--file <path>` or `--content "<string>"` flag. Do NOT use MCP tools for mutation.'
+        : 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create`. You MUST pass the markdown content via the `--file <path>` or `--content "<string>"` flag. Do NOT use MCP tools for mutation.'
 
     const targetDb = target === 'team' && teamDb ? teamDb : db
     const { entries: recent } = targetDb.getRecentEntries(5)
@@ -75,6 +97,8 @@ function generateSummaryPrompt(
         isGeneratingCodeMap = false
     }
 
+    const registryHint = getProjectRegistryHint()
+
     return {
         messages: [
             {
@@ -111,7 +135,7 @@ function generateSummaryPrompt(
 - Do NOT omit any of the three required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
-- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
+${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Recent Entries (for context):**
 ${markUntrustedContent(entrySummary)}`,
@@ -121,10 +145,12 @@ ${markUntrustedContent(entrySummary)}`,
     }
 }
 
-function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
+function generateEntryPrompt(_db: IDatabaseAdapter, _teamDb: IDatabaseAdapter | undefined, target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team' 
-        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create --team`. Do NOT use MCP tools for mutation.'
-        : `YOU MUST USE THE CLI TO SAVE THIS ENTRY: \`memory-journal-mcp entry create\`. Do NOT use MCP tools for mutation.`
+        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create --team`. You MUST pass the markdown content via the `--file <path>` or `--content "<string>"` flag. Do NOT use MCP tools for mutation.'
+        : 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry create`. You MUST pass the markdown content via the `--file <path>` or `--content "<string>"` flag. Do NOT use MCP tools for mutation.'
+
+    const registryHint = getProjectRegistryHint()
 
     return {
         messages: [
@@ -148,25 +174,39 @@ function generateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMes
 Just provide a concise markdown description of the specific architectural decision, strategic pivot, or blocker. Do NOT log routine code changes or bug fixes here; those belong strictly in Git. Keep it under 150 words. No top-level headers required.
 
 **Rules:**
-- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
+${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
                 }
             }
         ]
     }
 }
 
-function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: PromptMessage[] } {
+function generateUpdateEntryPrompt(db: IDatabaseAdapter, teamDb: IDatabaseAdapter | undefined, target: 'personal' | 'team'): { messages: PromptMessage[] } {
     const dbHint = target === 'team'
-        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry update --team`. Do NOT use MCP tools for mutation.'
-        : 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry update`. Do NOT use MCP tools for mutation.'
+        ? 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry update --team`. You MUST pass the markdown content via the `--file <path>` or `--content "<string>"` flag. Do NOT use MCP tools for mutation.'
+        : 'YOU MUST USE THE CLI TO SAVE THIS ENTRY: `memory-journal-mcp entry update`. You MUST pass the markdown content via the `--file <path>` or `--content "<string>"` flag. Do NOT use MCP tools for mutation.'
 
-    const fetchHint = target === 'team'
-        ? '`await mj.team.teamGetEntryById` or `await team_get_entry_by_id`'
-        : '`await mj.core.getEntryById` or `await get_entry_by_id`'
-
-    const recentHint = target === 'team'
-        ? '`await mj.team.teamGetRecentEntries({ limit: 1 })`'
-        : '`await mj.core.getRecentEntries({ limit: 1 })`'
+    const targetDb = target === 'team' && teamDb ? teamDb : db
+    let entryContext = ''
+    try {
+        const recentRes = targetDb.getRecentEntries(1) as { entries?: unknown[] } | unknown[]
+        const recent = (Array.isArray(recentRes) ? recentRes[0] : recentRes.entries?.[0]) as Record<string, unknown> | undefined
+        if (recent) {
+            entryContext = `
+**Target Entry Details (Pre-fetched for your convenience):**
+- **ID:** ${String(recent['id'])}
+- **Version:** ${String(recent['version'])}
+- **Type:** ${String(recent['entryType'])}
+- **Tags:** ${recent['tags'] != null ? JSON.stringify(recent['tags']) : '[]'}
+- **Content:**
+\`\`\`markdown
+${String(recent['content'])}
+\`\`\`
+`
+        }
+    } catch {
+        // fail silently
+    }
 
     return {
         messages: [
@@ -177,11 +217,12 @@ function generateUpdateEntryPrompt(target: 'personal' | 'team'): { messages: Pro
                     text: `Update an existing ${target === 'team' ? 'team ' : ''}journal entry safely.
 
 **Step 1: Identify the Target Entry**
-- If the user did not provide an entry ID, assume they want to update the most recent entry. Fetch it using ${recentHint} to get the target ID.
-- Once you have the ID, you MUST fetch the existing entry using ${fetchHint} to read its \`content\` and \`version\`.
+- The most recent entry has been pre-fetched below for your convenience. If the user did not specify an ID, you MUST update this pre-fetched entry.
+- You do NOT need to fetch it using mj.core.getEntryById unless the user asks to update a DIFFERENT entry ID.
+${entryContext}
 
 **Step 2: Apply Conditional Formatting Rules**
-Look at the tags and structure of the existing entry:
+Look at the tags and structure of the target entry:
 - If it has the \`session-summary\` tag: You MUST preserve the exact 3-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`). Do not flatten the text; only append or modify the relevant bullet points.
 - If it is a standard entry: Keep your modifications concise and under 150 words.
 
@@ -191,7 +232,7 @@ Look at the tags and structure of the existing entry:
 - Ensure you pass the full updated \`content\` string. Do not nest it under an \`updates\` object if calling the raw tool.
 
 **Rules:**
-- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
+${getProjectRegistryHint()}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
                 }
             }
         ]
@@ -353,8 +394,13 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             description: 'Create a structured mid-thread journal entry',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: () => {
-                return generateEntryPrompt('personal')
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                await Promise.resolve()
+                return generateEntryPrompt(db, teamDb, 'personal')
             },
         },
         {
@@ -362,8 +408,13 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             description: 'Create a structured mid-thread team journal entry',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: () => {
-                return generateEntryPrompt('team')
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                await Promise.resolve()
+                return generateEntryPrompt(db, teamDb, 'team')
             },
         },
         {
@@ -371,8 +422,13 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             description: 'Safely update an existing mid-thread entry or session summary',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: () => {
-                return generateUpdateEntryPrompt('personal')
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                await Promise.resolve()
+                return generateUpdateEntryPrompt(db, teamDb, 'personal')
             },
         },
         {
@@ -380,8 +436,13 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             description: 'Safely update an existing team entry or team session summary',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: () => {
-                return generateUpdateEntryPrompt('team')
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                await Promise.resolve()
+                return generateUpdateEntryPrompt(db, teamDb, 'team')
             },
         },
         {

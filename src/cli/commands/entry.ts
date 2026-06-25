@@ -53,9 +53,20 @@ async function parseContent(options: Record<string, unknown>): Promise<string> {
 
     if (!process.stdin.isTTY) {
         let stdinStr = ''
+
+        // Add a safety timeout for automated execution environments
+        const timeout = setTimeout(() => {
+            if (stdinStr.length === 0) {
+                process.stderr.write('Error: Timed out waiting for stdin. You must provide --file or --content when running in a non-interactive shell.\n')
+                process.exit(1)
+            }
+        }, 3000)
+
         for await (const chunk of process.stdin) {
             stdinStr += chunk
         }
+        clearTimeout(timeout)
+
         if (stdinStr.trim().length > 0) {
             return stdinStr
         }
