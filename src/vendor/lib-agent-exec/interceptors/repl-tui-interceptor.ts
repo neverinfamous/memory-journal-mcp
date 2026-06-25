@@ -115,6 +115,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
 
   const tuiRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${[...tuiCommands, 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
   const replRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
+  const interactiveFlagRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-[a-zA-Z]*i[a-zA-Z]*|--interactive|inspect|--inspect|-m\\s+pdb)\\b`, 'i');
   const tailFRegex = /tail(?:\\.exe)?.*(?:-f|--follow)/i;
 
   const extractScriptBody = (type: string, cmd: string, cmdArgs: string[]): string | null => {
@@ -184,8 +185,8 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
       process.exit(1);
     })
-    .with({ type: 'command', scriptBody: P.when(body => body !== null && replRegex.test(body!)) }, (p) => {
-      const m = replRegex.exec(p.scriptBody!);
+    .with({ type: 'command', scriptBody: P.when(body => body !== null && (replRegex.test(body!) || interactiveFlagRegex.test(body!))) }, (p) => {
+      const m = replRegex.exec(p.scriptBody!) || interactiveFlagRegex.exec(p.scriptBody!);
       const innerCmdBasename = m ? m[1].toLowerCase() : 'repl-app';
       console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
@@ -206,8 +207,8 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
     })
-    .with({ type: 'eval', code: P.when(c => replRegex.test(c)) }, (p) => {
-       const m = replRegex.exec(p.code);
+    .with({ type: 'eval', code: P.when(c => replRegex.test(c) || interactiveFlagRegex.test(c)) }, (p) => {
+       const m = replRegex.exec(p.code) || interactiveFlagRegex.exec(p.code);
        const innerCmdBasename = m ? m[1].toLowerCase() : 'repl-app';
        console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);

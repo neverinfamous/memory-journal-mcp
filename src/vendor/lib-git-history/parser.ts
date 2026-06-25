@@ -17,45 +17,59 @@ export function extractNumericMetadata(val: string): number | string | undefined
   if (vLower === 'low') return 0.2;
   if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') return undefined;
 
-  if (trimmed.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      const matched = match(parsed)
-        .with({ status: 'success', data: P.number }, (res) => res.data)
-        .with({ status: 'success', data: P.string }, (res) => {
-          const n = Number(res.data);
-          return !Number.isNaN(n) && Number.isFinite(n) ? n : res.data;
-        })
-        .with({ data: P.number }, (res) => res.data)
-        .with({ data: P.string }, (res) => {
-          const n = Number(res.data);
-          return !Number.isNaN(n) && Number.isFinite(n) ? n : res.data;
-        })
-        .with({ status: 'success', data: { trust: P.number } }, (res) => res.data.trust)
-        .with({ status: 'success', data: { impact: P.number } }, (res) => res.data.impact)
-        .with({ status: 'success', data: { confidence: P.number } }, (res) => res.data.confidence)
-        .with({ trust: P.number }, (res) => res.trust)
-        .with({ impact: P.number }, (res) => res.impact)
-        .with({ confidence: P.number }, (res) => res.confidence)
-        .otherwise(() => undefined);
-      
-      if (matched !== undefined) return matched;
-    } catch {
-      const matchedString = match(trimmed)
-        .with(P.string.includes('"trust":'), (s) => { const m = s.match(/"trust"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
-        .with(P.string.includes('"impact":'), (s) => { const m = s.match(/"impact"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
-        .with(P.string.includes('"confidence":'), (s) => { const m = s.match(/"confidence"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
-        .with(P.string.includes('"data":'), (s) => { const m = s.match(/"data"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
-        .otherwise(() => undefined);
-      
-      if (matchedString !== undefined && !Number.isNaN(matchedString)) return matchedString;
-    }
+  let jsonCandidate = trimmed;
+  if (!jsonCandidate.startsWith('{')) {
+    jsonCandidate = `{${jsonCandidate}}`;
+  }
+
+  try {
+    const parsed = JSON.parse(jsonCandidate);
+    const matched = match(parsed)
+      .with({ status: 'success', data: P.number }, (res) => res.data)
+      .with({ status: 'success', data: P.string }, (res) => {
+        const n = Number(res.data);
+        return !Number.isNaN(n) && Number.isFinite(n) ? n : res.data;
+      })
+      .with({ data: P.number }, (res) => res.data)
+      .with({ data: P.string }, (res) => {
+        const n = Number(res.data);
+        return !Number.isNaN(n) && Number.isFinite(n) ? n : res.data;
+      })
+      .with({ status: 'success', data: { trust: P.number } }, (res) => res.data.trust)
+      .with({ status: 'success', data: { impact: P.number } }, (res) => res.data.impact)
+      .with({ status: 'success', data: { confidence: P.number } }, (res) => res.data.confidence)
+      .with({ trust: P.number }, (res) => res.trust)
+      .with({ impact: P.number }, (res) => res.impact)
+      .with({ confidence: P.number }, (res) => res.confidence)
+      .with({ status: 'success', data: { trust: P.string } }, (res) => Number(res.data.trust))
+      .with({ status: 'success', data: { impact: P.string } }, (res) => Number(res.data.impact))
+      .with({ status: 'success', data: { confidence: P.string } }, (res) => Number(res.data.confidence))
+      .with({ trust: P.string }, (res) => Number(res.trust))
+      .with({ impact: P.string }, (res) => Number(res.impact))
+      .with({ confidence: P.string }, (res) => Number(res.confidence))
+      .otherwise(() => undefined);
+    
+    if (matched !== undefined && !Number.isNaN(matched)) return matched;
+  } catch {
+    const matchedString = match(trimmed)
+      .with(P.when((s: string) => /['"]trust['"]\s*:\s*['"]?([\d.]+)['"]?/.test(s)), (s: string) => { const m = s.match(/['"]trust['"]\s*:\s*['"]?([\d.]+)['"]?/); return m ? Number(m[1]) : undefined; })
+      .with(P.when((s: string) => /['"]impact['"]\s*:\s*['"]?([\d.]+)['"]?/.test(s)), (s: string) => { const m = s.match(/['"]impact['"]\s*:\s*['"]?([\d.]+)['"]?/); return m ? Number(m[1]) : undefined; })
+      .with(P.when((s: string) => /['"]confidence['"]\s*:\s*['"]?([\d.]+)['"]?/.test(s)), (s: string) => { const m = s.match(/['"]confidence['"]\s*:\s*['"]?([\d.]+)['"]?/); return m ? Number(m[1]) : undefined; })
+      .with(P.when((s: string) => /['"]data['"]\s*:\s*['"]?([\d.]+)['"]?/.test(s)), (s: string) => { const m = s.match(/['"]data['"]\s*:\s*['"]?([\d.]+)['"]?/); return m ? Number(m[1]) : undefined; })
+      .otherwise(() => undefined);
+    
+    if (matchedString !== undefined && !Number.isNaN(matchedString)) return matchedString;
   }
 
   const num = Number(trimmed);
   if (trimmed !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
     return num;
   }
+
+  if (trimmed.startsWith('{') && (trimmed.includes('"error"') || trimmed.includes("'error'") || trimmed.includes('error:'))) {
+    return undefined;
+  }
+  
   return trimmed !== '' ? trimmed : undefined;
 }
 
