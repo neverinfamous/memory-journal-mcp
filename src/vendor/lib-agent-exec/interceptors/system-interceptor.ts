@@ -56,14 +56,25 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
         .with(P.string.includes('`'), () => true)
         .with(P.when(a => a.includes('\\&') || a.includes('\\|') || a.includes('\\>') || a.includes('\\<') || a.includes('\\;')), () => true)
         .with(P.when(a => {
-           const stripped = a.split('').filter(c => c !== "'" && c !== '"').join('');
-           if (exactShellChars.includes(stripped.trim())) return true;
-           return exactShellChars.some(op => {
-               if (!stripped.includes(op)) return false;
-               const parts = stripped.split(op);
-               if (parts.length !== 2) return false;
-               return !parts[0].includes(' ') && !parts[1].includes(' ');
-           });
+            if (exactShellChars.includes(a.trim())) return true;
+            
+            type ParseState = { inSingle: boolean; inDouble: boolean; unquoted: string };
+            const initialState: ParseState = { inSingle: false, inDouble: false, unquoted: '' };
+            
+            const finalState = a.split('').reduce((state: ParseState, char: string) => {
+                return match([state, char])
+                    .with([{ inDouble: false }, "'"], ([s]) => ({ ...s, inSingle: !s.inSingle }))
+                    .with([{ inSingle: false }, '"'], ([s]) => ({ ...s, inDouble: !s.inDouble }))
+                    .with([{ inSingle: false, inDouble: false }, P.any], ([s, c]) => ({ ...s, unquoted: s.unquoted + c }))
+                    .otherwise(([s]) => s);
+            }, initialState);
+            
+            return exactShellChars.some(op => {
+                if (!finalState.unquoted.includes(op)) return false;
+                const parts = finalState.unquoted.split(op);
+                if (parts.length !== 2) return false;
+                return !parts[0].includes(' ') && !parts[1].includes(' ');
+            });
         }), () => true)
         .otherwise(() => false);
     });
