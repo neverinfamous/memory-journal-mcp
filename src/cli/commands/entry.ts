@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { EntryType } from '../../types/index.js'
+import type { EntryType, RelationshipType } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import type { CreateEntryInput } from '../../database/core/schema.js'
@@ -73,7 +73,7 @@ function parseRelatedTo(relatedToStr: unknown): number[] {
 function parseRelationships(relationshipsStr: unknown): { target_id: number, relation_type: string }[] {
     if (typeof relationshipsStr !== 'string') return []
     try {
-        const parsed = JSON.parse(relationshipsStr)
+        const parsed: unknown = JSON.parse(relationshipsStr)
         if (Array.isArray(parsed)) {
             return parsed.map((r: unknown) => {
                 if (typeof r !== 'object' || r === null) return null;
@@ -126,7 +126,7 @@ export async function createEntryAction(options: Record<string, unknown>, comman
 
         const relationships = parseRelationships(options['relationships'])
         for (const rel of relationships) {
-            db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as import('../../database/core/interfaces.js').RelationshipType)
+            db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as RelationshipType)
         }
 
         db.flushSave()
@@ -187,7 +187,7 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
 
         const relationships = parseRelationships(options['relationships'])
         for (const rel of relationships) {
-            db.linkEntries(entryId, rel.target_id, rel.relation_type as import('../../database/core/interfaces.js').RelationshipType)
+            db.linkEntries(entryId, rel.target_id, rel.relation_type as RelationshipType)
         }
 
         db.flushSave()
