@@ -28,7 +28,9 @@ export class ConfigResolver {
     private loadEnvFiles(): void {
         const envPaths = [
             path.resolve(process.cwd(), '.env'),
-            path.resolve(process.cwd(), 'secrets.env')
+            path.resolve(process.cwd(), 'secrets.env'),
+            path.resolve(os.homedir(), '.gemini', 'config', 'secrets.env'),
+            path.resolve(os.homedir(), '.gemini', 'config', '.env')
         ]
         
         const loadedKeys = new Set<string>()
