@@ -152,6 +152,11 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
     if (existing !== undefined) return existing
 
     try {
+        if (process.env['VITEST']) {
+            cachedGitHistory.set(root, null)
+            return null
+        }
+
         const fetchLimit = Math.max(15, Math.min(50, commitCount))
         const out = execFileSync('bun', [
             'C:\\Users\\chris\\Desktop\\adamic\\.agents\\scripts\\get-git-history-json.ts',
