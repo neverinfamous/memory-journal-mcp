@@ -55,25 +55,30 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
         .with(P.string.includes('$('), () => true)
         .with(P.string.includes('`'), () => true)
         .with(P.when(a => a.includes('\\&') || a.includes('\\|') || a.includes('\\>') || a.includes('\\<') || a.includes('\\;')), () => true)
-        .with(P.when(a => {
+        .with(P.when((a: string) => {
             if (exactShellChars.includes(a.trim())) return true;
             
             type ParseState = { inSingle: boolean; inDouble: boolean; unquoted: string };
             const initialState: ParseState = { inSingle: false, inDouble: false, unquoted: '' };
             
             const finalState = a.split('').reduce((state: ParseState, char: string) => {
-                return match([state, char])
+                return match([state, char] as const)
                     .with([{ inDouble: false }, "'"], ([s]) => ({ ...s, inSingle: !s.inSingle }))
                     .with([{ inSingle: false }, '"'], ([s]) => ({ ...s, inDouble: !s.inDouble }))
-                    .with([{ inSingle: false, inDouble: false }, P.any], ([s, c]) => ({ ...s, unquoted: s.unquoted + c }))
-                    .otherwise(([s]) => s);
+                    .with([{ inSingle: false, inDouble: false }, P.string], ([s, c]) => ({ ...s, unquoted: s.unquoted + c }))
+                    .with([{ inSingle: true }, P.string], ([s]) => s)
+                    .with([{ inDouble: true }, P.string], ([s]) => s)
+                    .exhaustive();
             }, initialState);
             
             return exactShellChars.some(op => {
                 if (!finalState.unquoted.includes(op)) return false;
                 const parts = finalState.unquoted.split(op);
-                if (parts.length !== 2) return false;
-                return !parts[0].includes(' ') && !parts[1].includes(' ');
+                
+                return match(parts)
+                    .with(P.when(p => p.length < 2), () => false)
+                    .with(P.when(p => p.every(part => !part.includes(' '))), () => true)
+                    .otherwise(() => false);
             });
         }), () => true)
         .otherwise(() => false);

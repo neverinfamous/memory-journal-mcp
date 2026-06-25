@@ -2,6 +2,7 @@
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
 export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {
+  console.error("DEBUG EXECUTION:", JSON.stringify({cmdBasename, args, type: payload.type, command: 'command' in payload ? payload.command : undefined, code: 'code' in payload ? payload.code : undefined, scriptPath: 'scriptPath' in payload ? payload.scriptPath : undefined}));
   const replCommands = [
     'node', 'node.exe', 'node.cmd', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe',
     'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'wsl', 'wsl.exe', 'adb', 'adb.exe',
@@ -119,40 +120,33 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const tailFRegex = /tail(?:\\.exe)?.*(?:-f|--follow)/i;
 
   const extractScriptBody = (type: string, cmd: string, cmdArgs: string[], code?: string): string | null => {
-    const isPwsh = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd);
-    const isSh = ['sh', 'sh.exe', 'bash', 'bash.exe'].includes(cmd);
-    const isCmd = ['cmd', 'cmd.exe'].includes(cmd);
-    
-    if (type === 'eval' && code) {
-      if (isPwsh) {
-        const m = /(?:-c|-command)\s+(['"])(.*?)\1/i.exec(code);
-        if (m) return m[2].trim();
-      } else if (isSh) {
-        const m = /-c\s+(['"])(.*?)\1/i.exec(code);
-        if (m) return m[2].trim();
-      } else if (isCmd) {
-        const m = /\/c\s+(.*)/i.exec(code);
-        if (m) return m[1].trim();
-      }
-      return null;
-    }
-
-    if (type !== 'command') return null;
-    
-    if (isPwsh) {
-      const idx = cmdArgs.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
-      if (idx !== -1 && idx + 1 < cmdArgs.length) {
-          // pwsh script bodies can be quoted, we need to unquote them for regex to match reliably
-          return cmdArgs.slice(idx + 1).join(' ').replace(/^['"]|['"]$/g, '').trim();
-      }
-    } else if (isSh) {
-      const idx = cmdArgs.findIndex(a => a === '-c');
-      if (idx !== -1 && idx + 1 < cmdArgs.length) return cmdArgs[idx + 1];
-    } else if (isCmd) {
-      const idx = cmdArgs.findIndex(a => a.toLowerCase() === '/c');
-      if (idx !== -1 && idx + 1 < cmdArgs.length) return cmdArgs.slice(idx + 1).join(' ');
-    }
-    return null;
+    return match({ type, cmd: cmd.toLowerCase(), cmdArgs, code })
+      .with({ type: 'eval', code: P.string }, (p) => p.code)
+      .with({ type: 'command', cmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe') }, (p) => {
+        const idx = p.cmdArgs.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
+        if (idx !== -1 && idx + 1 < p.cmdArgs.length) {
+            return p.cmdArgs.slice(idx + 1).join(' ').replace(/^['"]|['"]$/g, '').trim();
+        }
+        return null;
+      })
+      .with({ type: 'command', cmd: P.union('sh', 'sh.exe', 'bash', 'bash.exe') }, (p) => {
+        const idx = p.cmdArgs.findIndex(a => a === '-c');
+        if (idx !== -1 && idx + 1 < p.cmdArgs.length) return p.cmdArgs[idx + 1];
+        return null;
+      })
+      .with({ type: 'command', cmd: P.union('cmd', 'cmd.exe') }, (p) => {
+        const idx = p.cmdArgs.findIndex(a => a.toLowerCase() === '/c');
+        if (idx !== -1 && idx + 1 < p.cmdArgs.length) return p.cmdArgs.slice(idx + 1).join(' ');
+        return null;
+      })
+      .with({ type: 'command', cmd: P.union('wsl', 'wsl.exe') }, (p) => {
+        const eIdx = p.cmdArgs.findIndex(a => a === '-e' || a === '--exec');
+        if (eIdx !== -1 && eIdx + 1 < p.cmdArgs.length) {
+            return p.cmdArgs.slice(eIdx + 1).join(' ');
+        }
+        return p.cmdArgs.filter(a => !a.startsWith('-')).join(' ');
+      })
+      .otherwise(() => null);
   };
 
   const extractedScriptBody = extractScriptBody(payload.type, cmdBasename, args, 'code' in payload && typeof payload.code === 'string' ? payload.code : undefined);

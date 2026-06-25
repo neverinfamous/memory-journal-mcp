@@ -1,6 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { executeCommand } from './execution-engine.js';
 import { buildCommand, customInterceptors } from './command-builder.js';
 import { buildEnvironment } from './environment.js';
@@ -48,6 +49,7 @@ try {
   }
 
   const payload = parseResult.data;
+  fs.appendFileSync(path.join(os.tmpdir(), 'agent-exec-payload.log'), JSON.stringify(payload) + '\\n');
   const cwd = payload.cwd ? path.resolve(payload.cwd) : process.cwd();
   
   if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
