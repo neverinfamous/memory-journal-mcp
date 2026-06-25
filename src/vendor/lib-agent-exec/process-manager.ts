@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { ChildProcess, spawnSync } from 'node:child_process';
+import { match } from 'ts-pattern';
 
 export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];
 
@@ -13,7 +14,8 @@ export function killProcessTree(child: ChildProcess) {
     }
   }
   
-  if (process.platform === 'win32') {
+  match(process.platform)
+    .with('win32', () => {
     const childWithArgs = child as unknown as { spawnfile?: string, spawnargs?: string[] };
     const spawnfile = childWithArgs.spawnfile || '';
     const spawnargs = childWithArgs.spawnargs || [];
@@ -29,7 +31,7 @@ export function killProcessTree(child: ChildProcess) {
 
     let taskkillSuccess = false;
     try {
-      const result = spawnSync('taskkill.exe', ['/pid', child.pid.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore' });
+      const result = spawnSync('taskkill.exe', ['/pid', child.pid!.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore' });
       if (!result.error && result.status === 0) {
         taskkillSuccess = true;
       }
@@ -54,7 +56,7 @@ export function killProcessTree(child: ChildProcess) {
           }
           
           const toKill = new Set<number>();
-          const queue = [child.pid];
+          const queue = [child.pid!];
           while (queue.length > 0) {
             const current = queue.shift()!;
             toKill.add(current);
@@ -63,7 +65,7 @@ export function killProcessTree(child: ChildProcess) {
           }
           
           for (const pid of toKill) {
-            if (pid === child.pid) continue;
+            if (pid === child.pid!) continue;
             try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ }
           }
         }
@@ -73,11 +75,12 @@ export function killProcessTree(child: ChildProcess) {
     try {
        child.kill('SIGKILL');
     } catch { /* ignore */ }
-  } else {
+  })
+  .otherwise(() => {
     try {
       // Graceful degradation: Attempt SIGTERM first to allow daemons to clean up
       try {
-        process.kill(-child.pid, 'SIGTERM');
+        process.kill(-child.pid!, 'SIGTERM');
       } catch { /* ignore */ }
       
       // Fallback to SIGKILL process group on Unix to prevent zombies after a brief delay
@@ -92,5 +95,5 @@ export function killProcessTree(child: ChildProcess) {
          child.kill('SIGKILL');
       } catch { /* ignore */ }
     }
-  }
+  });
 }

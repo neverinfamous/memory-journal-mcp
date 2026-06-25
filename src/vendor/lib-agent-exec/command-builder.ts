@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import os from 'node:os';
+import { match } from 'ts-pattern';
 import { ExecPayload } from './schema.js';
 import { 
   ExecutionContext, 
@@ -195,13 +196,14 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       cmd = payload.interpreter;
     } else {
       const ext = path.extname(scriptFile).toLowerCase();
-      if (ext === '.py') cmd = 'python';
-      else if (ext === '.js' || ext === '.mjs') cmd = 'node';
-      else if (ext === '.ts') cmd = 'bun';
-      else if (ext === '.sh') cmd = 'bash';
-      else if (ext === '.ps1') cmd = 'pwsh';
-      else if (ext === '.bat' || ext === '.cmd') cmd = 'cmd.exe';
-      else cmd = 'bun';
+      cmd = match(ext)
+        .with('.py', () => 'python')
+        .with('.js', '.mjs', () => 'node')
+        .with('.ts', () => 'bun')
+        .with('.sh', () => 'bash')
+        .with('.ps1', () => 'pwsh')
+        .with('.bat', '.cmd', () => 'cmd.exe')
+        .otherwise(() => 'bun');
     }
     const isPwsh = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd.toLowerCase());
     const isCmd = ['cmd', 'cmd.exe'].includes(cmd.toLowerCase());
@@ -238,11 +240,13 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     let ext = '.ts';
     if (payload.interpreter) {
       const interp = payload.interpreter.toLowerCase();
-      if (interp.includes('python')) ext = '.py';
-      else if (interp.includes('pwsh') || interp.includes('powershell')) ext = '.ps1';
-      else if (interp.includes('bash') || interp.includes('sh') || interp.includes('zsh')) ext = '.sh';
-      else if (interp.includes('cmd') || interp.includes('bat')) ext = '.bat';
-      else if (interp.includes('node')) ext = '.js';
+      ext = match(interp)
+        .when(i => i.includes('python'), () => '.py')
+        .when(i => i.includes('pwsh') || i.includes('powershell'), () => '.ps1')
+        .when(i => i.includes('bash') || i.includes('sh') || i.includes('zsh'), () => '.sh')
+        .when(i => i.includes('cmd') || i.includes('bat'), () => '.bat')
+        .when(i => i.includes('node'), () => '.js')
+        .otherwise(() => ext);
     }
     tempScriptPath = path.join(scratchDir, `agent-eval-${uniqueId}${ext}`);
     try {
@@ -358,7 +362,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   });
 
   if (strippedQuotes) {
-    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
     console.error(`   Because 'shell: false' is used, quotes are NOT needed for spaces. Auto-healing by stripping wrapping quotes...`);
   }
 

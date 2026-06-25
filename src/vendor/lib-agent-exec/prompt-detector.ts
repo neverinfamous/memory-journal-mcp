@@ -4,9 +4,13 @@ import { stripVTControlCharacters } from 'node:util';
 export function checkPrompt(tail: string): boolean {
   const lower = stripVTControlCharacters(tail).toLowerCase();
   
+  if (!/[?:>#\$%✔…]/.test(lower) && !/(?:enter|press|hit|type|choose|select|provide|input|password|passphrase|username|login|email|token|y\/n|yes|no|editor|vi|nano|vim|emacs|continue|abort|quit|exit|override|overwrite|replace|sure|accept|proceed|\b[yn]\b)/.test(lower)) {
+    return false;
+  }
+  
   const hasStrictPrompt = /(?:^|\n)[ \t]*\+?(?:password|passphrase|username|email|token|prompt|choice|select|selection|question|confirm|answer|login|authentication|user|id|pass|y\/n|yes\/no|repository|branch|commit|version|author)[ \t]*[:>?][ \t]*$/i.test(lower);
   const hasActionPrompt = /(?:enter|provide|type|input)(?: \w+){0,3} (?:password|passphrase|username|email|token|user|id|pass|name|code|value|title|body)[ \t:]*$/i.test(lower);
-  const hasInquirerPrompt = /^\s*\?\s+.*?(?:›|»|:|\[.*?\]|\(.*?\))\s*$/m.test(lower) || /^\s*\?\s+.*?\s*$/m.test(lower) || /[✔?].*(?:…|\.\.\.)/m.test(lower);
+  const hasInquirerPrompt = /^\s*\?\s+.*?(?:›|»|:|\[.*?\]|\(.*?\))\s*$/m.test(lower) || /^\s*\?\s+.*?\s*$/m.test(lower) || /^[✔?][^\r\n]{0,250}(?:…|\.\.\.)/m.test(lower);
 
   return hasStrictPrompt || hasActionPrompt || hasInquirerPrompt ||
          /waiting for emacs/i.test(lower) || /hit enter to proceed/i.test(lower) ||
@@ -43,7 +47,7 @@ export function checkPrompt(tail: string): boolean {
          /(?:overwrite|replace|override)\s*\??\s*$/i.test(lower) ||
          // GitHub device login and generic pauses
          /press enter to .*?\s*$/i.test(lower) ||
-         /(?:hint:\s*)?waiting for (?:your editor|vi|nano|vim|emacs)/i.test(lower) ||
+         /^(?:hint:\s*)?waiting for (?:your editor|vi|nano|vim|emacs)/i.test(lower) ||
          // Generic password prompts
          /password for '.*?':\s*$/i.test(lower) ||
          // Y/n without colons
