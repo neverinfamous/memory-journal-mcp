@@ -501,6 +501,11 @@ Agents commonly extrapolate method names based on patterns (e.g., trying to call
 * **Adding Aliases:** Add entries to the \`METHOD_ALIASES\` constant in \`src/codemode/api-constants.ts\`.
 * **CRITICAL:** \`METHOD_ALIASES\` entries must point to either (a) a real tool method in the same group, or (b) another alias that eventually resolves to a real tool in the same group.
 
+### Layer 5: CLI Guardrails & Help Injection
+When an agent hallucinates CLI flags or usage patterns for standalone scripts or the commander CLI:
+* **Option Aliasing:** Add hardcoded aliases for commonly truncated flags in commander (e.g., \`.option('--impact, --impact-score')\`) so execution naturally succeeds.
+* **Help Meta-Prompting:** Use Commander's \`addHelpText('after', ...)\` or append to manual help scripts to inject explicit \`🤖 AI AGENT INSTRUCTIONS\` directly into the \`--help\` output, forcing subsequent agents to read explicit guardrails before execution.
+
 ## 3. Phase 2: Implementation
 
 1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
