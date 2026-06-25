@@ -259,6 +259,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         },
                     }
                 } catch (err) {
+                    logger.error('CRITICAL RESTORE ERROR THROWN', { error: err instanceof Error ? err.stack : String(err) })
                     return formatHandlerError(err)
                 }
             },

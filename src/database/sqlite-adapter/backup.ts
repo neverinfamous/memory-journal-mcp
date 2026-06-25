@@ -178,8 +178,9 @@ export class BackupManager {
             const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
             
             // Apply encryption key if present
-            if (process.env['DB_ENCRYPTION_KEY']) {
-                const key = process.env['DB_ENCRYPTION_KEY']
+            const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+            if (rawKey) {
+                const key = rawKey
                 if (key.startsWith("x'") && key.endsWith("'")) {
                     tempDb.pragma(`key = "${key}"`)
                 } else {
