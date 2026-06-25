@@ -52,8 +52,9 @@ export function extractNumericMetadata(val: string): number | string | undefined
           .with({ impact: P.string }, (res) => Number(res.impact))
           .with({ confidence: P.string }, (res) => Number(res.confidence))
           .otherwise(() => undefined);
-        
-        if (matched !== undefined && !Number.isNaN(matched)) return matched;
+        if (matched !== undefined && !Number.isNaN(matched)) {
+          return (typeof matched === 'number' && !Number.isFinite(matched)) ? undefined : matched;
+        }
       } catch {
         const matchedString = match(trimmed)
           .with(P.when((s: string) => /['"]?trust['"]?\s*:\s*['"]?([\d.]+)['"]?/.test(s)), (s: string) => { const m = s.match(/['"]?trust['"]?\s*:\s*['"]?([\d.]+)['"]?/); return m ? Number(m[1]) : undefined; })
@@ -62,7 +63,9 @@ export function extractNumericMetadata(val: string): number | string | undefined
           .with(P.when((s: string) => /['"]?data['"]?\s*:\s*['"]?([\d.]+)['"]?/.test(s)), (s: string) => { const m = s.match(/['"]?data['"]?\s*:\s*['"]?([\d.]+)['"]?/); return m ? Number(m[1]) : undefined; })
           .otherwise(() => undefined);
         
-        if (matchedString !== undefined && !Number.isNaN(matchedString)) return matchedString;
+        if (matchedString !== undefined && !Number.isNaN(matchedString)) {
+          return (typeof matchedString === 'number' && !Number.isFinite(matchedString)) ? undefined : matchedString;
+        }
       }
 
       if (trimmed.startsWith('{') && (trimmed.includes('"error"') || trimmed.includes("'error'") || trimmed.includes('error:'))) {
