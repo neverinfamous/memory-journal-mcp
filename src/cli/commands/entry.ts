@@ -75,10 +75,14 @@ function parseRelationships(relationshipsStr: unknown): { target_id: number, rel
     try {
         const parsed = JSON.parse(relationshipsStr)
         if (Array.isArray(parsed)) {
-            return parsed.map((r: any) => ({
-                target_id: Number(r.target_id),
-                relation_type: String(r.relation_type)
-            })).filter(r => !isNaN(r.target_id) && r.relation_type)
+            return parsed.map((r: unknown) => {
+                if (typeof r !== 'object' || r === null) return null;
+                const rec = r as Record<string, unknown>;
+                return {
+                    target_id: Number(rec['target_id']),
+                    relation_type: String(rec['relation_type'])
+                };
+            }).filter((r): r is {target_id: number, relation_type: string} => r !== null && !isNaN(r.target_id) && Boolean(r.relation_type))
         }
     } catch (e) {
         process.stderr.write(`Warning: Failed to parse --relationships JSON: ${e instanceof Error ? e.message : String(e)}\n`)
@@ -122,7 +126,7 @@ export async function createEntryAction(options: Record<string, unknown>, comman
 
         const relationships = parseRelationships(options['relationships'])
         for (const rel of relationships) {
-            db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as any)
+            db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as import('../../database/core/interfaces.js').RelationshipType)
         }
 
         db.flushSave()
@@ -159,15 +163,15 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
         const trustScore = options['trustScore'] !== undefined ? Number(options['trustScore']) : undefined
         const impactScore = options['impactScore'] !== undefined ? Number(options['impactScore']) : undefined
         
-        const updates: any = { content, expectedVersion: version }
-        if (options['type'] !== undefined) updates.entryType = options['type']
+        const updates: Partial<CreateEntryInput> & { expectedVersion: number } = { content, expectedVersion: version }
+        if (options['type'] !== undefined) updates.entryType = options['type'] as EntryType
         if (tags !== undefined) updates.tags = tags
         if (projectNumber !== undefined) updates.projectNumber = projectNumber
         if (trustScore !== undefined) updates.trustScore = trustScore
         if (impactScore !== undefined) updates.impactScore = impactScore
-        if (options['validationStatus'] !== undefined) updates.validationStatus = options['validationStatus']
-        if (options['sessionId'] !== undefined) updates.sessionId = options['sessionId']
-        if (options['autoContext'] !== undefined) updates.autoContext = options['autoContext']
+        if (options['validationStatus'] !== undefined) updates.validationStatus = options['validationStatus'] as 'passed' | 'failed' | 'none'
+        if (options['sessionId'] !== undefined) updates.sessionId = options['sessionId'] as string
+        if (options['autoContext'] !== undefined) updates.autoContext = options['autoContext'] as string
 
         const result = db.updateEntry(entryId, updates)
         
@@ -183,7 +187,7 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
 
         const relationships = parseRelationships(options['relationships'])
         for (const rel of relationships) {
-            db.linkEntries(entryId, rel.target_id, rel.relation_type as any)
+            db.linkEntries(entryId, rel.target_id, rel.relation_type as import('../../database/core/interfaces.js').RelationshipType)
         }
 
         db.flushSave()

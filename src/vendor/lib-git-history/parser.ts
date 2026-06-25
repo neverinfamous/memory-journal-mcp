@@ -6,6 +6,58 @@ import { getNumstatMap } from './git-numstat.js';
 import { getPatchMap } from './git-patch.js';
 import { FIELD_SEPARATOR } from './git-runner.js';
 import { isNoiseFile, extractIssues, getLanguage } from './parser-utils.js';
+import { match, P } from 'ts-pattern';
+
+export function extractNumericMetadata(val: string): number | string | undefined {
+  const trimmed = val.trim();
+  const vLower = trimmed.toLowerCase();
+
+  if (vLower === 'high') return 0.8;
+  if (vLower === 'medium') return 0.5;
+  if (vLower === 'low') return 0.2;
+  if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') return undefined;
+
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const matched = match(parsed)
+        .with({ status: 'success', data: P.number }, (res) => res.data)
+        .with({ status: 'success', data: P.string }, (res) => {
+          const n = Number(res.data);
+          return !Number.isNaN(n) && Number.isFinite(n) ? n : res.data;
+        })
+        .with({ data: P.number }, (res) => res.data)
+        .with({ data: P.string }, (res) => {
+          const n = Number(res.data);
+          return !Number.isNaN(n) && Number.isFinite(n) ? n : res.data;
+        })
+        .with({ status: 'success', data: { trust: P.number } }, (res) => res.data.trust)
+        .with({ status: 'success', data: { impact: P.number } }, (res) => res.data.impact)
+        .with({ status: 'success', data: { confidence: P.number } }, (res) => res.data.confidence)
+        .with({ trust: P.number }, (res) => res.trust)
+        .with({ impact: P.number }, (res) => res.impact)
+        .with({ confidence: P.number }, (res) => res.confidence)
+        .otherwise(() => undefined);
+      
+      if (matched !== undefined) return matched;
+    } catch {
+      const matchedString = match(trimmed)
+        .with(P.string.includes('"trust":'), (s) => { const m = s.match(/"trust"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
+        .with(P.string.includes('"impact":'), (s) => { const m = s.match(/"impact"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
+        .with(P.string.includes('"confidence":'), (s) => { const m = s.match(/"confidence"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
+        .with(P.string.includes('"data":'), (s) => { const m = s.match(/"data"\s*:\s*([\d.]+)/); return m ? Number(m[1]) : undefined; })
+        .otherwise(() => undefined);
+      
+      if (matchedString !== undefined && !Number.isNaN(matchedString)) return matchedString;
+    }
+  }
+
+  const num = Number(trimmed);
+  if (trimmed !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
+    return num;
+  }
+  return trimmed !== '' ? trimmed : undefined;
+}
 
 export type RawCommitBatchItem = {
   sha: string; parents: string[]; refs: string[]; tags: string[]; authorName: string; authorEmail: string; date: string;
@@ -444,52 +496,16 @@ export function parseGitRecord(
       else if (key === 'history-entry' || key === 'changelog-entry' || key === 'entry') entriesParsed.push(val);
       else if (key === 'history-significance' || key === 'changelog-significance' || key === 'significance') metadataObj.significance = val;
       else if (key === 'history-impact' || key === 'changelog-impact' || key === 'impact') {
-        const v = val.trim().toLowerCase();
-        if (v === 'high') metadataObj.impact = 0.8;
-        else if (v === 'medium') metadataObj.impact = 0.5;
-        else if (v === 'low') metadataObj.impact = 0.2;
-        else {
-          const vLower = val.trim().toLowerCase();
-          if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') continue;
-          const num = Number(val.trim());
-          if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
-            metadataObj.impact = num;
-          } else if (val.trim() !== '') {
-            metadataObj.impact = val;
-          }
-        }
+        const ext = extractNumericMetadata(val);
+        if (ext !== undefined) metadataObj.impact = ext;
       }
       else if (key === 'history-confidence' || key === 'changelog-confidence' || key === 'confidence') {
-        const v = val.trim().toLowerCase();
-        if (v === 'high') metadataObj.confidence = 0.8;
-        else if (v === 'medium') metadataObj.confidence = 0.5;
-        else if (v === 'low') metadataObj.confidence = 0.2;
-        else {
-          const vLower = val.trim().toLowerCase();
-          if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') continue;
-          const num = Number(val.trim());
-          if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
-            metadataObj.confidence = num;
-          } else if (val.trim() !== '') {
-            metadataObj.confidence = val;
-          }
-        }
+        const ext = extractNumericMetadata(val);
+        if (ext !== undefined) metadataObj.confidence = ext;
       }
       else if (key === 'history-trust' || key === 'changelog-trust' || key === 'trust') {
-        const v = val.trim().toLowerCase();
-        if (v === 'high') metadataObj.trust = 0.8;
-        else if (v === 'medium') metadataObj.trust = 0.5;
-        else if (v === 'low') metadataObj.trust = 0.2;
-        else {
-          const vLower = val.trim().toLowerCase();
-          if (vLower === 'nan' || vLower === 'infinity' || vLower === '-infinity') continue;
-          const num = Number(val.trim());
-          if (val.trim() !== '' && !Number.isNaN(num) && Number.isFinite(num)) {
-            metadataObj.trust = num;
-          } else if (val.trim() !== '') {
-            metadataObj.trust = val;
-          }
-        }
+        const ext = extractNumericMetadata(val);
+        if (ext !== undefined) metadataObj.trust = ext;
       }
       else if (key.match(/^(validation|history-validation|changelog-validation)(-status)?$/)) {
         let v = val.toLowerCase();

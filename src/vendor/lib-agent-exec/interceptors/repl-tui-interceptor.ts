@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { ExecutionContext } from './types.js';
-
+import { match, P } from 'ts-pattern';
 export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {
   const replCommands = [
     'node', 'node.exe', 'node.cmd', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe',
@@ -113,6 +113,34 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     }
   }
 
+  const tuiRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${[...tuiCommands, 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
+  const replRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
+  const tailFRegex = /tail(?:\\.exe)?.*(?:-f|--follow)/i;
+
+  const extractScriptBody = (type: string, cmd: string, cmdArgs: string[]): string | null => {
+    if (type !== 'command') return null;
+    const isPwsh = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd);
+    const isSh = ['sh', 'sh.exe', 'bash', 'bash.exe'].includes(cmd);
+    const isCmd = ['cmd', 'cmd.exe'].includes(cmd);
+    
+    if (isPwsh) {
+      const idx = cmdArgs.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
+      if (idx !== -1 && idx + 1 < cmdArgs.length) {
+          // pwsh script bodies can be quoted, we need to unquote them for regex to match reliably
+          return cmdArgs.slice(idx + 1).join(' ').replace(/^['"]|['"]$/g, '').trim();
+      }
+    } else if (isSh) {
+      const idx = cmdArgs.findIndex(a => a === '-c');
+      if (idx !== -1 && idx + 1 < cmdArgs.length) return cmdArgs[idx + 1];
+    } else if (isCmd) {
+      const idx = cmdArgs.findIndex(a => a.toLowerCase() === '/c');
+      if (idx !== -1 && idx + 1 < cmdArgs.length) return cmdArgs.slice(idx + 1).join(' ');
+    }
+    return null;
+  };
+
+  const extractedScriptBody = extractScriptBody(payload.type, cmdBasename, args);
+
   if (payload.type === 'command' && ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmdBasename)) {
     const cIndex = args.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
     if (cIndex !== -1 && cIndex + 1 < args.length) {
@@ -127,22 +155,6 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       });
       const scriptBody = scriptArgs.length === 1 ? scriptArgs[0] : safeArgs.join(' ');
       
-      const unquotedBody = scriptBody.replace(/^['"]|['"]$/g, '').trim();
-      const tuiReplRegex = new RegExp(`(?:^|;|&&|\\|\\||\\||\\{|&)\\s*(${[...replCommands, ...tuiCommands, 'tail', 'tail.exe', 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
-      let match = tuiReplRegex.exec(unquotedBody);
-      
-      if (!match) {
-        const strippedScriptBody = scriptBody.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
-        match = tuiReplRegex.exec(strippedScriptBody);
-      }
-      if (match) {
-          const innerCmdBasename = match[1].toLowerCase();
-          console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline PowerShell script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
-          console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
-          console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
-          process.exit(1);
-      }
-
       const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n` + scriptBody;
       const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
       args.splice(cIndex, args.length - cIndex, '-EncodedCommand', encoded);
@@ -163,30 +175,51 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     }
   }
 
-  if (payload.type === 'eval' && typeof payload.code === 'string') {
-    const unquotedBody = payload.code.replace(/^['"]|['"]$/g, '').trim();
-    
-    // Check for TUI commands globally
-    const tuiRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${[...tuiCommands, 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
-    const tuiMatch = tuiRegex.exec(unquotedBody);
-    
-    // Check for REPL commands that have NO arguments (they appear at the end of a line/command or before terminators)
-    const replRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
-    const replMatch = replRegex.exec(unquotedBody);
-
-    // Also explicitly catch tail -f
-    const isTailF = (unquotedBody.includes('tail') || unquotedBody.includes('tail.exe')) && (unquotedBody.includes('-f') || unquotedBody.includes('--follow'));
-
-    if (tuiMatch || replMatch || isTailF) {
-        let innerCmdBasename = 'tail';
-        if (tuiMatch) innerCmdBasename = tuiMatch[1].toLowerCase();
-        else if (replMatch) innerCmdBasename = replMatch[1].toLowerCase();
-
-        console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
-        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
-        console.error(`   Please use standard terminal commands instead.`);
-        process.exit(1);
-    }
-  }
+  match({ ...payload, scriptBody: extractedScriptBody })
+    .with({ type: 'command', scriptBody: P.when(body => body !== null && tuiRegex.test(body!)) }, (p) => {
+      const m = tuiRegex.exec(p.scriptBody!);
+      const innerCmdBasename = m ? m[1].toLowerCase() : 'tui-app';
+      console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
+      console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
+      process.exit(1);
+    })
+    .with({ type: 'command', scriptBody: P.when(body => body !== null && replRegex.test(body!)) }, (p) => {
+      const m = replRegex.exec(p.scriptBody!);
+      const innerCmdBasename = m ? m[1].toLowerCase() : 'repl-app';
+      console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
+      console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
+      process.exit(1);
+    })
+    .with({ type: 'command', scriptBody: P.when(body => body !== null && tailFRegex.test(body!)) }, () => {
+      console.error(`\n   💡 AGENT HINT: You wrapped 'tail' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
+      console.error(`   Please run tail directly in the payload or use standard terminal commands instead.`);
+      process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => tuiRegex.test(c)) }, (p) => {
+       const m = tuiRegex.exec(p.code);
+       const innerCmdBasename = m ? m[1].toLowerCase() : 'tui-app';
+       console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
+       console.error(`   Please use standard terminal commands instead.`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => replRegex.test(c)) }, (p) => {
+       const m = replRegex.exec(p.code);
+       const innerCmdBasename = m ? m[1].toLowerCase() : 'repl-app';
+       console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
+       console.error(`   Please use standard terminal commands instead.`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => tailFRegex.test(c)) }, () => {
+       console.error(`\n   💡 AGENT HINT: You passed 'tail' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
+       console.error(`   Please use standard terminal commands instead.`);
+       process.exit(1);
+    })
+    .otherwise(() => {});
 }
 

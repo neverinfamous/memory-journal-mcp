@@ -1,46 +1,75 @@
 // @ts-nocheck
 import { ExecutionContext } from './types.js';
+import { match, P } from 'ts-pattern';
 
 export function systemInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
-  const hasExactShellChars = args.some(a => exactShellChars.includes(a.trim()));
-  const hasComplexEdgeCases = args.some(a => {
-    if (a.includes('$(') || a.includes('`')) return true;
-    if (a.match(/\\(?:&&|\|\||\||>|<|;)/) || a.match(/\\[&|><;]/)) return true;
-    if (a.match(/^[a-zA-Z0-9_-]+(?:&&|\|\||\||>|<|;)[a-zA-Z0-9_-]+$/)) return true;
-    return false;
+  
+  const containsUnsafePipes = args.some(arg => {
+    const stripped = arg.replace(/['"]/g, '');
+    return match(stripped)
+      .with(P.when(a => exactShellChars.includes(a.trim())), () => true)
+      .with(P.string.includes('$('), () => true)
+      .with(P.string.includes('`'), () => true)
+      .with(P.when(a => a.includes('\\&') || a.includes('\\|') || a.includes('\\>') || a.includes('\\<') || a.includes('\\;')), () => true)
+      .with(P.when(a => exactShellChars.some(op => {
+          const parts = a.split(op);
+          if (parts.length !== 2) return false;
+          const isWord = (s: string) => /^[a-zA-Z0-9_-]+$/.test(s);
+          return isWord(parts[0]) && isWord(parts[1]);
+      })), () => true)
+      .otherwise(() => false);
   });
+
   const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe'];
-  if ((hasExactShellChars || hasComplexEdgeCases) && payload.type === 'command' && !patternTools.includes(cmdBasename)) {
+  
+  if (containsUnsafePipes && payload.type === 'command' && !patternTools.includes(cmdBasename)) {
     console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
     console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings and will fail.`);
     console.error(`   To use shell features, please use a 'script' payload type or pipe natively in PowerShell.`);
     process.exit(1);
   }
 
-  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'].includes(cmdBasename) && payload.type === 'command') {
-    const isInline = args.some(a => ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'].includes(a.toLowerCase()));
-    if (isInline) {
-       const inlineIdx = args.findIndex(a => ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'].includes(a.toLowerCase()));
-       const isEncoded = ['-ec', '-encodedcommand', '-en'].includes(args[inlineIdx].toLowerCase());
-       if (isEncoded) {
+  const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'];
+  const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'];
+
+  if (shells.includes(cmdBasename) && payload.type === 'command') {
+    const inlineIdx = args.findIndex(a => inlineFlags.includes(a.toLowerCase()));
+    
+    if (inlineIdx !== -1) {
+      const inlineFlag = args[inlineIdx].toLowerCase();
+      const innerCmdStr = args[inlineIdx + 1] || '';
+      const strippedCmdStr = innerCmdStr.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
+      const tokens = strippedCmdStr.split(/[\s;|{>&<]+/).filter(Boolean).map(t => t.toLowerCase());
+      
+      const stdTools = ['git', 'docker', 'docker-compose', 'gh', 'npm', 'pnpm', 'yarn', 'bun', 'cargo', 'aws', 'gcloud', 'az', 'terraform', 'tofu', 'kubectl', 'tail', 'watch', 'pm2', 'python', 'python3', 'node', 'journalctl', 'vi', 'vim', 'nvim', 'nano', 'top', 'htop', 'less', 'more', 'tmux', 'screen'];
+      const usedTool = tokens.find(t => stdTools.includes(t));
+
+      match({ shell: cmdBasename.toLowerCase(), flag: inlineFlag, tokens, usedTool })
+        .with({ flag: P.union('-ec', '-encodedcommand', '-en') }, () => {
            console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
            process.exit(1);
-       }
-       const innerCmdStr = args[inlineIdx + 1];
-       if (innerCmdStr) {
-           const strippedCmdStr = innerCmdStr.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
-           const stdToolsRegex = /(?:^|;|&&|\|\||\||\{|&)\s*(git|docker|docker-compose|gh|npm|pnpm|yarn|bun|cargo|aws|gcloud|az|terraform|tofu|kubectl|tail|watch|pm2|python|python3|node|journalctl|vi|vim|nvim|nano|top|htop|less|more|tmux|screen)\b/i;
-           const match = stdToolsRegex.exec(strippedCmdStr);
-           if (match) {
-               const innerCmdBasename = match[1].toLowerCase();
-               console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline shell (${cmdBasename} ${args[inlineIdx]}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
-               console.error(`   This bypasses the agent-exec robustness interceptors for ${innerCmdBasename} and risks hanging the process.`);
-               console.error(`   Please run ${innerCmdBasename} directly in the payload: {"type": "command", "command": "${innerCmdBasename}", "args": [...]}`);
-               console.error(`   If you need shell pipes/redirects with this tool, write a script file to the scratch directory and use a 'script' payload.`);
-               process.exit(1);
+        })
+        .with({ shell: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), tokens: P.when(ts => {
+           const catIdx = ts.indexOf('cat');
+           if (catIdx !== -1) {
+              const afterCat = ts.slice(catIdx + 1).filter(t => !t.startsWith('-'));
+              return afterCat.length >= 2;
            }
-       }
+           return false;
+        }) }, () => {
+           console.error(`\n   💡 AGENT HINT: In PowerShell, 'cat' is an alias for Get-Content. You CANNOT use space-separated arguments for multiple files like 'cat file1 file2'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+           console.error(`   Please use comma-separated arrays instead: 'Get-Content file1, file2'.`);
+           process.exit(1);
+        })
+        .with({ usedTool: P.not(P.nullish) }, ({ usedTool }) => {
+           console.error(`\n   💡 AGENT HINT: You wrapped '${usedTool}' inside an inline shell (${cmdBasename} ${args[inlineIdx]}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+           console.error(`   This bypasses the agent-exec robustness interceptors for ${usedTool} and risks hanging the process.`);
+           console.error(`   Please run ${usedTool} directly in the payload: {"type": "command", "command": "${usedTool}", "args": [...]}`);
+           console.error(`   If you need shell pipes/redirects with this tool, write a script file to the scratch directory and use a 'script' payload.`);
+           process.exit(1);
+        })
+        .otherwise(() => {});
     }
   }
 
