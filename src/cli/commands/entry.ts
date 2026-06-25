@@ -105,8 +105,13 @@ export async function createEntryAction(options: Record<string, unknown>, comman
     const db = await getDb(command.optsWithGlobals(), command)
 
     try {
-        const content = await parseContent(options)
+        let content = await parseContent(options)
         
+        const title = options['title'] as string | undefined
+        if (title && !content.startsWith('# ')) {
+            content = `# ${title}\n\n${content}`
+        }
+
         const tagsStr = options['tags'] as string | undefined
         const tags = tagsStr !== undefined ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : undefined
         
@@ -166,7 +171,12 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
             process.exit(1)
         }
 
-        const content = await parseContent(options)
+        let content = await parseContent(options)
+        
+        const title = options['title'] as string | undefined
+        if (title && !content.startsWith('# ')) {
+            content = `# ${title}\n\n${content}`
+        }
         
         const tagsStr = options['tags'] as string | undefined
         const tags = tagsStr !== undefined ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : undefined
