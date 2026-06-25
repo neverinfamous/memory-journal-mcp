@@ -103,21 +103,16 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
       console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&' and '||'. Prefer ';' for command separation.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
       process.exit(1);
     })
-    .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true }, ({ innerCmdStr, cmd: shellCmd, inlineFlag: flag }: { innerCmdStr: string; cmd: string; inlineFlag: string }) => {
+    .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true }, ({ innerCmdStr, cmd: _shellCmd, inlineFlag: flag }: { innerCmdStr: string; cmd: string; inlineFlag: string }) => {
       const strippedCmdStr = innerCmdStr.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
       const tokens = strippedCmdStr.split(/[\s;|{>&<]+/).filter(Boolean).map((t: string) => t.toLowerCase());
       
-      // PWSH cat rule
-      if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(shellCmd)) {
-        const catIdx = tokens.indexOf('cat');
-        if (catIdx !== -1) {
-          const afterCat = tokens.slice(catIdx + 1).filter((t: string) => !t.startsWith('-'));
-          if (afterCat.length >= 2) {
-            console.error(`\n   💡 AGENT HINT: In PowerShell, 'cat' is an alias for Get-Content. You CANNOT use space-separated arguments for multiple files like 'cat file1 file2'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
-            console.error(`   Please use comma-separated arrays instead: 'Get-Content file1, file2'.`);
-            process.exit(1);
-          }
-        }
+      // Native tool enforcement rule
+      const blockedAliases = ['cat', 'get-content', 'ls', 'dir', 'get-childitem', 'grep', 'select-string', 'sed'];
+      const usedAlias = tokens.find((t: string) => blockedAliases.includes(t));
+      if (usedAlias) {
+        console.error(`\n   💡 AGENT HINT: Do NOT use '${usedAlias}' in shell commands. You MUST use the provided native tools (view_file, list_dir, grep_search, replace_file_content) instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+        process.exit(1);
       }
 
       // stdTools rule
@@ -168,6 +163,12 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
         console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
         process.exit(1);
       }
+    })
+
+    // Native tool enforcement
+    .with({ isCommand: true, cmd: P.union('cat', 'cat.exe', 'get-content', 'ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'grep', 'grep.exe', 'select-string', 'sed', 'sed.exe') }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdBasename}' directly. You MUST use the provided native tools (view_file, list_dir, grep_search, replace_file_content) instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: If you encounter this hint during an autonomous task, you MUST notify the user IMMEDIATELY. Do not just add it to your task list. Stop and inform the user of the needed self-improvement so they can address it.\x1b[0m (Reference: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md))`);
+      process.exit(1);
     })
 
     // Missing stdin hang blocks

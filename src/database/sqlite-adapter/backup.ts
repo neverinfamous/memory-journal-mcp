@@ -42,9 +42,12 @@ export class BackupManager {
                 operation: 'exportToFile',
                 error: err,
             })
-            throw new Error(`WAL checkpoint failed, backup aborted to prevent stale data: ${err}`, {
-                cause: checkpointErr,
-            })
+            throw new Error(
+                `WAL checkpoint failed, backup aborted to prevent stale data: ${err}`,
+                {
+                    cause: checkpointErr,
+                }
+            )
         }
         await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
 
@@ -350,6 +353,17 @@ export class BackupManager {
                 } catch {
                     // Fallback to copyFile if atomic rename fails (e.g., Windows EBUSY or cross-device links)
                     await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
+                }
+
+                try {
+                    await fs.promises.unlink(`${this.ctx.getDbPath()}-wal`)
+                } catch {
+                    // Ignore missing files
+                }
+                try {
+                    await fs.promises.unlink(`${this.ctx.getDbPath()}-shm`)
+                } catch {
+                    // Ignore missing files
                 }
 
                 // Re-initialize using the connection's standard initialize method

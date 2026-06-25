@@ -71,6 +71,7 @@ test.describe('Payload Contracts: Backup Restore', () => {
             confirm: true,
         })) as Record<string, unknown>
 
+        console.error('RESTORE PAYLOAD ERROR:', JSON.stringify(restorePayload, null, 2))
         expect(restorePayload.success).toBe(true)
     })
 })
