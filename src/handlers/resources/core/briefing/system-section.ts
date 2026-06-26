@@ -146,7 +146,7 @@ const cachedTestHealth = new Map<string, TestHealth | null>()
 
 import { execFileSync } from 'node:child_process'
 
-function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHistorySummary | null {
+function loadCachedGitHistory(commitCount: number, targetPath?: string, importanceThreshold?: number): GitHistorySummary | null {
     const root = targetPath || resolveProjectRoot()
     const existing = cachedGitHistory.get(root)
     if (existing !== undefined) return existing
@@ -233,6 +233,12 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
             }
         }
         
+        const threshold = importanceThreshold ?? 0.3;
+        const filteredCommits = commits.filter(c => {
+            const sig = typeof c.significance === 'number' ? c.significance : parseFloat(c.significance || '0');
+            return sig >= threshold || c.isBreaking;
+        });
+
         const stats = {
             total: commits.length,
             highImpact,
@@ -242,7 +248,7 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string): GitHist
         
         const result = { 
             stats, 
-            commits: commits.slice(0, Math.max(1, commitCount)) 
+            commits: filteredCommits.slice(0, Math.max(1, commitCount)) 
         }
         cachedGitHistory.set(root, result)
     } catch (err: unknown) {
@@ -449,7 +455,7 @@ export function buildSystemContext(
         resourceCount: resourceCount ?? 0,
         promptCount: getPrompts().length,
         localTime,
-        gitHistory: loadCachedGitHistory(config?.commitCount ?? 3, targetRepoPath),
+        gitHistory: loadCachedGitHistory(config?.commitCount ?? 3, targetRepoPath, config?.briefingImportanceThreshold),
         testHealth: loadCachedTestHealth(targetRepoPath),
         filterSummary,
         isReadonly,
