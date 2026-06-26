@@ -417,11 +417,11 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `commit` | High-integrity procedure for committing code changes with validation gates |
 | `create-entry` | Create a structured mid-thread journal entry |
 | `create-team-entry` | Create a structured mid-thread team journal entry |
-| `flag-dashboard` | Dashboard overview of all active flags (blockers, critical, warnings) |
+| `flag-dashboard` | Dashboard overview of all active flags (blockers, critical, warnings). Optional ... |
 | `goal-tracker` | Milestone and achievement tracking |
 | `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
 | `mcp-heal` | Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM ... |
-| `optimize-journal` | Guided database pruning and optimization workflow with live metrics |
+| `optimize-journal` | Guided database pruning and verification workflow. Optional arguments: `lookback... |
 | `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
 | `pr-retrospective` | Conduct a retrospective analysis on a completed pull request |
 | `pr-summary` | Generate an executive summary of a pull request |
@@ -434,7 +434,6 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `team-session-summary` | Create a formatted team session summary entry |
 | `update-entry` | Safely update an existing mid-thread entry or session summary |
 | `update-team-entry` | Safely update an existing team entry or team session summary |
-| `verify-work` | Audit a batch of recent journal entries (default 10) to verify accuracy, elimina... |
 | `weekly-digest` | Create a weekly digest formatted day-by-day |
 <!-- END: PROMPTS -->
 

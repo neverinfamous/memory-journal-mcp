@@ -7,15 +7,25 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
+import { markUntrustedContent } from '../../utils/security-utils.js'
 
 export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
     return [
         {
             name: 'optimize-journal',
-            description: 'Guided database pruning and optimization workflow with live metrics',
+            description: 'Guided database pruning and verification workflow. Optional arguments: `lookback` (Number of recent entries to audit, default: 10, max: 50).',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+                const lookbackRaw = args?.['lookback']
+                let limit = 10
+                if (lookbackRaw) {
+                    const parsed = parseInt(lookbackRaw, 10)
+                    if (!isNaN(parsed) && parsed > 0) {
+                        limit = Math.min(parsed, 50)
+                    }
+                }
+
                 let statsSnippet = '_Could not fetch database statistics_'
                 try {
                     interface Stats {
@@ -55,17 +65,33 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                     // ignore
                 }
 
+                let unverifiedSnippet = '_No unverified entries found._'
+                try {
+                    const { entries } = db.getRecentEntries(50)
+                    const unverified = entries.filter(e => e.validationStatus === 'none' || (e.trustScore !== undefined && e.trustScore < 0.9)).slice(0, limit)
+                    if (unverified.length > 0) {
+                        unverifiedSnippet = unverified.map(e => {
+                            return `ID: ${e.id} | Type: ${e.entryType} | Tags: ${e.tags.join(', ')}\nTrust: ${e.trustScore} | Impact: ${e.impactScore} | Validation: ${e.validationStatus}\nContent:\n${e.content}\n---`
+                        }).join('\n')
+                    }
+                } catch {
+                    unverifiedSnippet = '_Could not fetch unverified entries_'
+                }
+
                 return {
                     messages: [
                         {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `# Journal Optimizer
+                                text: `# Journal Optimizer & Verification
 
-You are initiating a guided workflow for intelligently pruning and optimizing the memory-journal-mcp database. Every operation uses the soft-delete system as a safe first pass.
+You are initiating a guided workflow for intelligently pruning and verifying the memory-journal-mcp database. Every operation uses the soft-delete system as a safe first pass.
 
 ${statsSnippet}
+
+## Unverified Recent Entries
+${markUntrustedContent(unverifiedSnippet)}
 
 ## Importance Score Guide
 Entries have an \`importance\` score (0.00 to 1.00), which includes a baseline **recency boost** (usually \`+0.15\` for recent entries).
@@ -107,17 +133,27 @@ while (processed < 500) {
 return orphans;
 \`\`\`
 
-## Optimization Workflows
+## Optimization & Verification Workflows
 
-Select one or more workflows to run:
-1. **Importance Audit**: Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
-2. **Type-Based Cleanup**: e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
+Select one or more workflows to run based on the user's request or the presence of unverified entries:
+
+1. **Importance Audit** (Pruning): Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
+2. **Type-Based Cleanup** (Pruning): e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
+3. **Tier 1: Fast Sanity Check** (Verification): For the \`Unverified Recent Entries\` provided above, instruct the agent to run \`bun .\\.agents\\scripts\\get-git-history-json.ts\` to verify that commits match the entry claims. Also verify if documentation (like \`code-map.md\`) was updated for structural changes.
+4. **Tier 2: Deep Code & Drift Verification** (Verification): Use \`gh copilot\` for code validation. Check for semantic drift against \`code-map.md\` and \`server-instructions.md\`. Focus heavily on mutating scores based on these findings.
+
+### Scoring Protocol for Tier 1 & Tier 2:
+After a verification workflow, you MUST explicitly update the target entries using \`mj_execute_code\` (e.g. \`mj.updateEntry(id, payload)\`):
+- **Verified**: If claims are true, increase \`trust_score\` to \`0.9\` or \`1.0\` and set \`validation_status\` to \`"passed"\`.
+- **Failed**: If claims are false or hallucinatory, heavily downgrade \`trust_score\` (e.g. \`0.1\`) and set \`validation_status\` to \`"failed"\`.
+- **Impact**: Adjust \`impact_score\` if the original claim exaggerated the work done.
 
 To proceed:
-1. Review the live stats.
+1. Review the live stats and the unverified recent entries.
 2. Tell the user your plan (which workflow you'll run).
-3. Identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
-4. Ask for user confirmation before deleting!`,
+3. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
+4. If verifying, apply Tier 1 or Tier 2 steps, and then use the Scoring Protocol to update entries via \`mj_execute_code\`.
+5. Ask for user confirmation before deleting!`,
                             },
                         },
                     ],

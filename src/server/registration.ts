@@ -149,12 +149,15 @@ export function registerPrompts(
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
         if (promptDef.arguments && promptDef.arguments.length > 0) {
-            argsSchema = {}
-            for (const arg of promptDef.arguments) {
-                argsSchema[arg.name] =
-                    arg.required === true
-                        ? z.string().describe(arg.description)
-                        : z.string().optional().describe(arg.description)
+            const hasRequired = promptDef.arguments.some((arg) => arg.required === true)
+            if (hasRequired) {
+                argsSchema = {}
+                for (const arg of promptDef.arguments) {
+                    argsSchema[arg.name] =
+                        arg.required === true
+                            ? z.string().describe(arg.description)
+                            : z.string().optional().describe(arg.description)
+                }
             }
         }
 

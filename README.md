@@ -24,16 +24,16 @@
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp` (or `pnpm add -g memory-journal-mcp`)
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based with full semantic search
 
-## 🧠 Stop Experiencing AI Amnesia
+## 🧠 Eliminate AI Amnesia
 
-When managing large projects with AI assistance, you face a critical challenge:
+Large projects face a critical challenge. You lose context between sessions.
 
-- **Thread Amnesia** - Each new AI conversation starts from zero, unaware of previous work.
-- **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads.
-- **Repeated Work** - AI suggests solutions you've already tried or abandoned.
-- **Context Overload** - Manually copying project history into every new conversation.
+- **Stop Thread Amnesia** - AI conversations start fresh. They ignore previous work.
+- **Retain Deep Context** - You scatter decisions and code across threads. We save them.
+- **End Repeated Work** - AI repeats failed solutions. We remember your attempts.
+- **Prevent Context Overload** - You copy history manually. We automate context delivery.
 
-Memory Journal acts as your project's **long-term memory**. It bridges fragmented AI sessions.
+Memory Journal builds your project's long-term memory. It bridges fragmented AI sessions seamlessly.
 
 ---
 
@@ -51,7 +51,7 @@ Memory Journal acts as your project's **long-term memory**. It bridges fragmente
 
 ## 🎯 What Sets Us Apart
 
-**103 MCP Tools** · **27 Workflow Prompts** · **48 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**105 MCP Tools** · **27 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -157,7 +157,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 103   | All tools (default)      |
+| `full`               | 105   | All tools (default)      |
 | `starter`            | 16    | Core + search + codemode |
 | `essential`          | 10    | Minimal footprint        |
 | `readonly`           | 30    | Disable all mutations    |
@@ -176,7 +176,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **103 MCP Tools** (11 Groups)
+### 🛠️ **105 MCP Tools** (11 Groups)
 
 | Group           | Tools | Description                                                                                                                                                                                 |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
