@@ -116,14 +116,15 @@ const createEntryCmd = entryCmd
     .option('--rel-file <path>', 'Load relationships JSON from a file')
     .option('--auto-context <json>', 'JSON string for auto context')
     .option('--auto-context-file <path>', 'Load auto context JSON from a file')
+    .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
     .option('--team', 'Route to team database')
 addServerOptions(createEntryCmd)
 createEntryCmd.addHelpText(
     'after',
     `
 🤖 AI AGENT INSTRUCTIONS:
-- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.
-- ALIASES: You may use shortened aliases (\`--impact\`, \`--trust\`, \`--rel\`) to prevent truncation errors.`
+- METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
+- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.`
 )
 createEntryCmd.action(createEntryAction)
 
@@ -147,14 +148,15 @@ const updateEntryCmd = entryCmd
     .option('--rel-file <path>', 'Load relationships JSON from a file')
     .option('--auto-context <json>', 'JSON string for auto context')
     .option('--auto-context-file <path>', 'Load auto context JSON from a file')
+    .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
     .option('--team', 'Route to team database')
 addServerOptions(updateEntryCmd)
 updateEntryCmd.addHelpText(
     'after',
     `
 🤖 AI AGENT INSTRUCTIONS:
-- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.
-- ALIASES: You may use shortened aliases (\`--impact\`, \`--trust\`, \`--rel\`) to prevent truncation errors.`
+- METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
+- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.`
 )
 updateEntryCmd.action(updateEntryAction)
 

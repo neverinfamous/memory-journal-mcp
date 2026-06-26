@@ -107,15 +107,16 @@ function generateSummaryPrompt(
                     type: 'text',
                     text: `Create a ${target === 'team' ? 'team ' : ''}session summary journal entry using EXACTLY this template:
 
-**Required Parameters:**
-- \`entry_type: "retrospective"\`
-- \`tags\`: [REQUIRED] MUST include \`"session-summary"\` PLUS 2-3 specific domain/topological tags.
-- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context
-- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
-- \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
-- \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
-- \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
-- \`auto_context\`: [REQUIRED] JSON string of commit metadata MUST EXACTLY match this shape: \`{"type":"session-commits","commits":["<sha>"],"branch":"<branch_name>","pr":<number>}\`
+**Required Metadata payload (\`metadata.json\`):**
+Write a JSON file with the following keys:
+- \`type\`: "retrospective"
+- \`tags\`: Array of strings including "session-summary" plus 2-3 specific domain/topological tags.
+- \`project\`: Integer ID mapped from your active workspace context.
+- \`impact\`: Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
+- \`trust\`: Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
+- \`validation_status\`: Validation outcome ("passed", "none", or "failed").
+- \`auto_context\`: JSON object that EXACTLY matches this shape: \`{"type":"session-commits","commits":["<sha>"],"branch":"<branch_name>","pr":<number>}\`
+- \`relationships\`: Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'.
 - ${dbHint}
 
 **Required Content Structure (use EXACTLY these section headers):**
@@ -141,18 +142,11 @@ ${registryHint}- If you lose track of your project number, workspace, or agent I
 ${markUntrustedContent(entrySummary)}
 
 **Execution Template (Cross-Platform / PowerShell Safe):**
-Write your markdown and JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
+Write your markdown and metadata JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
 \`\`\`bash
 memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}\\
-  -t retrospective \\
-  --tags "session-summary,your,tags" \\
-  --project <ID> \\
-  --impact <SCORE> \\
-  --trust <SCORE> \\
-  --validation-status passed \\
-  --auto-context-file <scratch_dir>/auto-context.json \\
-  --rel-file <scratch_dir>/relationships.json \\
-  --file <scratch_dir>/session.md
+  --file <scratch_dir>/session.md \\
+  --metadata <scratch_dir>/metadata.json
 \`\`\``,
                 },
             },
@@ -175,14 +169,15 @@ function generateEntryPrompt(_db: IDatabaseAdapter, _teamDb: IDatabaseAdapter | 
                     type: 'text',
                     text: `Create a ${target === 'team' ? 'team ' : ''}mid-thread journal entry using EXACTLY this template:
 
-**Required Parameters:**
-- \`entry_type\`: [REQUIRED] MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective").
-- \`tags\`: [REQUIRED] 1-3 specific domain/topological tags.
-- \`project_number\`: [REQUIRED] Integer ID mapped from your active workspace context.
-- \`impact_score\`: [REQUIRED] Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
-- \`trust_score\`: [REQUIRED] Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
-- \`validation_status\`: [REQUIRED] Validation outcome (MUST be "passed", "none", or "failed")
-- \`relationships\`: [REQUIRED] Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'
+**Required Metadata payload (\`metadata.json\`):**
+Write a JSON file with the following keys:
+- \`type\`: MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective").
+- \`tags\`: Array of strings containing 1-3 specific domain/topological tags.
+- \`project\`: Integer ID mapped from your active workspace context.
+- \`impact\`: Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
+- \`trust\`: Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
+- \`validation_status\`: Validation outcome ("passed", "none", or "failed").
+- \`relationships\`: Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'.
 - ${dbHint}
 
 **Required Content Structure:**
@@ -192,17 +187,11 @@ Just provide a concise markdown description of the specific architectural decisi
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution Template (Cross-Platform / PowerShell Safe):**
-Write your markdown and JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
+Write your markdown and metadata JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
 \`\`\`bash
 memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}\\
-  -t <TYPE> \\
-  --tags "your,tags" \\
-  --project <ID> \\
-  --impact <SCORE> \\
-  --trust <SCORE> \\
-  --validation-status <STATUS> \\
-  --rel-file <scratch_dir>/relationships.json \\
-  --file <scratch_dir>/entry.md
+  --file <scratch_dir>/entry.md \\
+  --metadata <scratch_dir>/metadata.json
 \`\`\``
                 }
             }
@@ -259,19 +248,19 @@ Look at the tags and structure of the target entry:
 - ${dbHint}
 - You MUST pass the existing \`version\` as the \`expected_version\` parameter to prevent concurrent overwrites.
 - Ensure you pass the full updated \`content\` string.
-- Only pass metadata flags (like \`--tags\`, \`--impact\`, \`--trust\`, \`--validation-status\`, etc.) to the CLI if you are intentionally modifying those fields. Otherwise, omit them to preserve existing values.
+- Only create and pass a \`--metadata <scratch_dir>/metadata.json\` file if you are intentionally modifying fields like tags, trust, or impact. Otherwise, omit it to preserve existing values.
 
 **Rules:**
 ${getProjectRegistryHint()}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution Template (Cross-Platform / PowerShell Safe):**
-Write your markdown and JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
+Write your markdown and metadata JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
 \`\`\`bash
 memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}\\
   --id <ENTRY_ID> \\
   --expected-version <VERSION> \\
   --file <scratch_dir>/updated_entry.md
-  # ONLY add optional metadata flags here if you intend to modify them
+  # ONLY add --metadata <scratch_dir>/metadata.json if you intend to modify metadata
 \`\`\``
                 }
             }

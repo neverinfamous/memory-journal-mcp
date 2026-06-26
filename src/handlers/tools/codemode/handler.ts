@@ -268,31 +268,41 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 shape?: Record<string, unknown>;
                                 _def?: {
                                     typeName?: string;
+                                    type?: string;
                                     schema?: ZodLike;
+                                    in?: ZodLike;
+                                    out?: ZodLike;
                                     left?: ZodLike;
                                     right?: ZodLike;
-                                    out?: ZodLike;
                                 };
                                 innerType?: () => ZodLike;
                             }
 
                             const checkSchemaAcceptsKey = (schema: unknown, key: string): boolean => {
                                 if (schema === null || schema === undefined || typeof schema !== 'object') return false;
+                                
+                                // Support standard JSON Schema format (MCP Tool schemas)
+                                if ('properties' in schema && schema.properties !== null && typeof schema.properties === 'object') {
+                                    if (key in (schema.properties as Record<string, unknown>)) return true;
+                                }
+                                
                                 const s = schema as ZodLike;
                                 
                                 if (s.shape !== undefined && s.shape !== null && typeof s.shape === 'object' && key in s.shape) return true;
                                 
                                 if (s._def !== undefined && s._def !== null) {
-                                    if (s._def.typeName === 'ZodObject' && s.shape !== undefined && s.shape !== null) {
+                                    const typeName = s._def.typeName ?? s._def.type;
+                                    
+                                    if ((typeName === 'ZodObject' || typeName === 'object') && s.shape !== undefined && s.shape !== null) {
                                         return key in s.shape;
                                     }
-                                    if (s._def.typeName === 'ZodEffects' || s._def.typeName === 'ZodOptional' || s._def.typeName === 'ZodNullable') {
-                                        return checkSchemaAcceptsKey(s._def.schema ?? s.innerType?.(), key);
+                                    if (typeName === 'ZodEffects' || typeName === 'pipe' || typeName === 'ZodOptional' || typeName === 'optional' || typeName === 'ZodNullable' || typeName === 'nullable') {
+                                        return checkSchemaAcceptsKey(s._def.schema ?? s._def.out ?? s._def.in ?? s.innerType?.(), key);
                                     }
-                                    if (s._def.typeName === 'ZodIntersection') {
+                                    if (typeName === 'ZodIntersection' || typeName === 'intersection') {
                                         return checkSchemaAcceptsKey(s._def.left, key) || checkSchemaAcceptsKey(s._def.right, key);
                                     }
-                                    if (s._def.typeName === 'ZodPipeline' || (s._def.out !== undefined && s._def.out !== null)) {
+                                    if (typeName === 'ZodPipeline' || (s._def.out !== undefined && s._def.out !== null)) {
                                         return checkSchemaAcceptsKey(s._def.out, key);
                                     }
                                     if (s._def.schema) {

@@ -110,6 +110,97 @@ function parseRelationships(relationshipsStr: unknown, relFileStr: unknown): { t
     return []
 }
 
+function parseMetadata(metadataFile: unknown): Record<string, unknown> {
+    if (typeof metadataFile !== 'string') return {}
+    try {
+        const str = readFileSync(metadataFile, 'utf-8')
+        const parsed: unknown = JSON.parse(str)
+        if (typeof parsed === 'object' && parsed !== null) {
+            return parsed as Record<string, unknown>
+        }
+    } catch (e) {
+        process.stderr.write(`Warning: Failed to parse --metadata JSON: ${e instanceof Error ? e.message : String(e)}\n`)
+    }
+    return {}
+}
+
+interface EntryPayload {
+    entryType: EntryType | undefined;
+    tags: string[] | undefined;
+    projectNumber: number | undefined;
+    trustScore: number | undefined;
+    impactScore: number | undefined;
+    validationStatus: 'passed' | 'failed' | 'none' | undefined;
+    sessionId: string | undefined;
+    autoContextStr: string | undefined;
+    relationships: { target_id: number; relation_type: string }[];
+    relatedIds: number[];
+}
+
+function buildEntryPayload(options: Record<string, unknown>, metadata: Record<string, unknown>): EntryPayload {
+    const entryTypeStr = options['type'] ?? metadata['type'] ?? metadata['entry_type'] ?? metadata['entryType']
+    const entryType = entryTypeStr as EntryType | undefined
+
+    const tagsStr = options['tags'] as string | undefined
+    let tags: string[] | undefined
+    if (tagsStr !== undefined) {
+        tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean)
+    } else if (metadata['tags'] !== undefined && metadata['tags'] !== null) {
+        tags = Array.isArray(metadata['tags']) ? metadata['tags'].map(String) : undefined
+    }
+
+    const projectRaw = options['project'] ?? metadata['project'] ?? metadata['projectNumber'] ?? metadata['project_number']
+    const projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
+
+    const trustRaw = options['trustScore'] ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
+    const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
+
+    const impactRaw = options['impactScore'] ?? metadata['impact'] ?? metadata['impactScore'] ?? metadata['impact_score']
+    const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
+
+    const valStatusRaw = options['validationStatus'] ?? metadata['validation_status'] ?? metadata['validationStatus']
+    const validationStatus = valStatusRaw as 'passed' | 'failed' | 'none' | undefined
+
+    const sessionIdRaw = options['sessionId'] ?? metadata['session_id'] ?? metadata['sessionId']
+    const sessionId = sessionIdRaw as string | undefined
+
+    let autoContextStr = options['autoContext'] as string | undefined
+    const autoContextFile = options['autoContextFile'] as string | undefined
+    if (autoContextFile) {
+        try {
+            autoContextStr = readFileSync(autoContextFile, 'utf-8')
+        } catch (e) {
+            process.stderr.write(`Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`)
+        }
+    } else if (autoContextStr === undefined && metadata['auto_context'] !== undefined && metadata['auto_context'] !== null) {
+        autoContextStr = typeof metadata['auto_context'] === 'string' ? metadata['auto_context'] : JSON.stringify(metadata['auto_context'])
+    } else if (autoContextStr === undefined && metadata['autoContext'] !== undefined && metadata['autoContext'] !== null) {
+        autoContextStr = typeof metadata['autoContext'] === 'string' ? metadata['autoContext'] : JSON.stringify(metadata['autoContext'])
+    }
+
+    let relationships: { target_id: number, relation_type: string }[]
+    if (metadata['relationships'] !== undefined && metadata['relationships'] !== null && Array.isArray(metadata['relationships'])) {
+        relationships = metadata['relationships'].map((r: unknown) => {
+            const rec = r as Record<string, unknown> | null
+            return {
+                target_id: Number(rec?.['target_id']),
+                relation_type: String(rec?.['relation_type'])
+            }
+        }).filter(r => !isNaN(r.target_id) && Boolean(r.relation_type) && r.relation_type !== 'undefined')
+    } else {
+        relationships = parseRelationships(options['relationships'], options['relFile'])
+    }
+
+    let relatedIds = parseRelatedTo(options['relatedTo'])
+    if (relatedIds.length === 0 && Array.isArray(metadata['related_to'])) {
+        relatedIds = metadata['related_to'].map(Number).filter(n => !isNaN(n))
+    }
+
+    return {
+        entryType, tags, projectNumber, trustScore, impactScore, validationStatus, sessionId, autoContextStr, relationships, relatedIds
+    }
+}
+
 export async function createEntryAction(options: Record<string, unknown>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
 
@@ -121,44 +212,28 @@ export async function createEntryAction(options: Record<string, unknown>, comman
             content = `# ${title}\n\n${content}`
         }
 
-        const tagsStr = options['tags'] as string | undefined
-        const tags = tagsStr !== undefined ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : undefined
-        
-        const projectNumber = options['project'] !== undefined ? Number(options['project']) : undefined
-        const trustScore = options['trustScore'] !== undefined ? Number(options['trustScore']) : undefined
-        const impactScore = options['impactScore'] !== undefined ? Number(options['impactScore']) : undefined
-        
-        let autoContextStr = options['autoContext'] as string | undefined
-        const autoContextFile = options['autoContextFile'] as string | undefined
-        if (autoContextFile) {
-            try {
-                autoContextStr = readFileSync(autoContextFile, 'utf-8')
-            } catch (e) {
-                process.stderr.write(`Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`)
-            }
-        }
+        const metadata = parseMetadata(options['metadata'])
+        const payload = buildEntryPayload(options, metadata)
 
         const entryInput: CreateEntryInput = {
             content,
-            entryType: options['type'] as EntryType | undefined,
-            tags,
-            projectNumber,
-            trustScore,
-            impactScore,
-            validationStatus: options['validationStatus'] as 'passed' | 'failed' | 'none' | undefined,
-            sessionId: options['sessionId'] as string | undefined,
-            autoContext: autoContextStr
+            entryType: payload.entryType,
+            tags: payload.tags,
+            projectNumber: payload.projectNumber,
+            trustScore: payload.trustScore,
+            impactScore: payload.impactScore,
+            validationStatus: payload.validationStatus,
+            sessionId: payload.sessionId,
+            autoContext: payload.autoContextStr
         }
 
         const newEntry = db.createEntry(entryInput)
 
-        const relatedIds = parseRelatedTo(options['relatedTo'])
-        for (const targetId of relatedIds) {
+        for (const targetId of payload.relatedIds) {
             db.linkEntries(newEntry.id, targetId, 'references')
         }
 
-        const relationships = parseRelationships(options['relationships'], options['relFile'])
-        for (const rel of relationships) {
+        for (const rel of payload.relationships) {
             db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as RelationshipType)
         }
 
@@ -195,30 +270,18 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
             content = `# ${title}\n\n${content}`
         }
         
-        const tagsStr = options['tags'] as string | undefined
-        const tags = tagsStr !== undefined ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : undefined
-        const projectNumber = options['project'] !== undefined ? Number(options['project']) : undefined
-        const trustScore = options['trustScore'] !== undefined ? Number(options['trustScore']) : undefined
-        const impactScore = options['impactScore'] !== undefined ? Number(options['impactScore']) : undefined
+        const metadata = parseMetadata(options['metadata'])
+        const payload = buildEntryPayload(options, metadata)
         
         const updates: Partial<CreateEntryInput> & { expectedVersion: number } = { content, expectedVersion: version }
-        if (options['type'] !== undefined) updates.entryType = options['type'] as EntryType
-        if (tags !== undefined) updates.tags = tags
-        if (projectNumber !== undefined) updates.projectNumber = projectNumber
-        if (trustScore !== undefined) updates.trustScore = trustScore
-        if (impactScore !== undefined) updates.impactScore = impactScore
-        if (options['validationStatus'] !== undefined) updates.validationStatus = options['validationStatus'] as 'passed' | 'failed' | 'none'
-        if (options['sessionId'] !== undefined) updates.sessionId = options['sessionId'] as string
-        let autoContextStr = options['autoContext'] as string | undefined
-        const autoContextFile = options['autoContextFile'] as string | undefined
-        if (autoContextFile) {
-            try {
-                autoContextStr = readFileSync(autoContextFile, 'utf-8')
-            } catch (e) {
-                process.stderr.write(`Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`)
-            }
-        }
-        if (autoContextStr !== undefined) updates.autoContext = autoContextStr
+        if (payload.entryType !== undefined) updates.entryType = payload.entryType
+        if (payload.tags !== undefined) updates.tags = payload.tags
+        if (payload.projectNumber !== undefined) updates.projectNumber = payload.projectNumber
+        if (payload.trustScore !== undefined) updates.trustScore = payload.trustScore
+        if (payload.impactScore !== undefined) updates.impactScore = payload.impactScore
+        if (payload.validationStatus !== undefined) updates.validationStatus = payload.validationStatus
+        if (payload.sessionId !== undefined) updates.sessionId = payload.sessionId
+        if (payload.autoContextStr !== undefined) updates.autoContext = payload.autoContextStr
 
         const result = db.updateEntry(entryId, updates)
         
@@ -227,13 +290,11 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
              process.exit(1)
         }
 
-        const relatedIds = parseRelatedTo(options['relatedTo'])
-        for (const targetId of relatedIds) {
+        for (const targetId of payload.relatedIds) {
             db.linkEntries(entryId, targetId, 'references')
         }
 
-        const relationships = parseRelationships(options['relationships'], options['relFile'])
-        for (const rel of relationships) {
+        for (const rel of payload.relationships) {
             db.linkEntries(entryId, rel.target_id, rel.relation_type as RelationshipType)
         }
 

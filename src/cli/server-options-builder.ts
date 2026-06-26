@@ -73,8 +73,9 @@ export function buildServerOptions(
         teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
         toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined),
         defaultProjectNumber: catchConfig(() => {
-            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER');
-            return val ? parseInt(val, 10) : undefined;
+            const configVal = resolver.resolve<string | number>('defaultProjectNumber');
+            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal;
+            return val !== undefined && val !== null ? parseInt(String(val), 10) : undefined;
         }, undefined),
         defaultWorkspaceId: catchConfig(() => resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID'), undefined),
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
