@@ -138,7 +138,22 @@ function generateSummaryPrompt(
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Recent Entries (for context):**
-${markUntrustedContent(entrySummary)}`,
+${markUntrustedContent(entrySummary)}
+
+**Execution Template (Cross-Platform / PowerShell Safe):**
+Write your markdown and JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
+\`\`\`bash
+memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}\\
+  -t retrospective \\
+  --tags "session-summary,your,tags" \\
+  --project <ID> \\
+  --impact <SCORE> \\
+  --trust <SCORE> \\
+  --validation-status passed \\
+  --auto-context-file <scratch_dir>/auto-context.json \\
+  --rel-file <scratch_dir>/relationships.json \\
+  --file <scratch_dir>/session.md
+\`\`\``,
                 },
             },
         ],
@@ -174,7 +189,21 @@ function generateEntryPrompt(_db: IDatabaseAdapter, _teamDb: IDatabaseAdapter | 
 Just provide a concise markdown description of the specific architectural decision, strategic pivot, or blocker. Do NOT log routine code changes or bug fixes here; those belong strictly in Git. Keep it under 150 words. No top-level headers required.
 
 **Rules:**
-${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
+${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
+
+**Execution Template (Cross-Platform / PowerShell Safe):**
+Write your markdown and JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
+\`\`\`bash
+memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}\\
+  -t <TYPE> \\
+  --tags "your,tags" \\
+  --project <ID> \\
+  --impact <SCORE> \\
+  --trust <SCORE> \\
+  --validation-status passed \\
+  --rel-file <scratch_dir>/relationships.json \\
+  --file <scratch_dir>/entry.md
+\`\`\``
                 }
             }
         ]
@@ -232,7 +261,21 @@ Look at the tags and structure of the target entry:
 - Ensure you pass the full updated \`content\` string. Do not nest it under an \`updates\` object if calling the raw tool.
 
 **Rules:**
-${getProjectRegistryHint()}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)`
+${getProjectRegistryHint()}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
+
+**Execution Template (Cross-Platform / PowerShell Safe):**
+Write your markdown and JSON payloads to your conversation's designated scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to completely avoid shell quote-stripping issues. NEVER write temporary files to the repository workspace. Then execute:
+\`\`\`bash
+memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}\\
+  --id <ENTRY_ID> \\
+  --expected-version <VERSION> \\
+  --tags "your,tags" \\
+  --impact <SCORE> \\
+  --trust <SCORE> \\
+  --validation-status passed \\
+  --rel-file <scratch_dir>/relationships.json \\
+  --file <scratch_dir>/updated_entry.md
+\`\`\``
                 }
             }
         ]

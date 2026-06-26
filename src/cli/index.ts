@@ -113,7 +113,9 @@ const createEntryCmd = entryCmd
     .option('--session-id <id>', 'Session ID')
     .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
     .option('--rel, --relationships <json>', 'JSON string of relationships')
+    .option('--rel-file <path>', 'Load relationships JSON from a file')
     .option('--auto-context <json>', 'JSON string for auto context')
+    .option('--auto-context-file <path>', 'Load auto context JSON from a file')
     .option('--team', 'Route to team database')
 addServerOptions(createEntryCmd)
 createEntryCmd.addHelpText(
@@ -142,7 +144,9 @@ const updateEntryCmd = entryCmd
     .option('--session-id <id>', 'Session ID')
     .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
     .option('--rel, --relationships <json>', 'JSON string of relationships')
+    .option('--rel-file <path>', 'Load relationships JSON from a file')
     .option('--auto-context <json>', 'JSON string for auto context')
+    .option('--auto-context-file <path>', 'Load auto context JSON from a file')
     .option('--team', 'Route to team database')
 addServerOptions(updateEntryCmd)
 updateEntryCmd.addHelpText(

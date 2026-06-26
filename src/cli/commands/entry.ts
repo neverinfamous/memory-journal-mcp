@@ -81,10 +81,19 @@ function parseRelatedTo(relatedToStr: unknown): number[] {
     return relatedToStr.split(',').map((s) => s.trim()).filter(Boolean).map(Number)
 }
 
-function parseRelationships(relationshipsStr: unknown): { target_id: number, relation_type: string }[] {
-    if (typeof relationshipsStr !== 'string') return []
+function parseRelationships(relationshipsStr: unknown, relFileStr: unknown): { target_id: number, relation_type: string }[] {
+    let str = relationshipsStr
+    if (typeof relFileStr === 'string') {
+        try {
+            str = readFileSync(relFileStr, 'utf-8')
+        } catch (e) {
+            process.stderr.write(`Warning: Failed to read --rel-file: ${e instanceof Error ? e.message : String(e)}\n`)
+        }
+    }
+    
+    if (typeof str !== 'string') return []
     try {
-        const parsed: unknown = JSON.parse(relationshipsStr)
+        const parsed: unknown = JSON.parse(str)
         if (Array.isArray(parsed)) {
             return parsed.map((r: unknown) => {
                 if (typeof r !== 'object' || r === null) return null;
@@ -96,7 +105,7 @@ function parseRelationships(relationshipsStr: unknown): { target_id: number, rel
             }).filter((r): r is {target_id: number, relation_type: string} => r !== null && !isNaN(r.target_id) && Boolean(r.relation_type))
         }
     } catch (e) {
-        process.stderr.write(`Warning: Failed to parse --relationships JSON: ${e instanceof Error ? e.message : String(e)}\n`)
+        process.stderr.write(`Warning: Failed to parse relationships JSON: ${e instanceof Error ? e.message : String(e)}\n`)
     }
     return []
 }
@@ -119,7 +128,15 @@ export async function createEntryAction(options: Record<string, unknown>, comman
         const trustScore = options['trustScore'] !== undefined ? Number(options['trustScore']) : undefined
         const impactScore = options['impactScore'] !== undefined ? Number(options['impactScore']) : undefined
         
-        const autoContextStr = options['autoContext'] as string | undefined
+        let autoContextStr = options['autoContext'] as string | undefined
+        const autoContextFile = options['autoContextFile'] as string | undefined
+        if (autoContextFile) {
+            try {
+                autoContextStr = readFileSync(autoContextFile, 'utf-8')
+            } catch (e) {
+                process.stderr.write(`Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`)
+            }
+        }
 
         const entryInput: CreateEntryInput = {
             content,
@@ -140,7 +157,7 @@ export async function createEntryAction(options: Record<string, unknown>, comman
             db.linkEntries(newEntry.id, targetId, 'references')
         }
 
-        const relationships = parseRelationships(options['relationships'])
+        const relationships = parseRelationships(options['relationships'], options['relFile'])
         for (const rel of relationships) {
             db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as RelationshipType)
         }
@@ -192,7 +209,16 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
         if (impactScore !== undefined) updates.impactScore = impactScore
         if (options['validationStatus'] !== undefined) updates.validationStatus = options['validationStatus'] as 'passed' | 'failed' | 'none'
         if (options['sessionId'] !== undefined) updates.sessionId = options['sessionId'] as string
-        if (options['autoContext'] !== undefined) updates.autoContext = options['autoContext'] as string
+        let autoContextStr = options['autoContext'] as string | undefined
+        const autoContextFile = options['autoContextFile'] as string | undefined
+        if (autoContextFile) {
+            try {
+                autoContextStr = readFileSync(autoContextFile, 'utf-8')
+            } catch (e) {
+                process.stderr.write(`Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`)
+            }
+        }
+        if (autoContextStr !== undefined) updates.autoContext = autoContextStr
 
         const result = db.updateEntry(entryId, updates)
         
@@ -206,7 +232,7 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
             db.linkEntries(entryId, targetId, 'references')
         }
 
-        const relationships = parseRelationships(options['relationships'])
+        const relationships = parseRelationships(options['relationships'], options['relFile'])
         for (const rel of relationships) {
             db.linkEntries(entryId, rel.target_id, rel.relation_type as RelationshipType)
         }
