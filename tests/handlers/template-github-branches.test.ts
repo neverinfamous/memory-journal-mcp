@@ -54,11 +54,7 @@ describe('Template resources — branch coverage', () => {
     describe('projects/{number}/timeline', () => {
         it('should return error for invalid project number', () => {
             const resource = resources.find((r) => r.uri === 'memory://projects/{number}/timeline')!
-            const result = resource.handler(
-                'memory://projects/abc/timeline',
-                createMockContext() as never
-            ) as Record<string, unknown>
-            expect(result.error).toContain('Invalid project number')
+            expect(() => resource.handler('memory://projects/abc/timeline', createMockContext() as never)).toThrowError(/Invalid project number/)
         })
 
         it('should return entries for valid project', () => {
@@ -76,11 +72,7 @@ describe('Template resources — branch coverage', () => {
             const resource = resources.find(
                 (r) => r.uri === 'memory://issues/{issue_number}/entries'
             )!
-            const result = resource.handler(
-                'memory://issues/xyz/entries',
-                createMockContext() as never
-            ) as Record<string, unknown>
-            expect(result.error).toContain('Invalid issue number')
+            expect(() => resource.handler('memory://issues/xyz/entries', createMockContext() as never)).toThrowError(/Invalid issue number/)
         })
 
         it('should return entries for valid issue', () => {
@@ -98,11 +90,7 @@ describe('Template resources — branch coverage', () => {
     describe('prs/{pr_number}/entries', () => {
         it('should return error for invalid PR number', () => {
             const resource = resources.find((r) => r.uri === 'memory://prs/{pr_number}/entries')!
-            const result = resource.handler(
-                'memory://prs/bad/entries',
-                createMockContext() as never
-            ) as Record<string, unknown>
-            expect(result.error).toContain('Invalid PR number')
+            expect(() => resource.handler('memory://prs/bad/entries', createMockContext() as never)).toThrowError(/Invalid PR number/)
         })
 
         it('should include hint when no entries', () => {

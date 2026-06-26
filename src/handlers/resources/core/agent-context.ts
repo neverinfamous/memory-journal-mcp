@@ -1,5 +1,6 @@
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import type { InternalResourceDef, ResourceContext } from '../shared.js'
+import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 
 export function getAgentContextResource(): InternalResourceDef {
     return {
@@ -8,10 +9,7 @@ export function getAgentContextResource(): InternalResourceDef {
         title: 'Agent Context',
         description: 'Lightweight context for mid-thread agent reorientation. Returns project number, workspace ID, and session rules.',
         mimeType: 'text/yaml',
-        annotations: {
-            audience: ['assistant'],
-            priority: 1.0,
-        },
+        annotations: withPriority(1.0, ASSISTANT_FOCUSED),
         handler: (uri: string, context: ResourceContext) => {
             const config = context?.briefingConfig
             const registry = config?.projectRegistry ?? {}

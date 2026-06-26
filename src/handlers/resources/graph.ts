@@ -7,8 +7,9 @@
 import { ICON_GITHUB } from '../../constants/icons.js'
 // removed ENTRY_COLUMNS
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
-import type { InternalResourceDef, ResourceContext } from './shared.js'
+import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
 
 /**
  * Get graph resource definitions
@@ -23,7 +24,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_GITHUB],
             annotations: ASSISTANT_FOCUSED,
-            handler: async (uri: string, context: ResourceContext) => {
+            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/actions\/recent\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
 
@@ -51,14 +52,24 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                             workflowStatus: run.conclusion || run.status,
                         }))
 
-                        return { entries, count: entries.length, source: 'github_api' }
+                        const data = { entries, count: entries.length, source: 'github_api' }
+                        const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                        return { data: { ...data, _meta: { tokenEstimate } } }
+                    } else if (targetRepo) {
+                        throw new McpError(-32002, `Repository not found or GitHub integration unavailable for: ${targetRepo}`)
                     }
-                } catch {
-                    // Fallback to DB if GitHub fails
+                } catch (error) {
+                    if (error instanceof McpError) throw error;
+                    if (targetRepo) {
+                        throw new McpError(ErrorCode.InternalError, `GitHub integration failed: ${error instanceof Error ? error.message : String(error)}`)
+                    }
+                    // Fallback to DB if GitHub fails for default case
                 }
 
                 const entries = context.db.getWorkflowActionEntries(10)
-                return { entries, count: entries.length, source: 'database' }
+                const data = { entries, count: entries.length, source: 'database' }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { data: { ...data, _meta: { tokenEstimate } } }
             },
         },
     ]

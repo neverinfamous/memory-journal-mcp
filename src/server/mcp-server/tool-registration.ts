@@ -214,7 +214,6 @@ export function createServerInstance(
                         const mutatingTools = [
                             'create_entry', 'update_entry', 'delete_entry', 'restore_entry',
                             'batch_create_entries', 'batch_update_entries', 'batch_delete_entries',
-                            'raise_flag', 'resolve_flag',
                             'add_team_member', 'update_team_member', 'remove_team_member'
                         ]
                         const isMutation = mutatingTools.includes(tool.name) || (tool.name.startsWith('team_') && tool.name !== 'team_search' && tool.name !== 'get_team_entry_by_id')
@@ -224,14 +223,9 @@ export function createServerInstance(
                             void globalSubscriptionManager.notifyResourceUpdated('memory://recent')
                             void globalSubscriptionManager.notifyResourceUpdated('memory://statistics')
                             
-                            if (tool.name.startsWith('team_') || tool.name.includes('flag') || tool.name.includes('team_member')) {
+                            if (tool.name.startsWith('team_') || tool.name.includes('team_member')) {
                                 void globalSubscriptionManager.notifyResourceUpdated('memory://team/recent')
                                 void globalSubscriptionManager.notifyResourceUpdated('memory://team/statistics')
-                            }
-                            
-                            if (tool.name.includes('flag')) {
-                                void globalSubscriptionManager.notifyResourceUpdated('memory://flags')
-                                void globalSubscriptionManager.notifyResourceUpdated('memory://flags/history')
                             }
                         }
                     }

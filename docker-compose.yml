@@ -15,6 +15,9 @@ services:
       # - CORS_ORIGIN=http://localhost:3000
       # Required for IO operations to sandbox filesystem access
       - ALLOWED_IO_ROOTS=/app/data
+      # - RULES_FILE_PATH=/app/data/RULES.md
+      # - SKILLS_DIR_PATH=/app/data/skills
+      # - MEMORY_JOURNAL_WORKFLOW_SUMMARY=/deploy: production deploy | /audit: security scan
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev
@@ -50,6 +53,9 @@ services:
       # - CORS_ORIGIN=http://localhost:3000
       # Required for IO operations to sandbox filesystem access
       - ALLOWED_IO_ROOTS=/app/data
+      # - RULES_FILE_PATH=/app/data/RULES.md
+      # - SKILLS_DIR_PATH=/app/data/skills
+      # - MEMORY_JOURNAL_WORKFLOW_SUMMARY=/deploy: production deploy | /audit: security scan
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev

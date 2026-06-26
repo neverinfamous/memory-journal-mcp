@@ -122,7 +122,7 @@ rm *_metrics.json
 | Check               | Expected                                                             |
 | ------------------- | -------------------------------------------------------------------- |
 | Instruction levels  | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
-| Tool annotations    | 103 tools, all with `annotations`                                    |
+| Tool annotations    | 105 tools, all with `annotations`                                    |
 | Filter instructions | Output confirms correct filtering of config sections                 |
 | Prompts API         | Successfully fetches and parses all 31 prompts                       |
 | Progress            | Both native and code-mode progress APIs successfully complete        |
@@ -153,7 +153,7 @@ rm *_metrics.json
 - `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
-- 103 tools total registered and annotated correctly
+- 105 tools total registered and annotated correctly
 - `get_statistics` returns all 4 enhanced analytics metrics
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
 - Verified that all composite and partial performance indexes exist and are valid in the database schema

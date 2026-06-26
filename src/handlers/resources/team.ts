@@ -2,8 +2,7 @@ import { ICON_CLOCK, ICON_TEAM } from '../../constants/icons.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
-    MEDIUM_PRIORITY,
-} from '../../utils/resource-annotations.js'
+    } from '../../utils/resource-annotations.js'
 import type {
     InternalResourceDef,
     ResourceContext,
@@ -60,6 +59,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                             error: 'Team database not configured. Set TEAM_DB_PATH to enable.',
                             entries: [],
                             count: 0,
+                            code: -32002,
                         },
                     }
                 }
@@ -68,15 +68,21 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
                 const enriched = enrichWithAuthor(entries, context)
 
+                const responseData = {
+                    entries: enriched.map((e) => ({
+                        ...e,
+                        content: markUntrustedContent(e.content),
+                        author: e.author ? sanitizeAuthor(e.author) : null,
+                    })),
+                    count: enriched.length,
+                    source: 'team',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        entries: enriched.map((e) => ({
-                            ...e,
-                            content: markUntrustedContent(e.content),
-                            author: e.author ? sanitizeAuthor(e.author) : null,
-                        })),
-                        count: enriched.length,
-                        source: 'team',
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                     annotations: { lastModified },
                 }
@@ -89,13 +95,14 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
             description: 'Entry counts, types, and contributor breakdown for the team database.',
             mimeType: 'application/json',
             icons: [ICON_TEAM],
-            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
                 if (!context.teamDb) {
                     return {
                         data: {
                             error: 'Team database not configured. Set TEAM_DB_PATH to enable.',
                             configured: false,
+                            code: -32002,
                         },
                     }
                 }
@@ -113,12 +120,18 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     })
                 }
 
+                const responseData = {
+                    configured: true,
+                    ...(stats as object),
+                    authors,
+                    source: 'team',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        configured: true,
-                        ...(stats as object),
-                        authors,
-                        source: 'team',
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                 }
             },

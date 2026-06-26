@@ -12,6 +12,7 @@ import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
 
 /**
  * Get template resource definitions
@@ -30,11 +31,13 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 50 })
-                return { projectNumber, entries, count: entries.length }
+                const data = { projectNumber, entries, count: entries.length }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -50,11 +53,13 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const issueNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (issueNumber === null) {
-                    return { error: 'Invalid issue number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid issue number')
                 }
 
                 const { entries } = context.db.searchEntries('', { issueNumber, limit: 100 })
-                return { issueNumber, entries, count: entries.length }
+                const data = { issueNumber, entries, count: entries.length }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -70,11 +75,11 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
-                    return { error: 'Invalid PR number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid PR number')
                 }
 
                 const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
-                return {
+                const data = {
                     prNumber,
                     entries,
                     count: entries.length,
@@ -84,6 +89,8 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                           }
                         : {}),
                 }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -99,7 +106,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
-                    return { error: 'Invalid PR number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid PR number')
                 }
 
                 // Fetch live PR metadata from GitHub if available
@@ -154,7 +161,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                         'GitHub integration unavailable for live PR status. Entry timestamps show journal activity.'
                 }
 
-                return {
+                const data = {
                     prNumber,
                     prMetadata,
                     entries,
@@ -166,6 +173,8 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                           }
                         : {}),
                 }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -180,7 +189,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
@@ -217,13 +226,15 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     )
                 }
 
-                return {
+                const data = {
                     projectNumber,
                     commits: uniqueCommits,
                     metadata,
                     enrichedCommits,
                     count: uniqueCommits.length,
                 }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -238,7 +249,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
@@ -295,10 +306,12 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                return {
+                const data = {
                     projectNumber,
                     issues: Object.values(issues),
                 }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -313,7 +326,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
@@ -368,10 +381,12 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                return {
+                const data = {
                     projectNumber,
                     pullRequests: Object.values(prs),
                 }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         // Kanban board resources (GitHub Projects v2)
@@ -388,7 +403,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
 
                 if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
                 }
 
                 const resolved = await resolveGitHubRepo(
@@ -402,12 +417,10 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                 const board = await github.getProjectKanban(owner, projectNumber, repo)
                 if (!board) {
-                    return {
-                        error: `Project #${String(projectNumber)} not found or Status field not configured`,
-                        projectNumber,
-                        owner,
-                        hint: 'Projects can be at user, repository, or organization level.',
-                    }
+                    throw new McpError(
+                        -32002,
+                        `Project #${String(projectNumber)} not found or Status field not configured`
+                    )
                 }
 
                 // Strip 'body' from all items to mitigate massive payload size
@@ -419,7 +432,8 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                return board
+                const tokenEstimate = Math.ceil(JSON.stringify(board).length / 4)
+                return { ...board, _meta: { tokenEstimate } }
             },
         },
 

@@ -8,8 +8,7 @@ import { ICON_GITHUB, ICON_MILESTONE } from '../../constants/icons.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
-    MEDIUM_PRIORITY,
-} from '../../utils/resource-annotations.js'
+    } from '../../utils/resource-annotations.js'
 import type {
     GitHubIssue,
     GitHubPullRequest,
@@ -236,27 +235,33 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
+                const responseData = {
+                    status: fetchStatus,
+                    failures: failures.length > 0 ? failures : undefined,
+                    repository: `${owner}/${repo}`,
+                    branch,
+                    commit: commit?.slice(0, 7) ?? null,
+                    ci: {
+                        status: ciStatus,
+                        latestRun,
+                    },
+                    issues: {
+                        openCount: issues.length,
+                        items: openIssues,
+                    },
+                    pullRequests: {
+                        openCount: prs.length,
+                        items: openPrs,
+                    },
+                    kanbanSummary,
+                    milestones: milestoneSummary,
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        status: fetchStatus,
-                        failures: failures.length > 0 ? failures : undefined,
-                        repository: `${owner}/${repo}`,
-                        branch,
-                        commit: commit?.slice(0, 7) ?? null,
-                        ci: {
-                            status: ciStatus,
-                            latestRun,
-                        },
-                        issues: {
-                            openCount: issues.length,
-                            items: openIssues,
-                        },
-                        pullRequests: {
-                            openCount: prs.length,
-                            items: openPrs,
-                        },
-                        kanbanSummary,
-                        milestones: milestoneSummary,
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                     annotations: { lastModified },
                 }
@@ -272,7 +277,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 'Open GitHub milestones with completion percentages, due dates, and issue counts',
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
-            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/github\/milestones\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
@@ -303,12 +308,18 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 })
 
+                const responseData = {
+                    repository: `${owner}/${repo}`,
+                    milestones: milestonesWithProgress,
+                    count: milestonesWithProgress.length,
+                    hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        repository: `${owner}/${repo}`,
-                        milestones: milestonesWithProgress,
-                        count: milestonesWithProgress.length,
-                        hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                     annotations: { lastModified },
                 }
@@ -322,16 +333,16 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 'Detailed view of a single GitHub milestone with completion progress and issue counts. Use get_github_issues with the milestone filter for individual issue details.',
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
-            annotations: ASSISTANT_FOCUSED,
+            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const lastModified = new Date().toISOString()
                 const match = /memory:\/\/milestones\/(?:(.*)\/)?(\d+)$/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
                 const milestoneNumber = match?.[2] ? parseInt(match[2], 10) : null
 
-                if (milestoneNumber === null) {
+                if (milestoneNumber === null || isNaN(milestoneNumber)) {
                     return {
-                        data: { error: 'Invalid milestone number' },
+                        data: { error: 'Invalid milestone number', code: -32002 },
                         annotations: { lastModified },
                     }
                 }
@@ -348,7 +359,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const milestone = await github.getMilestone(owner, repo, milestoneNumber)
                 if (!milestone) {
                     return {
-                        data: { error: `Milestone #${String(milestoneNumber)} not found` },
+                        data: { error: `Milestone #${String(milestoneNumber)} not found`, code: -32002 },
                         annotations: { lastModified },
                     }
                 }
@@ -358,15 +369,21 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     milestone.closedIssues
                 )
 
+                const responseData = {
+                    repository: `${owner}/${repo}`,
+                    milestone: {
+                        ...milestone,
+                        title: markUntrustedContentInline(milestone.title),
+                        completionPercentage,
+                    },
+                    hint: 'Use get_github_issues tool to list issues associated with this milestone.',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        repository: `${owner}/${repo}`,
-                        milestone: {
-                            ...milestone,
-                            title: markUntrustedContentInline(milestone.title),
-                            completionPercentage,
-                        },
-                        hint: 'Use get_github_issues tool to list issues associated with this milestone.',
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                     annotations: { lastModified },
                 }

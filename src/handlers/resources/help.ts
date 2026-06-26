@@ -15,6 +15,7 @@ import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
 
 // ============================================================================
 // Group Metadata
@@ -229,13 +230,15 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         helpUri: `memory://help/${name}`,
                     }))
 
+                const data = {
+                    totalTools: tools.length,
+                    totalGroups: groupList.length,
+                    groups: groupList,
+                    hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return {
-                    data: {
-                        totalTools: tools.length,
-                        totalGroups: groupList.length,
-                        groups: groupList,
-                        hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
-                    },
+                    data: { ...data, _meta: { tokenEstimate } }
                 }
             },
         },
@@ -253,12 +256,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 const groupName = match?.[1]
 
                 if (!groupName) {
-                    return {
-                        data: {
-                            error: 'Invalid group name in URI',
-                            hint: 'Read memory://help for a list of available groups.',
-                        },
-                    }
+                    throw new McpError(ErrorCode.InvalidParams, 'Invalid group name in URI. Read memory://help for a list of available groups.')
                 }
 
                 // Resolve dynamic tool data for this group
@@ -312,6 +310,9 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         result['helpContent'] = staticContent
                     }
 
+                    const tokenEstimate = Math.ceil(JSON.stringify(result).length / 4)
+                    result['_meta'] = { tokenEstimate }
+
                     return { data: result }
                 }
 
@@ -323,14 +324,10 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 // Not found
                 const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
                 const staticKeys = [...HELP_CONTENT.keys()]
-                return {
-                    data: {
-                        error: `Group "${groupName}" not found`,
-                        availableGroups,
-                        staticHelpKeys: staticKeys,
-                        hint: 'Read memory://help for a list of available groups.',
-                    },
-                }
+                throw new McpError(
+                    -32002,
+                    `Group "${groupName}" not found. Available groups: ${availableGroups.join(', ')}. Static help: ${staticKeys.join(', ')}.`
+                )
             },
         },
     ]

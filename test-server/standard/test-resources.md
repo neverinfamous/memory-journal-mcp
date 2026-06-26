@@ -42,7 +42,6 @@
 | Team statistics   | `memory://team/statistics`             | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                      |
 | Help index        | `memory://help`                        | Lists all tool groups with counts, descriptions, and `totalTools`                                                                   |
 | Help group detail | `memory://help/{group}`                | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                              |
-| Help gotchas      | `memory://help/gotchas`                | Field notes and practical tips (moved from server instructions); verify non-empty content with actionable guidance                  |
 | Rules             | `memory://rules`                       | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                          |
 | Workflows         | `memory://workflows`                   | Workflow summary (requires `MEMORY_JOURNAL_WORKFLOW_SUMMARY` or `--workflow-summary`); returns `{ configured: false }` when not set |
 | Skills            | `memory://skills`                      | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                      |
@@ -57,6 +56,7 @@
 | Insights digest   | `memory://insights/digest`             | Cross-project digest snapshot (graceful empty if no digest available)                                                               |
 | Insights team     | `memory://insights/team-collaboration` | Team collaboration matrix with `authorActivity` and `impactFactor` (graceful if team DB not configured)                             |
 | Insights reports  | `memory://insights/reports`            | Last 5 scheduled digest report snapshots and previews                                                                               |
+| Project staleness | `memory://staleness`                   | Overview of staleness across all projects                                                                                           |
 
 ### 1.2 Template Resources — Happy Path
 
@@ -72,6 +72,16 @@
 | Kanban JSON      | `memory://kanban/5`            | Board JSON                                                                                                                          |
 | Milestone detail | `memory://milestones/<N>`      | Milestone with completion %, `openIssues` + `closedIssues` counts, and hint to use `get_github_issues` for individual issue details |
 | Briefing by repo | `memory://briefing/<repo>`     | Repo-scoped briefing (test with `memory://briefing/memory-journal-mcp`) — same structure as `memory://briefing` but repo-filtered   |
+| Agent Context    | `memory://agent-context/<repo>`| Context injected into agent instructions                                                                                            |
+| Actions by repo  | `memory://actions/recent/<repo>` | Recent actions scoped to specific repository                                                                                      |
+| Milestones by repo | `memory://github/milestones/<repo>` | Milestones scoped to specific repository                                                                                     |
+| Status by repo   | `memory://github/status/<repo>`| GitHub status scoped to specific repository                                                                                         |
+| Commits          | `memory://commits/5`           | Raw commit history for project                                                                                                      |
+| Commits by Issue | `memory://commits/5/by-issue`  | Commits grouped by issue                                                                                                            |
+| Commits by PR    | `memory://commits/5/by-pr`     | Commits grouped by PR                                                                                                               |
+| Kanban by repo   | `memory://kanban/<repo>/5`     | Kanban board scoped to specific repository                                                                                          |
+| Milestone by repo| `memory://milestones/<repo>/<N>` | Milestone detail scoped to specific repository                                                                                      |
+| Staleness project| `memory://staleness/5`         | Staleness details scoped to specific project                                                                                        |
 
 ### 1.3 Template Resources — Error Paths
 

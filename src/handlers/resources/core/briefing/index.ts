@@ -9,6 +9,7 @@ import { ICON_BRIEFING } from '../../../../constants/icons.js'
 import {
     withPriority,
     withSessionInit,
+    withAutoRead,
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
 import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
@@ -32,10 +33,7 @@ export const briefingResource: InternalResourceDef = {
         'AUTO-READ AT SESSION START: Returns the exact markdown string to display to the user for the briefing.',
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
-    annotations: {
-        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
-        autoRead: true,
-    },
+    annotations: withAutoRead(withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED))),
     handler: async (_uri: string, context: ResourceContext) => {
         return buildBriefingData(context)
     },
@@ -49,9 +47,7 @@ export const dynamicBriefingResource: InternalResourceDef = {
         'Project-specific briefing context for AI agents. Same as memory://briefing but targets a specific repository name from the registered workspaces.',
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
-    annotations: {
-        ...withPriority(0.9, ASSISTANT_FOCUSED),
-    },
+    annotations: withPriority(0.9, ASSISTANT_FOCUSED),
     handler: async (uri: string, context: ResourceContext) => {
         const match = /memory:\/\/briefing\/(.+)/.exec(uri)
         const repoName = match?.[1] ? decodeURIComponent(match[1]) : undefined

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { withPriority } from '../../utils/resource-annotations.js'
+import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type {
     InternalResourceDef,
     ResourceContext,
@@ -40,7 +40,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
             title: 'Project Staleness Overview',
             description: 'Overview of project staleness based on recent journal entries.',
             mimeType: 'application/json',
-            annotations: withPriority(0.6, { audience: ['assistant'] }),
+            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
                 try {
                     const registry = context.briefingConfig?.projectRegistry ?? {}
@@ -89,14 +89,20 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         result[status] = list
                     }
 
+                    const responseData = {
+                        thresholds: getEnvConfig(),
+                        projects: result,
+                    }
+                    const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                     return {
                         data: {
-                            thresholds: getEnvConfig(),
-                            projects: result,
+                            ...responseData,
+                            _meta: { tokenEstimate }
                         }
                     }
                 } catch (error) {
-                    return { data: formatHandlerError(error) }
+                    return { data: { ...formatHandlerError(error), code: -32603 } }
                 }
             }
         },
@@ -106,22 +112,21 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
             title: 'Project Staleness Detailed Breakdown',
             description: 'Detailed staleness breakdown for a single project.',
             mimeType: 'application/json',
-            annotations: withPriority(0.6, { audience: ['assistant'] }),
+            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: (uri: string, context: ResourceContext): ResourceResult => {
                 try {
-                    // Match the actual base URI after resolving {project_number}
                     const match = /^memory:\/\/staleness\/([^/]+)$/.exec(uri)
                     if (!match) {
-                        return { data: { error: 'Invalid project number in URI' } }
+                        return { data: { error: 'Invalid project number in URI', code: -32002 } }
                     }
 
                     const matchedId = match[1]
                     if (matchedId === undefined) {
-                        return { data: { error: 'Invalid project number in URI' } }
+                        return { data: { error: 'Invalid project number in URI', code: -32002 } }
                     }
                     const projectNumber = parseInt(matchedId, 10)
                     if (isNaN(projectNumber)) {
-                        return { data: { error: 'Project number must be a valid integer' } }
+                        return { data: { error: 'Project number must be a valid integer', code: -32002 } }
                     }
                     
                     const searchResult = context.db.searchEntries('', {
@@ -156,25 +161,31 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                     const latestEntry = searchResult.entries[0]
                     const status = calculateStaleness(latestEntry?.timestamp)
 
+                    const responseData = {
+                        project_number: projectNumber,
+                        status,
+                        last_5_entries: searchResult.entries.map(e => ({
+                            id: e.id,
+                            timestamp: e.timestamp,
+                            type: e.entryType,
+                            preview: e.content.length > 100 ? e.content.slice(0, 100) + '...' : e.content,
+                        })),
+                        tag_breakdown: tagsBreakdown,
+                        type_breakdown: typeBreakdown,
+                        weekly_trend: {
+                            new_entries_last_7_days: recentSearch.entries.length
+                        }
+                    }
+                    const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                     return {
                         data: {
-                            project_number: projectNumber,
-                            status,
-                            last_5_entries: searchResult.entries.map(e => ({
-                                id: e.id,
-                                timestamp: e.timestamp,
-                                type: e.entryType,
-                                preview: e.content.length > 100 ? e.content.slice(0, 100) + '...' : e.content,
-                            })),
-                            tag_breakdown: tagsBreakdown,
-                            type_breakdown: typeBreakdown,
-                            weekly_trend: {
-                                new_entries_last_7_days: recentSearch.entries.length
-                            }
+                            ...responseData,
+                            _meta: { tokenEstimate }
                         }
                     }
                 } catch (error) {
-                    return { data: formatHandlerError(error) }
+                    return { data: { ...formatHandlerError(error), code: -32603 } }
                 }
             }
         }

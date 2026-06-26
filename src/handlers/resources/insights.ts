@@ -9,6 +9,7 @@
 import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
 
 // ============================================================================
 // memory://insights/digest
@@ -31,8 +32,10 @@ export const digestInsightsResource: InternalResourceDef = {
         // Try scheduler first, then persisted DB snapshot
         const schedulerDigest = context.scheduler?.getLatestDigest?.()
         if (schedulerDigest) {
+            const data = { success: true, snapshot: schedulerDigest }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: { success: true, snapshot: schedulerDigest },
+                data: { ...data, _meta: { tokenEstimate } },
                 annotations: { lastModified },
             }
         }
@@ -41,12 +44,14 @@ export const digestInsightsResource: InternalResourceDef = {
         try {
             const liveDigest = context.db?.computeDigest?.()
             if (liveDigest !== undefined) {
+                const data = {
+                    success: true,
+                    snapshot: liveDigest,
+                    source: 'computed',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return {
-                    data: {
-                        success: true,
-                        snapshot: liveDigest,
-                        source: 'computed',
-                    },
+                    data: { ...data, _meta: { tokenEstimate } },
                     annotations: { lastModified },
                 }
             }
@@ -56,26 +61,23 @@ export const digestInsightsResource: InternalResourceDef = {
 
         const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
         if (dbSnapshot) {
+            const data = {
+                success: true,
+                snapshot: dbSnapshot.data,
+                computedAt: dbSnapshot.createdAt,
+                source: 'persisted',
+            }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: {
-                    success: true,
-                    snapshot: dbSnapshot.data,
-                    computedAt: dbSnapshot.createdAt,
-                    source: 'persisted',
-                },
+                data: { ...data, _meta: { tokenEstimate } },
                 annotations: { lastModified: dbSnapshot.createdAt },
             }
         }
 
-        return {
-            data: {
-                success: true,
-                snapshot: null,
-                message:
-                    'No digest available — enable with --digest-interval <minutes> (HTTP transport only)',
-            },
-            annotations: { lastModified },
-        }
+        throw new McpError(
+            -32002,
+            'No digest available — enable with --digest-interval <minutes> (HTTP transport only)'
+        )
     },
 }
 
@@ -98,14 +100,7 @@ export const teamCollaborationResource: InternalResourceDef = {
         const lastModified = new Date().toISOString()
 
         if (!context.teamDb) {
-            return {
-                data: {
-                    success: true,
-                    matrix: null,
-                    message: 'Team database not configured — set TEAM_DB_PATH to enable.',
-                },
-                annotations: { lastModified },
-            }
+            throw new McpError(-32002, 'Team database not configured — set TEAM_DB_PATH to enable.')
         }
 
         // Compute collaboration matrix live from team DB
@@ -114,18 +109,14 @@ export const teamCollaborationResource: InternalResourceDef = {
                 period: 'month',
                 limit: 100,
             })
+            const data = { success: true, matrix }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: { success: true, matrix },
+                data: { ...data, _meta: { tokenEstimate } },
                 annotations: { lastModified },
             }
         } catch (error) {
-            return {
-                data: {
-                    success: false,
-                    error: error instanceof Error ? error.message : String(error),
-                },
-                annotations: { lastModified },
-            }
+            throw new McpError(ErrorCode.InternalError, error instanceof Error ? error.message : String(error))
         }
     },
 }
@@ -160,18 +151,14 @@ export const reportHistoryResource: InternalResourceDef = {
                 }
             })
 
+            const data = { success: true, reports }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: { success: true, reports },
+                data: { ...data, _meta: { tokenEstimate } },
                 annotations: { lastModified: reports[0]?.computedAt ?? lastModified },
             }
         } catch (error) {
-            return {
-                data: {
-                    success: false,
-                    error: error instanceof Error ? error.message : String(error),
-                },
-                annotations: { lastModified },
-            }
+            throw new McpError(ErrorCode.InternalError, error instanceof Error ? error.message : String(error))
         }
     },
 }

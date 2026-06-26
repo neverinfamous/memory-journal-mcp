@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **103 tools** across **11 groups** (core, search, analytics, relationships, io, admin, github, git, backup, team, codemode), **49 resources**, and **30 prompts**.
+Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **105 tools** across **11 groups** (Core, Search, Analytics, Backup, Diagnostics, Batch, Flags/Team, Workflows, GitHub, Aliases, CodeMode), **60 resources**, and **30 prompts**.
 
 **Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
@@ -47,26 +47,21 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 - **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
 - **Zod schemas** for all tool input validation
 - **Output schemas** — All tools have Zod output schemas; error responses must pass validation
-- **Dual-schema pattern** — Relaxed schemas for SDK registration (to handle MCP client coercion), strict schemas inside handlers
+- **Dual Schema Pattern**: All schemas strictly separate input (stringified, loosely typed for LLMs) and output (strict internal domain types) validations. No `argsSchema` for empty or zero-argument prompts.
 
 ### Error Handling
 
-All tool handlers return structured error responses — never raw exceptions:
+All tool handlers must throw standard `@modelcontextprotocol/sdk/types.js` `McpError` exceptions with exact JSON-RPC codes:
 
-```typescript
-{
-  success: false,
-  error: string,        // Human-readable message
-  code: string,         // Module-prefixed code (e.g., "ENTRY_NOT_FOUND")
-  category: string,     // ErrorCategory enum (validation, connection, query, etc.)
-  suggestion: string,   // Actionable fix for the agent
-  recoverable: boolean  // true = user can fix, false = server error
-}
-```
+- `-32602`: Invalid params (Zod validation failures)
+- `-32002`: Resource not found or unavailable
+- `-32603`: Internal server error
 
-- Use `formatHandlerErrorResponse()` from `src/utils/error-helpers.ts` for enriched errors
-- Use `MemoryJournalMcpError` subclasses (`ValidationError`, `ResourceNotFoundError`, etc.) for typed errors
-- Existing `formatHandlerError()` preserved for backward compatibility
+Never use custom wrappers or return structured error JSON — rely on the SDK protocol constraints.
+
+### Token Estimation
+
+All resources must dynamically compute and return `_meta.tokenEstimate` within their JSON response blocks using the `Math.ceil(length / 4)` heuristic.
 
 ### Database
 
@@ -95,8 +90,8 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
-│   ├── tools/                  # 103 tool handlers (11 groups)
-│   ├── resources/              # 49 resource handlers
+│   ├── tools/                  # 105 tool handlers (11 groups)
+│   ├── resources/              # 60 resource handlers
 │   └── prompts/                # 30 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
@@ -117,7 +112,7 @@ src/
 | ---------------------------------------- | ---------------------------------------------------- |
 | `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments, now uses Adaptive Instruction Architecture pointing to `{prefix}://help`) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
-| `test-server/tool-reference.md`          | Categorized 103-tool inventory                       |
+| `test-server/tool-reference.md`          | Categorized 105-tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
 
 ## Review Checklist
@@ -128,7 +123,7 @@ When reviewing PRs, check for:
 - [ ] Missing barrel exports in `src/types/index.ts` when new types are added
 - [ ] `eslint-disable` usage — always forbidden
 - [ ] `@ts-ignore` or `as any` — always forbidden
-- [ ] Raw exceptions from tool handlers — must use `formatHandlerErrorResponse()`
+- [ ] Raw exceptions from tool handlers — must throw `McpError` with exact JSON-RPC codes (-32002, -32603)
 - [ ] Files approaching 500 lines — flag for splitting
 - [ ] New tools missing from `src/filtering/tool-filter.ts` TOOL_GROUPS
 - [ ] Missing Zod output schemas on new tools

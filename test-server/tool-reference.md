@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **103 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **105 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -266,7 +266,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 103   | All tools (default)      |
+| `full`               | 105   | All tools (default)      |
 | `starter`            | 15    | Core + search + codemode |
 | `essential`          | 9     | Minimal footprint        |
 | `readonly`           | 23    | Disable all mutations    |

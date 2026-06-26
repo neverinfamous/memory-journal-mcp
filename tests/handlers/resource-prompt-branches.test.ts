@@ -251,7 +251,7 @@ describe('Graph resources — branch coverage', () => {
                 'memory://actions/recent',
                 context as never
             )) as Record<string, unknown>
-            expect(result.source).toBe('database')
+            expect((result as any).data.source).toBe('database')
         })
 
         it('should fallback to database when github throws', async () => {
@@ -268,7 +268,7 @@ describe('Graph resources — branch coverage', () => {
                 'memory://actions/recent',
                 context as never
             )) as Record<string, unknown>
-            expect(result.source).toBe('database')
+            expect((result as any).data.source).toBe('database')
         })
 
         it('should fallback when repo info has no owner', async () => {
@@ -285,7 +285,7 @@ describe('Graph resources — branch coverage', () => {
                 'memory://actions/recent',
                 context as never
             )) as Record<string, unknown>
-            expect(result.source).toBe('database')
+            expect((result as any).data.source).toBe('database')
         })
     })
 })

@@ -15,9 +15,8 @@
 
 // Removed globalMetrics import
 import {
-    HIGH_PRIORITY,
-    MEDIUM_PRIORITY,
-    LOW_PRIORITY,
+    withPriority,
+    ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 
@@ -41,10 +40,7 @@ export const metricsSummaryResource: InternalResourceDef = {
         'Aggregate metrics across all tool calls since server start. ' +
         'Includes total calls, errors, duration, and token estimates.',
     mimeType: 'text/plain',
-    annotations: {
-        ...HIGH_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.9, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const s = ctx.runtime?.metrics.getSummary()
@@ -91,10 +87,7 @@ export const metricsTokensResource: InternalResourceDef = {
         'Per-tool token usage breakdown sorted by total output tokens. ' +
         'Use this to identify which tools are consuming the most context window.',
     mimeType: 'text/plain',
-    annotations: {
-        ...MEDIUM_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const breakdown = ctx.runtime?.metrics.getTokenBreakdown() ?? []
@@ -135,10 +128,7 @@ export const metricsResourcesResource: InternalResourceDef = {
         'Per-resource read frequency breakdown sorted by total reads. ' +
         'Use this to identify which resources are accessed most often.',
     mimeType: 'text/plain',
-    annotations: {
-        ...MEDIUM_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const breakdown = ctx.runtime?.metrics.getResourceBreakdown() ?? []
@@ -176,10 +166,7 @@ export const metricsSystemResource: InternalResourceDef = {
     description:
         'Process-level system metrics: memory usage, uptime, Node.js version, and platform.',
     mimeType: 'text/plain',
-    annotations: {
-        ...MEDIUM_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const sys = ctx.runtime?.metrics.getSystemMetrics()
@@ -216,10 +203,7 @@ export const metricsUsersResource: InternalResourceDef = {
         'Per-user tool call counts. Populated when user identifiers are provided ' +
         'via OAuth or request metadata. Returns empty breakdown when no user tracking configured.',
     mimeType: 'text/plain',
-    annotations: {
-        ...LOW_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.4, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const userBreakdown = ctx.runtime?.metrics.getUserBreakdown() ?? {}
@@ -259,10 +243,7 @@ export const metricsLatencyResource: InternalResourceDef = {
         'Per-tool latency percentiles (p50, p95, p99) with min/max bounds. ' +
         'Use this to identify tools with problematic tail latency.',
     mimeType: 'text/plain',
-    annotations: {
-        ...MEDIUM_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const summary = ctx.runtime?.metrics.getLatencySummary() ?? []

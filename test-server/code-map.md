@@ -499,38 +499,38 @@ catch (error) {
 
 ## ⚠️ CRITICAL: SDK Input Schema Validation (Read This First)
 
-**If you see a raw MCP `-32602` error, the problem is ALWAYS in our schema definition. It is NEVER an AntiGravity/client issue. Do not hallucinate client-side causes.**
+**If you see a raw MCP `-32602` error from the SDK, the problem is ALWAYS in our schema definition. It is NEVER an AntiGravity/client issue.**
 
 ### The Problem
 
-The MCP SDK validates tool inputs **before** our handler code runs. If a required field in our `inputSchema` receives `undefined` or an empty string, the SDK throws a raw `-32602 InvalidParams` error that bypasses our structured error handling entirely. The user sees an ugly protocol error instead of our clean `{success: false, error, code, category}` response.
+The MCP SDK validates tool inputs **before** our handler code runs. If a required field in our `inputSchema` receives `undefined` or an empty string, the SDK throws a generic `-32602 InvalidParams` error that bypasses our internal error throwing logic entirely. The user sees an ugly generic error instead of our carefully written error messages.
 
-### The Solution: Dual-Schema Pattern
+### The Solution: Dual-Schema Pattern with McpError
 
-Every tool has **two** schemas — one relaxed (SDK-facing) and one strict (handler-internal):
+Every tool has **two** schemas — one relaxed (SDK-facing) and one strict (handler-internal). Inside the handler, we throw `McpError` exceptions with exact JSON-RPC codes (e.g. `-32602` for InvalidParams, `-32002` for ResourceNotFound).
 
 ```typescript
 {
     name: 'create_entry',
     // SDK-FACING SCHEMA: All fields optional, NO .min() constraints.
-    // This lets {} pass through to our handler without -32602.
+    // This lets {} pass through to our handler without premature validation.
     inputSchema: z.object({
         content: z.string().optional().describe('Entry content'),
-        //                 ^^^^^^^^^^
-        // MUST be .optional() here — even if logically required.
     }),
     handler: async (params: unknown) => {
         try {
             // HANDLER SCHEMA: Strict validation with .min(1), required fields, etc.
-            // This is where real validation happens, producing structured errors.
+            // This is where real validation happens.
             const input = z.object({
                 content: z.string().min(1).max(MAX_CONTENT_LENGTH),
-                //                  ^^^^^^^
-                // Enforcement happens HERE, caught by formatHandlerError()
             }).parse(params)
             // ... tool logic ...
         } catch (err) {
-            return formatHandlerError(err)  // → structured {success: false, ...}
+            // Handlers throw standard McpError exceptions with JSON-RPC codes
+            if (err instanceof z.ZodError) {
+                throw new McpError(ErrorCode.InvalidParams, err.message);
+            }
+            throw new McpError(ErrorCode.InternalError, "An internal error occurred");
         }
     },
 }
