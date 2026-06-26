@@ -14,6 +14,9 @@ export const GitHistoryOptionsSchema = z.object({
     path: z.string().optional(),
     maxCount: z.number().optional(),
     since: z.string().optional(),
+    sortBy: z.enum(['date', 'impact']).optional(),
+    scope: z.string().optional(),
+    techDebtAudit: z.boolean().optional(),
 })
 
 export const GitHistoryOptionsSchemaMcp = z.object({
@@ -21,16 +24,25 @@ export const GitHistoryOptionsSchemaMcp = z.object({
     path: z.string().optional().describe('Filter by specific file or directory path'),
     maxCount: z.number().optional().describe('Maximum number of commits to return. Default: 50'),
     since: z.string().optional().describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
+    sortBy: z.enum(['date', 'impact']).optional().describe('Sort commits by date or impact score'),
+    scope: z.string().optional().describe('Filter commits by a specific scope'),
+    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
 })
 
 export const GitSearchOptionsSchema = z.object({
     query: z.string(),
     maxCount: z.number().optional(),
+    sortBy: z.enum(['date', 'impact']).optional(),
+    scope: z.string().optional(),
+    techDebtAudit: z.boolean().optional(),
 })
 
 export const GitSearchOptionsSchemaMcp = z.object({
     query: z.string().describe('Search query to match in commit messages'),
     maxCount: z.number().optional().describe('Maximum number of commits to return. Default: 50'),
+    sortBy: z.enum(['date', 'impact']).optional().describe('Sort commits by date or impact score'),
+    scope: z.string().optional().describe('Filter commits by a specific scope'),
+    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
 })
 
 export const GitReleaseInfoOptionsSchema = z.object({
@@ -54,11 +66,17 @@ interface FetchCommitsInput {
     since?: string
     query?: string
     ref?: string
+    sortBy?: 'date' | 'impact'
+    scope?: string
+    techDebtAudit?: boolean
 }
 
 async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<CommitEntry[]> {
+    const needsPostProcessing = input.sortBy === 'impact' || input.techDebtAudit === true || input.scope !== undefined
+    const fetchLimit = needsPostProcessing ? 500 : (input.maxCount ?? 50)
+
     const cliArgs: CliArgs = {
-        limit: input.maxCount?.toString(),
+        limit: fetchLimit.toString(),
         path: input.path,
         since: input.since,
         grep: input.query,
@@ -85,7 +103,35 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
         if (parsed) batch.push(parsed)
     }
     const commits = await processBatch(batch, cliArgs, [])
-    return commits
+    
+    let processedCommits = commits
+
+    if (input.scope !== undefined) {
+        processedCommits = processedCommits.filter(c => c.scope === input.scope)
+    }
+
+    if (input.techDebtAudit === true) {
+        processedCommits = processedCommits.filter(c => {
+            const meta = c.metadata
+            const impact = typeof meta?.impact === 'number' ? meta.impact : parseFloat(meta?.impact ?? '0')
+            const trust = typeof meta?.trust === 'number' ? meta.trust : parseFloat(meta?.trust ?? '1')
+            return impact >= 0.5 && (trust < 0.8 || meta?.validation === 'none')
+        })
+    }
+
+    if (input.sortBy === 'impact') {
+        processedCommits.sort((a, b) => {
+            const impactA = typeof a.metadata?.impact === 'number' ? a.metadata.impact : parseFloat(a.metadata?.impact ?? '0')
+            const impactB = typeof b.metadata?.impact === 'number' ? b.metadata.impact : parseFloat(b.metadata?.impact ?? '0')
+            return impactB - impactA
+        })
+    }
+
+    if (needsPostProcessing && input.maxCount !== undefined) {
+        processedCommits = processedCommits.slice(0, input.maxCount)
+    }
+
+    return processedCommits
 }
 
 async function getUnreleasedChangelog(cwd: string): Promise<{ latestTag: string | null; commits: CommitEntry[] }> {
@@ -149,7 +195,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const cwd = process.cwd()
                     const input = GitSearchOptionsSchema.parse(params)
                     await sendProgress(progress, 0, 1, `Searching commits for "${input.query}"...`)
-                    const commits = await fetchCommits({ query: input.query, maxCount: input.maxCount }, cwd)
+                    const commits = await fetchCommits(input, cwd)
                     return { success: true, commits }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -237,6 +283,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         byType: {} as Record<string, number>,
                         byAuthor: {} as Record<string, number>,
                         breakingCount: 0,
+                        totalInsertions: 0,
+                        totalDeletions: 0,
+                        totalImpact: 0,
+                        byCategory: {} as Record<string, number>
                     }
                     
                     for (const c of commits) {
@@ -248,6 +298,19 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         }
                         if (c.isBreaking) {
                             analysis.breakingCount++
+                        }
+                        
+                        analysis.totalInsertions += (c.totalInsertions ?? 0)
+                        analysis.totalDeletions += (c.totalDeletions ?? 0)
+                        
+                        if (c.metadata?.impact !== undefined) {
+                            const imp = typeof c.metadata.impact === 'number' ? c.metadata.impact : parseFloat(c.metadata.impact ?? '0')
+                            if (!isNaN(imp)) analysis.totalImpact += imp
+                        }
+                        
+                        const categories = c.metadata?.category ?? []
+                        for (const cat of categories) {
+                            analysis.byCategory[cat] = (analysis.byCategory[cat] ?? 0) + 1
                         }
                     }
                     
