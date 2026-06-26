@@ -200,7 +200,7 @@ memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}\\
   --project <ID> \\
   --impact <SCORE> \\
   --trust <SCORE> \\
-  --validation-status passed \\
+  --validation-status <STATUS> \\
   --rel-file <scratch_dir>/relationships.json \\
   --file <scratch_dir>/entry.md
 \`\`\``
@@ -258,7 +258,8 @@ Look at the tags and structure of the target entry:
 **Step 3: Execute the Update**
 - ${dbHint}
 - You MUST pass the existing \`version\` as the \`expected_version\` parameter to prevent concurrent overwrites.
-- Ensure you pass the full updated \`content\` string. Do not nest it under an \`updates\` object if calling the raw tool.
+- Ensure you pass the full updated \`content\` string.
+- Only pass metadata flags (like \`--tags\`, \`--impact\`, \`--trust\`, \`--validation-status\`, etc.) to the CLI if you are intentionally modifying those fields. Otherwise, omit them to preserve existing values.
 
 **Rules:**
 ${getProjectRegistryHint()}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
@@ -269,12 +270,8 @@ Write your markdown and JSON payloads to your conversation's designated scratch 
 memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}\\
   --id <ENTRY_ID> \\
   --expected-version <VERSION> \\
-  --tags "your,tags" \\
-  --impact <SCORE> \\
-  --trust <SCORE> \\
-  --validation-status passed \\
-  --rel-file <scratch_dir>/relationships.json \\
   --file <scratch_dir>/updated_entry.md
+  # ONLY add optional metadata flags here if you intend to modify them
 \`\`\``
                 }
             }

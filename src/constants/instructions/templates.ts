@@ -9,9 +9,6 @@ These templates define the REQUIRED structure for journal entry content by type.
 - [Concrete item: what was done, key files/PRs/entry IDs]
 - [Another concrete item]
 
-## Commits
-- [list of short commit SHAs generated this session]
-
 ## Unfinished / Blocked
 - [Item: why it's blocked or what remains — or "None" if complete]
 
@@ -20,7 +17,7 @@ These templates define the REQUIRED structure for journal entry content by type.
 \`\`\`
 
 Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes").
-Do NOT omit any of the four required sections.
+Do NOT omit any of the three required sections.
 Always remember to populate the \`auto_context\` payload parameter with the session's commit SHAs.
 
 ## Feature Implementation (entry\\_type: "feature\\_implementation")
