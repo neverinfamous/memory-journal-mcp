@@ -30,6 +30,7 @@
 | Test               | Command/Action         | Expected Result                                                                                 |
 | ------------------ | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | Basic connectivity | `test_simple`          | Returns echo message                                                                            |
+| Error handling     | `test_error_handling(error_type: "validation", message: "Test")` | Returns a structured error response with the requested error type               |
 | Trigger progress   | `trigger_progress`     | Emits progress notifications and returns complete                                               |
 | Health resource    | Read `memory://health` | Shows DB stats, tool filter status, vector index health                                         |
 | Health team block  | Read `memory://health` | Includes `teamDatabase` block with `configured`, `entryCount`, `path` (requires `TEAM_DB_PATH`) |
@@ -148,6 +149,7 @@ rm *_metrics.json
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
 - `test_simple` returns echo message
+- `test_error_handling` correctly returns structured errors based on `error_type`
 - `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)

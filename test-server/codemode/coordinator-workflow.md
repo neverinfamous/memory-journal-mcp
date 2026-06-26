@@ -49,17 +49,24 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 15. `test-cm-github.md`
 16. `test-cm-kanban-lifecycle.md`
 17. `test-cm-io.md`
-18. `test-cm-admin-backup.md`
-19. `test-cm-team-crud.md`
-20. `test-cm-team-admin-part-1.md`
-21. `test-cm-team-admin-part-2.md`
-22. `test-cm-team-vector-errors.md` (Includes cleanup)
-23. `test-cm-team-rbac.md`
-24. `test-cm-error-matrix.md`
-25. `test-cm-error-matrix-2.md`
-26. `test-cm-payload-optimization.md`
-27. `test-cm-hallucination-smoothing.md`
-28. `test-git.md`
+18. `test-cm-admin-core.md`
+19. `test-cm-admin-batch.md`
+20. `test-cm-backup.md`
+21. `test-cm-team-crud.md`
+22. `test-cm-team-admin-core.md`
+23. `test-cm-team-batch.md`
+24. `test-cm-team-analytics-relationships.md`
+25. `test-cm-team-admin-part-2.md`
+26. `test-cm-team-aliases.md`
+27. `test-cm-team-rbac.md`
+28. `test-cm-team-vector-errors.md` (Includes cleanup)
+29. `test-cm-error-matrix.md`
+30. `test-cm-error-matrix-2.md`
+31. `test-cm-payload-optimization.md`
+32. `test-cm-hallucination-smoothing.md`
+33. `test-cm-session-summary-healing.md`
+34. `test-config-reload.md`
+35. `test-git.md`
 
 ## Telemetry Collection
 
