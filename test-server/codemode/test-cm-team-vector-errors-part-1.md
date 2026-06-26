@@ -1,0 +1,107 @@
+# Re-Test memory-journal-mcp — Code Mode: Team Vector, Insights & Cross-Tool Errors
+
+Test team vector search, cross-project insights, and comprehensive cross-tool error path verification through Code Mode.
+
+**Scope:** 1 tool (`mj_execute_code`), Phase 28.10–28.11 — ~10 test cases covering team vector operations, insights, and cross-tool structured error verification via Code Mode.
+
+**Prerequisites:**
+
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Seed data S15–S17 are team DB entries with `project_number: 5`, required for `team_get_cross_project_insights`.
+
+**Workflow after testing:**
+
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `pnpm run check`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+
+---
+
+## Phase 28 (continued): Team Vector, Insights & Cross-Tool Errors
+
+### 28.9 Team Vector & Cross-Project Insights
+
+```javascript
+// Test code:
+const rebuild = await mj.team.teamRebuildVectorIndex({})
+const stats = await mj.team.teamGetVectorIndexStats({})
+
+const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 1 })
+let addResult = { success: false }
+if (recent.success && recent.entries && recent.entries.length > 0) {
+  addResult = await mj.team.teamAddToVectorIndex({
+    project_number: 5,
+    entry_id: recent.entries[0].id,
+  })
+}
+
+const addBad = await mj.team.teamAddToVectorIndex({
+  project_number: 5,
+  entry_id: 999999,
+})
+
+const search = await mj.team.teamSemanticSearch({
+  project_number: 5,
+  query: 'standup',
+})
+let relatedById = { entries: [] }
+if (recent.success && recent.entries && recent.entries.length > 0) {
+  relatedById = await mj.team.teamSemanticSearch({
+    project_number: 5,
+    entry_id: recent.entries[0].id,
+  })
+}
+const strict = await mj.team.teamSemanticSearch({
+  project_number: 5,
+  query: 'standup',
+  similarity_threshold: 0.5,
+})
+
+const insights = await mj.team.teamGetCrossProjectInsights({})
+const insightsFiltered = await mj.team.teamGetCrossProjectInsights({
+  start_date: '2026-01-01',
+  end_date: '2026-03-01',
+  min_entries: 1,
+})
+
+return {
+  rebuildSuccess: rebuild.success,
+  entriesIndexed: rebuild.success ? rebuild.entriesIndexed : 0,
+  vectorAvailable: stats.success ? stats.available : false,
+  vectorItemCount: stats.success ? stats.itemCount : 0,
+  searchCount: search.success ? (search.entries?.length ?? 0) : 0,
+  relatedCount: relatedById.success ? (relatedById.entries?.length ?? 0) : 0,
+  strictFewer: strict.success && search.success ? (strict.entries?.length ?? 0) <= (search.entries?.length ?? 0) : true,
+  addSuccess: addResult.success,
+  addBadError: addBad.success === false,
+  insightsProjectCount: insights.success ? insights.project_count : 0,
+  insightsHasProjects: insights.success ? Array.isArray(insights.projects) : false,
+  filteredInsights: insightsFiltered.success ? insightsFiltered.project_count >= 0 : false,
+}
+```
+
+| Check                  | Expected                                                                  |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `rebuildSuccess`       | `true`                                                                    |
+| `entriesIndexed`       | Number > 0                                                                |
+| `vectorAvailable`      | `true`                                                                    |
+| `searchCount`          | ≥ 1                                                                       |
+| `relatedCount`         | ≥ 1                                                                       |
+| `strictFewer`          | `true`                                                                    |
+| `addSuccess`           | `true`                                                                    |
+| `addBadError`          | `true`                                                                    |
+| `insightsHasProjects`  | `true`                                                                    |
+| `insightsProjectCount` | ≥ 1 (project 5 visible with seed entries S15–S17; 0 if team seed missing) |
+| `filteredInsights`     | `project_count ≥ 0` (≥ 1 if S15–S17 fall within date range)               |
+
+
+
+## Success Criteria
+
+- Cross-team search works
+- Team analytics works

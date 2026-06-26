@@ -80,14 +80,7 @@
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- GitHub issue lifecycle tools create/close issues correctly
-- `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
-- `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
-- `close_github_issue_with_entry` returns structured error for already-closed issues
-- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
 - `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
-- Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
-- `memory://milestones/{repo}/{number}` returns milestone with completion %, issue counts, and hint
 - `get_repo_insights` returns correct data based on `sections` parameter
 - `get_copilot_reviews` — referenced in test docs but not re-executed (verified in schema check only; see prior sessions)
 - All GitHub test artifacts cleaned up after testing

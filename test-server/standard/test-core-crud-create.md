@@ -40,6 +40,9 @@
 | With project_owner   | `create_entry(content: "...", project_number: 5, project_owner: "neverinfamous")`                                              | Entry created with `projectOwner` field                                               |
 | auto_context off     | `create_entry(project_number: 5, content: "No context", auto_context: false)`                                                  | Entry created without auto-generated context                                          |
 | share_with_team      | `create_entry(project_number: 5, content: "Shared entry", share_with_team: true)`                                              | Entry in personal DB + team DB; response has `sharedWithTeam: true`, `author`         |
+| Default Type         | `create_entry(project_number: 5, content: "Type omitted")`                                                                     | Type defaults to "note"                                                               |
+| Unrecognized Fields  | `create_entry(project_number: 5, content: "...", random_field: "ignore_me")`                                                   | Safe ignore (no crash), entry creates normally                                        |
+| Create No Project    | `create_entry(content: "No project test")` (without `project_number`)                                                          | Fails with `VALIDATION_ERROR` ("Missing project_number..."). *(Note: If `DEFAULT_PROJECT_NUMBER` is configured on the server, this will succeed instead of erroring. If so, remove the default and re-test).* |
 
 
 

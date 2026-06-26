@@ -14,8 +14,7 @@ export function getGitPromptDefinitions(): InternalPromptDef[] {
             name: 'commit',
             description: 'High-integrity procedure for committing code changes with validation gates',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, _db: IDatabaseAdapter) => {
+            handler: (_args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 return {
                     messages: [
                         {
@@ -82,8 +81,7 @@ Call \`mj_execute_code\` to create a \`technical_note\` entry documenting the co
             name: 'quick-commit',
             description: 'Fast procedure for committing code changes, bypassing validation gates',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, _db: IDatabaseAdapter) => {
+            handler: (_args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 return {
                     messages: [
                         {

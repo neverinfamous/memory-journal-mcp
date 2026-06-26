@@ -38,7 +38,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
     return [
         {
             name: 'issue-commander',
-            description: 'Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints',
+            description: 'Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints. Optional arguments: project_number, workflow_type',
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
@@ -79,7 +79,7 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
         },
         {
             name: 'pr-commander',
-            description: 'Pull request summary, review prep, and dependency updates with validation gates',
+            description: 'Pull request summary, review prep, and dependency updates with validation gates. Optional arguments: pr_number, workflow_type',
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (
@@ -129,7 +129,7 @@ If doing deps/changelog: Audit updates and backfill SHA provenance.`,
             description: 'CI/CD failure analysis with root cause identification',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
+            handler: (_args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
                 const entries = db.getWorkflowActionEntries(20)
 
                 return {

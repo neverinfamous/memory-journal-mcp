@@ -1,4 +1,4 @@
-# Re-Test memory-journal-mcp — Data Integrity & Boundary Testing
+# Re-Test memory-journal-mcp — Data Integrity & Boundary Testing (Part 1)
 
 **Scope:** Data round-trip fidelity, boundary value behavior, Unicode handling, concurrent-like operations, and implementation bug detection.
 
@@ -23,9 +23,9 @@
 
 ---
 
-## Phase 12: Data Integrity Verification
+## Phase 12.1: Data Integrity Verification (Part 1)
 
-### 12.1 Round-Trip Fidelity
+### 12.1.1 Round-Trip Fidelity
 
 Create entries with specific data, then read them back to verify nothing is lost or mutated.
 
@@ -40,7 +40,7 @@ Create entries with specific data, then read them back to verify nothing is lost
 | HTML-like content      | `create_entry(project_number: 5, content: "<script>alert('xss')</script>")`                                                                                                                                                       | `get_entry_by_id` — content stored as-is (no sanitization of journal content) |
 | Update preserves unset | `create_entry(project_number: 5, content: "Original", tags: ["a","b"])` then `update_entry(project_number: 5, entry_id: N, content: "Updated")`                                                                                   | `get_entry_by_id` — tags still `["a","b"]`, only content changed              |
 
-### 12.2 Boundary Values
+### 12.1.2 Boundary Values
 
 > [!WARNING]
 > **Payload Limit Learnings:** The default Express JSON parser limit is **1MB**. Scripts testing the upper boundary for `413 Payload Too Large` MUST exceed 1MB. Additionally, testing HTTP/SSE manually with raw `fetch()` or `curl` requires first initializing the session via `POST /mcp/session` to obtain an `x-mcp-session-id` header. Without this handshake, POSTing `tools/call` directly to `/mcp` will fail with a 500 or 400 validation error (e.g. `!isInitializeRequest(req.body)`). It is far more reliable to perform these tests directly over the standard Stdio MCP connection.
@@ -58,7 +58,7 @@ Create entries with specific data, then read them back to verify nothing is lost
 | Date at epoch boundary | `search_by_date_range(project_number: 5, start_date: "1970-01-01", end_date: "1970-01-02")` | Returns 0 entries (no crash)                                      |
 | Future date range      | `search_by_date_range(project_number: 5, start_date: "2099-01-01", end_date: "2099-12-31")` | Returns 0 entries (no crash, no false results)                    |
 
-### 12.3 Tag Operations Integrity
+### 12.1.3 Tag Operations Integrity
 
 | Test                           | Command/Action                                                                | Expected Result                                                                    |
 | ------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -69,43 +69,11 @@ Create entries with specific data, then read them back to verify nothing is lost
 | Tag with spaces                | `create_entry(project_number: 5, content: "test", tags: ["tag with spaces"])` | Entry created and tag retrievable (spaces convert to hyphens: `"tag-with-spaces"`) |
 | Duplicate tags in array        | `create_entry(project_number: 5, content: "test", tags: ["dup", "dup"])`      | Entry created — duplicates either deduplicated or stored as-is                     |
 
-### 12.4 Relationship Integrity
-
-| Test                        | Command/Action                                                                                  | Expected Result                                         |
-| --------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Link persists after re-read | `link_entries(from: A, to: B, type: "references")` then `get_entry_by_id(project_number: 5, A)` | Relationships array includes the link                   |
-| Duplicate link detection    | Link A→B twice with same type                                                                   | Second call returns `duplicate: true`                   |
-| Reverse link allowed        | Link B→A after A→B exists                                                                       | Succeeds — reverse direction is a separate relationship |
-| Link to soft-deleted entry  | Soft-delete B, then `link_entries(from: A, to: B)`                                              | Structured error — target entry not found or hidden     |
-| All relationship types      | Create links with each type: `references`, `implements`, `blocked_by`, `resolved`, `caused`     | All succeed                                             |
-
-### 12.5 Search Isolation After Delete
-
-| Test                       | Command/Action                                                                 | Expected Result                                     |
-| -------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| FTS5 isolation             | Create entry with unique term, delete it (soft), search for term               | Deleted entry does NOT appear in results            |
-| Semantic isolation         | Create entry, add to vector index, soft-delete, then `semantic_search`         | Deleted entry does NOT appear in semantic results   |
-| Date range isolation       | Create entry in known date, soft-delete, then `search_by_date_range` over date | Deleted entry does NOT appear in date range results |
-| Permanent delete isolation | Create entry, permanently delete, then search                                  | Entry completely absent from all search methods     |
-
-### 12.6 Filter Enforcement (Implementation Bug Detection)
-
-> [!CAUTION]
-> These tests detect **silent filter ignored** bugs — where a handler accepts filter params but ignores them.
-
-| Test                                 | Command/Action                                                                                 | Expected Result                                                         |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `get_statistics` date filter         | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")`                             | ⚠️ Should return 0 entries. If returns all, handler ignores date filter |
-| `export_entries` tag filter          | `export_entries(format: "json", tags: ["nonexistent-tag-xyz"], limit: 100)`                    | Should return 0 entries. If returns all, filter is ignored              |
-| `export_entries` date filter         | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)`                         | Should return 0 entries. If returns all, date filter is ignored         |
-| `search_by_date_range` with filters  | `search_by_date_range(project_number: 5, ..., entry_type: "nonexistent_type")`                 | Structured validation error rejecting the invalid enum value            |
-| `get_recent_entries` personal filter | `get_recent_entries(project_number: 5, limit: 100, is_personal: true)` vs `is_personal: false` | Results should be mutually exclusive                                    |
-
 ---
 
 ## Cleanup
 
-After testing, permanently delete all entries created during Phase 12. Since no automated cleanup script exists, you MUST manually call `delete_entry(permanent: true)` via direct MCP tool calls for every entry ID generated during this test phase.
+After testing, permanently delete all entries created during Phase 12.1. Since no automated cleanup script exists, you MUST manually call `delete_entry(permanent: true)` via direct MCP tool calls for every entry ID generated during this test phase.
 
 | Cleanup Step       | Command/Action                                                     |
 | ------------------ | ------------------------------------------------------------------ |
@@ -117,14 +85,10 @@ After testing, permanently delete all entries created during Phase 12. Since no 
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
+- Agent reports the Total Token Estimate in the final summary.
 - All field round-trips preserve data exactly (content, tags, PR fields, workflow fields, project number, is_personal)
 - Unicode, multiline, HTML-like, and long content stored and retrieved correctly
 - `update_entry` preserves unset fields (partial update semantics)
 - Content length boundaries enforced (max ~50K accepted, >100K rejected)
 - Limit boundaries enforced (1–500 accepted, 501 rejected, -1 rejected)
 - Tag merge operations correctly consolidate counts and delete source
-- Soft-deleted entries excluded from FTS5, semantic, and date range search results
-- Permanently deleted entries completely absent from all search methods
-- Filter enforcement validated — no silent filter ignored bugs
-- All relationship types persist and are queryable

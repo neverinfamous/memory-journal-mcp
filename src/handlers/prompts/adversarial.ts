@@ -12,12 +12,19 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
+import { z } from 'zod'
+
+const planReviewArgsSchema = z.object({
+    topic: z.string().optional(),
+    depth: z.enum(['light', 'standard', 'deep']).optional()
+})
+
+const auditArgsSchema = z.object({
+    target: z.string().optional()
+})
 
 /** Review depth profiles controlling which dimensions receive full scrutiny. */
 type ReviewDepth = 'light' | 'standard' | 'deep'
-
-/** Valid review depths for input validation. */
-const VALID_DEPTHS: ReadonlySet<string> = new Set(['light', 'standard', 'deep'])
 
 /**
  * Review dimension definitions with weights.
@@ -106,15 +113,12 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'adversarial-plan-review',
             description:
-                'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal',
+                'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth.',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const topic = args?.['topic'] ?? '{topic}'
-                const rawDepth = args?.['depth'] ?? 'standard'
-                const depth: ReviewDepth = VALID_DEPTHS.has(rawDepth)
-                    ? (rawDepth as ReviewDepth)
-                    : 'standard'
+                const parsed = planReviewArgsSchema.parse(args ?? {})
+                const topic = parsed.topic ?? '{topic}'
+                const depth: ReviewDepth = parsed.depth ?? 'standard'
 
                 // Pre-fetch prior plan drafts related to this topic
                 const { entries: priorDrafts } = db.searchEntries(topic, {
@@ -232,16 +236,18 @@ Review prior entries for recurring findings and reusable patterns before draftin
         },
         {
             name: 'adversarial-audit-code-quality',
-            description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency)',
+            description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency) Optional parameter: target',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
-                messages: [{
-                    role: 'user',
-                    content: {
-                        type: 'text',
-                        text: `# Adversarial Code Quality Audit
-Target: ${args?.['target'] ?? '{target}'}
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const parsed = auditArgsSchema.parse(args ?? {})
+                const target = parsed.target ?? '{target}'
+                return {
+                    messages: [{
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Adversarial Code Quality Audit
+Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
@@ -252,22 +258,25 @@ If the target is '{target}', determine it from the user's request. If the user h
 5. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests).
 6. Commit using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\` (type: "audit_finding", tags: ["commander", "code-quality"]).
 **Rule**: If you don't make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
-                    }
-                }]
-            })
+                        }
+                    }]
+                }
+            }
         },
         {
             name: 'adversarial-audit-security',
-            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces)',
+            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameter: target',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
-                messages: [{
-                    role: 'user',
-                    content: {
-                        type: 'text',
-                        text: `# Adversarial Security Audit
-Target: ${args?.['target'] ?? '{target}'}
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const parsed = auditArgsSchema.parse(args ?? {})
+                const target = parsed.target ?? '{target}'
+                return {
+                    messages: [{
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Adversarial Security Audit
+Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
@@ -275,22 +284,25 @@ If the target is '{target}', determine it from the user's request. If the user h
 2. Run \`gh copilot -- -p "Perform a security audit on <target> looking for injection vectors, auth/authz gaps, and data boundary issues." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.\n**Rule**: If you do not make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
-                    }
-                }]
-            })
+                        }
+                    }]
+                }
+            }
         },
         {
             name: 'adversarial-audit-performance',
-            description: 'Multi-pass adversarial performance audit (profiling, stress-testing)',
+            description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameter: target',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
-                messages: [{
-                    role: 'user',
-                    content: {
-                        type: 'text',
-                        text: `# Adversarial Performance Audit
-Target: ${args?.['target'] ?? '{target}'}
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const parsed = auditArgsSchema.parse(args ?? {})
+                const target = parsed.target ?? '{target}'
+                return {
+                    messages: [{
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Adversarial Performance Audit
+Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
@@ -298,22 +310,25 @@ If the target is '{target}', determine it from the user's request. If the user h
 2. Run \`gh copilot -- -p "Perform a performance audit on <target> looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.\n**Rule**: If you do not make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
-                    }
-                }]
-            })
+                        }
+                    }]
+                }
+            }
         },
         {
             name: 'adversarial-audit-seo',
-            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals)',
+            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameter: target',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
-                messages: [{
-                    role: 'user',
-                    content: {
-                        type: 'text',
-                        text: `# Adversarial SEO Audit
-Target: ${args?.['target'] ?? '{target}'}
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const parsed = auditArgsSchema.parse(args ?? {})
+                const target = parsed.target ?? '{target}'
+                return {
+                    messages: [{
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Adversarial SEO Audit
+Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
@@ -325,22 +340,25 @@ If the target is '{target}', determine it from the user's request. If the user h
 2. Run \`gh copilot -- -p "Perform an SEO and Core Web Vitals audit on <target>." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
 4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.\n**Rule**: If you do not make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
-                    }
-                }]
-            })
+                        }
+                    }]
+                }
+            }
         },
         {
             name: 'adversarial-audit-skill',
-            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test)',
+            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameter: target',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
-                messages: [{
-                    role: 'user',
-                    content: {
-                        type: 'text',
-                        text: `# Adversarial Skill Audit
-Target: ${args?.['target'] ?? '{target}'}
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const parsed = auditArgsSchema.parse(args ?? {})
+                const target = parsed.target ?? '{target}'
+                return {
+                    messages: [{
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Adversarial Skill Audit
+Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target skill, ask them for it now.
 
@@ -352,16 +370,16 @@ If the target is '{target}', determine it from the user's request. If the user h
 6. **HITL Approval**: Await HITL approval before applying fixes.
 7. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.
 **Rule**: If you don't make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
-                    }
-                }]
-            })
+                        }
+                    }]
+                }
+            }
         },
         {
             name: 'adversarial-audit-workflow',
-            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention)',
+            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameter: target',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => ({
                 messages: [{
                     role: 'user',
                     content: {
@@ -378,28 +396,6 @@ If the target is '{target}', determine it from the user's request. If the user h
                     }
                 }]
             })
-        },
-        {
-            name: 'flag-dashboard',
-            description: 'Dashboard overview of all active flags (blockers, critical, warnings). Optional arguments: `flag_type` (Filter by flag type e.g. blocker, critical).',
-            icons: [ICON_PROMPT],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const flagType = args?.['flag_type']
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# Flag Dashboard
-Generate a dashboard overview of active flags${flagType ? ` for type: ${flagType}` : ''}.
-
-Please read the relevant journal entries or search for the active flags and provide a summary of the current blockers, critical issues, and warnings.`
-                            }
-                        }
-                    ]
-                }
-            }
         }
     ]
 }

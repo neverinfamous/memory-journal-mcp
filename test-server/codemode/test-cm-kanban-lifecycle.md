@@ -40,10 +40,11 @@ const _stages = []
 
 try {
   // 1. Create temporary issue to test Kanban
-  const createResult = await mj.github.createIssue({
+  const createResult = await mj.github.createGithubIssueWithEntry({
     title: 'CM6 Test Kanban',
-    owner: OWNER,
-    repo: REPO,
+    body: 'Test kanban body',
+    project_number: 5,
+    tags: ['test-kanban']
   })
   if (!createResult.success) throw new Error('Could not create issue')
   const testIssue = createResult.issue.number
@@ -161,11 +162,11 @@ try {
     throw new Error(`Delete failed: ${deleteResult.error || JSON.stringify(deleteResult)}`)
   _stages.push({ step: 'deleteProjectItem', detached: true })
 
-  await mj.github.closeIssue({
+  await mj.github.closeGithubIssueWithEntry({
     issue_number: testIssue,
-    owner: OWNER,
-    repo: REPO,
-    comment: 'Testing complete',
+    project_number: PROJECT_NUM,
+    resolution_notes: 'Testing complete',
+    comment: 'Testing complete'
   })
 
   return { success: true, stages: _stages }

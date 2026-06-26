@@ -406,23 +406,22 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | Prompt | Description |
 | ------ | ----------- |
 | `actions-failure-digest` | CI/CD failure analysis with root cause identification |
-| `adversarial-audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency) |
-| `adversarial-audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
-| `adversarial-audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
+| `adversarial-audit-code-quality` | Multi-pass adversarial code quality audit (linting, technical debt, consistency)... |
+| `adversarial-audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) Optional pa... |
+| `adversarial-audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) Optiona... |
 | `adversarial-audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
-| `adversarial-audit-skill` | Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) |
-| `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
+| `adversarial-audit-skill` | Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Op... |
+| `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) O... |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
 | `code-review-prep` | Prepare a code review checklist and focus areas for a PR |
 | `commit` | High-integrity procedure for committing code changes with validation gates |
 | `create-entry` | Create a structured mid-thread journal entry |
 | `create-team-entry` | Create a structured mid-thread team journal entry |
-| `flag-dashboard` | Dashboard overview of all active flags (blockers, critical, warnings). Optional ... |
 | `goal-tracker` | Milestone and achievement tracking |
-| `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints |
+| `issue-commander` | Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints. Op... |
 | `mcp-heal` | Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM ... |
 | `optimize-journal` | Guided database pruning and verification workflow. Optional arguments: `lookback... |
-| `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates |
+| `pr-commander` | Pull request summary, review prep, and dependency updates with validation gates.... |
 | `pr-retrospective` | Conduct a retrospective analysis on a completed pull request |
 | `pr-summary` | Generate an executive summary of a pull request |
 | `prepare-retro` | Prepare a sprint retrospective (What went well, What could improve, Action items... |

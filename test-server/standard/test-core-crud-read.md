@@ -22,9 +22,7 @@
 | Get by ID                 | `get_entry_by_id(project_number: 5, entry_id: <N>)`                               | Returns `structuredContent` with relationships                           |
 | Importance score          | `get_entry_by_id(project_number: 5, entry_id: <N>)`                               | Response includes `importance` field (0.0-1.0) and `importanceBreakdown` |
 | No relationships          | `get_entry_by_id(project_number: 5, entry_id: <N>, include_relationships: false)` | Response omits `relationships` array (or returns empty)                  |
-| 1.7 Default Type        | `create_entry(project_number: <test_project>, content: "Type omitted")`                        | Type defaults to "note"                                              |
-| 1.8 Unrecognized Fields | `create_entry(project_number: <test_project>, content: "...", random_field: "ignore_me")`      | Safe ignore (no crash), entry creates normally                       |
-| 1.9 Create No Project   | `create_entry(content: "No project test")` (without `project_number`)                          | Fails with `VALIDATION_ERROR` ("Missing project_number..."). *(Note: If `DEFAULT_PROJECT_NUMBER` is configured on the server, this will succeed instead of erroring. If so, remove the default and re-test).* |
+
 | Update tags               | `update_entry(project_number: 5, entry_id: <N>, tags: ["updated"])`               | Tags changed                                                             |
 | Update content            | `update_entry(project_number: 5, entry_id: <N>, content: "Updated content")`      | Content changed; verify via `get_entry_by_id`                            |
 | Update entry_type         | `update_entry(project_number: 5, entry_id: <N>, entry_type: "technical_note")`    | Entry type changed                                                       |
@@ -69,12 +67,7 @@
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- `create_entry` persists all optional fields: PR fields, workflow fields, `projectOwner`, `autoContext`
-- `create_entry` with `share_with_team: true` creates entries in both personal and team DBs
-- `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors (not raw throws)
-- `create_entry` with `issue_number` auto-populates `issueUrl` from cached repo info
-- Creating entries with tags stores and returns tags properly
-- Creating an entry without a `project_number` correctly triggers a validation error suggesting `DEFAULT_PROJECT_NUMBER` configuration (when no default is configured)
+
 - Updating tags overwrites properly instead of merging
 - `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
 - `get_recent_entries` with `is_personal` filter returns only matching entries

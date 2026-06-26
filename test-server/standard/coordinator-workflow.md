@@ -44,22 +44,23 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 12. `test-resources.md`
 13. `test-errors-prompts.md`
 14. `test-errors-boundaries.md`
-15. `test-integrity.md`
-16. `test-github-read.md`
-17. `test-github-write.md`
-18. `test-kanban-lifecycle.md`
-19. `test-team-crud.md`
-20. `test-team-admin.md`
-21. `test-team-rbac.md`
-22. `test-tool-group-core.md`
-23. `test-tool-group-admin.md`
-24. `test-tool-group-backup.md`
-25. `test-tool-group-search.md`
-26. `test-tool-group-github.md`
-27. `test-tool-group-team.md`
-28. `test-payload-optimization.md`
-29. `test-workspace-isolation.md`
-30. `test-git.md`
+15. `test-integrity-part1.md`
+16. `test-integrity-part2.md`
+17. `test-github-read.md`
+18. `test-github-write.md`
+19. `test-kanban-lifecycle.md`
+20. `test-team-crud.md`
+21. `test-team-admin.md`
+22. `test-team-rbac.md`
+23. `test-tool-group-core.md`
+24. `test-tool-group-admin.md`
+25. `test-tool-group-backup.md`
+26. `test-tool-group-search.md`
+27. `test-tool-group-github.md`
+28. `test-tool-group-team.md`
+29. `test-payload-optimization.md`
+30. `test-workspace-isolation.md`
+31. `test-git.md`
 
 ## Telemetry Collection
 

@@ -8,6 +8,8 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
+import { z } from 'zod'
+import { coerceNumber } from '../../utils/query-helpers.js'
 
 export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
     return [
@@ -17,14 +19,15 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const lookbackRaw = args?.['lookback']
-                let limit = 10
-                if (lookbackRaw) {
-                    const parsed = parseInt(lookbackRaw, 10)
-                    if (!isNaN(parsed) && parsed > 0) {
-                        limit = Math.min(parsed, 50)
-                    }
-                }
+                const schema = z.object({
+                    lookback: z.preprocess(
+                        coerceNumber,
+                        z.number().int().min(1).max(50).optional().default(10)
+                    ),
+                })
+
+                const parsed = schema.safeParse(args ?? {})
+                const limit = parsed.success ? parsed.data.lookback : 10
 
                 let statsSnippet = '_Could not fetch database statistics_'
                 try {

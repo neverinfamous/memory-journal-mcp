@@ -254,4 +254,162 @@ return { cleaned: results.length, details: results }
 - `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
+- All test entries cleaned up after Phase 28## Phase 28B: Team Vector DB & Error Verification
+
+### 28.10 Cross-Tool Error Path Verification (via Code Mode)
+
+> [!IMPORTANT]
+> Verify that tool errors propagate as structured handler errors through the Code Mode API bridge — not as raw MCP errors or unhandled exceptions.
+
+```javascript
+// Test code — batch error path testing (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
+const errors = {}
+
+// Core errors
+errors.createEmpty = await mj.core.createEntry({ project_number: 5, content: '' })
+errors.getNotFound = await mj.core.getEntryById({ entry_id: 999999 })
+errors.updateNotFound = await mj.admin.updateEntry({ entry_id: 999999, content: 'x' })
+errors.deleteNotFound = await mj.admin.deleteEntry({ entry_id: 999999, expected_version: 1 })
+
+// Relationship errors
+errors.linkBadSource = await mj.relationships.linkEntries({
+  from_entry_id: 999999,
+  to_entry_id: 1,
+  relationship_type: 'references',
+})
+errors.vizNotFound = await mj.relationships.visualizeRelationships({ entry_id: 999999 })
+
+// GitHub errors
+errors.issueNotFound = await mj.github.getGithubIssue({ issue_number: 999999 })
+errors.prNotFound = await mj.github.getGithubPr({ pr_number: 999999 })
+errors.msNotFound = await mj.github.getGithubMilestone({ milestone_number: 999999 })
+
+// Backup errors
+errors.restoreNotFound = await mj.backup.restoreBackup({
+  filename: 'nonexistent.db',
+  confirm: true,
+})
+errors.backupTraversal = await mj.backup.backupJournal({ name: '../../../etc/passwd' })
+
+// Admin errors
+errors.mergeNonexistent = await mj.admin.mergeTags({
+  source_tag: 'nonexistent-xyz-abc',
+  target_tag: 'test',
+})
+errors.addVectorBad = await mj.admin.addToVectorIndex({ entry_id: 999999 })
+
+// Team errors
+errors.teamGetNotFound = await mj.team.teamGetEntryById({
+  project_number: 5,
+  entry_id: 999999,
+})
+errors.teamUpdateNotFound = await mj.team.teamUpdateEntry({
+  project_number: 5,
+  entry_id: 999999,
+  content: 'x',
+})
+errors.teamDeleteNotFound = await mj.team.teamDeleteEntry({
+  project_number: 5,
+  entry_id: 999999,
+  expected_version: 1,
+})
+errors.teamLinkBad = await mj.team.teamLinkEntries({
+  project_number: 5,
+  from_entry_id: 999999,
+  to_entry_id: 1,
+  relationship_type: 'references',
+})
+
+// Team vector errors (only true error paths)
+errors.teamAddVectorBad = await mj.team.teamAddToVectorIndex({
+  project_number: 5,
+  entry_id: 999999,
+})
+
+// Verify all errors are structured (not raw throws)
+const allStructured = Object.entries(errors).every(([key, val]) => {
+  return (
+    val &&
+    typeof val === 'object' &&
+    (val.success === false || val.error !== undefined || val.message?.includes('not found'))
+  )
+})
+
+return {
+  testedCount: Object.keys(errors).length,
+  allStructured,
+  details: Object.fromEntries(
+    Object.entries(errors).map(([k, v]) => [
+      k,
+      {
+        success: v.success,
+        hasError: !!v.error || !!v.message,
+        errorSnippet: (v.error || v.message || '')?.substring(0, 60),
+      },
+    ])
+  ),
+}
+```
+
+| Check           | Expected                                            |
+| --------------- | --------------------------------------------------- |
+| `testedCount`   | 18                                                  |
+| `allStructured` | `true` — no raw exceptions through Code Mode bridge |
+
+---
+
+## Cleanup
+
+After testing, remove all entries and backups created during Phases 25-27:
+
+```javascript
+// Cleanup code:
+const entries = await mj.search.searchEntries({ project_number: 5, query: 'CM4', limit: 50 })
+const cm4Entries = entries.entries.filter(
+  (e) => e.content?.includes('CM4') || e.tags?.some((t) => t.startsWith('codemode4'))
+)
+const results = []
+for (const e of cm4Entries) {
+  const getVersion = await mj.core.getEntryById({ entry_id: e.id })
+  const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true, expected_version: getVersion.entry?.version ?? 1 })
+  results.push({ id: e.id, deleted: del.success })
+}
+
+// Clean up team entries created during Phase 28
+const teamEntries = await mj.team.teamSearch({
+  project_number: 5,
+  query: 'CM4',
+  limit: 50,
+})
+if (teamEntries.success) {
+  for (const e of teamEntries.entries ?? []) {
+    if (e.content?.includes('CM4')) {
+      const getVersion = await mj.team.teamGetEntryById({ project_number: 5, entry_id: e.id })
+      const del = await mj.team.teamDeleteEntry({
+        project_number: 5,
+        entry_id: e.id,
+        expected_version: getVersion.entry?.version ?? 1,
+      })
+      results.push({ id: e.id, source: 'team', deleted: del.success })
+    }
+  }
+}
+
+return { cleaned: results.length, details: results }
+```
+
+---
+
+## Success Criteria
+
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `team_rebuild_vector_index` indexes team entries via Code Mode
+- `team_get_vector_index_stats` returns vector stats via Code Mode
+- `team_semantic_search(project_number: 5)` with threshold filtering works via Code Mode
+- `team_add_to_vector_index(project_number: 5)` succeeds for existing, errors for nonexistent via Code Mode
+- `team_get_cross_project_insights` returns schema-compliant response via Code Mode
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+- All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
 - All test entries cleaned up after Phase 28
+

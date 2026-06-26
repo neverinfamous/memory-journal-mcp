@@ -14,6 +14,7 @@ import type { InternalPromptDef, PromptMessage } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 
+
 import { spawn } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import * as path from 'node:path'
@@ -277,7 +278,6 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             name: 'prepare-standup',
             description: 'Prepare a daily standup summary (Yesterday, Today, Blockers)',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter
@@ -304,7 +304,6 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
             name: 'prepare-retro',
             description: 'Prepare a sprint retrospective (What went well, What could improve, Action items)',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter
@@ -331,7 +330,6 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
             name: 'weekly-digest',
             description: 'Create a weekly digest formatted day-by-day',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter
@@ -358,7 +356,6 @@ To complete this task, you MUST first fetch the relevant entries using \`search_
             name: 'goal-tracker',
             description: 'Milestone and achievement tracking',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: (_args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
                 const entries = db.getSignificantEntries(20)
 
@@ -392,7 +389,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'session-summary',
             description: 'Create a formatted session summary entry',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
@@ -407,7 +403,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'team-session-summary',
             description: 'Create a formatted team session summary entry',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
@@ -422,7 +417,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'create-entry',
             description: 'Create a structured mid-thread journal entry',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
@@ -436,7 +430,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'create-team-entry',
             description: 'Create a structured mid-thread team journal entry',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
@@ -450,7 +443,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'update-entry',
             description: 'Safely update an existing mid-thread entry or session summary',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
@@ -464,7 +456,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'update-team-entry',
             description: 'Safely update an existing team entry or team session summary',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
@@ -478,7 +469,6 @@ ${JSON.stringify(mappedEntries, null, 2)}`,
             name: 'mcp-heal',
             description: 'Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM hallucinations',
             icons: [ICON_PROMPT],
-            arguments: [],
             handler: () => {
                 return {
                     messages: [
@@ -539,8 +529,7 @@ When an agent hallucinates CLI flags or usage patterns for standalone scripts or
 
 1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
 2. Run automated tests to verify the changes don't break existing functionality (e.g., \`pnpm run check\`, \`pnpm run test\`, \`pnpm run test:e2e\`).
-3. Commit the changes locally.
-`,
+3. Commit the changes locally.`
                             },
                         },
                     ],
