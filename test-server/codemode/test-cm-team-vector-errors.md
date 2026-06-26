@@ -252,5 +252,6 @@ return { cleaned: results.length, details: results }
 - `team_semantic_search(project_number: 5)` with threshold filtering works via Code Mode
 - `team_add_to_vector_index(project_number: 5)` succeeds for existing, errors for nonexistent via Code Mode
 - `team_get_cross_project_insights` returns schema-compliant response via Code Mode
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
 - All test entries cleaned up after Phase 28

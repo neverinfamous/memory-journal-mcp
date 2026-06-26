@@ -4,6 +4,7 @@
 
 
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 
 This document provides a guided walkthrough for testing the dynamic configuration update capabilities of the memory-journal-mcp server. 
 It ensures that the `update_configuration` tool properly updates the configuration state and notifies the client.

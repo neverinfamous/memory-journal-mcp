@@ -16,6 +16,7 @@
 
 ## Phase 14A: Team CRUD & Search
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - **Required Tool Groups:** `admin`, `codemode`, `team`
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.

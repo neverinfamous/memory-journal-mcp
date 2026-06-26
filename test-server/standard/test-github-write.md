@@ -6,6 +6,7 @@
 
 - **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - **Required Tool Groups:** `codemode`, `github`
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
@@ -23,26 +24,7 @@
 
 ---
 
-## Phase 13: GitHub Integration (16 tools)
-
-### 13.1 Read-Only Tools
-
-| Test                  | Command/Action                                 | Expected Result                                          |
-| --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
-| Context               | `get_github_context`                           | Returns repo, branch, issues, PRs                        |
-| List issues           | `get_github_issues(limit: 5)`                  | Returns open issues                                      |
-| Issue milestone data  | Inspect issue objects                          | Issues include `milestone` field (if assigned)           |
-| Get issue             | `get_github_issue(issue_number: <N>)`          | Returns issue details                                    |
-| List PRs              | `get_github_prs(limit: 5)`                     | Returns open PRs                                         |
-| List closed issues    | `get_github_issues(state: "closed", limit: 3)` | Returns closed issues                                    |
-| List all issues       | `get_github_issues(state: "all", limit: 3)`    | Returns both open and closed issues                      |
-| List closed PRs       | `get_github_prs(state: "closed", limit: 3)`    | Returns closed/merged PRs                                |
-| List all PRs          | `get_github_prs(state: "all", limit: 3)`       | Returns both open and closed PRs                         |
-| Get PR                | `get_github_pr(pr_number: <N>)`                | Returns PR details (use known closed PR)                 |
-| Get nonexistent issue | `get_github_issue(issue_number: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
-| Get nonexistent PR    | `get_github_pr(pr_number: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
-
-### 13.2 Issue Lifecycle Tools
+## Phase 13: GitHub Integration (Writes)\n\n### 13.2 Issue Lifecycle Tools
 
 > [!CAUTION]
 > These tools **create and close real GitHub issues**. Use with awareness.
@@ -87,26 +69,7 @@
 | Milestone resource   | Read `memory://github/milestones/memory-journal-mcp`                                             | Static resource lists open milestones with completion %                                                           |
 | Milestone detail     | Read `memory://milestones/memory-journal-mcp/<N>`                                                | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
 
-### 13.5 Repository Insights Tool
-
-| Test              | Command/Action                             | Expected Result                                    |
-| ----------------- | ------------------------------------------ | -------------------------------------------------- |
-| Default (stars)   | `get_repo_insights`                        | Returns `stars`, `forks`, `watchers`, `openIssues` |
-| Traffic section   | `get_repo_insights(sections: "traffic")`   | Returns 14-day `clones` and `views` aggregates     |
-| Referrers section | `get_repo_insights(sections: "referrers")` | Returns top 5 referral sources                     |
-| Paths section     | `get_repo_insights(sections: "paths")`     | Returns top 5 popular content paths                |
-| All sections      | `get_repo_insights(sections: "all")`       | Returns full payload with all sections above       |
-
-### 13.6 Copilot Review Tool
-
-| Test                  | Command/Action                                        | Expected Result                                                                                                |
-| --------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body`                                  |
-| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                                                   |
-| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Returns structured `CONFIGURATION_ERROR` in multi-workspace environments (or auto-detects in single-workspace) |
-| No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`                                        |
-
-### 13.7 GitHub Test Cleanup
+### 13.7 GitHub Test Cleanup\n
 
 > [!IMPORTANT]
 > After GitHub testing, ensure all test artifacts are removed. Use the checklist below.

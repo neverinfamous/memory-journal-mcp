@@ -23,151 +23,9 @@ Test core CRUD operations through the Code Mode mj.* API bridge (Advanced cases)
 
 ## Phase 20B: Core CRUD Advanced via Code Mode
 
-### 20.11 Update Entry — is_personal Toggle
-
-```javascript
-// Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 personal toggle test' })
-const id = created.entry.id
-
-// Toggle to non-personal
-const toggled = await mj.admin.updateEntry({ entry_id: id, is_personal: false })
-const verify1 = await mj.core.getEntryById({ entry_id: id })
-
-// Toggle back to personal
-const toggledBack = await mj.admin.updateEntry({ entry_id: id, is_personal: true })
-const verify2 = await mj.core.getEntryById({ entry_id: id })
-
-return {
-  toggleSuccess: toggled.success,
-  isPersonalFalse: verify1.entry?.isPersonal === false,
-  toggleBackSuccess: toggledBack.success,
-  isPersonalTrue: verify2.entry?.isPersonal === true,
-}
-```
-
-| Check               | Expected |
-| ------------------- | -------- |
-| `toggleSuccess`     | `true`   |
-| `isPersonalFalse`   | `true`   |
-| `toggleBackSuccess` | `true`   |
-| `isPersonalTrue`    | `true`   |
-
-### 20.12 Create Entry — issueUrl Auto-Population
-
-| Test                    | Code                                                                                                                                                                                                                                       | Expected Result                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ project_number: 5, content: "CM3 issue link", issue_number: 1, project_number: 5 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
-
-### 20.13 Get Entry History
-
-```javascript
-// Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 history test v1' })
-const id = created.entry.id
-
-await mj.admin.updateEntry({ entry_id: id, content: 'CM3 history test v2' })
-await mj.admin.updateEntry({ entry_id: id, content: 'CM3 history test v3' })
-
-const history = await mj.core.getEntryHistory({ entry_id: id })
-
-return {
-  historyCount: history.revisions?.length,
-  firstRevNumber: history.revisions?.[0]?.revisionNumber,
-  firstRevContent: history.revisions?.[0]?.contentSnapshot,
-  secondRevNumber: history.revisions?.[1]?.revisionNumber,
-  secondRevContent: history.revisions?.[1]?.contentSnapshot,
-}
-```
-
-| Check              | Expected                |
-| ------------------ | ----------------------- |
-| `historyCount`     | `2`                     |
-| `firstRevNumber`   | `2`                     |
-| `firstRevContent`  | `"CM3 history test v2"` |
-| `secondRevNumber`  | `1`                     |
-| `secondRevContent` | `"CM3 history test v1"` |
-
-### 20.14 Soft-Delete Recovery, Archiving & Cursor Pagination
-
-```javascript
-// Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 recovery test' })
-const id = created.entry.id
-await mj.admin.deleteEntry({ entry_id: id, permanent: false })
-const deletedList = await mj.search.listDeletedEntries({ project_number: 5 })
-const isDeleted = deletedList.entries?.some(e => e.id === id)
-const restored = await mj.admin.restoreEntry({ entry_id: id })
-const verifyDeleted = await mj.search.listDeletedEntries({ project_number: 5 })
-const isNoLongerDeleted = !verifyDeleted.entries?.some(e => e.id === id)
-
-const archived = await mj.admin.updateEntry({ entry_id: id, is_archived: true })
-const archivedOff = await mj.core.getRecentEntries({ project_number: 5, limit: 10, include_archived: false })
-const isArchivedHidden = !archivedOff.entries?.some(e => e.id === id)
-const archivedOn = await mj.core.getRecentEntries({ project_number: 5, limit: 10, include_archived: true })
-const isArchivedVisible = archivedOn.entries?.some(e => e.id === id)
-
-const pagPage1 = await mj.core.getRecentEntries({ project_number: 5, limit: 2 })
-const hasCursor = typeof pagPage1.next_cursor === 'string'
-
-return {
-  isDeleted,
-  restoreSuccess: restored.success,
-  isNoLongerDeleted,
-  isArchivedHidden,
-  isArchivedVisible,
-  hasCursor,
-}
-```
-
-| Check               | Expected |
-| ------------------- | -------- |
-| `isDeleted`         | `true`   |
-| `restoreSuccess`    | `true`   |
-| `isNoLongerDeleted` | `true`   |
-| `isArchivedHidden`  | `true`   |
-| `isArchivedVisible` | `true`   |
-| `hasCursor`         | `true`   |
-
-### 20.15 Update Entry — Optimistic Locking
-
-```javascript
-// Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 locking test' })
-const id = created.entry.id
-const v1 = created.entry.version
-
-const update1 = await mj.admin.updateEntry({
-  entry_id: id,
-  expected_version: v1,
-  content: 'CM3 locking update 1'
-})
-const v2 = update1.entry?.version
-
-let conflictCaught = false
-const update2 = await mj.admin.updateEntry({
-  entry_id: id,
-  expected_version: v1, // deliberately stale
-  content: 'CM3 locking update 2'
-})
-if (!update2.success && update2.error?.includes('VERSION_CONFLICT')) {
-  conflictCaught = true
-}
-
-return {
-  firstUpdateSuccess: update1.success,
-  versionIncremented: v2 > v1,
-  conflictCaught
-}
-```
-
-| Check                | Expected |
-| -------------------- | -------- |
-| `firstUpdateSuccess` | `true`   |
-| `versionIncremented` | `true`   |
-| `conflictCaught`     | `true`   |
-
 ### 20.16 Sandbox Wrapper Pattern & Auto-Injection
+
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 
 ```javascript
 // Test code:
@@ -294,6 +152,7 @@ After testing, remove test entries created during Phase 20:
 | Delete locking test entry| `mj.core.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
 
 ---
+
 
 ## Success Criteria
 

@@ -1,4 +1,4 @@
-# memory-journal-mcp Usability & Hallucination Test: Team IO & Admin
+# memory-journal-mcp Usability & Hallucination Test: Team Batch & Relationships
 
 > **This test is optimized for an autonomous agent.**
 >
@@ -9,7 +9,7 @@ This prompt instructs you to organically test the `team` io and admin tool group
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in the `team` group:
-`team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`, `team_link_entries`, `team_visualize_relationships`, `team_export_entries`, `team_export_markdown`, `team_import_markdown`, `team_import_external`, `team_backup`, `team_list_backups`
+`team_batch_create_entries`, `team_batch_update_entries`, `team_batch_delete_entries`, `team_link_entries`, `team_visualize_relationships`
 
 **Instructions:**
 
@@ -28,6 +28,7 @@ If you encounter any failures, errors, or hallucinations:
 1. STOP. Do not just work around the issue in your script.
 2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/team/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 4. Apply the permanent fix.
 
 ## 3. Local Verification & Commit

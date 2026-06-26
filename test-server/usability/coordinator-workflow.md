@@ -34,21 +34,29 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 
 1. `test-usability-codemode.md`
 2. `test-usability-crud-mutations.md`
-3. `test-usability-core.md`
-4. `test-usability-search.md`
-5. `test-usability-analytics.md`
-6. `test-usability-relationships.md`
-7. `test-usability-io.md`
-8. `test-usability-admin.md`
-9. `test-usability-github-issues.md`
-10. `test-usability-github-projects.md`
-11. `test-usability-backup.md`
-12. `test-usability-team-core.md`
-13. `test-usability-team-search-analytics.md`
-14. `test-usability-team-io-admin.md`
-15. `test-usability-team-rbac.md`
-16. `test-usability-workspace-isolation.md`
-17. `test-usability-git.md`
+3. `test-usability-core-read.md`
+4. `test-usability-core-misc.md`
+5. `test-usability-search.md`
+6. `test-usability-analytics.md`
+7. `test-usability-relationships.md`
+8. `test-usability-io.md`
+9. `test-usability-admin-core.md`
+10. `test-usability-admin-system.md`
+11. `test-usability-github-issues-read.md`
+12. `test-usability-github-issues-write.md`
+13. `test-usability-github-kanban.md`
+14. `test-usability-github-milestones.md`
+15. `test-usability-backup.md`
+16. `test-usability-team-core-read.md`
+17. `test-usability-team-core-mutations.md`
+18. `test-usability-team-search-vector.md`
+19. `test-usability-team-analytics.md`
+20. `test-usability-team-batch-rel.md`
+21. `test-usability-team-io-backup.md`
+22. `test-usability-team-members.md`
+23. `test-usability-team-author.md`
+24. `test-usability-workspace-isolation.md`
+25. `test-usability-git.md`
 
 ## Finalization
 

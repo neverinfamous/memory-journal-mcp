@@ -1,15 +1,15 @@
-# memory-journal-mcp Usability & Hallucination Test: Team RBAC
+# memory-journal-mcp Usability & Hallucination Test: Core Misc
 
 > **This test is optimized for an autonomous agent.**
 >
 > **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 
-This prompt instructs you to organically test the `team` RBAC (Role-Based Access Control) tool group using Code Mode (`mj_execute_code`), intentionally fuzzing the inputs to discover agent hallucinations, and permanently hardening the codebase against them.
+This prompt instructs you to organically test the `core` tool group using Code Mode (`mj_execute_code`), intentionally fuzzing the inputs to discover agent hallucinations, and permanently hardening the codebase against them.
 
 ## 1. Fuzz Phase
 
-Use the `mj_execute_code` tool to interact with the following tools in the `team` group:
-`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`, `team_add_author_alias`, `team_remove_author_alias`, `team_list_author_aliases`, `team_resolve_author`, `team_consolidate_authors`
+Use the `mj_execute_code` tool to interact with the following tools in the `core` group:
+`create_entry`, `test_simple`, `test_error_handling`, `trigger_progress`, `mark_anchors_stale`
 
 **Instructions:**
 
@@ -27,7 +27,8 @@ If you encounter any failures, errors, or hallucinations:
 
 1. STOP. Do not just work around the issue in your script.
 2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
-3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/team/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
+3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/core/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 4. Apply the permanent fix.
 
 ## 3. Local Verification & Commit
@@ -36,7 +37,7 @@ If you made any codebase changes in the Heal Phase:
 
 1. Run `pnpm run check` locally to verify that all validation passes (linting, tests, types).
 2. DO NOT perform live server verification. DO NOT pause or wait for a server restart.
-3. Run `git add .` and `git commit -m "Optimize team rbac tool usage"` to save your changes locally.
+3. Run `git add .` and `git commit -m "Optimize core tool usage"` to save your changes locally.
 4. Conclude the test and report your findings.
 
 ## 4. Continuous Improvement

@@ -45,13 +45,8 @@
 | Hybrid search weights  | `search_entries(project_number: 5, query: "architecture", mode: "hybrid", fts_weight: 2.0, semantic_weight: 0.5)`   | Executes successfully without validation errors and returns results                                                             |
 | True phrase quotes     | `search_entries(project_number: 5, query: "\"exact match\" \"other phrase\"", mode: "fts")`                         | Executes successfully without SQLite syntax errors (balanced quotes preserved)                                                  |
 
-> [!TIP]
-> **Token Conservation in Code Mode:** When testing search across dozens of queries via `mj_execute_code`, do NOT append the full `res` objects to your results array. Map responses to `{ success: true, count: res.entries?.length || 0 }` to prevent returning massive JSON payloads (megabytes in size) that artificially inflate `_meta.tokenEstimate`.
-
 > [!NOTE]
 > **Cross-DB Search Behavior:** When a team DB is present, per-DB queries fetch `limit × 2` (capped at 500) to prevent BM25 ranking in one DB from silently dropping entries before the cross-DB merge. The user's requested `limit` is applied after merging.
->
-> **Code Mode API Group Structure:** When testing `mj_execute_code`, methods are bound to specific groups. Key mapping: `listTags` → `mj.core`, `mergeTags` → `mj.admin`, `getStatistics` → `mj.analytics`. Use `mj.help()` or `mj.<group>.help()` to discover available methods per group.
 
 ---
 

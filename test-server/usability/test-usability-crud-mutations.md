@@ -36,6 +36,8 @@ If you encounter any failures, data corruption, or lack of actionable error mess
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/core/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or dispatch logic).
 4. Apply the permanent fix. Ensure that both `UpdateEntrySchema` and `UpdateEntrySchemaMcp` layers are appropriately hardened using `.strict()`.
 
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+
 ## 3. Local Verification & Commit
 
 If you made any codebase changes in the Heal Phase:

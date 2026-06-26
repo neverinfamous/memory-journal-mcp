@@ -1,4 +1,4 @@
-# memory-journal-mcp Usability & Hallucination Test: Team Search & Analytics
+# memory-journal-mcp Usability & Hallucination Test: Team Analytics
 
 > **This test is optimized for an autonomous agent.**
 >
@@ -9,7 +9,7 @@ This prompt instructs you to organically test the `team` search and analytics to
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in the `team` group:
-`team_search`, `team_search_by_date_range`, `team_semantic_search`, `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`
+`team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`
 
 **Instructions:**
 
@@ -28,6 +28,7 @@ If you encounter any failures, errors, or hallucinations:
 1. STOP. Do not just work around the issue in your script.
 2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/team/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 4. Apply the permanent fix.
 
 ## 3. Local Verification & Commit

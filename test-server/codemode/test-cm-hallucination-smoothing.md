@@ -232,6 +232,7 @@ return result
 | `proxyErrorHandled`    | `true` (intercepted `.forEach`) |
 | `arrayProxiesHardened` | `true` (supports `.length`, `[0]`, `.map`, etc.) |
 | `contextAvailable`     | `true` (when passed via outer schema) |
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 
 ---
 

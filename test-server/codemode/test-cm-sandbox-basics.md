@@ -103,6 +103,7 @@ After the preceding test phases have executed several tool calls, verify that th
 - Custom `timeout` parameter accepted and enforced
 - Infinite loop terminated with structured error (not hang or crash)
 - Verified index schema via `_executeRawQueryUnsafe` check returning all three new composite and partial indexes
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - `memory://metrics/summary` returns aggregate session telemetry with `total_calls` and `total_duration_ms`
 - `memory://metrics/latency` returns per-tool percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields after tool calls have been made
 - `memory://metrics/resources` returns URI read telemetry after resource reads have occurred

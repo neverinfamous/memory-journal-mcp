@@ -1,4 +1,4 @@
-# memory-journal-mcp Usability & Hallucination Test: Team Core
+# memory-journal-mcp Usability & Hallucination Test: Team Core Mutations
 
 > **This test is optimized for an autonomous agent.**
 >
@@ -9,7 +9,7 @@ This prompt instructs you to organically test the `team` core tool group using C
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in the `team` group:
-`team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`, `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_list_deleted_entries`, `team_merge_tags`
+`team_create_entry`, `team_update_entry`, `team_delete_entry`, `team_restore_entry`, `team_merge_tags`
 
 **Instructions:**
 
@@ -28,6 +28,7 @@ If you encounter any failures, errors, or hallucinations:
 1. STOP. Do not just work around the issue in your script.
 2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/team/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 4. Apply the permanent fix.
 
 ## 3. Local Verification & Commit

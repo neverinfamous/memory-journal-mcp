@@ -31,4 +31,4 @@
 
 ## Phase 8: Team Database Isolation
 1. Switch to team operations (if applicable).
-2. Perform similar operations using team tools (e.g., `create_team_entry`) using workspaces "alpha" and "beta" to ensure team data is also isolated correctly.
+2. Perform similar operations using team tools (e.g., `team_create_entry`) using workspaces "alpha" and "beta" to ensure team data is also isolated correctly.

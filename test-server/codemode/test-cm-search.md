@@ -209,6 +209,7 @@ return {
 - `rebuild_vector_index` and `add_to_vector_index` work via Code Mode
 - `get_statistics` returns all 4 enhanced analytics metrics via Code Mode
 - `get_cross_project_insights` returns schema-compliant response
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - `search_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
 - `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
 - `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field

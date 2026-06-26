@@ -1,4 +1,4 @@
-# memory-journal-mcp Usability & Hallucination Test: Admin
+# memory-journal-mcp Usability & Hallucination Test: Admin System
 
 > **This test is optimized for an autonomous agent.**
 >
@@ -9,7 +9,7 @@ This prompt instructs you to organically test the `admin` tool group using Code 
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in the `admin` group:
-`update_configuration`, `update_entry`, `delete_entry`, `restore_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `search_audit_log`, `run_auto_prune`
+`update_configuration`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`, `search_audit_log`, `run_auto_prune`
 
 **Instructions:**
 
@@ -33,6 +33,8 @@ If you encounter any failures, errors, or hallucinations:
 2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/admin/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
 4. **Important**: Remember that Code Mode's `secureDispatcher` directly calls `tool.handler()`. This bypasses the MCP `inputSchema` (e.g. `UpdateEntrySchemaMcp`). If you are hardening schemas against hallucinations, you **MUST** apply `.strict()` to the internal schemas used inside the handler (e.g., `UpdateEntrySchema`) as well as the external MCP schemas.
+
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 5. Apply the permanent fix.
 
 ## 3. Local Verification & Commit

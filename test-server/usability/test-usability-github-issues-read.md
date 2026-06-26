@@ -9,7 +9,7 @@ This prompt instructs you to organically test the `github` issues/repo tool grou
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in the `github` group:
-`get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context`, `create_github_issue_with_entry`, `close_github_issue_with_entry`, `get_repo_insights`, `get_copilot_reviews`
+`get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context`
 
 **Instructions:**
 
@@ -28,6 +28,7 @@ If you encounter any failures, errors, or hallucinations:
 1. STOP. Do not just work around the issue in your script.
 2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/github/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 4. Apply the permanent fix.
 
 ## 3. Local Verification & Commit

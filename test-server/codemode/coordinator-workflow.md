@@ -36,26 +36,30 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 2. `test-cm-api-discovery.md`
 3. `test-cm-readonly.md`
 4. `test-cm-security.md`
-5. `test-cm-crud.md`
-6. `test-cm-crud-advanced.md`
-7. `test-cm-search.md`
-8. `test-cm-search-advanced.md`
-9. `test-cm-workflows.md`
-10. `test-cm-orchestration.md`
-11. `test-cm-relationships.md` (Includes cleanup for 9-11)
-12. `test-cm-github.md`
-13. `test-cm-kanban-lifecycle.md`
-14. `test-cm-io.md`
-15. `test-cm-admin-backup.md`
-16. `test-cm-team-crud.md`
-17. `test-cm-team-admin.md`
-18. `test-cm-team-vector-errors.md` (Includes cleanup)
-19. `test-cm-team-rbac.md`
-20. `test-cm-error-matrix.md`
-21. `test-cm-error-matrix-2.md`
-22. `test-cm-payload-optimization.md`
-23. `test-cm-hallucination-smoothing.md`
-24. `test-git.md`
+5. `test-cm-crud-part-1.md`
+6. `test-cm-crud-part-2.md`
+7. `test-cm-crud-advanced-part-1.md`
+8. `test-cm-crud-advanced-part-2.md`
+9. `test-cm-search.md`
+10. `test-cm-search-advanced-part-1.md`
+11. `test-cm-search-advanced-part-2.md`
+12. `test-cm-workflows.md`
+13. `test-cm-orchestration.md`
+14. `test-cm-relationships.md` (Includes cleanup for 12-14)
+15. `test-cm-github.md`
+16. `test-cm-kanban-lifecycle.md`
+17. `test-cm-io.md`
+18. `test-cm-admin-backup.md`
+19. `test-cm-team-crud.md`
+20. `test-cm-team-admin-part-1.md`
+21. `test-cm-team-admin-part-2.md`
+22. `test-cm-team-vector-errors.md` (Includes cleanup)
+23. `test-cm-team-rbac.md`
+24. `test-cm-error-matrix.md`
+25. `test-cm-error-matrix-2.md`
+26. `test-cm-payload-optimization.md`
+27. `test-cm-hallucination-smoothing.md`
+28. `test-git.md`
 
 ## Telemetry Collection
 

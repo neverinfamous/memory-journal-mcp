@@ -1,0 +1,64 @@
+# Re-Test memory-journal-mcp — Error Handling & Structured Responses
+
+**Scope:** Prompt handler validation, structured error response verification across all tool groups, and numeric coercion boundary testing.
+
+**Prerequisites:**
+
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+- **Required Tool Groups:** `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team`
+- MCP server instructions auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Seed data from `test-seed.md` must be present.
+
+**Workflow after testing:**
+
+1. Create a plan to fix any issues found, using `code-map.md` as source of truth.
+2. If code changed: update `UNRELEASED.md`, commit (no push). If clean pass: no changelog. Stop for **USER** to run `pnpm run check`.
+3. After user verification, re-test fixes with direct MCP calls.
+4. Provide brief final summary with **Total Token Estimate** (sum `_meta.tokenEstimate` from all responses, or read `memory://metrics/summary`).
+
+---
+
+## Phase 11: Error Handling Verification
+
+### 11.1 Prompt Handler Validation
+
+> [!NOTE]
+> Prompts are tested via the existing script `test-server/scripts/test-prompts.mjs`. Run it directly — do **not** use a browser or try to invoke `get_prompt` through the MCP client.
+
+**Command:**
+
+```
+node test-server/scripts/test-prompts.mjs
+```
+
+| Test                         | Expected Result                                                     |
+| ---------------------------- | ------------------------------------------------------------------- |
+| List all prompts             | 19 prompts listed (11 workflow + 6 GitHub + 1 adversarial + 1 team) |
+| All 19 named prompt calls    | 19/19 PASS with non-empty `messages[0].content.text`                |
+| `nonexistent-prompt`         | MCP error returned (code `-32602`)                                  |
+| `find-related({})` (no args) | Error returned gracefully                                           |
+| **Overall**                  | `21 pass, 0 fail (21 total)`                                        |
+
+### 11.2 Structured Error Response Verification
+
+Every tool must return `{success: false, error, code, category, suggestion, recoverable}` for errors — **never raw MCP exceptions**. Verify the pattern across representative tools from each group.
+
+| Group      | Tool                                   | Error Trigger                                      | Expected Result                                                                    |
+| ---------- | -------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **core**   | `create_entry`                         | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, `category:"validation"`, enum in error |
+| **core**   | `get_entry_by_id`                      | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
+| **search** | `search_by_date_range`                 | `start_date: "2026-12-31", end_date: "2026-01-01"` | `success:false`, `code:"VALIDATION_ERROR"`, `suggestion` with date hint            |
+| **admin**  | `update_entry`                         | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
+| **admin**  | `batch_update_entries`                 | `updates: [{ entry_id: 999999, content: "x" }]`    | `success:false`, `code:"AGGREGATE_ERROR"`, `aggregated_errors` array returned      |
+| **admin**  | `merge_tags`                           | `source_tag: "x", target_tag: "x"`                 | `success:false`, same-tag error with `category:"validation"`                       |
+| **backup** | `restore_backup`                       | `filename: "nonexistent.db"`                       | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `details.resourceType`               |
+| **github** | `get_github_issue`                     | `issue_number: 999999`                             | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
+| **team**   | `team_create_entry(project_number: 5)` | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
+| **team**   | `team_update_entry(project_number: 5)` | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
+
+*Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified by executing `node test-server/scripts/test-sdk-boundaries.mjs`.*
+
+\n\n## Success Criteria\n- Agent reports the Total Token Estimate...

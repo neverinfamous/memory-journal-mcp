@@ -6,7 +6,7 @@ In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You m
 - **Network:** Disabled. `fetch()` throws `SandboxNetworkError`. Node network modules are stripped.
 - **Globals:** `createEntry()`, `find()`, `recent()`, `searchEntries()`, `deleteEntry()`, `help()` work without the `mj.` prefix.
 - **Positional Arguments:** `create("note")`, `searchEntries("performance")`, `mj.backup.backupJournal("snapshot")`.
-- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., `text`/`message`/`description`→`content`, `entry`/`id`→`entry_id`, `issue_id`→`issue_number`, `q`/`search`→`query`, `path`/`filepath`→`source_dir`/`output_dir`, `file`→`filename`, `mode`→`summary_only`, `keep`→`keep_count`, `user`/`assignee`→`target_user`, `severity`→`flag_type`, `version`→`expected_version`, `team`/`team_id`→`workspace_id`).
+- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., `text`/`message`/`description`→`content`, `entry`/`id`→`entry_id`, `issue_id`→`issue_number`, `q`/`search`→`query`, `path`→`source_dir`/`output_dir`, `keep`→`keep_count`, `user`/`assignee`→`target_user`, `severity`→`flag_type`, `version`→`expected_version`, `team`/`team_id`→`workspace_id`).
 - **Arrays & Methods:** Proxies seamlessly support native array properties/methods (e.g., `.length`, `[0]`, `.map()`, `.filter()`, `.includes()`, `.shift()`, `.concat()`). Calling an unsupported method returns an actionable `VALIDATION_ERROR` rather than crashing.
 - **Async/Await:** Do NOT access `Promise` objects synchronously. Always `await` async operations. Missing `await` statements will be intercepted and return an actionable `VALIDATION_ERROR`.
 
@@ -94,13 +94,13 @@ In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You m
 - `cleanupBackups(params)`
 
 ### `mj.team`
-- `teamCreateEntry(params)`, `teamGetEntryById(params)` (or `teamRead()`), `teamGetRecent(params)`, `teamListTags(params)`
+- `teamCreateEntry(params)`, `teamGetEntryById(params)` (or `read()`), `teamGetRecent(params)`, `teamListTags(params)`
 - `teamSearch(params)`, `teamSearchByDateRange(params)`, `teamSemanticSearch(params)`
-- `teamUpdateEntry(params)`, `teamDeleteEntry(params)` (or `teamTrash()`), `teamRestoreEntry(params)`, `teamListDeletedEntries(params)`
+- `teamUpdateEntry(params)`, `teamDeleteEntry(params)`, `teamRestoreEntry(params)`, `teamListDeletedEntries(params)` (or `trash()`)
 - `teamMergeTags(params)`, `teamLinkEntries(params)`, `teamVisualizeRelationships(params)`
 - `teamBatchCreateEntries(params)`, `teamBatchUpdateEntries(params)`, `teamBatchDeleteEntries(params)`
-- `teamGetStatistics(params)` (or `teamGetStats()`), `teamGetCrossProjectInsights(params)`, `teamGetCollaborationMatrix(params)`
-- `teamExportEntries(params)` (or `teamExport()`), `teamExportMarkdown(params)`, `teamImportMarkdown(params)` (or `teamImportMd()`), `teamImportExternal(params)`
+- `teamGetStatistics(params)` (or `stats()`), `teamGetCrossProjectInsights(params)`, `teamGetCollaborationMatrix(params)`
+- `teamExportEntries(params)` (or `export()`), `teamExportMarkdown(params)`, `teamImportMarkdown(params)` (or `importMd()`), `teamImportExternal(params)`
 - `teamBackup(params)`, `teamListBackups(params)`
 - `teamGetVectorIndexStats(params)`, `teamRebuildVectorIndex(params)`, `teamAddToVectorIndex(params)`
 - `teamAddMember(params)`, `teamRemoveMember(params)`, `teamUpdateMemberRole(params)`, `teamListMembers(params)`, `teamGetMember(params)`

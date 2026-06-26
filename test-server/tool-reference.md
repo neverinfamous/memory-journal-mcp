@@ -6,6 +6,8 @@ Complete reference of all **102 tools** organized by 11 tool groups. Each group 
 >
 > Use [Tool Filtering](#️-tool-filtering) to select the groups you need. See [Code Mode](#-recommended-code-mode-maximum-token-savings) for the `mj.*` API that exposes every tool below through sandboxed JavaScript.
 
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+
 ---
 
 ## codemode (1 tool)

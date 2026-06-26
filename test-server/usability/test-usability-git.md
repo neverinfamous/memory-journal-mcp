@@ -16,6 +16,7 @@ Use the `mj_execute_code` tool to interact with the following tools in the `git`
 - Do not perfectly structure your initial calls. Act intuitively as an agent.
 - Evaluate the developer experience (DX) and heuristic fallbacks for Git tools.
 - **Schema Nuance**: Ensure `search_commits` handles missing parameters gracefully and errors are descriptive.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - **Path sanitization**: Ensure `simple-git` never leaks absolute paths in error messages or responses. Pass an invalid or extremely long path for `repo` to trigger an error and inspect the response payload. No absolute paths should be leaked from `simple-git` operations.
 
 ## 2. Heal Phase

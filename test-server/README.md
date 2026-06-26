@@ -119,6 +119,8 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 | **Error items in checklists** | Marked with 🔴 prefix                                                                                                |
 | **Post-test**                 | Clean up test databases/data → plan fixes → implement → lint+typecheck → changelog → commit (no push)                |
 
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+
 ## Connection Details & Portability
 
 The SQLite database path for `memory-journal-mcp` is entirely portable and **does not require code changes**.

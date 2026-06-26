@@ -1,0 +1,134 @@
+# Re-Test memory-journal-mcp — Code Mode: Core CRUD
+
+Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read, update, delete with full parameters and error paths.
+
+**Scope:** 1 tool (`mj_execute_code`), Phase 20 — ~15 test cases covering CRUD via Code Mode.
+
+**Prerequisites:**
+
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
+
+**Workflow after testing:**
+
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `pnpm run check`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+
+---
+
+## Phase 20: Core CRUD via Code Mode
+
+### 20.6 Update Entry — Error Paths
+
+| Test               | Code                                                                         | Expected Result                                       |
+| ------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Nonexistent ID     | `return await mj.admin.updateEntry({ entry_id: 999999, content: "fail" });`  | `{ success: false, error: "Entry 999999 not found" }` |
+| Invalid entry_type | `return await mj.admin.updateEntry({ entry_id: 1, entry_type: "invalid" });` | `{ success: false, error: "..." }`                    |
+| Expect Version Error | `return await mj.admin.updateEntry({ entry_id: 1, expected_version: 0 });` | `true` (throws VALIDATION_ERROR) |
+
+### 20.7 Delete Entry
+
+```javascript
+// Test code:
+const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 delete test' })
+const id = created.entry.id
+const soft = await mj.admin.deleteEntry({ entry_id: id, permanent: false })
+const searchAfterSoft = await mj.search.searchEntries({
+  project_number: 5,
+  query: 'CM3 delete test',
+  limit: 5,
+})
+const hiddenFromSearch = !searchAfterSoft.entries.some((e) => e.id === id)
+const perm = await mj.admin.deleteEntry({ entry_id: id, permanent: true })
+const notFound = await mj.admin.deleteEntry({ entry_id: 999999 })
+return {
+  softSuccess: soft.success,
+  hiddenFromSearch,
+  permSuccess: perm.success,
+  notFoundError: notFound.success === false,
+}
+```
+
+| Check              | Expected |
+| ------------------ | -------- |
+| `softSuccess`      | `true`   |
+| `hiddenFromSearch` | `true`   |
+| `permSuccess`      | `true`   |
+| `notFoundError`    | `true`   |
+
+### 20.8 Get Recent Entries — Filters
+
+| Test               | Code                                                                                                                                                                                             | Expected Result      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
+| is_personal: true  | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 5, is_personal: true }); return { count: r.entries.length, allPersonal: r.entries.every(e => e.isPersonal === true) };`    | `allPersonal: true`  |
+| is_personal: false | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 5, is_personal: false }); return { count: r.entries.length, nonePersonal: r.entries.every(e => e.isPersonal === false) };` | `nonePersonal: true` |
+
+### 20.9 test_simple & error_handling via Code Mode
+
+| Test             | Code                                                        | Expected Result                    |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------- |
+| Positional alias | `return await mj.core.testSimple({ message: "CM3 test" });` | `{ message: "..." }` echoing input |
+| testErrorHandling| `return await mj.core.testErrorHandling({ error_type: "validation" });` | `{ success: false }` |
+| triggerProgress  | `return await mj.core.triggerProgress({ message: "CM3", percent: 50 });` | `{ success: true }` |
+
+### 20.10 Create Entry — project_owner & auto_context
+
+| Test               | Code                                                                                                                                                                                                     | Expected Result                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| With project_owner | `const r = await mj.core.createEntry({ project_number: 5, content: "CM3 owner test", project_number: 5, project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
+| auto_context off   | `const r = await mj.core.createEntry({ project_number: 5, content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
+## Cleanup
+
+After testing, remove test entries created during Phase 20:
+
+| Cleanup Step             | Command/Action                                              |
+| ------------------------ | ----------------------------------------------------------- |
+| Delete full-params entry | `delete_entry(entry_id: <full_params_id>, permanent: true)` |
+| Delete shared entry      | `delete_entry(entry_id: <shared_id>, permanent: true)`      |
+| Delete update test entry | `delete_entry(entry_id: <update_test_id>, permanent: true)` |
+| Delete owner test entry  | `delete_entry(entry_id: <owner_test_id>, permanent: true)`  |
+| Delete toggle test entry | `delete_entry(entry_id: <toggle_test_id>, permanent: true)` |
+| Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
+| Delete history test entry| `delete_entry(entry_id: <history_test_id>, permanent: true)`|
+| Delete recovery test entry| `delete_entry(entry_id: <recovery_test_id>, permanent: true)`|
+| Delete locking test entry| `mj.core.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
+
+---
+
+
+## Success Criteria
+
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
+- `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
+- `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
+- `create_entry` rejects empty content with structured error
+- `create_entry` with `project_owner` persists the field
+- `create_entry` with `auto_context: false` creates entry without auto-generated context
+- `create_entry` with `issue_number` auto-populates `issueUrl`
+- `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
+- `get_entry_by_id` with `include_relationships: false` omits relationship data
+- `update_entry` updates content, tags, and entry_type — verified via read-back
+- `update_entry` `is_personal` toggle correctly changes personal status
+- `update_entry` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
+- `update_entry` returns structured error for nonexistent IDs
+- `delete_entry` soft delete hides entry from search
+- `delete_entry` permanent delete and nonexistent ID both return structured responses
+- `get_recent_entries` with `is_personal` filter returns correctly filtered entries
+- `get_entry_history` returns multiple historical snapshots successfully via Code Mode
+- `test_simple` callable via Code Mode
+- `test_error_handling` returns structured errors via Code Mode
+- `trigger_progress` returns success via Code Mode
+- `restore_entry` and `list_deleted_entries` are functional and callable via Code Mode scripts
+- Keyset cursor pagination and `is_archived` status filters execute successfully via Code Mode scripts
+- `mj_execute_code` outer `project_number` parameter automatically injects into mutation tools inside the sandbox (Sandbox Wrapper Pattern)
+- `get_recent_entries` pagination exposes a correct `hasMore` convenience boolean
+- `mj_execute_code` outer `auto_version: true` parameter automatically prefetches and injects `expected_version` for updates
+- String-based `project_number` parameters (`"5"`) auto-resolve to numeric safely without throwing VALIDATION_ERROR
