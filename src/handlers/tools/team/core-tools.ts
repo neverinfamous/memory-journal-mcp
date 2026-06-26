@@ -73,7 +73,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
-                            error: "Missing project_number. You MUST include it. Please retry your tool call. You can find the correct project_number in your Briefing under the Workspaces section (e.g., 'adamic (#16)' means project_number: 16).",
+                            error: "Missing project_number. You MUST include it. Please retry your tool call. You can find the correct project_number by querying 'memory://agent-context/{repo_name}' via the read_resource tool.",
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
