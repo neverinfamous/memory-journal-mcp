@@ -33,30 +33,37 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 ## Test Sequence Queue
 
 1. `test-usability-codemode.md`
-2. `test-usability-crud-mutations.md`
-3. `test-usability-core-read.md`
-4. `test-usability-core-misc.md`
-5. `test-usability-search.md`
-6. `test-usability-analytics.md`
-7. `test-usability-relationships.md`
-8. `test-usability-io.md`
-9. `test-usability-admin-core.md`
-10. `test-usability-admin-system.md`
-11. `test-usability-github-issues-read.md`
-12. `test-usability-github-issues-write.md`
-13. `test-usability-github-kanban.md`
-14. `test-usability-github-milestones.md`
-15. `test-usability-backup.md`
-16. `test-usability-team-core-read.md`
-17. `test-usability-team-core-mutations.md`
-18. `test-usability-team-search-vector.md`
-19. `test-usability-team-analytics.md`
-20. `test-usability-team-batch-rel.md`
-21. `test-usability-team-io-backup.md`
-22. `test-usability-team-members.md`
-23. `test-usability-team-author.md`
-24. `test-usability-workspace-isolation.md`
-25. `test-usability-git.md`
+2. `test-usability-core-read.md`
+3. `test-usability-core-misc.md`
+4. `test-usability-core-mutations.md`
+5. `test-usability-admin-batch.md`
+6. `test-usability-admin-vector.md`
+7. `test-usability-admin-system.md`
+8. `test-usability-search-core.md`
+9. `test-usability-search-vector.md`
+10. `test-usability-analytics.md`
+11. `test-usability-relationships.md`
+12. `test-usability-io.md`
+13. `test-usability-github-read.md`
+14. `test-usability-github-kanban.md`
+15. `test-usability-github-issue-cycle.md`
+16. `test-usability-github-milestones.md`
+17. `test-usability-git-history.md`
+18. `test-usability-git-analysis.md`
+19. `test-usability-backup.md`
+20. `test-usability-team-core-read.md`
+21. `test-usability-team-mutations.md`
+22. `test-usability-team-batch.md`
+23. `test-usability-team-search.md`
+24. `test-usability-team-analytics.md`
+25. `test-usability-team-relationships.md`
+26. `test-usability-team-io.md`
+27. `test-usability-team-backup.md`
+28. `test-usability-team-vector.md`
+29. `test-usability-team-members.md`
+30. `test-usability-team-aliases.md`
+
+31. `test-usability-workspace-isolation.md`
 
 ## Finalization
 
