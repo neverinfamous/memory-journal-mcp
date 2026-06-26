@@ -139,8 +139,8 @@ Select one or more workflows to run based on the user's request or the presence 
 
 1. **Importance Audit** (Pruning): Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
 2. **Type-Based Cleanup** (Pruning): e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
-3. **Tier 1: Fast Sanity Check** (Verification): For the \`Unverified Recent Entries\` provided above, instruct the agent to use the native MCP tool via Code Mode (e.g. \`mj.git.getCommitHistory({ techDebtAudit: true })\`) to verify that commits match the entry claims. Also verify if documentation (like \`code-map.md\`) was updated for structural changes.
-4. **Tier 2: Deep Code & Drift Verification** (Verification): Use \`gh copilot\` for code validation. Check for semantic drift against \`code-map.md\` and \`server-instructions.md\`. Focus heavily on mutating scores based on these findings.
+3. **Tier 1: Fast Sanity Check** (Verification): For the \`Unverified Recent Entries\` provided above, instruct the agent to use the native MCP tool via Code Mode (e.g. \`mj.git.getCommitHistory({ techDebtAudit: true })\`) to verify that commits match the entry claims. Ensure structural changes were correctly reflected by running \`bun scripts/update-code-map.ts\` if applicable.
+4. **Tier 2: Deep Code & Drift Verification** (Verification): Use \`gh copilot\` for code validation. Verify semantic drift against \`src/filtering/tool-constants.ts\` (the SSoT) and the \`memory://instructions\` resource. Mandate that any new tools claimed in an entry MUST have corresponding testing coverage explicitly verified in \`test-server/codemode\`, \`test-server/standard\`, or \`test-server/usability\`. Remind agents to use \`bun scripts/update-code-map.ts\` instead of manually editing \`code-map.md\`.
 
 ### Scoring Protocol for Tier 1 & Tier 2:
 After a verification workflow, you MUST explicitly update the target entries using \`mj_execute_code\` (e.g. \`mj.updateEntry(id, payload)\`):
