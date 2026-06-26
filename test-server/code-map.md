@@ -410,7 +410,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `adversarial-audit-performance` | Multi-pass adversarial performance audit (profiling, stress-testing) |
 | `adversarial-audit-security` | Multi-pass adversarial security audit (threat modeling, attack surfaces) |
 | `adversarial-audit-seo` | Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web... |
-| `adversarial-audit-skill` | Multi-pass adversarial skill audit (evaluate triggers, stress-test) |
+| `adversarial-audit-skill` | Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) |
 | `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
 | `code-review-prep` | Prepare a code review checklist and focus areas for a PR |

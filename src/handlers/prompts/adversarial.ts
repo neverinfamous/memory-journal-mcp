@@ -330,7 +330,7 @@ If the target is '{target}', determine it from the user's request. If the user h
         },
         {
             name: 'adversarial-audit-skill',
-            description: 'Multi-pass adversarial skill audit (evaluate triggers, stress-test)',
+            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test)',
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (args: Record<string, string>, _db: IDatabaseAdapter) => ({
@@ -343,10 +343,12 @@ Target: ${args?.['target'] ?? '{target}'}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target skill, ask them for it now.
 
-1. Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
-2. Run \`gh copilot -- -p "Evaluate the agent skill at <target> for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
-3. Present findings table (incorporating Copilot findings).
-4. Await HITL approval before applying fixes.`
+1. **Subagent Research Phase**: Spawn one or more \`research\` subagents using the \`invoke_subagent\` tool to perform deep web searches on high-value resources (e.g. official docs, release notes, credible blogs) for the latest best practices and version changes related to the target skill. Wait for their findings.
+2. **Gap Analysis**: Compare the subagent research findings against the current skill's contents to identify missing context, outdated information, or new version features.
+3. **Structural Evaluation**: Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
+4. **Validation via Copilot**: Run \`gh copilot -- -p "Evaluate the agent skill at <target> for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
+5. **Presentation**: Present findings table incorporating Copilot structural findings and the new research gaps.
+6. **HITL Approval**: Await HITL approval before applying fixes.`
                     }
                 }]
             })
