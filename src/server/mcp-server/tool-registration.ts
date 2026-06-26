@@ -472,8 +472,11 @@ export function createServerInstance(
                             
                             const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-');
                             const isPrompt = prompts.some((p) => p.name === normalized || p.name === requestedTool || p.name === requestedTool.replace(/^mj_/, ''));
+                            const isFilteredTool = Object.values(TOOL_GROUPS).flat().includes(requestedTool);
                             
-                            if (isPrompt) {
+                            if (isFilteredTool) {
+                                suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`;
+                            } else if (isPrompt) {
                                 suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`;
                             } else if (requestedTool.startsWith('mj_')) {
                                 suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`;
