@@ -400,7 +400,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-27 prompts total (12 workflow + 6 GitHub + 8 adversarial + 1 team).
+30 prompts total.
 
 <!-- BEGIN: PROMPTS -->
 | Prompt | Description |
