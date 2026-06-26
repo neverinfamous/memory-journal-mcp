@@ -382,6 +382,7 @@ export function formatUserMessage(opts: {
             return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}`;
         }).join('<br>');
         gitHistoryLines.push(`**Recent Changes:**<br>${shortCommits}`);
+        gitHistoryLines.push(`💡 **Tip:** Use MCP Prompts (\`git-impact-search\`, \`git-velocity-report\`, \`git-audit-trust\`) for deep analysis instead of raw git commands.`);
     }
 
     // ========================================================================
@@ -437,7 +438,7 @@ export function formatUserMessage(opts: {
     // ========================================================================
     // Assembly
     // ========================================================================
-    let flagsAlert = '💡 **Anti-Hallucination:** If you encounter MCP API confusion or hallucinations, note the item in your task list and tell the user with a prominent notice/warning on the first opportunity. Do not interrupt long and complex work to run `mcp-heal` immediately.\n\n'
+    let flagsAlert = '💡 **Anti-Hallucination:** If confused by MCP APIs, note it in your task list and warn the user. Do not interrupt complex work to run `mcp-heal`.\n\n'
     if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
         const orphanPct = Math.round(graphSummary.orphanRatio * 100)
         flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`mj-mcp-optimize\`.\n\n`
