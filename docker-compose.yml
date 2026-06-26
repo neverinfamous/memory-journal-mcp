@@ -12,7 +12,7 @@ services:
       # - GITHUB_TOKEN=<your-github-token>
       # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
       # Optional: CORS origin (default: none)
-      # - MCP_CORS_ORIGIN=http://localhost:3000
+      # - CORS_ORIGIN=http://localhost:3000
       # Required for IO operations to sandbox filesystem access
       - ALLOWED_IO_ROOTS=/app/data
     read_only: true
@@ -47,7 +47,7 @@ services:
       # - GITHUB_TOKEN=<your-github-token>
       # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
       # Optional: CORS origin (default: none)
-      # - MCP_CORS_ORIGIN=http://localhost:3000
+      # - CORS_ORIGIN=http://localhost:3000
       # Required for IO operations to sandbox filesystem access
       - ALLOWED_IO_ROOTS=/app/data
     read_only: true

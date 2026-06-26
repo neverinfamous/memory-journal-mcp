@@ -51,7 +51,7 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 
 ## 🎯 What Sets Us Apart
 
-**105 MCP Tools** · **27 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**103 MCP Tools** · **31 Workflow Prompts** · **49 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -157,12 +157,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 105   | All tools (default)      |
+| `full`               | 103   | All tools (default)      |
 | `starter`            | 16    | Core + search + codemode |
 | `essential`          | 10    | Minimal footprint        |
 | `readonly`           | 30    | Disable all mutations    |
-| `-github`            | 89    | Exclude a group          |
-| `-github,-analytics` | 87    | Exclude multiple groups  |
+| `-github`            | 85    | Exclude a group          |
+| `-github,-analytics` | 83    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -176,7 +176,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **105 MCP Tools** (11 Groups)
+### 🛠️ **103 MCP Tools** (11 Groups)
 
 | Group           | Tools | Description                                                                                                                                                                                 |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -194,11 +194,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **27 Workflow Prompts**
+### 🎯 **31 Workflow Prompts**
 
 Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **48 Resources**
+### 📡 **49 Resources**
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, and `localTime`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries

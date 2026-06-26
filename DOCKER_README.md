@@ -41,7 +41,7 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 
 ## 🎯 What Sets Us Apart
 
-**105 MCP Tools** · **27 Workflow Prompts** · **60 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**103 MCP Tools** · **31 Workflow Prompts** · **49 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,12 +81,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 105   | All tools (default)      |
+| `full`               | 103   | All tools (default)      |
 | `starter`            | 16    | Core + search + codemode |
 | `essential`          | 10    | Minimal footprint        |
 | `readonly`           | 30    | Disable all mutations    |
-| `-github`            | 89    | Exclude a group          |
-| `-github,-analytics` | 87    | Exclude multiple groups  |
+| `-github`            | 85    | Exclude a group          |
+| `-github,-analytics` | 83    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -98,7 +98,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **105 MCP Tools** (11 Groups)
+### 🛠️ **103 MCP Tools** (11 Groups)
 
 | Group           | Tools | Description                                                                                                                                                                                       |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -116,13 +116,13 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **27 Workflow Prompts**
+### 🎯 **31 Workflow Prompts**
 
 Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **60 Resources** (33 Static + 12 Template + 9 Dynamic Repo + 6 Aliases)
+### 📡 **49 Resources** (28 Static + 10 Template + 7 Dynamic Repo + 4 Aliases)
 
-33 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus 12 template resources, 9 dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`), and 6 alias resources. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+28 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus 10 template resources, 7 dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`), and 4 alias resources. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
 

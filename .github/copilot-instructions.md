@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **100 tools** across **10 groups** (core, search, analytics, relationships, io, admin, github, backup, team, codemode), **57 resources** (51 core + 6 aliases), and **19 prompts**.
+Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **103 tools** across **11 groups** (core, search, analytics, relationships, io, admin, github, git, backup, team, codemode), **49 resources**, and **31 prompts**.
 
 **Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
@@ -95,9 +95,9 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
-│   ├── tools/                  # 100 tool handlers (10 groups)
-│   ├── resources/              # 57 resource handlers (51 core + 6 aliases)
-│   └── prompts/                # 19 prompt handlers
+│   ├── tools/                  # 103 tool handlers (11 groups)
+│   ├── resources/              # 49 resource handlers
+│   └── prompts/                # 31 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
@@ -115,9 +115,9 @@ src/
 
 | File                                     | Purpose                                              |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments) |
+| `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments, now uses Adaptive Instruction Architecture pointing to `{prefix}://help`) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
-| `test-server/tool-reference.md`          | Categorized 100-tool inventory                       |
+| `test-server/tool-reference.md`          | Categorized 103-tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
 
 ## Review Checklist
