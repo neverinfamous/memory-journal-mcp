@@ -19,4 +19,14 @@ When the user has GitHub Copilot code review enabled:
 
 **Learn from reviews** — After a PR is merged or reviewed, use \`get_copilot_reviews({ pr_number, repo })\` to read Copilot's findings (pass \`repo\` in multi-project setups). If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged \`copilot-finding\` and link to the PR via \`pr_number\`.
 
-**Pre-emptive checking** — Before creating or modifying code, search journal entries with tag \`copilot-finding\` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.`;
+**Pre-emptive checking** — Before creating or modifying code, search journal entries with tag \`copilot-finding\` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.
+
+## Available Tools
+
+- **Issues**: \`get_github_issues\`, \`get_github_issue\`, \`create_github_issue_with_entry\`, \`close_github_issue_with_entry\`
+- **Pull Requests**: \`get_github_prs\`, \`get_github_pr\`, \`get_copilot_reviews\`
+- **Context & Insights**: \`get_github_context\`, \`get_repo_insights\`
+- **Kanban**: \`get_kanban_board\`, \`add_kanban_item\`, \`move_kanban_item\`, \`delete_kanban_item\`
+- **Milestones**: \`get_github_milestones\`, \`get_github_milestone\`, \`create_github_milestone\`, \`update_github_milestone\`, \`delete_github_milestone\`
+
+`;

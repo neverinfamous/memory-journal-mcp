@@ -32,30 +32,32 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 
 1. `test-seed.md` (**MUST PASS FIRST** — Universal Blocker)
 2. `test-core-infra.md`
-3. `test-core-crud.md`
-4. `test-core-search.md`
-5. `test-core-semantic.md`
-6. `test-core-relationships.md`
-7. `test-core-io.md`
-8. `test-core-admin.md`
-9. `test-schemas.md`
-10. `test-resources.md`
-11. `test-errors.md`
-12. `test-integrity.md`
-13. `test-github.md`
-14. `test-kanban-lifecycle.md`
-15. `test-team-crud.md`
-16. `test-team-admin.md`
-17. `test-team-rbac.md`
-18. `test-tool-group-core.md`
-19. `test-tool-group-admin.md`
-20. `test-tool-group-backup.md`
-21. `test-tool-group-search.md`
-22. `test-tool-group-github.md`
-23. `test-tool-group-team.md`
-24. `test-payload-optimization.md`
-25. `test-workspace-isolation.md`
-26. `test-git.md`
+3. `test-core-crud-create.md`
+4. `test-core-crud-read.md`
+5. `test-core-search-fts.md`
+6. `test-core-search-filters.md`
+7. `test-core-semantic.md`
+8. `test-core-relationships.md`
+9. `test-core-io.md`
+10. `test-core-admin.md`
+11. `test-schemas.md`
+12. `test-resources.md`
+13. `test-errors.md`
+14. `test-integrity.md`
+15. `test-github.md`
+16. `test-kanban-lifecycle.md`
+17. `test-team-crud.md`
+18. `test-team-admin.md`
+19. `test-team-rbac.md`
+20. `test-tool-group-core.md`
+21. `test-tool-group-admin.md`
+22. `test-tool-group-backup.md`
+23. `test-tool-group-search.md`
+24. `test-tool-group-github.md`
+25. `test-tool-group-team.md`
+26. `test-payload-optimization.md`
+27. `test-workspace-isolation.md`
+28. `test-git.md`
 
 ## Telemetry Collection
 

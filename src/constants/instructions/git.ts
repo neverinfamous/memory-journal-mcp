@@ -4,4 +4,12 @@ export const GIT_HELP = `# Git History Mining
 - **Release Tracking**: Use \`get_release_info\` to retrieve tag details and \`get_unreleased_commits\` to track work pending release.
 - **Analytics**: Use \`analyze_commit_patterns\` to identify file hotspots and active contributors within a timeframe.
 - **Performance**: Deep searches can take time. Cap your search ranges when possible.
-- **Code Mode**: These tools are exposed under the \`mj.git.*\` namespace (e.g., \`mj.git.getCommitHistory()\`).`;
+- **Code Mode**: These tools are exposed under the \`mj.git.*\` namespace (e.g., \`mj.git.getCommitHistory()\`).
+
+## Available Tools
+
+- **History**: \`get_commit_history\`, \`search_commits\`
+- **Releases**: \`get_release_info\`, \`get_unreleased_commits\`
+- **Analytics**: \`analyze_commit_patterns\`, \`check_entry_staleness\`
+
+`;

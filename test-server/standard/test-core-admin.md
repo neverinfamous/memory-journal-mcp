@@ -34,6 +34,7 @@
 | Verify merge      | `list_tags` + `search_entries(project_number: 5, query: "Test tag merge")`       | "test-old" gone, "test-new" exists, entry now has "test-new" tag            |
 | Merge same tag    | `merge_tags(source_tag: "test-new", target_tag: "test-new")`                     | Structured error: `{ success: false, error: "..." }` (source equals target) |
 | Merge nonexistent | `merge_tags(source_tag: "nonexistent-xyz", target_tag: "x")`                     | Structured error: `{ success: false, error: "Source tag not found: ..." }`  |
+| Mark anchors stale| `mark_anchors_stale(project_number: 5)`                                          | `success: true` and number of anchors marked stale                          |
 
 > [!NOTE]
 > If `restore_backup` is tested after `merge_tags`, the restored backup will revert the merge. This is expected behavior. Verify merge worked immediately after calling `merge_tags`, before any backup restoration.
@@ -59,6 +60,7 @@
 | Batch Create No Project | `batch_create_entries(entries: [{ content: "No project" }])` | `{ success: false }` with structured error: "Missing project_number..." |
 | Batch Update          | `batch_update_entries(updates: [{ entry_id: <id1>, content: "U1" }, { entry_id: <id2>, content: "U2" }])` | `success: true` and array of IDs       |
 | Batch Delete          | `batch_delete_entries(entry_ids: [<id1>, <id2>])`           | `success: true` and count of deleted entries                                     |
+| Run Auto Prune        | `run_auto_prune(project_number: 5)`                         | `success: true` and count of pruned (hard-deleted) entries                       |
 
 ### 5.4 Audit Telemetry
 

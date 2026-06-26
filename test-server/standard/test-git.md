@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Git History Mining
 
-**Scope:** 5 git history mining tools — commit history, search commits, release info, unreleased commits, and analytics.
+**Scope:** 6 git history mining tools — commit history, search commits, release info, unreleased commits, analytics, and staleness check.
 
 **Prerequisites:**
 
@@ -21,7 +21,7 @@
 
 ---
 
-## Phase 14: Git Integration (5 tools)
+## Phase 14: Git Integration (6 tools)
 
 ### 14.1 Git Tools
 
@@ -32,10 +32,11 @@
 | Get release info      | `get_release_info()`                           | Returns info for the latest release                      |
 | Get unreleased commits| `get_unreleased_commits()`                     | Returns unreleased commits                               |
 | Analyze commit pattern| `analyze_commit_patterns(days: 30)`            | Returns commit analytics for last 30 days                |
+| Check entry staleness | `check_entry_staleness(entry_id: <N>)`         | Returns staleness analysis against recent git activity   |
 
 ---
 
 ## Success Criteria
 
 - Agent reports the Total Token Estimate in the final summary.
-- All 5 git tools function correctly via direct MCP.
+- All 6 git tools function correctly via direct MCP.

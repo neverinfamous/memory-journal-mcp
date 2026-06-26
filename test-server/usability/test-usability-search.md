@@ -30,25 +30,15 @@ If you encounter any failures, errors, or hallucinations:
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/search/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or aliases in `src/codemode/api-constants.ts`).
 4. Apply the permanent fix.
 
-## 3. Refresh Checkpoint (CRITICAL)
+## 3. Local Verification & Commit
 
-If you made any codebase changes in the Heal Phase, the changes will not take effect until the server is restarted.
-**You cannot restart the server yourself.**
+If you made any codebase changes in the Heal Phase:
 
-Output the following message to the user:
+1. Run `pnpm run check` locally to verify that all validation passes (linting, tests, types).
+2. DO NOT perform live server verification. DO NOT pause or wait for a server restart.
+3. Run `git add .` and `git commit -m "Optimize search tool usage"` to save your changes locally.
+4. Conclude the test and report your findings.
 
-> "Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."
-
-**DO NOT PROCEED** to the verification phase until the user confirms the server has been refreshed.
-
-## 4. Verification & Commit
-
-Once the server is refreshed (or if no codebase changes were needed):
-
-1. Re-run your Code Mode script to verify that the guardrail successfully intercepts the hallucination and provides actionable feedback (or seamlessly heals it).
-2. If successful, run `git add .` and `git commit -m "Optimize search tool usage"` to save your changes locally.
-3. Conclude the test and report your findings.
-
-## 5. Continuous Improvement
+## 4. Continuous Improvement
 
 If during this test you discover a blind spot, a new hallucination vector, or a way to make this very testing prompt more effective, you are encouraged to edit this markdown file directly to permanently improve the testing apparatus. Commit any prompt improvements alongside your codebase fixes.

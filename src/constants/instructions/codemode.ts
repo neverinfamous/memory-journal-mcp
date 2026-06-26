@@ -17,6 +17,9 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`getEntryById(params)\`
 - \`getRecentEntries(params)\`
 - \`getEntryHistory(params)\`
+- \`testSimple(params)\`
+- \`testErrorHandling(params)\`
+- \`triggerProgress(params)\`
 - \`listTags(params)\`
 - \`markAnchorsStale(params)\`
 
@@ -53,6 +56,7 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`batchCreateEntries(params)\`
 - \`batchUpdateEntries(params)\`
 - \`batchDeleteEntries(params)\`
+- \`runAutoPrune(params)\`
 - \`searchAuditLog(params)\`
 
 ### \`mj.github\`
@@ -75,6 +79,14 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`getRepoInsights(params)\`
 - \`getCopilotReviews(params)\`
 
+### \`mj.git\`
+- \`getCommitHistory(params)\`
+- \`searchCommits(params)\`
+- \`getReleaseInfo(params)\`
+- \`getUnreleasedCommits(params)\`
+- \`analyzeCommitPatterns(params)\`
+- \`checkEntryStaleness(params)\`
+
 ### \`mj.backup\`
 - \`backupJournal(params)\`
 - \`listBackups(params)\`
@@ -91,7 +103,6 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`teamExportEntries(params)\` (or \`teamExport()\`), \`teamExportMarkdown(params)\`, \`teamImportMarkdown(params)\` (or \`teamImportMd()\`), \`teamImportExternal(params)\`
 - \`teamBackup(params)\`, \`teamListBackups(params)\`
 - \`teamGetVectorIndexStats(params)\`, \`teamRebuildVectorIndex(params)\`, \`teamAddToVectorIndex(params)\`
-- \`teamPassFlag(params)\`, \`teamResolveFlag(params)\`, \`teamListFlags(params)\`, \`teamUpdateFlag(params)\`, \`teamGetFlagAnalytics(params)\`
 - \`teamAddMember(params)\`, \`teamRemoveMember(params)\`, \`teamUpdateMemberRole(params)\`, \`teamListMembers(params)\`, \`teamGetMember(params)\`
 - \`teamAddAuthorAlias(params)\`, \`teamRemoveAuthorAlias(params)\`, \`teamListAuthorAliases(params)\`, \`teamResolveAuthor(params)\`, \`teamConsolidateAuthors(params)\`
 

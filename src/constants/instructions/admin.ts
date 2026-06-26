@@ -18,4 +18,15 @@ When deployed in HTTP mode with \`--report-interval <minutes>\` and \`--report-w
 
 ### Real-Time Subscriptions
 
-The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data. Note that subscriptions are scope-authorized; your session must possess the required scope (e.g., \`team\` or \`admin\`) for the target resource, or the subscription will be rejected with a \`PermissionError\`.`;
+The server supports the standard MCP \`resources/subscribe\` capability. You can subscribe to team resources (e.g., \`memory://team/recent\`, \`memory://flags\`, and \`memory://briefing\`) to receive real-time \`notifications/resources/updated\` notifications when other agents or team members mutate shared data. Note that subscriptions are scope-authorized; your session must possess the required scope (e.g., \`team\` or \`admin\`) for the target resource, or the subscription will be rejected with a \`PermissionError\`.
+
+## Available Tools
+
+- **Configuration**: \`update_configuration\`
+- **Entry Mutations**: \`update_entry\`, \`delete_entry\`, \`restore_entry\`
+- **Batch Operations**: \`batch_create_entries\`, \`batch_update_entries\`, \`batch_delete_entries\`
+- **Vector Index**: \`rebuild_vector_index\`, \`add_to_vector_index\`
+- **Maintenance**: \`merge_tags\`, \`run_auto_prune\`
+- **Auditing**: \`search_audit_log\`
+
+`;

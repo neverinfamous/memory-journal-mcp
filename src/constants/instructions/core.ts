@@ -113,4 +113,12 @@ Example:
 History-Category: Changed
 History-Entry: Refactored server instructions to adhere to 500-line modularity rule
 History-Confidence: 0.8
-History-Impact: 0.4`;
+History-Impact: 0.4
+
+## Available Tools
+
+- **Entry Lifecycle**: \`create_entry\`, \`get_entry_by_id\`, \`get_recent_entries\`, \`get_entry_history\`
+- **Taxonomy & Graph**: \`list_tags\`, \`mark_anchors_stale\`
+- **Testing Tools**: \`test_simple\`, \`test_error_handling\`, \`trigger_progress\`
+
+`;

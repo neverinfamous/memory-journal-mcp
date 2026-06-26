@@ -2,7 +2,7 @@
 
 Test tag management, export formats/filters, and the backup/restore lifecycle through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 26 — ~10 test cases covering admin, export, and backup operations via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 26 — ~12 test cases covering admin, export, backup, staleness, and pruning operations via Code Mode.
 
 **Prerequisites:**
 
@@ -229,6 +229,35 @@ return {
 | `configChangeKeys`    | `true`   |
 | `revertSuccess`       | `true`   |
 
+### 27.6 Staleness & Auto Prune
+
+```javascript
+// Test code:
+// markAnchorsStale
+const markStale = await mj.core.markAnchorsStale({
+  anchor_id: 1,
+  staleness_reason: "Testing staleness marking via Code Mode"
+})
+
+// runAutoPrune
+const prune = await mj.admin.runAutoPrune({
+  dry_run: true
+})
+
+return {
+  markStaleSuccess: markStale.success || markStale.code === "RESOURCE_NOT_FOUND",
+  pruneSuccess: prune.success,
+  pruneHasStats: prune.stats !== undefined
+}
+```
+
+| Check                 | Expected |
+| --------------------- | -------- |
+| `markStaleSuccess`    | `true`   |
+| `pruneSuccess`        | `true`   |
+| `pruneHasStats`       | `true`   |
+
+
 ---
 
 ## Success Criteria
@@ -249,3 +278,5 @@ return {
 - Code Mode correctly resolves fallback aliases like `mj.admin.bulkCreate`
 - `searchAuditLog` successfully queries and limits audit telemetry
 - `updateConfiguration` correctly updates server configuration via Code Mode
+- `markAnchorsStale` successfully marks anchors as stale or safely ignores missing entries
+- `runAutoPrune` executes dry-run successfully and returns stats

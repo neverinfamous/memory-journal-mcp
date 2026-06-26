@@ -1,6 +1,6 @@
 # Code Mode Re-Test — Git History Mining
 
-**Scope:** 5 git history mining tools executed exclusively through `mj_execute_code`.
+**Scope:** 6 git history mining tools executed exclusively through `mj_execute_code`.
 
 **Prerequisites:**
 
@@ -28,10 +28,11 @@
 | Get release info      | `mj.git.getReleaseInfo({})`                                         | Returns info for the latest release                      |
 | Get unreleased commits| `mj.git.getUnreleasedCommits({})`                                   | Returns unreleased commits                               |
 | Analyze commit pattern| `mj.git.analyzeCommitPatterns({ days: 30 })`                        | Returns commit analytics for last 30 days                |
+| Check entry staleness | `mj.git.checkEntryStaleness({ entry_id: 1 })`                       | Returns staleness info for entry                         |
 
 ---
 
 ## Success Criteria
 
 - Agent reports Total Token Estimate.
-- All 5 git tools function correctly via `mj.git.*` inside `mj_execute_code`.
+- All 6 git tools function correctly via `mj.git.*` inside `mj_execute_code`.

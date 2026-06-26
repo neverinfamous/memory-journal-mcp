@@ -27,24 +27,15 @@ If you encounter confusing V8 errors or unhandled edge cases instead of actionab
 3. Modify `src/codemode/worker-api-proxy.ts`, `worker-result-proxy.ts`, or the main dispatcher.
 4. Apply the permanent fix (e.g. throwing custom errors with actionable feedback).
 
-## 3. Refresh Checkpoint (CRITICAL)
+## 3. Local Verification & Commit
 
-If you made any codebase changes, the server must be restarted. **You cannot restart it.**
+If you made any codebase changes in the Heal Phase:
 
-Output the following message to the user:
+1. Run `pnpm run check` locally to verify that all validation passes (linting, tests, types).
+2. DO NOT perform live server verification. DO NOT pause or wait for a server restart.
+3. Run `git add .` and `git commit -m "Optimize tools tool usage"` to save your changes locally.
+4. Conclude the test and report your findings.
 
-> "Please manually refresh the `memory-journal-mcp` server, then say 'ready' so I can verify the fix."
-
-**DO NOT PROCEED** until the user confirms the server has been refreshed.
-
-## 4. Verification & Commit
-
-Once the server is refreshed:
-
-1. Re-run your Code Mode script to verify the fix works.
-2. If successful, run `git add .` and `git commit -m "Optimize codemode mechanics"`.
-3. Report your findings.
-
-## 5. Continuous Improvement
+## 4. Continuous Improvement
 
 If during this test you discover a blind spot, a new hallucination vector, or a way to make this very testing prompt more effective, you are encouraged to edit this markdown file directly to permanently improve the testing apparatus. Commit any prompt improvements alongside your codebase fixes.
