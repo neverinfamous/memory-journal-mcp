@@ -384,7 +384,7 @@ If the target is '{target}', determine it from the user's request. If the user h
                 {
                     name: 'lookback',
                     description: 'Number of recent entries to audit (default: 10, max: 50)',
-                    required: true
+                    required: false
                 }
             ],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
