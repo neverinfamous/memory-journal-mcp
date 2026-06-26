@@ -118,6 +118,14 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const replRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
   const interactiveFlagRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
   const tailFRegex = /tail(?:\\.exe)?.*(?:-f|--follow)/i;
+  const nodeWatchRegex = /(?:node|bun|npx|pnpx|bunx|yarn)(?:\\.exe|\\.cmd)?.*--watch/i;
+  const watchToolRegex = /(?:nodemon|ts-node-dev)(?:\\.exe|\\.cmd)?/i;
+  const tsxWatchRegex = /tsx(?:\\.exe|\\.cmd)?\\s+watch/i;
+  const pm2InteractiveRegex = /pm2(?:\\.exe|\\.cmd)?\\s+(?:logs|monit|dash)/i;
+  const bunReplRegex = /bun(?:\\.exe|\\.cmd)?\\s+repl/i;
+  const cmdPauseRegex = /pause\\b/i;
+  const pwshNoExitRegex = /pwsh(?:\\.exe)?\\s+.*-noexit/i;
+  const pwshUiRegex = /(?:Get-Credential|Show-Command|Out-GridView|Read-Host|PromptForChoice)/i;
 
   const extractScriptBody = (type: string, cmd: string, cmdArgs: string[], code?: string): string | null => {
     return match({ type, cmd: cmd.toLowerCase(), cmdArgs, code })
@@ -230,6 +238,45 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
     })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && (nodeWatchRegex.test(body) || watchToolRegex.test(body) || tsxWatchRegex.test(body))) }, () => {
+       console.error(`\n   💡 AGENT HINT: Node watch mode runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && (nodeWatchRegex.test(c) || watchToolRegex.test(c) || tsxWatchRegex.test(c))) }, () => {
+       console.error(`\n   💡 AGENT HINT: Node watch mode runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && pm2InteractiveRegex.test(body)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'pm2' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && pm2InteractiveRegex.test(c)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'pm2' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && bunReplRegex.test(body)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && bunReplRegex.test(c)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && cmdPauseRegex.test(body)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'pause' in cmd waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && cmdPauseRegex.test(c)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'pause' in cmd waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && (pwshNoExitRegex.test(body) || pwshUiRegex.test(body))) }, () => {
+       console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && (pwshNoExitRegex.test(c) || pwshUiRegex.test(c))) }, () => {
+       console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       process.exit(1);
+    })
     .otherwise(() => {});
 }
-

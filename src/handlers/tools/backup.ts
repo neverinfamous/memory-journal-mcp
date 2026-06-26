@@ -93,6 +93,10 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .string()
                     .optional()
                     .describe('Custom backup name (optional, defaults to timestamp). Anti-Hallucination Hint: You can use positional args like mj.backup.backupJournal("my_name").'),
+                compress: z
+                    .boolean()
+                    .optional()
+                    .describe('Anti-Hallucination Hint: Compression is natively handled by the database engine. This parameter is safely ignored.'),
             }).strict(),
             outputSchema: BackupResultOutputSchema,
             annotations: {

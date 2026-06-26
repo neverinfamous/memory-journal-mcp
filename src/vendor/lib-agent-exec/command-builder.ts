@@ -147,7 +147,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   }
   
   if (payload.type === 'command') {
-    const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
+    const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
     if (builtIns.includes(payload.command.toLowerCase())) {
       console.error(`\n   💡 AGENT HINT: '${payload.command}' is a shell built-in, not an executable file.`);
       console.error(`   🛠️ AUTONOMOUS HEALING: Automatically routing through system shell (cmd.exe/sh) to prevent execution failure...`);

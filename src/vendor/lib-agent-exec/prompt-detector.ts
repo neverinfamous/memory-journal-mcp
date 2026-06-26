@@ -4,7 +4,7 @@ import { stripVTControlCharacters } from 'node:util';
 export function checkPrompt(tail: string): boolean {
   const lower = stripVTControlCharacters(tail).toLowerCase();
   
-  if (!/[?:>#\$%✔…]/.test(lower) && !/(?:enter|press|hit|type|choose|select|provide|input|password|passphrase|username|login|email|token|y\/n|yes|no|editor|vi|nano|vim|emacs|continue|abort|quit|exit|override|overwrite|replace|sure|accept|proceed|\b[yn]\b)/.test(lower)) {
+  if (!/[?:>#$%✔…]/.test(lower) && !/(?:enter|press|hit|type|choose|select|provide|input|password|passphrase|username|login|email|token|y\/n|yes|no|editor|vi|nano|vim|emacs|continue|abort|quit|exit|override|overwrite|replace|sure|accept|proceed|\b[yn]\b)/.test(lower)) {
     return false;
   }
   

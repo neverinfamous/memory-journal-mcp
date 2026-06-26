@@ -179,7 +179,7 @@ export class ProcessController {
       if (error.code === 'ENOENT' || error.code === 'EUNKNOWN' || (error as NodeJS.ErrnoException).syscall === 'uv_spawn') {
          console.error(`   Executable '${this.cmd}' was not found in PATH or working directory.`);
          if (process.platform === 'win32') {
-             const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
+             const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
              if (builtIns.includes(this.cmd.toLowerCase())) {
                  console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
              }
@@ -352,7 +352,7 @@ export class ProcessController {
           } else {
             console.error(`\n❌ Command exited with code ${code}`);
             if (process.platform === 'win32') {
-                const builtIns = ['dir', 'echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
+                const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
                 if (builtIns.includes(this.cmd.toLowerCase())) {
                     console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
                 }

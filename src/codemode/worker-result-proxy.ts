@@ -59,6 +59,16 @@ export function wrapResult(result: unknown): unknown {
             ) {
                 successResult['hasMore'] = false
             }
+
+            // §2.5: Heal analytics `statistics` shape hallucination
+            if (
+                !('statistics' in successResult) &&
+                !('stats' in successResult) &&
+                ('totalEntries' in successResult || 'entriesByType' in successResult)
+            ) {
+                successResult['statistics'] = successResult
+                successResult['stats'] = successResult
+            }
             return new Proxy(successResult, {
                 ownKeys(target) { return Reflect.ownKeys(target) },
                 getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
