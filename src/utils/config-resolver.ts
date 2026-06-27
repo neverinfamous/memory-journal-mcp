@@ -182,6 +182,36 @@ export class ConfigResolver {
     }
 
     /**
+     * Helper to resolve an optional numeric value
+     */
+    public resolveInt(
+        cliKey: string,
+        envKey?: string,
+        min?: number,
+        max?: number
+    ): number | undefined {
+        const val = this.resolve<unknown>(cliKey, envKey)
+        if (val === undefined || val === null) {
+            return undefined
+        }
+
+        const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
+        const parsed = typeof val === 'number' ? val : parseInt(valStr, 10)
+        
+        if (Number.isNaN(parsed)) {
+            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${valStr}`)
+        }
+        if (min !== undefined && parsed < min) {
+            throw new ConfigurationError(`Configuration ${cliKey} must be at least ${min}`)
+        }
+        if (max !== undefined && parsed > max) {
+            throw new ConfigurationError(`Configuration ${cliKey} must be at most ${max}`)
+        }
+        
+        return parsed
+    }
+
+    /**
      * Helper to resolve boolean value
      */
     public resolveBool(
