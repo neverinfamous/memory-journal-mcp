@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { createProgram, addServerOptions } from './program-options.js'
+import { 
+    createProgram, addServerOptions, addCoreOptions, addDatabaseOptions, 
+    addCodeModeOptions, addAuditOptions, addPruningOptions 
+} from './program-options.js'
 import { serveAction } from './commands/serve.js'
 import { execAction } from './commands/exec.js'
 import { backupAction, restoreAction, vacuumAction, pruneAction } from './commands/admin.js'
@@ -27,7 +30,10 @@ program.addHelpText(
 const execCmd = program
     .command('exec <file>')
     .description('Execute a Code Mode script locally without starting a server')
-addServerOptions(execCmd)
+addCoreOptions(execCmd)
+addDatabaseOptions(execCmd)
+addCodeModeOptions(execCmd)
+addAuditOptions(execCmd)
 execCmd.addHelpText(
     'after',
     `
@@ -52,7 +58,8 @@ const backupCmd = adminCmd
     .command('backup')
     .description('Export the database to a timestamped backup file')
     .option('--dest <path>', 'Destination path or filename for the backup')
-addServerOptions(backupCmd)
+addCoreOptions(backupCmd)
+addDatabaseOptions(backupCmd)
 backupCmd.addHelpText(
     'after',
     `
@@ -64,7 +71,8 @@ backupCmd.action(backupAction)
 const restoreCmd = adminCmd
     .command('restore <file>')
     .description('Restore the database from a backup file')
-addServerOptions(restoreCmd)
+addCoreOptions(restoreCmd)
+addDatabaseOptions(restoreCmd)
 restoreCmd.addHelpText(
     'after',
     `
@@ -76,7 +84,8 @@ restoreCmd.action(restoreAction)
 const vacuumCmd = adminCmd
     .command('vacuum')
     .description('Optimize database query planner and flush WAL')
-addServerOptions(vacuumCmd)
+addCoreOptions(vacuumCmd)
+addDatabaseOptions(vacuumCmd)
 vacuumCmd.action(vacuumAction)
 
 const pruneCmd = adminCmd
@@ -84,7 +93,9 @@ const pruneCmd = adminCmd
     .description('Run autonomous database pruning')
     .option('--dry-run', 'Log candidates without modifying the database')
     .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
-addServerOptions(pruneCmd)
+addCoreOptions(pruneCmd)
+addDatabaseOptions(pruneCmd)
+addPruningOptions(pruneCmd)
 pruneCmd.addHelpText(
     'after',
     `
@@ -118,7 +129,8 @@ const createEntryCmd = entryCmd
     .option('--auto-context-file <path>', 'Load auto context JSON from a file')
     .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
     .option('--team', 'Route to team database')
-addServerOptions(createEntryCmd)
+addCoreOptions(createEntryCmd)
+addDatabaseOptions(createEntryCmd)
 createEntryCmd.addHelpText(
     'after',
     `
@@ -150,7 +162,8 @@ const updateEntryCmd = entryCmd
     .option('--auto-context-file <path>', 'Load auto context JSON from a file')
     .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
     .option('--team', 'Route to team database')
-addServerOptions(updateEntryCmd)
+addCoreOptions(updateEntryCmd)
+addDatabaseOptions(updateEntryCmd)
 updateEntryCmd.addHelpText(
     'after',
     `
