@@ -426,6 +426,14 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         }
     }
 
+    // Heal missing auto_context commits for commit narratives by parsing the SHA from content
+    if ('tags' in result && Array.isArray(result['tags']) && result['tags'].includes('commit-narrative') && !('auto_context' in result) && 'content' in result && typeof result['content'] === 'string') {
+        const match = /commit\s+([a-f0-9]{7,40})/i.exec(result['content'])
+        if (match?.[1]) {
+            result['auto_context'] = JSON.stringify({ commits: [match[1]] })
+        }
+    }
+
     // Heal auto_context 'commits' hallucination (e.g. passing a string instead of an array, or using 'commit_shas')
     if ('auto_context' in result) {
         const ac = result['auto_context'];

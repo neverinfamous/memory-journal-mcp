@@ -73,7 +73,7 @@ git commit -F scratch/commit-msg.txt
 \`\`\`
 
 ## 3. Journal Entry (Optional but recommended for impact > 0.5 or structural significance)
-Call \`mj_execute_code\` to create a \`technical_note\` entry documenting the commit. Tag it with \`["commit-narrative"]\`. Include the commit SHA, the rationale, and any architectural shifts.`,
+Use the CLI (\`memory-journal-mcp entry create\`) to create a \`technical_note\` entry documenting the commit. Tag it with \`["commit-narrative"]\`. Include the commit SHA in the content (the system will auto-link it), the rationale, and any architectural shifts.`,
                             },
                         },
                     ],
@@ -137,7 +137,7 @@ git commit -F scratch/commit-msg.txt
 \`\`\`
 
 ## 2. Journal Entry
-Since this is a quick commit, a journal entry is usually not required unless the change is structurally significant despite being quick.`,
+Since this is a quick commit, a journal entry is usually not required. If it is structurally significant, use the CLI (\`memory-journal-mcp entry create\`) to document the commit, tagging it with \`["commit-narrative"]\` and including the commit SHA in the content.`,
                             },
                         },
                     ],
