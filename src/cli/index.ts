@@ -4,12 +4,13 @@ import type { Command } from 'commander'
 import { 
     createProgram, addServerOptions, addCoreOptions, addDatabaseOptions, 
     addCodeModeOptions, addAuditOptions, addPruningOptions,
-    addWorkspaceOptions, addVectorOptions, addAgentInstructions, withGroup
+    addWorkspaceOptions, addVectorOptions, addAgentInstructions, withGroup,
+    addOutputOptions, withValidation
 } from './program-options.js'
-import { serveAction } from './commands/serve.js'
-import { execAction } from './commands/exec.js'
-import { backupAction, restoreAction, vacuumAction, pruneAction } from './commands/admin.js'
-import { createEntryAction, updateEntryAction } from './commands/entry.js'
+import { serveAction, serveSchema } from './commands/serve.js'
+import { execAction, execSchema } from './commands/exec.js'
+import { backupAction, restoreAction, vacuumAction, pruneAction, backupSchema, restoreSchema, vacuumSchema, pruneSchema } from './commands/admin.js'
+import { createEntryAction, updateEntryAction, createEntrySchema, updateEntrySchema } from './commands/entry.js'
 const program = createProgram()
 
 // Setup default 'serve' command
@@ -18,7 +19,7 @@ const serveCmd = program
     .description('Start the Memory Journal MCP Server')
 
 addServerOptions(serveCmd)
-serveCmd.action(serveAction)
+serveCmd.action(withValidation(serveSchema, serveAction))
 
 addAgentInstructions(program,
     `
@@ -33,9 +34,7 @@ const execCmd = program
     .command('exec <file>')
     .description('Execute a Code Mode script locally without starting a server')
 
-withGroup(execCmd, 'Command Options', (cmd: Command) => {
-    cmd.option('--json', 'Output results as a structured JSON envelope')
-})
+addOutputOptions(execCmd)
 
 addCoreOptions(execCmd)
 addDatabaseOptions(execCmd)
@@ -49,7 +48,7 @@ addAgentInstructions(execCmd,
 - ALWAYS provide the path to a valid script file. Scripts execute within the same execution environment as Code Mode tools.
 - Do NOT use this command to start the server. Use \`serve\` instead.`
 )
-execCmd.action(execAction)
+execCmd.action(withValidation(execSchema, execAction))
 
 // Setup 'admin' command group
 const adminCmd = program
@@ -66,10 +65,9 @@ const backupCmd = adminCmd
     .description('Export the database to a timestamped backup file')
 
 withGroup(backupCmd, 'Command Options', (cmd: Command) => {
-    cmd
-        .option('--dest <path>', 'Destination path or filename for the backup')
-        .option('--json', 'Output results as a structured JSON envelope')
+    cmd.option('--dest <path>', 'Destination path or filename for the backup')
 })
+addOutputOptions(backupCmd)
 
 addCoreOptions(backupCmd)
 addDatabaseOptions(backupCmd)
@@ -78,15 +76,13 @@ addAgentInstructions(backupCmd,
 🤖 AI AGENT INSTRUCTIONS:
 - If \`--dest\` is omitted, a timestamped backup will be created in the backups directory.`
 )
-backupCmd.action(backupAction)
+backupCmd.action(withValidation(backupSchema, backupAction))
 
 const restoreCmd = adminCmd
     .command('restore <file>')
     .description('Restore the database from a backup file')
 
-withGroup(restoreCmd, 'Command Options', (cmd: Command) => {
-    cmd.option('--json', 'Output results as a structured JSON envelope')
-})
+addOutputOptions(restoreCmd)
 
 addCoreOptions(restoreCmd)
 addDatabaseOptions(restoreCmd)
@@ -95,19 +91,17 @@ addAgentInstructions(restoreCmd,
 🤖 AI AGENT INSTRUCTIONS:
 - This will overwrite the CURRENT database. ALWAYS take a backup before running restore.`
 )
-restoreCmd.action(restoreAction)
+restoreCmd.action(withValidation(restoreSchema, restoreAction))
 
 const vacuumCmd = adminCmd
     .command('vacuum')
     .description('Optimize database query planner and flush WAL')
 
-withGroup(vacuumCmd, 'Command Options', (cmd: Command) => {
-    cmd.option('--json', 'Output results as a structured JSON envelope')
-})
+addOutputOptions(vacuumCmd)
 
 addCoreOptions(vacuumCmd)
 addDatabaseOptions(vacuumCmd)
-vacuumCmd.action(vacuumAction)
+vacuumCmd.action(withValidation(vacuumSchema, vacuumAction))
 
 const pruneCmd = adminCmd
     .command('prune')
@@ -117,8 +111,8 @@ withGroup(pruneCmd, 'Command Options', (cmd: Command) => {
     cmd
         .option('--dry-run', 'Log candidates without modifying the database')
         .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
-        .option('--json', 'Output results as a structured JSON envelope')
 })
+addOutputOptions(pruneCmd)
 
 addCoreOptions(pruneCmd)
 addDatabaseOptions(pruneCmd)
@@ -128,7 +122,7 @@ addAgentInstructions(pruneCmd,
 🤖 AI AGENT INSTRUCTIONS:
 - ALWAYS run with \`--dry-run\` first to verify what will be pruned.`
 )
-pruneCmd.action(pruneAction)
+pruneCmd.action(withValidation(pruneSchema, pruneAction))
 
 // Setup 'entry' command group
 const entryCmd = program
@@ -158,8 +152,8 @@ withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--auto-context-file <path>', 'Load auto context JSON from a file')
         .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
         .option('--team', 'Route to team database')
-        .option('--json', 'Output results as a structured JSON envelope')
 })
+addOutputOptions(createEntryCmd)
 
 addCoreOptions(createEntryCmd)
 addDatabaseOptions(createEntryCmd)
@@ -169,7 +163,7 @@ addAgentInstructions(createEntryCmd,
 - METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
 - MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.`
 )
-createEntryCmd.action(createEntryAction)
+createEntryCmd.action(withValidation(createEntrySchema, createEntryAction))
 
 const updateEntryCmd = entryCmd
     .command('update')
@@ -196,8 +190,8 @@ withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--auto-context-file <path>', 'Load auto context JSON from a file')
         .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
         .option('--team', 'Route to team database')
-        .option('--json', 'Output results as a structured JSON envelope')
 })
+addOutputOptions(updateEntryCmd)
 
 addCoreOptions(updateEntryCmd)
 addDatabaseOptions(updateEntryCmd)
@@ -207,6 +201,6 @@ addAgentInstructions(updateEntryCmd,
 - METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
 - MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.`
 )
-updateEntryCmd.action(updateEntryAction)
+updateEntryCmd.action(withValidation(updateEntrySchema, updateEntryAction))
 
 program.parse()

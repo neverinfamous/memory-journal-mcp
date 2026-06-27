@@ -69,7 +69,8 @@ export function createProgram(): Command {
     program.configureHelp({
         formatHelp: (cmd, helper) => {
             // Check for JSON help mode
-            if (process.argv.includes('--json')) {
+            const isJsonHelp = process.argv.includes('--json') || process.argv.includes('--json=true');
+            if (isJsonHelp) {
                 const envelope = {
                     status: 'success',
                     data: {
@@ -86,7 +87,8 @@ export function createProgram(): Command {
                             group: match([optionGroups.get(opt), opt.name()])
                                 .with([P.string, P._], ([name]) => name)
                                 .with([P.nullish, P.union('help', 'version')], () => 'Standard Options')
-                                .otherwise(() => 'Command Options')
+                                .with([P.nullish, P._], () => 'Command Options')
+                                .exhaustive()
                         })),
                         arguments: helper.visibleArguments(cmd).map(arg => ({
                             term: helper.argumentTerm(arg),
@@ -123,7 +125,8 @@ export function createProgram(): Command {
                     const groupName = match([optionGroups.get(opt), opt.name()])
                         .with([P.string, P._], ([name]) => name)
                         .with([P.nullish, P.union('help', 'version')], () => 'Standard Options')
-                        .otherwise(() => 'Command Options');
+                        .with([P.nullish, P._], () => 'Command Options')
+                        .exhaustive();
 
                     if (!groups.has(groupName)) groups.set(groupName, []);
                     const group = groups.get(groupName);
@@ -480,6 +483,12 @@ export function addMetricsOptions(command: Command): Command {
             )
             .option('--persist-metrics', 'Persist metrics to disk across server restarts (env: PERSIST_METRICS)')
             .option('--metrics-path <path>', 'Custom path to the metrics JSON file (env: METRICS_PATH)')
+    })
+}
+
+export function addOutputOptions(command: Command): Command {
+    return withGroup(command, 'Command Options', (cmd) => {
+        cmd.option('--json', 'Output results as a structured JSON envelope')
     })
 }
 

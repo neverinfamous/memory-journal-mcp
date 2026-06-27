@@ -3,11 +3,16 @@ import { logger } from '../../utils/logger.js'
 import { createServer } from '../../server/mcp-server/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { z } from 'zod'
 
-export async function serveAction(options: Record<string, unknown>, command: Command): Promise<void> {
+export const serveSchema = z.object({
+    config: z.string().optional(),
+    dumpConfig: z.boolean().optional(),
+}).loose()
+
+export async function serveAction(options: z.infer<typeof serveSchema>, command: Command): Promise<void> {
     let resolver: ConfigResolver
-    const configPath =
-        (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
     const configErrors: string[] = []
 
     try {
@@ -26,7 +31,7 @@ export async function serveAction(options: Record<string, unknown>, command: Com
         configErrors.push(e instanceof Error ? e.message : String(e))
     }
     
-    if (options['dumpConfig'] !== true) {
+    if (options.dumpConfig !== true) {
         logger.setLevel(logLevel as 'debug' | 'info' | 'warning' | 'error')
     }
 
@@ -54,7 +59,7 @@ export async function serveAction(options: Record<string, unknown>, command: Com
         process.exit(1)
     }
 
-    if (options['dumpConfig'] === true) {
+    if (options.dumpConfig === true) {
         const redactedOptions = JSON.parse(JSON.stringify(serverOptions)) as Record<
             string,
             unknown

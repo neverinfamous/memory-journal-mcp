@@ -6,10 +6,15 @@ import { globalSubscriptionManager } from '../../server/subscription-manager.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { z } from 'zod'
 
-export async function execAction(scriptPath: string, options: Record<string, unknown>, command: Command): Promise<void> {
+export const execSchema = z.object({
+    config: z.string().optional()
+}).loose()
+
+export async function execAction(scriptPath: string, options: z.infer<typeof execSchema>, command: Command): Promise<void> {
     let resolver: ConfigResolver
-    const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
     const configErrors: string[] = []
 
     try {

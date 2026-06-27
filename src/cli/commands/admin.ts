@@ -2,9 +2,33 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { runAutoPrune } from '../../server/auto-prune.js'
 import type { Command } from 'commander'
+import { z } from 'zod'
 
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
+
+export const backupSchema = z.object({
+    dest: z.string().optional(),
+    json: z.boolean().optional()
+}).loose()
+
+export const restoreSchema = z.object({
+    json: z.boolean().optional()
+}).loose()
+
+export const vacuumSchema = z.object({
+    json: z.boolean().optional()
+}).loose()
+
+export const pruneSchema = z.object({
+    archiveOlderThanDays: z.coerce.number().optional(),
+    pruneOlderThanDays: z.coerce.number().optional(),
+    hardDeleteOlderThanDays: z.coerce.number().optional(),
+    importanceThreshold: z.coerce.number().optional(),
+    dryRun: z.boolean().optional(),
+    excludeTags: z.string().optional(),
+    json: z.boolean().optional()
+}).loose()
 
 async function getDb(options: Record<string, unknown>, command: Command): Promise<IDatabaseAdapter> {
     let resolver: ConfigResolver
@@ -32,12 +56,12 @@ async function getDb(options: Record<string, unknown>, command: Command): Promis
     return db
 }
 
-export async function backupAction(options: Record<string, unknown>, command: Command): Promise<void> {
+export async function backupAction(options: z.infer<typeof backupSchema>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
-    const dest = options['dest'] as string | undefined
+    const dest = options.dest
     try {
         const result = await db.exportToFile(dest)
-        if (options['json'] === true) {
+        if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
         } else {
             process.stdout.write(`Backup successful: ${result.path} (${result.sizeBytes} bytes)\n`)
@@ -50,11 +74,11 @@ export async function backupAction(options: Record<string, unknown>, command: Co
     }
 }
 
-export async function restoreAction(file: string, options: Record<string, unknown>, command: Command): Promise<void> {
+export async function restoreAction(file: string, options: z.infer<typeof restoreSchema>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
     try {
         const result = await db.restoreFromFile(file)
-        if (options['json'] === true) {
+        if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
         } else {
             process.stdout.write(`Restore successful from ${result.restoredFrom}. Previous entries: ${result.previousEntryCount}, New entries: ${result.newEntryCount}\n`)
@@ -67,12 +91,12 @@ export async function restoreAction(file: string, options: Record<string, unknow
     }
 }
 
-export async function vacuumAction(options: Record<string, unknown>, command: Command): Promise<void> {
+export async function vacuumAction(options: z.infer<typeof vacuumSchema>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
     try {
         db.pragma('optimize')
         db.flushSave()
-        if (options['json'] === true) {
+        if (options.json === true) {
             process.stdout.write(JSON.stringify({ status: 'success', action: 'vacuum' }) + '\n')
         } else {
             process.stdout.write("Vacuum and optimize successful.\n")
@@ -85,26 +109,19 @@ export async function vacuumAction(options: Record<string, unknown>, command: Co
     }
 }
 
-export async function pruneAction(options: Record<string, unknown>, command: Command): Promise<void> {
+export async function pruneAction(options: z.infer<typeof pruneSchema>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
     
-    // Parse numeric options properly since commander might pass them as strings if not strongly typed
-    const parseNumber = (val: unknown): number | undefined => {
-        if (typeof val === 'number') return val
-        if (typeof val === 'string') return parseFloat(val)
-        return undefined
-    }
-
     try {
         const result = await runAutoPrune(db, {
-            archiveOlderThanDays: parseNumber(options['archiveOlderThanDays']) ?? 0,
-            pruneOlderThanDays: parseNumber(options['pruneOlderThanDays']) ?? 0,
-            hardDeleteOlderThanDays: parseNumber(options['hardDeleteOlderThanDays']) ?? 0,
-            importanceThreshold: parseNumber(options['importanceThreshold']) ?? 0.15,
-            dryRun: options['dryRun'] === true,
-            excludeTags: typeof options['excludeTags'] === 'string' ? options['excludeTags'].split(',') : []
+            archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
+            pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
+            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
+            importanceThreshold: options.importanceThreshold ?? 0.15,
+            dryRun: options.dryRun === true,
+            excludeTags: options.excludeTags ? options.excludeTags.split(',') : []
         })
-        if (options['json'] === true) {
+        if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
         } else {
             process.stdout.write(`Prune result:\n`)

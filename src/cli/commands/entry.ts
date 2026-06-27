@@ -6,6 +6,33 @@ import type { EntryType, RelationshipType } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import type { CreateEntryInput } from '../../database/core/schema.js'
+import { z } from 'zod'
+
+export const createEntrySchema = z.object({
+    file: z.string().optional(),
+    content: z.string().optional(),
+    title: z.string().optional(),
+    type: z.string().optional(),
+    tags: z.string().optional(),
+    project: z.coerce.number().optional(),
+    trustScore: z.coerce.number().optional(),
+    impactScore: z.coerce.number().optional(),
+    validationStatus: z.enum(['passed', 'failed', 'none']).optional(),
+    sessionId: z.string().optional(),
+    relatedTo: z.string().optional(),
+    relationships: z.string().optional(),
+    relFile: z.string().optional(),
+    autoContext: z.string().optional(),
+    autoContextFile: z.string().optional(),
+    metadata: z.string().optional(),
+    team: z.boolean().optional(),
+    json: z.boolean().optional()
+}).loose()
+
+export const updateEntrySchema = createEntrySchema.extend({
+    id: z.coerce.number(),
+    expectedVersion: z.coerce.number()
+})
 
 async function getDb(options: Record<string, unknown>, command: Command): Promise<IDatabaseAdapter> {
     let resolver: ConfigResolver
@@ -40,9 +67,9 @@ async function getDb(options: Record<string, unknown>, command: Command): Promis
     return db
 }
 
-async function parseContent(options: Record<string, unknown>): Promise<string> {
-    const file = options['file'] as string | undefined
-    const contentStr = options['content'] as string | undefined
+async function parseContent(options: z.infer<typeof createEntrySchema>): Promise<string> {
+    const file = options.file
+    const contentStr = options.content
 
     if (file) {
         return readFileSync(file, 'utf-8')
@@ -137,11 +164,11 @@ interface EntryPayload {
     relatedIds: number[];
 }
 
-function buildEntryPayload(options: Record<string, unknown>, metadata: Record<string, unknown>): EntryPayload {
-    const entryTypeStr = options['type'] ?? metadata['type'] ?? metadata['entry_type'] ?? metadata['entryType']
+function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata: Record<string, unknown>): EntryPayload {
+    const entryTypeStr = options.type ?? metadata['type'] ?? metadata['entry_type'] ?? metadata['entryType']
     const entryType = entryTypeStr as EntryType | undefined
 
-    const tagsStr = options['tags'] as string | undefined
+    const tagsStr = options.tags
     let tags: string[] | undefined
     if (tagsStr !== undefined) {
         tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean)
@@ -149,23 +176,23 @@ function buildEntryPayload(options: Record<string, unknown>, metadata: Record<st
         tags = Array.isArray(metadata['tags']) ? metadata['tags'].map(String) : undefined
     }
 
-    const projectRaw = options['project'] ?? metadata['project'] ?? metadata['projectNumber'] ?? metadata['project_number']
+    const projectRaw = options.project ?? metadata['project'] ?? metadata['projectNumber'] ?? metadata['project_number']
     const projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
 
-    const trustRaw = options['trustScore'] ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
+    const trustRaw = options.trustScore ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
     const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
 
-    const impactRaw = options['impactScore'] ?? metadata['impact'] ?? metadata['impactScore'] ?? metadata['impact_score']
+    const impactRaw = options.impactScore ?? metadata['impact'] ?? metadata['impactScore'] ?? metadata['impact_score']
     const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
 
-    const valStatusRaw = options['validationStatus'] ?? metadata['validation_status'] ?? metadata['validationStatus']
+    const valStatusRaw = options.validationStatus ?? metadata['validation_status'] ?? metadata['validationStatus']
     const validationStatus = valStatusRaw as 'passed' | 'failed' | 'none' | undefined
 
-    const sessionIdRaw = options['sessionId'] ?? metadata['session_id'] ?? metadata['sessionId']
+    const sessionIdRaw = options.sessionId ?? metadata['session_id'] ?? metadata['sessionId']
     const sessionId = sessionIdRaw as string | undefined
 
-    let autoContextStr = options['autoContext'] as string | undefined
-    const autoContextFile = options['autoContextFile'] as string | undefined
+    let autoContextStr = options.autoContext
+    const autoContextFile = options.autoContextFile
     if (autoContextFile) {
         try {
             autoContextStr = readFileSync(autoContextFile, 'utf-8')
@@ -188,10 +215,10 @@ function buildEntryPayload(options: Record<string, unknown>, metadata: Record<st
             }
         }).filter(r => !isNaN(r.target_id) && Boolean(r.relation_type) && r.relation_type !== 'undefined')
     } else {
-        relationships = parseRelationships(options['relationships'], options['relFile'])
+        relationships = parseRelationships(options.relationships, options.relFile)
     }
 
-    let relatedIds = parseRelatedTo(options['relatedTo'])
+    let relatedIds = parseRelatedTo(options.relatedTo)
     if (relatedIds.length === 0 && Array.isArray(metadata['related_to'])) {
         relatedIds = metadata['related_to'].map(Number).filter(n => !isNaN(n))
     }
@@ -201,18 +228,18 @@ function buildEntryPayload(options: Record<string, unknown>, metadata: Record<st
     }
 }
 
-export async function createEntryAction(options: Record<string, unknown>, command: Command): Promise<void> {
+export async function createEntryAction(options: z.infer<typeof createEntrySchema>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
 
     try {
         let content = await parseContent(options)
         
-        const title = options['title'] as string | undefined
+        const title = options.title
         if (title && !content.startsWith('# ')) {
             content = `# ${title}\n\n${content}`
         }
 
-        const metadata = parseMetadata(options['metadata'])
+        const metadata = parseMetadata(options.metadata)
         const payload = buildEntryPayload(options, metadata)
 
         const entryInput: CreateEntryInput = {
@@ -239,7 +266,7 @@ export async function createEntryAction(options: Record<string, unknown>, comman
 
         db.flushSave()
         
-        if (options['json'] === true) {
+        if (options.json === true) {
             process.stdout.write(JSON.stringify({ status: 'success', id: newEntry.id, version: newEntry.version }) + '\n')
         } else {
             process.stdout.write(`Successfully created entry #${newEntry.id}\n`)
@@ -252,17 +279,17 @@ export async function createEntryAction(options: Record<string, unknown>, comman
     }
 }
 
-export async function updateEntryAction(options: Record<string, unknown>, command: Command): Promise<void> {
+export async function updateEntryAction(options: z.infer<typeof updateEntrySchema>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
 
     try {
-        const entryId = options['id'] !== undefined ? Number(options['id']) : undefined
+        const entryId = options.id
         if (entryId === undefined || isNaN(entryId)) {
             process.stderr.write('Error: Must provide a valid --id\n')
             process.exit(1)
         }
 
-        const version = options['expectedVersion'] !== undefined ? Number(options['expectedVersion']) : undefined
+        const version = options.expectedVersion
         if (version === undefined || isNaN(version)) {
             process.stderr.write('Error: Must provide a valid --expected-version (expected version) to prevent concurrent overwrites\n')
             process.exit(1)
@@ -270,12 +297,12 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
 
         let content = await parseContent(options)
         
-        const title = options['title'] as string | undefined
+        const title = options.title
         if (title && !content.startsWith('# ')) {
             content = `# ${title}\n\n${content}`
         }
         
-        const metadata = parseMetadata(options['metadata'])
+        const metadata = parseMetadata(options.metadata)
         const payload = buildEntryPayload(options, metadata)
         
         const updates: Partial<CreateEntryInput> & { expectedVersion: number } = { content, expectedVersion: version }
@@ -305,7 +332,7 @@ export async function updateEntryAction(options: Record<string, unknown>, comman
 
         db.flushSave()
         
-        if (options['json'] === true) {
+        if (options.json === true) {
             process.stdout.write(JSON.stringify({ status: 'success', id: result.id, version: result.version }) + '\n')
         } else {
             process.stdout.write(`Successfully updated entry #${result.id} to version ${result.version}\n`)
