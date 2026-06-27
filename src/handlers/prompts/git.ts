@@ -35,6 +35,9 @@ If any gate fails, you must attempt to auto-fix the issue or request human-in-th
 ## 2. Commit Invocation
 Once validation passes, stage your changes and commit using standard native Git tooling.
 
+> [!WARNING]
+> **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
+
 > **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them and pass the semantic flags appropriately instead of raw \`git commit\`. Note that \`commit.ts\` does not support the \`-F\` flag for the full message.
 > **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
 > - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
@@ -46,7 +49,7 @@ Once validation passes, stage your changes and commit using standard native Git 
 > 
 > **Example \`commit.ts\` usage (Single Command):**
 > \`\`\`bash
-> git add . ; bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation passed
+> git add <specific-files-you-modified> ; bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation passed
 > \`\`\`
 > *(Note: Use \`--history-file scratch/narrative.txt\` instead of \`--history\` ONLY if your narrative is extremely long or contains complex quotes that risk shell-escaping issues)*
 
@@ -65,7 +68,7 @@ History-Validation: passed
 
 Then execute:
 \`\`\`bash
-git add .
+git add <specific-files-you-modified>
 git commit -F scratch/commit-msg.txt
 \`\`\`
 
@@ -98,6 +101,9 @@ You are initiating a fast procedure for committing code changes.
 ## 1. Commit Invocation
 Stage your changes and commit using standard native Git tooling.
 
+> [!WARNING]
+> **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
+
 > **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them instead of raw \`git commit\`.
 > **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
 > - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
@@ -109,7 +115,7 @@ Stage your changes and commit using standard native Git tooling.
 > 
 > **Example \`commit.ts\` usage for a quick commit (Single Command):**
 > \`\`\`bash
-> git add . ; bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none
+> git add <specific-files-you-modified> ; bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none
 > \`\`\`
 
 If using raw \`git\`, write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits:
@@ -126,7 +132,7 @@ History-Validation: none
 
 Then execute:
 \`\`\`bash
-git add .
+git add <specific-files-you-modified>
 git commit -F scratch/commit-msg.txt
 \`\`\`
 
