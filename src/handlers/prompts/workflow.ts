@@ -499,14 +499,14 @@ Determine which of the 4 layers needs modification:
 The most robust way to prevent a hallucination is to explicitly instruct the agent via the tools list or initialization payload.
 
 * **Schema \`.describe()\` Tags:** When an agent hallucinates a property, update the Zod schema. Add an explicit "Anti-Hallucination Hint" in the \`.describe()\` string. These surface directly in the JSON Schema that agents see on \`tools/list\`.
-* **Server Instructions:** If a structural hallucination persists, update \`src/constants/server-instructions.ts\` (or equivalent). This is the single source of truth for all instruction content.
+* **Server Instructions:** If a structural hallucination persists, update the markdown fragments in \`src/constants/server-instructions/\` and run the generator script (\`pnpm run generate:instructions\`). **DO NOT** edit \`src/constants/server-instructions.ts\` directly, as it is auto-generated and your changes will be overwritten!
 
 ### Layer 2: Dispatcher Healing (Frictionless Recovery)
 If agents consistently hallucinate inputs that can be logically inferred or normalized, heal them silently in the dispatcher (\`src/codemode/api/group-factory.ts\` or \`param-normalizer.ts\`) before they reach Zod validation.
 
 * **Type Coercion:** If agents pass strings instead of numbers, auto-resolve them.
 * **Case Normalization:** Catch and heal \`camelCase\` variations automatically.
-* **Explicit Interception:** If a string cannot be coerced, intercept it before validation and throw a highly actionable custom error.
+* **Explicit Interception:** If a string cannot be coerced, intercept it before validation and throw a highly actionable custom error prefixed with \`🛠️ AUTONOMOUS HEALING: \` to trigger an immediate agent hard-stop.
 
 ### Layer 3: Sandbox Proxy Interceptors (Actionable Errors)
 When agents execute code in Code Mode, they often make standard Javascript mistakes. Instead of cryptic V8 runtime failures, add Proxy interceptors (e.g., \`worker-api-proxy.ts\`, \`worker-result-proxy.ts\`) to throw explicit guidance.
@@ -524,12 +524,14 @@ Agents commonly extrapolate method names based on patterns (e.g., trying to call
 When an agent hallucinates CLI flags or usage patterns for standalone scripts or the commander CLI:
 * **Option Aliasing:** Add hardcoded aliases for commonly truncated flags in commander (e.g., \`.option('--impact, --impact-score')\`) so execution naturally succeeds.
 * **Help Meta-Prompting:** Use Commander's \`addHelpText('after', ...)\` or append to manual help scripts to inject explicit \`🤖 AI AGENT INSTRUCTIONS\` directly into the \`--help\` output, forcing subsequent agents to read explicit guardrails before execution.
+* **Actionable Errors:** Ensure that all CLI validation failures and process exits are prefixed with \`🛠️ AUTONOMOUS HEALING: \` to prevent agent loop retries.
 
 ## 3. Phase 2: Implementation
 
 1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
-2. Run automated tests to verify the changes don't break existing functionality (e.g., \`pnpm run check\`, \`pnpm run test\`, \`pnpm run test:e2e\`).
-3. Commit the changes locally.`
+2. Validate the integrity of your code changes by running \`pnpm run check\` (linting, typechecking, E2E tests).
+3. **Agent-First Validation (CRITICAL):** Programmatic tests cannot verify if an AI agent is actually healed. You MUST verify the fix against an actual agent by running the usability coordinator workflows (e.g., \`test-server/codemode/coordinator-workflow.md\` or \`test-server/standard/coordinator-workflow.md\`).
+4. Commit the changes locally.`
                             },
                         },
                     ],
