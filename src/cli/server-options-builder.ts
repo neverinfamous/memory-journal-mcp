@@ -56,13 +56,13 @@ export function buildServerOptions(
               logPath: auditLogPath,
               redact: catchConfig(() => resolver.resolveBool('auditRedact', 'AUDIT_REDACT') ?? true, true),
               auditReads: catchConfig(() => resolver.resolveBool('auditReads', 'AUDIT_READS') ?? false, false),
-              maxSizeBytes: catchConfig(() => resolver.resolveIntRequired('auditLogMaxSize', 'AUDIT_LOG_MAX_SIZE', 1024), 10485760),
+              maxSizeBytes: catchConfig(() => resolver.resolveInt('auditLogMaxSize', 'AUDIT_LOG_MAX_SIZE', 1024) ?? 10485760, 10485760),
           }
         : undefined;
 
     const serverOptions = {
         transport: transport as 'stdio' | 'http',
-        port: catchConfig(() => resolver.resolveIntRequired('port', 'PORT', 1, 65535), 3000),
+        port: catchConfig(() => resolver.resolveInt('port', 'PORT', 1, 65535) ?? 3000, 3000),
         host,
         statelessHttp: stateless,
         dbPath: db ?? defaultDbPath,
@@ -83,13 +83,13 @@ export function buildServerOptions(
         enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),
         authToken: catchConfig(() => resolver.resolve<string>('authToken', 'MCP_AUTH_TOKEN'), undefined),
         scheduler: {
-            backupIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('backupInterval', 'BACKUP_INTERVAL', 0), 0),
-            keepBackups: catchConfig(() => resolver.resolveIntRequired('keepBackups', 'KEEP_BACKUPS', 1, 100), 5),
-            vacuumIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('vacuumInterval', 'VACUUM_INTERVAL', 0), 0),
-            rebuildIndexIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0), 0),
-            digestIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('digestInterval', 'DIGEST_INTERVAL', 0), 0),
-            pruneIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0), 0),
-            reportIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('reportInterval', 'REPORT_INTERVAL', 0), 0),
+            backupIntervalMinutes: catchConfig(() => resolver.resolveInt('backupInterval', 'BACKUP_INTERVAL', 0) ?? 0, 0),
+            keepBackups: catchConfig(() => resolver.resolveInt('keepBackups', 'KEEP_BACKUPS', 1, 100) ?? 5, 5),
+            vacuumIntervalMinutes: catchConfig(() => resolver.resolveInt('vacuumInterval', 'VACUUM_INTERVAL', 0) ?? 0, 0),
+            rebuildIndexIntervalMinutes: catchConfig(() => resolver.resolveInt('rebuildIndexInterval', 'REBUILD_INDEX_INTERVAL', 0) ?? 0, 0),
+            digestIntervalMinutes: catchConfig(() => resolver.resolveInt('digestInterval', 'DIGEST_INTERVAL', 0) ?? 0, 0),
+            pruneIntervalMinutes: catchConfig(() => resolver.resolveInt('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0) ?? 0, 0),
+            reportIntervalMinutes: catchConfig(() => resolver.resolveInt('reportInterval', 'REPORT_INTERVAL', 0) ?? 0, 0),
             reportDeliveryOptions: {
                 webhookUrl: catchConfig(() => resolver.resolve<string>('reportWebhookUrl', 'REPORT_WEBHOOK_URL') ?? '', ''),
                 webhookAuth: catchConfig(() => resolver.resolve<string>('reportWebhookAuth', 'REPORT_WEBHOOK_AUTH'), undefined),
@@ -100,7 +100,7 @@ export function buildServerOptions(
         oauthIssuer: catchConfig(() => resolver.resolve<string>('oauthIssuer', 'OAUTH_ISSUER'), undefined),
         oauthAudience: catchConfig(() => resolver.resolve<string>('oauthAudience', 'OAUTH_AUDIENCE'), undefined),
         oauthJwksUri: catchConfig(() => resolver.resolve<string>('oauthJwksUri', 'OAUTH_JWKS_URI'), undefined),
-        oauthClockTolerance: catchConfig(() => resolver.resolveIntRequired('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0, 3600), 60),
+        oauthClockTolerance: catchConfig(() => resolver.resolveInt('oauthClockTolerance', 'OAUTH_CLOCK_TOLERANCE', 0) ?? 60, 60),
         allowPlaintextLoopbackOAuth: catchConfig(() => resolver.resolveBool('oauthAllowPlaintextLoopback', 'OAUTH_ALLOW_PLAINTEXT_LOOPBACK') ?? false, false),
         trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
         publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
@@ -189,14 +189,14 @@ export function buildServerOptions(
         }, undefined),
 
         briefingConfig: {
-            commitCount: catchConfig(() => resolver.resolveIntRequired('briefingCommits', 'BRIEFING_COMMIT_COUNT'), 3),
-            entryCount: catchConfig(() => resolver.resolveIntRequired('briefingEntries', 'BRIEFING_ENTRY_COUNT'), 3),
-            summaryCount: catchConfig(() => resolver.resolveIntRequired('briefingSummaries', 'BRIEFING_SUMMARY_COUNT'), 1),
+            commitCount: catchConfig(() => resolver.resolveInt('briefingCommits', 'BRIEFING_COMMIT_COUNT') ?? 3, 3),
+            entryCount: catchConfig(() => resolver.resolveInt('briefingEntries', 'BRIEFING_ENTRY_COUNT') ?? 3, 3),
+            summaryCount: catchConfig(() => resolver.resolveInt('briefingSummaries', 'BRIEFING_SUMMARY_COUNT') ?? 1, 1),
             includeTeam: catchConfig(() => resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false, false),
-            issueCount: catchConfig(() => resolver.resolveIntRequired('briefingIssues', 'BRIEFING_ISSUE_COUNT'), 0),
-            prCount: catchConfig(() => resolver.resolveIntRequired('briefingPrs', 'BRIEFING_PR_COUNT'), 0),
+            issueCount: catchConfig(() => resolver.resolveInt('briefingIssues', 'BRIEFING_ISSUE_COUNT') ?? 0, 0),
+            prCount: catchConfig(() => resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT') ?? 0, 0),
             prStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false, false),
-            milestoneCount: catchConfig(() => resolver.resolveIntRequired('briefingMilestones', 'BRIEFING_MILESTONE_COUNT'), 3),
+            milestoneCount: catchConfig(() => resolver.resolveInt('briefingMilestones', 'BRIEFING_MILESTONE_COUNT') ?? 3, 3),
             rulesFilePath: catchConfig(() => {
                 const val = resolver.resolve<string>('rulesFile', 'RULES_FILE_PATH');
                 return val ? path.resolve(process.cwd(), val) : undefined;
@@ -205,7 +205,7 @@ export function buildServerOptions(
                 const val = resolver.resolve<string>('skillsDir', 'SKILLS_DIR_PATH');
                 return val ? path.resolve(process.cwd(), val) : undefined;
             }, undefined),
-            workflowCount: catchConfig(() => resolver.resolveIntRequired('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT'), 0),
+            workflowCount: catchConfig(() => resolver.resolveInt('briefingWorkflows', 'BRIEFING_WORKFLOW_COUNT') ?? 0, 0),
             workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
             copilotReviews: catchConfig(() => resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false, false),
             workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
@@ -222,10 +222,10 @@ export function buildServerOptions(
         },
         auditConfig,
 
-        autoPruneIntervalMinutes: catchConfig(() => resolver.resolveIntRequired('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0), 0),
-        archiveOlderThanDays: catchConfig(() => resolver.resolveIntRequired('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0), 0),
-        pruneOlderThanDays: catchConfig(() => resolver.resolveIntRequired('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0), 0),
-        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveIntRequired('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0), 0),
+        autoPruneIntervalMinutes: catchConfig(() => resolver.resolveInt('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0) ?? 0, 0),
+        archiveOlderThanDays: catchConfig(() => resolver.resolveInt('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        pruneOlderThanDays: catchConfig(() => resolver.resolveInt('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveInt('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),
         pruneImportanceThreshold: catchConfig(() => {
             const val = resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD');
             if (typeof val === 'number') return val;
