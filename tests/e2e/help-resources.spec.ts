@@ -109,15 +109,9 @@ test.describe('Help Resources', () => {
     test('memory://help/{invalid} returns error response', async () => {
         const client = await createClient()
         try {
-            const response = await client.readResource({
+            await expect(client.readResource({
                 uri: 'memory://help/nonexistentgroup',
-            })
-
-            expect(response.contents).toBeDefined()
-            const text = (response.contents[0] as { text: string }).text
-            const parsed = JSON.parse(text)
-            expect(parsed.error).toBeDefined()
-            expect(typeof parsed.error).toBe('string')
+            })).rejects.toThrow('not found')
         } finally {
             await client.close()
         }

@@ -107,11 +107,10 @@ describe('Template resources — branch coverage', () => {
     describe('prs/{pr_number}/timeline', () => {
         it('should return error for invalid PR number', async () => {
             const resource = resources.find((r) => r.uri === 'memory://prs/{pr_number}/timeline')!
-            const result = (await resource.handler(
+            await expect(resource.handler(
                 'memory://prs/x/timeline',
                 createMockContext() as never
-            )) as Record<string, unknown>
-            expect(result.error).toContain('Invalid PR number')
+            )).rejects.toThrow('Invalid PR number')
         })
 
         it('should include unavailable note when no github', async () => {
@@ -231,11 +230,10 @@ describe('Template resources — branch coverage', () => {
     describe('kanban/{project_number}', () => {
         it('should return error for invalid project number', async () => {
             const resource = resources.find((r) => r.uri === 'memory://kanban/{project_number}')!
-            const result = (await resource.handler(
+            await expect(resource.handler(
                 'memory://kanban/abc',
                 createMockContext() as never
-            )) as Record<string, unknown>
-            expect(result.error).toContain('Invalid project number')
+            )).rejects.toThrow('Invalid project number')
         })
 
         it('should return error when no github', async () => {
@@ -265,11 +263,10 @@ describe('Template resources — branch coverage', () => {
                 getProjectKanban: vi.fn().mockResolvedValue(null),
             }
             const resource = resources.find((r) => r.uri === 'memory://kanban/{project_number}')!
-            const result = (await resource.handler(
+            await expect(resource.handler(
                 'memory://kanban/1',
                 createMockContext({ github }) as never
-            )) as Record<string, unknown>
-            expect(result.error).toContain('not found')
+            )).rejects.toThrow('not found')
         })
     })
 

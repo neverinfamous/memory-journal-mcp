@@ -132,7 +132,7 @@ test.describe('E2E Resource Reads: Template Resources', () => {
             const result = await readTemplateResource('memory://kanban/1/diagram')
             expect(result).toMatch(/(error|Project #1 not found)/)
         } catch (error: any) {
-            expect(error.message).toMatch(/(GitHub API not available|Bad credentials|Not Found)/)
+            expect(error.message).toMatch(/(Invalid project number|GitHub API not available|Bad credentials|Not Found)/)
         }
     })
 

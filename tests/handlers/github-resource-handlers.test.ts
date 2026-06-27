@@ -329,16 +329,13 @@ describe('GitHub Resource Handlers', () => {
 
         it('should return error when project not found', async () => {
             const github = createMockGitHub()
-            const result = await readResource(
+            await expect(readResource(
                 'memory://kanban/999',
                 db,
                 undefined,
                 undefined,
                 github
-            )
-
-            const data = result.data as { error: string }
-            expect(data.error).toContain('not found')
+            )).rejects.toThrow('not found')
         })
 
         it('should return error when no github', async () => {
@@ -511,16 +508,13 @@ describe('GitHub Resource Handlers', () => {
         })
 
         it('should return error for invalid PR number', async () => {
-            const result = await readResource(
+            await expect(readResource(
                 'memory://prs/abc/timeline',
                 db,
                 undefined,
                 undefined,
                 null
-            )
-
-            const data = result.data as { error: string }
-            expect(data.error).toContain('Invalid PR number')
+            )).rejects.toThrow('Invalid PR number')
         })
     })
 

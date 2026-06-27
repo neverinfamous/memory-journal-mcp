@@ -68,20 +68,17 @@ describe('Help Resource Handlers', () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
-        const result = (await groupHelp!.handler(
+        await expect(groupHelp!.handler(
             'memory://help/invalid_group_name',
             getContext()
-        )) as any
-        expect(result.data.error).toContain('not found')
-        expect(result.data.availableGroups).toBeDefined()
+        )).rejects.toThrow('not found')
     })
 
     it('should return error for malformed URI in memory://help/{group}', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
-        const result = (await groupHelp!.handler('memory://help/', getContext())) as any
-        expect(result.data.error).toContain('Invalid group')
+        await expect(groupHelp!.handler('memory://help/', getContext())).rejects.toThrow('Invalid group')
     })
 
     it('should handle all tool groups including codemode and team', async () => {

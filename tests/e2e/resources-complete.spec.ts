@@ -65,37 +65,15 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
 
     // --- Configuration-dependent resources (unconfigured in test env) ---
     test('should read memory://rules (unconfigured)', async () => {
-        const response = await client.readResource({ uri: 'memory://rules' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        expect(parsed).toHaveProperty('configured', false)
+        await expect(client.readResource({ uri: 'memory://rules' })).rejects.toThrow('RULES_FILE_PATH')
     })
 
     test('should read memory://workflows (unconfigured)', async () => {
-        const response = await client.readResource({ uri: 'memory://workflows' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        expect(parsed).toHaveProperty('configured', false)
+        await expect(client.readResource({ uri: 'memory://workflows' })).rejects.toThrow('MEMORY_JOURNAL_WORKFLOW_SUMMARY')
     })
 
     test('should read memory://skills (unconfigured)', async () => {
-        const response = await client.readResource({ uri: 'memory://skills' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        // Without SKILLS_DIR_PATH, should return { configured: false } or empty skills
-        expect(typeof parsed).toBe('object')
+        await expect(client.readResource({ uri: 'memory://skills' })).rejects.toThrow('SKILLS_DIR_PATH')
     })
 
     // --- GitHub resources (no token in test env) ---

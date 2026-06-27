@@ -86,8 +86,7 @@ describe('Resource Handler Coverage', () => {
 
     describe('template resources — invalid params', () => {
         it('should return error for invalid project timeline number', async () => {
-            const result = await readResource('memory://projects/abc/timeline', db)
-            expect(result.data).toHaveProperty('error')
+            await expect(readResource('memory://projects/abc/timeline', db)).rejects.toThrow()
         })
 
         it('should return entries for valid project timeline', async () => {
@@ -98,8 +97,7 @@ describe('Resource Handler Coverage', () => {
         })
 
         it('should return error for invalid issue entries number', async () => {
-            const result = await readResource('memory://issues/abc/entries', db)
-            expect(result.data).toHaveProperty('error')
+            await expect(readResource('memory://issues/abc/entries', db)).rejects.toThrow()
         })
 
         it('should return entries for valid issue entries', async () => {
@@ -109,8 +107,7 @@ describe('Resource Handler Coverage', () => {
         })
 
         it('should return error for invalid PR entries number', async () => {
-            const result = await readResource('memory://prs/abc/entries', db)
-            expect(result.data).toHaveProperty('error')
+            await expect(readResource('memory://prs/abc/entries', db)).rejects.toThrow()
         })
 
         it('should return entries for valid PR entries', async () => {
@@ -120,8 +117,7 @@ describe('Resource Handler Coverage', () => {
         })
 
         it('should return error for invalid PR timeline number', async () => {
-            const result = await readResource('memory://prs/abc/timeline', db)
-            expect(result.data).toHaveProperty('error')
+            await expect(readResource('memory://prs/abc/timeline', db)).rejects.toThrow()
         })
 
         it('should return timeline without GitHub for valid PR', async () => {
@@ -137,8 +133,7 @@ describe('Resource Handler Coverage', () => {
         })
 
         it('should return error for invalid kanban project number', async () => {
-            const result = await readResource('memory://kanban/abc', db)
-            expect(result.data).toHaveProperty('error')
+            await expect(readResource('memory://kanban/abc', db)).rejects.toThrow()
         })
 
         it('should return error for kanban without github', async () => {
@@ -196,10 +191,7 @@ describe('Resource Handler Coverage', () => {
             const originalEnv = process.env['RULES_FILE_PATH']
             delete process.env['RULES_FILE_PATH']
 
-            const result = await readResource('memory://rules', db)
-            const data = result.data as { configured: boolean; message: string }
-            expect(data.configured).toBe(false)
-            expect(data.message).toContain('RULES_FILE_PATH')
+            await expect(readResource('memory://rules', db)).rejects.toThrow('RULES_FILE_PATH')
 
             // Restore
             if (originalEnv !== undefined) process.env['RULES_FILE_PATH'] = originalEnv
@@ -212,10 +204,7 @@ describe('Resource Handler Coverage', () => {
                 'nonexistent/path/RULES.md'
             )
 
-            const result = await readResource('memory://rules', db)
-            const data = result.data as { configured: boolean; error: string }
-            expect(data.configured).toBe(true)
-            expect(data.error).toBeDefined()
+            await expect(readResource('memory://rules', db)).rejects.toThrow('Could not read rules file')
 
             delete process.env['RULES_FILE_PATH']
         })
@@ -226,10 +215,7 @@ describe('Resource Handler Coverage', () => {
             const originalEnv = process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
             delete process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
 
-            const result = await readResource('memory://workflows', db)
-            const data = result.data as { configured: boolean; message: string }
-            expect(data.configured).toBe(false)
-            expect(data.message).toContain('MEMORY_JOURNAL_WORKFLOW_SUMMARY')
+            await expect(readResource('memory://workflows', db)).rejects.toThrow('No workflow summary')
 
             if (originalEnv !== undefined)
                 process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] = originalEnv
@@ -252,15 +238,12 @@ describe('Resource Handler Coverage', () => {
             const originalEnv = process.env['SKILLS_DIR_PATH']
             delete process.env['SKILLS_DIR_PATH']
 
-            const result = await readResource('memory://skills', db)
-            const data = result.data as {
-                configured: boolean
-                skills: { name: string; source: string }[]
-                count: number
+            try {
+                await readResource('memory://skills', db)
+                throw new Error('Did not throw')
+            } catch (e: any) {
+                expect(e.message).toContain('No skills')
             }
-            // No shipped skills exist natively anymore
-            expect(data.configured).toBe(false)
-            expect(data.skills).toBeUndefined()
 
             // Restore
             if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv
@@ -273,13 +256,7 @@ describe('Resource Handler Coverage', () => {
                 'nonexistent/skills/dir'
             )
 
-            const result = await readResource('memory://skills', db)
-            const data = result.data as {
-                configured: boolean
-                error?: string
-            }
-            expect(data.configured).toBe(true)
-            expect(data.error).toBeDefined()
+            await expect(readResource('memory://skills', db)).rejects.toThrow('does not exist')
 
             delete process.env['SKILLS_DIR_PATH']
         })
