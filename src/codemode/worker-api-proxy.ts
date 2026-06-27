@@ -23,6 +23,10 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         if (obj['sort'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['sort']; delete obj['sort']; }
         if (obj['comment'] !== undefined && obj['resolution'] === undefined) { obj['resolution'] = obj['comment']; delete obj['comment']; }
         if (obj['version'] !== undefined && obj['expected_version'] === undefined) { obj['expected_version'] = obj['version']; delete obj['version']; }
+        if (obj['repo'] !== undefined && obj['repo_name'] === undefined) { obj['repo_name'] = obj['repo']; delete obj['repo']; }
+        if (obj['item_type'] !== undefined && obj['type'] === undefined) { obj['type'] = obj['item_type']; delete obj['item_type']; }
+        if (obj['category'] !== undefined && obj['type'] === undefined) { obj['type'] = obj['category']; delete obj['category']; }
+        if (obj['metadata'] !== undefined && obj['context'] === undefined) { obj['context'] = obj['metadata']; delete obj['metadata']; }
         if ((methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'update_entry' || methodName === 'updateEntry') && obj['content'] === undefined) {
             if (obj['text'] !== undefined) { obj['content'] = obj['text']; delete obj['text']; }
             else if (obj['message'] !== undefined) { obj['content'] = obj['message']; delete obj['message']; }

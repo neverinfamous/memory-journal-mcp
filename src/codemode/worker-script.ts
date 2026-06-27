@@ -141,6 +141,19 @@ async function executeCode(
                         return analyticsGroup['get_cross_project_insights'] ?? analyticsGroup['getCrossProjectInsights']
                     }
                 }
+                // Handle journal.search hallucination without breaking mj.search namespace
+                if (prop === 'search' && 'search' in target) {
+                    const searchGroup = target['search'] as Record<string, unknown>
+                    const searchFunc = searchGroup['search_entries'] ?? searchGroup['searchEntries']
+                    if (typeof searchFunc === 'function') {
+                        const callableSearch = function(this: unknown, ...args: unknown[]): unknown {
+                            return (searchFunc as (...args: unknown[]) => unknown).apply(this, args)
+                        }
+                        Object.assign(callableSearch, searchGroup)
+                        return callableSearch
+                    }
+                    return searchGroup
+                }
                 // Handle `memory.append(tags, content, metadata)` natural hallucination
                 if (prop === 'append' && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
@@ -234,6 +247,7 @@ async function executeCode(
             postgres: shimMj,
             mysql: shimMj,
             db: shimMj,
+            api: shimMj,
             memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
             sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
             create_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
