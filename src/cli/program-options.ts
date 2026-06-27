@@ -1,4 +1,6 @@
 import { Command, type Option } from 'commander'
+import { match, P } from 'ts-pattern'
+import { ZodError, type ZodType } from 'zod'
 import { VERSION } from '../version.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../audit/index.js'
 
@@ -22,6 +24,35 @@ export function addAgentInstructions(command: Command, text: string): void {
     commandAiInstructions.set(command, text);
 }
 
+export function withValidation<T, A extends unknown[]>(schema: ZodType<T>, action: (...args: A) => void | Promise<void>) {
+    return async (...args: A) => {
+        const command = args[args.length - 1] as Command;
+        // Commander's action handler args: (arg1, arg2, ..., options, command)
+        const rawOptions = args.length > 1 ? args[args.length - 2] : {};
+        try {
+            const validOptions = schema.parse(rawOptions);
+            const newArgs = [...args];
+            // Replace rawOptions with validOptions in the args array
+            if (newArgs.length > 1) {
+                newArgs[newArgs.length - 2] = validOptions;
+            }
+            await action(...(newArgs as unknown as A));
+        } catch (err: unknown) {
+            if (err instanceof ZodError) {
+                process.stderr.write(`\x1b[31mValidation Error:\x1b[0m\n`);
+                err.issues.forEach((e: { path: PropertyKey[]; message: string }) => {
+                    const path = e.path.length > 0 ? e.path.map(String).join('.') + ': ' : '';
+                    process.stderr.write(`  - ${path}${e.message}\n`);
+                });
+                process.stderr.write('\n');
+                command.help({ error: true });
+            } else {
+                throw err;
+            }
+        }
+    }
+}
+
 export function createProgram(): Command {
     const program = new Command()
 
@@ -29,9 +60,45 @@ export function createProgram(): Command {
         .name('memory-journal-mcp')
         .description('Project context management for AI-assisted development')
         .version(VERSION)
+        .configureOutput({
+            // Ensure error messages strictly go to stderr to maintain stdout discipline
+            writeErr: (str) => process.stderr.write(str),
+            outputError: (str, write) => write(`\x1b[31mError:\x1b[0m ${str}`)
+        })
 
     program.configureHelp({
         formatHelp: (cmd, helper) => {
+            // Check for JSON help mode
+            if (process.argv.includes('--json')) {
+                const envelope = {
+                    status: 'success',
+                    data: {
+                        name: cmd.name(),
+                        description: helper.commandDescription(cmd),
+                        usage: helper.commandUsage(cmd),
+                        commands: helper.visibleCommands(cmd).map(c => ({
+                            term: helper.subcommandTerm(c),
+                            description: helper.subcommandDescription(c)
+                        })),
+                        options: helper.visibleOptions(cmd).map(opt => ({
+                            term: helper.optionTerm(opt),
+                            description: helper.optionDescription(opt),
+                            group: match([optionGroups.get(opt), opt.name()])
+                                .with([P.string, P._], ([name]) => name)
+                                .with([P.nullish, P.union('help', 'version')], () => 'Standard Options')
+                                .otherwise(() => 'Command Options')
+                        })),
+                        arguments: helper.visibleArguments(cmd).map(arg => ({
+                            term: helper.argumentTerm(arg),
+                            description: helper.argumentDescription(arg)
+                        })),
+                        aiInstructions: commandAiInstructions.get(cmd) || null
+                    },
+                    timestamp: new Date().toISOString()
+                }
+                return JSON.stringify(envelope) + '\n';
+            }
+
             let output = '';
             
             output += `Usage: ${helper.commandUsage(cmd)}\n`;
@@ -53,14 +120,11 @@ export function createProgram(): Command {
             if (options.length > 0) {
                 const groups = new Map<string, typeof options>();
                 options.forEach(opt => {
-                    let groupName = optionGroups.get(opt);
-                    if (!groupName) {
-                        if (opt.name() === 'help' || opt.name() === 'version') {
-                            groupName = 'Standard Options';
-                        } else {
-                            groupName = 'Command Options';
-                        }
-                    }
+                    const groupName = match([optionGroups.get(opt), opt.name()])
+                        .with([P.string, P._], ([name]) => name)
+                        .with([P.nullish, P.union('help', 'version')], () => 'Standard Options')
+                        .otherwise(() => 'Command Options');
+
                     if (!groups.has(groupName)) groups.set(groupName, []);
                     const group = groups.get(groupName);
                     if (group) group.push(opt);
