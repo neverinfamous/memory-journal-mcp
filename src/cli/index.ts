@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 import type { Command } from 'commander'
+import { createProgram, addAgentInstructions, withGroup, withValidation } from './program.js'
 import { 
-    createProgram, addServerOptions, addCoreOptions, addDatabaseOptions, 
+    addServerOptions, addCoreOptions, addDatabaseOptions, 
     addCodeModeOptions, addAuditOptions, addPruningOptions,
-    addWorkspaceOptions, addVectorOptions, addAgentInstructions, withGroup,
-    addOutputOptions, withValidation
-} from './program-options.js'
+    addWorkspaceOptions, addVectorOptions,
+    addOutputOptions
+} from './option-groups.js'
 import { serveAction, serveSchema } from './commands/serve.js'
 import { execAction, execSchema } from './commands/exec.js'
 import { backupAction, restoreAction, vacuumAction, pruneAction, backupSchema, restoreSchema, vacuumSchema, pruneSchema } from './commands/admin.js'

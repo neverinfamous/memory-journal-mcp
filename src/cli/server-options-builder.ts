@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { ProjectRegistryEntry } from '../types/index.js'
 import type { AuditConfig } from '../audit/index.js'
 import type { ConfigResolver } from '../utils/config-resolver.js'
-import { defaultDbPath, defaultTeamDbPath } from './program-options.js'
+import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 import type { ServerOptionsSchema } from './schemas.js'
 
