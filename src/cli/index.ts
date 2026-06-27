@@ -2,7 +2,7 @@
 import { 
     createProgram, addServerOptions, addCoreOptions, addDatabaseOptions, 
     addCodeModeOptions, addAuditOptions, addPruningOptions,
-    addWorkspaceOptions, addVectorOptions
+    addWorkspaceOptions, addVectorOptions, addAgentInstructions
 } from './program-options.js'
 import { serveAction } from './commands/serve.js'
 import { execAction } from './commands/exec.js'
@@ -18,8 +18,7 @@ const serveCmd = program
 addServerOptions(serveCmd)
 serveCmd.action(serveAction)
 
-program.addHelpText(
-    'after',
+addAgentInstructions(program,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - This is an agent-native CLI. 
@@ -37,8 +36,7 @@ addWorkspaceOptions(execCmd)
 addVectorOptions(execCmd)
 addCodeModeOptions(execCmd)
 addAuditOptions(execCmd)
-execCmd.addHelpText(
-    'after',
+addAgentInstructions(execCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - ALWAYS provide the path to a valid script file. Scripts execute within the same execution environment as Code Mode tools.
@@ -50,8 +48,7 @@ execCmd.action(execAction)
 const adminCmd = program
     .command('admin')
     .description('Database administration utilities')
-adminCmd.addHelpText(
-    'after',
+addAgentInstructions(adminCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - These are dangerous administrative utilities. ALWAYS verify the target database before executing.`
@@ -63,8 +60,7 @@ const backupCmd = adminCmd
     .option('--dest <path>', 'Destination path or filename for the backup')
 addCoreOptions(backupCmd)
 addDatabaseOptions(backupCmd)
-backupCmd.addHelpText(
-    'after',
+addAgentInstructions(backupCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - If \`--dest\` is omitted, a timestamped backup will be created in the backups directory.`
@@ -76,8 +72,7 @@ const restoreCmd = adminCmd
     .description('Restore the database from a backup file')
 addCoreOptions(restoreCmd)
 addDatabaseOptions(restoreCmd)
-restoreCmd.addHelpText(
-    'after',
+addAgentInstructions(restoreCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - This will overwrite the CURRENT database. ALWAYS take a backup before running restore.`
@@ -99,8 +94,7 @@ const pruneCmd = adminCmd
 addCoreOptions(pruneCmd)
 addDatabaseOptions(pruneCmd)
 addPruningOptions(pruneCmd)
-pruneCmd.addHelpText(
-    'after',
+addAgentInstructions(pruneCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - ALWAYS run with \`--dry-run\` first to verify what will be pruned.`
@@ -134,8 +128,7 @@ const createEntryCmd = entryCmd
     .option('--team', 'Route to team database')
 addCoreOptions(createEntryCmd)
 addDatabaseOptions(createEntryCmd)
-createEntryCmd.addHelpText(
-    'after',
+addAgentInstructions(createEntryCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
@@ -167,8 +160,7 @@ const updateEntryCmd = entryCmd
     .option('--team', 'Route to team database')
 addCoreOptions(updateEntryCmd)
 addDatabaseOptions(updateEntryCmd)
-updateEntryCmd.addHelpText(
-    'after',
+addAgentInstructions(updateEntryCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
