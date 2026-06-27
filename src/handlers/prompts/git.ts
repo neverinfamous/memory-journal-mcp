@@ -53,25 +53,6 @@ Once validation passes, stage your changes and commit using standard native Git 
 > \`\`\`
 > *(Note: Use \`--history-file scratch/narrative.txt\` instead of \`--history\` ONLY if your narrative is extremely long or contains complex quotes that risk shell-escaping issues)*
 
-If using raw \`git\`, write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it includes the new semantic trailers:
-\`\`\`text
-feat(scope): conventional message here
-
-History-Category: Changed
-History-Entry: Narrative explaining the change.
-
-History-Impact: <IMPACT_SCORE>
-History-Confidence: <YOUR_SCORE_0.0_TO_1.0>
-History-Significance: milestone
-History-Validation: passed
-\`\`\`
-
-Then execute:
-\`\`\`bash
-git add <specific-files-you-modified>
-git commit -F scratch/commit-msg.txt
-\`\`\`
-
 ## 3. Journal Entry (Optional but recommended for impact > 0.5 or structural significance)
 Use the CLI (\`memory-journal-mcp entry create\`) to create a \`technical_note\` entry documenting the commit. Tag it with \`["commit-narrative"]\`. Include the commit SHA in the content (the system will auto-link it), the rationale, and any architectural shifts.`,
                             },
@@ -117,24 +98,6 @@ Stage your changes and commit using standard native Git tooling.
 > \`\`\`bash
 > git add <specific-files-you-modified> ; bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none
 > \`\`\`
-
-If using raw \`git\`, write your commit message to a temporary file (e.g., \`scratch/commit-msg.txt\`) and ensure it follows Conventional Commits:
-\`\`\`text
-docs(scope): conventional message here
-
-History-Category: Changed
-History-Entry: Narrative explaining the change (optional for quick-commit).
-
-History-Impact: <IMPACT_SCORE>
-History-Confidence: <YOUR_SCORE_0.0_TO_1.0>
-History-Validation: none
-\`\`\`
-
-Then execute:
-\`\`\`bash
-git add <specific-files-you-modified>
-git commit -F scratch/commit-msg.txt
-\`\`\`
 
 ## 2. Journal Entry
 Since this is a quick commit, a journal entry is usually not required. If it is structurally significant, use the CLI (\`memory-journal-mcp entry create\`) to document the commit, tagging it with \`["commit-narrative"]\` and including the commit SHA in the content.`,
