@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { 
     createProgram, addServerOptions, addCoreOptions, addDatabaseOptions, 
-    addCodeModeOptions, addAuditOptions, addPruningOptions 
+    addCodeModeOptions, addAuditOptions, addPruningOptions,
+    addWorkspaceOptions, addVectorOptions
 } from './program-options.js'
 import { serveAction } from './commands/serve.js'
 import { execAction } from './commands/exec.js'
@@ -32,6 +33,8 @@ const execCmd = program
     .description('Execute a Code Mode script locally without starting a server')
 addCoreOptions(execCmd)
 addDatabaseOptions(execCmd)
+addWorkspaceOptions(execCmd)
+addVectorOptions(execCmd)
 addCodeModeOptions(execCmd)
 addAuditOptions(execCmd)
 execCmd.addHelpText(

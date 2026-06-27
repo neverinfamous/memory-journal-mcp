@@ -40,8 +40,16 @@ export function addDatabaseOptions(command: Command): Command {
             '--team-admin <author>',
             'Bootstrap this author as admin if team_members table is empty (env: TEAM_ADMIN)'
         )
+}
+
+export function addWorkspaceOptions(command: Command): Command {
+    return command
         .option('--default-project <number>', 'Default GitHub Project number (env: DEFAULT_PROJECT_NUMBER)')
         .option('--default-workspace-id <string>', 'Default workspace ID for isolating journal entries (env: DEFAULT_WORKSPACE_ID)')
+}
+
+export function addVectorOptions(command: Command): Command {
+    return command
         .option(
             '--embedding-model <model>',
             'HuggingFace model name for semantic search embeddings (env: EMBEDDING_MODEL)'
@@ -293,6 +301,8 @@ export function addMetricsOptions(command: Command): Command {
 export function addServerOptions(command: Command): Command {
     addCoreOptions(command)
     addDatabaseOptions(command)
+    addWorkspaceOptions(command)
+    addVectorOptions(command)
     addNetworkOptions(command)
     addOAuthOptions(command)
     addAuditOptions(command)
