@@ -3,12 +3,10 @@ import { logger } from '../../utils/logger.js'
 import { createServer } from '../../server/mcp-server/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
-import { z } from 'zod'
+import { type z } from 'zod'
+import { serverOptionsSchema } from '../schemas.js'
 
-export const serveSchema = z.object({
-    config: z.string().optional(),
-    dumpConfig: z.boolean().optional(),
-}).loose()
+export const serveSchema = serverOptionsSchema
 
 export async function serveAction(options: z.infer<typeof serveSchema>, command: Command): Promise<void> {
     let resolver: ConfigResolver

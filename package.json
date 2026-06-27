@@ -66,6 +66,7 @@
         "node": ">=24.0.0"
     },
     "dependencies": {
+        "@clack/prompts": "^1.6.0",
         "@huggingface/transformers": "^4.2.0",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@octokit/graphql": "^9.0.3",

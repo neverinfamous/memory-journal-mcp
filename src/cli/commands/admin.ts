@@ -2,37 +2,27 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { runAutoPrune } from '../../server/auto-prune.js'
 import type { Command } from 'commander'
-import { z } from 'zod'
+import { type z } from 'zod'
 
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { 
+    adminBackupOptionsSchema, 
+    adminRestoreOptionsSchema, 
+    adminVacuumOptionsSchema, 
+    adminPruneOptionsSchema 
+} from '../schemas.js'
 
-export const backupSchema = z.object({
-    dest: z.string().optional(),
-    json: z.boolean().optional()
-}).loose()
+export const backupSchema = adminBackupOptionsSchema
+export const restoreSchema = adminRestoreOptionsSchema
+export const vacuumSchema = adminVacuumOptionsSchema
+export const pruneSchema = adminPruneOptionsSchema
 
-export const restoreSchema = z.object({
-    json: z.boolean().optional()
-}).loose()
+import type { ServerOptionsSchema } from '../schemas.js'
 
-export const vacuumSchema = z.object({
-    json: z.boolean().optional()
-}).loose()
-
-export const pruneSchema = z.object({
-    archiveOlderThanDays: z.coerce.number().optional(),
-    pruneOlderThanDays: z.coerce.number().optional(),
-    hardDeleteOlderThanDays: z.coerce.number().optional(),
-    importanceThreshold: z.coerce.number().optional(),
-    dryRun: z.boolean().optional(),
-    excludeTags: z.string().optional(),
-    json: z.boolean().optional()
-}).loose()
-
-async function getDb(options: Record<string, unknown>, command: Command): Promise<IDatabaseAdapter> {
+async function getDb(options: ServerOptionsSchema, command: Command): Promise<IDatabaseAdapter> {
     let resolver: ConfigResolver
-    const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const configPath = (options.config) ?? process.env['MEMORY_JOURNAL_CONFIG']
     const configErrors: string[] = []
 
     try {

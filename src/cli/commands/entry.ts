@@ -6,37 +6,19 @@ import type { EntryType, RelationshipType } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import type { CreateEntryInput } from '../../database/core/schema.js'
-import { z } from 'zod'
+import { type z } from 'zod'
+import * as p from '@clack/prompts'
+import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 
-export const createEntrySchema = z.object({
-    file: z.string().optional(),
-    content: z.string().optional(),
-    title: z.string().optional(),
-    type: z.string().optional(),
-    tags: z.string().optional(),
-    project: z.coerce.number().optional(),
-    trustScore: z.coerce.number().optional(),
-    impactScore: z.coerce.number().optional(),
-    validationStatus: z.enum(['passed', 'failed', 'none']).optional(),
-    sessionId: z.string().optional(),
-    relatedTo: z.string().optional(),
-    relationships: z.string().optional(),
-    relFile: z.string().optional(),
-    autoContext: z.string().optional(),
-    autoContextFile: z.string().optional(),
-    metadata: z.string().optional(),
-    team: z.boolean().optional(),
-    json: z.boolean().optional()
-}).loose()
+export const createEntrySchema = createEntryOptionsSchema
 
-export const updateEntrySchema = createEntrySchema.extend({
-    id: z.coerce.number(),
-    expectedVersion: z.coerce.number()
-})
+export const updateEntrySchema = updateEntryOptionsSchema
 
-async function getDb(options: Record<string, unknown>, command: Command): Promise<IDatabaseAdapter> {
+import type { BaseEntryOptionsSchema } from '../schemas.js'
+
+async function getDb(options: BaseEntryOptionsSchema, command: Command): Promise<IDatabaseAdapter> {
     let resolver: ConfigResolver
-    const configPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const configPath = (options.config) ?? process.env['MEMORY_JOURNAL_CONFIG']
     const configErrors: string[] = []
 
     try {
@@ -54,7 +36,7 @@ async function getDb(options: Record<string, unknown>, command: Command): Promis
         process.exit(1)
     }
 
-    const useTeamDb = options['team'] === true
+    const useTeamDb = options.team === true
 
     if (useTeamDb && typeof serverOptions.teamDbPath !== 'string') {
         process.stderr.write('Error: Cannot use --team flag because no team database is configured.\n')
@@ -97,9 +79,42 @@ async function parseContent(options: z.infer<typeof createEntrySchema>): Promise
         if (stdinStr.trim().length > 0) {
             return stdinStr
         }
+    } else if (!process.env['CI']) {
+        p.intro('Interactive Entry Creation')
+        
+        const titlePrompt = await p.text({
+            message: 'Title (optional):',
+            placeholder: 'My entry title',
+        })
+        
+        if (p.isCancel(titlePrompt)) {
+            p.cancel('Operation cancelled.')
+            process.exit(0)
+        }
+        
+        const contentPrompt = await p.text({
+            message: 'Content (for multiline, use --file):',
+            placeholder: 'Write your short journal entry here...',
+            validate: (value) => {
+                if (!value) return 'Content is required.'
+                return undefined
+            }
+        })
+        
+        if (p.isCancel(contentPrompt)) {
+            p.cancel('Operation cancelled.')
+            process.exit(0)
+        }
+        
+        if (titlePrompt) {
+            options.title = titlePrompt
+        }
+        
+        p.outro('Proceeding with entry creation...')
+        return contentPrompt
     }
 
-    process.stderr.write('Error: Must provide either --file, --content, or pipe data to stdin\n')
+    process.stderr.write('Error: Must provide either --file, --content, pipe data to stdin, or run interactively\n')
     process.exit(1)
 }
 

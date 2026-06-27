@@ -6,11 +6,10 @@ import { globalSubscriptionManager } from '../../server/subscription-manager.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
-import { z } from 'zod'
+import { type z } from 'zod'
+import { execOptionsSchema } from '../schemas.js'
 
-export const execSchema = z.object({
-    config: z.string().optional()
-}).loose()
+export const execSchema = execOptionsSchema
 
 export async function execAction(scriptPath: string, options: z.infer<typeof execSchema>, command: Command): Promise<void> {
     let resolver: ConfigResolver
