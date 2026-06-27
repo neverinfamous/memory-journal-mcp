@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+
+import type { Command } from 'commander'
 import { 
     createProgram, addServerOptions, addCoreOptions, addDatabaseOptions, 
     addCodeModeOptions, addAuditOptions, addPruningOptions,
-    addWorkspaceOptions, addVectorOptions, addAgentInstructions
+    addWorkspaceOptions, addVectorOptions, addAgentInstructions, withGroup
 } from './program-options.js'
 import { serveAction } from './commands/serve.js'
 import { execAction } from './commands/exec.js'
@@ -30,6 +32,11 @@ addAgentInstructions(program,
 const execCmd = program
     .command('exec <file>')
     .description('Execute a Code Mode script locally without starting a server')
+
+withGroup(execCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--json', 'Output results as a structured JSON envelope')
+})
+
 addCoreOptions(execCmd)
 addDatabaseOptions(execCmd)
 addWorkspaceOptions(execCmd)
@@ -57,7 +64,13 @@ addAgentInstructions(adminCmd,
 const backupCmd = adminCmd
     .command('backup')
     .description('Export the database to a timestamped backup file')
-    .option('--dest <path>', 'Destination path or filename for the backup')
+
+withGroup(backupCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--dest <path>', 'Destination path or filename for the backup')
+        .option('--json', 'Output results as a structured JSON envelope')
+})
+
 addCoreOptions(backupCmd)
 addDatabaseOptions(backupCmd)
 addAgentInstructions(backupCmd,
@@ -70,6 +83,11 @@ backupCmd.action(backupAction)
 const restoreCmd = adminCmd
     .command('restore <file>')
     .description('Restore the database from a backup file')
+
+withGroup(restoreCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--json', 'Output results as a structured JSON envelope')
+})
+
 addCoreOptions(restoreCmd)
 addDatabaseOptions(restoreCmd)
 addAgentInstructions(restoreCmd,
@@ -82,6 +100,11 @@ restoreCmd.action(restoreAction)
 const vacuumCmd = adminCmd
     .command('vacuum')
     .description('Optimize database query planner and flush WAL')
+
+withGroup(vacuumCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--json', 'Output results as a structured JSON envelope')
+})
+
 addCoreOptions(vacuumCmd)
 addDatabaseOptions(vacuumCmd)
 vacuumCmd.action(vacuumAction)
@@ -89,8 +112,14 @@ vacuumCmd.action(vacuumAction)
 const pruneCmd = adminCmd
     .command('prune')
     .description('Run autonomous database pruning')
-    .option('--dry-run', 'Log candidates without modifying the database')
-    .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
+
+withGroup(pruneCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--dry-run', 'Log candidates without modifying the database')
+        .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
+        .option('--json', 'Output results as a structured JSON envelope')
+})
+
 addCoreOptions(pruneCmd)
 addDatabaseOptions(pruneCmd)
 addPruningOptions(pruneCmd)
@@ -109,23 +138,29 @@ const entryCmd = program
 const createEntryCmd = entryCmd
     .command('create')
     .description('Create a new journal entry directly in the database')
-    .option('-f, --file <path>', 'Load markdown content from a file')
-    .option('-c, --content <string>', 'Raw markdown content string')
-    .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
-    .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
-    .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
-    .option('--project <number>', 'Project number')
-    .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
-    .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
-    .option('--validation-status <status>', 'Validation status (passed|none|failed)')
-    .option('--session-id <id>', 'Session ID')
-    .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
-    .option('--rel, --relationships <json>', 'JSON string of relationships')
-    .option('--rel-file <path>', 'Load relationships JSON from a file')
-    .option('--auto-context <json>', 'JSON string for auto context')
-    .option('--auto-context-file <path>', 'Load auto context JSON from a file')
-    .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
-    .option('--team', 'Route to team database')
+
+withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('-f, --file <path>', 'Load markdown content from a file')
+        .option('-c, --content <string>', 'Raw markdown content string')
+        .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
+        .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
+        .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
+        .option('--project <number>', 'Project number')
+        .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
+        .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
+        .option('--validation-status <status>', 'Validation status (passed|none|failed)')
+        .option('--session-id <id>', 'Session ID')
+        .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
+        .option('--rel, --relationships <json>', 'JSON string of relationships')
+        .option('--rel-file <path>', 'Load relationships JSON from a file')
+        .option('--auto-context <json>', 'JSON string for auto context')
+        .option('--auto-context-file <path>', 'Load auto context JSON from a file')
+        .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
+        .option('--team', 'Route to team database')
+        .option('--json', 'Output results as a structured JSON envelope')
+})
+
 addCoreOptions(createEntryCmd)
 addDatabaseOptions(createEntryCmd)
 addAgentInstructions(createEntryCmd,
@@ -139,25 +174,31 @@ createEntryCmd.action(createEntryAction)
 const updateEntryCmd = entryCmd
     .command('update')
     .description('Update an existing journal entry')
-    .option('--id <number>', 'ID of the entry to update')
-    .option('--expected-version <number>', 'Expected version of the entry (for concurrent modification safety)')
-    .option('-f, --file <path>', 'Load new markdown content from a file')
-    .option('-c, --content <string>', 'Raw new markdown content string')
-    .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
-    .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
-    .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
-    .option('--project <number>', 'Project number')
-    .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
-    .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
-    .option('--validation-status <status>', 'Validation status (passed|none|failed)')
-    .option('--session-id <id>', 'Session ID')
-    .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
-    .option('--rel, --relationships <json>', 'JSON string of relationships')
-    .option('--rel-file <path>', 'Load relationships JSON from a file')
-    .option('--auto-context <json>', 'JSON string for auto context')
-    .option('--auto-context-file <path>', 'Load auto context JSON from a file')
-    .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
-    .option('--team', 'Route to team database')
+
+withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--id <number>', 'ID of the entry to update')
+        .option('--expected-version <number>', 'Expected version of the entry (for concurrent modification safety)')
+        .option('-f, --file <path>', 'Load new markdown content from a file')
+        .option('-c, --content <string>', 'Raw new markdown content string')
+        .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
+        .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
+        .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
+        .option('--project <number>', 'Project number')
+        .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
+        .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
+        .option('--validation-status <status>', 'Validation status (passed|none|failed)')
+        .option('--session-id <id>', 'Session ID')
+        .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
+        .option('--rel, --relationships <json>', 'JSON string of relationships')
+        .option('--rel-file <path>', 'Load relationships JSON from a file')
+        .option('--auto-context <json>', 'JSON string for auto context')
+        .option('--auto-context-file <path>', 'Load auto context JSON from a file')
+        .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
+        .option('--team', 'Route to team database')
+        .option('--json', 'Output results as a structured JSON envelope')
+})
+
 addCoreOptions(updateEntryCmd)
 addDatabaseOptions(updateEntryCmd)
 addAgentInstructions(updateEntryCmd,

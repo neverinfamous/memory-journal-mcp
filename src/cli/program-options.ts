@@ -53,7 +53,14 @@ export function createProgram(): Command {
             if (options.length > 0) {
                 const groups = new Map<string, typeof options>();
                 options.forEach(opt => {
-                    const groupName = optionGroups.get(opt) || 'Options';
+                    let groupName = optionGroups.get(opt);
+                    if (!groupName) {
+                        if (opt.name() === 'help' || opt.name() === 'version') {
+                            groupName = 'Standard Options';
+                        } else {
+                            groupName = 'Command Options';
+                        }
+                    }
                     if (!groups.has(groupName)) groups.set(groupName, []);
                     const group = groups.get(groupName);
                     if (group) group.push(opt);
@@ -61,9 +68,22 @@ export function createProgram(): Command {
                 
                 const padWidth = helper.padWidth(cmd, helper);
                 
+                // Ensure Standard Options always prints last
+                const standardOptions = groups.get('Standard Options');
+                groups.delete('Standard Options');
+
                 for (const [groupName, groupOpts] of groups.entries()) {
                     output += `\n${groupName}:\n`;
                     groupOpts.forEach(opt => {
+                        const term = helper.optionTerm(opt);
+                        const optionDesc = helper.optionDescription(opt);
+                        output += `  ${term.padEnd(padWidth)}  ${optionDesc}\n`;
+                    });
+                }
+
+                if (standardOptions) {
+                    output += `\nStandard Options:\n`;
+                    standardOptions.forEach(opt => {
                         const term = helper.optionTerm(opt);
                         const optionDesc = helper.optionDescription(opt);
                         output += `  ${term.padEnd(padWidth)}  ${optionDesc}\n`;

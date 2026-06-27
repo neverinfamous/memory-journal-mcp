@@ -37,7 +37,11 @@ export async function backupAction(options: Record<string, unknown>, command: Co
     const dest = options['dest'] as string | undefined
     try {
         const result = await db.exportToFile(dest)
-        process.stdout.write(`Backup successful: ${result.path} (${result.sizeBytes} bytes)\n`)
+        if (options['json'] === true) {
+            process.stdout.write(JSON.stringify(result) + '\n')
+        } else {
+            process.stdout.write(`Backup successful: ${result.path} (${result.sizeBytes} bytes)\n`)
+        }
     } catch (e) {
         process.stderr.write("Backup failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
@@ -46,11 +50,15 @@ export async function backupAction(options: Record<string, unknown>, command: Co
     }
 }
 
-export async function restoreAction(file: string, _options: Record<string, unknown>, command: Command): Promise<void> {
+export async function restoreAction(file: string, options: Record<string, unknown>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
     try {
         const result = await db.restoreFromFile(file)
-        process.stdout.write(`Restore successful from ${result.restoredFrom}. Previous entries: ${result.previousEntryCount}, New entries: ${result.newEntryCount}\n`)
+        if (options['json'] === true) {
+            process.stdout.write(JSON.stringify(result) + '\n')
+        } else {
+            process.stdout.write(`Restore successful from ${result.restoredFrom}. Previous entries: ${result.previousEntryCount}, New entries: ${result.newEntryCount}\n`)
+        }
     } catch (e) {
         process.stderr.write("Restore failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
@@ -59,12 +67,16 @@ export async function restoreAction(file: string, _options: Record<string, unkno
     }
 }
 
-export async function vacuumAction(_options: Record<string, unknown>, command: Command): Promise<void> {
+export async function vacuumAction(options: Record<string, unknown>, command: Command): Promise<void> {
     const db = await getDb(command.optsWithGlobals(), command)
     try {
         db.pragma('optimize')
         db.flushSave()
-        process.stdout.write("Vacuum and optimize successful.\n")
+        if (options['json'] === true) {
+            process.stdout.write(JSON.stringify({ status: 'success', action: 'vacuum' }) + '\n')
+        } else {
+            process.stdout.write("Vacuum and optimize successful.\n")
+        }
     } catch (e) {
         process.stderr.write("Vacuum failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
@@ -92,12 +104,16 @@ export async function pruneAction(options: Record<string, unknown>, command: Com
             dryRun: options['dryRun'] === true,
             excludeTags: typeof options['excludeTags'] === 'string' ? options['excludeTags'].split(',') : []
         })
-        process.stdout.write(`Prune result:\n`)
-        process.stdout.write(`  Archived:     ${result.archivedCount}\n`)
-        process.stdout.write(`  Soft Deleted: ${result.prunedCount}\n`)
-        process.stdout.write(`  Hard Deleted: ${result.hardDeletedCount}\n`)
-        if (result.backupFile) {
-            process.stdout.write(`  Safety backup created: ${result.backupFile}\n`)
+        if (options['json'] === true) {
+            process.stdout.write(JSON.stringify(result) + '\n')
+        } else {
+            process.stdout.write(`Prune result:\n`)
+            process.stdout.write(`  Archived:     ${result.archivedCount}\n`)
+            process.stdout.write(`  Soft Deleted: ${result.prunedCount}\n`)
+            process.stdout.write(`  Hard Deleted: ${result.hardDeletedCount}\n`)
+            if (result.backupFile) {
+                process.stdout.write(`  Safety backup created: ${result.backupFile}\n`)
+            }
         }
     } catch (e) {
         process.stderr.write("Prune failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
