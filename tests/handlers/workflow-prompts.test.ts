@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
+import { getAnalyticsPromptDefinitions } from '../../src/handlers/prompts/analytics.js'
 
 describe('Workflow Prompts', () => {
     it('covers prepare-standup', () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const analyze = prompts.find((p) => p.name === 'prepare-standup')!
 
         const mockDb = {}
@@ -13,7 +14,7 @@ describe('Workflow Prompts', () => {
     })
 
     it('covers goal-tracker', () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const track = prompts.find((p) => p.name === 'goal-tracker')!
 
         const mockDb = {
@@ -32,7 +33,7 @@ describe('Workflow Prompts', () => {
     })
 
     it('covers session-summary', async () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const summary = prompts.find((p) => p.name === 'session-summary')!
 
         const mockDb = {

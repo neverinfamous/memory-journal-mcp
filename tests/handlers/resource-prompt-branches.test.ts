@@ -14,6 +14,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 }))
 
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
+import { getAnalyticsPromptDefinitions } from '../../src/handlers/prompts/analytics.js'
 import { getTeamResourceDefinitions } from '../../src/handlers/resources/team.js'
 import { getGraphResourceDefinitions } from '../../src/handlers/resources/graph.js'
 
@@ -54,7 +55,7 @@ describe('Workflow prompts — branch coverage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        prompts = getWorkflowPromptDefinitions()
+        prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
     })
 
     it('prepare-standup: should format standup entries', () => {

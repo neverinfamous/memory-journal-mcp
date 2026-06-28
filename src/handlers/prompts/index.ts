@@ -8,6 +8,7 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
+import { getAnalyticsPromptDefinitions } from './analytics.js'
 import { getGitHubPromptDefinitions } from './github.js'
 import { getGitPromptDefinitions } from './git.js'
 
@@ -83,6 +84,7 @@ export function getPrompt(
 function getAllPromptDefinitions(): InternalPromptDef[] {
     return [
         ...getWorkflowPromptDefinitions(),
+        ...getAnalyticsPromptDefinitions(),
         ...getGitHubPromptDefinitions(),
         ...getGitPromptDefinitions(),
         ...getAdversarialPromptDefinitions(),

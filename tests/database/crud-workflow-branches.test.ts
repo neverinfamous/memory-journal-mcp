@@ -24,6 +24,7 @@ import {
 } from '../../src/database/sqlite-adapter/entries/crud.js'
 import { TagsManager } from '../../src/database/sqlite-adapter/tags.js'
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
+import { getAnalyticsPromptDefinitions } from '../../src/handlers/prompts/analytics.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 import type { JournalEntry } from '../../src/types/index.js'
 
@@ -354,7 +355,7 @@ describe('Workflow prompts — branch coverage', () => {
     }
 
     it('should generate prepare-standup prompt for standup', () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const analysis = prompts.find((p) => p.name === 'prepare-standup')!
         const db = createMockDb()
         const result = analysis.handler({}, db)
@@ -362,7 +363,7 @@ describe('Workflow prompts — branch coverage', () => {
     })
 
     it('should generate prepare-retro prompt for retro', () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const analysis = prompts.find((p) => p.name === 'prepare-retro')!
         const db = createMockDb()
         const result = analysis.handler({}, db)
@@ -370,7 +371,7 @@ describe('Workflow prompts — branch coverage', () => {
     })
 
     it('should generate goal-tracker prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const goal = prompts.find((p) => p.name === 'goal-tracker')!
         const db = createMockDb([mockEntry({ content: 'goal: ship v2' })])
         const result = goal.handler({}, db)
@@ -379,7 +380,7 @@ describe('Workflow prompts — branch coverage', () => {
 
 
     it('should generate session-summary prompt', async () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb([mockEntry({ content: 'debug session' })])
         const result = await summary.handler({}, db)
