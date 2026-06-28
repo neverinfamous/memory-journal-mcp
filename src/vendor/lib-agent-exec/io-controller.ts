@@ -53,8 +53,8 @@ export class IOController {
     return null;
   }
   
-  private outStream?: fs.WriteStream;
-  private errStream?: fs.WriteStream;
+  private outStream?: fs.WriteStream | Writable;
+  private errStream?: fs.WriteStream | Writable;
   
   private stallTimer: NodeJS.Timeout | null = null;
   private promptStallTimer: NodeJS.Timeout | null = null;
@@ -141,7 +141,7 @@ export class IOController {
               callback();
             }
           }
-        }) as unknown as fs.WriteStream;
+        });
       }
       const outPath = path.resolve(filePath);
       ensureDir(outPath);
@@ -219,7 +219,7 @@ export class IOController {
     }
   }
 
-  private safelyPauseAndDrain(source: NodeJS.ReadableStream | null | undefined, targets: NodeJS.WritableStream[]) {
+  private safelyPauseAndDrain(source: NodeJS.ReadableStream | null | undefined, targets: Writable[]) {
     if (!source || targets.length === 0 || ('isPaused' in source && typeof source.isPaused === 'function' && source.isPaused())) return;
     source.pause();
     let drainCount = targets.length;

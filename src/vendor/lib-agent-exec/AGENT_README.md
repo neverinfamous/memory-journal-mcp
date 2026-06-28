@@ -44,7 +44,7 @@ If you are a **human user** attempting to run interactive commands natively in y
 There are three execution types (`command`, `script`, `eval`). Always provide the payload via a `.json` file.
 
 > [!NOTE]
-> The examples below show only the core fields. For a complete list of all shared **Base Options** (such as `cwd`, `env`, `timeoutMs`, `stdoutFile`, and `webhook` configurations), please run `bun .\.agents\scripts\agent-exec.ts --help`.
+> **Payload Validation**: Ensures `command`, `script`, and `eval` schemas strictly adhere to Zod definitions and `ts-pattern` routing. Covers edge cases like `cwd`, `args`, `env`, `timeoutMs`, `stallTimeoutMs`, `target`, `integrationContext`, `expectJsonEnvelope`, `bypassInterceptors`, `webhookHeaders`, `webhookPayloadTemplate`, `webhookMethod`, `webhookTimeoutMs`, `stdoutFile`, and `stderrFile`.
 
 ### 1. Command Payload
 Used for executing standard CLI binaries.
@@ -146,3 +146,8 @@ The bridge standardizes the environment to enforce non-interactive behaviors. Th
 
 If you modify interceptors or execution logic, programmatic `bun test` passes are **not enough**. You MUST run the usability testing suite to ensure actual agents don't get trapped by false positives (e.g. `&&` chains or pipeline character bugs).
 - **Run the Fuzzing Suite:** Ask the user to "Execute the usability testing coordinator workflow in adamic", or manually trigger the subagents defined in `.agents/scripts/usability/coordinator-workflow.md`.
+
+---
+
+## 📈 Continuous Self-Improvement
+As an agent operating within this workspace, you are expected to practice continuous self-improvement. If you identify gaps, ambiguities, or missing instructions during an audit or execution task, **proactively update this `AGENT_README.md`** and relevant testing prompts. You are empowered to refine your own processes.

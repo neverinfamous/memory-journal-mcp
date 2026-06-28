@@ -51,13 +51,11 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 
 ### Error Handling
 
-All tool handlers must throw standard `@modelcontextprotocol/sdk/types.js` `McpError` exceptions with exact JSON-RPC codes:
+All tool handlers must return structured error JSON with \`isError: true\` instead of throwing raw MCP exceptions.
+Every tool must return \`{success, error, code, category, suggestion, recoverable}\` to ensure agents get classification, remediation hints, and recoverability signals.
 
-- `-32602`: Invalid params (Zod validation failures)
-- `-32002`: Resource not found or unavailable
-- `-32603`: Internal server error
-
-Never use custom wrappers or return structured error JSON — rely on the SDK protocol constraints.
+- **Never** throw raw \`McpError\` exceptions which cause agents to crash.
+- **Always** return a structured JSON response wrapped in \`{ content: [{ type: 'text', text: JSON.stringify(...) }], isError: true }\`.
 
 ### Token Estimation
 
@@ -123,7 +121,7 @@ When reviewing PRs, check for:
 - [ ] Missing barrel exports in `src/types/index.ts` when new types are added
 - [ ] `eslint-disable` usage — always forbidden
 - [ ] `@ts-ignore` or `as any` — always forbidden
-- [ ] Raw exceptions from tool handlers — must throw `McpError` with exact JSON-RPC codes (-32002, -32603)
+- [ ] Raw exceptions from tool handlers — forbidden. Must return structured JSON with \`isError: true\` and exact classification codes
 - [ ] Files approaching 500 lines — flag for splitting
 - [ ] New tools missing from `src/filtering/tool-filter.ts` TOOL_GROUPS
 - [ ] Missing Zod output schemas on new tools

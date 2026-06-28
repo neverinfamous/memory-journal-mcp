@@ -112,7 +112,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       let current: unknown = payload.integrationContext;
       const keys = pathStr.split('.');
       for (const key of keys) {
-        if (current == null || typeof current !== 'object') return match;
+        if (current == null || typeof current !== 'object' || !(key in current)) return match;
         current = (current as Record<string, unknown>)[key];
       }
       return typeof current === 'object' ? JSON.stringify(current) : String(current);
@@ -287,7 +287,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       args = [tempScriptPath.replace(/\\/g, '/'), ...(payload.args || [])];
     }
   } else {
-    const p = payload as Record<string, unknown>;
+    const p = payload as { type?: unknown };
     console.error(`❌ Error: Unsupported payload type '${String(p.type)}'.`);
     process.exit(1);
   }
@@ -354,7 +354,8 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     }
   }
 
-  // Sync back args references if modified completely
+  // Sync back args and cmd references if modified completely
+  cmd = ctx.cmdBasename || cmd;
   args = ctx.args;
 
   let strippedQuotes = false;
@@ -421,7 +422,9 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     wslEnvArgs.push(`AGENT_EXEC_WSL_UUID=${wslUuid}`);
     const payloadEnv = payload.env || {};
     for (const [k, v] of Object.entries(payloadEnv)) {
-      wslEnvArgs.push(`${k}=${convertToWslPath(v as string)}`);
+      if (v !== undefined) {
+        wslEnvArgs.push(`${k}=${convertToWslPath(String(v))}`);
+      }
     }
     for (const [k, v] of Object.entries(envOverrides)) {
       wslEnvArgs.push(`${k}=${convertToWslPath(v)}`);

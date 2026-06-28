@@ -1,5 +1,5 @@
 // @ts-nocheck
-import fs from 'node:fs';
+import { Writable } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 
 const ESC = String.fromCharCode(27);
@@ -20,8 +20,8 @@ export class StreamManager {
 
   constructor(
     private truncateOutputLength?: number,
-    private outStream?: fs.WriteStream,
-    private errStream?: fs.WriteStream
+    private outStream?: Writable,
+    private errStream?: Writable
   ) {}
 
   private stripAnsi(str: string): string {
@@ -162,8 +162,8 @@ export class StreamManager {
     return this.resolveCarriageReturns(lineBuffer);
   }
 
-  public writeData(isErr: boolean, str: string, outFileName?: string, errFileName?: string): NodeJS.WritableStream[] {
-    const streamsToDrain: NodeJS.WritableStream[] = [];
+  public writeData(isErr: boolean, str: string, outFileName?: string, errFileName?: string): Writable[] {
+    const streamsToDrain: Writable[] = [];
     if (!str) return streamsToDrain;
 
     const targetStream = isErr ? this.errStream : this.outStream;
@@ -175,7 +175,7 @@ export class StreamManager {
     }
 
     if (!this.truncateOutputLength) {
-       if (!targetStream && !stdStream.destroyed) {
+       if (!targetStream && !(stdStream as Writable).destroyed) {
          const canWriteStd = stdStream.write(str);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }
@@ -196,14 +196,14 @@ export class StreamManager {
        const fileHint = fileName ? ` Use ${fileName} to capture full output.` : ` Specify 'stdoutFile' or 'stderrFile' in the payload to capture full output.`;
        const truncMsg = `\n... [${isErr ? 'STDERR' : 'STDOUT'} truncated to ${this.truncateOutputLength} chars.${fileHint}]\n`;
        
-       if (!targetStream && !stdStream.destroyed) {
+       if (!targetStream && !(stdStream as Writable).destroyed) {
          const canWriteStd = stdStream.write(toWrite + truncMsg);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }
 
        if (isErr) this.stderrTruncated = true; else this.stdoutTruncated = true;
     } else {
-       if (!targetStream && !stdStream.destroyed) {
+       if (!targetStream && !(stdStream as Writable).destroyed) {
          const canWriteStd = stdStream.write(str);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }

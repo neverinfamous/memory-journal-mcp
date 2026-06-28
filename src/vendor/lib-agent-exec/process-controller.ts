@@ -33,8 +33,8 @@ export class ProcessController {
       this.setupTimeouts();
     } catch (err) {
       this.cleanupTempScript();
-      if (err instanceof Error && ('code' in err || ('syscall' in err && (err as NodeJS.ErrnoException).syscall === 'uv_spawn'))) {
-        this.onChildError(err as NodeJS.ErrnoException);
+      if (err instanceof Error && ('code' in err || ('syscall' in err && err.syscall === 'uv_spawn'))) {
+        this.onChildError(err as Error & { code?: string, syscall?: string });
         return;
       }
       console.error(`❌ Unexpected error during spawn setup:`, err);
@@ -168,7 +168,7 @@ export class ProcessController {
     checkStreams.unref();
   }
 
-  private onChildError(error: NodeJS.ErrnoException) {
+  private onChildError(error: Error & { code?: string, syscall?: string }) {
     this.isFinished = true;
     if (this.timeoutTimer) clearTimeout(this.timeoutTimer);
     if (this.forceKillTimer) clearTimeout(this.forceKillTimer);
@@ -176,7 +176,7 @@ export class ProcessController {
 
     const handleError = () => {
       console.error(`❌ Execution Error: ${error.message}`);
-      if (error.code === 'ENOENT' || error.code === 'EUNKNOWN' || (error as NodeJS.ErrnoException).syscall === 'uv_spawn') {
+      if (error.code === 'ENOENT' || error.code === 'EUNKNOWN' || error.syscall === 'uv_spawn') {
          console.error(`   Executable '${this.cmd}' was not found in PATH or working directory.`);
          if (process.platform === 'win32') {
              const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
@@ -287,7 +287,7 @@ export class ProcessController {
               let current: unknown = this.payload.integrationContext;
               const keys = pathStr.split('.');
               for (const key of keys) {
-                if (current == null || typeof current !== 'object') return match;
+                if (current == null || typeof current !== 'object' || !(key in current)) return match;
                 current = (current as Record<string, unknown>)[key];
               }
               return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));

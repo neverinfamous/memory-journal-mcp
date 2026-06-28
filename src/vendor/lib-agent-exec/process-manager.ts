@@ -16,7 +16,7 @@ export function killProcessTree(child: ChildProcess) {
   
   match(process.platform)
     .with('win32', () => {
-    const childWithArgs = child as unknown as { spawnfile?: string, spawnargs?: string[] };
+    const childWithArgs = child as ChildProcess & { spawnfile?: string, spawnargs?: string[] };
     const spawnfile = childWithArgs.spawnfile || '';
     const spawnargs = childWithArgs.spawnargs || [];
     if (spawnfile.toLowerCase().endsWith('wsl.exe')) {

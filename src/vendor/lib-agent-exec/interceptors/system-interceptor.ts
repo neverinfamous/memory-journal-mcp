@@ -2,7 +2,8 @@
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
 
-export function systemInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
+export function systemInterceptor(ctx: ExecutionContext): void {
+  const { cmdBasename, args, payload } = ctx;
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
   const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe'];
   const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'] as const;
@@ -16,13 +17,13 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
   // 1. Mutating intercepts (safe to run before block checks)
   match({ cmd, args })
-    .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args }) => {
-      if (!args.some(a => a.includes('BatchMode=yes'))) {
+    .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args: matchedArgs }) => {
+      if (!matchedArgs.some(a => a.includes('BatchMode=yes'))) {
         console.error(`\n   💡 AGENT HINT: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-        args.unshift('-o', 'BatchMode=yes');
+        ctx.args.unshift('-o', 'BatchMode=yes');
       }
-      if (!args.some(a => a.includes('StrictHostKeyChecking='))) {
-        args.unshift('-o', 'StrictHostKeyChecking=accept-new');
+      if (!matchedArgs.some(a => a.includes('StrictHostKeyChecking='))) {
+        ctx.args.unshift('-o', 'StrictHostKeyChecking=accept-new');
       }
     })
     .with({ cmd: P.union('ping', 'ping.exe') }, ({ args }) => {
@@ -40,11 +41,17 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
         }
       }
     })
-    .with({ cmd: P.union('sudo', 'sudo.exe') }, ({ args }) => {
-      if (process.platform !== 'win32' && !args.includes('-n') && !args.includes('--non-interactive')) {
+    .with({ cmd: P.union('sudo', 'sudo.exe') }, ({ args: matchedArgs }) => {
+      if (process.platform !== 'win32' && !matchedArgs.includes('-n') && !matchedArgs.includes('--non-interactive')) {
         console.error(`\n   💡 AGENT HINT: Automatically injecting '-n' (non-interactive) into sudo command to prevent password prompt hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-        args.unshift('-n');
+        ctx.args.unshift('-n');
       }
+    })
+    .with({ cmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
+      console.error(`\n   💡 AGENT HINT: 'cat' is a shell alias and fails natively on Windows without a shell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically rewriting command to run via Node.js for cross-platform compatibility.\x1b[0m`);
+      const filePaths = ctx.args.map(a => a.replace(/\\/g, '\\\\').replace(/'/g, "\\'")).join("', '");
+      ctx.cmdBasename = 'node';
+      ctx.args = ['-e', `const fs = require('fs'); ['${filePaths}'].forEach(f => { try { console.log(fs.readFileSync(f, 'utf8')); } catch(e) { console.error(e.message); process.exit(1); } });`];
     })
     .otherwise(() => {});
 
@@ -143,17 +150,22 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
       console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. Prefer ';' for command separation or write a full script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
+    .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true, innerCmdStr: P.when((s: string) => {
+        const stripped = getUnquoted(s);
+        const tokens = stripped.split(/[\s;|{>&<]+/).filter(Boolean).map(t => t.toLowerCase());
+        return tokens.includes('cat') || tokens.includes('cat.exe');
+    }) }, () => {
+      console.error(`\n   💡 AGENT HINT: 'cat' may fail in PowerShell without GNU tools or proper aliases.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically rewriting 'cat' to 'Get-Content' in PowerShell inline command.\x1b[0m`);
+      const inlineIdx = ctx.args.findIndex(a => inlineFlags.includes(a.toLowerCase()));
+      if (inlineIdx !== -1 && ctx.args[inlineIdx + 1]) {
+        ctx.args[inlineIdx + 1] = ctx.args[inlineIdx + 1].replace(/\bcat\b/g, 'Get-Content');
+      }
+    })
     .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true }, ({ innerCmdStr, cmd: _shellCmd, inlineFlag: flag }: { innerCmdStr: string; cmd: string; inlineFlag: string }) => {
       const strippedCmdStr = getUnquoted(innerCmdStr);
       const tokens = strippedCmdStr.split(/[\s;|{>&<]+/).filter(Boolean).map((t: string) => t.toLowerCase());
       
-      // Native tool enforcement rule
-      const blockedAliases = ['cat', 'get-content', 'ls', 'dir', 'get-childitem', 'grep', 'select-string', 'sed'];
-      const usedAlias = tokens.find((t: string) => blockedAliases.includes(t));
-      if (usedAlias) {
-        console.error(`\n   💡 AGENT HINT: Do NOT use '${usedAlias}' in shell commands. You MUST use the provided native tools (view_file, list_dir, grep_search, replace_file_content) instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-        process.exit(1);
-      }
+
 
       // stdTools rule
       const usedTool = tokens.find((t: string) => stdTools.includes(t));
@@ -206,10 +218,7 @@ export function systemInterceptor({ cmdBasename, args, payload }: ExecutionConte
     })
 
     // Native tool enforcement
-    .with({ isCommand: true, cmd: P.union('cat', 'cat.exe', 'get-content', 'ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'grep', 'grep.exe', 'select-string', 'sed', 'sed.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdBasename}' directly. You MUST use the provided native tools (view_file, list_dir, grep_search, replace_file_content) instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      process.exit(1);
-    })
+
     
     // Web request tool enforcement
     .with({ isCommand: true, cmd: P.union('curl', 'curl.exe', 'wget', 'wget.exe') }, () => {
