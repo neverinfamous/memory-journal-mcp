@@ -79,7 +79,7 @@ async function parseContent(options: z.infer<typeof createEntrySchema>): Promise
         if (stdinStr.trim().length > 0) {
             return stdinStr
         }
-    } else if (!process.env['CI']) {
+    } else if (!process.env['CI'] && !process.env['NonInteractive']) {
         p.intro('Interactive Entry Creation')
         
         const titlePrompt = await p.text({
@@ -244,7 +244,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
 }
 
 export async function createEntryAction(options: z.infer<typeof createEntrySchema>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals(), command)
+    const db = await getDb(options, command)
 
     try {
         let content = await parseContent(options)
@@ -295,7 +295,7 @@ export async function createEntryAction(options: z.infer<typeof createEntrySchem
 }
 
 export async function updateEntryAction(options: z.infer<typeof updateEntrySchema>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals(), command)
+    const db = await getDb(options, command)
 
     try {
         const entryId = options.id

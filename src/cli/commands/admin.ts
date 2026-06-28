@@ -47,7 +47,7 @@ async function getDb(options: ServerOptionsSchema, command: Command): Promise<ID
 }
 
 export async function backupAction(options: z.infer<typeof backupSchema>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals(), command)
+    const db = await getDb(options, command)
     const dest = options.dest
     try {
         const result = await db.exportToFile(dest)
@@ -65,7 +65,7 @@ export async function backupAction(options: z.infer<typeof backupSchema>, comman
 }
 
 export async function restoreAction(file: string, options: z.infer<typeof restoreSchema>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals(), command)
+    const db = await getDb(options, command)
     try {
         const result = await db.restoreFromFile(file)
         if (options.json === true) {
@@ -82,7 +82,7 @@ export async function restoreAction(file: string, options: z.infer<typeof restor
 }
 
 export async function vacuumAction(options: z.infer<typeof vacuumSchema>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals(), command)
+    const db = await getDb(options, command)
     try {
         db.pragma('optimize')
         db.flushSave()
@@ -100,7 +100,7 @@ export async function vacuumAction(options: z.infer<typeof vacuumSchema>, comman
 }
 
 export async function pruneAction(options: z.infer<typeof pruneSchema>, command: Command): Promise<void> {
-    const db = await getDb(command.optsWithGlobals(), command)
+    const db = await getDb(options as unknown as ServerOptionsSchema, command)
     
     try {
         const result = await runAutoPrune(db, {
