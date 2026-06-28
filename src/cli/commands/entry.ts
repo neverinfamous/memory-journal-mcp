@@ -8,6 +8,7 @@ import { buildServerOptions } from '../server-options-builder.js'
 import type { CreateEntryInput } from '../../database/core/schema.js'
 import { type z } from 'zod'
 import * as p from '@clack/prompts'
+import * as yaml from 'yaml'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 
 export const createEntrySchema = createEntryOptionsSchema
@@ -116,6 +117,35 @@ async function parseContent(options: z.infer<typeof createEntrySchema>): Promise
 
     process.stderr.write('Error: Must provide either --file, --content, pipe data to stdin, or run interactively\n')
     process.exit(1)
+}
+
+function parseFrontmatter(rawContent: string): { frontmatter: Record<string, unknown>, body: string } {
+    if (rawContent.startsWith('---\n') || rawContent.startsWith('---\r\n')) {
+        const endOfFrontmatter = rawContent.indexOf('\n---\n', 3)
+        const endOfFrontmatterWindows = rawContent.indexOf('\r\n---\r\n', 4)
+        
+        let endIdx = -1;
+        let skip = 5;
+        if (endOfFrontmatter !== -1 && (endOfFrontmatterWindows === -1 || endOfFrontmatter < endOfFrontmatterWindows)) {
+            endIdx = endOfFrontmatter;
+            skip = 5;
+        } else if (endOfFrontmatterWindows !== -1) {
+            endIdx = endOfFrontmatterWindows;
+            skip = 7;
+        }
+        
+        if (endIdx !== -1) {
+            const yamlStr = rawContent.slice(rawContent.indexOf('\n') + 1, endIdx)
+            const body = rawContent.slice(endIdx + skip).trimStart()
+            try {
+                const parsed: unknown = yaml.parse(yamlStr)
+                return { frontmatter: typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : {}, body }
+            } catch {
+                // Return as-is if parsing fails
+            }
+        }
+    }
+    return { frontmatter: {}, body: rawContent }
 }
 
 function parseRelatedTo(relatedToStr: unknown): number[] {
@@ -255,14 +285,16 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     const db = await getDb(options, command)
 
     try {
-        let content = await parseContent(options)
+        const rawContent = await parseContent(options)
+        const { frontmatter, body } = parseFrontmatter(rawContent)
+        let content = body
         
         const title = options.title
         if (title && !content.startsWith('# ')) {
             content = `# ${title}\n\n${content}`
         }
 
-        const metadata = parseMetadata(options.metadata)
+        const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
         const payload = buildEntryPayload(options, metadata)
 
         const entryInput: CreateEntryInput = {
@@ -326,14 +358,16 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.exit(1)
         }
 
-        let content = await parseContent(options)
+        const rawContent = await parseContent(options)
+        const { frontmatter, body } = parseFrontmatter(rawContent)
+        let content = body
         
         const title = options.title
         if (title && !content.startsWith('# ')) {
             content = `# ${title}\n\n${content}`
         }
         
-        const metadata = parseMetadata(options.metadata)
+        const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
         const payload = buildEntryPayload(options, metadata)
         
         const updates: Partial<CreateEntryInput> & { expectedVersion: number } = { content, expectedVersion: version }

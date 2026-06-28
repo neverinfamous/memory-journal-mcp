@@ -104,16 +104,26 @@ function generateSummaryPrompt(
                     type: 'text',
                     text: `Create a ${target === 'team' ? 'team ' : ''}session summary journal entry using EXACTLY this template:
 
-**Required Metadata payload (\`metadata.json\`):**
-Write a JSON file with the following keys:
-- \`type\`: "retrospective"
-- \`tags\`: Array of strings including "session-summary" plus 2-3 specific domain/topological tags.
-- \`project\`: Integer ID mapped from your active workspace context.
-- \`impact\`: Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
-- \`trust\`: Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
-- \`validation_status\`: Validation outcome ("passed", "none", or "failed").
-- \`auto_context\`: JSON object that EXACTLY matches this shape: \`{"type":"session-commits","commits":["<sha>"],"branch":"<branch_name>","pr":<number>}\`
-- \`relationships\`: Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'.
+**Required YAML Frontmatter:**
+At the top of your markdown file, include a YAML frontmatter block with the following keys:
+\`\`\`yaml
+---
+type: "retrospective"
+tags: ["session-summary", "your-tag-1", "your-tag-2"]
+project: <Integer ID mapped from your active workspace context>
+impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
+trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+validation_status: "passed" # or "none", or "failed"
+auto_context: 
+  type: "session-commits"
+  commits: ["<sha>"]
+  branch: "<branch_name>"
+  pr: <number>
+relationships: 
+  - target_id: 123
+    relation_type: "resolves" # 'resolves', 'depends_on', 'implements', 'relates_to'
+---
+\`\`\`
 
 **Required Content Structure (use EXACTLY these section headers):**
 \`\`\`
@@ -138,7 +148,7 @@ ${registryHint}- If you lose track of your project number, workspace, or agent I
 ${markUntrustedContent(entrySummary)}
 
 **Execution:**
-Write markdown and metadata JSON to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/session.md --metadata <scratch_dir>/metadata.json\``,
+Write your markdown file (with the YAML frontmatter at the top) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/session.md\``,
                 },
             },
         ],
@@ -156,15 +166,21 @@ function generateEntryPrompt(_db: IDatabaseAdapter, _teamDb: IDatabaseAdapter | 
                     type: 'text',
                     text: `Create a ${target === 'team' ? 'team ' : ''}mid-thread journal entry using EXACTLY this template:
 
-**Required Metadata payload (\`metadata.json\`):**
-Write a JSON file with the following keys:
-- \`type\`: MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective").
-- \`tags\`: Array of strings containing 1-3 specific domain/topological tags.
-- \`project\`: Integer ID mapped from your active workspace context.
-- \`impact\`: Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for simple docs).
-- \`trust\`: Decimal score analyzing testing rigor. MUST start lower (0.3-0.5) for unverified work, scale higher (0.8-1.0) only if rigorously tested.
-- \`validation_status\`: Validation outcome ("passed", "none", or "failed").
-- \`relationships\`: Array of links to previous entries/flags (e.g. \`[{"target_id": 123, "relation_type": "resolves"}]\`). Types: 'resolves', 'depends_on', 'implements', 'relates_to'.
+**Required YAML Frontmatter:**
+At the top of your markdown file, include a YAML frontmatter block with the following keys:
+\`\`\`yaml
+---
+type: "architecture" # MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective")
+tags: ["domain-tag", "another-tag"]
+project: <Integer ID mapped from your active workspace context>
+impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
+trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+validation_status: "passed" # or "none", or "failed"
+relationships: 
+  - target_id: 123
+    relation_type: "resolves" # 'resolves', 'depends_on', 'implements', 'relates_to'
+---
+\`\`\`
 
 **Required Content Structure:**
 Just provide a concise markdown description of the specific architectural decision, strategic pivot, or blocker. Do NOT log routine code changes or bug fixes here; those belong strictly in Git. Keep it under 150 words. No top-level headers required.
@@ -173,7 +189,7 @@ Just provide a concise markdown description of the specific architectural decisi
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution:**
-Write markdown and metadata JSON to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md --metadata <scratch_dir>/metadata.json\``
+Write your markdown file (with the YAML frontmatter at the top) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md\``
                 }
             }
         ]
@@ -223,14 +239,14 @@ Look at the tags and structure of the target entry:
 
 **Step 3: Execute the Update**
 - You MUST pass the existing \`version\` as the \`expected_version\` parameter to prevent concurrent overwrites.
-- Ensure you pass the full updated \`content\` string.
-- Only create and pass a \`--metadata <scratch_dir>/metadata.json\` file if you are intentionally modifying fields like tags, trust, or impact. Otherwise, omit it to preserve existing values.
+- Ensure you write the full updated \`content\` string to a markdown file in your scratch directory.
+- If you want to modify fields like tags, trust, or impact, simply add a YAML frontmatter block (\`---\`... \`---\`) to the top of your markdown file. Otherwise, omit it to preserve existing values.
 
 **Rules:**
 ${getProjectRegistryHint()}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution:**
-Write markdown and metadata JSON to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}--id <ENTRY_ID> --expected-version <VERSION> --file <scratch_dir>/updated_entry.md\` (add \`--metadata\` flag if modifying tags/scores).`
+Write your updated markdown file to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}--id <ENTRY_ID> --expected-version <VERSION> --file <scratch_dir>/updated_entry.md\``
                 }
             }
         ]
