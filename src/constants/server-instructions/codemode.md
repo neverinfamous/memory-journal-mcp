@@ -106,4 +106,4 @@ In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You m
 - `teamAddMember(params)`, `teamRemoveMember(params)`, `teamUpdateMemberRole(params)`, `teamListMembers(params)`, `teamGetMember(params)`
 - `teamAddAuthorAlias(params)`, `teamRemoveAuthorAlias(params)`, `teamListAuthorAliases(params)`, `teamResolveAuthor(params)`, `teamConsolidateAuthors(params)`
 
-**Rule:** When `mj_execute_code` is the only registered tool (e.g., Code Mode), all tool actions must be performed using the `mj.*` namespaces listed above inside the code sandbox. Do NOT attempt to call the original tool names as direct MCP operations.
+**Rule:** When `mj_execute_code` is the only registered tool (e.g., Code Mode), all tool actions must be performed using the `mj.*` namespaces listed above inside the code sandbox. Do NOT attempt to call the original tool names as direct MCP operations. CLI commands are exempt from this and should be run in the terminal.

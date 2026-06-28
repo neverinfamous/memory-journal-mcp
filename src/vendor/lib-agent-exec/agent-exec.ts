@@ -2,22 +2,64 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { parseArgs } from 'node:util';
+import { match, P } from 'ts-pattern';
 import { executeCommand } from './execution-engine.js';
 import { buildCommand, customInterceptors } from './command-builder.js';
 import { buildEnvironment } from './environment.js';
-import { PayloadSchema } from './schema.js';
+import { PayloadSchema, agentExecCliArgsSchema } from './schema.js';
+import { showHelp, showUsageError } from './help.js';
 
-let payloadPath = process.argv[2];
+let payloadPath: string;
 let interceptorsPath: string | null = null;
+const isJson = process.argv.includes('--json');
 
-if (payloadPath?.startsWith('--interceptors=')) {
-  interceptorsPath = payloadPath.substring(15);
-  payloadPath = process.argv[3];
+function fatalError(msg: string, details?: string[]): never {
+  if (isJson) {
+    console.log(JSON.stringify({ status: "error", message: msg, details }));
+  } else {
+    console.error(`❌ Error: ${msg}`);
+    if (details) {
+      for (const d of details) {
+        console.error(`  - ${d}`);
+      }
+    }
+  }
+  process.exit(1);
 }
 
-if (!payloadPath) {
-  console.error('❌ Error: Missing payload JSON file path.');
-  process.exit(1);
+try {
+  const options = {
+    interceptors: { type: 'string' },
+    help: { type: 'boolean', short: 'h' },
+    json: { type: 'boolean' },
+  } as const;
+
+  const { values, positionals } = parseArgs({
+    args: process.argv.slice(2),
+    options,
+    strict: true,
+    allowPositionals: true
+  });
+  
+  
+
+  const parsedArgs = agentExecCliArgsSchema.parse({
+    ...values,
+    payloadPath: positionals[0]
+  });
+
+  const result = match(parsedArgs)
+    .with({ help: true }, (args) => showHelp(!!args.json))
+    .with({ payloadPath: P.string }, (args) => {
+      return { path: args.payloadPath, interceptors: args.interceptors || null };
+    })
+    .otherwise(() => showUsageError('Missing payload JSON file path.', isJson));
+    
+  payloadPath = result.path;
+  interceptorsPath = result.interceptors;
+} catch (err: unknown) {
+  showUsageError(err instanceof Error ? err.message : String(err), isJson);
 }
 
 try {
@@ -32,29 +74,26 @@ try {
 
   const stat = fs.statSync(payloadPath);
   if (stat.size > 10 * 1024 * 1024) {
-    console.error('❌ Error: Payload file exceeds 10MB limit.');
-    process.exit(1);
+    fatalError('Payload file exceeds 10MB limit.');
   }
   const payloadStr = fs.readFileSync(payloadPath, 'utf8');
   const rawPayload = JSON.parse(payloadStr);
 
   const parseResult = PayloadSchema.safeParse(rawPayload);
   if (!parseResult.success) {
-    console.error('❌ Error: Payload schema validation failed.');
-    for (const err of parseResult.error.issues) {
+    const details = parseResult.error.issues.map(err => {
       const pathStr = err.path.length > 0 ? err.path.join('.') : 'root';
-      console.error(`  - ${pathStr}: ${err.message}`);
-    }
-    process.exit(1);
+      return `${pathStr}: ${err.message}`;
+    });
+    fatalError('Payload schema validation failed.', details);
   }
 
   const payload = parseResult.data;
-  fs.appendFileSync(path.join(os.tmpdir(), 'agent-exec-payload.log'), JSON.stringify(payload) + '\\n');
+  fs.appendFileSync(path.join(os.tmpdir(), 'agent-exec-payload.log'), JSON.stringify(payload) + '\n');
   const cwd = payload.cwd ? path.resolve(payload.cwd) : process.cwd();
   
   if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
-    console.error(`❌ Error: The provided cwd '${cwd}' does not exist or is not a directory.`);
-    process.exit(1);
+    fatalError(`The provided cwd '${cwd}' does not exist or is not a directory.`);
   }
 
   const env = buildEnvironment(payload.env);
@@ -75,9 +114,8 @@ try {
 
 } catch (err) {
   if (err instanceof SyntaxError) {
-    console.error(`❌ Error: Invalid JSON in payload file. ${err.message}`);
+    fatalError(`Invalid JSON in payload file. ${err.message}`);
   } else {
-    console.error(`❌ Error executing agent-exec: ${err instanceof Error ? err.message : String(err)}`);
+    fatalError(`Error executing agent-exec: ${err instanceof Error ? err.message : String(err)}`);
   }
-  process.exit(1);
 }

@@ -95,6 +95,15 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   let tempScriptPath: string | null = null;
   const envOverrides: Record<string, string> = {};
 
+  if (process.platform === 'win32' && payload.target !== 'wsl2') {
+    const hasPipeCommand = 'command' in payload && typeof payload.command === 'string' && (payload.command.includes(' && ') || payload.command.includes(' || '));
+    const hasPipeArg = payload.args?.some(a => typeof a === 'string' && (a.trim() === '&&' || a.trim() === '||'));
+    if (hasPipeCommand || hasPipeArg) {
+      console.error(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: Native PowerShell does NOT support '&&' or '||'. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.\x1b[0m`);
+      process.exit(1);
+    }
+  }
+
   const replaceTemplates = (str: string) => {
     if (!('integrationContext' in payload) || !payload.integrationContext) return str;
     const contextStr = JSON.stringify(payload.integrationContext);

@@ -65,3 +65,40 @@ export const entrySchema = z.object({
 
 export type CommitEntry = z.infer<typeof entrySchema>;
 export type FileStatus = z.infer<typeof fileStatusSchema>;
+
+export const cliArgsSchema = z.object({
+  limit: z.string().optional(),
+  path: z.string().optional(),
+  author: z.string().optional(),
+  search: z.string().optional(),
+  grep: z.string().optional(),
+  range: z.string().optional(),
+  since: z.string().optional(),
+  until: z.string().optional(),
+  'first-parent': z.boolean().optional(),
+  help: z.boolean().optional(),
+  'include-merges': z.boolean().optional(),
+  'include-patch': z.boolean().optional(),
+  'diff-context': z.string().optional(),
+  'max-body-length': z.string().optional(),
+  'max-patch-length': z.string().optional(),
+  category: z.string().optional(),
+  type: z.string().optional(),
+  breaking: z.boolean().optional(),
+  jsonl: z.boolean().optional(),
+  'changelog-only': z.boolean().optional(),
+  format: z.string().optional(),
+  summary: z.boolean().optional(),
+  all: z.boolean().optional(),
+  'patch-search': z.string().optional(),
+  'diff-filter': z.string().optional(),
+  reverse: z.boolean().optional(),
+  'no-body': z.boolean().optional(),
+  'issue-tracker': z.string().optional(),
+  'issue-pattern': z.string().optional(),
+  cache: z.boolean().optional(),
+  mailmap: z.string().optional(),
+  'slack-map': z.string().optional(),
+});
+
+export type CliArgs = z.infer<typeof cliArgsSchema>;

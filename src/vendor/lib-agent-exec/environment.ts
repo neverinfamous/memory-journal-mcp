@@ -21,6 +21,11 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
   };
   
   for (const [key, value] of Object.entries(process.env)) {
+    // 🛠️ AUTONOMOUS HEALING: Strip the AntiGravity dummy token from the host environment
+    // so that native tools like `git` and `gh` fall back to the user's keychain instead of failing.
+    if (key.toUpperCase() === 'GITHUB_TOKEN' && value === 'github_pat_antigravitydummytoken') {
+      continue;
+    }
     setEnv(key, value);
   }
 

@@ -195,7 +195,7 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
             buffer = (' ' + buffer.slice(nextBoundary + RECORD_SEPARATOR.length)).slice(1);
             lastSlice = 0;
           } else {
-            buffer = buffer.length > RECORD_SEPARATOR.length ? buffer.slice(-(RECORD_SEPARATOR.length - 1)) : buffer;
+            buffer = buffer.length > RECORD_SEPARATOR.length ? (' ' + buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : buffer;
             continue;
           }
         }
@@ -214,7 +214,7 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
         }
         if (buffer.length > 100 * 1024 * 1024) {
           console.warn('Warning: Git record buffer exceeded 100MB. Dropping massive commit to prevent memory exhaustion.');
-          buffer = buffer.length > RECORD_SEPARATOR.length ? buffer.slice(-(RECORD_SEPARATOR.length - 1)) : buffer;
+          buffer = buffer.length > RECORD_SEPARATOR.length ? (' ' + buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : buffer;
           droppingMassiveCommit = true;
         }
       }

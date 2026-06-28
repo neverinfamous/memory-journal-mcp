@@ -9,7 +9,10 @@ By pairing this deterministic history model with a deterministic execution bridg
 The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leveraging `NUL` byte delimiting to perfectly parse complex repository states (e.g., file renames, carriage returns, spaces in file names) without string escaping flaws.
 
 1. **`git-runner.ts`**: The execution bridge. It directly interfaces with `git` and handles low-level NUL-byte parsing to extract raw metric data (additions, deletions, statuses). Accepts an optional `cwd` argument, allowing cross-repository and vendor execution contexts without pathing errors.
-2. **`parser.ts`**: The semantic engine. It batches commits and maps raw headers into structured conventional commit shapes. It natively parses `feat(scope)!`, `BREAKING CHANGE:` trailers, issue references, co-authors, and computes qualitative sizes (XS, S, M, L, XL). **Crucially**, it natively parses custom `Confidence:` and `Significance:` (or Impact) trailers from commit messages into the `metadata` object to power downstream **Velocity Summaries** and health dashboards.
+2. **`parser.ts`**: The semantic engine export hub. To respect strict size constraints, the heavy parsing logic is split into specialized modules:
+   - **`parser-record.ts`**: Natively parses raw NUL-delimited strings, `feat(scope)!`, `BREAKING CHANGE:` trailers, issue references, and computes qualitative sizes (XS, S, M, L, XL).
+   - **`parser-batch.ts`**: Handles the asynchronous correlation of patch data, numstats, and base commit data.
+   - **`parser-metadata.ts`**: Extracts custom `Confidence:`, `Significance:`, and `Impact:` trailers into the `metadata` object using pattern matching to power downstream health dashboards.
 3. **`schema.ts`**: The contract. Uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics). **Always consult this schema** if modifying the data returned by the parser.
 4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve the `metadata` attributes without the heavy patch/body diffs.
 
@@ -23,12 +26,19 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 > 
 > NEVER leave scratch files or temporary databases in the active project workspace.
 
+## 🚫 Anti-Patterns
+
+- **NEVER** use `git log`, `git shortlog`, or `git show` to read or parse commit history in any repository. 
+- The `get-git-history-json.ts` script is the required mechanism for all history exploration. 
+- If you simply need the current HEAD SHA, use `git rev-parse HEAD` or `git rev-parse --short HEAD`.
+
 ## 🛠️ Usage Guidelines for Agents
 
+- **CLI Help**: The script has a comprehensive built-in manual. Run `bun .\.agents\scripts\get-git-history-json.ts --help` to explore all available filtering (by date, author, category) and formatting options.
 - **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous test suite using **Bun** (`bun test`) to prevent regressions. Do NOT attempt to run Vitest or Playwright.
 - **Data Coercion**: Metrics inside `totalInsertions`, `similarityScore`, etc., are explicitly strict integers. Do not attempt to parse them loosely or pass floating point decimals.
 - **File Renames**: Be aware that file renames (status `R`) are structured with both an `oldFile` and `file` property in the file status object.
-- **Validation**: Any changes to this module **must** pass `pwsh -c "bun run check"`. The tests depend on carefully constructed mock Git histories.
+- **Validation**: Any changes to this module **must** pass `pnpm run check`. The tests depend on carefully constructed mock Git histories.
 
 ## 📖 Related Context
 

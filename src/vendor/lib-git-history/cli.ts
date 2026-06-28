@@ -1,40 +1,10 @@
 // @ts-nocheck
 import { parseArgs } from 'node:util';
+import pc from 'picocolors';
 
-export type CliArgs = {
-  limit?: string;
-  path?: string;
-  author?: string;
-  search?: string;
-  grep?: string;
-  range?: string;
-  since?: string;
-  until?: string;
-  'first-parent'?: boolean;
-  help?: boolean;
-  'include-merges'?: boolean;
-  'include-patch'?: boolean;
-  'diff-context'?: string;
-  'max-body-length'?: string;
-  'max-patch-length'?: string;
-  category?: string;
-  type?: string;
-  breaking?: boolean;
-  jsonl?: boolean;
-  'changelog-only'?: boolean;
-  format?: string;
-  summary?: boolean;
-  all?: boolean;
-  'patch-search'?: string;
-  'diff-filter'?: string;
-  reverse?: boolean;
-  'no-body'?: boolean;
-  'issue-tracker'?: string;
-  'issue-pattern'?: string;
-  cache?: boolean;
-  mailmap?: string;
-  'slack-map'?: string;
-};
+import { cliArgsSchema, type CliArgs } from './schema.js';
+
+export type { CliArgs };
 
 export function parseArguments(): CliArgs {
   const options = {
@@ -74,7 +44,7 @@ export function parseArguments(): CliArgs {
 
   try {
     const { values } = parseArgs({ args: process.argv.slice(2), options, strict: true });
-    return values as CliArgs;
+    return cliArgsSchema.parse(values);
   } catch (err: unknown) {
     console.error(err instanceof Error ? err.message : String(err));
     showHelpAndExit(1);
@@ -82,7 +52,73 @@ export function parseArguments(): CliArgs {
 }
 
 export function showHelpAndExit(exitCode: number = 0): never {
-  const logFn = exitCode === 0 ? console.log : console.error;
-  logFn(`Usage: bun get-git-history-json.ts [options]`);
+  const logFn = console.error;
+  logFn(`\
+Usage: ${pc.bold('bun get-git-history-json.ts [options]')}
+
+Extracts, parses, and formats git history into a deterministic JSON shape,
+acting as the Single Source of Truth (SSoT) for repository history.
+
+${pc.bold('Agent Directives:')}
+  ${pc.red('NEVER use `git log`, `git shortlog`, or `git show`.')}
+  This tool is the required mechanism for all history exploration.
+
+${pc.bold('Filtering Options:')}
+  -n, --limit <n>          Maximum number of commits to process (defaults to 100 if no range/limit provided)
+  -r, --range <range>      Git commit range (e.g., HEAD~5..HEAD, tags/v1.0.0..tags/v1.1.0)
+  --since <date>           Show commits more recent than a specific date
+  --until <date>           Show commits older than a specific date
+  -a, --author <name>      Filter commits by author name/email
+  -p, --path <path>        Filter commits modifying a specific path/file
+
+${pc.bold('Semantic Filtering Options:')}
+  -c, --category <cat>     Filter by conventional commit category (e.g., feat, fix)
+  -t, --type <type>        Filter by explicit conventional type
+  -b, --breaking           Filter to only include breaking changes
+  --changelog-only         Only include commits suitable for a changelog
+
+${pc.bold('Search Options:')}
+  -s, --search <query>     Search within commit messages
+  -g, --grep <query>       Regex search within commit messages
+  -G, --patch-search <q>   Search within the actual patch diffs (git log -G)
+
+${pc.bold('Content & Formatting Options:')}
+  -f, --format <fmt>       Output format: json (default), markdown, slack, or custom script path
+  --summary                Output summary metadata only (omits bodies, files, patches)
+  --no-body                Omit commit bodies from output
+  --include-patch          Include full patch diff strings in output
+  --jsonl                  Output as JSON Lines format
+  -U, --diff-context <n>   Lines of context for diffs (default: 3)
+  --max-body-length <n>    Truncate commit bodies over this length
+  --max-patch-length <n>   Truncate patches over this length
+
+${pc.bold('Git Behavior Options:')}
+  --first-parent           Follow only the first parent commit upon seeing a merge
+  --include-merges         Include merge commits in the history
+  --all                    Include all commits (removes the default implicit limit of 100)
+  --reverse                Output commits in reverse chronological order
+  --diff-filter <filter>   Filter by diff type (e.g., 'A' for Added, 'M' for Modified)
+
+${pc.bold('Integration Options:')}
+  --issue-tracker <url>    URL prefix to attach to detected issue numbers
+  --issue-pattern <regex>  Regex to identify issue patterns
+  --mailmap <file>         Use a specific mailmap file for author normalization
+  --slack-map <file>       Path to JSON map translating authors to Slack IDs
+  --cache                  Enable local SQLite caching of processed commits
+  -h, --help               Show this help message
+
+${pc.bold('Usage Examples:')}
+
+  1. Get the latest commit summary as JSON:
+     bun get-git-history-json.ts -n 1 --summary
+
+  2. Get all breaking changes authored by Alice in the last 30 days:
+     bun get-git-history-json.ts --author "Alice" --breaking --since "30 days ago"
+
+  3. Generate a Markdown changelog for a specific range:
+     bun get-git-history-json.ts -r "v1.0.0..v1.1.0" -f markdown
+
+  4. Search the diff contents for a specific token:
+     bun get-git-history-json.ts -G "TODO: refactor" --include-patch`);
   process.exit(exitCode);
 }

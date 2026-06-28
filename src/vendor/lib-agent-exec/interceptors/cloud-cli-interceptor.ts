@@ -93,6 +93,10 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         console.error(`\n   💡 AGENT HINT: 'gh auth ${subCmd2}' is highly interactive. Provide a token via stdin and use '--with-token'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
         process.exit(1);
       }
+    } else if (subCmd1 === 'run' && subCmd2 === 'view') {
+      if (args.includes('--log')) {
+        console.error(`\n   💡 AGENT HINT: If the job is still in progress, 'gh run view --log' will fail with code 1. Do NOT poll in a tight loop. Instead, use your 'schedule' tool to set a 60-second timer to wait asynchronously.\n`);
+      }
     } else if (subCmd1 === 'run' && subCmd2 === 'watch') {
       console.error(`\n   💡 AGENT HINT: 'gh run watch' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
       process.exit(1);

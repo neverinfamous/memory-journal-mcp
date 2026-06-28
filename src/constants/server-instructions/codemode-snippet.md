@@ -11,4 +11,4 @@ Anti-Hallucination: DO NOT invoke `mj_execute_code` with an empty `code` payload
 Sandbox: No network access (`fetch` is undefined). `setTimeout` and `sleep(ms)` are available for minor delays.
 Readonly: Pass `readonly: true` to `mj_execute_code` to restrict execution to read-only operations.
 Read `memory://help/codemode` for full namespace table, examples, and patterns.
-**Codemode-only**: When `mj_execute_code` is the only registered tool, all tool names referenced in these instructions (e.g., `create_entry`, `search_entries`) must be called via `mj_execute_code` using `mj.*` namespaces or bare globals. Do NOT call them as direct MCP tools.
+**Codemode-only**: When `mj_execute_code` is the only registered tool, all tool names referenced in these instructions (e.g., `create_entry`, `search_entries`) must be called via `mj_execute_code` using `mj.*` namespaces or bare globals. Do NOT call them as direct MCP tools. Note: This rule applies ONLY to MCP tools; CLI commands (like `memory-journal-mcp entry create`) should always be run natively in the terminal using `run_command`.
