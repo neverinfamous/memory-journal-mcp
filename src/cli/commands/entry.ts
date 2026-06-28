@@ -284,7 +284,7 @@ export async function createEntryAction(options: z.infer<typeof createEntrySchem
         if (options.json === true) {
             process.stdout.write(JSON.stringify({ status: 'success', id: newEntry.id, version: newEntry.version }) + '\n')
         } else {
-            process.stdout.write(`Successfully created entry #${newEntry.id}\n`)
+            process.stderr.write(`Successfully created entry #${newEntry.id}\n`)
         }
     } catch (e) {
         process.stderr.write("Failed to create entry: " + (e instanceof Error ? e.message : String(e)) + "\n")
@@ -350,7 +350,7 @@ export async function updateEntryAction(options: z.infer<typeof updateEntrySchem
         if (options.json === true) {
             process.stdout.write(JSON.stringify({ status: 'success', id: result.id, version: result.version }) + '\n')
         } else {
-            process.stdout.write(`Successfully updated entry #${result.id} to version ${result.version}\n`)
+            process.stderr.write(`Successfully updated entry #${result.id} to version ${result.version}\n`)
         }
     } catch (e) {
         process.stderr.write("Failed to update entry: " + (e instanceof Error ? e.message : String(e)) + "\n")

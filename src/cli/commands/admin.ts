@@ -54,7 +54,7 @@ export async function backupAction(options: z.infer<typeof backupSchema>, comman
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
         } else {
-            process.stdout.write(`Backup successful: ${result.path} (${result.sizeBytes} bytes)\n`)
+            process.stderr.write(`Backup successful: ${result.path} (${result.sizeBytes} bytes)\n`)
         }
     } catch (e) {
         process.stderr.write("Backup failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
@@ -71,7 +71,7 @@ export async function restoreAction(file: string, options: z.infer<typeof restor
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
         } else {
-            process.stdout.write(`Restore successful from ${result.restoredFrom}. Previous entries: ${result.previousEntryCount}, New entries: ${result.newEntryCount}\n`)
+            process.stderr.write(`Restore successful from ${result.restoredFrom}. Previous entries: ${result.previousEntryCount}, New entries: ${result.newEntryCount}\n`)
         }
     } catch (e) {
         process.stderr.write("Restore failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
@@ -89,7 +89,7 @@ export async function vacuumAction(options: z.infer<typeof vacuumSchema>, comman
         if (options.json === true) {
             process.stdout.write(JSON.stringify({ status: 'success', action: 'vacuum' }) + '\n')
         } else {
-            process.stdout.write("Vacuum and optimize successful.\n")
+            process.stderr.write("Vacuum and optimize successful.\n")
         }
     } catch (e) {
         process.stderr.write("Vacuum failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
@@ -114,12 +114,12 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
         } else {
-            process.stdout.write(`Prune result:\n`)
-            process.stdout.write(`  Archived:     ${result.archivedCount}\n`)
-            process.stdout.write(`  Soft Deleted: ${result.prunedCount}\n`)
-            process.stdout.write(`  Hard Deleted: ${result.hardDeletedCount}\n`)
+            process.stderr.write(`Prune result:\n`)
+            process.stderr.write(`  Archived:     ${result.archivedCount}\n`)
+            process.stderr.write(`  Soft Deleted: ${result.prunedCount}\n`)
+            process.stderr.write(`  Hard Deleted: ${result.hardDeletedCount}\n`)
             if (result.backupFile) {
-                process.stdout.write(`  Safety backup created: ${result.backupFile}\n`)
+                process.stderr.write(`  Safety backup created: ${result.backupFile}\n`)
             }
         }
     } catch (e) {
