@@ -212,7 +212,8 @@ addAgentInstructions(createEntryCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
-- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.`
+- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.
+- SNAKE_CASE FLAGS: Do not hallucinate snake_case CLI flags (like --project_number or --session_id). The CLI expects kebab-case (--project-number).`
 )
 createEntryCmd.action(withValidation(createEntrySchema, createEntryAction))
 
@@ -255,7 +256,8 @@ addAgentInstructions(updateEntryCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
-- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.`
+- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.
+- SNAKE_CASE FLAGS: Do not hallucinate snake_case CLI flags (like --project_number or --session_id). The CLI expects kebab-case (--project-number).`
 )
 updateEntryCmd.action(withValidation(updateEntrySchema, updateEntryAction))
 
