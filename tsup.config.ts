@@ -4,6 +4,7 @@ export default defineConfig({
     entry: {
         index: 'src/index.ts',
         cli: 'src/cli/index.ts',
+        'cli/index': 'src/cli/index.ts',
         'worker-script': 'src/codemode/worker-script.ts',
     },
     format: ['esm'],
