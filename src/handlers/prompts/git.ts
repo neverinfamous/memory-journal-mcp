@@ -49,12 +49,12 @@ Once validation passes, stage your changes and commit using standard native Git 
 > 
 > **Example \`commit.ts\` usage (Single Command):**
 > \`\`\`bash
-> bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation passed --add <specific-files-you-modified>
+> bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation passed --add <specific-files-you-modified> --journal
 > \`\`\`
 > *(Note: Use \`--history-file scratch/narrative.txt\` instead of \`--history\` ONLY if your narrative is extremely long or contains complex quotes that risk shell-escaping issues)*
 
-## 3. Journal Entry (Optional but recommended for impact > 0.5 or structural significance)
-Use the CLI (\`memory-journal-mcp entry create\`) to create a \`technical_note\` entry documenting the commit. Tag it with \`["commit-narrative"]\`. Include the commit SHA in the content (the system will auto-link it), the rationale, and any architectural shifts.`,
+## 3. Journal Entry
+The \`--journal\` flag in \`commit.ts\` will **automatically** create a journal entry with the \`commit-narrative\` tag and the SHA, auto-linking it to the codebase. If for some reason you do not use \`--journal\`, you must manually create the entry via \`memory-journal-mcp entry create\`.`,
                             },
                         },
                     ],
@@ -96,11 +96,11 @@ Stage your changes and commit using standard native Git tooling.
 > 
 > **Example \`commit.ts\` usage for a quick commit (Single Command):**
 > \`\`\`bash
-> bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none --add <specific-files-you-modified>
+> bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none --add <specific-files-you-modified> --journal
 > \`\`\`
 
 ## 2. Journal Entry
-Since this is a quick commit, a journal entry is usually not required. If it is structurally significant, use the CLI (\`memory-journal-mcp entry create\`) to document the commit, tagging it with \`["commit-narrative"]\` and including the commit SHA in the content.`,
+The \`--journal\` flag in \`commit.ts\` will **automatically** create a journal entry. You should usually include it even for quick commits so the system maintains a comprehensive audit trail of all changes.`,
                             },
                         },
                     ],

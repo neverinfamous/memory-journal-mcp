@@ -351,20 +351,20 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                                 type: 'text',
                                 text: `# MCP Server Optimization & Anti-Hallucination Guardrails
 
-The primary philosophy of this workflow is: **When you (the agent) encounter a hallucination, confusion, or are forced to use introspection to figure out an API, DO NOT just work around it.**
+The primary philosophy of this workflow is: **Automate away as many problems as possible.** When you (the agent) encounter a hallucination, confusion, or an artificial roadblock, DO NOT just work around it or settle for throwing a "good error message".
 
-You MUST modify the server codebase to ensure future agents never face the same issue.
+You MUST modify the underlying infrastructure (codebase, environment profiles, wrappers) to ensure execution succeeds seamlessly without the agent even noticing.
 
 ## 1. Workflow Initialization
 
-1. Identify the specific hallucination or confusion error that occurred.
+1. Identify the specific hallucination, confusion error, or roadblock that occurred.
 2. Formulate a plan to heal the codebase using the strict hierarchy below.
 
 ## 2. Phase 1: Determine the Layer of Healing
 
 There is a strict hierarchy of how you should heal the codebase:
-1. **Prevent (Highest Preference):** Modify the API schemas or the dispatcher to silently catch and transform the hallucinatory payload into a valid format so the execution succeeds automatically without the agent even noticing.
-2. **Mitigate (Fallback):** If the input cannot be safely inferred or coerced, intercept it and throw a highly actionable custom error explicitly guiding the agent on how to fix it immediately.
+1. **Prevent (Highest Preference - Frictionless Recovery):** Automate the problem away. Modify the API schemas, dispatchers, environment profiles, or interceptors to silently catch, transform, or permit the hallucinatory payload so the execution succeeds automatically.
+2. **Mitigate (Fallback Only):** ONLY if the input cannot be safely inferred, coerced, or permitted without causing data destruction, intercept it and throw a highly actionable custom error explicitly guiding the agent on how to fix it immediately.
 
 Determine which of the 4 layers needs modification:
 
