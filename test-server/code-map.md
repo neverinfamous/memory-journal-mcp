@@ -8,6 +8,17 @@
 
 ---
 
+## Environment & Execution Boundaries
+
+This project relies on modern JavaScript runtimes (`node`, `tsx`, `bun`) and cross-platform testing frameworks (`vitest`, `playwright`). As such, the overwhelming majority of development is optimized for **Windows Native Orchestration** using PowerShell (bolstered by `lib-agent-exec` interceptors).
+
+However, agents and developers must bridge into **WSL** (Linux) under the following explicit conditions:
+1. **Compilation Traps:** The SQLite dependencies (`better-sqlite3-multiple-ciphers`, `sqlite-vec`) use native C bindings. If `node-gyp` fails to build on Windows due to missing Visual Studio build tools, run the compilation via `wsl bash -c`.
+2. **CRLF Isolation:** The server interfaces heavily with Git (`simple-git`) and provides CLI output. If tests fail mysteriously on Windows (especially string-matching or diffs), execute tests in WSL to isolate and identify Windows `\r\n` line-ending bugs.
+3. **Forensic Log Parsing:** If Playwright E2E tests generate massive trace logs that require complex Unix parsing (e.g., chained `grep` and `awk`), use `wsl bash -c` rather than fighting PowerShell object pipelines.
+
+---
+
 ## Directory Tree
 
 ```
