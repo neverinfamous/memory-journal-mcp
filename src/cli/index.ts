@@ -173,7 +173,7 @@ withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
         .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
-        .option('--project <number>', 'Project number')
+        .option('--project, --project-number <number>', 'Project number')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
         .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
         .option('--validation-status <status>', 'Validation status (passed|none|failed)')
