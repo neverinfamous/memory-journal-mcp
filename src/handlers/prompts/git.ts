@@ -39,6 +39,7 @@ Once validation passes, stage your changes and commit using standard native Git 
 > **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
 
 > **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them and pass the semantic flags appropriately instead of raw \`git commit\`. Note that \`commit.ts\` does not support the \`-F\` flag for the full message.
+> **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** You are executing commands in Windows PowerShell. You MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
 > **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
 > - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
 > - \`confidence\`: 
@@ -86,6 +87,7 @@ Stage your changes and commit using standard native Git tooling.
 > **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
 
 > **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them instead of raw \`git commit\`.
+> **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** You are executing commands in Windows PowerShell. You MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
 > **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
 > - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
 > - \`confidence\`: 
