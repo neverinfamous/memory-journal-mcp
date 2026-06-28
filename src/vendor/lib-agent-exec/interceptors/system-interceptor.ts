@@ -1,6 +1,6 @@
-// @ts-nocheck
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
+import { execSync } from 'node:child_process';
 
 export function systemInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, args, payload } = ctx;
@@ -47,11 +47,32 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         ctx.args.unshift('-n');
       }
     })
+    .with({ cmd: P.union('git', 'git.exe') }, ({ args: matchedArgs }) => {
+      if (matchedArgs.includes('branch') && matchedArgs.includes('-r')) {
+        console.error(`\n   💡 AGENT HINT: 'git branch -r' may return stale deleted branches.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Synchronously running 'git fetch -p' to prune the cache before executing branch listing.\x1b[0m`);
+        try {
+          execSync('git fetch -p', { stdio: 'ignore' });
+        } catch {
+          // ignore
+        }
+      }
+    })
     .with({ cmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
       console.error(`\n   💡 AGENT HINT: 'cat' is a shell alias and fails natively on Windows without a shell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically rewriting command to run via Node.js for cross-platform compatibility.\x1b[0m`);
       const filePaths = ctx.args.map(a => a.replace(/\\/g, '\\\\').replace(/'/g, "\\'")).join("', '");
       ctx.cmdBasename = 'node';
       ctx.args = ['-e', `const fs = require('fs'); ['${filePaths}'].forEach(f => { try { console.log(fs.readFileSync(f, 'utf8')); } catch(e) { console.error(e.message); process.exit(1); } });`];
+    })
+    .with({ cmd: P.union('awk', 'sed', 'grep') }, () => {
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' natively fails or lacks features on Windows.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching execution target to WSL2.\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+    })
+    .with({ cmd: P.union('gh', 'gh.exe', 'pnpm', 'npm', 'docker', 'docker.exe') }, ({ args }) => {
+      const isLogin = args.some(a => a === 'login' || a === 'auth');
+      if (isLogin) {
+        console.error(`\n   💡 AGENT HINT: Interactive login commands like '${cmdBasename} ${args.join(' ')}' hang the agent.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Blocking execution. Please instruct the user to run this in their own terminal appended with '--agent-bypass'.\x1b[0m`);
+        process.exit(1);
+      }
     })
     .otherwise(() => {});
 
