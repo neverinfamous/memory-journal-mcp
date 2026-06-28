@@ -180,7 +180,7 @@ interface EntryPayload {
 }
 
 function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata: Record<string, unknown>): EntryPayload {
-    const entryTypeStr = options.type ?? metadata['type'] ?? metadata['entry_type'] ?? metadata['entryType']
+    const entryTypeStr = options.type ?? options.category ?? metadata['type'] ?? metadata['entry_type'] ?? metadata['entryType']
     const entryType = entryTypeStr as EntryType | undefined
 
     const tagsStr = options.tags

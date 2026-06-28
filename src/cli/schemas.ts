@@ -165,6 +165,7 @@ export const baseEntryOptionsSchema = z.object({
     content: z.string().optional(),
     title: z.string().optional(),
     type: z.string().optional(),
+    category: z.string().optional(),
     tags: z.string().optional(),
     project: z.coerce.number().optional(),
     project_number: z.coerce.number().optional(),
