@@ -14,8 +14,8 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `verify-schemas.mjs`           | `tools/list` validates that all tools (except `mj_execute_code`) contain a properly serialized `outputSchema` definition                  | stdio         | ~5s      |
 | `test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                              | stdio         | ~10s     |
 | `test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter     | stdio         | ~90s     |
-| `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (105 total)                                                                                  | stdio         | ~5s      |
-| `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 31 prompts (shape + errors)                                                                        | stdio         | ~10s     |
+| `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (103 total)                                                                                  | stdio         | ~5s      |
+| `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 29 prompts (shape + errors)                                                                        | stdio         | ~10s     |
 | `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                                   | HTTP stateful | ~130s    |
 | `test-progress.mjs`            | Two-phase progress notification test: (1) native tool progress via `export_entries`, (2) Code Mode `mj.reportProgress()` sandbox binding. | stdio         | ~8s      |
 | `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests.        | stdio         | ~1s      |

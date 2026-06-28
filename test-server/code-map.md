@@ -193,7 +193,7 @@ src/
 │       └── types.ts                # GitHub integration internal types
 │
 └── handlers/
-    ├── tools/                      # 105 tool handlers (11 groups) — see § Handler Map below
+    ├── tools/                      # 103 tool handlers (11 groups) — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod output schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
@@ -335,9 +335,9 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ---
 
-## Resources (60 total)
+## Resources (71 total)
 
-> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 60, though they map to the 54 capabilities listed below.
+> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 71, though they map to the capabilities listed below.
 
 ### Static Resources
 
@@ -411,7 +411,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-30 prompts total.
+29 prompts total.
 
 <!-- BEGIN: PROMPTS -->
 | Prompt | Description |
@@ -612,7 +612,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | File / Directory                                       | Purpose                                                                                                                                              |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `test-server/README.md`                                | Agent testing orchestration doc                                                                                                                      |
-| `test-server/tool-reference.md`                        | Categorized 105-tool inventory                                                                                                                       |
+| `test-server/tool-reference.md`                        | Categorized 103-tool inventory                                                                                                                       |
 | `test-server/code-map.md`                              | This file — agent-optimized codebase navigation                                                                                                      |
 | `test-server/test-preflight.md`                        | Pre-test verification checklist                                                                                                                      |
 | `test-server/standard/test-seed.md`                    | Seed data creation (S1–S17) — must run first                                                                                                         |
@@ -623,7 +623,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/standard/test-core-relationships.md`      | Relationships, causal types, visualization, graph resources                                                                                          |
 | `test-server/standard/test-core-admin.md`              | Admin tools (tags, export, backup/restore)                                                                                                           |
 | `test-server/standard/test-core-scheduler.md`          | Scheduler tests (HTTP-only, terminal script)                                                                                                         |
-| `test-server/standard/test-schemas.md`                 | outputSchema validation for all 60 tools                                                                                                             |
+| `test-server/standard/test-schemas.md`                 | outputSchema validation for all 103 tools                                                                                                            |
 | `test-server/standard/test-resources.md`               | All 28 resources (static + template, happy + error paths)                                                                                            |
 | `test-server/standard/test-github.md`                  | **GitHubIntegration** (`index.ts`): Facade uniting 18 tools (issues, PRs, kanban, milestones, repo context). Orchestrates cross-module dependencies. |
 | `test-server/standard/test-errors.md`                  | Prompt handlers, structured error verification, numeric coercion                                                                                     |
