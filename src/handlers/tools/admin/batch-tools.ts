@@ -21,7 +21,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'batch_create_entries',
             title: 'Batch Create Entries',
-            description: 'Create multiple journal entries at once. Max 50 per batch. Use this for imports or bulk creation. Select the most accurate entry_type for each. REQUIRED: You MUST include project_number. Extract this from the Workspaces section of your session briefing. REQUIRED: You MUST include impact_score, trust_score, and validation_status. REQUIRED: You MUST use related_to to anchor entries to previous context.',
+            description: 'Create multiple journal entries at once. Max 50 per batch. Use this for imports or bulk creation. Select the most accurate entry_type for each. REQUIRED: You MUST include project_number. Extract this by querying memory://agent-id. REQUIRED: You MUST include impact_score, trust_score, and validation_status. REQUIRED: You MUST use related_to to anchor entries to previous context.',
             group: 'admin',
             inputSchema: BatchCreateEntriesSchemaMcp,
             outputSchema: BatchCreateEntriesOutputSchema,
@@ -98,7 +98,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'batch_update_entries',
             title: 'Batch Update Entries',
-            description: 'Update multiple existing journal entries in a single transaction. Max 50 per batch. REQUIRED: You MUST include project_number. Extract this from the Workspaces section of your session briefing.',
+            description: 'Update multiple existing journal entries in a single transaction. Max 50 per batch. REQUIRED: You MUST include project_number. Extract this by querying memory://agent-id.',
             group: 'admin',
             inputSchema: BatchUpdateEntriesSchemaMcp,
             outputSchema: BatchUpdateEntriesOutputSchema,

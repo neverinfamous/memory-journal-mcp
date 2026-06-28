@@ -79,9 +79,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   // 1.5. Generic Path Hallucination Intercepts
   for (let i = 0; i < args.length; i++) {
     // memory-journal-mcp backups path hallucination
-    if (args[i].includes('memory-journal-mcp\\backups') || args[i].includes('memory-journal-mcp/backups')) {
+    const arg = args[i];
+    if (arg && (arg.includes('memory-journal-mcp\\backups') || arg.includes('memory-journal-mcp/backups'))) {
       console.error(`\n   💡 AGENT HINT: 'backups' directory is located at 'data/backups', not the repository root.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to data/backups.\x1b[0m`);
-      args[i] = args[i].replace(/memory-journal-mcp[\\/]backups/g, 'memory-journal-mcp\\data\\backups');
+      args[i] = arg.replace(/memory-journal-mcp[\\/]backups/g, 'memory-journal-mcp\\data\\backups');
     }
   }
 
@@ -135,7 +136,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   // Helper for inline commands
   const inlineIdx = args.findIndex(a => inlineFlags.includes(a.toLowerCase()));
   const hasInlineCmd = inlineIdx !== -1;
-  const inlineFlag = hasInlineCmd ? args[inlineIdx].toLowerCase() : '';
+  const inlineFlag = hasInlineCmd ? (args[inlineIdx]?.toLowerCase() || '') : '';
   const innerCmdStr = hasInlineCmd ? (args[inlineIdx + 1] || '') : '';
   
   // Helper to safely strip quoted parts using a ts-pattern state machine
@@ -178,8 +179,11 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     }) }, () => {
       console.error(`\n   💡 AGENT HINT: 'cat' may fail in PowerShell without GNU tools or proper aliases.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically rewriting 'cat' to 'Get-Content' in PowerShell inline command.\x1b[0m`);
       const inlineIdx = ctx.args.findIndex(a => inlineFlags.includes(a.toLowerCase()));
-      if (inlineIdx !== -1 && ctx.args[inlineIdx + 1]) {
-        ctx.args[inlineIdx + 1] = ctx.args[inlineIdx + 1].replace(/\bcat\b/g, 'Get-Content');
+      if (inlineIdx !== -1) {
+        const nextArg = ctx.args[inlineIdx + 1];
+        if (nextArg) {
+          ctx.args[inlineIdx + 1] = nextArg.replace(/\bcat\b/g, 'Get-Content');
+        }
       }
     })
     .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true }, ({ innerCmdStr, cmd: _shellCmd, inlineFlag: flag }: { innerCmdStr: string; cmd: string; inlineFlag: string }) => {
