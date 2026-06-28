@@ -18,6 +18,9 @@ import { analyticsStatsAction, analyticsInsightsAction, analyticsSchema } from '
 import { exportJsonAction, exportMarkdownAction, importMarkdownAction, importExternalAction, exportJsonSchema, exportMarkdownSchema, importMarkdownSchema, importExternalSchema } from './commands/io.js'
 const program = createProgram()
 
+program
+    .option('--json', 'Output help as structured JSON (agent-native)')
+
 // Setup default 'serve' command
 const serveCmd = program
     .command('serve', { isDefault: true })
@@ -31,8 +34,18 @@ addAgentInstructions(program,
 🤖 AI AGENT INSTRUCTIONS:
 - This is an agent-native CLI. 
 - ALWAYS use valid JSON strings for JSON arguments (e.g. \`--rel '[{"target_id":1,"relation_type":"relates_to"}]'\`).
-- If you forget project details, DO NOT hallucinate. Query \`memory://agent-context/{repo}\`.`
+- If you forget project details, DO NOT hallucinate. Query \`memory://agent-context/{repo}\`.
+- 🛠️ AUTONOMOUS HEALING: DO NOT attempt to run \`node .../build/index.js\`. ALWAYS use the global \`memory-journal-mcp\` wrapper or \`bun src/cli/index.ts\`.`
 )
+
+// Setup agent healing for 'project' hallucination
+program
+    .command('project [args...]', { hidden: true })
+    .allowUnknownOption()
+    .action(() => {
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'project' command does not exist. To find project IDs, query the MCP resource memory://agent-context/{repo}.\n`);
+        process.exit(1);
+    });
 
 // Setup 'exec' command
 const execCmd = program
@@ -163,7 +176,7 @@ const entryCmd = program
     .description('Manage journal entries')
 
 const createEntryCmd = entryCmd
-    .command('create')
+    .command('create [content]')
     .description('Create a new journal entry directly in the database')
 
 withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
@@ -174,10 +187,14 @@ withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
         .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
         .option('--project, --project-number <number>', 'Project number')
+        .option('--project_number <number>', 'Project number (alias)')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
+        .option('--trust_score <number>', 'Trust score (0.0 to 1.0) (alias)')
         .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
+        .option('--impact_score <number>', 'Impact score (0.0 to 1.0) (alias)')
         .option('--validation-status <status>', 'Validation status (passed|none|failed)')
         .option('--session-id <id>', 'Session ID')
+        .option('--session_id <id>', 'Session ID (alias)')
         .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
         .option('--rel, --relationships <json>', 'JSON string of relationships')
         .option('--rel-file <path>', 'Load relationships JSON from a file')
@@ -199,7 +216,7 @@ addAgentInstructions(createEntryCmd,
 createEntryCmd.action(withValidation(createEntrySchema, createEntryAction))
 
 const updateEntryCmd = entryCmd
-    .command('update')
+    .command('update [content]')
     .description('Update an existing journal entry')
 
 withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
@@ -211,11 +228,15 @@ withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
         .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
-        .option('--project <number>', 'Project number')
+        .option('--project, --project-number <number>', 'Project number')
+        .option('--project_number <number>', 'Project number (alias)')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
+        .option('--trust_score <number>', 'Trust score (0.0 to 1.0) (alias)')
         .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
+        .option('--impact_score <number>', 'Impact score (0.0 to 1.0) (alias)')
         .option('--validation-status <status>', 'Validation status (passed|none|failed)')
         .option('--session-id <id>', 'Session ID')
+        .option('--session_id <id>', 'Session ID (alias)')
         .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
         .option('--rel, --relationships <json>', 'JSON string of relationships')
         .option('--rel-file <path>', 'Load relationships JSON from a file')

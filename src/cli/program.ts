@@ -66,17 +66,28 @@ export function createProgram(): Command {
             // Check for JSON help mode
             const isJsonHelp = process.argv.includes('--json') || process.argv.includes('--json=true');
             if (isJsonHelp) {
-                const envelope = {
-                    status: 'success',
-                    data: {
-                        name: cmd.name(),
-                        description: helper.commandDescription(cmd),
-                        usage: helper.commandUsage(cmd),
-                        commands: helper.visibleCommands(cmd).map(c => ({
-                            term: helper.subcommandTerm(c),
-                            description: helper.subcommandDescription(c)
-                        })),
-                        options: helper.visibleOptions(cmd).map(opt => ({
+                interface CommandHelpJson {
+                    name: string;
+                    description: string;
+                    usage: string;
+                    commands: CommandHelpJson[];
+                    options: { term: string; description: string; group: string }[];
+                    arguments: { term: string; description: string }[];
+                    aiInstructions: string[] | null;
+                }
+
+                const buildCommandTree = (c: Command): CommandHelpJson => {
+                    const rawAiInstructions = commandAiInstructions.get(c);
+                    const cleanedAiInstructions = rawAiInstructions 
+                        ? rawAiInstructions.replace(/^\n*🤖 AI AGENT INSTRUCTIONS:\n*/, '').split('\n').map(s => s.trim().replace(/^- /, '')).filter(Boolean)
+                        : null;
+
+                    return {
+                        name: c.name(),
+                        description: helper.commandDescription(c),
+                        usage: helper.commandUsage(c),
+                        commands: helper.visibleCommands(c).map(subCmd => buildCommandTree(subCmd)),
+                        options: helper.visibleOptions(c).map(opt => ({
                             term: helper.optionTerm(opt),
                             description: helper.optionDescription(opt),
                             group: match([optionGroups.get(opt), opt.name()])
@@ -85,14 +96,19 @@ export function createProgram(): Command {
                                 .with([P.nullish, P._], () => 'Command Options')
                                 .exhaustive()
                         })),
-                        arguments: helper.visibleArguments(cmd).map(arg => ({
+                        arguments: helper.visibleArguments(c).map(arg => ({
                             term: helper.argumentTerm(arg),
                             description: helper.argumentDescription(arg)
                         })),
-                        aiInstructions: commandAiInstructions.get(cmd) || null
-                    },
+                        aiInstructions: cleanedAiInstructions
+                    };
+                };
+
+                const envelope = {
+                    status: 'success',
+                    data: buildCommandTree(cmd),
                     timestamp: new Date().toISOString()
-                }
+                };
                 return JSON.stringify(envelope) + '\n';
             }
 
