@@ -370,4 +370,11 @@ addCoreOptions(analyticsInsightsCmd)
 addDatabaseOptions(analyticsInsightsCmd)
 analyticsInsightsCmd.action(withValidation(analyticsSchema, analyticsInsightsAction))
 
-program.parse()
+// Auto-heal snake_case flags hallucinatory arguments to kebab-case
+const args = process.argv.map(arg => {
+    if (arg.startsWith('--') && arg.includes('_')) {
+        return arg.replace(/_/g, '-');
+    }
+    return arg;
+});
+program.parse(args)
