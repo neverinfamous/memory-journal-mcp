@@ -167,10 +167,14 @@ export const baseEntryOptionsSchema = z.object({
     type: z.string().optional(),
     tags: z.string().optional(),
     project: z.coerce.number().optional(),
+    project_number: z.coerce.number().optional(),
     trustScore: z.coerce.number().optional(),
+    trust_score: z.coerce.number().optional(),
     impactScore: z.coerce.number().optional(),
+    impact_score: z.coerce.number().optional(),
     validationStatus: z.enum(['passed', 'failed', 'none']).optional(),
     sessionId: z.string().optional(),
+    session_id: z.string().optional(),
     relatedTo: z.string().optional(),
     relationships: z.string().optional(),
     relFile: z.string().optional(),
@@ -232,3 +236,5 @@ export const adminAuditSearchOptionsSchema = z.object({
 export const adminRebuildIndexOptionsSchema = z.object({
     team: z.boolean().optional()
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+

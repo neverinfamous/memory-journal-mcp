@@ -191,19 +191,19 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
         tags = Array.isArray(metadata['tags']) ? metadata['tags'].map(String) : undefined
     }
 
-    const projectRaw = options.project ?? metadata['project'] ?? metadata['projectNumber'] ?? metadata['project_number']
+    const projectRaw = options.project ?? options.project_number ?? metadata['project'] ?? metadata['projectNumber'] ?? metadata['project_number']
     const projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
 
-    const trustRaw = options.trustScore ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
+    const trustRaw = options.trustScore ?? options.trust_score ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
     const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
 
-    const impactRaw = options.impactScore ?? metadata['impact'] ?? metadata['impactScore'] ?? metadata['impact_score']
+    const impactRaw = options.impactScore ?? options.impact_score ?? metadata['impact'] ?? metadata['impactScore'] ?? metadata['impact_score']
     const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
 
     const valStatusRaw = options.validationStatus ?? metadata['validation_status'] ?? metadata['validationStatus']
     const validationStatus = valStatusRaw as 'passed' | 'failed' | 'none' | undefined
 
-    const sessionIdRaw = options.sessionId ?? metadata['session_id'] ?? metadata['sessionId']
+    const sessionIdRaw = options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
     const sessionId = sessionIdRaw as string | undefined
 
     let autoContextStr = options.autoContext
@@ -243,7 +243,15 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     }
 }
 
-export async function createEntryAction(options: z.infer<typeof createEntrySchema>, command: Command): Promise<void> {
+export async function createEntryAction(...args: unknown[]): Promise<void> {
+    const command = args[args.length - 1] as Command;
+    const options = (args.length > 1 ? args[args.length - 2] : {}) as z.infer<typeof createEntrySchema>;
+    const contentArg = args.length > 2 && typeof args[0] === 'string' ? args[0] : undefined;
+
+    if (contentArg !== undefined && options.content === undefined) {
+        options.content = contentArg;
+    }
+
     const db = await getDb(options, command)
 
     try {
@@ -294,7 +302,15 @@ export async function createEntryAction(options: z.infer<typeof createEntrySchem
     }
 }
 
-export async function updateEntryAction(options: z.infer<typeof updateEntrySchema>, command: Command): Promise<void> {
+export async function updateEntryAction(...args: unknown[]): Promise<void> {
+    const command = args[args.length - 1] as Command;
+    const options = (args.length > 1 ? args[args.length - 2] : {}) as z.infer<typeof updateEntrySchema>;
+    const contentArg = args.length > 2 && typeof args[0] === 'string' ? args[0] : undefined;
+
+    if (contentArg !== undefined && options.content === undefined) {
+        options.content = contentArg;
+    }
+
     const db = await getDb(options, command)
 
     try {
