@@ -10,8 +10,12 @@ import {
 } from './option-groups.js'
 import { serveAction, serveSchema } from './commands/serve.js'
 import { execAction, execSchema } from './commands/exec.js'
-import { backupAction, restoreAction, vacuumAction, pruneAction, backupSchema, restoreSchema, vacuumSchema, pruneSchema } from './commands/admin.js'
+import { backupAction, restoreAction, vacuumAction, pruneAction, auditAction, rebuildIndexAction, backupSchema, restoreSchema, vacuumSchema, pruneSchema, auditSchema, rebuildIndexSchema } from './commands/admin.js'
 import { createEntryAction, updateEntryAction, createEntrySchema, updateEntrySchema } from './commands/entry.js'
+import { searchAction, searchSchema } from './commands/search.js'
+import { visualizeAction, visualizeSchema } from './commands/visualize.js'
+import { analyticsStatsAction, analyticsInsightsAction, analyticsSchema } from './commands/analytics.js'
+import { exportJsonAction, exportMarkdownAction, importMarkdownAction, importExternalAction, exportJsonSchema, exportMarkdownSchema, importMarkdownSchema, importExternalSchema } from './commands/io.js'
 const program = createProgram()
 
 // Setup default 'serve' command
@@ -125,6 +129,34 @@ addAgentInstructions(pruneCmd,
 )
 pruneCmd.action(withValidation(pruneSchema, pruneAction))
 
+const auditCmd = adminCmd
+    .command('audit')
+    .description('Search operational telemetry audit logs')
+withGroup(auditCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--limit <number>', 'Maximum number of results to return')
+        .option('--tool <string>', 'Filter by tool name')
+        .option('--user <string>', 'Filter by user')
+        .option('--category <string>', 'Filter by category')
+        .option('--status <string>', 'Filter by status (success|error)')
+})
+addOutputOptions(auditCmd)
+addCoreOptions(auditCmd)
+addDatabaseOptions(auditCmd)
+addAuditOptions(auditCmd)
+auditCmd.action(withValidation(auditSchema, auditAction))
+
+const rebuildIndexCmd = adminCmd
+    .command('rebuild-index')
+    .description('Rebuild semantic search vector index')
+withGroup(rebuildIndexCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--team', 'Rebuild index for team database')
+})
+addOutputOptions(rebuildIndexCmd)
+addCoreOptions(rebuildIndexCmd)
+addDatabaseOptions(rebuildIndexCmd)
+rebuildIndexCmd.action(withValidation(rebuildIndexSchema, rebuildIndexAction))
+
 // Setup 'entry' command group
 const entryCmd = program
     .command('entry')
@@ -203,5 +235,114 @@ addAgentInstructions(updateEntryCmd,
 - MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.`
 )
 updateEntryCmd.action(withValidation(updateEntrySchema, updateEntryAction))
+
+// Setup 'search' command
+const searchCmd = program
+    .command('search <query>')
+    .description('Search journal entries')
+withGroup(searchCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--mode <mode>', 'Search mode: auto, fts, semantic, hybrid', 'auto')
+        .option('--limit <number>', 'Maximum number of results to return', '50')
+        .option('--team', 'Search team database')
+})
+addOutputOptions(searchCmd)
+addCoreOptions(searchCmd)
+addDatabaseOptions(searchCmd)
+addAgentInstructions(searchCmd,
+    `
+🤖 AI AGENT INSTRUCTIONS:
+- Search output defaults to a JSON representation since it is optimized for agents. No need to parse a table.`
+)
+searchCmd.action(withValidation(searchSchema, searchAction))
+
+// Setup 'io' command group
+const ioCmd = program
+    .command('io')
+    .description('Import and export tools')
+
+const exportJsonCmd = ioCmd.command('export-json').description('Export database entries to a JSON file')
+withGroup(exportJsonCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--dest <path>', 'Destination file path (optional)')
+})
+addCoreOptions(exportJsonCmd)
+addDatabaseOptions(exportJsonCmd)
+addOutputOptions(exportJsonCmd)
+exportJsonCmd.action(withValidation(exportJsonSchema, exportJsonAction))
+
+const exportMarkdownCmd = ioCmd.command('export-markdown').description('Export entries to a directory of markdown files')
+withGroup(exportMarkdownCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--dir <path>', 'Destination directory for markdown files (required)')
+})
+addCoreOptions(exportMarkdownCmd)
+addDatabaseOptions(exportMarkdownCmd)
+addOutputOptions(exportMarkdownCmd)
+exportMarkdownCmd.action(withValidation(exportMarkdownSchema, exportMarkdownAction))
+
+const importMarkdownCmd = ioCmd.command('import-markdown').description('Import entries from a directory of markdown files')
+withGroup(importMarkdownCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--dir <path>', 'Source directory of markdown files (required)')
+})
+addCoreOptions(importMarkdownCmd)
+addDatabaseOptions(importMarkdownCmd)
+addOutputOptions(importMarkdownCmd)
+importMarkdownCmd.action(withValidation(importMarkdownSchema, importMarkdownAction))
+
+const importExternalCmd = ioCmd.command('import-external').description('Import entries from external knowledge bases')
+withGroup(importExternalCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--dir <path>', 'Source directory (required)')
+        .option('--format <format>', 'External format: notion or obsidian (required)')
+})
+addCoreOptions(importExternalCmd)
+addDatabaseOptions(importExternalCmd)
+addOutputOptions(importExternalCmd)
+importExternalCmd.action(withValidation(importExternalSchema, importExternalAction))
+
+// Setup 'visualize' command
+const visualizeCmd = program
+    .command('visualize')
+    .description('Generate Mermaid relationship graph')
+withGroup(visualizeCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--out <path>', 'Output file path (optional, will print to stdout if omitted)')
+        .option('--team', 'Visualize team database')
+})
+addCoreOptions(visualizeCmd)
+addDatabaseOptions(visualizeCmd)
+addAgentInstructions(visualizeCmd,
+    `
+🤖 AI AGENT INSTRUCTIONS:
+- ALWAYS use \`--out\` to write massive Mermaid diagrams to a file instead of raw stdout.`
+)
+visualizeCmd.action(withValidation(visualizeSchema, visualizeAction))
+
+// Setup 'analytics' command group
+const analyticsCmd = program
+    .command('analytics')
+    .description('Database analytics and insights')
+addAgentInstructions(analyticsCmd,
+    `
+🤖 AI AGENT INSTRUCTIONS:
+- Analytics commands return massive JSON objects optimized for automated consumption.`
+)
+
+const analyticsStatsCmd = analyticsCmd.command('stats').description('Get basic database statistics')
+withGroup(analyticsStatsCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--team', 'Get stats for team database')
+})
+addOutputOptions(analyticsStatsCmd)
+addCoreOptions(analyticsStatsCmd)
+addDatabaseOptions(analyticsStatsCmd)
+analyticsStatsCmd.action(withValidation(analyticsSchema, analyticsStatsAction))
+
+const analyticsInsightsCmd = analyticsCmd.command('insights').description('Get cross-project insights')
+withGroup(analyticsInsightsCmd, 'Command Options', (cmd: Command) => {
+    cmd.option('--team', 'Get insights for team database')
+})
+addOutputOptions(analyticsInsightsCmd)
+addCoreOptions(analyticsInsightsCmd)
+addDatabaseOptions(analyticsInsightsCmd)
+analyticsInsightsCmd.action(withValidation(analyticsSchema, analyticsInsightsAction))
 
 program.parse()

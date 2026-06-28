@@ -188,3 +188,47 @@ export const updateEntryOptionsSchema = baseEntryOptionsSchema.extend({
     id: z.coerce.number(),
     expectedVersion: z.coerce.number()
 })
+
+export const searchOptionsSchema = z.object({
+    mode: z.enum(['auto', 'fts', 'semantic', 'hybrid']).optional(),
+    team: z.boolean().optional(),
+    limit: z.coerce.number().optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+export const ioExportJsonOptionsSchema = z.object({
+    dest: z.string().optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+export const ioExportMarkdownOptionsSchema = z.object({
+    dir: z.string().optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+export const ioImportMarkdownOptionsSchema = z.object({
+    dir: z.string().optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+export const ioImportExternalOptionsSchema = z.object({
+    dir: z.string().optional(),
+    format: z.enum(['notion', 'obsidian']).optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+export const visualizeOptionsSchema = z.object({
+    out: z.string().optional(),
+    team: z.boolean().optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape)
+
+export const analyticsOptionsSchema = z.object({
+    team: z.boolean().optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+export const adminAuditSearchOptionsSchema = z.object({
+    limit: z.coerce.number().optional(),
+    tool: z.string().optional(),
+    user: z.string().optional(),
+    category: z.string().optional(),
+    status: z.enum(['success', 'error']).optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(auditOptionsSchema.shape).extend(outputOptionsSchema.shape)
+
+export const adminRebuildIndexOptionsSchema = z.object({
+    team: z.boolean().optional()
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
