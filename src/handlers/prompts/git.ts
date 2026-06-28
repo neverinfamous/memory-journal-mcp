@@ -49,7 +49,7 @@ Once validation passes, stage your changes and commit using standard native Git 
 > 
 > **Example \`commit.ts\` usage (Single Command):**
 > \`\`\`bash
-> git add <specific-files-you-modified> ; bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation passed
+> bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation passed --add <specific-files-you-modified>
 > \`\`\`
 > *(Note: Use \`--history-file scratch/narrative.txt\` instead of \`--history\` ONLY if your narrative is extremely long or contains complex quotes that risk shell-escaping issues)*
 
@@ -96,7 +96,7 @@ Stage your changes and commit using standard native Git tooling.
 > 
 > **Example \`commit.ts\` usage for a quick commit (Single Command):**
 > \`\`\`bash
-> git add <specific-files-you-modified> ; bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none
+> bun path/to/commit.ts --msg "docs(scope): message" --no-history --category Changed --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation none --add <specific-files-you-modified>
 > \`\`\`
 
 ## 2. Journal Entry
