@@ -50,6 +50,7 @@ Divide the target files into logical groups and dispatch multiple parallel `main
 - **Config & Env**: `.env.example`, `server.json`, `mcp-config-example.json`, `docker-compose.yml`, `wrangler.toml`, `wrangler.jsonc`
 - **GitHub Elements**: `.github/copilot-instructions.md`, `.github/pull_request_template.md`, `.github/workflows/`
 - **MCP & Instructions**: `test-server/code-map.md`, `test-server/tool-reference.md`, `src/constants/server-instructions/README.md`, `test-server/scripts/prompt-template.md`
+- **Skills**: `skills/**/*.md` (e.g., `/mcp-builder`)
 - **Testing Prompts**: `test-server/*/README.md`, `test-server/*/coordinator-workflow.md`
 
 <instructions>
