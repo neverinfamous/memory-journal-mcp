@@ -308,7 +308,6 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
 
         const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
         const payload = buildEntryPayload(options, metadata, config)
-        console.log("DEBUG payload:", payload.projectNumber, payload.workspaceId, "registry:", !!config.projectRegistry)
 
         const entryInput: CreateEntryInput = {
             content,
