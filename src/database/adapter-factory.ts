@@ -6,11 +6,11 @@ export const DatabaseAdapterFactory = {
     /**
      * Creates and returns the SQLite database adapter
      */
-    create(dbPath: string): Promise<IDatabaseAdapter> {
+    create(dbPath: string, config?: any): Promise<IDatabaseAdapter> {
         logger.info('Initializing SQLite database backend', {
             module: 'DatabaseAdapterFactory',
             dbPath,
         })
-        return Promise.resolve(new DatabaseAdapter(dbPath))
+        return Promise.resolve(new DatabaseAdapter(dbPath, config))
     },
 }

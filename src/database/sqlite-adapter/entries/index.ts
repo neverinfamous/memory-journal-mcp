@@ -35,10 +35,11 @@ import { updateAnchorStatus, getAnchorsByEntryId } from './anchors.js'
 export class EntriesManager {
     private sharedContext: EntriesSharedContext
 
-    constructor(ctx: NativeConnectionManager, tagsMgr: TagsManager) {
+    constructor(ctx: NativeConnectionManager, tagsMgr: TagsManager, config?: any) {
         this.sharedContext = {
             ctx,
             tagsMgr,
+            config,
             get db() {
                 return ctx.getNativeDb()
             },

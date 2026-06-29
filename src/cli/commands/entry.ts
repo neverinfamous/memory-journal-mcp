@@ -4,6 +4,7 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { EntryType, RelationshipType } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
+import { resolveProjectNumberFromPath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import type { CreateEntryInput } from '../../database/core/schema.js'
 import { type z } from 'zod'
@@ -17,7 +18,7 @@ export const updateEntrySchema = updateEntryOptionsSchema
 
 import type { BaseEntryOptionsSchema } from '../schemas.js'
 
-async function getDb(options: BaseEntryOptionsSchema, command: Command): Promise<IDatabaseAdapter> {
+async function getDb(options: BaseEntryOptionsSchema, command: Command): Promise<{ db: IDatabaseAdapter, config: any }> {
     let resolver: ConfigResolver
     const configPath = (options.config) ?? process.env['MEMORY_JOURNAL_CONFIG']
     const configErrors: string[] = []
@@ -45,9 +46,9 @@ async function getDb(options: BaseEntryOptionsSchema, command: Command): Promise
     }
 
     const dbPath = useTeamDb ? String(serverOptions.teamDbPath) : serverOptions.dbPath
-    const db = await DatabaseAdapterFactory.create(dbPath)
+    const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
-    return db
+    return { db, config: serverOptions }
 }
 
 async function parseContent(options: z.infer<typeof createEntrySchema>): Promise<string> {
@@ -200,6 +201,7 @@ interface EntryPayload {
     entryType: EntryType | undefined;
     tags: string[] | undefined;
     projectNumber: number | undefined;
+    workspaceId: string | undefined;
     trustScore: number | undefined;
     impactScore: number | undefined;
     validationStatus: 'passed' | 'failed' | 'none' | undefined;
@@ -209,7 +211,7 @@ interface EntryPayload {
     relatedIds: number[];
 }
 
-function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata: Record<string, unknown>): EntryPayload {
+function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata: Record<string, unknown>, config?: any): EntryPayload {
     const entryTypeStr = options.type ?? options.category ?? metadata['type'] ?? metadata['entry_type'] ?? metadata['entryType']
     const entryType = entryTypeStr as EntryType | undefined
 
@@ -222,7 +224,17 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     }
 
     const projectRaw = options.project ?? options.project_number ?? metadata['project'] ?? metadata['projectNumber'] ?? metadata['project_number']
-    const projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
+    let projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
+    if (projectNumber === undefined || isNaN(projectNumber)) {
+        const autoResolved = resolveProjectNumberFromPath(process.cwd(), config)
+        if (autoResolved !== undefined) {
+            projectNumber = autoResolved
+        } else {
+            projectNumber = undefined
+        }
+    }
+    
+    const workspaceId = resolveWorkspaceId(options.workspaceId as string | undefined, projectNumber, config)
 
     const trustRaw = options.trustScore ?? options.trust_score ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
     const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
@@ -269,7 +281,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     }
 
     return {
-        entryType, tags, projectNumber, trustScore, impactScore, validationStatus, sessionId, autoContextStr, relationships, relatedIds
+        entryType, tags, projectNumber, workspaceId, trustScore, impactScore, validationStatus, sessionId, autoContextStr, relationships, relatedIds
     }
 }
 
@@ -282,7 +294,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         options.content = contentArg;
     }
 
-    const db = await getDb(options, command)
+    const { db, config } = await getDb(options, command)
 
     try {
         const rawContent = await parseContent(options)
@@ -295,13 +307,15 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
 
         const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-        const payload = buildEntryPayload(options, metadata)
+        const payload = buildEntryPayload(options, metadata, config)
+        console.log("DEBUG payload:", payload.projectNumber, payload.workspaceId, "registry:", !!config.projectRegistry)
 
         const entryInput: CreateEntryInput = {
             content,
             entryType: payload.entryType,
             tags: payload.tags,
             projectNumber: payload.projectNumber,
+            workspaceId: payload.workspaceId,
             trustScore: payload.trustScore,
             impactScore: payload.impactScore,
             validationStatus: payload.validationStatus,
@@ -343,7 +357,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         options.content = contentArg;
     }
 
-    const db = await getDb(options, command)
+    const { db, config } = await getDb(options, command)
 
     try {
         const entryId = options.id
@@ -368,12 +382,13 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         }
         
         const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-        const payload = buildEntryPayload(options, metadata)
+        const payload = buildEntryPayload(options, metadata, config)
         
         const updates: Partial<CreateEntryInput> & { expectedVersion: number } = { content, expectedVersion: version }
         if (payload.entryType !== undefined) updates.entryType = payload.entryType
         if (payload.tags !== undefined) updates.tags = payload.tags
         if (payload.projectNumber !== undefined) updates.projectNumber = payload.projectNumber
+        if (payload.workspaceId !== undefined) updates.workspaceId = payload.workspaceId
         if (payload.trustScore !== undefined) updates.trustScore = payload.trustScore
         if (payload.impactScore !== undefined) updates.impactScore = payload.impactScore
         if (payload.validationStatus !== undefined) updates.validationStatus = payload.validationStatus

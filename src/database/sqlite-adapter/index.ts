@@ -46,11 +46,13 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     private backupMgr: BackupManager
     private membersMgr: MembersManager
     private aliasMgr: AliasManager
+    private config?: any
 
-    constructor(dbPath: string) {
+    constructor(dbPath: string, config?: any) {
+        this.config = config
         this.connection = new NativeConnectionManager(dbPath)
         this.tagsMgr = new TagsManager(this.connection)
-        this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr)
+        this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr, this.config)
         this.relationshipsMgr = new RelationshipsManager(this.connection, this.entriesMgr)
         this.backupMgr = new BackupManager(this.connection)
         this.membersMgr = new MembersManager(this.connection)

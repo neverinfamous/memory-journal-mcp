@@ -34,6 +34,7 @@ export interface EntriesSharedContext {
     ctx: NativeConnectionManager
     tagsMgr: TagsManager
     db: Database
+    config?: any
 }
 
 /**
