@@ -18,15 +18,12 @@ export function getAgentContextResource(): InternalResourceDef {
             const match = /^memory:\/\/agent-context\/(.+)$/.exec(uri)
             const repo = match?.[1] ?? 'default'
 
-            // Default fallback if registry mapping isn't found
-            let mappedWorkspace = process.cwd()
             let projectNumber = defaultProjectNumber ?? -1
 
             if (Object.keys(registry).length > 0) {
                 // Allow looking up by key first
                 const exactMatch = registry[repo]
                 if (exactMatch) {
-                    mappedWorkspace = exactMatch.path
                     projectNumber = exactMatch.project_number ?? projectNumber
                 } else {
                     // Try to match by path basename
@@ -35,13 +32,15 @@ export function getAgentContextResource(): InternalResourceDef {
                         return entry.path.endsWith(`/${repo}`) || entry.path.endsWith(`\\${repo}`)
                     })
                     if (found) {
-                        mappedWorkspace = found[1].path
                         projectNumber = found[1].project_number ?? projectNumber
                     }
                 }
             }
 
-            const finalWorkspaceId = resolveWorkspaceId(mappedWorkspace, projectNumber, undefined)
+            // resolveWorkspaceId takes explicitWorkspaceId first. We don't have an explicit one, 
+            // we want it to resolve based on projectNumber and registry.
+            // By passing config, we allow it to find the registry key just like tool handlers do.
+            const finalWorkspaceId = resolveWorkspaceId(undefined, projectNumber, config)
 
             const content = [
                 `Project: ${repo}`,
