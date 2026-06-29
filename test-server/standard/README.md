@@ -31,7 +31,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | File                | Phase | Purpose                                                                                 | When to Run |
 | ------------------- | :---: | --------------------------------------------------------------------------------------- | ----------- |
 | `test-schemas.md`   |   9   | **Output Schemas** — Verify all 103 outputSchema tools return `structuredContent`        | After seed  |
-| `test-resources.md` |  10   | **Resources** — All 38 resources (30 static + 8 template, happy + error paths)          | After seed  |
+| `test-resources.md` |  10   | **Resources** — All 49 resources (41 static + 8 template, happy + error paths)          | After seed  |
 | `test-errors.md`    |  11   | **Error Handling** — Prompt handlers, structured error verification, numeric coercion   | After seed  |
 | `test-integrity.md` |  12   | **Data Integrity** — Boundary values, round-trip fidelity, implementation bug detection | After seed  |
 

@@ -3,21 +3,32 @@ services:
     build: .
     container_name: memory-journal-mcp
     volumes:
-      # Mount local data directory for persistent SQLite database
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
+      - MEMORY_JOURNAL_CONFIG=
       - DB_PATH=/app/data/memory_journal.db
+      - TEAM_DB_PATH=
+      - ADDITIONAL_TEAM_DBS=
+      - TEAM_DEFAULT_ROLE=
+      - TEAM_ADMIN=
+      - DEFAULT_PROJECT_NUMBER=
+      - DEFAULT_WORKSPACE_ID=
+      - EMBEDDING_MODEL=
+      - AUTO_REBUILD_INDEX=
+      - MCP_HOST=
+      - PORT=
+      - STATELESS=
+      - CORS_ORIGIN=
+      - MCP_ENABLE_HSTS=
+      - MCP_AUTH_TOKEN=
+      - MCP_AUTH_SCOPES=
+      - TRUST_PROXY=
+      - PUBLIC_ORIGIN=
+      - OAUTH_ENABLED=
       - AUDIT_LOG_PATH=stderr
-      # Optional: GitHub integration
-      # - GITHUB_TOKEN=<your-github-token>
-      # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: none)
-      # - CORS_ORIGIN=http://localhost:3000
-      # Required for IO operations to sandbox filesystem access
       - ALLOWED_IO_ROOTS=/app/data
-      # - RULES_FILE_PATH=/app/data/RULES.md
-      # - SKILLS_DIR_PATH=/app/data/skills
-      # - MEMORY_JOURNAL_WORKFLOW_SUMMARY=/deploy: production deploy | /audit: security scan
+      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
+      - AUTO_PRUNE_INTERVAL_MINUTES=
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev
@@ -29,33 +40,39 @@ services:
       - mcp-net
     stdin_open: true
     tty: true
-    # MCP stdio communication (default transport)
     command: ['node', 'dist/cli.js']
     restart: unless-stopped
 
-  # HTTP transport service for remote access
   memory-journal-mcp-http:
     build: .
     container_name: memory-journal-mcp-http
     volumes:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
-      - NODE_ENV=production
+      - MEMORY_JOURNAL_CONFIG=
       - DB_PATH=/app/data/memory_journal.db
+      - TEAM_DB_PATH=
+      - ADDITIONAL_TEAM_DBS=
+      - TEAM_DEFAULT_ROLE=
+      - TEAM_ADMIN=
+      - DEFAULT_PROJECT_NUMBER=
+      - DEFAULT_WORKSPACE_ID=
+      - EMBEDDING_MODEL=
+      - AUTO_REBUILD_INDEX=
       - MCP_HOST=0.0.0.0
-      - AUDIT_LOG_PATH=stderr
-      # Required for HTTP: Bearer token authentication
+      - PORT=3000
+      - STATELESS=
+      - CORS_ORIGIN=
+      - MCP_ENABLE_HSTS=
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
-      # Optional: GitHub integration
-      # - GITHUB_TOKEN=<your-github-token>
-      # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: none)
-      # - CORS_ORIGIN=http://localhost:3000
-      # Required for IO operations to sandbox filesystem access
+      - MCP_AUTH_SCOPES=
+      - TRUST_PROXY=
+      - PUBLIC_ORIGIN=
+      - OAUTH_ENABLED=
+      - AUDIT_LOG_PATH=stderr
       - ALLOWED_IO_ROOTS=/app/data
-      # - RULES_FILE_PATH=/app/data/RULES.md
-      # - SKILLS_DIR_PATH=/app/data/skills
-      # - MEMORY_JOURNAL_WORKFLOW_SUMMARY=/deploy: production deploy | /audit: security scan
+      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
+      - AUTO_PRUNE_INTERVAL_MINUTES=
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev

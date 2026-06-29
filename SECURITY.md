@@ -113,7 +113,7 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 
 | Scope   | Tool Groups                                       | Description                |
 | ------- | ------------------------------------------------- | -------------------------- |
-| `read`  | core, search, analytics, relationships, export    | Read-only operations       |
+| `read`  | core, search, analytics, relationships, io, git   | Read-only operations       |
 | `write` | github, team (+ all read groups)                  | Read + write operations    |
 | `admin` | admin, backup, codemode (+ all write/read groups) | Full administrative access |
 

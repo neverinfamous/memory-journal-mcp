@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **103 tools** across **11 groups** (Core, Search, Analytics, Backup, Diagnostics, Batch, Flags/Team, Workflows, GitHub, Aliases, CodeMode), **71 resources**, and **29 prompts**.
+Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **103 tools** across **11 groups** (Core, Search, Analytics, Backup, Diagnostics, Batch, Flags/Team, Workflows, GitHub, Aliases, CodeMode), **49 resources**, and **29 prompts**.
 
 **Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
@@ -67,8 +67,17 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 - Backward compatible with self-healing legacy database retrofitting — never break existing data
 - Consider index implications for new queries
 
-## Architecture
+## Architectural Rules & Key Concepts
 
+- **Multi-Tenancy**: `workspace_id` is a core concept across multi-tenancy. No split-brain allowed.
+- **Team Support**: Team database tools explicitly require `TEAM_DB_PATH`.
+- **Metrics**: Tools support `trust_score` and `impact_score` for analytics.
+- **YAML Frontmatter**: Supported natively in entry commands (`memory-journal-mcp entry create`).
+- **Docker Tags**: Always use `:latest` docker tags.
+- **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types.
+- **Plugin Sync**: Ensure `lib-agent-exec` and `lib-git-history` plugins are kept in sync.
+
+## Architecture
 ```
 src/
 ├── cli/                        # CLI entry point (Commander)
@@ -89,7 +98,7 @@ src/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
 │   ├── tools/                  # 103 tool handlers (11 groups)
-│   ├── resources/              # 71 resource handlers
+│   ├── resources/              # 49 resource handlers
 │   └── prompts/                # 29 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker

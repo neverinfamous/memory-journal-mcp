@@ -46,7 +46,7 @@ Brief description of the changes in this PR.
 ## 📱 Environment Tested
 
 - **OS:** [e.g. Windows 11, macOS 14, Ubuntu 22.04]
-- **Python:** [e.g. 3.11.5]
+- **Node.js:** [e.g. 20.x, 22.x]
 - **Docker:** [e.g. 24.0.6]
 - **MCP Client:** [e.g. Cursor 0.42.3]
 
