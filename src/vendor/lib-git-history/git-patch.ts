@@ -4,7 +4,7 @@ import { activeProcesses, PATCH_BOUNDARY_STR } from './git-runner.js';
 import type { CliArgs } from './cli.js';
 
 export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string) {
-  if (!args['include-patch']) return new Map();
+  if (!args['include-patch'] && args['diff-context'] === undefined) return new Map();
   const patchBaseArgs = [...lockedArgs];
   const excludes = [
     ':(exclude)*.lock', ':(exclude)*-lock.json', ':(exclude)*.min.js', ':(exclude)*.map',
@@ -158,11 +158,17 @@ export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas
       
       const patchByteLen = patchEnd - (hashEnd + 1);
       if (patchByteLen > maxPatchLen) {
-        const maxEnd = Math.min(hashEnd + 1 + maxPatchLen, fullBuffer.length);
-        let safeEnd = maxEnd;
-        while (safeEnd > hashEnd + 1 && safeEnd < fullBuffer.length && (fullBuffer[safeEnd] & 0xC0) === 0x80) safeEnd--;
-        const patch = fullBuffer.toString('utf-8', hashEnd + 1, safeEnd).trim() + '\n...[patch truncated due to length]';
-        map.set(hash, { patch, truncated: true });
+        const fullPatchStr = fullBuffer.toString('utf-8', hashEnd + 1, patchEnd).trim();
+        const fileDiffs = fullPatchStr.split(/(?=^diff --git )/m);
+        let truncated = false;
+        const processedDiffs = fileDiffs.map(fileDiff => {
+          if (fileDiff.length > maxPatchLen) {
+            truncated = true;
+            return fileDiff.slice(0, maxPatchLen) + '\n...[patch truncated due to length]';
+          }
+          return fileDiff;
+        });
+        map.set(hash, { patch: processedDiffs.join('\n'), truncated });
       } else {
         const patch = fullBuffer.toString('utf-8', hashEnd + 1, patchEnd).trim();
         map.set(hash, { patch, truncated: false });

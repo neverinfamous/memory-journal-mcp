@@ -4,7 +4,7 @@ import { entrySchema, fileStatusSchema, type CommitEntry } from './schema.js';
 import type { CliArgs } from './cli.js';
 import { getNumstatMap } from './git-numstat.js';
 import { getPatchMap } from './git-patch.js';
-import { isNoiseFile } from './parser-utils.js';
+import { isNoiseFile, getSlackMap, getLanguage } from './parser-utils.js';
 import type { RawCommitBatchItem } from './parser-record.js';
 
 export async function processBatch(
@@ -23,7 +23,7 @@ export async function processBatch(
       console.warn('Warning: Failed to get numstat map (This may cause missing file stats for this batch):', err instanceof Error ? err.message : String(err));
       return new Map();
     }),
-    args['include-patch'] ? getPatchMap(formattingFlags, args, shas).catch((err) => {
+    (args['include-patch'] || args['diff-context'] !== undefined) ? getPatchMap(formattingFlags, args, shas).catch((err) => {
       console.warn('Warning: Failed to get patch map (This may cause missing patches for this batch):', err instanceof Error ? err.message : String(err));
       return undefined;
     }) : Promise.resolve(undefined)
@@ -69,12 +69,14 @@ export async function processBatch(
       if (!stats && oldFile) stats = statsForCommit.get(oldFile);
 
       if (parsedFiles.length < maxFilesPerCommit) {
+        const language = getLanguage(file);
         parsedFiles.push({
           status, file, ...(oldFile ? { oldFile } : {}),
           ...(similarityScore !== undefined ? { similarityScore } : {}),
           ...(stats && stats.insertions !== undefined ? { insertions: stats.insertions } : {}),
           ...(stats && stats.deletions !== undefined ? { deletions: stats.deletions } : {}),
           ...(stats?.isBinary ? { isBinary: true } : {}),
+          ...(language ? { language } : {}),
         });
       }
     }
@@ -103,6 +105,9 @@ export async function processBatch(
     const isRebased = (committerEmail && authorEmail && committerEmail !== authorEmail && committerName !== 'GitHub') || 
                       (!isNaN(cTime) && !isNaN(aTime) && Math.abs(cTime - aTime) > 1000 * 60 * 60 * 24);
 
+    const map = getSlackMap(args);
+    const slackId = (authorEmail && map[authorEmail]) ? map[authorEmail] : (authorName && map[authorName] ? map[authorName] : undefined);
+
     const entryObj: Record<string, unknown> = {
       commit: sha || 'unknown_commit',
       ...(parents.length > 0 ? { parents } : {}),
@@ -110,6 +115,7 @@ export async function processBatch(
       ...(tags.length > 0 ? { tags } : {}),
       author: authorName || 'Unknown Author',
       ...(authorEmail ? { email: authorEmail } : {}),
+      ...(slackId ? { slackId } : {}),
       ...(committerName && committerName !== authorName ? { committer: committerName } : {}),
       ...(committerEmail && committerEmail !== authorEmail ? { committerEmail } : {}),
       ...(committerDate && committerDate !== date ? { committerDate } : {}),
@@ -129,7 +135,7 @@ export async function processBatch(
       entryObj.associatedIssues = Array.from(issuesMap.entries()).map(([issue, action]) => ({ issue, action }));
     }
 
-    if (args['include-patch'] && patchMap.has(sha)) {
+    if ((args['include-patch'] || args['diff-context'] !== undefined) && patchMap.has(sha)) {
       const patchData = patchMap.get(sha)!;
       entryObj.patch = patchData.patch;
       if (patchData.truncated) entryObj.isPatchTruncated = true;

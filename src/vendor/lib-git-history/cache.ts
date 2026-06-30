@@ -6,6 +6,44 @@ import type { CommitEntry } from './schema.js';
 
 let db: Database | null = null;
 
+interface DBCommitRow {
+  commit_hash: string;
+  parents: string | null;
+  refs: string | null;
+  tags: string | null;
+  author: string;
+  email: string | null;
+  committer: string | null;
+  committerEmail: string | null;
+  committerDate: string | null;
+  date: string;
+  type: string | null;
+  scope: string | null;
+  isBreaking: number;
+  breakingChangeDescription: string | null;
+  isRevert: number;
+  revertedCommit: string | null;
+  isRebased: number;
+  subject: string;
+  cleanSubject: string | null;
+  body: string | null;
+  size: "XS" | "S" | "M" | "L" | "XL" | null;
+  files: string | null;
+  fileCount: number | null;
+  isFilesTruncated: number;
+  totalInsertions: number | null;
+  totalDeletions: number | null;
+  metadata: string | null;
+  patch: string | null;
+  isPatchTruncated: number;
+  references: string | null;
+  coAuthors: string | null;
+  reviewers: string | null;
+  associatedIssues: string | null;
+  validationErrors: string | null;
+  isCorrupted: number;
+}
+
 export function initCache(dbPath?: string): Database {
   if (db) return db;
   
@@ -169,43 +207,43 @@ export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] 
   }
   
   const stmt = db!.prepare(query);
-  const rows = stmt.all(params as Record<string, string | number>) as Record<string, string | number | null>[];
+  const rows = stmt.all(params as Record<string, string | number>) as DBCommitRow[];
   
   return rows.map(row => ({
-    commit: row.commit_hash as string,
-    parents: row.parents ? JSON.parse(row.parents as string) : undefined,
-    refs: row.refs ? JSON.parse(row.refs as string) : undefined,
-    tags: row.tags ? JSON.parse(row.tags as string) : undefined,
-    author: row.author as string,
-    email: (row.email as string) || undefined,
-    committer: (row.committer as string) || undefined,
-    committerEmail: (row.committerEmail as string) || undefined,
-    committerDate: (row.committerDate as string) || undefined,
-    date: row.date as string,
-    type: (row.type as string) || undefined,
-    scope: (row.scope as string) || undefined,
+    commit: row.commit_hash,
+    parents: row.parents ? JSON.parse(row.parents) : undefined,
+    refs: row.refs ? JSON.parse(row.refs) : undefined,
+    tags: row.tags ? JSON.parse(row.tags) : undefined,
+    author: row.author,
+    email: row.email || undefined,
+    committer: row.committer || undefined,
+    committerEmail: row.committerEmail || undefined,
+    committerDate: row.committerDate || undefined,
+    date: row.date,
+    type: row.type || undefined,
+    scope: row.scope || undefined,
     isBreaking: row.isBreaking === 1 ? true : undefined,
-    breakingChangeDescription: (row.breakingChangeDescription as string) || undefined,
+    breakingChangeDescription: row.breakingChangeDescription || undefined,
     isRevert: row.isRevert === 1 ? true : undefined,
-    revertedCommit: (row.revertedCommit as string) || undefined,
+    revertedCommit: row.revertedCommit || undefined,
     isRebased: row.isRebased === 1 ? true : undefined,
-    subject: row.subject as string,
-    cleanSubject: (row.cleanSubject as string) || undefined,
-    body: (row.body as string) || undefined,
-    size: (row.size as "XS" | "S" | "M" | "L" | "XL") || undefined,
-    files: row.files ? JSON.parse(row.files as string) : undefined,
-    fileCount: (row.fileCount as number) || undefined,
+    subject: row.subject,
+    cleanSubject: row.cleanSubject || undefined,
+    body: row.body || undefined,
+    size: row.size || undefined,
+    files: row.files ? JSON.parse(row.files) : undefined,
+    fileCount: row.fileCount || undefined,
     isFilesTruncated: row.isFilesTruncated === 1 ? true : undefined,
-    totalInsertions: row.totalInsertions !== null ? (row.totalInsertions as number) : undefined,
-    totalDeletions: row.totalDeletions !== null ? (row.totalDeletions as number) : undefined,
-    metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
-    patch: (row.patch as string) || undefined,
+    totalInsertions: row.totalInsertions !== null ? row.totalInsertions : undefined,
+    totalDeletions: row.totalDeletions !== null ? row.totalDeletions : undefined,
+    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+    patch: row.patch || undefined,
     isPatchTruncated: row.isPatchTruncated === 1 ? true : undefined,
-    references: row.references ? JSON.parse(row.references as string) : undefined,
-    coAuthors: row.coAuthors ? JSON.parse(row.coAuthors as string) : undefined,
-    reviewers: row.reviewers ? JSON.parse(row.reviewers as string) : undefined,
-    associatedIssues: row.associatedIssues ? JSON.parse(row.associatedIssues as string) : undefined,
-    validationErrors: row.validationErrors ? JSON.parse(row.validationErrors as string) : undefined,
+    references: row.references ? JSON.parse(row.references) : undefined,
+    coAuthors: row.coAuthors ? JSON.parse(row.coAuthors) : undefined,
+    reviewers: row.reviewers ? JSON.parse(row.reviewers) : undefined,
+    associatedIssues: row.associatedIssues ? JSON.parse(row.associatedIssues) : undefined,
+    validationErrors: row.validationErrors ? JSON.parse(row.validationErrors) : undefined,
     isCorrupted: row.isCorrupted === 1 ? true : undefined
   }));
 }

@@ -59,6 +59,7 @@ export const entrySchema = z.object({
     issue: z.string(),
     action: z.string().nullable()
   })).optional(),
+  slackId: z.string().optional(),
   validationErrors: z.array(z.any()).optional(),
   isCorrupted: z.boolean().optional(),
 });
@@ -85,10 +86,13 @@ export const cliArgsSchema = z.object({
   category: z.string().optional(),
   type: z.string().optional(),
   breaking: z.boolean().optional(),
+  impact: z.string().optional(),
+  confidence: z.string().optional(),
   jsonl: z.boolean().optional(),
   'changelog-only': z.boolean().optional(),
   format: z.string().optional(),
   summary: z.boolean().optional(),
+  stats: z.boolean().optional(),
   all: z.boolean().optional(),
   'patch-search': z.string().optional(),
   'diff-filter': z.string().optional(),
@@ -99,6 +103,8 @@ export const cliArgsSchema = z.object({
   cache: z.boolean().optional(),
   mailmap: z.string().optional(),
   'slack-map': z.string().optional(),
+  'package-version': z.boolean().optional(),
+  'stream-to-file': z.string().optional(),
 });
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;

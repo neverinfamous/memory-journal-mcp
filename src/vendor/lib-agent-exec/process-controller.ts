@@ -59,6 +59,7 @@ export class ProcessController {
     this.ioController = new IOController(
       this.child, 
       this.payload, 
+      this.cwd,
       (reason) => this.handleStall(reason),
       (reason) => this.handleMaxBuffer(reason)
     );
@@ -208,7 +209,8 @@ export class ProcessController {
            console.error(`   ✅ GOOD: {"command": "${rootCmd}", "args": [${errArgs}]}`);
          }
       }
-      process.exit(1);
+      this.isFinished = false;
+      this.handleFinish(1, null, false);
     };
 
     if (this.ioController) {
@@ -263,11 +265,13 @@ export class ProcessController {
     if (this.forceKillTimer) clearTimeout(this.forceKillTimer);
     
     this.cleanupTempScript();
-    this.ioController.flushAll();
+    if (this.ioController) {
+      this.ioController.flushAll();
+    }
 
-    return this.ioController.closeFileStreams().then(async () => {
+    const finalizeFinish = async () => {
       let computedCode = code;
-      const envData = typeof this.ioController.getParsedEnvelope === 'function' ? this.ioController.getParsedEnvelope() : null;
+      const envData = this.ioController && typeof this.ioController.getParsedEnvelope === 'function' ? this.ioController.getParsedEnvelope() : null;
       if (this.payload.expectJsonEnvelope && envData) {
          if (envData.status === 'error' || (envData.exit_code !== undefined && envData.exit_code !== 0)) {
              computedCode = typeof envData.exit_code === 'number' ? envData.exit_code : 1;
@@ -295,8 +299,8 @@ export class ProcessController {
           };
 
           const vars = {
-            stdout: this.ioController.stdoutTail,
-            stderr: this.ioController.stderrTail,
+            stdout: this.ioController?.stdoutTail || '',
+            stderr: this.ioController?.stderrTail || '',
             code,
             signal,
             success: false,
@@ -311,31 +315,68 @@ export class ProcessController {
               vars
             );
           } else {
-            body = JSON.stringify({ code, signal, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+            body = JSON.stringify({ code, signal, stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '' });
             body = replaceCtx(body);
           }
           
-          const targetUrl = replaceCtx(this.payload.onFailure);
-          const method = this.payload.webhookMethod || 'POST';
-          const timeoutMs = this.payload.webhookTimeoutMs || 5000;
+          const urls = Array.isArray(this.payload.onFailure) ? this.payload.onFailure : [this.payload.onFailure];
+          for (const u of urls) {
+            const targetUrl = replaceCtx(u);
+            const method = this.payload.webhookMethod || 'POST';
+            const timeoutMs = this.payload.webhookTimeoutMs ?? 5000;
 
-          try { await fetch(targetUrl, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+            if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+              console.error(`❌ Webhook Error: Invalid or unsafe target URL for onFailure webhook. Only http/https allowed.`);
+            } else {
+              const fetchOptions: RequestInit = { method, headers };
+              if (timeoutMs > 0) {
+                fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+              }
+              if (method !== 'GET') fetchOptions.body = body;
+              try { await fetch(targetUrl, fetchOptions).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+            }
+          }
         }
         if (code === null && signal) {
           console.error(`\n❌ Command was terminated by signal ${signal}`);
           process.exit(1);
         } else if (code !== null) {
           const baseCmd = path.basename(this.cmd).toLowerCase();
-          const isGrepNoMatch = code === 1 && ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(baseCmd);
-          const isDiffFound = code === 1 && ['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(baseCmd);
+          let isGrepNoMatch = code === 1 && ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(baseCmd);
+          let isDiffFound = code === 1 && ['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(baseCmd);
           
           let isOutdatedInfo = false;
           if (code === 1 && this.payload.type === 'command') {
              const origCmd = path.basename(this.payload.command).toLowerCase();
+             const isWrapper = ['wsl', 'wsl.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'cmd', 'cmd.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(origCmd);
+             const allArgsStr = this.payload.args ? this.payload.args.join(' ').toLowerCase() : '';
+             
+             const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl)\s+|\b(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
+             
+             if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
+                 isGrepNoMatch = true;
+             } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr)) {
+                 isGrepNoMatch = true;
+             }
+
+             if (['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(origCmd)) {
+                 isDiffFound = true;
+             } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr)) {
+                 isDiffFound = true;
+             }
+
              if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(origCmd)) {
                  const origArgs = this.payload.args || [];
-                 if (origArgs.includes('outdated')) {
+                 if (origArgs.length > 0 && origArgs[0].toLowerCase() === 'outdated') {
                      isOutdatedInfo = true;
+                 }
+             } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
+                 isOutdatedInfo = true;
+             } else if (['git', 'git.exe'].includes(origCmd)) {
+                 const origArgs = this.payload.args || [];
+                 const diffIndex = origArgs.indexOf('diff');
+                 if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
+                     isDiffFound = true;
                  }
              }
           }
@@ -381,8 +422,8 @@ export class ProcessController {
         };
 
         const vars = {
-          stdout: this.ioController.stdoutTail,
-          stderr: this.ioController.stderrTail,
+          stdout: this.ioController?.stdoutTail || '',
+          stderr: this.ioController?.stderrTail || '',
           code: computedCode,
           signal,
           success: computedCode === 0,
@@ -397,17 +438,35 @@ export class ProcessController {
             vars
           );
         } else {
-          body = JSON.stringify({ success: true, stdout: this.ioController.stdoutTail, stderr: this.ioController.stderrTail });
+          body = JSON.stringify({ success: true, stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '' });
           body = replaceCtx(body);
         }
         
-        const targetUrl = replaceCtx(this.payload.onSuccess);
-        const method = this.payload.webhookMethod || 'POST';
-        const timeoutMs = this.payload.webhookTimeoutMs || 5000;
+        const urls = Array.isArray(this.payload.onSuccess) ? this.payload.onSuccess : [this.payload.onSuccess];
+        for (const u of urls) {
+          const targetUrl = replaceCtx(u);
+          const method = this.payload.webhookMethod || 'POST';
+          const timeoutMs = this.payload.webhookTimeoutMs ?? 5000;
 
-        try { await fetch(targetUrl, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) }).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+            console.error(`❌ Webhook Error: Invalid or unsafe target URL for onSuccess webhook. Only http/https allowed.`);
+          } else {
+            const fetchOptions: RequestInit = { method, headers };
+            if (timeoutMs > 0) {
+              fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+            }
+            if (method !== 'GET') fetchOptions.body = body;
+            try { await fetch(targetUrl, fetchOptions).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
+          }
+        }
       }
       process.exit(0);
-    });
+    };
+    
+    if (this.ioController) {
+      return this.ioController.closeFileStreams().then(finalizeFinish);
+    } else {
+      return finalizeFinish();
+    }
   }
 }

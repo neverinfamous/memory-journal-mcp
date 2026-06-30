@@ -44,7 +44,7 @@ If you are a **human user** attempting to run interactive commands natively in y
 There are three execution types (`command`, `script`, `eval`). Always provide the payload via a `.json` file.
 
 > [!NOTE]
-> **Payload Validation**: Ensures `command`, `script`, and `eval` schemas strictly adhere to Zod definitions and `ts-pattern` routing. Covers edge cases like `cwd`, `args`, `env`, `timeoutMs`, `stallTimeoutMs`, `target`, `integrationContext`, `expectJsonEnvelope`, `bypassInterceptors`, `webhookHeaders`, `webhookPayloadTemplate`, `webhookMethod`, `webhookTimeoutMs`, `stdoutFile`, and `stderrFile`.
+> **Payload Validation**: Ensures `command`, `script`, and `eval` schemas strictly adhere to Zod definitions and `ts-pattern` routing. Covers edge cases like `cwd`, `args`, `env`, `timeoutMs`, `stallTimeoutMs`, `target`, `integrationContext`, `templateOverride`, `keepPayload`, `expectJsonEnvelope`, `bypassInterceptors`, `webhookHeaders`, `webhookPayloadTemplate`, `webhookMethod`, `webhookTimeoutMs`, `onSuccess`, `onFailure`, `stdin`, `stdoutFile`, `stderrFile`, `maxBuffer`, and `truncateOutputLength`.
 
 ### 1. Command Payload
 Used for executing standard CLI binaries.
@@ -55,7 +55,22 @@ Used for executing standard CLI binaries.
   "args": ["log", "-n", "5"],
   "cwd": "C:\\path\\to\\dir", // Optional
   "env": { "CUSTOM_VAR": "value" }, // Optional
+  "stdin": "input string", // Optional
+  "stdoutFile": "C:\\path\\to\\out.log", // Optional
+  "stderrFile": "C:\\path\\to\\err.log", // Optional
+  "maxBuffer": 10485760, // Optional
+  "truncateOutputLength": 1048576, // Optional
+  "keepPayload": false, // Optional
+  "bypassInterceptors": true, // Optional (disables safety heuristics)
   "timeoutMs": 30000, // Optional
+  "stallTimeoutMs": 10000, // Optional
+  "expectJsonEnvelope": false, // Optional
+  "onSuccess": ["http://localhost:9999/success"], // Optional (string or array of strings)
+  "onFailure": "http://localhost:9999/fail", // Optional (string or array of strings)
+  "webhookMethod": "POST", // Optional (GET, POST, PUT, PATCH, DELETE)
+  "webhookHeaders": { "Authorization": "Bearer {{integrationContext.token}}" }, // Optional
+  "webhookPayloadTemplate": "{\"status\":\"{{envelope.status}}\",\"data\":{{envelope.data}}}", // Optional
+  "webhookTimeoutMs": 5000, // Optional
   "target": "wsl2" // Optional (routes execution natively into the WSL2 Linux VM)
 }
 ```
@@ -88,7 +103,7 @@ If an `integrationContext` object is provided in the payload, you may use templa
 All payload types (`command`, `script`, `eval`) support an optional boolean flag: `"expectJsonEnvelope": true`. 
 When enabled, the execution bridge will actively parse the final output line of `stdout` for a structured JSON envelope (e.g., `{"status": "success", "data": {...}}` or `{"status": "error", "exit_code": 1}`). 
 - **Smart Exit Codes**: If the envelope status is `"error"`, the physical process exit code is automatically overridden to a failure (even if the shell script exited `0`).
-- **Webhook Integration**: Exposes the `{{envelope.data}}` and `{{envelope.status}}` template variables for use within `webhookPayloadTemplate`.
+- **Webhook Integration**: Exposes the `{{envelope.data}}` and `{{envelope.status}}` template variables for use within `webhookPayloadTemplate`. Features like `webhookMethod`, `webhookHeaders`, `onSuccess`, and `onFailure` are fully supported for complex integrations.
 
 ## 🛠️ Handling Autonomous Healing Hints
 
@@ -103,10 +118,11 @@ When you execute a command and see a console error containing `🛠️ AUTONOMOU
 To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging and false positives. If you need to explicitly bypass these interceptors (e.g., for testing edge cases), you can set `"bypassInterceptors": true` in your JSON payload:
 
 
-- **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, and `diff` return exit code `1` when no matches/differences are found. Similarly, package manager commands like `npm outdated` or `pnpm outdated` return `1` when updates are available. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures.
+- **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, `diff`, and `git diff` return exit code `1` when no matches/differences are found. Similarly, package manager commands like `npm outdated` or `pnpm outdated` return `1` when updates are available. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures. This behavior correctly applies even when these commands are executed indirectly via shell wrappers (e.g. `wsl`, `bash -c`, or `powershell`).
 - **TTY Flag Stripping**: Docker TTY flags (`-t`, `--tty`) and interactive flags (`-i`) are automatically stripped.
 - **PowerShell Padding**: If `pwsh` is called, `-NonInteractive -NoProfile` flags are forcefully injected.
 - **Indefinite Blocking Prevention**: Commands like `docker logs -f` have their `-f`/`--follow` flags stripped. Utilities that inherently run indefinitely like `watch` or `tail -f` are blocked entirely.
+- **TUI & Interactive App Blocking**: TUI apps (`vim`, `nano`, `less`, etc.) are blocked natively, wrapped via `wsl`, or launched inside containers via `docker exec`/`docker run` to prevent the agent from hanging.
 - **Interactive REPL Blocks**: Attempting to launch `node`, `python`, or `bash` without arguments or a script file will be intercepted and terminated immediately to prevent hanging.
 - **Shell Wrapper Blocking**: Wrapping standard tools (`git`, `docker`, `gh`, `npm`, etc.) inside inline shell invocations (e.g., `pwsh -c "git log"`) bypasses the interceptor pipeline and is strictly blocked. Use a `script` payload or invoke the tool directly via a `command` payload.
 - **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging.
@@ -140,7 +156,7 @@ The bridge standardizes the environment to enforce non-interactive behaviors. Th
 - **ANSI Stripping**: The bridge utilizes native C++ Node APIs (`util.stripVTControlCharacters`) to comprehensively strip terminal escape codes in real-time.
 - **Carriage Returns**: Backspaces (`\b`) and carriage returns (`\r`) from animated progress bars are automatically resolved linearly ($O(N)$) before output.
 - **Real-Time Flushing**: To ensure interactive prompts and paused progress bars are visible to agents, the `StreamManager` employs a 200ms inactivity timer to flush pending non-newline-terminated strings.
-- **Truncation**: Output is strictly capped. If a command exceeds the `maxBuffer` limit (default 10MB), the process tree will be forcibly terminated. You may specify `stdoutFile` or `stderrFile` in the payload to redirect massive outputs to disk and raise the buffer limit to 1GB.
+- **Truncation**: Output is strictly capped. If a command exceeds the `maxBuffer` limit (default 10MB), the process tree will be forcibly terminated. You may specify `stdoutFile` or `stderrFile` in the payload to redirect massive outputs to disk and raise the buffer limit to 1GB. To prevent graceful truncation from triggering a `maxBuffer` crash, you can specify `truncateOutputLength` which limits the stored buffer and protects memory without killing the process.
 
 ## 🧪 Usability & Hallucination Testing
 

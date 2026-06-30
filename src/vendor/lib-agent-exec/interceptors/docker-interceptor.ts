@@ -192,6 +192,8 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   }
 
   if (isDockerTtySensitive) {
+    const dockerValueFlags = ['-v', '--volume', '-p', '--publish', '--name', '-e', '--env', '--env-file', '--build-arg', '-f', '--file', '-w', '--workdir', '-u', '--user', '--network', '--entrypoint', '-m', '--memory', '--cpus', '--label', '--hostname', '--add-host', '--dns', '--cap-add', '--cap-drop', '--device', '--log-driver', '--log-opt', '--restart', '--mount', '--tmpfs', '--ulimit', '--pid', '--ipc', '--uts', '--userns', '--cgroupns', '--runtime', '--isolation', '--security-opt', '--storage-opt', '--sysctl', '--link', '--health-cmd', '--health-interval', '--health-retries', '--health-timeout', '--stop-signal', '--stop-timeout', '--shm-size', '--gpus', '--ip', '--ip6', '--mac-address', '--init', '--read-only', '--sig-proxy', '--platform', '--pull', '-l', '-h', '--group-add', '--expose', '--domainname', '--blkio-weight', '--cidfile', '--cgroup-parent'];
+    
     const hasTtyFlag = args.some(arg => 
       /^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg) || 
       arg.startsWith('--tty') || 
@@ -209,7 +211,6 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
       let stopStripping = false;
       let seenRunOrExec = false;
-      const dockerArgFlags = ['-v', '--volume', '-p', '--publish', '--name', '-e', '--env', '-w', '--workdir', '-u', '--user', '--network', '--entrypoint', '-m', '--memory', '--cpus'];
       
       const newArgs = [];
       for (let i = 0; i < args.length; i++) {
@@ -224,7 +225,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
          
          if (!arg.startsWith('-')) {
             const prev = args[i-1];
-            if (!dockerArgFlags.includes(prev)) stopStripping = true;
+            if (!dockerValueFlags.includes(prev)) stopStripping = true;
             newArgs.push(arg);
             continue;
          }
@@ -269,7 +270,6 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     let containerName: string | null = null;
     let containerCmd: string | null = null;
     const containerCmdArgs: string[] = [];
-    const dockerValueFlags = ['-v', '--volume', '-p', '--publish', '--name', '-e', '--env', '--env-file', '--build-arg', '-f', '--file', '-w', '--workdir', '-u', '--user', '--network', '--entrypoint', '-m', '--memory', '--cpus', '--label', '--hostname', '--add-host', '--dns', '--cap-add', '--cap-drop', '--device', '--log-driver', '--log-opt', '--restart', '--mount', '--tmpfs', '--ulimit', '--pid', '--ipc', '--uts', '--userns', '--cgroupns', '--runtime', '--isolation', '--security-opt', '--storage-opt', '--sysctl', '--link', '--health-cmd', '--health-interval', '--health-retries', '--health-timeout', '--stop-signal', '--stop-timeout', '--shm-size', '--gpus', '--ip', '--ip6', '--mac-address', '--init', '--read-only', '--sig-proxy', '--platform', '--pull', '-l', '-h', '--group-add', '--expose', '--domainname', '--blkio-weight', '--cidfile', '--cgroup-parent'];
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];

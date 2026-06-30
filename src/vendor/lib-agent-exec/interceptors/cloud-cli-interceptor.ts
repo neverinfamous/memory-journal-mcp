@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { ExecutionContext } from './types.js';
+import { match, P } from 'ts-pattern';
 
 export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {
   const cloudCliCmds = ['wrangler', 'vercel', 'netlify', 'firebase', 'heroku', 'supabase', 'stripe', 'fly', 'flyctl', 'expo', 'eas', 'wrangler.cmd', 'vercel.cmd', 'netlify.cmd', 'firebase.cmd', 'heroku.cmd', 'supabase.cmd', 'stripe.exe', 'fly.exe', 'flyctl.exe', 'expo.cmd', 'eas.cmd'];
@@ -62,113 +63,150 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
 
     const subCmd1 = args.filter(a => !a.startsWith('-'))[0];
     const subCmd2 = args.filter(a => !a.startsWith('-'))[1];
-    
-    if (subCmd1 === 'pr' && subCmd2 === 'create') {
-      if (!args.includes('--fill') && !args.includes('--title') && !args.includes('--fill-first')) {
-        console.error(`\n   💡 AGENT HINT: 'gh pr create' is interactive without '--fill' or '--title'/'--body'. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+
+    match([subCmd1, subCmd2])
+      .with(['pr', 'create'], () => {
+        if (!args.includes('--fill') && !args.includes('--title') && !args.includes('--fill-first')) {
+          console.error(`\n   💡 AGENT HINT: 'gh pr create' is interactive without '--fill' or '--title'/'--body'. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['pr', 'merge'], () => {
+        if (!args.includes('--auto') && !args.includes('--merge') && !args.includes('--squash') && !args.includes('--rebase')) {
+          console.error(`\n   💡 AGENT HINT: 'gh pr merge' requires a merge strategy (--merge, --squash, --rebase, --auto) to be non-interactive. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['issue', 'create'], () => {
+        if (!args.includes('--title')) {
+          console.error(`\n   💡 AGENT HINT: 'gh issue create' is interactive without '--title'. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['repo', 'create'], () => {
+        if (!args.includes('--public') && !args.includes('--private') && !args.includes('--internal')) {
+          console.error(`\n   💡 AGENT HINT: 'gh repo create' is interactive without visibility flags (--public/--private). Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['pr', 'review'], () => {
+        if (!args.includes('--approve') && !args.includes('--request-changes') && !args.includes('--comment')) {
+          console.error(`\n   💡 AGENT HINT: 'gh pr review' is interactive without a review type flag (--approve/--request-changes/--comment). Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['auth', P.union('login', 'refresh')], () => {
+        if (!args.includes('--with-token')) {
+          console.error(`\n   💡 AGENT HINT: 'gh auth ${subCmd2}' is highly interactive. Provide a token via stdin and use '--with-token'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['run', 'view'], () => {
+        if (args.includes('--log')) {
+          console.error(`\n   💡 AGENT HINT: If the job is still in progress, 'gh run view --log' will fail with code 1. Do NOT poll in a tight loop. Instead, use your 'schedule' tool to set a 60-second timer to wait asynchronously.\n`);
+        } else if (!args.includes('--json')) {
+          console.error(`\n   💡 AGENT HINT: 'gh run view' requires '--json' to output structured data. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['run', 'watch'], () => {
+        console.error(`\n   💡 AGENT HINT: 'gh run watch' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
         process.exit(1);
-      }
-    } else if (subCmd1 === 'pr' && subCmd2 === 'merge') {
-      if (!args.includes('--auto') && !args.includes('--merge') && !args.includes('--squash') && !args.includes('--rebase')) {
-        console.error(`\n   💡 AGENT HINT: 'gh pr merge' requires a merge strategy (--merge, --squash, --rebase, --auto) to be non-interactive. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      })
+      .with(['release', 'create'], () => {
+        if (!args.includes('--title') && !args.includes('--notes') && !args.includes('--generate-notes')) {
+          console.error(`\n   💡 AGENT HINT: 'gh release create' is interactive without release notes flags. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['release', 'delete'], () => {
+        if (!args.includes('-y') && !args.includes('--yes')) {
+          console.error(`\n   💡 AGENT HINT: 'gh release delete' is interactive without '--yes'. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['repo', 'delete'], () => {
+        if (!args.includes('--yes')) {
+          console.error(`\n   💡 AGENT HINT: 'gh repo delete' is interactive without '--yes'. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['issue', 'edit'], () => {
+        if (!args.includes('--title') && !args.includes('--body') && !args.includes('--add-assignee') && !args.includes('--add-label')) {
+          console.error(`\n   💡 AGENT HINT: 'gh issue edit' is interactive without modification flags. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['pr', 'edit'], () => {
+        if (!args.includes('--title') && !args.includes('--body') && !args.includes('--add-assignee') && !args.includes('--add-label') && !args.includes('--add-reviewer')) {
+          console.error(`\n   💡 AGENT HINT: 'gh pr edit' is interactive without modification flags. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['run', 'rerun'], () => {
+        if (args.length <= 2) {
+          console.error(`\n   💡 AGENT HINT: 'gh run rerun' is interactive without a run ID. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['run', 'download'], () => {
+        if (args.length <= 2) {
+          console.error(`\n   💡 AGENT HINT: 'gh run download' is interactive without a run ID. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['issue', 'transfer'], () => {
+        if (args.length <= 3) {
+          console.error(`\n   💡 AGENT HINT: 'gh issue transfer' is interactive without issue and repo args. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['codespace', 'ssh'], () => {
+        console.error(`\n   💡 AGENT HINT: 'gh codespace ssh' runs an interactive shell. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
         process.exit(1);
-      }
-    } else if (subCmd1 === 'issue' && subCmd2 === 'create') {
-      if (!args.includes('--title')) {
-        console.error(`\n   💡 AGENT HINT: 'gh issue create' is interactive without '--title'. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      })
+      .with(['secret', 'set'], () => {
+        if (!args.includes('--body') && !payload.stdin) {
+          console.error(`\n   💡 AGENT HINT: 'gh secret set' requires '--body' or stdin. Blocking execution to prevent interactive prompt.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['gist', 'create'], () => {
+        if (args.length <= 2 && !payload.stdin) {
+          console.error(`\n   💡 AGENT HINT: 'gh gist create' is interactive without files or stdin. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['pr', 'checkout'], () => {
+        const positionalAfterCheckout = args.filter(a => !a.startsWith('-')).slice(2);
+        if (positionalAfterCheckout.length === 0) {
+          console.error(`\n   💡 AGENT HINT: 'gh pr checkout' without a PR number opens an interactive picker. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['browse', P._], () => {
+        console.error(`\n   💡 AGENT HINT: 'gh browse' opens a browser window which is not available in headless mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
         process.exit(1);
-      }
-    } else if (subCmd1 === 'repo' && subCmd2 === 'create') {
-      if (!args.includes('--public') && !args.includes('--private') && !args.includes('--internal')) {
-        console.error(`\n   💡 AGENT HINT: 'gh repo create' is interactive without visibility flags (--public/--private). Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'pr' && subCmd2 === 'review') {
-      if (!args.includes('--approve') && !args.includes('--request-changes') && !args.includes('--comment')) {
-        console.error(`\n   💡 AGENT HINT: 'gh pr review' is interactive without a review type flag (--approve/--request-changes/--comment). Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'auth' && (subCmd2 === 'login' || subCmd2 === 'refresh')) {
-      if (!args.includes('--with-token')) {
-        console.error(`\n   💡 AGENT HINT: 'gh auth ${subCmd2}' is highly interactive. Provide a token via stdin and use '--with-token'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'run' && subCmd2 === 'view') {
-      if (args.includes('--log')) {
-        console.error(`\n   💡 AGENT HINT: If the job is still in progress, 'gh run view --log' will fail with code 1. Do NOT poll in a tight loop. Instead, use your 'schedule' tool to set a 60-second timer to wait asynchronously.\n`);
-      }
-    } else if (subCmd1 === 'run' && subCmd2 === 'watch') {
-      console.error(`\n   💡 AGENT HINT: 'gh run watch' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-      process.exit(1);
-    } else if (subCmd1 === 'release' && subCmd2 === 'create') {
-      if (!args.includes('--title') && !args.includes('--notes') && !args.includes('--generate-notes')) {
-        console.error(`\n   💡 AGENT HINT: 'gh release create' is interactive without release notes flags. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'release' && subCmd2 === 'delete') {
-      if (!args.includes('-y') && !args.includes('--yes')) {
-        console.error(`\n   💡 AGENT HINT: 'gh release delete' is interactive without '--yes'. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'repo' && subCmd2 === 'delete') {
-      if (!args.includes('--yes')) {
-        console.error(`\n   💡 AGENT HINT: 'gh repo delete' is interactive without '--yes'. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'issue' && subCmd2 === 'edit') {
-      if (!args.includes('--title') && !args.includes('--body') && !args.includes('--add-assignee') && !args.includes('--add-label')) {
-        console.error(`\n   💡 AGENT HINT: 'gh issue edit' is interactive without modification flags. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'pr' && subCmd2 === 'edit') {
-      if (!args.includes('--title') && !args.includes('--body') && !args.includes('--add-assignee') && !args.includes('--add-label') && !args.includes('--add-reviewer')) {
-        console.error(`\n   💡 AGENT HINT: 'gh pr edit' is interactive without modification flags. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'run' && subCmd2 === 'rerun') {
-      if (args.length <= 2) {
-        console.error(`\n   💡 AGENT HINT: 'gh run rerun' is interactive without a run ID. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'run' && subCmd2 === 'download') {
-      if (args.length <= 2) {
-        console.error(`\n   💡 AGENT HINT: 'gh run download' is interactive without a run ID. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'issue' && subCmd2 === 'transfer') {
-      if (args.length <= 3) {
-        console.error(`\n   💡 AGENT HINT: 'gh issue transfer' is interactive without issue and repo args. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'codespace' && subCmd2 === 'ssh') {
-      console.error(`\n   💡 AGENT HINT: 'gh codespace ssh' runs an interactive shell. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-      process.exit(1);
-    } else if (subCmd1 === 'secret' && subCmd2 === 'set') {
-      if (!args.includes('--body') && !payload.stdin) {
-        console.error(`\n   💡 AGENT HINT: 'gh secret set' requires '--body' or stdin. Blocking execution to prevent interactive prompt.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'gist' && subCmd2 === 'create') {
-      if (args.length <= 2 && !payload.stdin) {
-        console.error(`\n   💡 AGENT HINT: 'gh gist create' is interactive without files or stdin. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'pr' && subCmd2 === 'checkout') {
-      // gh pr checkout without a PR number/URL/branch opens an interactive picker
-      const positionalAfterCheckout = args.filter(a => !a.startsWith('-')).slice(2);
-      if (positionalAfterCheckout.length === 0) {
-        console.error(`\n   💡 AGENT HINT: 'gh pr checkout' without a PR number opens an interactive picker. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    } else if (subCmd1 === 'browse') {
-      console.error(`\n   💡 AGENT HINT: 'gh browse' opens a browser window which is not available in headless mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-      process.exit(1);
-    } else if (subCmd1 === 'label' && subCmd2 === 'create') {
-      if (!args.includes('--name') && args.filter(a => !a.startsWith('-')).length <= 2) {
-        console.error(`\n   💡 AGENT HINT: 'gh label create' is interactive without a label name. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
-        process.exit(1);
-      }
-    }
+      })
+      .with(['label', 'create'], () => {
+        if (!args.includes('--name') && args.filter(a => !a.startsWith('-')).length <= 2) {
+          console.error(`\n   💡 AGENT HINT: 'gh label create' is interactive without a label name. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with([P.union('pr', 'issue', 'repo', 'run', 'release'), P.union('list', 'status', 'view')], () => {
+        if (!args.includes('--json')) {
+          console.error(`\n   💡 AGENT HINT: 'gh ${subCmd1} ${subCmd2}' requires '--json' to output structured data. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .with(['search', P._], () => {
+        if (!args.includes('--json')) {
+          console.error(`\n   💡 AGENT HINT: 'gh search' requires '--json' to output structured data. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+          process.exit(1);
+        }
+      })
+      .otherwise(() => {});
   }
 
   if (['az', 'az.cmd', 'az.exe'].includes(cmdBasename)) {

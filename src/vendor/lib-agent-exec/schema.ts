@@ -22,30 +22,30 @@ const basePayloadSchema = z.object({
   maxBuffer: z.number().positive().optional(),
   truncateOutputLength: z.number().positive().optional(),
   keepPayload: z.boolean().optional(),
-  stallTimeoutMs: z.number().int().nonnegative().optional(),
+  stallTimeoutMs: z.number().int().nonnegative().max(2147483647).optional(),
   bypassInterceptors: z.boolean().optional(),
-  onSuccess: safeString.optional(),
-  onFailure: safeString.optional(),
-  webhookHeaders: z.record(safeString, safeString).optional(),
+  onSuccess: z.union([safeString, safeStringArray]).optional(),
+  onFailure: z.union([safeString, safeStringArray]).optional(),
+  webhookHeaders: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
   webhookPayloadTemplate: safeString.optional(),
-  webhookMethod: safeString.optional(),
-  webhookTimeoutMs: z.number().int().nonnegative().optional(),
+  webhookMethod: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).optional(),
+  webhookTimeoutMs: z.number().int().nonnegative().max(2147483647).optional(),
   expectJsonEnvelope: z.boolean().optional(),
 });
 
 export const PayloadSchema = z.discriminatedUnion("type", [
   basePayloadSchema.extend({
     type: z.literal("command"),
-    command: safeString.min(1, "command must not be empty"),
+    command: safeString.refine(val => val.trim().length > 0, "command must not be empty"),
   }),
   basePayloadSchema.extend({
     type: z.literal("script"),
-    scriptPath: safeString.min(1, "scriptPath must not be empty"),
+    scriptPath: safeString.refine(val => val.trim().length > 0, "scriptPath must not be empty"),
     interpreter: safeString.optional(),
   }),
   basePayloadSchema.extend({
     type: z.literal("eval"),
-    code: noNullString.min(1, "code must not be empty"),
+    code: noNullString.refine(val => val.trim().length > 0, "code must not be empty"),
     interpreter: safeString.optional(),
   })
 ]);

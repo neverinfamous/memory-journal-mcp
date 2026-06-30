@@ -10,9 +10,9 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 1. **`git-runner.ts`**: The execution bridge. It directly interfaces with `git` and handles low-level NUL-byte parsing to extract raw metric data (additions, deletions, statuses). Accepts an optional `cwd` argument, allowing cross-repository and vendor execution contexts without pathing errors.
 2. **`parser.ts`**: The semantic engine export hub. To respect strict size constraints, the heavy parsing logic is split into specialized modules:
-   - **`parser-record.ts`**: Natively parses raw NUL-delimited strings, `feat(scope)!`, `BREAKING CHANGE:` trailers, issue references, and computes qualitative sizes (XS, S, M, L, XL).
-   - **`parser-batch.ts`**: Handles the asynchronous correlation of patch data, numstats, and base commit data.
-   - **`parser-metadata.ts`**: Extracts custom `Confidence:`, `Significance:`, and `Impact:` trailers into the `metadata` object using pattern matching to power downstream health dashboards.
+   - **`parser-record.ts`**: Natively parses raw NUL-delimited strings, `feat(scope)!`, `BREAKING CHANGE:` trailers, revert references (`revertedCommit`), and issue references. Also manages error boundaries, outputting Zod errors into `validationErrors` if coercion fails.
+   - **`parser-batch.ts`**: Handles the asynchronous correlation of patch data, numstats, and base commit data, and computes qualitative sizes (XS, S, M, L, XL). Sets boundary flags like `isPatchTruncated` and `isFilesTruncated` when output exceeds configured constraints.
+   - **`parser-metadata.ts`**: Extracts custom `Category:`, `Entry:`, `Significance:`, `Impact:`, `Trust:`, `Confidence:`, and `Validation:` trailers into the `metadata` object using pattern matching to power downstream health dashboards.
 3. **`schema.ts`**: The contract. Uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics). **Always consult this schema** if modifying the data returned by the parser.
 4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve the `metadata` attributes without the heavy patch/body diffs.
 
@@ -36,9 +36,11 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 - **CLI Help**: The script has a comprehensive built-in manual. Run `bun .\.agents\scripts\get-git-history-json.ts --help` to explore all available filtering (by date, author, category) and formatting options.
 - **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous test suite using **Bun** (`bun test`) to prevent regressions. Do NOT attempt to run Vitest or Playwright.
-- **Data Coercion**: Metrics inside `totalInsertions`, `similarityScore`, etc., are explicitly strict integers. Do not attempt to parse them loosely or pass floating point decimals.
+- **Data Coercion**: Metrics inside `totalInsertions`, `totalDeletions`, `similarityScore`, `insertions` and `deletions` are explicitly strict integers. Do not attempt to parse them loosely or pass floating point decimals.
 - **File Renames**: Be aware that file renames (status `R`) are structured with both an `oldFile` and `file` property in the file status object.
+- **Trailers & Metadata**: Custom trailers are fully extracted into `trailersObj`, while explicitly mapped metadata (like `Category`, `Entry`, `Significance`, `Impact`, `Trust`, `Confidence`, `Validation`) are stored in the strongly-typed `metadata` object.
 - **Validation**: Any changes to this module **must** pass `pnpm run check`. The tests depend on carefully constructed mock Git histories.
+- **Custom Formatting**: The script supports custom templating using `.hbs` or `.txt` Handlebars templates. Provide the absolute path to your template via the `--format <path>` flag. The template has access to a `commits` array and a structured `versionMap`. Note that custom formatters (and built-in markdown/slack) will include ALL commits by default; if you want to restrict output to a changelog (only feat, fix, etc.), you MUST explicitly pass the `--changelog-only` flag.
 
 ## 📖 Related Context
 
@@ -49,3 +51,8 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 If you are modifying the history parsing logic, you MUST run the usability testing suite to ensure LLMs do not hallucinate or break when piping large JSON responses.
 - **Run the Fuzzing Suite:** Ask the user to "Execute the usability testing coordinator workflow in adamic", or manually trigger the subagents defined in `.agents/scripts/usability/coordinator-workflow.md`.
+
+---
+
+## 📈 Continuous Self-Improvement
+As an agent operating within this workspace, you are expected to practice continuous self-improvement. If you identify gaps, ambiguities, or missing instructions during an audit or execution task, **proactively update this `AGENT_README.md`** and relevant testing prompts. You are empowered to refine your own processes.

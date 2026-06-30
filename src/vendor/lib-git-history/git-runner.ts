@@ -48,16 +48,18 @@ export function getGitTagRange(cwd: string = process.cwd()): { range: string; is
 }
 
 export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined): string[] {
+  if (targetRange && targetRange.startsWith('-')) {
+    throw new Error(`Invalid target range: ${targetRange}. Range must not start with '-'.`);
+  }
   const gitArgs: string[] = [];
   gitArgs.push('-M');
-  if (args['include-merges']) gitArgs.push('--cc');
+  if (args['include-merges'] || args['first-parent']) gitArgs.push('-m');
   else gitArgs.push('--no-merges');
 
-  if (args.limit) gitArgs.push('-n', args.limit);
   if (args.author) gitArgs.push(`--author=${args.author}`);
   if (args.search) gitArgs.push(`-S${args.search}`);
   if (args.grep) gitArgs.push(`--grep=${args.grep}`);
-  if (args.author || args.search || args.grep) {
+  if (args.author || args.search || args.grep || args['patch-search']) {
     if (!gitArgs.includes('-i')) gitArgs.push('-i');
   }
   if (args.since) gitArgs.push(`--since=${args.since}`);
@@ -72,16 +74,14 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   if (args.all) {
     gitArgs.push('--all');
   } else if (!targetRange || targetRange === 'HEAD') {
-    if (!args.limit && !hasTsFilters) gitArgs.push('-n', '100');
-    else if (!args.limit && hasTsFilters) gitArgs.push('-n', '50000');
+    if (!args.limit && !hasTsFilters && !args.reverse) gitArgs.push('-n', '100');
+    else if (hasTsFilters && !args.reverse) gitArgs.push('-n', '50000');
     gitArgs.push('HEAD');
   } else {
     gitArgs.push(targetRange);
   }
 
-  if (args.limit && !hasTsFilters && !args.all && (!targetRange || targetRange !== 'HEAD')) {
-    gitArgs.push('-n', args.limit);
-  } else if (args.limit && !hasTsFilters && !args.all && targetRange && targetRange === 'HEAD') {
+  if (args.limit && !hasTsFilters && !args.reverse) {
     if (!gitArgs.includes('-n')) gitArgs.push('-n', args.limit);
   }
 
@@ -89,7 +89,7 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   return gitArgs;
 }
 
-export async function* streamGitRecords(args: string[], cwd: string = process.cwd()): AsyncGenerator<string> {
+export async function* streamGitRecords(args: string[], cwd: string = process.cwd(), maxBufferLimit: number = 100 * 1024 * 1024): AsyncGenerator<string> {
   const ac = new AbortController();
   let idleTimeout = setTimeout(() => ac.abort(), 300000);
   idleTimeout.unref();
@@ -202,18 +202,21 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
 
         while ((sepIdx = buffer.indexOf(RECORD_SEPARATOR, lastSlice)) !== -1) {
           const record = buffer.slice(lastSlice, sepIdx);
-          if (record.length < 100 * 1024 * 1024 && record.trim()) {
-            yield record;
-          } else if (record.length >= 100 * 1024 * 1024) {
-            console.warn('Warning: Git record exceeded 100MB. Dropping massive commit.');
+          if (record.trim()) {
+            if (record.length >= maxBufferLimit) {
+              console.warn(`Warning: Git record exceeded ${Math.round(maxBufferLimit/1024/1024)}MB. Truncating massive commit.`);
+              yield record.slice(0, maxBufferLimit);
+            } else {
+              yield record;
+            }
           }
           lastSlice = sepIdx + RECORD_SEPARATOR.length;
         }
         if (lastSlice > 0) {
           buffer = (' ' + buffer.slice(lastSlice)).slice(1);
         }
-        if (buffer.length > 100 * 1024 * 1024) {
-          console.warn('Warning: Git record buffer exceeded 100MB. Dropping massive commit to prevent memory exhaustion.');
+        if (buffer.length > maxBufferLimit) {
+          console.warn(`Warning: Git record buffer exceeded ${Math.round(maxBufferLimit/1024/1024)}MB. Dropping massive commit to prevent memory exhaustion.`);
           buffer = buffer.length > RECORD_SEPARATOR.length ? (' ' + buffer.slice(-(RECORD_SEPARATOR.length - 1))).slice(1) : buffer;
           droppingMassiveCommit = true;
         }
@@ -227,7 +230,7 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
       }
     }
     await processComplete;
-    if (!droppingMassiveCommit && buffer.trim() && buffer.length < 100 * 1024 * 1024) yield buffer;
+    if (!droppingMassiveCommit && buffer.trim() && buffer.length < maxBufferLimit) yield buffer;
   } finally {
     clearTimeout(idleTimeout);
     clearTimeout(absoluteTimeout);

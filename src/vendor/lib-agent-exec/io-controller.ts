@@ -15,6 +15,7 @@ export class IOController {
   private _stdoutTail = '';
   private _stderrTail = '';
   private _lastParsedEnvelope: Record<string, unknown> | null = null;
+  private pendingStdout = '';
   
   public get stdoutTail() { return this._stdoutTail; }
   public get stderrTail() { return this._stderrTail; }
@@ -22,7 +23,7 @@ export class IOController {
   public getParsedEnvelope(): Record<string, unknown> | null {
     if (!this.payload.expectJsonEnvelope) return null;
     
-    const current = this.parseEnvelopeFromTail(this._stdoutTail);
+    const current = this.parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
     if (current) return current;
     
     return this._lastParsedEnvelope;
@@ -34,9 +35,11 @@ export class IOController {
     if (tail.length === 0) return null;
     
     let lastBrace = tail.lastIndexOf('}');
-    while (lastBrace !== -1) {
+    let attempts = 0;
+    while (lastBrace !== -1 && attempts < 10) {
       let firstBrace = tail.lastIndexOf('{', lastBrace);
-      while (firstBrace !== -1) {
+      while (firstBrace !== -1 && attempts < 10) {
+        attempts++;
         try {
           const candidate = tail.slice(firstBrace, lastBrace + 1);
           const parsed = JSON.parse(candidate);
@@ -51,6 +54,56 @@ export class IOController {
       lastBrace = tail.lastIndexOf('}', lastBrace - 1);
     }
     return null;
+  }
+  
+  private finalizeStdout(decoded: string): string {
+    if (!this.payload.expectJsonEnvelope) return decoded;
+    this.pendingStdout += decoded;
+    const tail = this.pendingStdout.trim();
+    if (!tail) {
+       const res = this.pendingStdout;
+       this.pendingStdout = '';
+       return res;
+    }
+    
+    let lastBrace = tail.lastIndexOf('}');
+    let found = false;
+    let envelopeStart = -1;
+    let envelopeEnd = -1;
+    let attempts = 0;
+    while (lastBrace !== -1 && attempts < 10) {
+       let firstBrace = tail.lastIndexOf('{', lastBrace);
+       while (firstBrace !== -1 && attempts < 10) {
+          attempts++;
+          try {
+             const candidate = tail.slice(firstBrace, lastBrace + 1);
+             const parsedObj = JSON.parse(candidate);
+             if (parsedObj && typeof parsedObj === 'object' && 'status' in parsedObj) {
+                found = true;
+                envelopeStart = firstBrace;
+                envelopeEnd = lastBrace + 1;
+                this._lastParsedEnvelope = parsedObj;
+                break;
+             }
+          } catch { /* ignore */ }
+          firstBrace = tail.lastIndexOf('{', firstBrace - 1);
+       }
+       if (found) break;
+       lastBrace = tail.lastIndexOf('}', lastBrace - 1);
+    }
+    
+    if (found) {
+       const envString = tail.slice(envelopeStart, envelopeEnd);
+       const idx = this.pendingStdout.lastIndexOf(envString);
+       if (idx !== -1) {
+          this.pendingStdout = this.pendingStdout.slice(0, idx) + this.pendingStdout.slice(idx + envString.length);
+          this.pendingStdout = this.pendingStdout.replace(/\s+$/, '');
+          if (this.pendingStdout.length > 0) this.pendingStdout += '\n';
+       }
+    }
+    const res = this.pendingStdout;
+    this.pendingStdout = '';
+    return res;
   }
   
   private outStream?: fs.WriteStream | Writable;
@@ -69,6 +122,7 @@ export class IOController {
   constructor(
     private child: ChildProcess,
     private payload: ExecPayload,
+    private cwd: string,
     private onStall: (reason: string) => void,
     private onMaxBuffer: (reason: string) => void
   ) {
@@ -143,7 +197,7 @@ export class IOController {
           }
         });
       }
-      const outPath = path.resolve(filePath);
+      const outPath = path.resolve(this.cwd, filePath);
       ensureDir(outPath);
       return fs.createWriteStream(outPath);
     };
@@ -258,6 +312,7 @@ export class IOController {
   }
 
   private evaluatePromptStall() {
+    if (this.payload.bypassInterceptors) return;
     if (!this.payload.stdin || this.isStdinClosed) {
       if (this.hasTuiSequence(this._stdoutTail) || this.hasTuiSequence(this._stderrTail)) {
         this.onStall('Execution stalled: Process attempted to enter an interactive alternate screen buffer or TUI.');
@@ -302,8 +357,37 @@ export class IOController {
   }
 
   private processData(isErr: boolean, data: Buffer) {
-    const decoded = isErr ? this.stderrDecoder.write(data) : this.stdoutDecoder.write(data);
+    let decoded = isErr ? this.stderrDecoder.write(data) : this.stdoutDecoder.write(data);
     
+    if (!isErr && this.payload.expectJsonEnvelope) {
+       this.pendingStdout += decoded;
+       const lines = this.pendingStdout.split('\n');
+       let toEmit = '';
+       for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i];
+          let isEnvelope = false;
+          const trimmed = line.trim();
+          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+             try {
+                const parsed = JSON.parse(trimmed);
+                if (parsed && typeof parsed === 'object' && 'status' in parsed) {
+                   isEnvelope = true;
+                   this._lastParsedEnvelope = parsed;
+                }
+             } catch { /* ignore */ }
+          }
+          if (!isEnvelope) {
+             toEmit += line + '\n';
+          }
+       }
+       this.pendingStdout = lines[lines.length - 1];
+       if (this.pendingStdout.length > 0 && !this.pendingStdout.trimStart().startsWith('{')) {
+          toEmit += this.pendingStdout;
+          this.pendingStdout = '';
+       }
+       decoded = toEmit;
+    }
+
     // Robust sliding window for ANSI checking
     if (isErr) {
       this._stderrTail += decoded;
@@ -311,7 +395,7 @@ export class IOController {
     } else {
       this._stdoutTail += decoded;
       if (this.payload.expectJsonEnvelope) {
-         const parsed = this.parseEnvelopeFromTail(this._stdoutTail);
+         const parsed = this.parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
          if (parsed) {
             this._lastParsedEnvelope = parsed;
          }
@@ -330,7 +414,7 @@ export class IOController {
     const defaultMaxBuffer = fileForStream ? 1024 * 1024 * 1024 : (this.payload.truncateOutputLength ? Infinity : 10 * 1024 * 1024);
     const maxBuffer = this.payload.maxBuffer ?? defaultMaxBuffer;
     
-    if (this.streamManager.getLength(isErr) > maxBuffer) {
+    if ((this.streamManager.getLength(false) + this.streamManager.getLength(true)) > maxBuffer) {
        this.onMaxBuffer(`Output exceeded maxBuffer of ${maxBuffer} bytes.`);
        return;
     }
@@ -343,7 +427,12 @@ export class IOController {
   }
 
   private processEnd(isErr: boolean) {
-    const decoded = isErr ? this.stderrDecoder.end() : this.stdoutDecoder.end();
+    let decoded = isErr ? this.stderrDecoder.end() : this.stdoutDecoder.end();
+    if (!isErr) {
+      decoded = this.finalizeStdout(decoded);
+      this._stdoutTail += decoded;
+      if (this._stdoutTail.length > 2048) this._stdoutTail = this._stdoutTail.slice(-1024);
+    }
     let str = this.streamManager.processChunk(isErr, decoded);
     str += this.streamManager.flushChunk(isErr);
     if (str) {
@@ -373,6 +462,16 @@ export class IOController {
     if (this.stderrFlushTimer) clearTimeout(this.stderrFlushTimer);
 
     if (this.child.stdout) {
+       if (this.pendingStdout) {
+          const finalStr = this.finalizeStdout('');
+          if (finalStr) {
+             this._stdoutTail += finalStr;
+             if (this._stdoutTail.length > 2048) this._stdoutTail = this._stdoutTail.slice(-1024);
+             const str = this.streamManager.processChunk(false, finalStr);
+             this.streamManager.addLength(false, str.length);
+             this.streamManager.writeData(false, str, this.payload.stdoutFile, this.payload.stderrFile);
+          }
+       }
        const str = this.streamManager.flushChunk(false);
        if (str) {
           this.streamManager.addLength(false, str.length);

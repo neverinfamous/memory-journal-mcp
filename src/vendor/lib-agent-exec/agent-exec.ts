@@ -96,9 +96,9 @@ try {
     fatalError(`The provided cwd '${cwd}' does not exist or is not a directory.`);
   }
 
-  const env = buildEnvironment(payload.env);
-  
   const { cmd, args, tempScriptPath, envOverrides } = buildCommand(payload, cwd);
+  
+  const env = buildEnvironment(payload.env);
   
   const finalEnv = { ...env };
   for (const [k, v] of Object.entries(envOverrides)) {

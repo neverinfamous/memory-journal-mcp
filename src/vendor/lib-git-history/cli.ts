@@ -26,10 +26,13 @@ export function parseArguments(): CliArgs {
     category: { type: 'string', short: 'c' },
     type: { type: 'string', short: 't' },
     breaking: { type: 'boolean', short: 'b' },
+    impact: { type: 'string' },
+    confidence: { type: 'string' },
     jsonl: { type: 'boolean' },
     'changelog-only': { type: 'boolean' },
     format: { type: 'string', short: 'f' },
     summary: { type: 'boolean' },
+    stats: { type: 'boolean' },
     all: { type: 'boolean' },
     'patch-search': { type: 'string', short: 'G' },
     'diff-filter': { type: 'string' },
@@ -40,6 +43,8 @@ export function parseArguments(): CliArgs {
     cache: { type: 'boolean' },
     mailmap: { type: 'string' },
     'slack-map': { type: 'string' },
+    'package-version': { type: 'boolean' },
+    'stream-to-file': { type: 'string' },
   } as const;
 
   try {
@@ -52,7 +57,7 @@ export function parseArguments(): CliArgs {
 }
 
 export function showHelpAndExit(exitCode: number = 0): never {
-  const logFn = console.error;
+  const logFn = exitCode === 0 ? console.log : console.error;
   logFn(`\
 Usage: ${pc.bold('bun get-git-history-json.ts [options]')}
 
@@ -75,6 +80,8 @@ ${pc.bold('Semantic Filtering Options:')}
   -c, --category <cat>     Filter by conventional commit category (e.g., feat, fix)
   -t, --type <type>        Filter by explicit conventional type
   -b, --breaking           Filter to only include breaking changes
+  --impact <impact>        Filter by minimum impact score (e.g., ">=0.5", "0.8")
+  --confidence <conf>      Filter by minimum confidence score (e.g., ">=0.5", "0.8")
   --changelog-only         Only include commits suitable for a changelog
 
 ${pc.bold('Search Options:')}
@@ -85,6 +92,7 @@ ${pc.bold('Search Options:')}
 ${pc.bold('Content & Formatting Options:')}
   -f, --format <fmt>       Output format: json (default), markdown, slack, or custom script path
   --summary                Output summary metadata only (omits bodies, files, patches)
+  --stats                  Output summary metadata plus file stats (omits bodies, patches)
   --no-body                Omit commit bodies from output
   --include-patch          Include full patch diff strings in output
   --jsonl                  Output as JSON Lines format
@@ -104,6 +112,8 @@ ${pc.bold('Integration Options:')}
   --issue-pattern <regex>  Regex to identify issue patterns
   --mailmap <file>         Use a specific mailmap file for author normalization
   --slack-map <file>       Path to JSON map translating authors to Slack IDs
+  --package-version        Include the package.json version in the output metadata
+  --stream-to-file <file>  Stream JSON output directly to a file instead of stdout
   --cache                  Enable local SQLite caching of processed commits
   -h, --help               Show this help message
 

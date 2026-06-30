@@ -263,13 +263,13 @@ export function parseGitRecord(
           else if (['error', 'failing', 'fail'].includes(v)) v = 'failed';
           metadataObj.validation = v;
         })
-        .with('breaking-change', () => {
+        .with(P.union('breaking-change', 'breaking-changes'), () => {
           isBreaking = true;
           if (val.trim()) breakingChangeDescription = val;
         })
         .with('co-authored-by', () => { coAuthors.push(...val.split(',').map(s => s.trim()).filter(Boolean)); })
         .with('reviewed-by', () => { if (val) reviewers.push(val); })
-        .with(P.when((k: string) => /^(acked-by|bug|cc|closes|depends-on|fixes|related-to|reported-by|resolves|see-also|signed-off-by|tested-by)$/.test(k)), () => {
+        .with(P.when((k: string) => /^(acked-by|bug|cc|closes|depends-on|fixes|refs|references|related-to|reported-by|resolves|see-also|signed-off-by|tested-by)$/.test(k)), () => {
           const niceKey = key.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-');
           if (val) references.push(`${niceKey}: ${val}`);
         })
@@ -313,10 +313,45 @@ export function parseGitRecord(
   if (entriesParsed.length > 0) metadataObj.entry = entriesParsed;
   if (Object.keys(customTrailers).length > 0) metadataObj.customTrailers = customTrailers;
 
-  if (args.category && !categories.includes(args.category)) return null;
+  const filterCategories = categories.length > 0 ? categories : (type ? [type.charAt(0).toUpperCase() + type.slice(1)] : ['Uncategorized']);
+  if (args.category && !filterCategories.some(c => c.toLowerCase() === args.category!.toLowerCase())) return null;
   if (args.type && type !== args.type) return null;
   if (args.breaking && !isBreaking) return null;
   if (args['changelog-only'] && entriesParsed.length === 0 && !(['feat', 'fix', 'perf', 'revert'].includes(type || '') || isBreaking)) return null;
+
+  if (args.impact) {
+    const recordImpact = metadataObj.impact as number | undefined;
+    if (recordImpact === undefined) return null;
+    const impactMatch = args.impact.match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
+    if (!impactMatch) return null;
+    const op = impactMatch[1] || '==';
+    const val = parseFloat(impactMatch[2]);
+    const pass = match(op)
+      .with('>', () => recordImpact > val)
+      .with('>=', () => recordImpact >= val)
+      .with('<', () => recordImpact < val)
+      .with('<=', () => recordImpact <= val)
+      .with('==', '=', () => recordImpact === val)
+      .otherwise(() => false);
+    if (!pass) return null;
+  }
+
+  if (args.confidence) {
+    const recordConfidence = metadataObj.confidence as number | undefined;
+    if (recordConfidence === undefined) return null;
+    const confMatch = args.confidence.match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
+    if (!confMatch) return null;
+    const op = confMatch[1] || '==';
+    const val = parseFloat(confMatch[2]);
+    const pass = match(op)
+      .with('>', () => recordConfidence > val)
+      .with('>=', () => recordConfidence >= val)
+      .with('<', () => recordConfidence < val)
+      .with('<=', () => recordConfidence <= val)
+      .with('==', '=', () => recordConfidence === val)
+      .otherwise(() => false);
+    if (!pass) return null;
+  }
 
   const refs = refsRaw ? refsRaw.split(', ').map(r => r.trim().replace(/^HEAD -> /, '')).filter(Boolean) : [];
   const tags = refs.filter(r => r.startsWith('tag: ')).map(r => r.replace(/^tag:\s*/, ''));
@@ -333,6 +368,24 @@ export function parseGitRecord(
   const issuesMap = new Map<string, string | null>();
   extractIssues(subject, issuesMap, args['issue-pattern']);
   extractIssues(body, issuesMap, args['issue-pattern']);
+
+  if (args['issue-tracker']) {
+    const tracker = args['issue-tracker'];
+    const newIssuesMap = new Map<string, string | null>();
+    for (const [issue, action] of issuesMap.entries()) {
+      let finalIssue = issue;
+      if (issue.startsWith('#')) {
+        finalIssue = tracker + (tracker.endsWith('/') ? '' : '') + issue.slice(1);
+      } else if (!issue.startsWith('http')) {
+        finalIssue = tracker.endsWith('/') ? tracker + issue : tracker + '/' + issue;
+      }
+      newIssuesMap.set(finalIssue, action);
+    }
+    issuesMap.clear();
+    for (const [k, v] of newIssuesMap.entries()) {
+      issuesMap.set(k, v);
+    }
+  }
 
   return {
     sha: (' ' + sha).slice(1), parents, refs, tags, 

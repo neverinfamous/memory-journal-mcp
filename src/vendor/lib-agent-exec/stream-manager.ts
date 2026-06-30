@@ -22,7 +22,11 @@ export class StreamManager {
     private truncateOutputLength?: number,
     private outStream?: Writable,
     private errStream?: Writable
-  ) {}
+  ) {
+    if (outStream || errStream) {
+      this.truncateOutputLength = truncateOutputLength ?? 1024 * 1024 * 1024;
+    }
+  }
 
   private stripAnsi(str: string): string {
     // Preserve Erase in Line/Whole Line semantics by translating them to \u001A (Substitute)
@@ -42,17 +46,10 @@ export class StreamManager {
   }
 
   private resolveCarriageReturns(str: string): string {
-    let hasTrailingCr = false;
-    if (str.endsWith('\r')) {
-      hasTrailingCr = true;
-      str = str.slice(0, -1);
+    if (!str.includes('\r') && !str.includes('\b') && !str.includes('\u001A')) {
+      return str;
     }
-    
-    let hasLeadingCr = false;
-    if (str.startsWith('\r')) {
-      hasLeadingCr = true;
-    }
-    
+
     const chars: string[] = [];
     let cursor = 0;
     
@@ -70,7 +67,7 @@ export class StreamManager {
       }
     }
     
-    return (hasLeadingCr ? '\r' : '') + chars.join('') + (hasTrailingCr ? '\r' : '');
+    return chars.join('');
   }
 
   public processChunk(isErr: boolean, data: string): string {
@@ -169,13 +166,11 @@ export class StreamManager {
     const targetStream = isErr ? this.errStream : this.outStream;
     const stdStream = isErr ? process.stderr : process.stdout;
 
-    if (targetStream && !targetStream.destroyed) {
-       const canWrite = targetStream.write(str);
-       if (!canWrite) streamsToDrain.push(targetStream);
-    }
-
     if (!this.truncateOutputLength) {
-       if (!targetStream && !(stdStream as Writable).destroyed) {
+       if (targetStream && !targetStream.destroyed) {
+         const canWrite = targetStream.write(str);
+         if (!canWrite) streamsToDrain.push(targetStream);
+       } else if (!targetStream && !(stdStream as Writable).destroyed) {
          const canWriteStd = stdStream.write(str);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }
@@ -193,17 +188,23 @@ export class StreamManager {
        
        const toWrite = allowedLength > 0 ? str.substring(0, allowedLength) : "";
        const fileName = isErr ? errFileName : outFileName;
-       const fileHint = fileName ? ` Use ${fileName} to capture full output.` : ` Specify 'stdoutFile' or 'stderrFile' in the payload to capture full output.`;
+       const fileHint = fileName ? `` : ` Specify 'stdoutFile' or 'stderrFile' in the payload to capture full output.`;
        const truncMsg = `\n... [${isErr ? 'STDERR' : 'STDOUT'} truncated to ${this.truncateOutputLength} chars.${fileHint}]\n`;
        
-       if (!targetStream && !(stdStream as Writable).destroyed) {
+       if (targetStream && !targetStream.destroyed) {
+         const canWrite = targetStream.write(toWrite + truncMsg);
+         if (!canWrite) streamsToDrain.push(targetStream);
+       } else if (!targetStream && !(stdStream as Writable).destroyed) {
          const canWriteStd = stdStream.write(toWrite + truncMsg);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }
 
        if (isErr) this.stderrTruncated = true; else this.stdoutTruncated = true;
     } else {
-       if (!targetStream && !(stdStream as Writable).destroyed) {
+       if (targetStream && !targetStream.destroyed) {
+         const canWrite = targetStream.write(str);
+         if (!canWrite) streamsToDrain.push(targetStream);
+       } else if (!targetStream && !(stdStream as Writable).destroyed) {
          const canWriteStd = stdStream.write(str);
          if (!canWriteStd) streamsToDrain.push(stdStream);
        }
@@ -218,6 +219,10 @@ export class StreamManager {
   }
 
   public getLength(isErr: boolean): number {
-    return isErr ? this.stderrLength : this.stdoutLength;
+    const len = isErr ? this.stderrLength : this.stdoutLength;
+    if (this.truncateOutputLength) {
+      return Math.min(len, this.truncateOutputLength);
+    }
+    return len;
   }
 }

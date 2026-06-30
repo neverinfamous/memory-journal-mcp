@@ -1,6 +1,8 @@
+// @ts-nocheck
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
 import { execSync } from 'node:child_process';
+import path from 'node:path';
 
 export function systemInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, args, payload } = ctx;
@@ -8,7 +10,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe'];
   const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'] as const;
   const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'];
-  const stdTools = ['git', 'docker', 'docker-compose', 'gh', 'npm', 'pnpm', 'yarn', 'bun', 'cargo', 'aws', 'gcloud', 'az', 'terraform', 'tofu', 'kubectl', 'tail', 'watch', 'pm2', 'python', 'python3', 'node', 'journalctl', 'vi', 'vim', 'nvim', 'nano', 'top', 'htop', 'less', 'more', 'tmux', 'screen'];
+
 
   const isCommand = payload.type === 'command';
   const positionalArgs = args.filter(a => !a.startsWith('-'));
@@ -16,7 +18,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   const cmd = cmdBasename.toLowerCase();
 
   // 1. Mutating intercepts (safe to run before block checks)
-  match({ cmd, args })
+  match({ cmd, args, payload })
     .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args: matchedArgs }) => {
       if (!matchedArgs.some(a => a.includes('BatchMode=yes'))) {
         console.error(`\n   💡 AGENT HINT: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
@@ -57,11 +59,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         }
       }
     })
-    .with({ cmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'cat' is a shell alias and fails natively on Windows without a shell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically rewriting command to run via Node.js for cross-platform compatibility.\x1b[0m`);
-      const filePaths = ctx.args.map(a => a.replace(/\\/g, '\\\\').replace(/'/g, "\\'")).join("', '");
-      ctx.cmdBasename = 'node';
-      ctx.args = ['-e', `const fs = require('fs'); ['${filePaths}'].forEach(f => { try { console.log(fs.readFileSync(f, 'utf8')); } catch(e) { console.error(e.message); process.exit(1); } });`];
+    .with({ cmd: P.union('cat', 'cat.exe', 'get-content'), payload: { target: P.when(t => t !== 'wsl2') } }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      process.exit(1);
     })
     .with({ cmd: P.union('awk', 'sed', 'grep') }, () => {
       console.error(`\n   💡 AGENT HINT: '${cmdBasename}' natively fails or lacks features on Windows.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching execution target to WSL2.\x1b[0m`);
@@ -74,15 +74,23 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         process.exit(1);
       }
     })
+    .with({ cmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe') }, ({ args: matchedArgs }) => {
+      if (!matchedArgs.some(a => a.toLowerCase() === '-noninteractive')) {
+        console.error(`\n   💡 AGENT HINT: Automatically injecting '-NonInteractive' into ${cmdBasename} command to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        ctx.args.unshift('-NonInteractive');
+      }
+      if (!matchedArgs.some(a => a.toLowerCase() === '-noprofile')) {
+        ctx.args.unshift('-NoProfile');
+      }
+    })
     .otherwise(() => {});
 
   // 1.5. Generic Path Hallucination Intercepts
   for (let i = 0; i < args.length; i++) {
     // memory-journal-mcp backups path hallucination
-    const arg = args[i];
-    if (arg && (arg.includes('memory-journal-mcp\\backups') || arg.includes('memory-journal-mcp/backups'))) {
+    if (args[i].includes('memory-journal-mcp\\backups') || args[i].includes('memory-journal-mcp/backups')) {
       console.error(`\n   💡 AGENT HINT: 'backups' directory is located at 'data/backups', not the repository root.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to data/backups.\x1b[0m`);
-      args[i] = arg.replace(/memory-journal-mcp[\\/]backups/g, 'memory-journal-mcp\\data\\backups');
+      args[i] = args[i].replace(/memory-journal-mcp[\\/]backups/g, 'memory-journal-mcp\\data\\backups');
     }
   }
 
@@ -115,12 +123,18 @@ export function systemInterceptor(ctx: ExecutionContext): void {
             
             return exactShellChars.some(op => {
                 if (!finalState.unquoted.includes(op)) return false;
+                if (finalState.unquoted.trim() === op) return true;
                 const parts = finalState.unquoted.split(op);
                 
                 return match(parts)
                     .with(P.when(p => p.length < 2), () => false)
-                    .with(P.when(p => p.every(part => !part.includes(' '))), () => true)
-                    .otherwise(() => false);
+                    .otherwise((p) => p.slice(0, -1).some((before, i) => {
+                        const after = p[i + 1];
+                        return match([before, after])
+                            .with([P.when(b => b !== '' && !b.endsWith(' ')), P.any], () => true)
+                            .with([P.any, P.when(a => a !== '' && !a.startsWith(' '))], () => true)
+                            .otherwise(() => false);
+                    }));
             });
         }), () => true)
         .otherwise(() => false);
@@ -136,7 +150,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   // Helper for inline commands
   const inlineIdx = args.findIndex(a => inlineFlags.includes(a.toLowerCase()));
   const hasInlineCmd = inlineIdx !== -1;
-  const inlineFlag = hasInlineCmd ? (args[inlineIdx]?.toLowerCase() || '') : '';
+  const inlineFlag = hasInlineCmd ? args[inlineIdx].toLowerCase() : '';
   const innerCmdStr = hasInlineCmd ? (args[inlineIdx + 1] || '') : '';
   
   // Helper to safely strip quoted parts using a ts-pattern state machine
@@ -159,48 +173,61 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   };
 
   // 3. Centralized structural blocking using ts-pattern
-  match({ cmd, isCommand, hasInlineCmd, inlineFlag, innerCmdStr, positionalArgs, args, hasStdin, isWin32: process.platform === 'win32' })
+  const originalCmd = 'command' in payload && typeof payload.command === 'string' 
+    ? path.basename(payload.command).toLowerCase() 
+    : cmd;
+
+  match({ cmd, originalCmd, isCommand, hasInlineCmd, inlineFlag, innerCmdStr, positionalArgs, args, hasStdin, isWin32: process.platform === 'win32' })
     // Shell inline rules
-    .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true, inlineFlag: P.union('-ec', '-encodedcommand', '-en') }, () => {
+    .with({ isCommand: true, originalCmd: P.union(...shells), hasInlineCmd: true, inlineFlag: P.union('-ec', '-encodedcommand', '-en') }, () => {
       console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
-    .with({ isCommand: true, cmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), hasInlineCmd: true, innerCmdStr: P.when((s: string) => {
+    .with({ isCommand: true, originalCmd: P.union('powershell', 'powershell.exe'), hasInlineCmd: false, args: P.when((a: string[]) => {
+      return a.length > 0 && !a.some(arg => ['-file', '-help', '-version', '-?', '/?'].includes(arg.toLowerCase()));
+    }) }, () => {
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
+      console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
+      console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
+      process.exit(1);
+    })
+    .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), hasInlineCmd: true, innerCmdStr: P.when((s: string) => {
         const stripped = getUnquoted(s);
         return stripped.includes('&&') || stripped.includes('||') || stripped.includes('|') || stripped.includes('>');
     }) }, () => {
-      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. Prefer ';' for command separation or write a full script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. You MUST use semicolons (;) for simple commands, or use a WSL2 JSON payload for POSIX pipelines.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
-    .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true, innerCmdStr: P.when((s: string) => {
+    .with({ isCommand: true, originalCmd: P.union(...shells), hasInlineCmd: true, innerCmdStr: P.when((s: string) => {
+        const stripped = getUnquoted(s);
+        const tokens = stripped.split(/[\s;|{>&<]+/).filter(Boolean).map(t => t.toLowerCase());
+        return tokens.includes('curl') || tokens.includes('wget') || tokens.includes('invoke-webrequest') || tokens.includes('iwr');
+    }) }, ({ innerCmdStr }) => {
+        const stripped = getUnquoted(innerCmdStr);
+        const tokens = stripped.split(/[\s;|{>&<]+/).filter(Boolean).map(t => t.toLowerCase());
+        const cmdStr = tokens.find(t => ['curl', 'wget', 'invoke-webrequest', 'iwr'].includes(t)) || 'wget';
+        const nativeExe = cmdStr === 'wget' ? 'wget.exe' : 'curl.exe';
+        console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        process.exit(1);
+    })
+    .with({ isCommand: true, originalCmd: P.union(...shells), hasInlineCmd: true, innerCmdStr: P.when((s: string) => {
         const stripped = getUnquoted(s);
         const tokens = stripped.split(/[\s;|{>&<]+/).filter(Boolean).map(t => t.toLowerCase());
         return tokens.includes('cat') || tokens.includes('cat.exe');
     }) }, () => {
       console.error(`\n   💡 AGENT HINT: 'cat' may fail in PowerShell without GNU tools or proper aliases.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically rewriting 'cat' to 'Get-Content' in PowerShell inline command.\x1b[0m`);
       const inlineIdx = ctx.args.findIndex(a => inlineFlags.includes(a.toLowerCase()));
-      if (inlineIdx !== -1) {
-        const nextArg = ctx.args[inlineIdx + 1];
-        if (nextArg) {
-          ctx.args[inlineIdx + 1] = nextArg.replace(/\bcat\b/g, 'Get-Content');
-        }
+      if (inlineIdx !== -1 && ctx.args[inlineIdx + 1]) {
+        ctx.args[inlineIdx + 1] = ctx.args[inlineIdx + 1].replace(/\bcat\b/g, 'Get-Content');
       }
     })
-    .with({ isCommand: true, cmd: P.union(...shells), hasInlineCmd: true }, ({ innerCmdStr, cmd: _shellCmd, inlineFlag: flag }: { innerCmdStr: string; cmd: string; inlineFlag: string }) => {
-      const strippedCmdStr = getUnquoted(innerCmdStr);
-      const tokens = strippedCmdStr.split(/[\s;|{>&<]+/).filter(Boolean).map((t: string) => t.toLowerCase());
-      
-
-
-      // stdTools rule
-      const usedTool = tokens.find((t: string) => stdTools.includes(t));
-      if (usedTool) {
-        console.error(`\n   💡 AGENT HINT: You wrapped '${usedTool}' inside an inline shell (${cmdBasename} ${flag}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-        console.error(`   This bypasses the agent-exec robustness interceptors for ${usedTool} and risks hanging the process.`);
-        console.error(`   Please run ${usedTool} directly in the payload: {"type": "command", "command": "${usedTool}", "args": [...]}`);
-        console.error(`   If you need shell pipes/redirects with this tool, write a script file to the scratch directory and use a 'script' payload.`);
-        process.exit(1);
-      }
+    .with({ isCommand: true, originalCmd: P.union(...shells), hasInlineCmd: true }, ({ originalCmd: _shellCmd, inlineFlag: flag }: { innerCmdStr: string; originalCmd: string; inlineFlag: string }) => {
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${cmdBasename} ${flag}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
+      console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
+      console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
+      process.exit(1);
     })
 
     // Interactive blocks
@@ -243,22 +270,6 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     })
 
     // Native tool enforcement
-
-    
-    // Web request tool enforcement
-    .with({ isCommand: true, cmd: P.union('curl', 'curl.exe', 'wget', 'wget.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdBasename}' natively. You MUST use the agent-native 'read_url_content' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      process.exit(1);
-    })
-
-    // Inline Node/Python eval blocks
-    .with({ isCommand: true, cmd: P.union('node', 'node.exe'), args: P.when(a => a.includes('-e') || a.includes('--eval')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'node -e' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      console.error(`   Please use the 'eval' JSON payload instead: {"type": "eval", "interpreter": "node", "code": "..."}`);
-      process.exit(1);
-    })
-
-    // Missing stdin hang blocks
     .with({ isCommand: true, hasStdin: false, cmd: P.union('cat', 'cat.exe', 'wc', 'wc.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe', 'find', 'find.exe', 'findstr', 'findstr.exe', 'gpg', 'gpg.exe'), positionalArgs: P.when(pa => pa.length === 0) }, () => {
       console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
@@ -284,6 +295,37 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments, no recursive flag, and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
+    })
+    // Web request tool enforcement
+    .with({ isCommand: true, cmd: P.union('curl', 'wget', 'invoke-webrequest', 'iwr') }, () => {
+      const cmdStr = cmdBasename;
+      const nativeExe = cmd === 'wget' ? 'wget.exe' : 'curl.exe';
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      process.exit(1);
+    })
+
+    // Search tool enforcement (FS Alias Hallucinations)
+    .with({ isCommand: true, cmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe') }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdBasename}' natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      process.exit(1);
+    })
+
+    // List dir tool enforcement (FS Alias Hallucinations)
+    .with({ isCommand: true, cmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com') }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdBasename}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      process.exit(1);
+    })
+
+    // Inline Node/Python eval blocks
+    .with({ isCommand: true, cmd: P.union('node', 'node.exe'), args: P.when(a => a.some(arg => ['-e', '--eval', '-p', '--print'].includes(arg) || arg.startsWith('-e=') || arg.startsWith('--eval=') || arg.startsWith('-p=') || arg.startsWith('--print='))) }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'node -e' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      console.error(`   Please use the 'eval' JSON payload instead: {"type": "eval", "interpreter": "node", "code": "..."}`);
+      process.exit(1);
+    })
+    .with({ isCommand: true, cmd: P.union('python', 'python.exe', 'python3', 'python3.exe'), args: P.when(a => a.some(arg => arg === '-c' || arg.startsWith('-c='))) }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'python -c' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      console.error(`   Please use the 'eval' JSON payload instead: {"type": "eval", "interpreter": "python", "code": "..."}`);
+      process.exit(1);
     })
     .otherwise(() => {});
 }

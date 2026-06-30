@@ -13,106 +13,95 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     'ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe', 'openssl', 'openssl.exe'
   ];
 
-  const baseTui = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted'];
+  const baseTui = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted', 'watch', 'journalctl'];
   const tuiCommands = [...baseTui, ...baseTui.map(c => `${c}.exe`)];
 
-  if (replCommands.includes(cmdBasename) && payload.type === 'command' && !payload.stdin) {
-    const explicitlyInteractive = args.includes('-i') || args.includes('--interactive') || (cmdBasename === 'php' && args.includes('-a'));
-    const isNodeDebug = ['node', 'node.exe', 'node.cmd'].includes(cmdBasename) && args.some(a => a === 'inspect' || a.startsWith('--inspect'));
-    const isDbRepl = ['mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'].includes(cmdBasename) && !args.some(a => ['-c', '--command', '-e', '--execute', '--eval'].includes(a));
-    const isNakedShell = ['ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe'].includes(cmdBasename) && args.filter(a => !a.startsWith('-') && !a.includes('@')).length === 0;
+  match({ cmdBasename, type: payload.type, hasStdin: !!payload.stdin, args })
+    .with({ type: 'command', hasStdin: false, cmdBasename: P.when(c => replCommands.includes(c as string)) }, ({ cmdBasename, args }) => {
+      const explicitlyInteractive = args.includes('-i') || args.includes('--interactive') || (cmdBasename === 'php' && args.includes('-a'));
+      const isNodeDebug = ['node', 'node.exe', 'node.cmd'].includes(cmdBasename) && args.some(a => a === 'inspect' || a.startsWith('--inspect'));
+      const isDbRepl = ['mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'].includes(cmdBasename) && !args.some(a => ['-c', '--command', '-e', '--execute', '--eval'].includes(a));
+      const isNakedShell = ['ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe'].includes(cmdBasename) && args.filter(a => !a.startsWith('-') && !a.includes('@')).length === 0;
 
-    if (args.length === 0 || explicitlyInteractive || isNodeDebug || isDbRepl || isNakedShell) {
-      const reason = isDbRepl ? `as a DB client without execution flags` : (isNakedShell ? `as a naked shell/connection without commands` : (isNodeDebug ? `with a debugging flag` : (explicitlyInteractive ? `with an interactive flag` : `without arguments or stdin`)));
-      console.error(`\n   💡 AGENT HINT: You attempted to start an interactive REPL (${cmdBasename} ${reason}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
-      console.error(`   If you meant to execute code, use the 'eval' payload type, provide a script, or pass 'stdin'.`);
-      process.exit(1);
-    }
-    
-    if (['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(cmdBasename)) {
-      const isPythonInteractive = args.includes('-i') || args.some((a, i) => a === '-m' && args[i + 1] === 'pdb');
-      if (isPythonInteractive) {
-        console.error(`\n   💡 AGENT HINT: You attempted to start Python in interactive mode or with a debugger (-i or -m pdb).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      if (args.length === 0 || explicitlyInteractive || isNodeDebug || isDbRepl || isNakedShell) {
+        const reason = isDbRepl ? `as a DB client without execution flags` : (isNakedShell ? `as a naked shell/connection without commands` : (isNodeDebug ? `with a debugging flag` : (explicitlyInteractive ? `with an interactive flag` : `without arguments or stdin`)));
+        console.error(`\n   💡 AGENT HINT: You attempted to start an interactive REPL (${cmdBasename} ${reason}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
+        console.error(`   If you meant to execute code, use the 'eval' payload type, provide a script, or pass 'stdin'.`);
         process.exit(1);
       }
-    }
-  }
-
-  if (tuiCommands.includes(cmdBasename) && payload.type === 'command') {
-    console.error(`\n   💡 AGENT HINT: You attempted to start an interactive TUI application (${cmdBasename}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-    console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
-    console.error(`   Please use standard terminal commands (e.g. cat, grep, list_dir, view_file) instead.`);
-    process.exit(1);
-  }
-
-  if (['node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe', 'yarn', 'yarn.cmd', 'yarn.exe'].includes(cmdBasename) && payload.type === 'command') {
-    if (args.includes('--watch')) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename} --watch' runs indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang until timeout.`);
-      console.error(`   Please use standard execution without watch mode.`);
+      
+      if (['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(cmdBasename)) {
+        const isPythonInteractive = args.includes('-i') || args.some((a, i) => a === '-m' && args[i + 1] === 'pdb');
+        if (isPythonInteractive) {
+          console.error(`\n   💡 AGENT HINT: You attempted to start Python in interactive mode or with a debugger (-i or -m pdb).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+          console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
+          process.exit(1);
+        }
+      }
+    })
+    .with({ type: 'command', cmdBasename: P.when(c => tuiCommands.includes(c as string)) }, () => {
+      console.error(`\n   💡 AGENT HINT: You attempted to start an interactive TUI application (${cmdBasename}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
+      console.error(`   Please use standard terminal commands (e.g. cat, grep, list_dir, view_file) instead.`);
       process.exit(1);
-    }
-    const watchTools = ['nodemon', 'ts-node-dev'];
-    const usedWatchTool = args.find(a => watchTools.includes(a));
-    if (usedWatchTool) {
-      console.error(`\n   💡 AGENT HINT: '${usedWatchTool}' runs indefinitely in watch mode. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      process.exit(1);
-    }
-  }
-
-  if (['tsx', 'tsx.cmd', 'tsx.exe'].includes(cmdBasename) && args.includes('watch')) {
-     console.error(`\n   💡 AGENT HINT: 'tsx watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-     process.exit(1);
-  }
-
-  if (['nodemon', 'nodemon.cmd', 'nodemon.exe', 'ts-node-dev', 'ts-node-dev.cmd', 'ts-node-dev.exe'].includes(cmdBasename)) {
-     console.error(`\n   💡 AGENT HINT: '${cmdBasename}' runs indefinitely in watch mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-     process.exit(1);
-  }
-
-  if (['pm2', 'pm2.cmd', 'pm2.exe'].includes(cmdBasename)) {
-     if (args.includes('logs') || args.includes('monit') || args.includes('dash')) {
-         console.error(`\n   💡 AGENT HINT: 'pm2 ${args.find(a => ['logs', 'monit', 'dash'].includes(a))}' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-         process.exit(1);
-     }
-  }
-
-  if (['bun', 'bun.exe', 'bun.cmd'].includes(cmdBasename)) {
-    if (args.includes('repl')) {
-      console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      process.exit(1);
-    }
-  }
-
-  if (['cmd', 'cmd.exe'].includes(cmdBasename)) {
-    if (args.some(a => a.toLowerCase() === 'pause')) {
-      console.error(`\n   💡 AGENT HINT: 'pause' in cmd.exe waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      process.exit(1);
-    }
-  }
-
-  if (['tail', 'tail.exe'].includes(cmdBasename) && (args.includes('-f') || args.includes('--follow'))) {
-    console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-    process.exit(1);
-  }
-
-  if (['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmdBasename)) {
-    envOverrides['POWERSHELL_TELEMETRY_OPTOUT'] = '1';
-    envOverrides['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1';
-    
-    if (args.some(a => a.toLowerCase() === '-noexit')) {
-      console.error(`\n   💡 AGENT HINT: 'pwsh -NoExit' prevents the shell from exiting and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      process.exit(1);
-    }
-
-    const uiCmdlets = ['Get-Credential', 'Show-Command', 'Out-GridView', 'Read-Host', 'PromptForChoice'];
-    if (args.some(a => uiCmdlets.some(c => a.includes(c)))) {
-      console.error(`\n   💡 AGENT HINT: PowerShell UI cmdlets like Get-Credential or Out-GridView will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      process.exit(1);
-    }
-  }
+    })
+    .with({ type: 'command', cmdBasename: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe', 'yarn', 'yarn.cmd', 'yarn.exe') }, ({ args }) => {
+      if (args.includes('--watch')) {
+        console.error(`\n   💡 AGENT HINT: '${cmdBasename} --watch' runs indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang until timeout.`);
+        console.error(`   Please use standard execution without watch mode.`);
+        process.exit(1);
+      }
+      const watchTools = ['nodemon', 'ts-node-dev'];
+      const usedWatchTool = args.find(a => watchTools.includes(a));
+      if (usedWatchTool) {
+        console.error(`\n   💡 AGENT HINT: '${usedWatchTool}' runs indefinitely in watch mode. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        process.exit(1);
+      }
+    })
+    .with({ cmdBasename: P.union('tsx', 'tsx.cmd', 'tsx.exe'), args: P.when(a => a.includes('watch')) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'tsx watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ cmdBasename: P.union('nodemon', 'nodemon.cmd', 'nodemon.exe', 'ts-node-dev', 'ts-node-dev.cmd', 'ts-node-dev.exe') }, () => {
+       console.error(`\n   💡 AGENT HINT: '${cmdBasename}' runs indefinitely in watch mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ cmdBasename: P.union('pm2', 'pm2.cmd', 'pm2.exe') }, ({ args }) => {
+       if (args.includes('logs') || args.includes('monit') || args.includes('dash')) {
+           console.error(`\n   💡 AGENT HINT: 'pm2 ${args.find(a => ['logs', 'monit', 'dash'].includes(a))}' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+           process.exit(1);
+       }
+    })
+    .with({ cmdBasename: P.union('bun', 'bun.exe', 'bun.cmd'), args: P.when(a => a.includes('repl')) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ cmdBasename: P.union('cmd', 'cmd.exe'), args: P.when(a => a.some(arg => arg.toLowerCase() === 'pause')) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'pause' in cmd.exe waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ cmdBasename: P.union('tail', 'tail.exe'), args: P.when(a => a.includes('-f') || a.includes('--follow')) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ cmdBasename: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe') }, ({ args }) => {
+      envOverrides['POWERSHELL_TELEMETRY_OPTOUT'] = '1';
+      envOverrides['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1';
+      
+      if (args.some(a => a.toLowerCase() === '-noexit')) {
+        console.error(`\n   💡 AGENT HINT: 'pwsh -NoExit' prevents the shell from exiting and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        process.exit(1);
+      }
+  
+      const uiCmdlets = ['Get-Credential', 'Show-Command', 'Out-GridView', 'Read-Host', 'PromptForChoice'];
+      if (args.some(a => uiCmdlets.some(c => a.includes(c)))) {
+        console.error(`\n   💡 AGENT HINT: PowerShell UI cmdlets like Get-Credential or Out-GridView will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        process.exit(1);
+      }
+    })
+    .otherwise(() => {});
 
   const tuiRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${[...tuiCommands, 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
   const replRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
@@ -153,6 +142,19 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
             return p.cmdArgs.slice(eIdx + 1).join(' ');
         }
         return p.cmdArgs.filter(a => !a.startsWith('-')).join(' ');
+      })
+      .with({ type: 'command', cmd: P.union('docker', 'docker.exe', 'docker-compose', 'docker-compose.exe') }, (p) => {
+        const runExecIdx = p.cmdArgs.findIndex(a => a === 'run' || a === 'exec');
+        if (runExecIdx !== -1) {
+            // Find first positional argument after run/exec that doesn't start with '-'
+            // This is naive but works for the regex matcher since we just need the string
+            const remaining = p.cmdArgs.slice(runExecIdx + 1).filter(a => !a.startsWith('-'));
+            if (remaining.length > 0) {
+                // Return everything after the first non-flag argument (which is usually the image or container)
+                return remaining.slice(1).join(' ');
+            }
+        }
+        return null;
       })
       .otherwise(() => null);
   };
