@@ -27,10 +27,9 @@ export const pruneSchema = adminPruneOptionsSchema
 export const auditSchema = adminAuditSearchOptionsSchema
 export const rebuildIndexSchema = adminRebuildIndexOptionsSchema
 
-import type { ServerOptionsSchema } from '../schemas.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
 
-async function getDb(options: ServerOptionsSchema & { team?: boolean }, command: Command): Promise<{ db: IDatabaseAdapter, serverOptions: ServerOptions }> {
+async function getDb(options: Record<string, unknown> & { config?: string, team?: boolean }, command: Command): Promise<{ db: IDatabaseAdapter, serverOptions: ServerOptions }> {
     let resolver: ConfigResolver
     const configPath = (options.config) ?? process.env['MEMORY_JOURNAL_CONFIG']
     const configErrors: string[] = []
@@ -110,7 +109,7 @@ export async function vacuumAction(options: z.infer<typeof vacuumSchema>, comman
 }
 
 export async function pruneAction(options: z.infer<typeof pruneSchema>, command: Command): Promise<void> {
-    const { db } = await getDb(options as unknown as (ServerOptionsSchema & { team?: boolean }), command)
+    const { db } = await getDb(options, command)
     
     try {
         const result = await runAutoPrune(db, {

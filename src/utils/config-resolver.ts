@@ -151,6 +151,23 @@ export class ConfigResolver {
         }
     }
 
+    private _parseNumeric(val: unknown, cliKey: string, min?: number, max?: number, isFloat: boolean = false): number {
+        const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
+        const parsed = typeof val === 'number' ? val : (isFloat ? parseFloat(valStr) : parseInt(valStr, 10))
+        
+        if (Number.isNaN(parsed)) {
+            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${valStr}`)
+        }
+        if (min !== undefined && parsed < min) {
+            throw new ConfigurationError(`Configuration ${cliKey} must be at least ${min}`)
+        }
+        if (max !== undefined && parsed > max) {
+            throw new ConfigurationError(`Configuration ${cliKey} must be at most ${max}`)
+        }
+        
+        return parsed
+    }
+
     /**
      * Helper to resolve a required numeric value
      */
@@ -164,21 +181,7 @@ export class ConfigResolver {
         if (val === undefined || val === null) {
             throw new ConfigurationError(`Missing required numeric configuration for ${cliKey}`)
         }
-
-        const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
-        const parsed = typeof val === 'number' ? val : parseInt(valStr, 10)
-        
-        if (Number.isNaN(parsed)) {
-            throw new ConfigurationError(`Invalid required numeric configuration for ${cliKey}: ${valStr}`)
-        }
-        if (min !== undefined && parsed < min) {
-            throw new ConfigurationError(`Configuration ${cliKey} must be at least ${min}`)
-        }
-        if (max !== undefined && parsed > max) {
-            throw new ConfigurationError(`Configuration ${cliKey} must be at most ${max}`)
-        }
-        
-        return parsed
+        return this._parseNumeric(val, cliKey, min, max, false)
     }
 
     /**
@@ -194,21 +197,7 @@ export class ConfigResolver {
         if (val === undefined || val === null) {
             return undefined
         }
-
-        const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
-        const parsed = typeof val === 'number' ? val : parseInt(valStr, 10)
-        
-        if (Number.isNaN(parsed)) {
-            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${valStr}`)
-        }
-        if (min !== undefined && parsed < min) {
-            throw new ConfigurationError(`Configuration ${cliKey} must be at least ${min}`)
-        }
-        if (max !== undefined && parsed > max) {
-            throw new ConfigurationError(`Configuration ${cliKey} must be at most ${max}`)
-        }
-        
-        return parsed
+        return this._parseNumeric(val, cliKey, min, max, false)
     }
 
     /**
@@ -224,21 +213,7 @@ export class ConfigResolver {
         if (val === undefined || val === null) {
             return undefined
         }
-
-        const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
-        const parsed = typeof val === 'number' ? val : parseFloat(valStr)
-        
-        if (Number.isNaN(parsed)) {
-            throw new ConfigurationError(`Invalid numeric configuration for ${cliKey}: ${valStr}`)
-        }
-        if (min !== undefined && parsed < min) {
-            throw new ConfigurationError(`Configuration ${cliKey} must be at least ${min}`)
-        }
-        if (max !== undefined && parsed > max) {
-            throw new ConfigurationError(`Configuration ${cliKey} must be at most ${max}`)
-        }
-        
-        return parsed
+        return this._parseNumeric(val, cliKey, min, max, true)
     }
 
     /**

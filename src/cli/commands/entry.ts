@@ -7,7 +7,7 @@ import { ConfigResolver } from '../../utils/config-resolver.js'
 import { resolveProjectNumberFromPath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import type { CreateEntryInput } from '../../database/core/schema.js'
-import { type z } from 'zod'
+import { z } from 'zod'
 import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
@@ -140,7 +140,8 @@ function parseFrontmatter(rawContent: string): { frontmatter: Record<string, unk
             const body = rawContent.slice(endIdx + skip).trimStart()
             try {
                 const parsed: unknown = yaml.parse(yamlStr)
-                return { frontmatter: typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : {}, body }
+                const parsedRec = z.record(z.string(), z.unknown()).safeParse(parsed)
+                return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
             } catch {
                 // Return as-is if parsing fails
             }
@@ -170,7 +171,7 @@ function parseRelationships(relationshipsStr: unknown, relFileStr: unknown): { t
         if (Array.isArray(parsed)) {
             return parsed.map((r: unknown) => {
                 if (typeof r !== 'object' || r === null) return null;
-                const rec = r as Record<string, unknown>;
+                const rec = z.record(z.string(), z.unknown()).parse(r);
                 return {
                     target_id: Number(rec['target_id']),
                     relation_type: String(rec['relation_type'])
@@ -189,7 +190,7 @@ function parseMetadata(metadataFile: unknown): Record<string, unknown> {
         const str = readFileSync(metadataFile, 'utf-8')
         const parsed: unknown = JSON.parse(str)
         if (typeof parsed === 'object' && parsed !== null) {
-            return parsed as Record<string, unknown>
+            return z.record(z.string(), z.unknown()).parse(parsed)
         }
     } catch (e) {
         process.stderr.write(`Warning: Failed to parse --metadata JSON: ${e instanceof Error ? e.message : String(e)}\n`)
@@ -234,7 +235,8 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
         }
     }
     
-    const explicitWorkspaceId = (options as Record<string, unknown>)['workspaceId'] ?? (options as Record<string, unknown>)['workspace_id'] ?? metadata['workspaceId'] ?? metadata['workspace_id'];
+    const optsRec = z.record(z.string(), z.unknown()).parse(options);
+    const explicitWorkspaceId = optsRec['workspaceId'] ?? optsRec['workspace_id'] ?? metadata['workspaceId'] ?? metadata['workspace_id'];
     const workspaceId = resolveWorkspaceId(explicitWorkspaceId as string | undefined, projectNumber, config)
 
     const trustRaw = options.trustScore ?? options.trust_score ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
@@ -267,7 +269,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     let relationships: { target_id: number, relation_type: string }[]
     if (metadata['relationships'] !== undefined && metadata['relationships'] !== null && Array.isArray(metadata['relationships'])) {
         relationships = metadata['relationships'].map((r: unknown) => {
-            const rec = r as Record<string, unknown> | null
+            const rec = r ? z.record(z.string(), z.unknown()).parse(r) : null
             return {
                 target_id: Number(rec?.['target_id']),
                 relation_type: String(rec?.['relation_type'])

@@ -24,8 +24,8 @@
         "check": "tsx scripts/run-checks.ts && pnpm run test && pnpm run test:e2e",
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:coverage": "vitest run --coverage && npx tsx scripts/update-badges.ts",
-        "test:vendor": "bun test src/vendor/",
+        "test:coverage": "vitest run --coverage && tsx scripts/update-badges.ts",
+        "test:vendor": "vitest run src/vendor/",
         "sync:vendor": "bun scripts/sync-vendor.ts",
         "bench": "vitest bench --run",
         "pretest:e2e": "node -e \"fs.rmSync('.test-output/e2e', { recursive: true, force: true })\"",
@@ -112,8 +112,6 @@
         "tmp": "^0.2.5",
         "vite": "^8.0.5",
         "ip-address": "10.2.0",
-        "esbuild": "0.28.1",
-        "tsup>esbuild": "0.28.1",
-        "tsup>bundle-require>esbuild": "0.28.1"
+        "esbuild": "0.28.1"
     }
 }

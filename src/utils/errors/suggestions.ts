@@ -125,7 +125,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
  */
 export function matchSuggestion(
     message: string
-): { suggestion: string; code?: string } | undefined {
+): { suggestion: string; code?: string | undefined } | undefined {
     for (const entry of ERROR_SUGGESTIONS) {
         if (entry.pattern.test(message)) {
             return { suggestion: entry.suggestion, code: entry.code }

@@ -1,8 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 import path from 'node:path'
 
-process.env.MEMORY_JOURNAL_CONFIG = path.join(process.cwd(), 'tests', 'e2e', 'empty-config.json');
-
 const WORKERS = 1; // Using 1 worker to prevent SQLite lock contention and transport blocking
 
 export default defineConfig({
@@ -24,28 +22,24 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'] },
         },
     ],
-    webServer: Array.from({ length: WORKERS }).map((_, i) => {
-        const port = 3100 + i;
-        return {
-            command:
-                `node dist/cli.js --transport http --port ${port} --db ./.test-output/e2e/test-e2e-worker-${i}.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2`,
-            env: {
-                ...process.env,
-                // Elevate rate limit boundary for test runner concurrency (simulating realistic clustered traffic)
-                MCP_RATE_LIMIT_MAX: '1000',
-                // Enable team DB so team tools get functional E2E coverage
-                TEAM_DB_PATH: `./.test-output/e2e/test-e2e-team-worker-${i}.db`,
-                TEAM_AUTHOR: 'Alice',
-                DEFAULT_PROJECT_NUMBER: '1',
-                ALLOWED_IO_ROOTS: process.cwd() + '/.test-output/e2e',
-                METRICS_EXPORT: 'prometheus',
-                MEMORY_JOURNAL_CONFIG: process.cwd() + '/tests/e2e/empty-config.json',
-            },
-            url: `http://localhost:${port}/health`,
-            reuseExistingServer: !process.env.CI,
-            timeout: 60000,
-            stdout: 'pipe',
-            stderr: 'pipe',
-        };
-    }),
+    webServer: {
+        command: `node dist/cli.js --transport http --port 3100 --db ./.test-output/e2e/test-e2e-worker-0.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2`,
+        env: {
+            ...process.env,
+            // Elevate rate limit boundary for test runner concurrency (simulating realistic clustered traffic)
+            MCP_RATE_LIMIT_MAX: '1000',
+            // Enable team DB so team tools get functional E2E coverage
+            TEAM_DB_PATH: `./.test-output/e2e/test-e2e-team-worker-0.db`,
+            TEAM_AUTHOR: 'Alice',
+            DEFAULT_PROJECT_NUMBER: '1',
+            ALLOWED_IO_ROOTS: path.join(process.cwd(), '.test-output', 'e2e'),
+            METRICS_EXPORT: 'prometheus',
+            MEMORY_JOURNAL_CONFIG: path.join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
+        },
+        url: `http://localhost:3100/health`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 60000,
+        stdout: 'pipe',
+        stderr: 'pipe',
+    },
 })

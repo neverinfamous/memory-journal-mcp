@@ -9,12 +9,12 @@ export interface DynamicConfig {
     rawToolFilter: string | undefined
     toolFilterConfig: ToolFilterConfig | null
     briefingConfig: BriefingConfig
-    codemodeInternalFullAccess?: boolean
+    codemodeInternalFullAccess?: boolean | undefined
 }
 
 export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
-    private configFilePath?: string
+    private configFilePath?: string | undefined
     private watcher?: fs.FSWatcher
 
     constructor(initialConfig: DynamicConfig, configFilePath?: string) {

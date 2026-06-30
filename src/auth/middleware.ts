@@ -22,14 +22,20 @@ import { logger } from '../utils/logger.js'
  * Extended Express Request with auth context
  * Uses module augmentation to extend Express.Request interface
  */
-export interface AuthRequest extends Request {
-    /** Authenticated user claims */
-    auth?: TokenClaims
-    /** Raw access token */
-    accessToken?: string
-    /** Request ID for tracing */
-    requestId?: string
+declare global {
+    namespace Express {
+        interface Request {
+            /** Authenticated user claims */
+            auth?: TokenClaims
+            /** Raw access token */
+            accessToken?: string
+            /** Request ID for tracing */
+            requestId?: string
+        }
+    }
 }
+
+export type AuthRequest = Request
 
 // =============================================================================
 // Configuration
@@ -134,7 +140,7 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
     const { tokenValidator, resourceServer, publicPaths = [] } = config
 
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        const authReq = req as AuthRequest
+        const authReq = req
 
         // Generate request ID for tracing
         const requestId = crypto.randomUUID()
@@ -223,7 +229,7 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
  */
 export function requireScope(scope: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req as AuthRequest
+        const authReq = req
 
         if (!authReq.auth) {
             // Should not happen if auth middleware is applied first
@@ -269,7 +275,7 @@ export function requireScope(scope: string): RequestHandler {
  */
 export function requireAnyScope(scopes: string[]): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req as AuthRequest
+        const authReq = req
 
         if (!authReq.auth) {
             res.status(401).json({
@@ -317,7 +323,7 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
  */
 export function requireToolScope(toolName: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req as AuthRequest
+        const authReq = req
 
         if (!authReq.auth) {
             res.status(401).json({

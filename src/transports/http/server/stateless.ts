@@ -12,12 +12,11 @@ export async function setupStateless(
     isAuthExpected: boolean
 ): Promise<void> {
     const statelessTransport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
         enableJsonResponse: true,
     })
 
     const server = serverFactory()
-    await server.connect(statelessTransport)
+    await server.connect(statelessTransport as any)
     logger.info('Stateless transport connected', { module: 'HTTP' })
 
     // POST /mcp — all requests go to the same transport

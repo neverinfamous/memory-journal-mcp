@@ -14,16 +14,16 @@ import { matchSuggestion, GENERIC_CODES } from '../utils/errors/suggestions.js'
 
 interface ErrorOptions {
     /** Actionable suggestion for resolving the error */
-    suggestion?: string
+    suggestion?: string | undefined
 
     /** Whether the operation can be retried */
-    recoverable?: boolean
+    recoverable?: boolean | undefined
 
     /** Additional structured context */
-    details?: Record<string, unknown>
+    details?: Record<string, unknown> | undefined
 
     /** Original cause error */
-    cause?: Error
+    cause?: Error | unknown | undefined
 }
 
 // =============================================================================
@@ -47,13 +47,13 @@ export class MemoryJournalMcpError extends Error {
     readonly category: ErrorCategory
 
     /** Actionable suggestion for resolving the error */
-    readonly suggestion?: string
+    readonly suggestion?: string | undefined
 
     /** Whether the operation can be retried */
     readonly recoverable: boolean
 
     /** Additional structured context */
-    readonly details?: Record<string, unknown>
+    readonly details?: Record<string, unknown> | undefined
 
     constructor(message: string, code: string, category: ErrorCategory, options?: ErrorOptions) {
         super(message, options?.cause ? { cause: options.cause } : undefined)

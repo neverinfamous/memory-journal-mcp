@@ -7,11 +7,11 @@ import type { AuditConfig } from '../audit/index.js'
 import type { ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
-import type { ServerOptionsSchema } from './schemas.js'
+
 
 export function buildServerOptions(
     resolver: ConfigResolver,
-    _options: ServerOptionsSchema,
+    _options: Record<string, unknown> & { team?: boolean },
     _command: Command,
     configErrors: string[]
 ): { serverOptions: ServerOptions; transport: string; db: string | undefined; teamDb?: string; host?: string } {

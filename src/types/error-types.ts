@@ -47,16 +47,16 @@ export interface ErrorResponse {
     category: ErrorCategory
 
     /** Actionable suggestion for resolving the error */
-    suggestion?: string
+    suggestion?: string | undefined
 
     /** Whether the operation can be retried */
     recoverable: boolean
 
     /** Details of individual errors in a multi-step operation */
-    aggregated_errors?: { message: string; [key: string]: unknown }[]
+    aggregated_errors?: { message: string; [key: string]: unknown }[] | undefined
 
     /** Additional structured context */
-    details?: Record<string, unknown>
+    details?: Record<string, unknown> | undefined
 }
 
 // =============================================================================

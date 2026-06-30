@@ -13,6 +13,7 @@
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { parseYamlFrontmatter } from './yaml-parser.js'
+import { extractTags, formatToISODate, getFirstString } from './utils.js'
 
 export function convertObsidian(
     content: string,
@@ -28,23 +29,8 @@ export function convertObsidian(
 
     const mergedTags = new Set<string>()
 
-    // 1. Process Frontmatter Tags
-    if (yamlMeta['tags'] !== undefined) {
-        const t = yamlMeta['tags']
-        const tagsArray = Array.isArray(t) ? t : t.split(/[, ]+/).map(s => s.trim())
-        for (const tag of tagsArray) {
-            if (tag) mergedTags.add(tag.replace(/^#/, ''))
-        }
-    }
-
-    // Process aliases as tags
-    if (yamlMeta['aliases'] !== undefined) {
-        const a = yamlMeta['aliases']
-        const aliasesArray = Array.isArray(a) ? a : [a]
-        for (const alias of aliasesArray) {
-            if (alias) mergedTags.add(alias.replace(/ /g, '-').toLowerCase())
-        }
-    }
+    // 1. Process Frontmatter Tags and Aliases
+    extractTags(yamlMeta, mergedTags, 'aliases')
 
     // Extract Timestamp (try common frontmatter keys, fallback to filename if daily note)
     const dateStr = getFirstString(yamlMeta, ['date', 'created', 'timestamp'])
@@ -96,27 +82,4 @@ export function convertObsidian(
         metadata: mjMeta,
         body: processedBody.trim(),
     }
-}
-
-function getFirstString(meta: Record<string, string | string[]>, keys: string[]): string | null {
-    for (const key of keys) {
-        const val = meta[key]
-        if (val !== undefined) {
-            return Array.isArray(val) ? val[0] ?? null : val
-        }
-    }
-    return null
-}
-
-function formatToISODate(dateStr: string): string {
-    // Basic attempt to convert to ISO. If fails, return original to let Zod fail properly.
-    try {
-        const d = new Date(dateStr)
-        if (!isNaN(d.getTime())) {
-            return d.toISOString()
-        }
-    } catch {
-        // ignore
-    }
-    return dateStr
 }

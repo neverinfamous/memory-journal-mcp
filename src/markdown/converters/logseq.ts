@@ -13,6 +13,7 @@
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { parseYamlFrontmatter } from './yaml-parser.js'
+import { extractTags } from './utils.js'
 
 export function convertLogseq(
     content: string,
@@ -28,23 +29,8 @@ export function convertLogseq(
 
     const mergedTags = new Set<string>()
 
-    // 1. Process Frontmatter Tags
-    if (yamlMeta['tags'] !== undefined) {
-        const t = yamlMeta['tags']
-        const tagsArray = Array.isArray(t) ? t : t.split(/[, ]+/).map(s => s.trim())
-        for (const tag of tagsArray) {
-            if (tag) mergedTags.add(tag.replace(/^#/, ''))
-        }
-    }
-
-    // Process aliases as tags
-    if (yamlMeta['alias'] !== undefined) {
-        const a = yamlMeta['alias']
-        const aliasesArray = Array.isArray(a) ? a : [a]
-        for (const alias of aliasesArray) {
-            if (alias) mergedTags.add(alias.replace(/ /g, '-').toLowerCase())
-        }
-    }
+    // 1. Process Frontmatter Tags and Aliases
+    extractTags(yamlMeta, mergedTags, 'alias')
 
     // 2. Process Body Text
     const lines = body.split('\n')
