@@ -276,7 +276,7 @@ export interface GraphSummary {
     orphanRatio?: number
 }
 
-export function buildGraphContext(context: ResourceContext): GraphSummary | undefined {
+export function buildGraphContext(context: ResourceContext, workspaceId?: string): GraphSummary | undefined {
     try {
         const stats = context.db.getStatistics('week')
         const comp = stats['relationshipComplexity'] as
@@ -301,7 +301,7 @@ export function buildGraphContext(context: ResourceContext): GraphSummary | unde
             }))
 
             if (totalEntries > 0) {
-                const orphanCount = context.db.getOrphanCount('default')
+                const orphanCount = context.db.getOrphanCount(workspaceId)
                 orphanRatio = orphanCount / totalEntries
             }
         } catch {
