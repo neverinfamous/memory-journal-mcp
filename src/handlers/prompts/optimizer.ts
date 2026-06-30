@@ -138,14 +138,18 @@ return orphans;
 
 ## Optimization & Verification Workflows
 
-Select one or more workflows to run based on the user's request or the presence of unverified entries:
+Select one or more workflows to run based on the user's request or the presence of unverified entries. **Crucially, prioritize high-quality, agent-managed editing over blind predetermined scripts.**
 
-1. **Importance Audit** (Pruning): Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
-2. **Type-Based Cleanup** (Pruning): e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
-3. **Tier 1: Fast Sanity Check** (Verification): For the \`Unverified Recent Entries\` provided above, instruct the agent to use the native MCP tool via Code Mode (e.g. \`mj.git.getCommitHistory({ techDebtAudit: true })\`) to verify that commits match the entry claims. Ensure structural changes were correctly reflected by running \`bun scripts/update-code-map.ts\` if applicable.
-4. **Tier 2: Deep Code & Drift Verification** (Verification): Use \`gh copilot\` for code validation. Verify semantic drift against \`src/filtering/tool-constants.ts\` (the SSoT) and the \`memory://instructions\` resource. Mandate that any new tools claimed in an entry MUST have corresponding testing coverage explicitly verified in \`test-server/codemode\`, \`test-server/standard\`, or \`test-server/usability\`. Remind agents to use \`bun scripts/update-code-map.ts\` instead of manually editing \`code-map.md\`.
+1. **Agent-Managed Optimization (Quality Focus)**: Do not blindly process the entire database via a massive script. Instead, pull entries in manageable batches (e.g., 30-50), assess their content, inject missing descriptive tags heuristically, and apply updates (\`trust_score\`, \`validation_status\`). Present your findings for each batch and get user approval before proceeding to the next batch.
+2. **Project Consolidation & Anomalies (Bug Fixes)**: Audit the entries for historical bugs:
+   - *Miscategorized Projects*: Entries missing a \`project_number\` or assigned to hallucinated projects (e.g. parsed from absolute file paths). **Inform the user of the situation and get their approval before consolidating them to the correct, active project.**
+   - *Missing Metadata*: Audit for missing timestamps or missing impact scores. Inject appropriate defaults or fixes for these anomalies.
+3. **Importance Audit** (Pruning): Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
+4. **Type-Based Cleanup** (Pruning): e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
+5. **Tier 1: Fast Sanity Check** (Verification): For the \`Unverified Recent Entries\` provided above, instruct the agent to use the native MCP tool via Code Mode (e.g. \`mj.git.getCommitHistory({ techDebtAudit: true })\`) to verify that commits match the entry claims. Ensure structural changes were correctly reflected by running \`bun scripts/update-code-map.ts\` if applicable.
+6. **Tier 2: Deep Code & Drift Verification** (Verification): Use \`gh copilot\` for code validation. Verify semantic drift against \`src/filtering/tool-constants.ts\` (the SSoT) and the \`memory://instructions\` resource. Mandate that any new tools claimed in an entry MUST have corresponding testing coverage explicitly verified in \`test-server/codemode\`, \`test-server/standard\`, or \`test-server/usability\`. Remind agents to use \`bun scripts/update-code-map.ts\` instead of manually editing \`code-map.md\`.
 
-### Scoring Protocol for Tier 1 & Tier 2:
+### Scoring Protocol for Verification:
 After a verification workflow, you MUST explicitly update the target entries using \`mj_execute_code\` (e.g. \`mj.updateEntry(id, payload)\`):
 - **Verified**: If claims are true, increase \`trust_score\` to \`0.9\` or \`1.0\` and set \`validation_status\` to \`"passed"\`.
 - **Failed**: If claims are false or hallucinatory, heavily downgrade \`trust_score\` (e.g. \`0.1\`) and set \`validation_status\` to \`"failed"\`.
@@ -156,7 +160,7 @@ To proceed:
 2. Tell the user your plan (which workflow you'll run).
 3. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
 4. If verifying, apply Tier 1 or Tier 2 steps, and then use the Scoring Protocol to update entries via \`mj_execute_code\`.
-5. Ask for user confirmation before deleting!`,
+5. Ask for user confirmation before deleting or consolidating projects!`,
                             },
                         },
                     ],
