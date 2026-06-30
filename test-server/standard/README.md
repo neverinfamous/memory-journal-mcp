@@ -1,21 +1,24 @@
 # Standard Feature Tests
 
+## Value Proposition
+**Validate Capabilities Instantly.** Ensure rock-solid reliability across 103 MCP tools. Catch regressions early. Maintain perfect data integrity. Empower AI agents with deterministic, isolated test workflows.
+
 > **This README is optimized for AI agent consumption.**
 
-This directory contains the core modular test files for `memory-journal-mcp`. These tests execute direct `callTool` operations via MCP to validate the standard capabilities of the server.
+This directory contains the core modular test files for `memory-journal-mcp`. Execute direct `callTool` operations via MCP. Validate standard server capabilities seamlessly.
 
 > **CRITICAL:** `test-seed.md` **must** be executed first in any test session. All other test files in this directory depend on the seed data being present. Once seeded, you may run any of the other tests independently.
 
-## Test Modules
+## Master Test Modules
 
-### Seed & Infrastructure
+### Bootstrap Core Infrastructure
 
 | File                 | Phase | Purpose                                                                                    | When to Run          |
 | -------------------- | :---: | ------------------------------------------------------------------------------------------ | -------------------- |
 | `test-seed.md`       |   0   | **Seed Data** — Create 17 entries (S1–S17) required by all other test files                | **Always run first** |
 | `test-core-infra.md` |   1   | **Infrastructure** — Health, briefing, protocol validation scripts, GitHub status resource, and performance index schema checks | After seed           |
 
-### Core Functional Tests
+### Validate Core Functionality
 
 | File                         | Phase | Purpose                                                                                             | When to Run |
 | ---------------------------- | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
@@ -26,7 +29,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-core-io.md`            |   6   | **IO & Interoperability** — Export/Import Markdown roundtrips, slugification, JSON legacy exports   | After seed  |
 | `test-core-admin.md`         |   7   | **Admin & Backup** — Tag management, batch operations, backup/restore operations                                      | After seed  |
 
-### Cross-Cutting Validation
+### Ensure Cross-Cutting Reliability
 
 | File                | Phase | Purpose                                                                                 | When to Run |
 | ------------------- | :---: | --------------------------------------------------------------------------------------- | ----------- |
@@ -35,7 +38,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-errors.md`    |  11   | **Error Handling** — Prompt handlers, structured error verification, numeric coercion   | After seed  |
 | `test-integrity.md` |  12   | **Data Integrity** — Boundary values, round-trip fidelity, implementation bug detection | After seed  |
 
-### External Integrations
+### Verify External Integrations
 
 | File                       | Phase | Purpose                                                                                                 | When to Run |
 | -------------------------- | :---: | ------------------------------------------------------------------------------------------------------- | ----------- |
@@ -45,7 +48,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-team-admin.md`       |  14B  | **Team Admin & IO** — Admin, analytics, vector search, relationships, export/import, backup             | After seed  |
 | `test-team-rbac.md`        | 14.5  | **Team RBAC** — Member management tools (add, update, get, list, remove) and role-based access limits   | After seed  |
 
-### Granular Tool Group Stress Tests
+### Stress Test Tool Groups
 
 | File                        | Phase | Purpose                                                                  | When to Run |
 | --------------------------- | :---: | ------------------------------------------------------------------------ | ----------- |
@@ -56,7 +59,7 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-tool-group-github.md` |  15e  | **GitHub** — Structured error matrix, OutputSchema compliance            | After seed  |
 | `test-tool-group-team.md`   |  15f  | **Team** — Structured error matrix, missing DB context, vector fallbacks | After seed  |
 
-### Cross-Cutting Optimization Tests
+### Optimize Payload Performance
 
 | File                           | Phase | Purpose                                                                                             | When to Run |
 | ------------------------------ | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
@@ -129,7 +132,7 @@ Phase 0 (Seed Data) ─── MUST PASS FIRST
     └── Phase 16 (Payload Optimization) independent
 ```
 
-## Execution Workflow
+## Streamline Execution Workflow
 
 1. Run `test-seed.md` (Phase 0) — **must pass before proceeding**.
 2. Run `test-core-infra.md` (Phase 1) to verify server health and connectivity.
@@ -138,7 +141,7 @@ Phase 0 (Seed Data) ─── MUST PASS FIRST
 5. Run `test-payload-optimization.md` (Phase 16) to verify payload optimization features.
 6. Cleanup is handled within individual test files where applicable.
 
-## Token Estimate Reporting
+## Track Token Consumption
 
 All test workflows in `test-server/standard/` require the agent to track and report the token estimate used during the test pass.
 
@@ -148,7 +151,7 @@ All test workflows in `test-server/standard/` require the agent to track and rep
 - _Alternatively_, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
 - Always provide this **Total Token Estimate** clearly in your final test report summary so the user can track context window consumption. The tokens tracked should only count the estimated tokens that actually entered the context window.
 
-## Resource Metric Validation
+## Validate Telemetry Metrics
 
 During or after your execution workflows, explicitly verify that resource read telemetry is accumulating accurately:
 

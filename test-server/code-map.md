@@ -411,7 +411,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-29 prompts total.
+28 prompts total.
 
 <!-- BEGIN: PROMPTS -->
 | Prompt | Description |
@@ -425,7 +425,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `adversarial-audit-workflow` | Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) O... |
 | `adversarial-plan-review` | Bootstrap an adversarial planning workflow with structured review dimensions, sc... |
 | `code-review-prep` | Prepare a code review checklist and focus areas for a PR |
-| `commit` | High-integrity procedure for committing code changes with validation gates |
+| `commit` | Procedure for committing code changes with intelligent validation gates |
 | `create-entry` | Create a structured mid-thread journal entry |
 | `create-team-entry` | Create a structured mid-thread team journal entry |
 | `goal-tracker` | Milestone and achievement tracking |
@@ -439,7 +439,6 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `prepare-standup` | Prepare a daily standup summary (Yesterday, Today, Blockers) |
 | `project-milestone-tracker` | Track progress against a specific project milestone |
 | `project-status-summary` | Generate a comprehensive status summary for a GitHub project |
-| `quick-commit` | Fast procedure for committing code changes, bypassing validation gates |
 | `session-summary` | Create a formatted session summary entry |
 | `team-session-summary` | Create a formatted team session summary entry |
 | `update-entry` | Safely update an existing mid-thread entry or session summary |

@@ -267,11 +267,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
 | `full`               | 103   | All tools (default)      |
-| `starter`            | 15    | Core + search + codemode |
-| `essential`          | 9     | Minimal footprint        |
-| `readonly`           | 23    | Disable all mutations    |
-| `-github`            | 82    | Exclude a group          |
-| `-github,-analytics` | 80    | Exclude multiple groups  |
+| `starter`            | 16    | Core + search + codemode |
+| `essential`          | 10    | Minimal footprint        |
+| `readonly`           | 30    | Disable all mutations    |
+| `-github`            | 85    | Exclude a group          |
+| `-github,-analytics` | 83    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

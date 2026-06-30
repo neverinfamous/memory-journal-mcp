@@ -229,7 +229,7 @@ src/
 ├── handlers/
 │   ├── tools/                  # 103 tool handlers (11 groups)
 │   ├── resources/              # 49 resource handlers
-│   └── prompts/                # 29 prompt handlers
+│   └── prompts/                # 28 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
