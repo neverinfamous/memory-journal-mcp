@@ -140,13 +140,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                 
                 return match(parts)
                     .with(P.when(p => p.length < 2), () => false)
-                    .otherwise((p) => p.slice(0, -1).some((before, i) => {
-                        const after = p[i + 1];
-                        return match([before, after])
-                            .with([P.when(b => b !== '' && !b.endsWith(' ')), P.any], () => true)
-                            .with([P.any, P.when(a => a !== '' && !a.startsWith(' '))], () => true)
-                            .otherwise(() => false);
-                    }));
+                    .otherwise(() => true);
             });
         }), () => true)
         .otherwise(() => false);

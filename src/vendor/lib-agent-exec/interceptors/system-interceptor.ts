@@ -141,13 +141,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                 
                 return match(parts)
                     .with(P.when(p => p.length < 2), () => false)
-                    .otherwise((p) => p.slice(0, -1).some((before, i) => {
-                        const after = p[i + 1];
-                        return match([before, after])
-                            .with([P.when(b => b !== '' && !b.endsWith(' ')), P.any], () => true)
-                            .with([P.any, P.when(a => a !== '' && !a.startsWith(' '))], () => true)
-                            .otherwise(() => false);
-                    }));
+                    .otherwise(() => true);
             });
         }), () => true)
         .otherwise(() => false);
@@ -318,9 +312,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
     })
     // Web request tool enforcement
-    .with({ isCommand: true, cmd: P.union('curl', 'wget', 'invoke-webrequest', 'iwr') }, () => {
-      const cmdStr = cmdBasename;
-      const nativeExe = cmd === 'wget' ? 'wget.exe' : 'curl.exe';
+    .with({ isCommand: true, originalCmd: P.union('curl', 'wget', 'invoke-webrequest', 'iwr') }, () => {
+      const cmdStr = originalCmd;
+      const nativeExe = originalCmd === 'wget' ? 'wget.exe' : 'curl.exe';
       console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
