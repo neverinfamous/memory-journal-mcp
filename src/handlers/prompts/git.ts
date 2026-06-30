@@ -55,7 +55,7 @@ Once validation passes, stage your changes and commit using standard native Git 
 > *(Note: Use \`--history-file scratch/narrative.txt\` instead of \`--history\` ONLY if your narrative is extremely long or contains complex quotes that risk shell-escaping issues)*
 
 ## 3. Journal Entry
-The \`--journal\` flag in \`commit.ts\` will **automatically** create a journal entry with the \`commit-narrative\` tag and the SHA, auto-linking it to the codebase. If for some reason you do not use \`--journal\`, you must manually create the entry via \`memory-journal-mcp entry create\`.`,
+The \`--journal\` flag in \`commit.ts\` automatically creates a journal entry for substantive changes. It acts as an automated gatekeeper and will intelligently **skip** creating an entry if the impact score is trivial (< 0.4) and no history narrative is provided, keeping the journal noise-free. You should generally pass the \`--journal\` flag and trust the script to decide whether to record the commit. If for some reason you do not use \`--journal\`, you must manually create the entry via \`memory-journal-mcp entry create\`.`,
                             },
                         },
                     ],
@@ -102,7 +102,7 @@ Stage your changes and commit using standard native Git tooling.
 > \`\`\`
 
 ## 2. Journal Entry
-The \`--journal\` flag in \`commit.ts\` will **automatically** create a journal entry. You should usually include it even for quick commits so the system maintains a comprehensive audit trail of all changes.`,
+The \`--journal\` flag in \`commit.ts\` acts as an automated gatekeeper. It will intelligently **skip** creating an entry if the impact score is trivial (< 0.4) and no history narrative is provided, keeping the journal noise-free. You should usually include it even for quick commits so the script can decide whether it warrants a comprehensive audit trail.`,
                             },
                         },
                     ],
