@@ -71,7 +71,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         }
       }
     })
-    .with({ cmd: P.union('cat', 'cat.exe', 'get-content'), payload: P.when((p: unknown) => (p as { target?: string }).target !== 'wsl2') }, () => {
+    .with({ cmd: P.union('cat', 'cat.exe', 'get-content'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
       console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
