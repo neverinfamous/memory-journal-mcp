@@ -17,6 +17,19 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   const hasStdin = !!payload.stdin;
   const cmd = cmdBasename.toLowerCase();
 
+  // 0. Early intercept: detect blocked commands embedded in the command string with spaces
+  // Agents hallucinate by putting "curl https://example.com" as the command instead of using args
+  const networkAliases = ['curl', 'wget', 'invoke-webrequest', 'iwr'];
+  if (isCommand && 'command' in payload && typeof payload.command === 'string' && payload.command.includes(' ')) {
+    const firstToken = payload.command.trim().split(/\s+/)[0].toLowerCase();
+    const firstTokenBase = path.basename(firstToken).replace(/\.exe$/, '');
+    if (networkAliases.includes(firstTokenBase)) {
+      const nativeExe = firstTokenBase === 'wget' ? 'wget.exe' : 'curl.exe';
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${firstToken}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      process.exit(1);
+    }
+  }
+
   // 1. Mutating intercepts (safe to run before block checks)
   match({ cmd, args, payload })
     .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args: matchedArgs }) => {
@@ -59,7 +72,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         }
       }
     })
-    .with({ cmd: P.union('cat', 'cat.exe', 'get-content'), payload: { target: P.when(t => t !== 'wsl2') } }, () => {
+    .with({ cmd: P.union('cat', 'cat.exe', 'get-content'), payload: P.when((p: unknown) => (p as { target?: string }).target !== 'wsl2') }, () => {
       console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
@@ -133,7 +146,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                         return match([before, after])
                             .with([P.when(b => b !== '' && !b.endsWith(' ')), P.any], () => true)
                             .with([P.any, P.when(a => a !== '' && !a.startsWith(' '))], () => true)
-                            .otherwise(() => true);
+                            .otherwise(() => false);
                     }));
             });
         }), () => true)
@@ -173,8 +186,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   };
 
   // 3. Centralized structural blocking using ts-pattern
-  const originalCmd = 'command' in payload && typeof payload.command === 'string' 
-    ? path.basename(payload.command).toLowerCase() 
+  // Extract the first token's basename when the command string contains spaces
+  // to prevent path.basename("curl https://example.com") returning "example.com"
+  const originalCmd = 'command' in payload && typeof payload.command === 'string'
+    ? (() => {
+        const cmdStr = payload.command.trim();
+        const firstToken = cmdStr.includes(' ') ? cmdStr.split(/\s+/)[0] : cmdStr;
+        return path.basename(firstToken).toLowerCase();
+      })()
     : cmd;
 
   match({ cmd, originalCmd, isCommand, hasInlineCmd, inlineFlag, innerCmdStr, positionalArgs, args, hasStdin, isWin32: process.platform === 'win32' })
@@ -223,6 +242,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
     })
     .with({ isCommand: true, originalCmd: P.union(...shells), hasInlineCmd: true }, ({ originalCmd: _shellCmd, inlineFlag: flag }: { innerCmdStr: string; originalCmd: string; inlineFlag: string }) => {
+      // Skip blocking for WSL2 targets: bash -c is a legitimate pattern that gets wrapped in wsl.exe later
+      if (payload.target === 'wsl2') return;
       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${cmdBasename} ${flag}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);

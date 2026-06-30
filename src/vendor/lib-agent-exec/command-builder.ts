@@ -193,25 +193,44 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       let localCmd: string = p.command;
       let localArgs: string[] = [...(p.args || [])];
 
-      const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
-      const hasShellMeta = /[|&;<>$`{}()]/.test(p.command) || (p.args && p.args.some(a => /[|&;<>$`{}()]/.test(a)));
+      if (p.target === 'wsl2') {
+        if (localCmd.toLowerCase() === 'diff' || localCmd.toLowerCase() === 'diff.exe') {
+          if (!localArgs.includes('--strip-trailing-cr')) {
+            localArgs.unshift('--strip-trailing-cr');
+          }
+        } else if (['grep', 'grep.exe', 'egrep', 'fgrep'].includes(localCmd.toLowerCase())) {
+          const nonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
+          if (nonFlagIdx !== -1) {
+            if (!localArgs.includes('-E') && !localArgs.includes('-P')) {
+              localArgs.unshift('-P');
+              const newNonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
+              localArgs[newNonFlagIdx] = localArgs[newNonFlagIdx].replace(/\$$/, '\\r?$');
+            } else {
+              localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
+            }
+          }
+        }
+      }
 
-      if (builtIns.includes(p.command.toLowerCase()) || (p.target === 'wsl2' && hasShellMeta)) {
-        console.error(`\n   💡 AGENT HINT: '${p.command}' is a shell built-in or contains shell metacharacters.`);
+      const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
+      const hasShellMeta = /[|&;<>$`{}()]/.test(localCmd) || localArgs.some(a => /[|&;<>$`{}()]/.test(a));
+
+      if (builtIns.includes(localCmd.toLowerCase()) || (p.target === 'wsl2' && hasShellMeta)) {
+        console.error(`\n   💡 AGENT HINT: '${localCmd}' is a shell built-in or contains shell metacharacters.`);
         console.error(`   🛠️ AUTONOMOUS HEALING: Automatically routing through system shell to prevent execution failure...`);
         
         if (process.platform === 'win32' && p.target !== 'wsl2') {
           // SEC-FIX: Route builtins through pwsh.exe instead of cmd.exe to prevent quote escaping injection vectors
-          const escapedCmd = p.command.replace(/'/g, "''");
-          const escapedArgs = (p.args || []).map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
+          const escapedCmd = localCmd.replace(/'/g, "''");
+          const escapedArgs = localArgs.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
           const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;
           const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
           localCmd = 'pwsh.exe';
           localArgs = ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-EncodedCommand', encoded];
         } else {
           const originalCmd = [
-            /[|&;<>$`{}()]/.test(p.command) ? p.command : escapeUnixArg(p.command, false),
-            ...(p.args || []).map(a => escapeUnixArg(a, false))
+            /[|&;<>$`{}()]/.test(localCmd) ? localCmd : escapeUnixArg(localCmd, false),
+            ...localArgs.map(a => escapeUnixArg(a, false))
           ].join(' ');
           localCmd = 'sh';
           localArgs = ['-c', originalCmd];
@@ -559,23 +578,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       wslCmd = 'python3';
     }
 
-    // Auto-heal CRLF boundary issues for text-processing tools reading Windows files
-    if (wslCmd === 'diff' || wslCmd === 'diff.exe') {
-      if (!wslArgs.includes('--strip-trailing-cr')) {
-        wslArgs.unshift('--strip-trailing-cr');
-      }
-    } else if (['grep', 'grep.exe', 'egrep', 'fgrep'].includes(wslCmd)) {
-      const nonFlagIdx = wslArgs.findIndex(a => !a.startsWith('-'));
-      if (nonFlagIdx !== -1) {
-        if (!wslArgs.includes('-E') && !wslArgs.includes('-P')) {
-          wslArgs.unshift('-P');
-          const newNonFlagIdx = wslArgs.findIndex(a => !a.startsWith('-'));
-          wslArgs[newNonFlagIdx] = wslArgs[newNonFlagIdx].replace(/\$$/, '\\r?$');
-        } else {
-          wslArgs[nonFlagIdx] = wslArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
-        }
-      }
-    }
+    // Auto-heal CRLF boundary issues for text-processing tools reading Windows files handled earlier before sh -c wrapper
 
     args = ['--cd', wslCwd, '-e', 'env', ...wslEnvArgs, wslCmd, ...wslArgs];
     cmd = 'wsl.exe';
