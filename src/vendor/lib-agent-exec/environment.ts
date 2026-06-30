@@ -74,7 +74,6 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     NPM_CONFIG_PROGRESS: 'false',
     NPM_CONFIG_YES: 'true',
     npm_config_yes: 'true',
-    npm_config_interactive: 'false',
     NPM_CONFIG_COLOR: 'false',
     YARN_NON_INTERACTIVE: '1',
     NPM_CONFIG_AUDIT: 'false',
@@ -151,7 +150,7 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     'GIT_EDITOR', 'GH_EDITOR', 'EDITOR', 'VISUAL', 'GIT_SEQUENCE_EDITOR',
     'GIT_ASKPASS', 'SSH_ASKPASS', 'GH_PROMPT_DISABLED', 'GH_FORCE_TTY', 'GIT_TERMINAL_PROMPT',
     'CI', 'NO_COLOR', 'PAGER', 'PYTHONUNBUFFERED', 'FORCE_COLOR', 'TERM', 'GPG_TTY',
-    'NPM_CONFIG_INTERACTIVE', 'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE',
+    'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE',
     'POETRY_INTERACTIVE', 'PIP_NO_INPUT', 'PYTHON_TEST_NO_INPUT'
   ]);
 

@@ -55,7 +55,6 @@ export function packageManagerInterceptor({ cmdBasename, args, envOverrides }: E
   }
 
   if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(cmdBasename)) {
-    envOverrides['npm_config_interactive'] = 'false';
     envOverrides['CI'] = '1';
     envOverrides['PNPM_INTERACTIVE'] = 'false';
 
@@ -94,7 +93,6 @@ export function packageManagerInterceptor({ cmdBasename, args, envOverrides }: E
   }
 
   if (['npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'].includes(cmdBasename)) {
-    envOverrides['npm_config_interactive'] = 'false';
     envOverrides['CI'] = '1';
     if (!args.includes('-y') && !args.includes('--yes')) {
       console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);

@@ -7,7 +7,7 @@ import path from 'node:path';
 export function systemInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, args, payload } = ctx;
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
-  const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe'];
+  const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe', 'node', 'node.exe', 'python', 'python.exe', 'bun', 'bun.exe'];
   const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'] as const;
   const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'];
 
@@ -316,16 +316,38 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       process.exit(1);
     })
 
-    // Inline Node/Python eval blocks
+    // Inline Node/Python eval blocks (Seamless Healing)
     .with({ isCommand: true, cmd: P.union('node', 'node.exe'), args: P.when(a => a.some(arg => ['-e', '--eval', '-p', '--print'].includes(arg) || arg.startsWith('-e=') || arg.startsWith('--eval=') || arg.startsWith('-p=') || arg.startsWith('--print='))) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'node -e' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      console.error(`   Please use the 'eval' JSON payload instead: {"type": "eval", "interpreter": "node", "code": "..."}`);
-      process.exit(1);
+      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'node -e' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Seamlessly converting 'node -e' to an 'eval' payload to bypass execution errors.\x1b[0m`);
+      const flagIdx = ctx.args.findIndex(arg => ['-e', '--eval', '-p', '--print'].includes(arg));
+      let code = "";
+      if (flagIdx !== -1) {
+        code = ctx.args.slice(flagIdx + 1).join(" ");
+      } else {
+        const arg = ctx.args.find(a => a.startsWith('-e=') || a.startsWith('--eval=') || a.startsWith('-p=') || a.startsWith('--print='));
+        code = arg ? arg.split('=')[1] : "";
+      }
+      ctx.payload = {
+        type: 'eval',
+        interpreter: 'node',
+        code: code || "console.log('empty eval');"
+      };
     })
     .with({ isCommand: true, cmd: P.union('python', 'python.exe', 'python3', 'python3.exe'), args: P.when(a => a.some(arg => arg === '-c' || arg.startsWith('-c='))) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'python -c' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      console.error(`   Please use the 'eval' JSON payload instead: {"type": "eval", "interpreter": "python", "code": "..."}`);
-      process.exit(1);
+      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'python -c' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Seamlessly converting 'python -c' to an 'eval' payload to bypass execution errors.\x1b[0m`);
+      const flagIdx = ctx.args.findIndex(arg => arg === '-c');
+      let code = "";
+      if (flagIdx !== -1) {
+        code = ctx.args.slice(flagIdx + 1).join(" ");
+      } else {
+        const arg = ctx.args.find(a => a.startsWith('-c='));
+        code = arg ? arg.split('=')[1] : "";
+      }
+      ctx.payload = {
+        type: 'eval',
+        interpreter: 'python',
+        code: code || "print('empty eval')"
+      };
     })
     .otherwise(() => {});
 }
