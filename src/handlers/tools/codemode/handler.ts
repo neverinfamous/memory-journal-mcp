@@ -456,9 +456,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const pool = getSandboxPool()
                     
                     // Prepare sandbox payload
-                    // If context was provided in the schema, use it. Otherwise empty object.
-                    // We cast it to satisfy TypeScript since schemas.ts allows z.any() for flexibility
-                    const userContext = (input.context as Record<string, unknown> | undefined) ?? {}
+                    // We no longer cast it, and pass it cleanly.
+                    const userContext = (input.context !== undefined && input.context !== null && typeof input.context === 'object' ? input.context : {}) as Record<string, unknown>
                     
                     // IMPORTANT: The worker relies on capturing the AuthContext from AsyncLocalStorage.
                     // We must run the execution wrapped in the current context so the worker thread

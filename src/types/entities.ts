@@ -5,44 +5,49 @@
 /**
  * Entry types for journal entries
  */
-export type EntryType =
-    | 'personal_reflection'
-    | 'project_decision'
-    | 'technical_achievement'
-    | 'bug_fix'
-    | 'feature_implementation'
-    | 'code_review'
-    | 'meeting_notes'
-    | 'learning'
-    | 'research'
-    | 'planning'
-    | 'retrospective'
-    | 'standup'
-    | 'technical_note'
-    | 'development_note'
-    | 'enhancement'
-    | 'milestone'
-    | 'system_integration_test'
-    | 'test_entry'
-    | 'plan_draft'
-    | 'adversarial_review'
-    | 'plan_refinement'
-    | 'copilot_validation'
-    | 'other'
+export const ENTRY_TYPES = [
+    'personal_reflection',
+    'project_decision',
+    'technical_achievement',
+    'bug_fix',
+    'feature_implementation',
+    'code_review',
+    'meeting_notes',
+    'learning',
+    'research',
+    'planning',
+    'retrospective',
+    'standup',
+    'technical_note',
+    'development_note',
+    'enhancement',
+    'milestone',
+    'system_integration_test',
+    'test_entry',
+    'plan_draft',
+    'adversarial_review',
+    'plan_refinement',
+    'copilot_validation',
+    'other',
+] as const
+
+export type EntryType = typeof ENTRY_TYPES[number]
 
 /**
  * Significance types for important entries
  */
-export type SignificanceType =
-    | 'milestone'
-    | 'breakthrough'
-    | 'decision'
-    | 'architecture'
-    | 'lesson_learned'
-    | 'blocker_resolved'
-    | 'release'
-    | 'security'
-    | null
+export const SIGNIFICANCE_TYPES = [
+    'milestone',
+    'breakthrough',
+    'decision',
+    'architecture',
+    'lesson_learned',
+    'blocker_resolved',
+    'release',
+    'security',
+] as const
+
+export type SignificanceType = typeof SIGNIFICANCE_TYPES[number] | null
 
 /**
  * Relationship types between entries
@@ -59,15 +64,18 @@ export type SignificanceType =
  * - resolved: Entry resolved/fixed an issue from another
  * - caused: Entry caused or led to another outcome
  */
-export type RelationshipType =
-    | 'evolves_from'
-    | 'references'
-    | 'implements'
-    | 'clarifies'
-    | 'response_to'
-    | 'blocked_by'
-    | 'resolved'
-    | 'caused'
+export const RELATIONSHIP_TYPES = [
+    'evolves_from',
+    'references',
+    'implements',
+    'clarifies',
+    'response_to',
+    'blocked_by',
+    'resolved',
+    'caused',
+] as const
+
+export type RelationshipType = typeof RELATIONSHIP_TYPES[number]
 
 /**
  * Journal entry entity

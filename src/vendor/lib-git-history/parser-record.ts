@@ -244,24 +244,24 @@ export function parseGitRecord(
           categories.push(...splitVals.map(s => titleCase(s.trim().replace(/^"|"$/g, ''))).filter(Boolean));
         })
         .with(P.union('history-entry', 'changelog-entry', 'entry'), () => { entriesParsed.push(val); })
-        .with(P.union('history-significance', 'changelog-significance', 'significance'), () => { metadataObj.significance = val; })
+        .with(P.union('history-significance', 'changelog-significance', 'significance'), () => { metadataObj['significance'] = val; })
         .with(P.union('history-impact', 'changelog-impact', 'impact'), () => {
           const ext = extractNumericMetadata(val);
-          if (ext !== undefined) metadataObj.impact = ext;
+          if (ext !== undefined) metadataObj['impact'] = ext;
         })
         .with(P.union('history-confidence', 'changelog-confidence', 'confidence'), () => {
           const ext = extractNumericMetadata(val);
-          if (ext !== undefined) metadataObj.confidence = ext;
+          if (ext !== undefined) metadataObj['confidence'] = ext;
         })
         .with(P.union('history-trust', 'changelog-trust', 'trust'), () => {
           const ext = extractNumericMetadata(val);
-          if (ext !== undefined) metadataObj.trust = ext;
+          if (ext !== undefined) metadataObj['trust'] = ext;
         })
         .with(P.when((k: string) => /^(validation|history-validation|changelog-validation)(-status)?$/.test(k)), () => {
           let v = val.toLowerCase();
           if (['success', 'ok', 'passing'].includes(v)) v = 'passed';
           else if (['error', 'failing', 'fail'].includes(v)) v = 'failed';
-          metadataObj.validation = v;
+          metadataObj['validation'] = v;
         })
         .with(P.union('breaking-change', 'breaking-changes'), () => {
           isBreaking = true;
@@ -309,20 +309,20 @@ export function parseGitRecord(
     isBreaking = true;
   }
 
-  if (categories.length > 0) metadataObj.category = categories;
-  if (entriesParsed.length > 0) metadataObj.entry = entriesParsed;
-  if (Object.keys(customTrailers).length > 0) metadataObj.customTrailers = customTrailers;
+  if (categories.length > 0) metadataObj['category'] = categories;
+  if (entriesParsed.length > 0) metadataObj['entry'] = entriesParsed;
+  if (Object.keys(customTrailers).length > 0) metadataObj['customTrailers'] = customTrailers;
 
   const filterCategories = categories.length > 0 ? categories : (type ? [type.charAt(0).toUpperCase() + type.slice(1)] : ['Uncategorized']);
-  if (args.category && !filterCategories.some(c => c.toLowerCase() === args.category!.toLowerCase())) return null;
+  if (args['category'] && !filterCategories.some(c => c.toLowerCase() === args['category']!.toLowerCase())) return null;
   if (args.type && type !== args.type) return null;
   if (args.breaking && !isBreaking) return null;
   if (args['changelog-only'] && entriesParsed.length === 0 && !(['feat', 'fix', 'perf', 'revert'].includes(type || '') || isBreaking)) return null;
 
-  if (args.impact) {
-    const recordImpact = metadataObj.impact as number | undefined;
+  if (args['impact']) {
+    const recordImpact = metadataObj['impact'] as number | undefined;
     if (recordImpact === undefined) return null;
-    const impactMatch = args.impact.match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
+    const impactMatch = args['impact'].match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
     if (!impactMatch) return null;
     const op = impactMatch[1] || '==';
     const val = parseFloat(impactMatch[2]);
@@ -336,10 +336,10 @@ export function parseGitRecord(
     if (!pass) return null;
   }
 
-  if (args.confidence) {
-    const recordConfidence = metadataObj.confidence as number | undefined;
+  if (args['confidence']) {
+    const recordConfidence = metadataObj['confidence'] as number | undefined;
     if (recordConfidence === undefined) return null;
-    const confMatch = args.confidence.match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
+    const confMatch = args['confidence'].match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
     if (!confMatch) return null;
     const op = confMatch[1] || '==';
     const val = parseFloat(confMatch[2]);

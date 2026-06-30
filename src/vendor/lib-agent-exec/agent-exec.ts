@@ -64,7 +64,11 @@ try {
 
 try {
   if (interceptorsPath) {
-    const plugin = await import(path.resolve(interceptorsPath));
+    const resolvedPath = path.resolve(interceptorsPath);
+    if (!resolvedPath.startsWith(process.cwd()) && !resolvedPath.startsWith(__dirname)) {
+      fatalError(`Interceptor plugin must be loaded from within the workspace: ${resolvedPath}`);
+    }
+    const plugin = await import(resolvedPath);
     if (plugin.default && Array.isArray(plugin.default)) {
       customInterceptors.push(...plugin.default);
     } else if (plugin.default && typeof plugin.default === 'function') {
@@ -73,8 +77,9 @@ try {
   }
 
   const stat = fs.statSync(payloadPath);
-  if (stat.size > 10 * 1024 * 1024) {
-    fatalError('Payload file exceeds 10MB limit.');
+  const maxPayloadSize = process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE ? parseInt(process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE, 10) : 10 * 1024 * 1024;
+  if (stat.size > maxPayloadSize) {
+    fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
   }
   const payloadStr = fs.readFileSync(payloadPath, 'utf8');
   const rawPayload = JSON.parse(payloadStr);

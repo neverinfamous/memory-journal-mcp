@@ -30,7 +30,7 @@ export const ExecuteCodeSchema = z.object({
     workspace_id: z.string().optional(),
     repo: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
-    context: z.any().optional(),
+    context: z.unknown().optional(),
     timeout_ms: z.number().optional(),
     timeout: z.number().optional(),
     readonly: z.boolean().optional(),
@@ -74,7 +74,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'If true, state-modifying API calls (create_entry, update_entry, etc.) will be skipped, returning simulated success.'
         ),
-    context: z.any()
+    context: z.unknown()
         .optional()
         .describe(
             'A JSON object, string, or array to pass variables directly into the sandbox (accessible via `context`). Use this for large strings or complex data to avoid string-escaping issues in the code parameter.'

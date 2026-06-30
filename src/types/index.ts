@@ -36,6 +36,7 @@ export type {
     Anchor,
     AnchorStatus,
 } from './entities.js'
+export { ENTRY_TYPES, RELATIONSHIP_TYPES, SIGNIFICANCE_TYPES } from './entities.js'
 export type {
     GitHubProject,
     GitHubIssue,

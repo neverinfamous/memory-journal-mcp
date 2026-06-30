@@ -128,14 +128,15 @@ import path from 'node:path'
  * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
 export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
-    // 1. Initial basic check for traversal strings
-    const normalized = dirPath.replace(/\\/g, '/')
+    // 1. Decode URI and perform basic check for traversal strings
+    const decodedDir = decodeURIComponent(dirPath)
+    const normalized = decodedDir.replace(/\\/g, '/')
     const segments = normalized.split('/')
     if (segments.some((s) => s === '..')) {
-        throw new PathTraversalError(dirPath)
+        throw new PathTraversalError(decodedDir)
     }
 
-    const resolved = path.resolve(dirPath)
+    const resolved = path.resolve(decodedDir)
 
     // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
     // This prevents symlink traversal bypasses where the final node does not exist but a parent is a symlink pointing outside.
@@ -143,18 +144,17 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     let existingRealPath = ''
 
     while (currentDir !== path.parse(currentDir).root) {
-        try {
+        if (fs.existsSync(currentDir)) {
             existingRealPath = fs.realpathSync(currentDir)
             break
-        } catch {
-            currentDir = path.dirname(currentDir)
         }
+        currentDir = path.dirname(currentDir)
     }
 
     if (!existingRealPath) {
-        try {
+        if (fs.existsSync(currentDir)) {
             existingRealPath = fs.realpathSync(currentDir) // root resolution
-        } catch {
+        } else {
             existingRealPath = currentDir
         }
     }
@@ -189,7 +189,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
 
     if (!isAllowed) {
         throw new PathTraversalError(
-            `Directory path escapes allowed sandbox boundaries: ${dirPath}`
+            `Directory path escapes allowed sandbox boundaries: ${decodedDir}`
         )
     }
 }

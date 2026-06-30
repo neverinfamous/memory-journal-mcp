@@ -391,15 +391,15 @@ export class Scheduler {
      * Digest job: compute analytics snapshot and persist to database.
      */
     private runDigest(): void {
-        const snapshot = this.db.computeDigest() as unknown as DigestSnapshot
-        this.db.saveAnalyticsSnapshot('digest', snapshot as unknown as Record<string, unknown>)
+        const snapshot = this.db.computeDigest()
+        this.db.saveAnalyticsSnapshot('digest', snapshot)
         logger.info('Scheduled analytics digest computed', {
             module: 'Scheduler',
             operation: 'digest',
             context: {
-                currentPeriodEntries: snapshot.currentPeriodEntries,
-                activityGrowthPercent: snapshot.activityGrowthPercent,
-                topImportanceCount: snapshot.topImportanceEntries.length,
+                currentPeriodEntries: (snapshot as unknown as DigestSnapshot).currentPeriodEntries,
+                activityGrowthPercent: (snapshot as unknown as DigestSnapshot).activityGrowthPercent,
+                topImportanceCount: (snapshot as unknown as DigestSnapshot).topImportanceEntries.length,
             },
         })
     }
@@ -412,19 +412,19 @@ export class Scheduler {
      * Report job: compute analytics snapshot, persist, and deliver via webhook.
      */
     private runReport(): void {
-        const snapshot = this.db.computeDigest() as unknown as DigestSnapshot
-        this.db.saveAnalyticsSnapshot('report', snapshot as unknown as Record<string, unknown>)
+        const snapshot = this.db.computeDigest()
+        this.db.saveAnalyticsSnapshot('report', snapshot)
         logger.info('Scheduled analytics report computed', {
             module: 'Scheduler',
             operation: 'report',
             context: {
-                currentPeriodEntries: snapshot.currentPeriodEntries,
+                currentPeriodEntries: (snapshot as unknown as DigestSnapshot).currentPeriodEntries,
             },
         })
 
         if (this.options.reportDeliveryOptions?.webhookUrl) {
-            const report = formatDigestReport(snapshot, VERSION)
-            void deliverReport(report, snapshot, this.options.reportDeliveryOptions)
+            const report = formatDigestReport(snapshot as unknown as DigestSnapshot, VERSION)
+            void deliverReport(report, snapshot as unknown as DigestSnapshot, this.options.reportDeliveryOptions)
         }
     }
 

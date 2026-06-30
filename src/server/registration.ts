@@ -14,9 +14,9 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
 import { auditOperation } from '../audit/interceptor.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
-
 import { ConfigurationError } from '../types/errors.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
+import type { GitHubIntegration } from '../github/github-integration/index.js'
 
 // ============================================================================
 // Types
@@ -144,7 +144,7 @@ export function registerPrompts(
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
     runtime?: ServerRuntime,
-    github?: unknown
+    github?: GitHubIntegration
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined

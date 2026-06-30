@@ -11,6 +11,7 @@ import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getAnalyticsPromptDefinitions } from './analytics.js'
 import { getGitHubPromptDefinitions } from './github.js'
 import { getGitPromptDefinitions } from './git.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
 
 import { getAdversarialPromptDefinitions } from './adversarial.js'
 import { getOptimizerPromptDefinitions } from './optimizer.js'
@@ -43,7 +44,7 @@ export interface InternalPromptDef {
         args: Record<string, string>,
         db: IDatabaseAdapter,
         teamDb?: IDatabaseAdapter,
-        github?: unknown
+        github?: GitHubIntegration
     ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
 
@@ -66,7 +67,7 @@ export function getPrompt(
     args: Record<string, string>,
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
-    github?: unknown
+    github?: GitHubIntegration
 ): Promise<{ messages: PromptMessage[] }> {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)

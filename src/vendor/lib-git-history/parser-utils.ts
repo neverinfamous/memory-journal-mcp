@@ -94,7 +94,7 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
     } else if (domain === 'linear.app') {
       const pathMatch = fullPath.match(/issue\/([A-Z0-9_.-]+)/i);
       if (pathMatch) issue = pathMatch[1];
-    } else if (domain === 'slack.com' && fullPath.startsWith('archives/')) {
+    } else if (domain === 'slack.com' && fullPath?.startsWith('archives/')) {
       issue = fullPath;
     } else if (domain === 'notion.so') {
       issue = fullPath;

@@ -14,6 +14,10 @@ import type { ToolDispatcher, GroupApiRecord } from './types.js'
 import { parseProjectRegistry } from './types.js'
 import { createGroupApi, toolNameToMethodName } from './group-factory.js'
 
+function isRecord(val: unknown): val is Record<string, unknown> {
+    return typeof val === 'object' && val !== null && !Array.isArray(val)
+}
+
 // =============================================================================
 // JournalApi Class
 // =============================================================================
@@ -78,8 +82,8 @@ export class JournalApi {
             this.core['listEntries'] = searchEntriesFn
             this.core['readQuery'] = async (...args: unknown[]) => {
                 const res = await searchEntriesFn(...args)
-                if (res !== null && typeof res === 'object' && 'entries' in res) {
-                    return { ...res, rows: (res as Record<string, unknown>)['entries'] }
+                if (isRecord(res) && 'entries' in res) {
+                    return { ...res, rows: res['entries'] }
                 }
                 return res
             }
@@ -112,14 +116,14 @@ export class JournalApi {
         if (semanticFn) {
             const wrappedSemanticFn = async (...args: unknown[]): Promise<unknown> => {
                 const res = await semanticFn(...args)
-                if (res !== null && typeof res === 'object' && 'entries' in res) {
-                    const entries = (res as Record<string, unknown>)['entries']
+                if (isRecord(res) && 'entries' in res) {
+                    const entries = res['entries']
                     if (Array.isArray(entries) && entries.length === 0 && searchEntriesFallbackFn) {
-                        const params = args[0] as Record<string, unknown> | undefined
-                        if (params && typeof params['query'] === 'string') {
+                        const params = args[0]
+                        if (isRecord(params) && typeof params['query'] === 'string') {
                             const fallback = await searchEntriesFallbackFn(...args)
-                            if (fallback !== null && typeof fallback === 'object' && 'entries' in fallback) {
-                                const fallbackEntries = (fallback as Record<string, unknown>)['entries']
+                            if (isRecord(fallback) && 'entries' in fallback) {
+                                const fallbackEntries = fallback['entries']
                                 if (Array.isArray(fallbackEntries) && fallbackEntries.length > 0) {
                                     return fallback
                                 }
@@ -204,13 +208,8 @@ export class JournalApi {
             if (!statsFn) return Promise.reject(new Error('getStatistics is not available'))
 
             const stats = await statsFn({ group_by: 'month', project_breakdown: true })
-            if (
-                stats !== null &&
-                stats !== undefined &&
-                typeof stats === 'object' &&
-                'projectBreakdown' in stats
-            ) {
-                return (stats as Record<string, unknown>)['projectBreakdown']
+            if (isRecord(stats) && 'projectBreakdown' in stats) {
+                return stats['projectBreakdown']
             }
             return []
         }
@@ -220,8 +219,8 @@ export class JournalApi {
                 let searchVal: string | number | undefined
                 if (typeof params === 'number') searchVal = params
                 else if (typeof params === 'string') searchVal = params
-                else if (typeof params === 'object' && params !== null) {
-                    const obj = params as Record<string, unknown>
+                if (isRecord(params)) {
+                    const obj = params
                     if (typeof obj['project_number'] === 'number') searchVal = obj['project_number']
                     else if (typeof obj['projectNumber'] === 'number')
                         searchVal = obj['projectNumber']
@@ -238,8 +237,8 @@ export class JournalApi {
                     if (Array.isArray(projects)) {
                         const projArray = projects as unknown[]
                         const found = projArray.find((p: unknown) => {
-                            if (typeof p !== 'object' || p === null) return false
-                            const proj = p as Record<string, unknown>
+                            if (!isRecord(p)) return false
+                            const proj = p
                             if (numVal !== undefined && (proj['project_number'] === numVal || proj['projectNumber'] === numVal))
                                 return true
                             if (strVal !== undefined && typeof proj['name'] === 'string') {

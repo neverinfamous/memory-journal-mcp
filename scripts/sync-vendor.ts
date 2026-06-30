@@ -47,6 +47,7 @@ try {
       
       if (file.endsWith('.ts')) {
         const content = readFileSync(srcFile, 'utf8');
+        // Vendor files rely on external dependencies (Bun, picocolors) and must not be strictly checked
         writeFileSync(destFile, '// @ts-nocheck\n' + content);
       } else {
         cpSync(srcFile, destFile);

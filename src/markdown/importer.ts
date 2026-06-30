@@ -12,6 +12,7 @@ import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
+import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 
@@ -46,43 +47,10 @@ export interface ImportResult {
 }
 
 /** Supported relationship types for validation */
-const VALID_RELATIONSHIP_TYPES = new Set<string>([
-    'evolves_from',
-    'references',
-    'implements',
-    'clarifies',
-    'response_to',
-    'blocked_by',
-    'resolved',
-    'caused',
-])
+const VALID_RELATIONSHIP_TYPES = new Set<string>(RELATIONSHIP_TYPES)
 
 /** Valid entry types for casting */
-const VALID_ENTRY_TYPES = new Set<string>([
-    'personal_reflection',
-    'project_decision',
-    'technical_achievement',
-    'bug_fix',
-    'feature_implementation',
-    'code_review',
-    'meeting_notes',
-    'learning',
-    'research',
-    'planning',
-    'retrospective',
-    'standup',
-    'technical_note',
-    'development_note',
-    'enhancement',
-    'milestone',
-    'system_integration_test',
-    'test_entry',
-    'plan_draft',
-    'adversarial_review',
-    'plan_refinement',
-    'copilot_validation',
-    'other',
-])
+const VALID_ENTRY_TYPES = new Set<string>(ENTRY_TYPES)
 
 /**
  * Safely cast a string to EntryType, returning undefined for invalid values.

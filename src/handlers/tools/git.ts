@@ -55,8 +55,8 @@ export const GitReleaseInfoOptionsSchemaMcp = z.object({
 
 export const GitOutputSchema = z.object({
     success: z.boolean(),
-    commits: z.array(z.any()).optional(),
-    changelog: z.any().optional(),
+    commits: z.array(z.unknown()).optional(),
+    changelog: z.unknown().optional(),
     error: z.string().optional(),
 }).extend(ErrorFieldsMixin.shape)
 
@@ -261,7 +261,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             }),
             outputSchema: z.object({
                 success: z.boolean(),
-                analysis: z.any().optional(),
+                analysis: z.unknown().optional(),
                 error: z.string().optional()
             }).extend(ErrorFieldsMixin.shape),
             annotations: {

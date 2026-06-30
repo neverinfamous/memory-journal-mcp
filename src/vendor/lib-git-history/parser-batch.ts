@@ -41,7 +41,7 @@ export async function processBatch(
 
   for (const b of batch) {
     const { sha, parents, refs, tags, authorName, authorEmail, committerName, committerEmail, committerDate, date, type, scope, isBreaking, breakingChangeDescription, cleanSubject, subject, rawFiles, metadataObj, trailersObj, references, coAuthors, reviewers, issuesMap, isRevert, revertedCommit } = b;
-    let body = b.body;
+    let body = b['body'];
 
     const parsedFiles: z.infer<typeof fileStatusSchema>[] = [];
     const statsForCommit = numstatMap.get(sha) || new Map();
@@ -141,17 +141,17 @@ export async function processBatch(
       if (patchData.truncated) entryObj.isPatchTruncated = true;
     }
 
-    if (Object.keys(metadataObj).length > 0) entryObj.metadata = metadataObj;
+    if (Object.keys(metadataObj).length > 0) entryObj['metadata'] = metadataObj;
     if (references.length > 0) entryObj.references = references;
     if (coAuthors.length > 0) entryObj.coAuthors = coAuthors;
     if (reviewers.length > 0) entryObj.reviewers = reviewers;
-    if (trailersObj && Object.keys(trailersObj).length > 0) entryObj.trailersObj = trailersObj;
+    if (trailersObj && Object.keys(trailersObj).length > 0) entryObj['trailersObj'] = trailersObj;
 
-    if (isRevert) entryObj.isRevert = true;
-    if (revertedCommit) entryObj.revertedCommit = revertedCommit;
-    if (isBreaking) entryObj.isBreaking = true;
-    if (breakingChangeDescription) entryObj.breakingChangeDescription = breakingChangeDescription;
-    if (isRebased) entryObj.isRebased = true;
+    if (isRevert) entryObj['isRevert'] = true;
+    if (revertedCommit) entryObj['revertedCommit'] = revertedCommit;
+    if (isBreaking) entryObj['isBreaking'] = true;
+    if (breakingChangeDescription) entryObj['breakingChangeDescription'] = breakingChangeDescription;
+    if (isRebased) entryObj['isRebased'] = true;
 
     body = body.replace(/(?:\r?\n){3,}/g, '\n\n');
     
@@ -174,7 +174,7 @@ export async function processBatch(
       }
       body = (' ' + newBody + '\n\n...[truncated to protect context]').slice(1);
     }
-    if (body) entryObj.body = (' ' + body).slice(1);
+    if (body) entryObj['body'] = (' ' + body).slice(1);
 
     const parseResult = entrySchema.safeParse(entryObj);
     if (parseResult.success) {
@@ -185,26 +185,26 @@ export async function processBatch(
         if (issue.path.length === 1) {
           delete coercedObj[issue.path[0] as string];
         } else if (issue.path.length === 2 && issue.path[0] === 'metadata') {
-          const meta = { ...(coercedObj.metadata as Record<string, unknown>) };
+          const meta = { ...(coercedObj['metadata'] as Record<string, unknown>) };
           delete meta[issue.path[1] as string];
-          coercedObj.metadata = meta;
+          coercedObj['metadata'] = meta;
         } else if (issue.path[0] === 'files') {
-          delete coercedObj.files;
+          delete coercedObj['files'];
         }
       }
       const retryResult = entrySchema.safeParse(coercedObj);
       if (retryResult.success) {
         const finalData = retryResult.data;
-        (finalData as Record<string, unknown>).validationErrors = parseResult.error.issues;
+        (finalData as Record<string, unknown>)['validationErrors'] = parseResult.error.issues;
         processed.push(finalData);
       } else {
         const fallbackData = coercedObj as z.infer<typeof entrySchema>;
-        if (!fallbackData.commit) (fallbackData as Record<string, unknown>).commit = sha || 'unknown_commit';
-        if (!fallbackData.subject) (fallbackData as Record<string, unknown>).subject = subject || 'No Subject';
-        if (!fallbackData.date) (fallbackData as Record<string, unknown>).date = date || new Date().toISOString();
-        if (!fallbackData.author) (fallbackData as Record<string, unknown>).author = authorName || 'Unknown Author';
-        (fallbackData as Record<string, unknown>).validationErrors = parseResult.error.issues;
-        (fallbackData as Record<string, unknown>).isCorrupted = true;
+        if (!fallbackData['commit']) (fallbackData as Record<string, unknown>)['commit'] = sha || 'unknown_commit';
+        if (!fallbackData['subject']) (fallbackData as Record<string, unknown>)['subject'] = subject || 'No Subject';
+        if (!fallbackData['date']) (fallbackData as Record<string, unknown>)['date'] = date || new Date().toISOString();
+        if (!fallbackData['author']) (fallbackData as Record<string, unknown>)['author'] = authorName || 'Unknown Author';
+        (fallbackData as Record<string, unknown>)['validationErrors'] = parseResult.error.issues;
+        (fallbackData as Record<string, unknown>)['isCorrupted'] = true;
         processed.push(fallbackData);
       }
     }

@@ -10,13 +10,18 @@ import { wrapResult } from './worker-result-proxy.js'
 import { METHOD_ALIASES } from './api-constants.js'
 import { applyGitInterceptions } from './api/git-api.js'
 
+export function isRecord(val: unknown): val is Record<string, unknown> {
+    return typeof val === 'object' && val !== null && !Array.isArray(val);
+}
+
 export function applyArgInterceptions(methodName: string, args: unknown[]): { args: unknown[] } | { error: Record<string, unknown> } {
     const gitIntercept = applyGitInterceptions(methodName, args);
     if (gitIntercept) return gitIntercept;
 
     // Generic Parameter Aliases (Phase 31.1 Hallucination Smoothing)
-    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['user'] !== undefined && obj['target_user'] === undefined) { obj['target_user'] = obj['user']; delete obj['user']; }
         if (obj['severity'] !== undefined && obj['flag_type'] === undefined) { obj['flag_type'] = obj['severity']; delete obj['severity']; }
         if (obj['msg'] !== undefined && obj['message'] === undefined) { obj['message'] = obj['msg']; delete obj['msg']; }
@@ -48,10 +53,10 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
          methodName === 'team_semantic_search' || methodName === 'teamSemanticSearch' ||
          methodName === 'cross_team_search' || methodName === 'crossTeamSearch') &&
         args.length === 1 &&
-        typeof args[0] === 'object' &&
-        args[0] !== null
+        isRecord(args[0])
     ) {
-        const obj = args[0] as Record<string, unknown>;
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         
         if (methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange') {
             if (obj['q'] !== undefined || obj['query'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['keep'] !== undefined || obj['path'] !== undefined) {
@@ -124,10 +129,10 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     if (
         (methodName === 'search_entries' || methodName === 'searchEntries' || methodName === 'team_search' || methodName === 'teamSearch' || methodName === 'search_by_date_range' || methodName === 'searchByDateRange' || methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange' || methodName === 'cross_team_search' || methodName === 'crossTeamSearch') &&
         args.length === 1 &&
-        typeof args[0] === 'object' &&
-        args[0] !== null
+        isRecord(args[0])
     ) {
-        const obj = args[0] as Record<string, unknown>
+        const obj = { ...args[0] };
+        args[0] = obj;
         if ('exact_match' in obj) {
             const isFuzzy = obj['exact_match'] === false;
             obj['fuzzy_match'] = isFuzzy;
@@ -180,8 +185,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // IO tools hallucinations
     const ioMethods = ['export_entries', 'exportEntries', 'team_export_entries', 'teamExportEntries', 'export_markdown', 'exportMarkdown', 'team_export_markdown', 'teamExportMarkdown', 'import_markdown', 'importMarkdown', 'team_import_markdown', 'teamImportMarkdown', 'import_external', 'importExternal', 'team_import_external', 'teamImportExternal'];
-    if (ioMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (ioMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
 
         // Keep alias maps to limit for all IO methods
         if (obj['keep'] !== undefined && obj['limit'] === undefined) {
@@ -278,8 +284,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     }
 
     // Vector index stats hallucination: passing `q` or `query`
-    if ((methodName === 'team_get_vector_index_stats' || methodName === 'teamGetVectorIndexStats' || methodName === 'get_vector_index_stats' || methodName === 'getVectorIndexStats') && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if ((methodName === 'team_get_vector_index_stats' || methodName === 'teamGetVectorIndexStats' || methodName === 'get_vector_index_stats' || methodName === 'getVectorIndexStats') && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined) {
             return { error: {
                 success: false,
@@ -300,8 +307,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // List deleted entries hallucinations
     const listDeletedMethods = ['list_deleted_entries', 'listDeletedEntries', 'team_list_deleted_entries', 'teamListDeletedEntries'];
-    if (listDeletedMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (listDeletedMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined) {
             return { error: {
                 success: false,
@@ -326,8 +334,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // Analytics tools hallucinations
     const analyticsMethods = ['get_statistics', 'getStatistics', 'get_cross_project_insights', 'getCrossProjectInsights', 'team_get_statistics', 'teamGetStatistics', 'team_get_cross_project_insights', 'teamGetCrossProjectInsights', 'get_collaboration_matrix', 'getCollaborationMatrix', 'team_get_collaboration_matrix', 'teamGetCollaborationMatrix'];
-    if (analyticsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (analyticsMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         
         if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['text'] !== undefined || obj['message'] !== undefined || obj['description'] !== undefined || obj['path'] !== undefined || obj['keep'] !== undefined || obj['mode'] !== undefined) {
             return { error: {
@@ -388,8 +397,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         'get_repo_insights', 'getRepoInsights',
         'get_copilot_reviews', 'getCopilotReviews'
     ];
-    if (githubMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (githubMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         
         // 1. Text aliases
         for (const key of ['text', 'message', 'description'] as const) {
@@ -509,8 +519,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // Backup tools hallucinations
     const backupMethods = ['backup_journal', 'backupJournal', 'team_backup', 'teamBackup', 'list_backups', 'listBackups', 'team_list_backups', 'teamListBackups', 'restore_backup', 'restoreBackup', 'cleanup_backups', 'cleanupBackups'];
-    if (backupMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (backupMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
 
         if (methodName.includes('backup_journal') || methodName.includes('backupJournal') || methodName.includes('team_backup') || methodName.includes('teamBackup')) {
             if (obj['name'] === undefined) {
@@ -622,8 +633,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 suggestion: `Use a batch method or pass a single object like { entry_id: number }`,
                 recoverable: true
             }};
-        } else if (typeof args[0] === 'object' && args[0] !== null) {
-            const obj = args[0] as Record<string, unknown>;
+        } else if (isRecord(args[0])) {
+            const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
             if (Array.isArray(obj['ids']) || Array.isArray(obj['entry_ids']) || Array.isArray(obj['entry_id']) || Array.isArray(obj['id'])) {
                 return { error: {
                     success: false,
@@ -705,7 +717,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     if ((methodName === 'batch_create_entries' || methodName === 'batchCreateEntries' || methodName === 'team_batch_create_entries' || methodName === 'teamBatchCreateEntries') && args.length === 1) {
         if (Array.isArray(args[0])) {
             args[0] = { entries: args[0] };
-        } else if (typeof args[0] === 'object' && args[0] !== null && !('entries' in args[0])) {
+        } else if (isRecord(args[0]) && !('entries' in args[0])) {
             return { error: {
                 success: false,
                 error: `${methodName} requires an 'entries' array.`,
@@ -721,7 +733,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     if ((methodName === 'batch_update_entries' || methodName === 'batchUpdateEntries' || methodName === 'team_batch_update_entries' || methodName === 'teamBatchUpdateEntries') && args.length === 1) {
         if (Array.isArray(args[0])) {
             args[0] = { updates: args[0] };
-        } else if (typeof args[0] === 'object' && args[0] !== null && !('updates' in args[0])) {
+        } else if (isRecord(args[0]) && !('updates' in args[0])) {
             return { error: {
                 success: false,
                 error: `${methodName} requires an 'updates' array.`,
@@ -753,7 +765,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             args[0] = { entry_ids: args[0] };
         } else if (args.length > 1 && args.every(a => typeof a === 'number')) {
             args = [{ entry_ids: args }];
-        } else if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null && !Array.isArray(args[0]) && !('entry_ids' in args[0])) {
+        } else if (args.length === 1 && isRecord(args[0]) && !Array.isArray(args[0]) && !('entry_ids' in args[0])) {
             return { error: {
                 success: false,
                 error: `${methodName} requires an 'entry_ids' array.`,
@@ -767,8 +779,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // link_entries hallucination: passing source, target, type, description, etc.
     if (methodName === 'link_entries' || methodName === 'linkEntries' || methodName === 'team_link_entries' || methodName === 'teamLinkEntries') {
-        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-            const obj = args[0] as Record<string, unknown>;
+        if (args.length === 1 && isRecord(args[0])) {
+            const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
             if (obj['source'] !== undefined && obj['from_entry_id'] === undefined) {
                 obj['from_entry_id'] = obj['source'];
                 delete obj['source'];
@@ -816,8 +829,8 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     if (methodName === 'update_configuration' || methodName === 'updateConfiguration' || methodName === 'config' || methodName === 'configure') {
         if (args.length === 1 && typeof args[0] === 'string') {
             // instruction_level is deprecated, no fallback needed
-        } else if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-            const obj = { ...(args[0] as Record<string, unknown>) };
+        } else if (args.length === 1 && isRecord(args[0])) {
+            const obj = { ...args[0] };
             if (typeof obj['config'] === 'object' && obj['config'] !== null) {
                 args[0] = { ...obj, ...(obj['config'] as Record<string, unknown>) };
                 delete (args[0] as Record<string, unknown>)['config'];
@@ -837,8 +850,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // team_update_entry hallucination: passing `keep` instead of `is_archived`
     if (methodName === 'update_entry' || methodName === 'updateEntry' || methodName === 'team_update_entry' || methodName === 'teamUpdateEntry') {
-        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-            const obj = args[0] as Record<string, unknown>;
+        if (args.length === 1 && isRecord(args[0])) {
+            const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
             if (obj['keep'] !== undefined && obj['is_archived'] === undefined) {
                 obj['is_archived'] = !obj['keep'];
                 delete obj['keep'];
@@ -870,8 +884,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     
     // delete_entry hallucination: version -> expected_version mapping
     const deleteMethods = ['delete_entry', 'deleteEntry', 'team_delete_entry', 'teamDeleteEntry'];
-    if (deleteMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (deleteMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['version'] !== undefined && obj['expected_version'] === undefined) {
             obj['expected_version'] = obj['version'];
             delete obj['version'];
@@ -880,8 +895,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     
     // team_get_recent hallucination: passing `q` or `query` or `keep`
     const recentMethods = ['get_recent_entries', 'getRecentEntries', 'team_get_recent', 'teamGetRecent'];
-    if (recentMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (recentMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined) {
             return { error: {
                 success: false,
@@ -900,8 +916,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // team_list_tags hallucination: passing `q` or `query`
     const listTagsMethods = ['list_tags', 'listTags', 'team_list_tags', 'teamListTags'];
-    if (listTagsMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (listTagsMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined || obj['path'] !== undefined || obj['mode'] !== undefined || obj['keep'] !== undefined) {
             return { error: {
                 success: false,
@@ -916,8 +933,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // team_create_entry hallucination: text/message/description
     const createMethods = ['create_entry', 'createEntry', 'team_create_entry', 'teamCreateEntry'];
-    if (createMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (createMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['text'] !== undefined && obj['content'] === undefined) {
             obj['content'] = obj['text'];
             delete obj['text'];
@@ -971,8 +989,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     }
 
     // test_simple & test_error_handling hallucination: passing text/description instead of message
-    if ((methodName === 'test_simple' || methodName === 'testSimple' || methodName === 'test_error_handling' || methodName === 'testErrorHandling') && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if ((methodName === 'test_simple' || methodName === 'testSimple' || methodName === 'test_error_handling' || methodName === 'testErrorHandling') && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         if (obj['text'] !== undefined && obj['message'] === undefined) {
             obj['message'] = obj['text'];
             delete obj['text'];
@@ -989,8 +1008,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // merge_tags hallucination: passing `source_tags` or `from`/`to` or comma-separated tags
     if (methodName === 'merge_tags' || methodName === 'mergeTags' || methodName === 'team_merge_tags' || methodName === 'teamMergeTags') {
-        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-            const obj = args[0] as Record<string, unknown>;
+        if (args.length === 1 && isRecord(args[0])) {
+            const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
             if (obj['source_tags'] !== undefined && obj['source_tag'] === undefined) {
                 obj['source_tag'] = Array.isArray(obj['source_tags']) ? obj['source_tags'][0] : obj['source_tags'];
                 delete obj['source_tags'];
@@ -1026,8 +1046,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // search_audit_log hallucination: passing `limit` as a string or using `keep` instead of `limit`
     if (methodName === 'search_audit_log' || methodName === 'searchAuditLog') {
-        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-            const obj = args[0] as Record<string, unknown>;
+        if (args.length === 1 && isRecord(args[0])) {
+            const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
             if (obj['keep'] !== undefined && obj['limit'] === undefined) {
                 obj['limit'] = obj['keep'];
                 delete obj['keep'];
@@ -1048,8 +1069,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // team member tools hallucination: path/target/user -> author, keep/mode -> role
     const memberMethods = ['team_add_member', 'teamAddMember', 'team_update_member_role', 'teamUpdateMemberRole', 'team_remove_member', 'teamRemoveMember', 'team_get_member', 'teamGetMember'];
-    if (memberMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (memberMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         for (const key of ['path', 'target', 'user', 'name', 'account', 'username', 'member']) {
             if (obj[key] !== undefined && obj['author'] === undefined) {
                 obj['author'] = obj[key];
@@ -1066,8 +1088,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // team alias tools hallucination: text/message/name -> alias, target/to/author -> canonical_author
     const aliasMethods = ['team_add_author_alias', 'teamAddAuthorAlias', 'team_remove_author_alias', 'teamRemoveAuthorAlias', 'team_list_author_aliases', 'teamListAuthorAliases', 'team_resolve_author', 'teamResolveAuthor', 'team_consolidate_authors', 'teamConsolidateAuthors'];
-    if (aliasMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (aliasMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         
         for (const key of ['q', 'query', 'search']) {
             if (obj[key] !== undefined) {
@@ -1099,8 +1122,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // update_configuration hallucination: trying to change maxTokens or temperature
     if (methodName === 'update_configuration' || methodName === 'updateConfiguration') {
-        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-            const obj = args[0] as Record<string, unknown>;
+        if (args.length === 1 && isRecord(args[0])) {
+            const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
             const hasContextParam = ['maxTokens', 'max_tokens', 'temperature', 'top_p', 'topP'].find(k => k in obj);
             if (hasContextParam) {
                 return {
@@ -1119,8 +1143,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
     // Session Summary Hallucination Healing
     const sessionSummaryMethods = ['create_entry', 'createEntry', 'team_create_entry', 'teamCreateEntry', 'update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'];
-    if (sessionSummaryMethods.includes(methodName) && args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-        const obj = args[0] as Record<string, unknown>;
+    if (sessionSummaryMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
+        const obj = { ...args[0] };
+        args[0] = obj; // We clone it below
         const tags = obj['tags'] as string[] | undefined;
         const entryType = obj['entry_type'] as string | undefined;
         

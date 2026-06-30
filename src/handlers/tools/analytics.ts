@@ -137,7 +137,7 @@ const GetStatisticsSchema = z.object({
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     project_breakdown: z.boolean().optional().default(false),
     workspace_id: z.string().optional(),
-    project_number: z.any().optional(), // Allow injected project_number
+    project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -147,10 +147,10 @@ const GetStatisticsSchemaMcp = z.object({
     end_date: z.string().optional(),
     project_breakdown: z.boolean().optional().default(false),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-    project_number: z.any().optional().describe('Anti-Hallucination Hint: get_statistics cannot be filtered by project_number. It always returns global stats. Use project_breakdown: true instead.'),
-    timeframe: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
-    period: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
-    time: z.any().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or time.'),
+    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_statistics cannot be filtered by project_number. It always returns global stats. Use project_breakdown: true instead.'),
+    timeframe: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
+    period: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
+    time: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or time.'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -167,7 +167,7 @@ const CrossProjectInsightsInputSchema = z.object({
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
     workspace_id: z.string().optional(),
-    project_number: z.any().optional(), // Allow injected project_number
+    project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -179,9 +179,9 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
         .default(3)
         .describe('Minimum entries to include project'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-    project_number: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects. Do not pass a project_number.'),
-    query: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a query. It analyzes all entries.'),
-    limit: z.any().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a limit.'),
+    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects. Do not pass a project_number.'),
+    query: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a query. It analyzes all entries.'),
+    limit: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a limit.'),
 })
 
 // ============================================================================
