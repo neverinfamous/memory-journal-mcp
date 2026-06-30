@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { EntryType, RelationshipType } from '../../types/index.js'
+import type { EntryType, RelationshipType, ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { resolveProjectNumberFromPath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
@@ -18,7 +18,7 @@ export const updateEntrySchema = updateEntryOptionsSchema
 
 import type { BaseEntryOptionsSchema } from '../schemas.js'
 
-async function getDb(options: BaseEntryOptionsSchema, command: Command): Promise<{ db: IDatabaseAdapter, config: any }> {
+async function getDb(options: BaseEntryOptionsSchema, command: Command): Promise<{ db: IDatabaseAdapter, config: ToolHandlerConfig }> {
     let resolver: ConfigResolver
     const configPath = (options.config) ?? process.env['MEMORY_JOURNAL_CONFIG']
     const configErrors: string[] = []
@@ -211,7 +211,7 @@ interface EntryPayload {
     relatedIds: number[];
 }
 
-function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata: Record<string, unknown>, config?: any): EntryPayload {
+function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata: Record<string, unknown>, config?: ToolHandlerConfig): EntryPayload {
     const entryTypeStr = options.type ?? options.category ?? metadata['type'] ?? metadata['entry_type'] ?? metadata['entryType']
     const entryType = entryTypeStr as EntryType | undefined
 
@@ -226,7 +226,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     const projectRaw = options.project ?? options.project_number ?? metadata['project'] ?? metadata['projectNumber'] ?? metadata['project_number']
     let projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
     if (projectNumber === undefined || isNaN(projectNumber)) {
-        const autoResolved = resolveProjectNumberFromPath(process.cwd(), config)
+        const autoResolved = resolveProjectNumberFromPath(process.cwd())
         if (autoResolved !== undefined) {
             projectNumber = autoResolved
         } else {
@@ -234,7 +234,8 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
         }
     }
     
-    const workspaceId = resolveWorkspaceId(options.workspaceId as string | undefined, projectNumber, config)
+    const explicitWorkspaceId = (options as Record<string, unknown>)['workspaceId'] ?? (options as Record<string, unknown>)['workspace_id'] ?? metadata['workspaceId'] ?? metadata['workspace_id'];
+    const workspaceId = resolveWorkspaceId(explicitWorkspaceId as string | undefined, projectNumber, config)
 
     const trustRaw = options.trustScore ?? options.trust_score ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
     const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
@@ -247,6 +248,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
 
     const sessionIdRaw = options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
     const sessionId = sessionIdRaw as string | undefined
+
 
     let autoContextStr = options.autoContext
     const autoContextFile = options.autoContextFile

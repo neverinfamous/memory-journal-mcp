@@ -1,4 +1,4 @@
-import type { JournalEntry } from '../../../types/index.js'
+import type { JournalEntry, ToolHandlerConfig } from '../../../types/index.js'
 import type { Database } from 'better-sqlite3'
 import type { TagsManager } from '../tags.js'
 import type { NativeConnectionManager } from '../native-connection.js'
@@ -34,7 +34,7 @@ export interface EntriesSharedContext {
     ctx: NativeConnectionManager
     tagsMgr: TagsManager
     db: Database
-    config?: any
+    config?: ToolHandlerConfig
 }
 
 /**

@@ -21,6 +21,15 @@ export function resolveWorkspaceId(
     return config?.defaultWorkspaceId ?? 'default'
 }
 
+interface RegistryEntry {
+    path?: string;
+    project_number?: number;
+}
+
+interface ParsedConfig {
+    projectRegistry?: Record<string, RegistryEntry>;
+}
+
 /**
  * Automatically resolves a project number by inspecting the global config
  * and matching the provided working directory against registered paths.
@@ -31,9 +40,9 @@ export function resolveProjectNumberFromPath(cwd: string): number | undefined {
         if (!fs.existsSync(configPath)) return undefined
         
         const content = fs.readFileSync(configPath, 'utf-8')
-        const config = JSON.parse(content)
+        const config = JSON.parse(content) as ParsedConfig
         
-        if (!config.projectRegistry) return undefined
+        if (config.projectRegistry === undefined || config.projectRegistry === null) return undefined
         
         const normalizedCwd = cwd.replace(/\\/g, '/').toLowerCase()
         
@@ -41,22 +50,22 @@ export function resolveProjectNumberFromPath(cwd: string): number | undefined {
         let bestMatchLength = -1
         let bestProjectNumber: number | undefined = undefined
         
-        for (const [key, entry] of Object.entries(config.projectRegistry)) {
-            const entryPath = (entry as any).path
-            if (!entryPath) continue
+        for (const [, entry] of Object.entries(config.projectRegistry)) {
+            const entryPath = entry.path
+            if (entryPath === undefined || entryPath === null) continue
             
             const normalizedRegPath = entryPath.replace(/\\/g, '/').toLowerCase()
             
             if (normalizedCwd.startsWith(normalizedRegPath)) {
                 if (normalizedRegPath.length > bestMatchLength) {
                     bestMatchLength = normalizedRegPath.length
-                    bestProjectNumber = (entry as any).project_number
+                    bestProjectNumber = entry.project_number
                 }
             }
         }
         
         return bestProjectNumber
-    } catch (err) {
+    } catch {
         // Silently fail if auto-resolution fails
         return undefined
     }

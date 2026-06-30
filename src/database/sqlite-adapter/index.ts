@@ -8,6 +8,7 @@ import type {
     EntryRevision,
     AnchorStatus,
     Anchor,
+    ToolHandlerConfig
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
 import type {
@@ -46,9 +47,9 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     private backupMgr: BackupManager
     private membersMgr: MembersManager
     private aliasMgr: AliasManager
-    private config?: any
+    private config?: ToolHandlerConfig
 
-    constructor(dbPath: string, config?: any) {
+    constructor(dbPath: string, config?: ToolHandlerConfig) {
         this.config = config
         this.connection = new NativeConnectionManager(dbPath)
         this.tagsMgr = new TagsManager(this.connection)

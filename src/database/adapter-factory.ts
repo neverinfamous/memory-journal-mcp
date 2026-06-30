@@ -1,12 +1,13 @@
 import type { IDatabaseAdapter } from './core/interfaces.js'
 import { DatabaseAdapter } from './sqlite-adapter/index.js'
 import { logger } from '../utils/logger.js'
+import type { ToolHandlerConfig } from '../types/index.js'
 
 export const DatabaseAdapterFactory = {
     /**
      * Creates and returns the SQLite database adapter
      */
-    create(dbPath: string, config?: any): Promise<IDatabaseAdapter> {
+    create(dbPath: string, config?: ToolHandlerConfig): Promise<IDatabaseAdapter> {
         logger.info('Initializing SQLite database backend', {
             module: 'DatabaseAdapterFactory',
             dbPath,

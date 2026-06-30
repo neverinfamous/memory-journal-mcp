@@ -1,4 +1,4 @@
-import type { JournalEntry, EntryType, ImportanceResult, EntryRevision, AnchorStatus, Anchor } from '../../../types/index.js'
+import type { JournalEntry, EntryType, ImportanceResult, EntryRevision, AnchorStatus, Anchor, ToolHandlerConfig } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { TagsManager } from '../tags.js'
@@ -35,7 +35,7 @@ import { updateAnchorStatus, getAnchorsByEntryId } from './anchors.js'
 export class EntriesManager {
     private sharedContext: EntriesSharedContext
 
-    constructor(ctx: NativeConnectionManager, tagsMgr: TagsManager, config?: any) {
+    constructor(ctx: NativeConnectionManager, tagsMgr: TagsManager, config?: ToolHandlerConfig) {
         this.sharedContext = {
             ctx,
             tagsMgr,
