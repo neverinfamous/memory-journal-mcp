@@ -261,6 +261,15 @@ addAgentInstructions(updateEntryCmd,
 )
 updateEntryCmd.action(withValidation(updateEntrySchema, updateEntryAction))
 
+// Setup agent healing for 'delete' hallucination
+entryCmd
+    .command('delete [args...]', { hidden: true })
+    .allowUnknownOption()
+    .action(() => {
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'entry delete' command does not exist in the CLI. Deleting entries is an admin-level operation. Please use the MCP tool 'mj_execute_code' with 'db.admin.batchDeleteEntries({ entry_ids: [...] })' instead.\n`);
+        process.exit(1);
+    });
+
 // Setup 'search' command
 const searchCmd = program
     .command('search <query>')
