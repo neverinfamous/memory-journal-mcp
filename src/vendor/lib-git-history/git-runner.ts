@@ -53,7 +53,7 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   }
   const gitArgs: string[] = [];
   gitArgs.push('-M');
-  if (args['include-merges'] || args['first-parent']) gitArgs.push('-m');
+  if (args['include-merges'] || args['first-parent']) gitArgs.push('-c');
   else gitArgs.push('--no-merges');
 
   if (args.author) gitArgs.push(`--author=${args.author}`);
@@ -204,8 +204,7 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
           const record = buffer.slice(lastSlice, sepIdx);
           if (record.trim()) {
             if (record.length >= maxBufferLimit) {
-              console.warn(`Warning: Git record exceeded ${Math.round(maxBufferLimit/1024/1024)}MB. Truncating massive commit.`);
-              yield record.slice(0, maxBufferLimit);
+              console.warn(`Warning: Git record exceeded ${Math.round(maxBufferLimit/1024/1024)}MB. Dropping massive commit.`);
             } else {
               yield record;
             }

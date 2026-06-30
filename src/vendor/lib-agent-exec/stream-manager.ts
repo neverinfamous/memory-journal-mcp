@@ -219,10 +219,14 @@ export class StreamManager {
   }
 
   public getLength(isErr: boolean): number {
-    const len = isErr ? this.stderrLength : this.stdoutLength;
+    return isErr ? this.stderrLength : this.stdoutLength;
+  }
+
+  public getBufferedLength(isErr: boolean): number {
+    const rawLen = (isErr ? this.stderrLength : this.stdoutLength) + (isErr ? this.stderrLineBuffer.length : this.stdoutLineBuffer.length);
     if (this.truncateOutputLength) {
-      return Math.min(len, this.truncateOutputLength);
+      return Math.min(rawLen, this.truncateOutputLength);
     }
-    return len;
+    return rawLen;
   }
 }

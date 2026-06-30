@@ -133,7 +133,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                         return match([before, after])
                             .with([P.when(b => b !== '' && !b.endsWith(' ')), P.any], () => true)
                             .with([P.any, P.when(a => a !== '' && !a.startsWith(' '))], () => true)
-                            .otherwise(() => false);
+                            .otherwise(() => true);
                     }));
             });
         }), () => true)
@@ -320,13 +320,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ isCommand: true, cmd: P.union('node', 'node.exe'), args: P.when(a => a.some(arg => ['-e', '--eval', '-p', '--print'].includes(arg) || arg.startsWith('-e=') || arg.startsWith('--eval=') || arg.startsWith('-p=') || arg.startsWith('--print='))) }, () => {
       console.error(`\n   💡 AGENT HINT: Do NOT use inline 'node -e' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Seamlessly converting 'node -e' to an 'eval' payload to bypass execution errors.\x1b[0m`);
       const flagIdx = ctx.args.findIndex(arg => ['-e', '--eval', '-p', '--print'].includes(arg));
-      let code = "";
-      if (flagIdx !== -1) {
-        code = ctx.args.slice(flagIdx + 1).join(" ");
-      } else {
-        const arg = ctx.args.find(a => a.startsWith('-e=') || a.startsWith('--eval=') || a.startsWith('-p=') || a.startsWith('--print='));
-        code = arg ? arg.split('=')[1] : "";
-      }
+      const code = flagIdx !== -1
+        ? ctx.args.slice(flagIdx + 1).join(" ")
+        : (ctx.args.find(a => a.startsWith('-e=') || a.startsWith('--eval=') || a.startsWith('-p=') || a.startsWith('--print='))?.split('=')[1] || "");
       ctx.payload = {
         type: 'eval',
         interpreter: 'node',
@@ -336,13 +332,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ isCommand: true, cmd: P.union('python', 'python.exe', 'python3', 'python3.exe'), args: P.when(a => a.some(arg => arg === '-c' || arg.startsWith('-c='))) }, () => {
       console.error(`\n   💡 AGENT HINT: Do NOT use inline 'python -c' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Seamlessly converting 'python -c' to an 'eval' payload to bypass execution errors.\x1b[0m`);
       const flagIdx = ctx.args.findIndex(arg => arg === '-c');
-      let code = "";
-      if (flagIdx !== -1) {
-        code = ctx.args.slice(flagIdx + 1).join(" ");
-      } else {
-        const arg = ctx.args.find(a => a.startsWith('-c='));
-        code = arg ? arg.split('=')[1] : "";
-      }
+      const code = flagIdx !== -1
+        ? ctx.args.slice(flagIdx + 1).join(" ")
+        : (ctx.args.find(a => a.startsWith('-c='))?.split('=')[1] || "");
       ctx.payload = {
         type: 'eval',
         interpreter: 'python',

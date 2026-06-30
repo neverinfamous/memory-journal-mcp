@@ -17,6 +17,14 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const tuiCommands = [...baseTui, ...baseTui.map(c => `${c}.exe`)];
 
   match({ cmdBasename, type: payload.type, hasStdin: !!payload.stdin, args })
+    .with({ cmdBasename: P.union('tsx', 'tsx.cmd', 'tsx.exe'), args: P.when(a => a.includes('watch')) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'tsx watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ cmdBasename: P.union('nodemon', 'nodemon.cmd', 'nodemon.exe', 'ts-node-dev', 'ts-node-dev.cmd', 'ts-node-dev.exe') }, () => {
+       console.error(`\n   💡 AGENT HINT: '${cmdBasename}' runs indefinitely in watch mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
     .with({ type: 'command', hasStdin: false, cmdBasename: P.when(c => replCommands.includes(c as string)) }, ({ cmdBasename, args }) => {
       const explicitlyInteractive = args.includes('-i') || args.includes('--interactive') || (cmdBasename === 'php' && args.includes('-a'));
       const isNodeDebug = ['node', 'node.exe', 'node.cmd'].includes(cmdBasename) && args.some(a => a === 'inspect' || a.startsWith('--inspect'));
@@ -60,14 +68,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
         process.exit(1);
       }
     })
-    .with({ cmdBasename: P.union('tsx', 'tsx.cmd', 'tsx.exe'), args: P.when(a => a.includes('watch')) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'tsx watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-       process.exit(1);
-    })
-    .with({ cmdBasename: P.union('nodemon', 'nodemon.cmd', 'nodemon.exe', 'ts-node-dev', 'ts-node-dev.cmd', 'ts-node-dev.exe') }, () => {
-       console.error(`\n   💡 AGENT HINT: '${cmdBasename}' runs indefinitely in watch mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-       process.exit(1);
-    })
+
     .with({ cmdBasename: P.union('pm2', 'pm2.cmd', 'pm2.exe') }, ({ args }) => {
        if (args.includes('logs') || args.includes('monit') || args.includes('dash')) {
            console.error(`\n   💡 AGENT HINT: 'pm2 ${args.find(a => ['logs', 'monit', 'dash'].includes(a))}' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);

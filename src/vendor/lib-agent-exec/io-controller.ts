@@ -414,7 +414,7 @@ export class IOController {
     const defaultMaxBuffer = fileForStream ? 1024 * 1024 * 1024 : (this.payload.truncateOutputLength ? Infinity : 10 * 1024 * 1024);
     const maxBuffer = this.payload.maxBuffer ?? defaultMaxBuffer;
     
-    if ((this.streamManager.getLength(false) + this.streamManager.getLength(true)) > maxBuffer) {
+    if ((this.streamManager.getBufferedLength(false) + this.streamManager.getBufferedLength(true)) > maxBuffer) {
        this.onMaxBuffer(`Output exceeded maxBuffer of ${maxBuffer} bytes.`);
        return;
     }
