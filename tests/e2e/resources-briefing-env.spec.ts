@@ -78,12 +78,22 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         await client.connect(transport)
     })
 
-    test.afterAll(async () => {
+    // eslint-disable-next-line no-empty-pattern
+    test.afterAll(async ({}, testInfo) => {
         if (client) {
             await client.close()
         }
-        if (serverProcess) {
-            serverProcess.kill('SIGTERM')
+        if (serverProcess && serverProcess.exitCode === null) {
+            const exitPromise = new Promise(resolve => serverProcess.on('exit', resolve))
+            serverProcess.kill('SIGKILL')
+            await exitPromise
+        }
+        // Don't delete log if test failed
+        if (testInfo.status !== 'passed' && fs.existsSync('serverProcess.log')) {
+            console.error("SERVER LOG:\n" + fs.readFileSync('serverProcess.log', 'utf8'))
+        }
+        if (fs.existsSync('serverProcess.log')) {
+            fs.unlinkSync('serverProcess.log')
         }
     })
 
