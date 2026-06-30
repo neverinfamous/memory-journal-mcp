@@ -39,7 +39,7 @@ export function wrapResult(result: unknown): unknown {
                         const errVal = target['error']
                         const errorMsg = typeof errVal === 'string' ? errVal : 'Unknown error'
                         throw new Error(
-                            `Attempted to access missing property '${prop}' on a failed operation. API Error: ${errorMsg}`
+                            `🛠️ AUTONOMOUS HEALING: Attempted to access property '${prop}' on a failed operation. You MUST check if 'success' is true before accessing properties on the result object. API Error: ${errorMsg}`
                         )
                     }
                     return undefined
@@ -178,7 +178,7 @@ export function wrapResult(result: unknown): unknown {
 
                         const keys = Object.keys(target).join(', ') || 'none'
                         throw new TypeError(
-                            `CodeMode Non-Array Proxy Error: Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Keys available: ${keys}`
+                            `🛠️ AUTONOMOUS HEALING: CodeMode Non-Array Proxy Error: Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Check the available keys and access the correct array property. Keys available: ${keys}`
                         )
                     }
 
@@ -187,7 +187,7 @@ export function wrapResult(result: unknown): unknown {
                         ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'copyWithin', 'fill'].includes(prop)
                     ) {
                         throw new Error(
-                            `[VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You must use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
+                            `🛠️ AUTONOMOUS HEALING: [VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You MUST use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
                         )
                     }
                     return undefined
