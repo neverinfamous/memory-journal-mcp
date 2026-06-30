@@ -89,7 +89,7 @@ export function buildJournalContext(
     }
 
     const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
-    let summaryEntries =
+    const rawSummaryEntries =
         typeof projectNumber === 'number'
             ? extractEntries(context.db.searchEntries('', {
                   limit: summaryFetchLimit,
@@ -101,10 +101,13 @@ export function buildJournalContext(
                   tags: ['session-summary'],
               }))
     
-    summaryEntries = summaryEntries.filter(isImportant)
+    let summaryEntries = rawSummaryEntries.filter(isImportant)
+    if (summaryEntries.length === 0 && rawSummaryEntries.length > 0) {
+        summaryEntries = rawSummaryEntries
+    }
 
     // Fallback to retrospective type if no tag matched
-    let retroEntries =
+    const rawRetroEntries =
         summaryEntries.length === 0
             ? typeof projectNumber === 'number'
                 ? extractEntries(context.db.searchEntries('', {
@@ -118,7 +121,10 @@ export function buildJournalContext(
                   }))
             : []
             
-    retroEntries = retroEntries.filter(isImportant)
+    let retroEntries = rawRetroEntries.filter(isImportant)
+    if (retroEntries.length === 0 && rawRetroEntries.length > 0) {
+        retroEntries = rawRetroEntries
+    }
 
     const finalSummaryEntries = (summaryEntries.length > 0 ? summaryEntries : retroEntries).slice(0, config.summaryCount ?? 1)
 
@@ -161,12 +167,15 @@ export function buildJournalContext(
 
     // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
     const fetchLimit = Math.max(100, config.entryCount * 10)
-    let recentEntries =
+    const rawRecentEntries =
         typeof projectNumber === 'number'
             ? extractEntries(context.db.searchEntries('', { limit: fetchLimit, projectNumber }))
             : extractEntries(context.db.getRecentEntries(fetchLimit))
             
-    recentEntries = recentEntries.filter(isImportant)
+    let recentEntries = rawRecentEntries.filter(isImportant)
+    if (recentEntries.length === 0 && rawRecentEntries.length > 0) {
+        recentEntries = rawRecentEntries
+    }
 
     // Exclude entries already shown in the Summary slot to diversify briefing content
     const summaryIds = new Set(finalSummaryEntries.map((e: JournalEntry) => e.id))
@@ -286,7 +295,8 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
 
         if (!comp || !causal) return undefined
 
-        const totalEntries = (stats['totalEntries'] as number) || 0
+
+        const totalActiveEntries = context.db.getActiveEntryCount()
 
         // Fetch top hubs and orphan ratio via purpose-built safe methods
         let topHubs: { id: number; preview: string; count: number }[] = []
@@ -300,9 +310,9 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
                 preview: ''
             }))
 
-            if (totalEntries > 0) {
+            if (totalActiveEntries > 0) {
                 const orphanCount = context.db.getOrphanCount(workspaceId)
-                orphanRatio = orphanCount / totalEntries
+                orphanRatio = orphanCount / totalActiveEntries
             }
         } catch {
             // Ignore query errors gracefully
