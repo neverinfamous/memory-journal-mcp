@@ -12,6 +12,8 @@ import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
+import * as fs from 'node:fs'
+import path from 'node:path'
 
 const BRIEFING_PORT = 5126 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const BRIEFING_BASE = `http://localhost:${BRIEFING_PORT}`
@@ -52,10 +54,14 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                     TEAM_DB_PATH: './.test-output/e2e/test-briefing-team.db',
                     TEAM_AUTHOR: 'Alice',
                     MCP_AUTH_SCOPES: 'read,write,team',
+                    MEMORY_JOURNAL_CONFIG: path.join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
                 },
                 windowsHide: true,
             }
         )
+
+        serverProcess.stdout?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[OUT] ${data.toString()}`));
+        serverProcess.stderr?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[ERR] ${data.toString()}`));
 
         for (let i = 0; i < 30; i++) {
             try {
@@ -92,6 +98,9 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                     entry_type: 'test_entry',
                 },
             })
+            if (resp.isError) {
+                console.error("TOOL CALL FAILED: ", JSON.stringify(resp, null, 2));
+            }
             expect(resp.isError).toBeUndefined()
         }
 

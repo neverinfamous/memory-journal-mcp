@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { applyArgInterceptions } from '../../src/codemode/worker-api-proxy.js'
+import { applyArgInterceptions } from '../../src/codemode/param-normalizer.js'
 
 // =============================================================================
 // Helpers

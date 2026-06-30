@@ -15,6 +15,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import * as jose from 'jose'
 import express from 'express'
 import type { Server } from 'node:http'
+import { join } from 'node:path'
 
 const OAUTH_SCOPES_PORT = 5113 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const JWKS_PORT = 5114 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
@@ -103,6 +104,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                     ...process.env,
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
+                    MEMORY_JOURNAL_CONFIG: join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
                 },
                 windowsHide: true,
             }

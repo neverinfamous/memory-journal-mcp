@@ -97,7 +97,7 @@ describe('ConfigResolver', () => {
         cliOptions['port'] = 'not-a-number'
         mockCommand.getOptionValueSource.mockReturnValue('cli')
         
-        expect(() => resolver.resolveIntRequired('port', 'PORT')).toThrow(/Invalid required numeric configuration/)
+        expect(() => resolver.resolveIntRequired('port', 'PORT')).toThrow(/Invalid numeric configuration/)
     })
 
     it('resolveBool handles string "true" and "false"', () => {

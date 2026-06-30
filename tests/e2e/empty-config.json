@@ -10,5 +10,6 @@
   "briefingWorkflowStatus": false,
   "briefingCopilot": false,
   "instructionLevel": "standard",
-  "codemodeInternalFullAccess": false
+  "codemodeInternalFullAccess": false,
+  "teamDefaultRole": "admin"
 }

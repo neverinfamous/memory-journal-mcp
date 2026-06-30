@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { z } from 'zod'
 import { getEnabledGroups } from '../../filtering/tool-filter.js'
@@ -460,7 +461,11 @@ export function createServerInstance(
                         }
 
                         // Catch hallucinated tool names BEFORE the SDK throws a generic validation error
-                        if (req.params.name && !allToolNames.has(req.params.name)) {
+                        appendFileSync('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\test-debug.txt', `[TEST DEBUG] tools/call invoked for: ${req.params?.name}\n`);
+                        appendFileSync('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\test-debug.txt', `[TEST DEBUG] allToolNames size: ${allToolNames.size}\n`);
+                        appendFileSync('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\test-debug.txt', `[TEST DEBUG] allToolNames.has('${req.params?.name}'): ${req.params?.name ? allToolNames.has(req.params.name) : false}\n`);
+
+                        if (req.params?.name && !allToolNames.has(req.params.name)) {
                             const requestedTool = req.params.name;
                             let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
                             

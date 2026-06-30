@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyArgInterceptions } from '../../src/codemode/worker-api-proxy.js'
+import { applyArgInterceptions } from '../../src/codemode/param-normalizer.js'
 
 describe('worker-api-proxy session summary auto-healing', () => {
     it('should normalize mangled headers for mj.core.createEntry', () => {

@@ -61,6 +61,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                         "team-b": join(process.cwd(), '.test-output', 'e2e', 'test-e2e-team-happy-b.db') 
                     }),
                     MCP_AUTH_SCOPES: 'read,write,team',
+                    MEMORY_JOURNAL_CONFIG: join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
                 },
                 windowsHide: true,
             }
