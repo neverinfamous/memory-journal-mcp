@@ -151,7 +151,7 @@ export class ConfigResolver {
         }
     }
 
-    private _parseNumeric(val: unknown, cliKey: string, min?: number, max?: number, isFloat: boolean = false): number {
+    private _parseNumeric(val: unknown, cliKey: string, min?: number, max?: number, isFloat = false): number {
         const valStr = typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)
         const parsed = typeof val === 'number' ? val : (isFloat ? parseFloat(valStr) : parseInt(valStr, 10))
         

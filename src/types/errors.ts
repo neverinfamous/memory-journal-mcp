@@ -23,7 +23,7 @@ interface ErrorOptions {
     details?: Record<string, unknown> | undefined
 
     /** Original cause error */
-    cause?: Error | unknown | undefined
+    cause?: unknown
 }
 
 // =============================================================================
@@ -56,7 +56,7 @@ export class MemoryJournalMcpError extends Error {
     readonly details?: Record<string, unknown> | undefined
 
     constructor(message: string, code: string, category: ErrorCategory, options?: ErrorOptions) {
-        super(message, options?.cause ? { cause: options.cause } : undefined)
+        super(message, options?.cause !== undefined ? { cause: options.cause } : undefined)
         this.name = 'MemoryJournalMcpError'
         this.category = category
         this.recoverable = options?.recoverable ?? false

@@ -408,6 +408,7 @@ Agents often run into environment-level interceptors (like global PowerShell pro
 * **Native Tool Priority:** If you trigger a system interceptor for using shell commands like \`cat\`, \`grep\`, or \`ls\`, you MUST autonomously switch to native tools (e.g., \`view_file\`, \`grep_search\`, \`list_dir\`). DO NOT ask the user for help or wait for permission.
 * **Transient IDE Errors:** If shifting lines via code edits triggers IDE typing errors (e.g., "Unsafe argument of type error typed"), ALWAYS verify with \`tsc --noEmit\` before attempting complex type refactoring, as it may just be a stale ESLint cache.
 * **Interceptor Awareness:** If an agent encounters a global interceptor that contradicts autonomous healing (e.g., telling the agent to "Stop and notify the user IMMEDIATELY"), that global profile itself must be healed to instruct the agent to autonomously recover instead.
+* **Command Verification Trap:** In environments utilizing PowerShell proxy functions (like \`lib-agent-exec\`), native tools (e.g., \`pnpm\`, \`bun\`, \`git\`) exist as Aliases or Functions rather than traditional executables. DO NOT use \`Get-Command <tool> -CommandType Application\` to verify existence, as this explicitly filters out aliases and will falsely report the tool as missing. Use \`Get-Command <tool>\` without the \`-CommandType\` filter.
 
 ## 3. Phase 2: Implementation
 

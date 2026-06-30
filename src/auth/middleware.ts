@@ -23,6 +23,7 @@ import { logger } from '../utils/logger.js'
  * Uses module augmentation to extend Express.Request interface
  */
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
         interface Request {
             /** Authenticated user claims */

@@ -16,7 +16,7 @@ export async function setupStateless(
     })
 
     const server = serverFactory()
-    await server.connect(statelessTransport as any)
+    await server.connect(statelessTransport)
     logger.info('Stateless transport connected', { module: 'HTTP' })
 
     // POST /mcp — all requests go to the same transport

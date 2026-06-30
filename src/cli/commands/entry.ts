@@ -269,7 +269,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     let relationships: { target_id: number, relation_type: string }[]
     if (metadata['relationships'] !== undefined && metadata['relationships'] !== null && Array.isArray(metadata['relationships'])) {
         relationships = metadata['relationships'].map((r: unknown) => {
-            const rec = r ? z.record(z.string(), z.unknown()).parse(r) : null
+            const rec = r != null ? z.record(z.string(), z.unknown()).parse(r) : null
             return {
                 target_id: Number(rec?.['target_id']),
                 relation_type: String(rec?.['relation_type'])
