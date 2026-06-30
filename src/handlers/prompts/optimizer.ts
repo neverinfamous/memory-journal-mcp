@@ -52,7 +52,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                     let orphanCount: number | string = 'Unknown'
                     let orphanDensity = 'Unknown'
                     try {
-                        orphanCount = db.getOrphanCount()
+                        orphanCount = db.getOrphanCount('default')
                         if (typeof totalEntries === 'number' && totalEntries > 0) {
                             orphanDensity = Math.round((orphanCount / totalEntries) * 100) + '%'
                         }

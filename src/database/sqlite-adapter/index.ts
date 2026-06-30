@@ -501,8 +501,8 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.relationshipsMgr.getRelationshipHubs(limit)
     }
 
-    getOrphanCount(): number {
-        return this.relationshipsMgr.getOrphanCount()
+    getOrphanCount(workspaceId?: string): number {
+        return this.relationshipsMgr.getOrphanCount(workspaceId)
     }
 
     // ========================================================================

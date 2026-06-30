@@ -430,5 +430,5 @@ export interface IDatabaseAdapter {
     executeInTransaction<T>(cb: () => T): T
 
     getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[]
-    getOrphanCount(): number
+    getOrphanCount(workspaceId?: string): number
 }

@@ -301,7 +301,7 @@ export function buildGraphContext(context: ResourceContext): GraphSummary | unde
             }))
 
             if (totalEntries > 0) {
-                const orphanCount = context.db.getOrphanCount()
+                const orphanCount = context.db.getOrphanCount('default')
                 orphanRatio = orphanCount / totalEntries
             }
         } catch {

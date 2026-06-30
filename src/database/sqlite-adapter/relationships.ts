@@ -157,18 +157,25 @@ export class RelationshipsManager {
      * Count entries with no relationships (orphans).
      * Used by the briefing resource to compute orphan ratio.
      */
-    getOrphanCount(): number {
+    getOrphanCount(workspaceId?: string): number {
+        let filter = ''
+        const params: unknown[] = []
+        if (workspaceId && workspaceId !== '*') {
+            filter = ' AND m.workspace_id = ?'
+            params.push(workspaceId)
+        }
+
         const row = this.db
             .prepare(
                 `SELECT COUNT(*) as orphan_count
                  FROM memory_journal m
-                 WHERE m.deleted_at IS NULL AND m.id NOT IN (
+                 WHERE m.deleted_at IS NULL${filter} AND m.id NOT IN (
                      SELECT from_entry_id FROM relationships
                      UNION
                      SELECT to_entry_id FROM relationships
                  )`
             )
-            .get() as { orphan_count: number } | undefined
+            .get(...params) as { orphan_count: number } | undefined
 
         return row?.orphan_count ?? 0
     }
