@@ -88,16 +88,16 @@ export function buildJournalContext(
         return score >= threshold
     }
 
-    // ── Session summaries (computed first to enable deduplication) ──────
+    const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
     let summaryEntries =
         typeof projectNumber === 'number'
             ? extractEntries(context.db.searchEntries('', {
-                  limit: config.summaryCount,
+                  limit: summaryFetchLimit,
                   projectNumber,
                   tags: ['session-summary'],
               }))
             : extractEntries(context.db.searchEntries('', {
-                  limit: config.summaryCount,
+                  limit: summaryFetchLimit,
                   tags: ['session-summary'],
               }))
     
@@ -108,19 +108,19 @@ export function buildJournalContext(
         summaryEntries.length === 0
             ? typeof projectNumber === 'number'
                 ? extractEntries(context.db.searchEntries('', {
-                      limit: config.summaryCount,
+                      limit: summaryFetchLimit,
                       projectNumber,
                       entryType: 'retrospective',
                   }))
                 : extractEntries(context.db.searchEntries('', {
-                      limit: config.summaryCount,
+                      limit: summaryFetchLimit,
                       entryType: 'retrospective',
                   }))
             : []
             
     retroEntries = retroEntries.filter(isImportant)
 
-    const finalSummaryEntries = summaryEntries.length > 0 ? summaryEntries : retroEntries
+    const finalSummaryEntries = (summaryEntries.length > 0 ? summaryEntries : retroEntries).slice(0, config.summaryCount ?? 1)
 
     let latestSessionSummary
     let sessionSummaries
@@ -160,7 +160,7 @@ export function buildJournalContext(
     }
 
     // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
-    const fetchLimit = config.entryCount + (config.summaryCount ?? 0) + 10
+    const fetchLimit = Math.max(100, config.entryCount * 10)
     let recentEntries =
         typeof projectNumber === 'number'
             ? extractEntries(context.db.searchEntries('', { limit: fetchLimit, projectNumber }))

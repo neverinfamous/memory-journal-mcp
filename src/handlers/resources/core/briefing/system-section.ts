@@ -157,7 +157,7 @@ function loadCachedGitHistory(commitCount: number, targetPath?: string, importan
             return null
         }
 
-        const fetchLimit = Math.max(15, Math.min(50, commitCount))
+        const fetchLimit = Math.max(50, commitCount * 4)
         const out = execFileSync('bun', [
             'C:\\Users\\chris\\Desktop\\adamic\\.agents\\scripts\\get-git-history-json.ts',
             '--limit', String(fetchLimit),
