@@ -404,9 +404,9 @@ export const SearchAuditLogSchema = z.preprocess(
 
 export const RunAutoPruneSchema = z.object({
     dry_run: z.boolean().optional().default(false),
-    archive_older_than_days: z.number().int().min(0).optional(),
-    prune_older_than_days: z.number().int().min(0).optional(),
-    hard_delete_older_than_days: z.number().int().min(0).optional(),
+    archive_older_than_days: z.number().min(0).optional(),
+    prune_older_than_days: z.number().min(0).optional(),
+    hard_delete_older_than_days: z.number().min(0).optional(),
     importance_threshold: z.number().min(0).max(1).optional(),
 }).strict()
 

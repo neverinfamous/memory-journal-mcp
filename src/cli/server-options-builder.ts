@@ -224,9 +224,9 @@ export function buildServerOptions(
         auditConfig,
 
         autoPruneIntervalMinutes: catchConfig(() => resolver.resolveInt('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0) ?? 0, 0),
-        archiveOlderThanDays: catchConfig(() => resolver.resolveInt('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        pruneOlderThanDays: catchConfig(() => resolver.resolveInt('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0) ?? 0, 0),
-        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveInt('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),
+        archiveOlderThanDays: catchConfig(() => resolver.resolveNumber('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0), 14),
+        pruneOlderThanDays: catchConfig(() => resolver.resolveNumber('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0), 30),
+        hardDeleteOlderThanDays: catchConfig(() => resolver.resolveNumber('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),
         pruneImportanceThreshold: catchConfig(() => {
             const val = resolver.resolve<unknown>('pruneImportanceThreshold', 'PRUNE_IMPORTANCE_THRESHOLD');
             if (typeof val === 'number') return val;
