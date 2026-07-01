@@ -76,7 +76,7 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
     const fetchLimit = needsPostProcessing ? 500 : (input.maxCount ?? 50)
 
     const cliArgs: CliArgs = {
-        limit: fetchLimit.toString(),
+        limit: fetchLimit,
         path: input.path,
         since: input.since,
         grep: input.query,

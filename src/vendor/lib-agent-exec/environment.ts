@@ -2,34 +2,8 @@
 import path from 'node:path';
 import { ExecPayload } from './schema.js';
 
-export function buildEnvironment(payloadEnv: ExecPayload['env']) {
-  const env: Record<string, string | undefined> = {};
-  const isWin = process.platform === 'win32';
-  const upperKeysMap = new Map<string, string>();
 
-  const findKey = (key: string) => {
-    if (!isWin) return key;
-    const upper = key.toUpperCase();
-    return upperKeysMap.get(upper) || key;
-  };
-
-  const setEnv = (key: string, value: string | undefined) => {
-    const actualKey = findKey(key);
-    env[actualKey] = value;
-    if (isWin) upperKeysMap.set(actualKey.toUpperCase(), actualKey);
-    return actualKey;
-  };
-  
-  for (const [key, value] of Object.entries(process.env)) {
-    // 🛠️ AUTONOMOUS HEALING: Strip the AntiGravity dummy token from the host environment
-    // so that native tools like `git` and `gh` fall back to the user's keychain instead of failing.
-    if (key.toUpperCase() === 'GITHUB_TOKEN' && value === 'github_pat_antigravitydummytoken') {
-      continue;
-    }
-    setEnv(key, value);
-  }
-
-  const defaults: Record<string, string> = {
+export const DEFAULT_ENV_VARS: Record<string, string> = {
     CI: '1',
     GIT_TERMINAL_PROMPT: '0',
     GIT_EDITOR: 'true',
@@ -41,7 +15,7 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     GH_EDITOR: 'true',
     GH_PAGER: '',
     GH_NO_UPDATE_NOTIFIER: '1',
-    GIT_PAGER: isWin ? '' : 'cat',
+    GIT_PAGER: process.platform === 'win32' ? '' : 'cat',
     GIT_CONFIG_COUNT: '3',
     GIT_CONFIG_KEY_0: 'core.pager',
     GIT_CONFIG_VALUE_0: '',
@@ -141,11 +115,39 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     STORYBOOK_DISABLE_TELEMETRY: '1',
     TURBO_TELEMETRY_DISABLED: '1',
     AZURE_CORE_COLLECT_TELEMETRY: '0'
+};
+
+export function buildEnvironment(payloadEnv: ExecPayload['env']) {
+  const env: Record<string, string | undefined> = {};
+  const isWin = process.platform === 'win32';
+  const upperKeysMap = new Map<string, string>();
+
+  const findKey = (key: string) => {
+    if (!isWin) return key;
+    const upper = key.toUpperCase();
+    return upperKeysMap.get(upper) || key;
   };
 
-  for (const [key, value] of Object.entries(defaults)) {
+  const setEnv = (key: string, value: string | undefined) => {
+    const actualKey = findKey(key);
+    env[actualKey] = value;
+    if (isWin) upperKeysMap.set(actualKey.toUpperCase(), actualKey);
+    return actualKey;
+  };
+  
+  for (const [key, value] of Object.entries(process.env)) {
+    // 🛠️ AUTONOMOUS HEALING: Strip the AntiGravity dummy token from the host environment
+    // so that native tools like `git` and `gh` fall back to the user's keychain instead of failing.
+    if (key.toUpperCase() === 'GITHUB_TOKEN' && value === 'github_pat_antigravitydummytoken') {
+      continue;
+    }
     setEnv(key, value);
   }
+
+  for (const [key, value] of Object.entries(DEFAULT_ENV_VARS)) {
+    setEnv(key, value);
+  }
+
 
   const immutableOverrides = new Set([
     'GIT_EDITOR', 'GH_EDITOR', 'EDITOR', 'VISUAL', 'GIT_SEQUENCE_EDITOR',
@@ -162,7 +164,7 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
         continue;
       }
 
-      const valStr = value as string;
+      const valStr = String(value);
       const actualKey = findKey(key);
       const isNodeOpts = isWin ? actualKey.toUpperCase() === 'NODE_OPTIONS' : actualKey === 'NODE_OPTIONS';
       const isPath = isWin ? actualKey.toUpperCase() === 'PATH' : actualKey === 'PATH';

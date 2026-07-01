@@ -8,12 +8,17 @@ export function executeCommand(
   cmd: string,
   args: string[],
   env: Record<string, string | undefined>,
-  tempScriptPath?: string | null
+  tempScriptPath?: string | null,
+  isJson: boolean = false
 ) {
   if (payload.target === 'wsl2') {
     const hasUuid = args.some(a => typeof a === 'string' && a.startsWith('AGENT_EXEC_WSL_UUID='));
     if (!hasUuid) {
-      console.error(`❌ Execution Error: Target is 'wsl2', but AGENT_EXEC_WSL_UUID was not found in the execution arguments. You MUST route WSL2 execution through 'buildCommand' to prevent zombie processes.`);
+      if (isJson) {
+         console.log(JSON.stringify({ status: "error", message: `Execution Error: Target is 'wsl2', but AGENT_EXEC_WSL_UUID was not found in the execution arguments. You MUST route WSL2 execution through 'buildCommand' to prevent zombie processes.` }));
+      } else {
+         console.error(`❌ Execution Error: Target is 'wsl2', but AGENT_EXEC_WSL_UUID was not found in the execution arguments. You MUST route WSL2 execution through 'buildCommand' to prevent zombie processes.`);
+      }
       process.exit(1);
     }
   }
@@ -23,7 +28,8 @@ export function executeCommand(
     cmd,
     args,
     env,
-    tempScriptPath || null
+    tempScriptPath || null,
+    isJson
   );
   
   controller.start();

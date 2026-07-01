@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import os from 'node:os';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 import { ExecPayload } from './schema.js';
 import { 
   ExecutionContext, 
@@ -14,6 +14,97 @@ import {
   replTuiInterceptor, 
   systemInterceptor 
 } from './interceptors/index.js';
+import { replaceIntegrationContext, BUILT_INS } from './utils.js';
+import { DEFAULT_ENV_VARS } from './environment.js';
+
+
+export const isPwsh = (cmd: string) => ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd.toLowerCase());
+export const isCmd = (cmd: string) => ['cmd', 'cmd.exe'].includes(cmd.toLowerCase());
+
+export function formatForCmdExe(args: string[]): string[] {
+  if (args[0]?.toLowerCase() !== '/c') return args;
+  const originalCmdAndArgs = args.slice(1);
+  const commandLine = originalCmdAndArgs.map(arg => {
+    let crtArg = arg;
+    if (/[ \t\n\v"]/.test(arg) || arg.length === 0) {
+      crtArg = arg.replace(/(\\+)(")/g, '$1$1$2');
+      crtArg = crtArg.replace(/"/g, '\\"');
+      crtArg = `"${crtArg}"`;
+    }
+    let cmdArg = '';
+    let inQuotes = false;
+    for (let i = 0; i < crtArg.length; i++) {
+      const char = crtArg[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+        cmdArg += char;
+      } else if (!inQuotes && /[&|<>^]/.test(char)) {
+        cmdArg += '^' + char;
+      } else {
+        cmdArg += char;
+      }
+    }
+    return cmdArg;
+  }).join(' ');
+  return ['/d', '/s', '/c', `"${commandLine}"`];
+}
+
+export function convertToWslPath(winPath: string): string {
+  const transform = (p: string) => {
+    return p.replace(/^([a-zA-Z]):[/\\](.*)/, (match, drive, rest) => `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`);
+  };
+
+  if (path.win32.isAbsolute(winPath)) {
+    return transform(winPath);
+  }
+
+  const kvMatch = winPath.match(/^([a-zA-Z0-9_-]+[=:])(.+)$/);
+  if (kvMatch) {
+    const prefix = kvMatch[1];
+    const value = kvMatch[2];
+    
+    const doubleQuoteMatch = value.match(/^"(.+)"$/);
+    const singleQuoteMatch = value.match(/^'(.+)'$/);
+    
+    if (doubleQuoteMatch && path.win32.isAbsolute(doubleQuoteMatch[1])) {
+      return `${prefix}"${transform(doubleQuoteMatch[1])}"`;
+    }
+    if (singleQuoteMatch && path.win32.isAbsolute(singleQuoteMatch[1])) {
+      return `${prefix}'${transform(singleQuoteMatch[1])}'`;
+    }
+    if (path.win32.isAbsolute(value)) {
+      return `${prefix}${transform(value)}`;
+    }
+  }
+
+  return winPath;
+}
+
+function buildPwshWrapper(cmd: string, args: string[]): { cmd: string; args: string[] } {
+  const escapedCmd = cmd.replace(/'/g, "''");
+  const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
+  const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;
+  const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
+  return {
+    cmd: 'pwsh.exe',
+    args: ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-EncodedCommand', encoded]
+  };
+}
+
+function applyTemplateOverride(templateOverride: string, baseCmd: string, baseArgs: string[], replaceTemplates: (str: string) => string): { cmd: string; args: string[] } {
+  const innerCmdStr = [baseCmd, ...baseArgs]
+    .map(a => a.includes(' ') || a.includes('"') || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a)
+    .join(' ');
+  
+  const fullOverride = templateOverride.includes('{{code}}') 
+    ? templateOverride.replace('{{code}}', innerCmdStr)
+    : `${templateOverride} ${innerCmdStr}`;
+    
+  const allArgs = tokenizeArgs(fullOverride).map(a => replaceTemplates(a));
+  return allArgs.length > 0 
+    ? { cmd: allArgs[0], args: allArgs.slice(1) }
+    : { cmd: baseCmd, args: baseArgs };
+}
 
 export const customInterceptors: Array<(ctx: ExecutionContext) => void> = [];
 
@@ -71,7 +162,7 @@ function tokenizeArgs(str: string): string[] {
   return args;
 }
 
-function resolveWindowsCommand(cmd: string, cwd: string, payloadEnv?: Record<string, string>): string {
+function resolveWindowsCommand(cmd: string, cwd: string, payloadEnv?: Record<string, string | undefined>): string {
   if (process.platform !== 'win32') return cmd;
   if (path.isAbsolute(cmd) && fs.existsSync(cmd)) return cmd;
   
@@ -99,94 +190,100 @@ function resolveWindowsCommand(cmd: string, cwd: string, payloadEnv?: Record<str
   return cmd;
 }
 
-export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; args: string[]; tempScriptPath: string | null; envOverrides: Record<string, string> } {
+export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean = false): { cmd: string; args: string[]; tempScriptPath: string | null; envOverrides: Record<string, string> } {
+  const exitWithError = (message: string) => {
+    if (isJson) {
+      console.log(JSON.stringify({ status: "error", message }));
+      process.exit(1);
+    } else {
+      console.error(`❌ Error: ${message}`);
+      process.exit(1);
+    }
+  };
+
   let cmd: string;
   let args: string[];
   let tempScriptPath: string | null = null;
   const envOverrides: Record<string, string> = {};
 
-  match({ platform: process.platform, target: payload.target })
-    .with({ platform: 'win32', target: P.not('wsl2') }, () => {
-      const hasPipeCommand = 'command' in payload && typeof payload.command === 'string' && (payload.command.includes(' && ') || payload.command.includes(' || ') || payload.command.includes(' | ') || payload.command.includes(' > '));
-      const hasPipeArg = payload.args?.some(a => typeof a === 'string' && (a.trim() === '&&' || a.trim() === '||' || a.trim() === '|' || a.trim() === '>'));
-      if (hasPipeCommand || hasPipeArg) {
+  if (process.platform === 'win32' && payload.target !== 'wsl2') {
+    const hasPipeCommand = payload.type === 'command' && (payload.command.includes(' && ') || payload.command.includes(' || ') || payload.command.includes(' | ') || payload.command.includes(' > '));
+    const hasPipeArg = payload.args?.some(a => a.trim() === '&&' || a.trim() === '||' || a.trim() === '|' || a.trim() === '>');
+    if (hasPipeCommand || hasPipeArg) {
+      if (isJson) {
+        exitWithError(`Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.`);
+      } else {
         console.error(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.\x1b[0m`);
         process.exit(1);
       }
-    })
-    .otherwise(() => {});
+    }
+  }
 
-  const replaceTemplates = (str: string) => {
-    if (!('integrationContext' in payload) || !payload.integrationContext) return str;
-    const contextStr = JSON.stringify(payload.integrationContext);
-    return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-      if (!pathStr) return contextStr;
-      let current: unknown = payload.integrationContext;
-      const keys = pathStr.split('.');
-      for (const key of keys) {
-        if (current == null || typeof current !== 'object' || !(key in current)) return match;
-        current = (current as Record<string, unknown>)[key];
-      }
-      return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
-    });
-  };
+  const replaceTemplates = (str: string) => replaceIntegrationContext(str, payload);
 
   if ('integrationContext' in payload && payload.integrationContext) {
     const contextStr = JSON.stringify(payload.integrationContext);
-    if (contextStr.length > 32000) {
-      console.error('❌ Error: integrationContext stringified size exceeds 32KB limit on Windows.');
-      process.exit(1);
+    const MAX_WINDOWS_ENV_SIZE = 32000;
+    if (contextStr.length > MAX_WINDOWS_ENV_SIZE) {
+      exitWithError(`integrationContext stringified size exceeds ${MAX_WINDOWS_ENV_SIZE} bytes limit on Windows.`);
     }
     // SEC-FIX: Removed integrationContext from envOverrides to prevent data boundary leak
 
     if (payload.args) {
-      payload.args = payload.args.map(a => typeof a === 'string' ? replaceTemplates(a) : a);
+      payload.args = payload.args.map(a => replaceTemplates(a));
     }
     if (payload.env) {
       const newEnv: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.env)) {
-        newEnv[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
+        newEnv[k] = replaceTemplates(v);
       }
       payload.env = newEnv;
     }
-    if ('command' in payload && typeof payload.command === 'string') {
-      payload.command = replaceTemplates(payload.command);
-    }
-    if ('templateOverride' in payload && typeof payload.templateOverride === 'string') {
+    match(payload)
+      .with({ type: 'command' }, (p) => {
+        p.command = replaceTemplates(p.command);
+      })
+      .with({ type: 'script' }, (p) => {
+        p.scriptPath = replaceTemplates(p.scriptPath);
+      })
+      .with({ type: 'eval' }, (p) => {
+        p.code = replaceTemplates(p.code);
+      })
+      .exhaustive();
+
+    if (payload.templateOverride) {
       payload.templateOverride = replaceTemplates(payload.templateOverride);
     }
-    if ('scriptPath' in payload && typeof payload.scriptPath === 'string') {
-      payload.scriptPath = replaceTemplates(payload.scriptPath);
-    }
-    if ('code' in payload && typeof payload.code === 'string') {
-      payload.code = replaceTemplates(payload.code);
-    }
-    if ('webhookHeaders' in payload && payload.webhookHeaders) {
+    if (payload.webhookHeaders) {
       const newHeaders: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.webhookHeaders)) {
-        newHeaders[k] = typeof v === 'string' ? replaceTemplates(v) : String(v);
+        newHeaders[k] = replaceTemplates(v);
       }
       payload.webhookHeaders = newHeaders;
     }
   }
 
-  if ('command' in payload && typeof payload.command === 'string') {
-    const c = payload.command.trim();
-    const doubleQuoteMatch = c.match(/^"([^"]+)"(?:\s+(.*))?$/);
-    const singleQuoteMatch = c.match(/^'([^']+)'(?:\s+(.*))?$/);
+  match(payload)
+    .with({ type: 'command' }, (p) => {
+      const c = p.command.trim();
+      const doubleQuoteMatch = c.match(/^"([^"]+)"(?:\s+(.*))?$/);
+      const singleQuoteMatch = c.match(/^'([^']+)'(?:\s+(.*))?$/);
 
-    if (doubleQuoteMatch) {
-      payload.command = doubleQuoteMatch[1];
-      if (doubleQuoteMatch[2]) {
-        payload.args = [...tokenizeArgs(doubleQuoteMatch[2]), ...(payload.args || [])];
+      if (doubleQuoteMatch) {
+        p.command = doubleQuoteMatch[1];
+        if (doubleQuoteMatch[2]) {
+          p.args = [...tokenizeArgs(doubleQuoteMatch[2]), ...(p.args || [])];
+        }
+      } else if (singleQuoteMatch) {
+        p.command = singleQuoteMatch[1];
+        if (singleQuoteMatch[2]) {
+          p.args = [...tokenizeArgs(singleQuoteMatch[2]), ...(p.args || [])];
+        }
       }
-    } else if (singleQuoteMatch) {
-      payload.command = singleQuoteMatch[1];
-      if (singleQuoteMatch[2]) {
-        payload.args = [...tokenizeArgs(singleQuoteMatch[2]), ...(payload.args || [])];
-      }
-    }
-  }
+    })
+    .with({ type: 'script' }, () => {})
+    .with({ type: 'eval' }, () => {})
+    .exhaustive();
   
   const parsedCmdArgs = match(payload)
     .with({ type: 'command' }, (p) => {
@@ -194,6 +291,9 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       let localArgs: string[] = [...(p.args || [])];
 
       if (p.target === 'wsl2') {
+        localCmd = convertToWslPath(localCmd);
+        localArgs = localArgs.map(a => convertToWslPath(a));
+
         if (localCmd.toLowerCase() === 'diff' || localCmd.toLowerCase() === 'diff.exe') {
           if (!localArgs.includes('--strip-trailing-cr')) {
             localArgs.unshift('--strip-trailing-cr');
@@ -201,7 +301,10 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
         } else if (['grep', 'grep.exe', 'egrep', 'fgrep'].includes(localCmd.toLowerCase())) {
           const nonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
           if (nonFlagIdx !== -1) {
-            if (!localArgs.includes('-E') && !localArgs.includes('-P')) {
+            if (localArgs.includes('-E')) {
+              localArgs[localArgs.indexOf('-E')] = '-P';
+              localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
+            } else if (!localArgs.includes('-P')) {
               localArgs.unshift('-P');
               const newNonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
               localArgs[newNonFlagIdx] = localArgs[newNonFlagIdx].replace(/\$$/, '\\r?$');
@@ -212,21 +315,17 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
         }
       }
 
-      const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
       const hasShellMeta = /[|&;<>$`{}()]/.test(localCmd) || localArgs.some(a => /[|&;<>$`{}()]/.test(a));
 
-      if (builtIns.includes(localCmd.toLowerCase()) || (p.target === 'wsl2' && hasShellMeta)) {
+      if (BUILT_INS.includes(localCmd.toLowerCase()) || (p.target === 'wsl2' && hasShellMeta)) {
         console.error(`\n   💡 AGENT HINT: '${localCmd}' is a shell built-in or contains shell metacharacters.`);
         console.error(`   🛠️ AUTONOMOUS HEALING: Automatically routing through system shell to prevent execution failure...`);
         
         if (process.platform === 'win32' && p.target !== 'wsl2') {
           // SEC-FIX: Route builtins through pwsh.exe instead of cmd.exe to prevent quote escaping injection vectors
-          const escapedCmd = localCmd.replace(/'/g, "''");
-          const escapedArgs = localArgs.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
-          const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;
-          const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
-          localCmd = 'pwsh.exe';
-          localArgs = ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-EncodedCommand', encoded];
+          const wrapped = buildPwshWrapper(localCmd, localArgs);
+          localCmd = wrapped.cmd;
+          localArgs = wrapped.args;
         } else {
           const originalCmd = [
             /[|&;<>$`{}()]/.test(localCmd) ? localCmd : escapeUnixArg(localCmd, false),
@@ -237,30 +336,19 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
         }
       }
 
-      if ('templateOverride' in p && typeof p.templateOverride === 'string' && p.templateOverride) {
-        const innerCmdStr = [p.command, ...(p.args || [])]
-          .map(a => a.includes(' ') || a.includes('"') || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a)
-          .join(' ');
-        
-        const fullOverride = p.templateOverride.includes('{{code}}') 
-          ? p.templateOverride.replace('{{code}}', innerCmdStr)
-          : `${p.templateOverride} ${innerCmdStr}`;
-          
-        const allArgs = tokenizeArgs(fullOverride).map(a => replaceTemplates(a));
-        if (allArgs.length > 0) {
-          localCmd = allArgs[0];
-          localArgs = allArgs.slice(1);
-        }
+      if (p.templateOverride) {
+        const updated = applyTemplateOverride(p.templateOverride, localCmd, localArgs, replaceTemplates);
+        localCmd = updated.cmd;
+        localArgs = updated.args;
       }
       return { cmd: localCmd, args: localArgs };
     })
     .with({ type: 'script' }, (p) => {
       let localCmd: string;
       let localArgs: string[];
-      let scriptFile = path.resolve(p.scriptPath);
+      let scriptFile = path.resolve(cwd, p.scriptPath);
       if (!fs.existsSync(scriptFile) || !fs.statSync(scriptFile).isFile()) {
-        console.error(`❌ Error: The script file '${scriptFile}' does not exist or is not a file.`);
-        process.exit(1);
+        exitWithError(`The script file '${scriptFile}' does not exist or is not a file.`);
       }
       if (p.interpreter) {
         localCmd = p.interpreter;
@@ -275,9 +363,6 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
           .with('.bat', '.cmd', () => 'cmd.exe')
           .otherwise(() => 'bun');
       }
-      const isPwsh = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(localCmd.toLowerCase());
-      const isCmd = ['cmd', 'cmd.exe'].includes(localCmd.toLowerCase());
-      
       // Auto-heal CRLF for bash scripts in WSL
       if (payload.target === 'wsl2' && ['bash', 'sh'].includes(localCmd.toLowerCase())) {
         const content = fs.readFileSync(scriptFile, 'utf-8');
@@ -287,28 +372,18 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
           scriptFile = tempScriptPath;
         }
       }
-      if (isPwsh) {
+      if (isPwsh(localCmd)) {
         localArgs = ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-File', scriptFile.replace(/\\/g, '/'), ...(p.args || [])];
-      } else if (isCmd) {
+      } else if (isCmd(localCmd)) {
         localArgs = ['/c', scriptFile.replace(/\\/g, '/'), ...(p.args || [])];
       } else {
         localArgs = [scriptFile.replace(/\\/g, '/'), ...(p.args || [])];
       }
 
-      if ('templateOverride' in p && typeof p.templateOverride === 'string' && p.templateOverride) {
-        const innerCmdStr = [localCmd, ...localArgs]
-          .map(a => a.includes(' ') || a.includes('"') || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a)
-          .join(' ');
-        
-        const fullOverride = p.templateOverride.includes('{{code}}') 
-          ? p.templateOverride.replace('{{code}}', innerCmdStr)
-          : `${p.templateOverride} ${innerCmdStr}`;
-          
-        const allArgs = tokenizeArgs(fullOverride).map(a => replaceTemplates(a));
-        if (allArgs.length > 0) {
-          localCmd = allArgs[0];
-          localArgs = allArgs.slice(1);
-        }
+      if (p.templateOverride) {
+        const updated = applyTemplateOverride(p.templateOverride, localCmd, localArgs, replaceTemplates);
+        localCmd = updated.cmd;
+        localArgs = updated.args;
       }
       return { cmd: localCmd, args: localArgs };
     })
@@ -332,7 +407,7 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
       tempScriptPath = path.join(scratchDir, `agent-eval-${uniqueId}${ext}`);
       try {
         let codeToExecute = p.code;
-        if ('templateOverride' in p && p.templateOverride) {
+        if (p.templateOverride) {
           if (p.templateOverride.includes('{{code}}')) {
             codeToExecute = p.templateOverride.replace('{{code}}', p.code);
           } else {
@@ -341,22 +416,22 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
         }
         if (ext === '.ps1') {
           codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
+        } else if (p.target === 'wsl2' && ext === '.sh') {
+          codeToExecute = codeToExecute.replace(/\r\n/g, '\n');
         }
         fs.writeFileSync(tempScriptPath, codeToExecute, 'utf-8');
       } catch (err) {
-        console.error(`❌ Error: Failed to write eval code to temporary file ${tempScriptPath}`);
-        console.error(err instanceof Error ? err.message : String(err));
-        process.exit(1);
+        exitWithError(`Failed to write eval code to temporary file ${tempScriptPath}: ${err instanceof Error ? err.message : String(err)}`);
       }
       const localCmd = p.interpreter || (p.target === 'wsl2' ? 'bash' : 'bun');
-      const localArgs = match(localCmd.toLowerCase())
-        .when(cmd => ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmd), () => [
+      const localArgs = match(localCmd)
+        .when(isPwsh, () => [
           '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-File', tempScriptPath!.replace(/\\/g, '/'), ...(p.args || [])
         ])
-        .when(cmd => ['cmd', 'cmd.exe'].includes(cmd), () => [
+        .when(isCmd, () => [
           '/c', tempScriptPath!.replace(/\\/g, '/'), ...(p.args || [])
         ])
-        .when(cmd => process.platform === 'win32' && ['bash', 'sh', 'zsh'].includes(cmd), () => {
+        .when(cmd => process.platform === 'win32' && ['bash', 'sh', 'zsh'].includes(cmd.toLowerCase()), () => {
           const wslPath = tempScriptPath!.replace(/\\/g, '/').replace(/^([a-zA-Z]):\//, (m, drive) => `/mnt/${drive.toLowerCase()}/`);
           return [wslPath, ...(p.args || [])];
         })
@@ -372,24 +447,10 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
   args = parsedCmdArgs.args;
 
   if (payload.target !== 'wsl2') {
-    cmd = resolveWindowsCommand(cmd, cwd, payload.env as Record<string, string>);
+    cmd = resolveWindowsCommand(cmd, cwd, payload.env);
   }
 
-  envOverrides['NPM_CONFIG_YES'] = 'true'; // Automatically answer yes to npx/pnpx install prompts
-  envOverrides['DEBIAN_FRONTEND'] = 'noninteractive'; // Prevent apt prompts
-  envOverrides['YARN_NON_INTERACTIVE'] = '1'; // Prevent yarn interactive prompts
-  envOverrides['GIT_TERMINAL_PROMPT'] = '0'; // Prevent credential/passphrase prompt hanging globally
-  envOverrides['GIT_SSH_COMMAND'] = 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new'; // Prevent SSH prompt hanging globally
-  envOverrides['GIT_EDITOR'] = 'true'; // Prevent git from hanging when it opens an editor
-  envOverrides['GIT_SEQUENCE_EDITOR'] = 'true'; // Prevent git rebase from hanging
-  envOverrides['GCM_INTERACTIVE'] = 'false'; // Prevent Git Credential Manager GUI from hanging on Windows
-  envOverrides['DENO_NO_PROMPT'] = '1'; // Prevent deno prompt hanging globally
-  envOverrides['HOMEBREW_NO_INTERACTIVE'] = '1'; // Prevent brew interactive prompts globally
-  envOverrides['PAGER'] = 'cat'; // Prevent any CLI tool from spawning an interactive pager
-  envOverrides['GIT_PAGER'] = 'cat'; // Prevent git from spawning an interactive pager
-  envOverrides['CI'] = '1'; // Instruct compliant CLI tools to run in non-interactive/headless mode
-  envOverrides['npm_config_audit'] = 'false'; // Prevent npm audit noise/prompts
-  envOverrides['npm_config_fund'] = 'false'; // Prevent npm fund noise/prompts
+  Object.assign(envOverrides, DEFAULT_ENV_VARS);
 
   if (cmd === 'find' || cmd === 'find.exe') {
     const isUnixFind = args.some(a => a.startsWith('-name') || a.startsWith('-type') || a.startsWith('-exec') || a.startsWith('-mtime') || a === '.' || a === '..');
@@ -455,100 +516,21 @@ export function buildCommand(payload: ExecPayload, cwd: string): { cmd: string; 
     console.error(`   Because 'shell: false' is used, quotes are NOT needed for spaces. Auto-healing by stripping wrapping quotes...`);
   }
 
-  // Format arguments correctly for cmd.exe to prevent quote stripping and shell injection
-  if (['cmd', 'cmd.exe'].includes(path.basename(cmd).toLowerCase()) && args[0]?.toLowerCase() === '/c') {
-    const originalCmdAndArgs = args.slice(1);
-    
-    // Algorithm:
-    // 1. Format each argument for C runtime (CommandLineToArgvW).
-    // 2. Escape cmd.exe metacharacters (^ & | < >) that fall OUTSIDE of cmd.exe's quote state.
-    const commandLine = originalCmdAndArgs.map(arg => {
-      // Step 1: C runtime escaping
-      let crtArg = arg;
-      if (/[ \t\n\v"]/.test(arg) || arg.length === 0) {
-        // Escape backslashes that precede a quote
-        crtArg = arg.replace(/(\\+)(")/g, '$1$1$2');
-        // Escape quotes
-        crtArg = crtArg.replace(/"/g, '\\"');
-        // Wrap in quotes
-        crtArg = `"${crtArg}"`;
-      }
-      
-      // Step 2: cmd.exe escaping
-      let cmdArg = '';
-      let inQuotes = false;
-      for (let i = 0; i < crtArg.length; i++) {
-        const char = crtArg[i];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-          cmdArg += char;
-        } else if (!inQuotes && /[&|<>^]/.test(char)) {
-          cmdArg += '^' + char;
-        } else {
-          cmdArg += char;
-        }
-      }
-      // Note: % environment variables are not escaped by ^ in cmd.exe. 
-      // We assume payload arguments do not intentionally contain %VAR% unless meant to be expanded,
-      // which is standard behavior.
-      
-      return cmdArg;
-    }).join(' ');
-    
-    // Pass the entire command line wrapped in quotes, with /s to strip them.
-    args = ['/d', '/s', '/c', `"${commandLine}"`];
+  if (isCmd(path.basename(cmd)) && args[0]?.toLowerCase() === '/c') {
+    args = formatForCmdExe(args);
   }
 
   if (payload.type === 'command') {
     const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd');
     if (isWinBatch && payload.target !== 'wsl2') {
       console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
-      const escapedCmd = cmd.replace(/'/g, "''");
-      const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');
-      const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Continue';\n$ProgressPreference = 'SilentlyContinue'; $ConfirmPreference = 'None';\n& '${escapedCmd}' ${escapedArgs}\nexit $LASTEXITCODE`;
-      const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64');
-      args = ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-EncodedCommand', encoded];
-      cmd = 'pwsh.exe';
+      const wrapped = buildPwshWrapper(cmd, args);
+      cmd = wrapped.cmd;
+      args = wrapped.args;
     }
   }
 
   if (payload.target === 'wsl2') {
-    const convertToWslPath = (winPath: string) => {
-      // 1. Pure path (e.g. C:\path\to\file.txt)
-      if (/^[a-zA-Z]:[/\\]/.test(winPath)) {
-        return winPath.replace(/^([a-zA-Z]):[/\\](.*)/, (match, drive, rest) => {
-          return `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`;
-        });
-      }
-      
-      // 2. Flag with unquoted path (e.g. --file=C:\path\to\file.txt)
-      if (/^[a-zA-Z0-9_-]+[=:][a-zA-Z]:[/\\]/.test(winPath)) {
-        return winPath.replace(/^([a-zA-Z0-9_-]+[=:])([a-zA-Z]):[/\\](.*)/, (match, prefix, drive, rest) => {
-           return `${prefix}/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`;
-        });
-      }
-
-      // 3. Flag with double-quoted path (e.g. --file="C:\path")
-      if (/^[a-zA-Z0-9_-]+[=:]"([a-zA-Z]):[/\\](.*)"$/.test(winPath)) {
-        return winPath.replace(/^([a-zA-Z0-9_-]+[=:])"([a-zA-Z]):[/\\](.*)"$/, (match, prefix, drive, rest) => {
-           return `${prefix}"/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}"`;
-        });
-      }
-      
-      // 4. Flag with single-quoted path (e.g. --file='C:\path')
-      if (/^[a-zA-Z0-9_-]+[=:]'([a-zA-Z]):[/\\](.*)'$/.test(winPath)) {
-        return winPath.replace(/^([a-zA-Z0-9_-]+[=:])'([a-zA-Z]):[/\\](.*)'$/, (match, prefix, drive, rest) => {
-           return `${prefix}'/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}'`;
-        });
-      }
-
-      // 5. Fallback for embedded paths (e.g. regex ^C:\path). 
-      // Stop at spaces to avoid corrupting trailing regex characters.
-      return winPath.replace(/([a-zA-Z]):[/\\]([^"';=,\s]*)/g, (match, drive, rest) => {
-        return `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`;
-      });
-    };
-
     const wslCwd = convertToWslPath(cwd);
     
     const wslEnvArgs: string[] = [];

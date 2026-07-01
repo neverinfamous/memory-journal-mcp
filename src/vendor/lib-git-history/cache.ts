@@ -2,47 +2,48 @@
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { CommitEntry } from './schema.js';
+import { z } from 'zod';
+import { entrySchema, commitSizeSchema, type CommitEntry } from './schema.js';
 
 let db: Database | null = null;
 
-interface DBCommitRow {
-  commit_hash: string;
-  parents: string | null;
-  refs: string | null;
-  tags: string | null;
-  author: string;
-  email: string | null;
-  committer: string | null;
-  committerEmail: string | null;
-  committerDate: string | null;
-  date: string;
-  type: string | null;
-  scope: string | null;
-  isBreaking: number;
-  breakingChangeDescription: string | null;
-  isRevert: number;
-  revertedCommit: string | null;
-  isRebased: number;
-  subject: string;
-  cleanSubject: string | null;
-  body: string | null;
-  size: "XS" | "S" | "M" | "L" | "XL" | null;
-  files: string | null;
-  fileCount: number | null;
-  isFilesTruncated: number;
-  totalInsertions: number | null;
-  totalDeletions: number | null;
-  metadata: string | null;
-  patch: string | null;
-  isPatchTruncated: number;
-  references: string | null;
-  coAuthors: string | null;
-  reviewers: string | null;
-  associatedIssues: string | null;
-  validationErrors: string | null;
-  isCorrupted: number;
-}
+const dbCommitRowSchema = z.object({
+  commit_hash: z.string(),
+  parents: z.string().nullable(),
+  refs: z.string().nullable(),
+  tags: z.string().nullable(),
+  author: z.string(),
+  email: z.string().nullable(),
+  committer: z.string().nullable(),
+  committerEmail: z.string().nullable(),
+  committerDate: z.string().nullable(),
+  date: z.string(),
+  type: z.string().nullable(),
+  scope: z.string().nullable(),
+  isBreaking: z.number(),
+  breakingChangeDescription: z.string().nullable(),
+  isRevert: z.number(),
+  revertedCommit: z.string().nullable(),
+  isRebased: z.number(),
+  subject: z.string(),
+  cleanSubject: z.string().nullable(),
+  body: z.string().nullable(),
+  size: commitSizeSchema.nullable(),
+  files: z.string().nullable(),
+  fileCount: z.number().nullable(),
+  isFilesTruncated: z.number(),
+  totalInsertions: z.number().nullable(),
+  totalDeletions: z.number().nullable(),
+  metadata: z.string().nullable(),
+  patch: z.string().nullable(),
+  isPatchTruncated: z.number(),
+  references: z.string().nullable(),
+  coAuthors: z.string().nullable(),
+  reviewers: z.string().nullable(),
+  associatedIssues: z.string().nullable(),
+  validationErrors: z.string().nullable(),
+  isCorrupted: z.number()
+});
 
 export function initCache(dbPath?: string): Database {
   if (db) return db;
@@ -51,14 +52,18 @@ export function initCache(dbPath?: string): Database {
   
   try {
     mkdirSync(dirname(targetPath), { recursive: true });
-  } catch {
-    // Ignore if exists
+  } catch (err: unknown) {
+    const isErrnoException = (e: unknown): e is NodeJS.ErrnoException => e instanceof Error && 'code' in e;
+    if (isErrnoException(err) && err.code !== 'EEXIST') throw err;
   }
   
   db = new Database(targetPath);
   
   // enable WAL mode for performance
   db.exec('PRAGMA journal_mode = WAL;');
+  db.exec('PRAGMA synchronous = NORMAL;');
+  db.exec('PRAGMA busy_timeout = 5000;');
+  db.exec('PRAGMA foreign_keys = ON;');
   
   db.exec(`
     CREATE TABLE IF NOT EXISTS commits (
@@ -97,8 +102,13 @@ export function initCache(dbPath?: string): Database {
       associatedIssues TEXT,
       validationErrors TEXT,
       isCorrupted INTEGER
-    )
+    ) STRICT
   `);
+  
+  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_author ON commits(author);');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_type ON commits(type);');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_scope ON commits(scope);');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_commits_isBreaking ON commits(isBreaking);');
   
   return db;
 }
@@ -111,9 +121,9 @@ export function closeCache(): void {
 }
 
 export function insertCommits(batch: CommitEntry[]): void {
-  if (!db) initCache();
+  const currentDb = db || initCache();
   
-  const insert = db!.prepare(`
+  const insert = currentDb.prepare(`
     INSERT OR REPLACE INTO commits (
       commit_hash, parents, refs, tags, author, email, committer, committerEmail, committerDate,
       date, type, scope, isBreaking, breakingChangeDescription, isRevert, revertedCommit,
@@ -129,7 +139,7 @@ export function insertCommits(batch: CommitEntry[]): void {
     )
   `);
   
-  const transaction = db!.transaction((commits: CommitEntry[]) => {
+  const transaction = currentDb.transaction((commits: CommitEntry[]) => {
     for (const c of commits) {
       insert.run({
         $commit_hash: c.commit,
@@ -175,7 +185,7 @@ export function insertCommits(batch: CommitEntry[]): void {
 }
 
 export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] {
-  if (!db) initCache();
+  const currentDb = db || initCache();
   
   let query = 'SELECT * FROM commits';
   const conditions: string[] = [];
@@ -206,44 +216,51 @@ export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] 
     query += ' WHERE ' + conditions.join(' AND ');
   }
   
-  const stmt = db!.prepare(query);
-  const rows = stmt.all(params as Record<string, string | number>) as DBCommitRow[];
-  
-  return rows.map(row => ({
-    commit: row.commit_hash,
-    parents: row.parents ? JSON.parse(row.parents) : undefined,
-    refs: row.refs ? JSON.parse(row.refs) : undefined,
-    tags: row.tags ? JSON.parse(row.tags) : undefined,
-    author: row.author,
-    email: row.email || undefined,
-    committer: row.committer || undefined,
-    committerEmail: row.committerEmail || undefined,
-    committerDate: row.committerDate || undefined,
-    date: row.date,
-    type: row.type || undefined,
-    scope: row.scope || undefined,
-    isBreaking: row.isBreaking === 1 ? true : undefined,
-    breakingChangeDescription: row.breakingChangeDescription || undefined,
-    isRevert: row.isRevert === 1 ? true : undefined,
-    revertedCommit: row.revertedCommit || undefined,
-    isRebased: row.isRebased === 1 ? true : undefined,
-    subject: row.subject,
-    cleanSubject: row.cleanSubject || undefined,
-    body: row.body || undefined,
-    size: row.size || undefined,
-    files: row.files ? JSON.parse(row.files) : undefined,
-    fileCount: row.fileCount || undefined,
-    isFilesTruncated: row.isFilesTruncated === 1 ? true : undefined,
-    totalInsertions: row.totalInsertions !== null ? row.totalInsertions : undefined,
-    totalDeletions: row.totalDeletions !== null ? row.totalDeletions : undefined,
-    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-    patch: row.patch || undefined,
-    isPatchTruncated: row.isPatchTruncated === 1 ? true : undefined,
-    references: row.references ? JSON.parse(row.references) : undefined,
-    coAuthors: row.coAuthors ? JSON.parse(row.coAuthors) : undefined,
-    reviewers: row.reviewers ? JSON.parse(row.reviewers) : undefined,
-    associatedIssues: row.associatedIssues ? JSON.parse(row.associatedIssues) : undefined,
-    validationErrors: row.validationErrors ? JSON.parse(row.validationErrors) : undefined,
-    isCorrupted: row.isCorrupted === 1 ? true : undefined
-  }));
+  const stmt = currentDb.prepare(query);
+  const rows = z.array(dbCommitRowSchema).parse(stmt.all(params));
+  const safeParseJSON = (str: string | null | undefined): unknown => {
+    if (!str) return undefined;
+    try { return JSON.parse(str); } catch { return undefined; }
+  };
+
+  return rows.map(row => {
+    const rawObj = {
+      commit: row.commit_hash,
+      parents: safeParseJSON(row.parents),
+      refs: safeParseJSON(row.refs),
+      tags: safeParseJSON(row.tags),
+      author: row.author,
+      email: row.email || undefined,
+      committer: row.committer || undefined,
+      committerEmail: row.committerEmail || undefined,
+      committerDate: row.committerDate || undefined,
+      date: row.date,
+      type: row.type || undefined,
+      scope: row.scope || undefined,
+      isBreaking: row.isBreaking === 1 ? true : undefined,
+      breakingChangeDescription: row.breakingChangeDescription || undefined,
+      isRevert: row.isRevert === 1 ? true : undefined,
+      revertedCommit: row.revertedCommit || undefined,
+      isRebased: row.isRebased === 1 ? true : undefined,
+      subject: row.subject,
+      cleanSubject: row.cleanSubject || undefined,
+      body: row.body || undefined,
+      size: row.size || undefined,
+      files: safeParseJSON(row.files),
+      fileCount: row.fileCount || undefined,
+      isFilesTruncated: row.isFilesTruncated === 1 ? true : undefined,
+      totalInsertions: row.totalInsertions !== null ? row.totalInsertions : undefined,
+      totalDeletions: row.totalDeletions !== null ? row.totalDeletions : undefined,
+      metadata: safeParseJSON(row.metadata),
+      patch: row.patch || undefined,
+      isPatchTruncated: row.isPatchTruncated === 1 ? true : undefined,
+      references: safeParseJSON(row.references),
+      coAuthors: safeParseJSON(row.coAuthors),
+      reviewers: safeParseJSON(row.reviewers),
+      associatedIssues: safeParseJSON(row.associatedIssues),
+      validationErrors: safeParseJSON(row.validationErrors),
+      isCorrupted: row.isCorrupted === 1 ? true : undefined
+    };
+    return entrySchema.parse(rawObj);
+  });
 }

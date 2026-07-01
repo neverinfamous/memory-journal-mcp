@@ -10,11 +10,11 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 1. **`git-runner.ts`**: The execution bridge. It directly interfaces with `git` and handles low-level NUL-byte parsing to extract raw metric data (additions, deletions, statuses). Accepts an optional `cwd` argument, allowing cross-repository and vendor execution contexts without pathing errors.
 2. **`parser.ts`**: The semantic engine export hub. To respect strict size constraints, the heavy parsing logic is split into specialized modules:
-   - **`parser-record.ts`**: Natively parses raw NUL-delimited strings, `feat(scope)!`, `BREAKING CHANGE:` trailers, revert references (`revertedCommit`), and issue references. Also manages error boundaries, outputting Zod errors into `validationErrors` if coercion fails.
+   - **`parser-record.ts`**: Natively parses raw NUL-delimited strings, `feat(scope)!`, `BREAKING CHANGE:` trailers, revert references (`revertedCommit`), and issue references. It also extracts custom `Category:`, `Entry:`, `Significance:`, `Impact:`, `Trust:`, `Confidence:`, and `Validation:` trailers into the `metadata` object using pattern matching, and manages error boundaries.
    - **`parser-batch.ts`**: Handles the asynchronous correlation of patch data, numstats, and base commit data, and computes qualitative sizes (XS, S, M, L, XL). Sets boundary flags like `isPatchTruncated` and `isFilesTruncated` when output exceeds configured constraints.
-   - **`parser-metadata.ts`**: Extracts custom `Category:`, `Entry:`, `Significance:`, `Impact:`, `Trust:`, `Confidence:`, and `Validation:` trailers into the `metadata` object using pattern matching to power downstream health dashboards.
+   - **`parser-metadata.ts`**: Provides helper utilities for evaluating and extracting numeric metadata (like Impact, Confidence, Trust) from string values.
 3. **`schema.ts`**: The contract. Uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics). **Always consult this schema** if modifying the data returned by the parser.
-4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve the `metadata` attributes without the heavy patch/body diffs.
+4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve `metadata` without the heavy patch/body diffs, or the `--stats` flag for lightweight file modification metrics.
 
 ## 🧹 Scratch Workspace Protocol
 
@@ -44,7 +44,7 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
 
 ## 📖 Related Context
 
-- If you need to write a commit using this system, use the `/mcp:memory-journal-mcp:commit` prompt.
+- If you need to write a commit using this system, use the `/mcp:memory-journal-mcp:commit` or `/mcp:memory-journal-mcp:quick-commit` prompts.
 - Do NOT edit `.agents/workflows/changelog.md` (or similar changelog files); always extract history using `get-git-history-json.ts` instead.
 
 ## 🧪 Usability & Hallucination Testing

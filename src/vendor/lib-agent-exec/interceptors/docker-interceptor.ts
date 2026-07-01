@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
 
 export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
@@ -9,13 +10,13 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (kubectlCmds.includes(cmdBasename)) {
     const subCmd = args.filter(a => !a.startsWith('-'))[0];
     if (['edit', 'attach', 'debug'].includes(subCmd)) {
-      console.error(`\n   💡 AGENT HINT: 'kubectl ${subCmd}' is highly interactive and will hang. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'kubectl ${subCmd}' is highly interactive and will hang. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
     }
     if (subCmd === 'logs') {
       const hasFollow = args.some(a => a === '-f' || a === '--follow');
       if (hasFollow) {
-        console.error(`\n   💡 AGENT HINT: 'kubectl logs -f' runs indefinitely and will cause a timeout.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'kubectl logs -f' runs indefinitely and will cause a timeout.\n${AUTONOMOUS_HEALING_MSG}`);
         console.error(`   Auto-healing: Automatically stripping '-f / --follow' flag...`);
         for (let i = args.length - 1; i >= 0; i--) {
           if (args[i] === '-f' || args[i] === '--follow') args.splice(i, 1);
@@ -72,12 +73,12 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
   if (dockerCmds.includes(cmdBasename) && subCmd === 'login') {
     if (!args.includes('-u') && !args.includes('--username') && !args.includes('--password-stdin')) {
-      console.error(`\n   💡 AGENT HINT: 'docker login' called without credentials (-u or --password-stdin).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker login' called without credentials (-u or --password-stdin).\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang waiting for a username. Blocking execution.`);
       process.exit(1);
     }
     if (args.includes('--password-stdin') && (!payload.stdin || payload.stdin.trim().length === 0)) {
-      console.error(`\n   💡 AGENT HINT: 'docker login --password-stdin' requires credentials via stdin.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker login --password-stdin' requires credentials via stdin.\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   You provided the flag but no valid 'stdin' payload. Blocking execution to prevent hanging.`);
       process.exit(1);
     }
@@ -85,26 +86,26 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
   if (dockerCmds.includes(cmdBasename) && subCmd === 'plugin' && args.includes('install')) {
     if (!args.includes('--grant-all-permissions')) {
-      console.error(`\n   💡 AGENT HINT: 'docker plugin install' asks for confirmation. Automatically injecting '--grant-all-permissions'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker plugin install' asks for confirmation. Automatically injecting '--grant-all-permissions'.\n${AUTONOMOUS_HEALING_MSG}`);
       args.push('--grant-all-permissions');
     }
   }
 
   if (dockerCmds.includes(cmdBasename) && subCmd === 'start') {
     if (args.includes('-i') || args.includes('--interactive') || args.includes('-a') || args.includes('--attach')) {
-      console.error(`\n   💡 AGENT HINT: 'docker start' with interactive/attach flags will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker start' with interactive/attach flags will hang indefinitely. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
     }
   }
 
   if (dockerCmds.includes(cmdBasename) && subCmd === 'attach') {
-    console.error(`\n   💡 AGENT HINT: 'docker attach' inherently connects stdio to the container and hangs in non-interactive modes. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+    console.error(`\n   💡 AGENT HINT: 'docker attach' inherently connects stdio to the container and hangs in non-interactive modes. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
 
   if (dockerCmds.includes(cmdBasename) && !isComposePlugin) {
     if (subCmd === 'events' || subCmd === 'wait' || (subCmd === 'system' && args.includes('events')) || (subCmd === 'stats' && !args.includes('--no-stream'))) {
-       console.error(`\n   💡 AGENT HINT: 'docker ${subCmd}' runs indefinitely or blocks execution. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'docker ${subCmd}' runs indefinitely or blocks execution. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
        process.exit(1);
     }
   }
@@ -117,7 +118,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (isLogsCmd) {
     const hasFollow = args.some(a => a === '-f' || a === '--follow' || a.startsWith('--follow='));
     if (hasFollow) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename} logs -f' runs indefinitely and will cause a timeout.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename} logs -f' runs indefinitely and will cause a timeout.\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   Auto-healing: Automatically stripping '-f / --follow' flag...`);
       for (let i = args.length - 1; i >= 0; i--) {
         if (args[i] === '-f' || args[i] === '--follow' || args[i].startsWith('--follow=')) args.splice(i, 1);
@@ -132,13 +133,13 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (isUpCmd) {
     const hasDetach = args.some(a => a === '-d' || a === '--detach');
     if (!hasDetach) {
-      console.error(`\n   💡 AGENT HINT: 'docker compose up' was called without '-d' or '--detach'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker compose up' was called without '-d' or '--detach'.\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   Auto-healing: Automatically appending '-d' flag to prevent indefinite blocking...`);
       args.push('-d');
     }
     const watchIdx = args.findIndex(a => a === '--watch');
     if (watchIdx !== -1) {
-      console.error(`\n   💡 AGENT HINT: 'docker compose up --watch' runs indefinitely and will cause a timeout.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker compose up --watch' runs indefinitely and will cause a timeout.\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   Auto-healing: Automatically stripping '--watch' flag...`);
       args.splice(watchIdx, 1);
     }
@@ -149,7 +150,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     (dockerComposeCmds.includes(cmdBasename) && composeSubCmd === 'watch');
 
   if (isWatchCmd) {
-    console.error(`\n   💡 AGENT HINT: 'docker compose watch' runs indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+    console.error(`\n   💡 AGENT HINT: 'docker compose watch' runs indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
     console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
     console.error(`   Please run this command manually in a separate terminal if you need live syncing.`);
     process.exit(1);
@@ -160,7 +161,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     (dockerComposeCmds.includes(cmdBasename) && composeSubCmd === 'wait');
 
   if (isComposeWaitCmd) {
-    console.error(`\n   💡 AGENT HINT: 'docker compose wait' blocks execution indefinitely. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+    console.error(`\n   💡 AGENT HINT: 'docker compose wait' blocks execution indefinitely. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
     process.exit(1);
   }
 
@@ -171,7 +172,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (isRmCmd) {
     const hasForce = args.some(a => a === '-f' || a === '--force');
     if (!hasForce) {
-      console.error(`\n   💡 AGENT HINT: 'docker compose rm' asks for confirmation. Automatically appending '-f' flag to prevent indefinite blocking...\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker compose rm' asks for confirmation. Automatically appending '-f' flag to prevent indefinite blocking...\n${AUTONOMOUS_HEALING_MSG}`);
       args.push('-f');
     }
   }
@@ -179,14 +180,14 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   const pruneCategories = ['system', 'image', 'volume', 'network', 'container', 'builder'];
   if (dockerCmds.includes(cmdBasename) && pruneCategories.includes(subCmd) && args.includes('prune')) {
     if (!args.includes('-f') && !args.includes('--force')) {
-      console.error(`\n   💡 AGENT HINT: 'docker ${subCmd} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker ${subCmd} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
       args.push('-f');
     }
   }
 
   if (isBuildxPlugin && buildxSubCmd === 'prune') {
     if (!args.includes('-f') && !args.includes('--force')) {
-      console.error(`\n   💡 AGENT HINT: 'docker buildx prune' asks for confirmation. Automatically injecting '-f' to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'docker buildx prune' asks for confirmation. Automatically injecting '-f' to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
       args.push('-f');
     }
   }
@@ -200,7 +201,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
       arg.startsWith('--interactive')
     );
     if (hasTtyFlag) {
-      console.error(`\n   💡 AGENT HINT: You attempted to run a Docker command with a TTY flag.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to run a Docker command with a TTY flag.\n${AUTONOMOUS_HEALING_MSG}`);
       console.error(`   Because 'agent-exec.ts' uses \`shell: false\` and pipes stdio, TTY allocation is NOT supported.`);
       console.error(`   Auto-healing: Automatically stripping TTY flags (-t, --tty) to prevent process hanging...`);
       
@@ -251,7 +252,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
     if ((isComposeExec || isComposeRun) && !args.includes('-T')) {
       const targetCmd = isComposeExec ? 'exec' : 'run';
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-T' into docker compose ${targetCmd} to forcefully disable TTY allocation.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Automatically injecting '-T' into docker compose ${targetCmd} to forcefully disable TTY allocation.\n${AUTONOMOUS_HEALING_MSG}`);
       const targetIndex = args.indexOf(targetCmd);
       if (targetIndex !== -1) {
         args.splice(targetIndex + 1, 0, '-T');
@@ -298,7 +299,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
         : containerCmdArgs.some(a => shellExecFlags.includes(a));
 
       if (!hasExecFlag && !payload.stdin) {
-        console.error(`\n   💡 AGENT HINT: 'docker ... ${containerCmd}' targets an interactive shell/REPL inside the container.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'docker ... ${containerCmd}' targets an interactive shell/REPL inside the container.\n${AUTONOMOUS_HEALING_MSG}`);
         console.error(`   Without execution flags (e.g., -c 'command') or stdin, it will hang indefinitely.`);
         console.error(`   Please provide a command to execute: e.g., docker exec <container> ${containerCmd} -c 'your command'`);
         process.exit(1);

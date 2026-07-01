@@ -6,19 +6,18 @@ export const processManagerHooks: { onKill?: (pid: number) => void }[] = [];
 
 export function killProcessTree(child: ChildProcess) {
   if (!child.pid || child.killed || child.exitCode !== null || child.signalCode !== null) return;
+  const pid = child.pid;
 
-  
   for (const hook of processManagerHooks) {
     if (hook.onKill) {
-      try { hook.onKill(child.pid); } catch { /* ignore */ }
+      try { hook.onKill(pid); } catch { /* ignore */ }
     }
   }
   
   match(process.platform)
     .with('win32', () => {
-    const childWithArgs = child as ChildProcess & { spawnfile?: string, spawnargs?: string[] };
-    const spawnfile = childWithArgs.spawnfile || '';
-    const spawnargs = childWithArgs.spawnargs || [];
+    const spawnfile = child.spawnfile || '';
+    const spawnargs: string[] = child.spawnargs || [];
     if (spawnfile.toLowerCase().endsWith('wsl.exe')) {
       const uuidArg = spawnargs.find((a: string) => a.startsWith('AGENT_EXEC_WSL_UUID='));
       if (uuidArg) {
@@ -31,7 +30,7 @@ export function killProcessTree(child: ChildProcess) {
 
     let taskkillSuccess = false;
     try {
-      const result = spawnSync('taskkill.exe', ['/pid', child.pid!.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore' });
+      const result = spawnSync('taskkill.exe', ['/pid', pid.toString(), '/t', '/f'], { shell: false, timeout: 2000, stdio: 'ignore' });
       if (!result.error && result.status === 0) {
         taskkillSuccess = true;
       }
@@ -56,7 +55,7 @@ export function killProcessTree(child: ChildProcess) {
           }
           
           const toKill = new Set<number>();
-          const queue = [child.pid!];
+          const queue = [pid];
           while (queue.length > 0) {
             const current = queue.shift()!;
             toKill.add(current);
@@ -64,9 +63,9 @@ export function killProcessTree(child: ChildProcess) {
             if (children) queue.push(...children);
           }
           
-          for (const pid of toKill) {
-            if (pid === child.pid!) continue;
-            try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ }
+          for (const processPid of toKill) {
+            if (processPid === pid) continue;
+            try { process.kill(processPid, 'SIGKILL'); } catch { /* ignore */ }
           }
         }
       } catch { /* ignore fallback errors */ }
@@ -80,13 +79,13 @@ export function killProcessTree(child: ChildProcess) {
     try {
       // Graceful degradation: Attempt SIGTERM first to allow daemons to clean up
       try {
-        process.kill(-child.pid!, 'SIGTERM');
+        process.kill(-pid, 'SIGTERM');
       } catch { /* ignore */ }
       
       // Fallback to SIGKILL process group on Unix to prevent zombies after a brief delay
       setTimeout(() => {
         try {
-          process.kill(-child.pid!, 'SIGKILL');
+          process.kill(-pid, 'SIGKILL');
         } catch { /* ignore */ }
       }, 5000).unref();
     } catch {

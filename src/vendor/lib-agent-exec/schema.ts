@@ -8,35 +8,37 @@ const safeString = noNullString
 
 const safeStringArray = z.array(safeString).max(1000);
 
+const lenientBoolean = z.union([z.boolean(), z.literal("true"), z.literal("false")]).transform(val => val === true || val === "true");
+
 const basePayloadSchema = z.object({
   args: safeStringArray.optional(),
-  cwd: safeString.optional(),
-  env: z.record(safeString, safeString).optional(),
+  cwd: safeString.max(1024).optional(),
+  env: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
   integrationContext: z.record(z.string(), z.unknown()).optional(),
-  templateOverride: safeString.optional(),
-  target: z.enum(["windows", "wsl2"]).optional(),
-  timeoutMs: z.number().int().nonnegative().max(2147483647).optional(),
-  stdin: noNullString.optional(),
+  templateOverride: safeString.max(1024).optional(),
+  target: z.union([z.literal("windows"), z.literal("wsl2")]).optional(),
+  timeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
+  stdin: z.string().max(10 * 1024 * 1024).optional(),
   stdoutFile: safeString.optional(),
   stderrFile: safeString.optional(),
-  maxBuffer: z.number().positive().optional(),
-  truncateOutputLength: z.number().positive().optional(),
-  keepPayload: z.boolean().optional(),
-  stallTimeoutMs: z.number().int().nonnegative().max(2147483647).optional(),
-  bypassInterceptors: z.boolean().optional(),
+  maxBuffer: z.number().int().positive().max(2147483647).optional(),
+  truncateOutputLength: z.number().int().positive().max(2147483647).optional(),
+  keepPayload: lenientBoolean.optional(),
+  stallTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
+  bypassInterceptors: lenientBoolean.optional(),
   onSuccess: z.union([safeString, safeStringArray]).optional(),
   onFailure: z.union([safeString, safeStringArray]).optional(),
   webhookHeaders: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
   webhookPayloadTemplate: noNullString.optional(),
-  webhookMethod: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).optional(),
-  webhookTimeoutMs: z.number().int().nonnegative().max(2147483647).optional(),
-  expectJsonEnvelope: z.boolean().optional(),
-});
+  webhookMethod: z.union([z.literal("GET"), z.literal("POST"), z.literal("PUT"), z.literal("PATCH"), z.literal("DELETE")]).optional(),
+  webhookTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
+  expectJsonEnvelope: lenientBoolean.optional(),
+}).strict();
 
 export const PayloadSchema = z.discriminatedUnion("type", [
   basePayloadSchema.extend({
     type: z.literal("command"),
-    command: safeString.refine(val => val.trim().length > 0, "command must not be empty"),
+    command: safeString.min(1, "command must not be empty").refine(val => val.trim().length > 0, "command must not be empty"),
   }),
   basePayloadSchema.extend({
     type: z.literal("script"),
@@ -53,11 +55,16 @@ export const PayloadSchema = z.discriminatedUnion("type", [
 export type ExecPayload = z.infer<typeof PayloadSchema>;
 
 export const agentExecCliArgsSchema = z.object({
-  interceptors: z.string().optional(),
-  plugin: z.string().optional(),
+  interceptors: z.union([z.string().max(1024), z.array(z.string().max(1024)).max(100)]).optional(),
+  plugin: z.string().max(1024).optional(),
   help: z.boolean().optional(),
   json: z.boolean().optional(),
-  payloadPath: z.string().optional(),
+  payloadPath: z.string().max(1024).optional(),
 });
 
 export type AgentExecCliArgs = z.infer<typeof agentExecCliArgsSchema>;
+
+export const JsonEnvelopeSchema = z.object({
+  status: z.union([z.literal("success"), z.literal("error")]),
+  exit_code: z.number().int().optional(),
+}).passthrough();

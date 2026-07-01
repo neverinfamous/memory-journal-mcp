@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { z } from 'zod';
 
+export const commitSizeSchema = z.enum(['XS', 'S', 'M', 'L', 'XL']);
+
 export const fileStatusSchema = z.object({
   status: z.string(),
   file: z.string(),
@@ -33,7 +35,8 @@ export const entrySchema = z.object({
   subject: z.string(),
   cleanSubject: z.string().optional(),
   body: z.string().optional(),
-  size: z.enum(['XS', 'S', 'M', 'L', 'XL']).optional(),
+  isBodyTruncated: z.boolean().optional(),
+  size: commitSizeSchema.optional(),
   files: z.array(fileStatusSchema).optional(),
   fileCount: z.number().int().optional(),
   isFilesTruncated: z.boolean().optional(),
@@ -60,7 +63,7 @@ export const entrySchema = z.object({
     action: z.string().nullable()
   })).optional(),
   slackId: z.string().optional(),
-  validationErrors: z.array(z.any()).optional(),
+  validationErrors: z.array(z.unknown()).optional(),
   isCorrupted: z.boolean().optional(),
 });
 
@@ -68,7 +71,7 @@ export type CommitEntry = z.infer<typeof entrySchema>;
 export type FileStatus = z.infer<typeof fileStatusSchema>;
 
 export const cliArgsSchema = z.object({
-  limit: z.string().optional(),
+  limit: z.coerce.number().int().min(0).optional(),
   path: z.string().optional(),
   author: z.string().optional(),
   search: z.string().optional(),
@@ -80,9 +83,9 @@ export const cliArgsSchema = z.object({
   help: z.boolean().optional(),
   'include-merges': z.boolean().optional(),
   'include-patch': z.boolean().optional(),
-  'diff-context': z.string().optional(),
-  'max-body-length': z.string().optional(),
-  'max-patch-length': z.string().optional(),
+  'diff-context': z.coerce.number().int().min(0).optional(),
+  'max-body-length': z.coerce.number().int().min(0).optional(),
+  'max-patch-length': z.coerce.number().int().min(0).optional(),
   category: z.string().optional(),
   type: z.string().optional(),
   breaking: z.boolean().optional(),

@@ -4,8 +4,81 @@ import { entrySchema, fileStatusSchema, type CommitEntry } from './schema.js';
 import type { CliArgs } from './cli.js';
 import { getNumstatMap } from './git-numstat.js';
 import { getPatchMap } from './git-patch.js';
-import { isNoiseFile, getSlackMap, getLanguage } from './parser-utils.js';
+import { isNoiseFile, getSlackMap, getLanguage, truncateSafely, flattenString } from './parser-utils.js';
+import { DEFAULT_MAX_BODY_LEN, MAX_FILES_PER_COMMIT, MS_PER_DAY } from './constants.js';
 import type { RawCommitBatchItem } from './parser-record.js';
+
+const SIZE_XS_THRESHOLD = 10;
+const SIZE_S_THRESHOLD = 50;
+const SIZE_M_THRESHOLD = 250;
+const SIZE_L_THRESHOLD = 1000;
+
+function parseWithFallbacks(entryObj: Record<string, unknown>, sha: string, subject: string, date: string, authorName: string): CommitEntry | null {
+  const parseResult = entrySchema.safeParse(entryObj);
+  if (parseResult.success) return parseResult.data;
+
+  const coercedObj: Record<string, unknown> = { ...entryObj };
+  for (const issue of parseResult.error.issues) {
+    if (issue.path.length === 1) {
+      delete coercedObj[String(issue.path[0])];
+    } else if (issue.path.length === 2 && issue.path[0] === 'metadata') {
+      const rawMeta = coercedObj['metadata'];
+      const meta: Record<string, unknown> = typeof rawMeta === 'object' && rawMeta !== null 
+        ? { ...rawMeta } 
+        : {};
+      delete meta[String(issue.path[1])];
+      coercedObj['metadata'] = meta;
+    } else if (issue.path[0] === 'files') {
+      delete coercedObj['files'];
+    }
+  }
+  const retryResult = entrySchema.safeParse(coercedObj);
+  if (retryResult.success) {
+    const finalData = retryResult.data;
+    finalData.validationErrors = parseResult.error.issues;
+    return finalData;
+  }
+
+  coercedObj.commit = coercedObj.commit || sha || 'unknown_commit';
+  coercedObj.subject = coercedObj.subject || subject || 'No Subject';
+  coercedObj.date = coercedObj.date || date || new Date().toISOString();
+  coercedObj.author = coercedObj.author || authorName || 'Unknown Author';
+  coercedObj.validationErrors = parseResult.error.issues;
+  coercedObj.isCorrupted = true;
+  
+  const fallbackResult = entrySchema.safeParse(coercedObj);
+  return fallbackResult.success ? fallbackResult.data : null;
+}
+
+function computeCommitSize(totalLines: number, trueFileCount: number): string | undefined {
+  if (totalLines > 0) {
+    if (totalLines < SIZE_XS_THRESHOLD) return 'XS';
+    if (totalLines < SIZE_S_THRESHOLD) return 'S';
+    if (totalLines < SIZE_M_THRESHOLD) return 'M';
+    if (totalLines < SIZE_L_THRESHOLD) return 'L';
+    return 'XL';
+  } else if (trueFileCount > 0) {
+    return 'XS';
+  }
+  return undefined;
+}
+
+function truncateBodyWithContext(body: string, maxBodyLen: number): string {
+  if (!body || body.length <= maxBodyLen) return body;
+  const truncated = truncateSafely(body, maxBodyLen, '');
+  const lastNewline = Math.max(truncated.lastIndexOf('\n\n'), truncated.lastIndexOf('\n'));
+  let newBody = lastNewline > 0 ? truncated.slice(0, lastNewline).trim() : truncated.trim();
+  
+  const codeMatches = newBody.match(/```/g);
+  if (codeMatches && codeMatches.length % 2 !== 0) {
+     newBody += '\n```';
+  }
+  const tildeMatches = newBody.match(/~~~/g);
+  if (tildeMatches && tildeMatches.length % 2 !== 0) {
+     newBody += '\n~~~';
+  }
+  return flattenString(newBody + '\n\n...[truncated to protect context]');
+}
 
 export async function processBatch(
   batch: RawCommitBatchItem[],
@@ -19,11 +92,11 @@ export async function processBatch(
   const patchMap = new Map<string, { patch: string; truncated: boolean }>();
   
   const [nMap, pMapResult] = await Promise.all([
-    getNumstatMap(formattingFlags, shas).catch((err) => {
+    (args.summary) ? Promise.resolve(new Map()) : getNumstatMap(formattingFlags, shas).catch((err) => {
       console.warn('Warning: Failed to get numstat map (This may cause missing file stats for this batch):', err instanceof Error ? err.message : String(err));
       return new Map();
     }),
-    (args['include-patch'] || args['diff-context'] !== undefined) ? getPatchMap(formattingFlags, args, shas).catch((err) => {
+    ((args['include-patch'] || args['diff-context'] !== undefined) && !args.summary) ? getPatchMap(formattingFlags, args, shas).catch((err) => {
       console.warn('Warning: Failed to get patch map (This may cause missing patches for this batch):', err instanceof Error ? err.message : String(err));
       return undefined;
     }) : Promise.resolve(undefined)
@@ -35,9 +108,9 @@ export async function processBatch(
   }
 
   const processed: CommitEntry[] = [];
-  const parsedMaxBodyLen = args['max-body-length'] ? parseInt(args['max-body-length'], 10) : undefined;
-  const maxBodyLen = (parsedMaxBodyLen !== undefined && !Number.isNaN(parsedMaxBodyLen) && parsedMaxBodyLen >= 0) ? parsedMaxBodyLen : 10000;
-  const maxFilesPerCommit = 100;
+  const parsedMaxBodyLen = args['max-body-length'];
+  const maxBodyLen = (parsedMaxBodyLen !== undefined && !Number.isNaN(parsedMaxBodyLen) && parsedMaxBodyLen >= 0) ? parsedMaxBodyLen : DEFAULT_MAX_BODY_LEN;
+  const maxFilesPerCommit = MAX_FILES_PER_COMMIT;
 
   for (const b of batch) {
     const { sha, parents, refs, tags, authorName, authorEmail, committerName, committerEmail, committerDate, date, type, scope, isBreaking, breakingChangeDescription, cleanSubject, subject, rawFiles, metadataObj, trailersObj, references, coAuthors, reviewers, issuesMap, isRevert, revertedCommit } = b;
@@ -60,7 +133,7 @@ export async function processBatch(
       }
     }
 
-    const trueFileCount = Math.max(fileLines.length, uniqueStats.size);
+    const trueFileCount = b.trueFileCount !== undefined ? Math.max(b.trueFileCount, uniqueStats.size) : Math.max(fileLines.length, uniqueStats.size);
 
     for (const line of fileLines) {
       const { status, file, oldFile, similarityScore } = line;
@@ -88,22 +161,12 @@ export async function processBatch(
       });
     }
 
-    let size: string | undefined;
-    const totalLines = nonNoiseInsertions + nonNoiseDeletions;
-    if (totalLines > 0) {
-      if (totalLines < 10) size = 'XS';
-      else if (totalLines < 50) size = 'S';
-      else if (totalLines < 250) size = 'M';
-      else if (totalLines < 1000) size = 'L';
-      else size = 'XL';
-    } else if (trueFileCount > 0) {
-      size = 'XS';
-    }
+    const size = computeCommitSize(nonNoiseInsertions + nonNoiseDeletions, trueFileCount);
 
     const cTime = committerDate ? new Date(committerDate).getTime() : NaN;
     const aTime = date ? new Date(date).getTime() : NaN;
     const isRebased = (committerEmail && authorEmail && committerEmail !== authorEmail && committerName !== 'GitHub') || 
-                      (!isNaN(cTime) && !isNaN(aTime) && Math.abs(cTime - aTime) > 1000 * 60 * 60 * 24);
+                      (!isNaN(cTime) && !isNaN(aTime) && Math.abs(cTime - aTime) > MS_PER_DAY);
 
     const map = getSlackMap(args);
     const slackId = (authorEmail && map[authorEmail]) ? map[authorEmail] : (authorName && map[authorName] ? map[authorName] : undefined);
@@ -136,9 +199,11 @@ export async function processBatch(
     }
 
     if ((args['include-patch'] || args['diff-context'] !== undefined) && patchMap.has(sha)) {
-      const patchData = patchMap.get(sha)!;
-      entryObj.patch = patchData.patch;
-      if (patchData.truncated) entryObj.isPatchTruncated = true;
+      const patchData = patchMap.get(sha);
+      if (patchData) {
+        entryObj.patch = patchData.patch;
+        if (patchData.truncated) entryObj.isPatchTruncated = true;
+      }
     }
 
     if (Object.keys(metadataObj).length > 0) entryObj['metadata'] = metadataObj;
@@ -156,58 +221,13 @@ export async function processBatch(
     body = body.replace(/(?:\r?\n){3,}/g, '\n\n');
     
     if (body.length > maxBodyLen) {
-      let safeLen = maxBodyLen;
-    while (safeLen > 0 && body.charCodeAt(safeLen - 1) >= 0xD800 && body.charCodeAt(safeLen - 1) <= 0xDBFF) {
-      safeLen--;
+      body = truncateBodyWithContext(body, maxBodyLen);
+      entryObj['isBodyTruncated'] = true;
     }
-    const truncated = body.slice(0, safeLen);
-      const lastNewline = Math.max(truncated.lastIndexOf('\n\n'), truncated.lastIndexOf('\n'));
-      let newBody = lastNewline > 0 ? truncated.slice(0, lastNewline).trim() : truncated.trim();
-      
-      const codeMatches = newBody.match(/```/g);
-      if (codeMatches && codeMatches.length % 2 !== 0) {
-         newBody += '\n```';
-      }
-      const tildeMatches = newBody.match(/~~~/g);
-      if (tildeMatches && tildeMatches.length % 2 !== 0) {
-         newBody += '\n~~~';
-      }
-      body = (' ' + newBody + '\n\n...[truncated to protect context]').slice(1);
-    }
-    if (body) entryObj['body'] = (' ' + body).slice(1);
+    if (body) entryObj['body'] = flattenString(body);
 
-    const parseResult = entrySchema.safeParse(entryObj);
-    if (parseResult.success) {
-      processed.push(parseResult.data);
-    } else {
-      const coercedObj = { ...entryObj } as Record<string, unknown>;
-      for (const issue of parseResult.error.issues) {
-        if (issue.path.length === 1) {
-          delete coercedObj[issue.path[0] as string];
-        } else if (issue.path.length === 2 && issue.path[0] === 'metadata') {
-          const meta = { ...(coercedObj['metadata'] as Record<string, unknown>) };
-          delete meta[issue.path[1] as string];
-          coercedObj['metadata'] = meta;
-        } else if (issue.path[0] === 'files') {
-          delete coercedObj['files'];
-        }
-      }
-      const retryResult = entrySchema.safeParse(coercedObj);
-      if (retryResult.success) {
-        const finalData = retryResult.data;
-        (finalData as Record<string, unknown>)['validationErrors'] = parseResult.error.issues;
-        processed.push(finalData);
-      } else {
-        const fallbackData = coercedObj as z.infer<typeof entrySchema>;
-        if (!fallbackData['commit']) (fallbackData as Record<string, unknown>)['commit'] = sha || 'unknown_commit';
-        if (!fallbackData['subject']) (fallbackData as Record<string, unknown>)['subject'] = subject || 'No Subject';
-        if (!fallbackData['date']) (fallbackData as Record<string, unknown>)['date'] = date || new Date().toISOString();
-        if (!fallbackData['author']) (fallbackData as Record<string, unknown>)['author'] = authorName || 'Unknown Author';
-        (fallbackData as Record<string, unknown>)['validationErrors'] = parseResult.error.issues;
-        (fallbackData as Record<string, unknown>)['isCorrupted'] = true;
-        processed.push(fallbackData);
-      }
-    }
+    const parsedEntry = parseWithFallbacks(entryObj, sha, subject, date, authorName);
+    if (parsedEntry) processed.push(parsedEntry);
   }
   return processed;
 }

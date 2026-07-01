@@ -16,6 +16,8 @@ export function parseArguments(): CliArgs {
     range: { type: 'string', short: 'r' },
     since: { type: 'string' },
     until: { type: 'string' },
+    before: { type: 'string' },
+    after: { type: 'string' },
     'first-parent': { type: 'boolean' },
     help: { type: 'boolean', short: 'h' },
     'include-merges': { type: 'boolean' },
@@ -49,6 +51,15 @@ export function parseArguments(): CliArgs {
 
   try {
     const { values } = parseArgs({ args: process.argv.slice(2), options, strict: true });
+    
+    // Map before/after aliases
+    if (values.before && !values.until) values.until = values.before;
+    if (values.after && !values.since) values.since = values.after;
+    
+    // Remove aliases to ensure a single source of truth in the returned object
+    delete values.before;
+    delete values.after;
+    
     return cliArgsSchema.parse(values);
   } catch (err: unknown) {
     console.error(err instanceof Error ? err.message : String(err));
@@ -71,8 +82,8 @@ ${pc.bold('Agent Directives:')}
 ${pc.bold('Filtering Options:')}
   -n, --limit <n>          Maximum number of commits to process (defaults to 100 if no range/limit provided)
   -r, --range <range>      Git commit range (e.g., HEAD~5..HEAD, tags/v1.0.0..tags/v1.1.0)
-  --since <date>           Show commits more recent than a specific date
-  --until <date>           Show commits older than a specific date
+  --since, --after <date>  Show commits more recent than a specific date
+  --until, --before <date> Show commits older than a specific date
   -a, --author <name>      Filter commits by author name/email
   -p, --path <path>        Filter commits modifying a specific path/file
 

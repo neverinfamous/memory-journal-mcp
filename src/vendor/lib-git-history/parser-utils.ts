@@ -1,7 +1,31 @@
 // @ts-nocheck
 import { readFileSync } from 'node:fs';
+import type { z } from 'zod';
+import type { entrySchema } from './schema.js';
 import type { CliArgs } from './cli.js';
 import { match } from 'ts-pattern';
+import { MAX_ISSUE_TEXT_LENGTH } from './constants.js';
+
+export function flattenString(str: string): string {
+  return (' ' + str).slice(1);
+}
+
+export function extractShaFromBuffer(recordBuf: Buffer): { sha: string; shaEnd: number } {
+  let shaEnd = recordBuf.indexOf(0x0A);
+  const nullIdx = recordBuf.indexOf(0x00);
+  if (shaEnd === -1 || (nullIdx !== -1 && nullIdx < shaEnd)) shaEnd = nullIdx;
+  if (shaEnd === -1) shaEnd = recordBuf.length;
+  return { sha: recordBuf.toString('utf-8', 0, shaEnd).trim(), shaEnd };
+}
+
+export function truncateSafely(str: string, maxLength: number, truncateMsg: string): string {
+  if (str.length <= maxLength) return str;
+  let safeLen = maxLength;
+  while (safeLen > 0 && str.charCodeAt(safeLen - 1) >= 0xD800 && str.charCodeAt(safeLen - 1) <= 0xDBFF) {
+    safeLen--;
+  }
+  return str.slice(0, safeLen) + truncateMsg;
+}
 
 let slackMapCache: Record<string, string> | null = null;
 export function getSlackMap(args: CliArgs): Record<string, string> {
@@ -12,21 +36,67 @@ export function getSlackMap(args: CliArgs): Record<string, string> {
   }
   try {
     slackMapCache = JSON.parse(readFileSync(args['slack-map'], 'utf-8'));
-  } catch (err) {
+  } catch (err: unknown) {
     console.warn(`[lib-git-history] Warning: Failed to parse slack-map JSON: ${err}`);
     slackMapCache = {};
   }
-  return slackMapCache!;
+  return slackMapCache || {};
 }
 
-export const isNoiseFile = (file: string) => {
-  return /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|bun\.lockb|uv\.lock|Cargo\.lock|Gemfile\.lock|poetry\.lock|go\.sum|CHANGELOG\.md|test-server\/tool-reference\.md|test-server\/code-map\.md|\.pnp\.[^/]+|\.eslintrc\.[^/]+|prettier\.config\.[^/]+|tsconfig(\.[^/]+)?\.json|jest\.config\.[^/]+|vite\.config\.[^/]+|\.gitignore|\.gitattributes|flake\.lock|deno\.lock|mix\.lock|Podfile\.lock|Cartfile\.resolved)$|(^|\/)\.?dist\/|(^|\/)\.?build\/|(^|\/)\.?coverage\/|(^|\/)\.yarn\/|(^|\/)vendor\/|(^|\/)__snapshots__\/|\.snap$|(^|\/)\.DS_Store|(^|\/)\.vercel\/|(^|\/)\.next\/|(^|\/)\.nuxt\/|(^|\/)\.husky\//i.test(file);
-};
+export function resolveIssueTrackerUrl(issue: string, repoHost: string, repoPath: string, args: CliArgs): string | null {
+  if (args['issue-tracker']) {
+    let urlTemplate = args['issue-tracker'];
+    
+    if (urlTemplate.includes(',')) {
+       const parts = urlTemplate.split(',');
+       for (const p of parts) {
+         const [prefix, tpl] = p.split('=', 2);
+         if (tpl && issue.startsWith(prefix)) {
+           urlTemplate = tpl;
+           break;
+         }
+       }
+    }
+    
+    const cleanIssue = issue.startsWith('#') ? issue.slice(1) : issue;
+    return urlTemplate.replace(/\{id\}/g, cleanIssue).replace(/\{\}/g, issue);
+  }
+
+  if (issue.startsWith('#')) {
+    const num = issue.slice(1);
+    if (repoHost === 'gitlab.com') return `https://gitlab.com/${repoPath}/-/issues/${num}`;
+    return `https://${repoHost}/${repoPath}/issues/${num}`;
+  }
+  if (issue.includes('#')) {
+    const [repo, num] = issue.split('#');
+    return `https://github.com/${repo}/issues/${num}`;
+  }
+  return null;
+}
+
+const NOISE_FILE_PATTERNS = [
+  '(^|\\/)(package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|bun\\.lock|bun\\.lockb|uv\\.lock|Cargo\\.lock|Gemfile\\.lock|poetry\\.lock|go\\.sum|CHANGELOG\\.md|test-server\\/tool-reference\\.md|test-server\\/code-map\\.md|\\.pnp\\.[^/]+|\\.eslintrc\\.[^/]+|prettier\\.config\\.[^/]+|tsconfig(\\.[^/]+)?\\.json|jest\\.config\\.[^/]+|vite\\.config\\.[^/]+|\\.gitignore|\\.gitattributes|flake\\.lock|deno\\.lock|mix\\.lock|Podfile\\.lock|Cartfile\\.resolved)$',
+  '(^|\\/)\\.?dist\\/',
+  '(^|\\/)\\.?build\\/',
+  '(^|\\/)\\.?coverage\\/',
+  '(^|\\/)\\.yarn\\/',
+  '(^|\\/)vendor\\/',
+  '(^|\\/)__snapshots__\\/',
+  '\\.snap$',
+  '(^|\\/)\\.DS_Store',
+  '(^|\\/)\\.vercel\\/',
+  '(^|\\/)\\.next\\/',
+  '(^|\\/)\\.nuxt\\/',
+  '(^|\\/)\\.husky\\/'
+];
+const NOISE_FILE_REGEX = new RegExp(NOISE_FILE_PATTERNS.join('|'), 'i');
+
+export const isNoiseFile = (file: string) => NOISE_FILE_REGEX.test(file);
 
 export const extractIssues = (text: string, issuesMap: Map<string, string | null>, issuePattern?: string) => {
   if (!text) return;
-  const safeText = text.length > 50000 ? text.slice(0, 50000) : text;
-  const actionRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}(?:([@\w.-]+\/[\w.-]+)?#(\d+)|([A-Z][A-Z0-9_]+-\d+))\b/ig;
+  const safeText = text.length > MAX_ISSUE_TEXT_LENGTH ? text.slice(0, MAX_ISSUE_TEXT_LENGTH) : text;
+  const actionRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}(?:([@\w.-]+\/[\w.-]+)?#(\d+)|([A-Z][A-Z0-9_]+-\d+))\b/ig;
   let match;
   let lastAction: string | null = null;
   let lastIndex = 0;
@@ -62,7 +132,7 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
     }
   }
   
-  const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,50}https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app|slack\.com|notion\.so)\/([A-Za-z0-9_./-]*[A-Za-z0-9_/-])/ig;
+  const urlRegex = /(?:^|[^\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\s:-]{0,10}https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(github\.com|gitlab\.com|bitbucket\.org|atlassian\.net|linear\.app|slack\.com|notion\.so)\/([A-Za-z0-9_./-]*[A-Za-z0-9_/-])/ig;
   lastAction = null;
   lastIndex = 0;
   while ((match = urlRegex.exec(safeText)) !== null) {
@@ -107,7 +177,7 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
   
   if (issuePattern) {
     try {
-      const customRegex = new RegExp(`(?:^|[^\\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\\s:-]{0,50}(?:${issuePattern})\\b`, 'ig');
+      const customRegex = new RegExp(`(?:^|[^\\w])(fixes|fix|closes|close|resolves|resolve|addresses|address|implements|related to|see also)?[\\s:-]{0,10}(?:${issuePattern})\\b`, 'ig');
       let customMatch;
       let lastAction: string | null = null;
       let lastIndex = 0;
@@ -175,3 +245,29 @@ export const getLanguage = (file: string): string | undefined => {
     .with('ex', 'exs', () => 'Elixir')
     .otherwise(() => undefined);
 };
+
+export function iterateChangelog(
+  versionMap: Map<string, Map<string, z.infer<typeof entrySchema>[]>>,
+  callbacks: {
+    onVersion: (version: string) => void;
+    onCategory: (category: string) => void;
+    onCommit: (commit: z.infer<typeof entrySchema>, entries: string[]) => void;
+    onCategoryEnd?: (category: string) => void;
+    onVersionEnd?: (version: string) => void;
+  }
+): void {
+  for (const [version, categoryMap] of versionMap.entries()) {
+    callbacks.onVersion(version);
+    const sortedCategories = Array.from(categoryMap.keys()).sort();
+    for (const cat of sortedCategories) {
+      callbacks.onCategory(cat);
+      const commits = categoryMap.get(cat)!;
+      for (const commit of commits) {
+        const entries = commit.metadata?.entry && commit.metadata.entry.length > 0 ? commit.metadata.entry : [commit.cleanSubject || commit.subject];
+        callbacks.onCommit(commit, entries);
+      }
+      callbacks.onCategoryEnd?.(cat);
+    }
+    callbacks.onVersionEnd?.(version);
+  }
+}

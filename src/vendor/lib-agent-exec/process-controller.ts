@@ -5,7 +5,98 @@ import fs from 'node:fs';
 import { IOController } from './io-controller.js';
 import { killProcessTree } from './process-manager.js';
 import { ExecPayload } from './schema.js';
-import { renderWebhookTemplate } from './webhook-template.js';
+import { sendWebhook, BUILT_INS, AUTONOMOUS_HEALING_MSG } from './utils.js';
+
+const TIMEOUT_EXIT_FORCE_MS = 5000;
+const STREAM_DAEMON_CHECK_MS = 100;
+const DAEMON_DATA_STALL_MS = 500;
+const DAEMON_EXIT_STALL_MS = 2000;
+const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+const FORCE_KILL_DELAY_MS = 2000;
+
+function isErrnoException(e: Error): e is NodeJS.ErrnoException {
+  return 'code' in e || 'syscall' in e;
+}
+
+function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, stderr: string): { isGrepNoMatch: boolean, isDiffFound: boolean, isOutdatedInfo: boolean } {
+  let isGrepNoMatch = false;
+  let isDiffFound = false;
+  let isOutdatedInfo = false;
+  
+  if (code === 1) {
+    let scriptContent = '';
+    
+    if (payload.type === 'command') {
+      const origCmd = path.basename(payload.command).toLowerCase();
+      const isWrapper = ['wsl', 'wsl.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'cmd', 'cmd.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(origCmd);
+      const allArgsStr = payload.args ? payload.args.join(' ').toLowerCase() : '';
+      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
+      
+      if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
+          isGrepNoMatch = true;
+      } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr)) {
+          isGrepNoMatch = true;
+      }
+
+      if (['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(origCmd)) {
+          isDiffFound = true;
+      } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr)) {
+          isDiffFound = true;
+      }
+
+      if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(origCmd)) {
+          const origArgs = payload.args || [];
+          const firstNonFlag = origArgs.find(a => !a.startsWith('-'));
+          if (firstNonFlag && firstNonFlag.toLowerCase() === 'outdated') {
+              isOutdatedInfo = true;
+          }
+      } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
+          isOutdatedInfo = true;
+      } else if (['git', 'git.exe'].includes(origCmd)) {
+          const origArgs = payload.args || [];
+          const diffIndex = origArgs.indexOf('diff');
+          if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
+              isDiffFound = true;
+          }
+      }
+    } else if (payload.type === 'eval') {
+      scriptContent = payload.code.toLowerCase();
+    } else if (payload.type === 'script') {
+      if (payload.scriptPath && fs.existsSync(payload.scriptPath)) {
+        try {
+          scriptContent = fs.readFileSync(payload.scriptPath, 'utf8').toLowerCase();
+        } catch { /* ignore */ }
+      }
+    }
+
+    if (scriptContent) {
+      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
+      
+      if (new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent)) {
+        isGrepNoMatch = true;
+      }
+      if (new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(scriptContent)) {
+        isDiffFound = true;
+      }
+      if (new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(scriptContent)) {
+        isOutdatedInfo = true;
+      }
+    }
+  }
+
+  // Refine heuristic by analyzing stderr to prevent swallowing true faults (like package installation errors)
+  if (isOutdatedInfo && (stderr.includes('ERR_PNPM') || stderr.includes('npm ERR!') || stderr.includes('error:') || stderr.includes('Error:'))) {
+    isOutdatedInfo = false;
+  }
+  if (isGrepNoMatch && (stderr.includes('No such file or directory') || stderr.includes('grep:'))) {
+    isGrepNoMatch = false;
+  }
+  if (isDiffFound && (stderr.includes('No such file or directory') || stderr.includes('diff:'))) {
+    isDiffFound = false;
+  }
+
+  return { isGrepNoMatch, isDiffFound, isOutdatedInfo };
+}
 
 export class ProcessController {
   private child!: ChildProcess;
@@ -22,7 +113,8 @@ export class ProcessController {
     private cmd: string,
     private args: string[],
     private env: Record<string, string | undefined>,
-    private tempScriptPath: string | null
+    private tempScriptPath: string | null,
+    private isJson: boolean = false
   ) {}
 
   public start() {
@@ -33,11 +125,13 @@ export class ProcessController {
       this.setupTimeouts();
     } catch (err) {
       this.cleanupTempScript();
-      if (err instanceof Error && ('code' in err || ('syscall' in err && err.syscall === 'uv_spawn'))) {
-        this.onChildError(err as Error & { code?: string, syscall?: string });
-        return;
+      if (err instanceof Error) {
+        if (isErrnoException(err) && (err.code || err.syscall === 'uv_spawn')) {
+          this.onChildError(err);
+          return;
+        }
       }
-      console.error(`❌ Unexpected error during spawn setup:`, err);
+      if (!this.isJson) console.error(`❌ Unexpected error during spawn setup:`, err);
       process.exit(1);
     }
   }
@@ -61,7 +155,8 @@ export class ProcessController {
       this.payload, 
       this.cwd,
       (reason) => this.handleStall(reason),
-      (reason) => this.handleMaxBuffer(reason)
+      (reason) => this.handleMaxBuffer(reason),
+      this.isJson
     );
     this.ioController.setupStreams();
   }
@@ -72,15 +167,13 @@ export class ProcessController {
     }
   }
 
-  private handleStall(reason: string) {
-    console.error(`\n❌ ${reason} Forcing termination...`);
+  private handleStall(reason: string) { console.error(`\n❌ ${reason} Forcing termination...`);
     this.ioController.destroyStreams();
     killProcessTree(this.child);
     this.handleFinish(1, null, false);
   }
 
-  private handleMaxBuffer(reason: string) {
-    console.error(`\n❌ ${reason}`);
+  private handleMaxBuffer(reason: string) { if (!this.isJson) console.error(`\n❌ ${reason}`);
     this.ioController.destroyStreams();
     killProcessTree(this.child);
     this.handleFinish(1, null, false);
@@ -94,8 +187,7 @@ export class ProcessController {
     process.on('exit', onExit);
     this.cleanupProcessHandlers.push(() => process.off('exit', onExit));
 
-    const onUncaughtException = (err: Error) => {
-      console.error(`❌ Uncaught Exception in agent-exec:`, err);
+    const onUncaughtException = (err: Error) => { if (!this.isJson) console.error(`❌ Uncaught Exception in agent-exec:`, err);
       this.cleanupTempScript();
       this.ioController.closeFileStreams().then(() => {
         killProcessTree(this.child);
@@ -105,8 +197,7 @@ export class ProcessController {
     process.on('uncaughtException', onUncaughtException);
     this.cleanupProcessHandlers.push(() => process.off('uncaughtException', onUncaughtException));
 
-    const onUnhandledRejection = (reason: unknown) => {
-      console.error(`❌ Unhandled Rejection in agent-exec:`, reason);
+    const onUnhandledRejection = (reason: unknown) => { if (!this.isJson) console.error(`❌ Unhandled Rejection in agent-exec:`, reason);
       this.cleanupTempScript();
       this.ioController.closeFileStreams().then(() => {
         killProcessTree(this.child);
@@ -116,11 +207,10 @@ export class ProcessController {
     process.on('unhandledRejection', onUnhandledRejection);
     this.cleanupProcessHandlers.push(() => process.off('unhandledRejection', onUnhandledRejection));
 
-    const handleSignal = (signal: string) => {
-      console.error(`\n⚠️ Received ${signal}, terminating process tree...`);
+    const handleSignal = (signal: NodeJS.Signals) => { if (!this.isJson) console.error(`\n⚠️ Received ${signal}, terminating process tree...`);
       killProcessTree(this.child);
       this.ioController.destroyStreams();
-      this.handleFinish(null, signal as NodeJS.Signals, false);
+      this.handleFinish(null, signal, false);
     };
 
     const onSigInt = () => handleSignal('SIGINT');
@@ -151,62 +241,46 @@ export class ProcessController {
       const timeSinceData = Date.now() - lastDataTime;
       const timeSinceExit = Date.now() - exitTime;
 
-      if (timeSinceData > 500 || timeSinceExit > 2000) {
-        if (timeSinceData <= 500) {
-          console.error(`\n⚠️ Main process exited, but stdio streams are still actively receiving data from a daemon. Forcing severing of streams...`);
-        } else {
-          console.error(`\n⚠️ Main process exited, but stdio streams remain open and idle (daemon detected). Severing streams to allow exit...`);
+      if (timeSinceData > DAEMON_DATA_STALL_MS || timeSinceExit > DAEMON_EXIT_STALL_MS) {
+        if (timeSinceData <= DAEMON_DATA_STALL_MS) { if (!this.isJson) console.error(`\n⚠️ Main process exited, but stdio streams are still actively receiving data from a daemon. Forcing severing of streams...`);
+        } else { if (!this.isJson) console.error(`\n⚠️ Main process exited, but stdio streams remain open and idle (daemon detected). Severing streams to allow exit...`);
         }
         this.ioController.destroyStreams();
-        if (code !== 0) {
-           console.error(`\n❌ Process exited with error code ${code}, but left daemons running. Killing process tree...`);
+        if (code !== 0) { if (!this.isJson) console.error(`\n❌ Process exited with error code ${code}, but left daemons running. Killing process tree...`);
            killProcessTree(this.child);
         }
         this.handleFinish(code, signal, true);
         clearInterval(checkStreams);
       }
-    }, 100);
+    }, STREAM_DAEMON_CHECK_MS);
     checkStreams.unref();
   }
 
-  private onChildError(error: Error & { code?: string, syscall?: string }) {
+  private onChildError(error: unknown) {
     this.isFinished = true;
     if (this.timeoutTimer) clearTimeout(this.timeoutTimer);
     if (this.forceKillTimer) clearTimeout(this.forceKillTimer);
     this.cleanupTempScript();
 
     const handleError = () => {
-      console.error(`❌ Execution Error: ${error.message}`);
-      if (error.code === 'ENOENT' || error.code === 'EUNKNOWN' || error.syscall === 'uv_spawn') {
-         console.error(`   Executable '${this.cmd}' was not found in PATH or working directory.`);
+      const msg = error instanceof Error ? error.message : String(error);
+      const errCode = error instanceof Error && isErrnoException(error) && error.code ? String(error.code) : undefined;
+      const errSyscall = error instanceof Error && isErrnoException(error) && error.syscall ? String(error.syscall) : undefined; if (!this.isJson) console.error(`❌ Execution Error: ${msg}`);
+      if (errCode === 'ENOENT' || errCode === 'EUNKNOWN' || errSyscall === 'uv_spawn') { if (!this.isJson) console.error(`   Executable '${this.cmd}' was not found in PATH or working directory.`);
          if (process.platform === 'win32') {
-             const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
-             if (builtIns.includes(this.cmd.toLowerCase())) {
-                 console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+             if (BUILT_INS.includes(this.cmd.toLowerCase())) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
              }
-             if (this.cmd === 'npm' || this.cmd === 'npx' || this.cmd === 'tsc') {
-                 console.error(`\n   💡 AGENT HINT: On Windows, '${this.cmd}' is usually a .cmd or .ps1 script, not an .exe.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-                 console.error(`   You may need to specify the extension (e.g. '${this.cmd}.cmd') or run it via 'pwsh.exe'.`);
+             if (this.cmd === 'npm' || this.cmd === 'npx' || this.cmd === 'tsc') { if (!this.isJson) console.error(`\n   💡 AGENT HINT: On Windows, '${this.cmd}' is usually a .cmd or .ps1 script, not an .exe.\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   You may need to specify the extension (e.g. '${this.cmd}.cmd') or run it via 'pwsh.exe'.`);
              }
          }
-         if (process.platform === 'win32' && this.cwd && this.cwd.length >= 260) {
-             console.error(`\n   💡 AGENT HINT: Your working directory path exceeds the Windows MAX_PATH limit (260 characters).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-             console.error(`   This causes libuv to fail to spawn the process with an ENOENT error.`);
+         if (process.platform === 'win32' && this.cwd && this.cwd.length >= 260) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: Your working directory path exceeds the Windows MAX_PATH limit (260 characters).\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   This causes libuv to fail to spawn the process with an ENOENT error.`);
          }
-         if (this.cmd.includes('-') && /^[A-Z][a-z]+-[A-Z][a-zA-Z]+$/.test(this.cmd)) {
-           console.error(`\n   💡 AGENT HINT: '${this.cmd}' appears to be a PowerShell cmdlet (e.g. Get-Item, Write-Host).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-           console.error(`   You cannot execute cmdlets directly as files. Please wrap them using: {"command": "pwsh", "args": ["-c", "${this.cmd}"]}`);
-         } else if (this.cmd.toLowerCase().endsWith('.sh') || this.cmd.toLowerCase().endsWith('.ps1') || this.cmd.toLowerCase().endsWith('.bat') || this.cmd.toLowerCase().endsWith('.cmd')) {
-           console.error(`\n   💡 AGENT HINT: You attempted to run a script file ('${this.cmd}') as a direct command.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-           console.error(`   Please use the {"type": "script", "scriptPath": "${this.cmd}"} payload type instead.`);
+         if (this.cmd.includes('-') && /^[A-Z][a-z]+-[A-Z][a-zA-Z]+$/.test(this.cmd)) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' appears to be a PowerShell cmdlet (e.g. Get-Item, Write-Host).\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   You cannot execute cmdlets directly as files. Please wrap them using: {"command": "pwsh", "args": ["-c", "${this.cmd}"]}`);
+         } else if (this.cmd.toLowerCase().endsWith('.sh') || this.cmd.toLowerCase().endsWith('.ps1') || this.cmd.toLowerCase().endsWith('.bat') || this.cmd.toLowerCase().endsWith('.cmd')) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: You attempted to run a script file ('${this.cmd}') as a direct command.\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   Please use the {"type": "script", "scriptPath": "${this.cmd}"} payload type instead.`);
          } else if (this.cmd.includes(' ')) {
            const parts = this.cmd.split(' ');
            const rootCmd = parts[0];
-           const errArgs = parts.slice(1).map((s: string) => `"${s}"`).join(', ');
-           console.error(`\n   💡 AGENT HINT: Your command contains spaces. Because shell: false is used,\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-           console.error(`   you MUST pass arguments in the 'args' array, not in the 'command' string.`);
-           console.error(`   ❌ BAD: {"command": "${this.cmd}"}`);
-           console.error(`   ✅ GOOD: {"command": "${rootCmd}", "args": [${errArgs}]}`);
+           const errArgs = parts.slice(1).map((s: string) => `"${s}"`).join(', '); if (!this.isJson) console.error(`\n   💡 AGENT HINT: Your command contains spaces. Because shell: false is used,\n${AUTONOMOUS_HEALING_MSG}`); if (!this.isJson) console.error(`   you MUST pass arguments in the 'args' array, not in the 'command' string.`); if (!this.isJson) console.error(`   ❌ BAD: {"command": "${this.cmd}"}`); if (!this.isJson) console.error(`   ✅ GOOD: {"command": "${rootCmd}", "args": [${errArgs}]}`);
          }
       }
       this.isFinished = false;
@@ -221,11 +295,11 @@ export class ProcessController {
   }
 
   private setupTimeouts() {
-    const timeoutMs = this.payload.timeoutMs ?? 15 * 60 * 1000;
+    const timeoutMs = this.payload.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (timeoutMs > 0) {
-      this.timeoutTimer = setTimeout(() => {
+      this.timeoutTimer = setTimeout(() => { 
         console.error(`\n❌ Execution timed out after ${timeoutMs}ms. Attempting graceful shutdown...`);
-        console.error(`   💡 AGENT HINT: If you intended to start a long-running process (like a dev server), you must send it to the background by configuring your tool payload (e.g., using 'WaitMsBeforeAsync') AND set 'timeoutMs' to a large value (e.g. 86400000) in the JSON payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        console.error(`   💡 AGENT HINT: If you intended to start a long-running process (like a dev server), you must send it to the background by configuring your tool payload (e.g., using 'WaitMsBeforeAsync') AND set 'timeoutMs' to a large value (e.g. 86400000) in the JSON payload.\n${AUTONOMOUS_HEALING_MSG}`);
         try {
           if (this.child.pid) {
             if (process.platform === 'win32') {
@@ -237,17 +311,15 @@ export class ProcessController {
         } catch { /* ignore */ }
         
         this.forceKillTimer = setTimeout(() => {
-          if (!this.isFinished) {
-             console.error(`❌ Process did not exit gracefully. Force killing process tree...`);
+          if (!this.isFinished) { if (!this.isJson) console.error(`❌ Process did not exit gracefully. Force killing process tree...`);
              killProcessTree(this.child);
              this.ioController.destroyStreams();
-             this.handleFinish(null, 'SIGKILL' as NodeJS.Signals, false);
-             setTimeout(() => {
-               console.error(`❌ Ultimate fallback: Process exit forced.`);
+             this.handleFinish(null, 'SIGKILL', false);
+             setTimeout(() => { if (!this.isJson) console.error(`❌ Ultimate fallback: Process exit forced.`);
                process.exit(1);
-             }, 5000).unref();
+             }, TIMEOUT_EXIT_FORCE_MS).unref();
           }
-        }, 2000);
+        }, FORCE_KILL_DELAY_MS);
       }, timeoutMs);
     }
   }
@@ -281,184 +353,82 @@ export class ProcessController {
       }
       code = computedCode;
 
+      if (this.isJson) {
+         const { isGrepNoMatch, isDiffFound, isOutdatedInfo } = (computedCode !== null && computedCode !== 0) ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isDiffFound: false, isOutdatedInfo: false };
+         const isGraceful = isGrepNoMatch || isDiffFound || isOutdatedInfo;
+         const finalCode = isGraceful ? 0 : computedCode;
+
+         if (this.payload.onFailure && finalCode !== 0) {
+            await sendWebhook(this.payload, this.payload.onFailure, {
+              stdout: this.ioController?.stdoutTail || '',
+              stderr: this.ioController?.stderrTail || '',
+              code: finalCode,
+              signal,
+              success: false,
+              envData
+            });
+         }
+         if (this.payload.onSuccess && finalCode === 0) {
+            await sendWebhook(this.payload, this.payload.onSuccess, {
+              stdout: this.ioController?.stdoutTail || '',
+              stderr: this.ioController?.stderrTail || '',
+              code: finalCode,
+              signal,
+              success: true,
+              envData
+            });
+         }
+         console.log(JSON.stringify({
+           status: finalCode === 0 ? "success" : "error",
+           code: finalCode,
+           signal,
+           stdout: this.ioController?.stdoutTail || '',
+           stderr: this.ioController?.stderrTail || '',
+           envData
+         }));
+         process.exit(finalCode === 0 ? 0 : (finalCode ?? 1));
+      }
+
       if (code !== 0) {
         if (this.payload.onFailure) {
-          const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
-          const replaceCtx = (str: string) => {
-            if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
-            return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-              if (!pathStr) return JSON.stringify(this.payload.integrationContext);
-              let current: unknown = this.payload.integrationContext;
-              const keys = pathStr.split('.');
-              for (const key of keys) {
-                if (current == null || typeof current !== 'object' || !(key in current)) return match;
-                current = (current as Record<string, unknown>)[key];
-              }
-              return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
-            });
-          };
-
-          const vars = {
+          await sendWebhook(this.payload, this.payload.onFailure, {
             stdout: this.ioController?.stdoutTail || '',
             stderr: this.ioController?.stderrTail || '',
             code,
             signal,
             success: false,
             envData
-          };
-
-          let body: string;
-          if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
-            body = renderWebhookTemplate(
-              this.payload.webhookPayloadTemplate,
-              'integrationContext' in this.payload ? this.payload.integrationContext : null,
-              vars
-            );
-          } else {
-            body = JSON.stringify({ code, signal, stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '' });
-            body = replaceCtx(body);
-          }
-          
-          const urls = Array.isArray(this.payload.onFailure) ? this.payload.onFailure : [this.payload.onFailure];
-          for (const u of urls) {
-            const targetUrl = replaceCtx(u);
-            const method = this.payload.webhookMethod || 'POST';
-            const timeoutMs = this.payload.webhookTimeoutMs ?? 5000;
-
-            if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-              console.error(`❌ Webhook Error: Invalid or unsafe target URL for onFailure webhook. Only http/https allowed.`);
-            } else {
-              const fetchOptions: RequestInit = { method, headers };
-              if (timeoutMs > 0) {
-                fetchOptions.signal = AbortSignal.timeout(timeoutMs);
-              }
-              if (method !== 'GET') fetchOptions.body = body;
-              try { await fetch(targetUrl, fetchOptions).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onFailure webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
-            }
-          }
+          });
         }
-        if (code === null && signal) {
-          console.error(`\n❌ Command was terminated by signal ${signal}`);
+        if (code === null && signal) { if (!this.isJson) console.error(`\n❌ Command was terminated by signal ${signal}`);
           process.exit(1);
         } else if (code !== null) {
-          const baseCmd = path.basename(this.cmd).toLowerCase();
-          let isGrepNoMatch = code === 1 && ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(baseCmd);
-          let isDiffFound = code === 1 && ['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(baseCmd);
+          const { isGrepNoMatch, isDiffFound, isOutdatedInfo } = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
           
-          let isOutdatedInfo = false;
-          if (code === 1 && this.payload.type === 'command') {
-             const origCmd = path.basename(this.payload.command).toLowerCase();
-             const isWrapper = ['wsl', 'wsl.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'cmd', 'cmd.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(origCmd);
-             const allArgsStr = this.payload.args ? this.payload.args.join(' ').toLowerCase() : '';
-             
-             const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
-             
-             if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
-                 isGrepNoMatch = true;
-             } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr)) {
-                 isGrepNoMatch = true;
-             }
-
-             if (['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(origCmd)) {
-                 isDiffFound = true;
-             } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr)) {
-                 isDiffFound = true;
-             }
-
-             if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(origCmd)) {
-                 const origArgs = this.payload.args || [];
-                 if (origArgs.length > 0 && origArgs[0].toLowerCase() === 'outdated') {
-                     isOutdatedInfo = true;
-                 }
-             } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
-                 isOutdatedInfo = true;
-             } else if (['git', 'git.exe'].includes(origCmd)) {
-                 const origArgs = this.payload.args || [];
-                 const diffIndex = origArgs.indexOf('diff');
-                 if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
-                     isDiffFound = true;
-                 }
-             }
-          }
-          
-          if (isGrepNoMatch) {
-            console.error(`\nℹ️  No matches found (exit code 1).`);
+          if (isGrepNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matches found (exit code 1).`);
             process.exit(0);
-          } else if (isDiffFound) {
-            console.error(`\nℹ️  Differences found (exit code 1).`);
+          } else if (isDiffFound) { if (!this.isJson) console.error(`\nℹ️  Differences found (exit code 1).`);
             process.exit(0);
-          } else if (isOutdatedInfo) {
-            console.error(`\nℹ️  Outdated packages found (exit code 1).`);
+          } else if (isOutdatedInfo) { if (!this.isJson) console.error(`\nℹ️  Outdated packages found (exit code 1).`);
             process.exit(0);
-          } else {
-            console.error(`\n❌ Command exited with code ${code}`);
+          } else { if (!this.isJson) console.error(`\n❌ Command exited with code ${code}`);
             if (process.platform === 'win32') {
-                const builtIns = ['echo', 'cd', 'pwd', 'del', 'copy', 'move', 'ren', 'mkdir', 'rmdir', 'type'];
-                if (builtIns.includes(this.cmd.toLowerCase())) {
-                    console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+                if (BUILT_INS.includes(this.cmd.toLowerCase())) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
                 }
             }
             process.exit(code);
           }
         }
-      }
-
-      console.error(`\n✅ Command succeeded${isDaemon ? ' (background process detached)' : ''}.`);
+      } if (!this.isJson) console.error(`\n✅ Command succeeded${isDaemon ? ' (background process detached)' : ''}.`);
       if (this.payload.onSuccess) {
-        const headers = { 'Content-Type': 'application/json', ...(this.payload.webhookHeaders || {}) };
-        
-        const replaceCtx = (str: string) => {
-          if (!('integrationContext' in this.payload) || !this.payload.integrationContext) return str;
-          return str.replace(/\{\{integrationContext(?:\.([a-zA-Z0-9_.]+))?\}\}/g, (match, pathStr) => {
-            if (!pathStr) return JSON.stringify(this.payload.integrationContext);
-            let current: unknown = this.payload.integrationContext;
-            const keys = pathStr.split('.');
-            for (const key of keys) {
-              if (current == null || typeof current !== 'object') return match;
-              current = (current as Record<string, unknown>)[key];
-            }
-            return typeof current === 'object' ? JSON.stringify(current) : (typeof current === 'string' ? JSON.stringify(current).slice(1, -1) : String(current));
-          });
-        };
-
-        const vars = {
+        await sendWebhook(this.payload, this.payload.onSuccess, {
           stdout: this.ioController?.stdoutTail || '',
           stderr: this.ioController?.stderrTail || '',
           code: computedCode,
           signal,
           success: computedCode === 0,
           envData
-        };
-
-        let body: string;
-        if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
-          body = renderWebhookTemplate(
-            this.payload.webhookPayloadTemplate,
-            'integrationContext' in this.payload ? this.payload.integrationContext : null,
-            vars
-          );
-        } else {
-          body = JSON.stringify({ success: true, stdout: this.ioController?.stdoutTail || '', stderr: this.ioController?.stderrTail || '' });
-          body = replaceCtx(body);
-        }
-        
-        const urls = Array.isArray(this.payload.onSuccess) ? this.payload.onSuccess : [this.payload.onSuccess];
-        for (const u of urls) {
-          const targetUrl = replaceCtx(u);
-          const method = this.payload.webhookMethod || 'POST';
-          const timeoutMs = this.payload.webhookTimeoutMs ?? 5000;
-
-          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-            console.error(`❌ Webhook Error: Invalid or unsafe target URL for onSuccess webhook. Only http/https allowed.`);
-          } else {
-            const fetchOptions: RequestInit = { method, headers };
-            if (timeoutMs > 0) {
-              fetchOptions.signal = AbortSignal.timeout(timeoutMs);
-            }
-            if (method !== 'GET') fetchOptions.body = body;
-            try { await fetch(targetUrl, fetchOptions).catch((err) => { console.error(`❌ Webhook Error: Failed to invoke onSuccess webhook: ${err.message}`); }); } catch (err) { console.error(`❌ Webhook Error: ${err instanceof Error ? err.message : String(err)}`); }
-          }
-        }
+        });
       }
       process.exit(0);
     };

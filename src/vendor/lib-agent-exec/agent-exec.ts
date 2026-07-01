@@ -10,8 +10,9 @@ import { buildEnvironment } from './environment.js';
 import { PayloadSchema, agentExecCliArgsSchema } from './schema.js';
 import { showHelp, showUsageError } from './help.js';
 
+const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
 let payloadPath: string;
-let interceptorsPath: string | null = null;
+let interceptorsPaths: string[] = [];
 const isJson = process.argv.includes('--json');
 
 function fatalError(msg: string, details?: string[]): never {
@@ -30,9 +31,11 @@ function fatalError(msg: string, details?: string[]): never {
 
 try {
   const options = {
-    interceptors: { type: 'string' },
+    interceptors: { type: 'string', multiple: true },
+    plugin: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
     json: { type: 'boolean' },
+    payloadPath: { type: 'string' },
   } as const;
 
   const { values, positionals } = parseArgs({
@@ -46,24 +49,33 @@ try {
 
   const parsedArgs = agentExecCliArgsSchema.parse({
     ...values,
-    payloadPath: positionals[0]
+    payloadPath: values.payloadPath ?? positionals[0]
   });
 
   const result = match(parsedArgs)
     .with({ help: true }, (args) => showHelp(!!args.json))
     .with({ payloadPath: P.string }, (args) => {
-      return { path: args.payloadPath, interceptors: args.interceptors || null };
+      let interceptors: string[] = [];
+      if (Array.isArray(args.interceptors)) {
+        interceptors = args.interceptors;
+      } else if (typeof args.interceptors === 'string') {
+        interceptors = [args.interceptors];
+      }
+      if (typeof args.plugin === 'string') {
+        interceptors.push(args.plugin);
+      }
+      return { path: args.payloadPath, interceptors };
     })
     .otherwise(() => showUsageError('Missing payload JSON file path.', isJson));
     
   payloadPath = result.path;
-  interceptorsPath = result.interceptors;
+  interceptorsPaths = result.interceptors;
 } catch (err: unknown) {
   showUsageError(err instanceof Error ? err.message : String(err), isJson);
 }
 
 try {
-  if (interceptorsPath) {
+  for (const interceptorsPath of interceptorsPaths) {
     const resolvedPath = path.resolve(interceptorsPath);
     if (!resolvedPath.startsWith(process.cwd()) && !resolvedPath.startsWith(__dirname)) {
       fatalError(`Interceptor plugin must be loaded from within the workspace: ${resolvedPath}`);
@@ -77,7 +89,9 @@ try {
   }
 
   const stat = fs.statSync(payloadPath);
-  const maxPayloadSize = process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE ? parseInt(process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE, 10) : 10 * 1024 * 1024;
+  if (!stat.isFile()) fatalError('Payload path must be a regular file.');
+  const envSize = process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE ? parseInt(process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE, 10) : NaN;
+  const maxPayloadSize = !Number.isNaN(envSize) && envSize > 0 ? envSize : DEFAULT_MAX_PAYLOAD_SIZE;
   if (stat.size > maxPayloadSize) {
     fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
   }
@@ -94,6 +108,9 @@ try {
   }
 
   const payload = parseResult.data;
+  if (payload.keepPayload !== true) {
+    try { fs.unlinkSync(payloadPath); } catch { /* ignore */ }
+  }
   fs.appendFileSync(path.join(os.tmpdir(), 'agent-exec-payload.log'), JSON.stringify(payload) + '\n');
   const cwd = payload.cwd ? path.resolve(payload.cwd) : process.cwd();
   
@@ -115,7 +132,7 @@ try {
     finalEnv[targetKey] = v;
   }
 
-  executeCommand(payload, cwd, cmd, args, finalEnv, tempScriptPath);
+  executeCommand(payload, cwd, cmd, args, finalEnv, tempScriptPath, isJson);
 
 } catch (err) {
   if (err instanceof SyntaxError) {
