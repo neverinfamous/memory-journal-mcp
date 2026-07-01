@@ -565,7 +565,7 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.entries[result.entries.length - 1]!.id).toBe(lowId)
         })
 
-        it('should NOT include importanceScore when sort_by is default (timestamp)', async () => {
+        it('should ALWAYS include importanceScore when sort_by is default (timestamp)', async () => {
             const result = (await callTool(
                 'search_entries',
                 { query: 'ImpSort', limit: 10 },
@@ -574,7 +574,7 @@ describe('Search Tool Handlers - Coverage', () => {
 
             expect(result.count).toBe(3)
             for (const entry of result.entries) {
-                expect(entry['importanceScore']).toBeUndefined()
+                expect(typeof entry['importanceScore']).toBe('number')
             }
         })
 
@@ -637,7 +637,7 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.error).toBeDefined()
         })
 
-        it('should accept sort_by: "timestamp" explicitly', async () => {
+        it('should accept sort_by: "timestamp" explicitly and include importanceScore', async () => {
             const result = (await callTool(
                 'search_entries',
                 { query: 'ImpSort', sort_by: 'timestamp', limit: 10 },
@@ -646,7 +646,7 @@ describe('Search Tool Handlers - Coverage', () => {
 
             expect(result.count).toBe(3)
             for (const entry of result.entries) {
-                expect(entry['importanceScore']).toBeUndefined()
+                expect(typeof entry['importanceScore']).toBe('number')
             }
         })
     })

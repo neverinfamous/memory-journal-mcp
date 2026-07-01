@@ -281,16 +281,10 @@ function buildSearchQuery(
 ): { sql: string; params: unknown[] } {
     let query: string
     const useImportance = options?.sortBy === 'importance'
-    const importanceCol = useImportance
-        ? `, ${buildImportanceSqlExpression()} AS importanceScore`
-        : ''
+    const importanceCol = `, ${buildImportanceSqlExpression()} AS importanceScore`
 
-    let ctePrefix = ''
-    let joinClause = ''
-    if (useImportance) {
-        ctePrefix = `WITH ${buildImportanceCte()}`
-        joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
-    }
+    const ctePrefix = `WITH ${buildImportanceCte()}`
+    const joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
 
     const snippetCol = (useFts && options?.includeHighlights) ? ", snippet(fts_content, 0, '«', '»', '…', 64) AS highlight_snippet" : ""
 

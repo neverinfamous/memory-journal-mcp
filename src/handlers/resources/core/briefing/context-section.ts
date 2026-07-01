@@ -80,7 +80,8 @@ function extractSection(content: string | null | undefined, sectionTitle: string
 export function buildJournalContext(
     context: ResourceContext,
     config: BriefingConfig,
-    projectNumber?: number | null
+    projectNumber?: number | null,
+    activeWorkspaceId?: string
 ): JournalContext {
     const threshold = config.briefingImportanceThreshold ?? 0.3
     const isImportant = (e: JournalEntry): boolean => {
@@ -89,7 +90,7 @@ export function buildJournalContext(
         return score >= threshold
     }
 
-    const targetWs = config.defaultWorkspaceId || 'default'
+    const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
     const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
     const rawSummaryEntries =
         typeof projectNumber === 'number'

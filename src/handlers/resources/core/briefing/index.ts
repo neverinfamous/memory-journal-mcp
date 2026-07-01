@@ -64,12 +64,14 @@ export async function buildBriefingData(
     let activeGithub = context.github
     let activeProjectNumber = config.defaultProjectNumber
     let activeRepoPath: string | undefined
+    let activeWorkspaceId: string | undefined
 
     if (targetRepo) {
         let resolvedRepo = targetRepo
         if (!config.projectRegistry?.[resolvedRepo]) {
             resolvedRepo = targetRepo.split('/').pop() || targetRepo
         }
+        activeWorkspaceId = resolvedRepo
 
         const registryEntry = config.projectRegistry?.[resolvedRepo]
         if (registryEntry) {
@@ -81,7 +83,7 @@ export async function buildBriefingData(
     }
 
     // Build all sections
-    const journal = buildJournalContext(context, config, activeProjectNumber)
+    const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const github = await buildGitHubSection(activeGithub, config)
     const team = buildTeamContext(context, config, activeProjectNumber)
     const insights = buildInsightsSection(context)
