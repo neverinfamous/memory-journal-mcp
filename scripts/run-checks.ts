@@ -31,14 +31,14 @@ let success = true
 
 if (!target || target === 'lint') {
     console.log('Running lint...')
-    const passed = runCommand('npx', ['eslint', 'src/', 'tests/'])
+    const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/'])
     lintOk = passed
     if (!passed) success = false
 }
 
 if (!target || target === 'typecheck') {
     console.log('Running typecheck...')
-    const passed = runCommand('npx', ['tsc', '--noEmit'])
+    const passed = runCommand('pnpm', ['exec', 'tsc', '--noEmit'])
     typecheckOk = passed
     if (!passed) success = false
 }
@@ -46,7 +46,7 @@ if (!target || target === 'typecheck') {
 if (!target) {
     // Also run code-map if running all
     console.log('Running code-map generation...')
-    runCommand('npx', ['tsx', 'scripts/update-code-map.ts'])
+    runCommand('pnpm', ['exec', 'tsx', 'scripts/update-code-map.ts'])
 }
 
 const overallOk = lintOk && typecheckOk
