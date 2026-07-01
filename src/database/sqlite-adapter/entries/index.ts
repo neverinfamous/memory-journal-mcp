@@ -68,8 +68,8 @@ export class EntriesManager {
         return getEntryByIdIncludeDeleted(this.sharedContext, id, workspaceId)
     }
 
-    getActiveEntryCount(): number {
-        return getActiveEntryCount(this.sharedContext)
+    getActiveEntryCount(workspaceId?: string): number {
+        return getActiveEntryCount(this.sharedContext, workspaceId)
     }
 
     updateEntry(

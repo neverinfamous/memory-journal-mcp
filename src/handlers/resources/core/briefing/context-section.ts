@@ -167,10 +167,15 @@ export function buildJournalContext(
 
     // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
     const fetchLimit = Math.max(100, config.entryCount * 10)
-    const rawRecentEntries =
-        typeof projectNumber === 'number'
-            ? extractEntries(context.db.searchEntries('', { limit: fetchLimit, projectNumber }))
-            : extractEntries(context.db.getRecentEntries(fetchLimit))
+    const targetWs = config.defaultWorkspaceId || 'default'
+    const rawRecentEntries = extractEntries(
+        context.db.searchEntries('', { 
+            limit: fetchLimit, 
+            workspaceId: targetWs,
+            ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
+            sortBy: 'timestamp'
+        })
+    )
             
     let recentEntries = rawRecentEntries.filter(isImportant)
     if (recentEntries.length === 0 && rawRecentEntries.length > 0) {
@@ -190,7 +195,8 @@ export function buildJournalContext(
         }
     })
 
-    const totalEntries = context.db.getActiveEntryCount()
+    const targetWsForCount = config.defaultWorkspaceId || undefined
+    const totalEntries = context.db.getActiveEntryCount(targetWsForCount)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
     return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: config.defaultWorkspaceId }
@@ -296,7 +302,7 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
         if (!comp || !causal) return undefined
 
 
-        const totalActiveEntries = context.db.getActiveEntryCount()
+        const totalActiveEntries = context.db.getActiveEntryCount(workspaceId)
 
         // Fetch top hubs and orphan ratio via purpose-built safe methods
         let topHubs: { id: number; preview: string; count: number }[] = []

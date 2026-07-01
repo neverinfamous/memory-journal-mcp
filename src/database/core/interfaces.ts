@@ -123,7 +123,7 @@ export interface IDatabaseAdapter {
         workspaceId?: string
     ): { entries: JournalEntry[]; nextCursor?: string }
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
-    getActiveEntryCount(): number
+    getActiveEntryCount(workspaceId?: string): number
     updateEntry(
         id: number,
         updates: {

@@ -121,8 +121,8 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.getEntriesPage(offset, limit)
     }
 
-    getActiveEntryCount(): number {
-        return this.entriesMgr.getActiveEntryCount()
+    getActiveEntryCount(workspaceId?: string): number {
+        return this.entriesMgr.getActiveEntryCount(workspaceId)
     }
 
     updateEntry(
