@@ -67,7 +67,8 @@ function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): J
     return 'entries' in result ? result.entries : []
 }
 
-function extractSection(content: string, sectionTitle: string): string | null {
+function extractSection(content: string | null | undefined, sectionTitle: string): string | null {
+    if (!content) return null
     const regex = new RegExp(`##\\s+${sectionTitle}\\s*\\n([\\s\\S]*?)(?:\\n##\\s|$)`, 'i')
     const match = content.match(regex)
     if (match?.[1]) {
@@ -88,6 +89,7 @@ export function buildJournalContext(
         return score >= threshold
     }
 
+    const targetWs = config.defaultWorkspaceId || 'default'
     const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
     const rawSummaryEntries =
         typeof projectNumber === 'number'
@@ -95,10 +97,14 @@ export function buildJournalContext(
                   limit: summaryFetchLimit,
                   projectNumber,
                   tags: ['session-summary'],
+                  workspaceId: targetWs,
+                  sortBy: 'timestamp'
               }))
             : extractEntries(context.db.searchEntries('', {
                   limit: summaryFetchLimit,
                   tags: ['session-summary'],
+                  workspaceId: targetWs,
+                  sortBy: 'timestamp'
               }))
     
     let summaryEntries = rawSummaryEntries.filter(isImportant)
@@ -114,10 +120,14 @@ export function buildJournalContext(
                       limit: summaryFetchLimit,
                       projectNumber,
                       entryType: 'retrospective',
+                      workspaceId: targetWs,
+                      sortBy: 'timestamp'
                   }))
                 : extractEntries(context.db.searchEntries('', {
                       limit: summaryFetchLimit,
                       entryType: 'retrospective',
+                      workspaceId: targetWs,
+                      sortBy: 'timestamp'
                   }))
             : []
             
@@ -167,7 +177,6 @@ export function buildJournalContext(
 
     // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
     const fetchLimit = Math.max(100, config.entryCount * 10)
-    const targetWs = config.defaultWorkspaceId || 'default'
     const rawRecentEntries = extractEntries(
         context.db.searchEntries('', { 
             limit: fetchLimit, 

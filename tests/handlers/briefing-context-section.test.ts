@@ -50,7 +50,7 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
     return {
         getRecentEntries: vi.fn().mockReturnValue(mockEntries),
         searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
-            if (options?.sortBy === 'timestamp') {
+            if (options?.sortBy === 'timestamp' && !options?.tags?.includes('session-summary') && options?.entryType !== 'retrospective') {
                 return mockEntries
             }
             return { entries: [] }
@@ -103,7 +103,7 @@ describe('buildJournalContext', () => {
         const longContent = 'A'.repeat(200)
         const db = createMockDb({
             searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
-                if (options?.sortBy === 'timestamp') return { entries: [
+                if (options?.sortBy === 'timestamp' && !options?.tags?.includes('session-summary') && options?.entryType !== 'retrospective') return { entries: [
                     {
                         id: 1,
                         timestamp: '2025-01-15T10:00:00Z',
@@ -142,7 +142,7 @@ describe('buildJournalContext', () => {
     it('should handle entries with null content', () => {
         const db = createMockDb({
             searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
-                if (options?.sortBy === 'timestamp') return { entries: [
+                if (options?.sortBy === 'timestamp' && !options?.tags?.includes('session-summary') && options?.entryType !== 'retrospective') return { entries: [
                     {
                         id: 1,
                         timestamp: '2025-01-15T10:00:00Z',
