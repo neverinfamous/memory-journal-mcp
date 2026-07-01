@@ -31,24 +31,30 @@ vi.mock('../../src/utils/logger.js', () => ({
 // ============================================================================
 
 function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
+    const mockEntries = { entries: [
+        {
+            id: 1,
+            timestamp: '2025-01-15T10:00:00Z',
+            entryType: 'note',
+            content: 'This is a sample entry for testing purposes.',
+            importanceScore: 0.5,
+        },
+        {
+            id: 2,
+            timestamp: '2025-01-14T09:00:00Z',
+            entryType: 'decision',
+            content: 'Decided to use TypeScript for the project.',
+            importanceScore: 0.5,
+        },
+    ] }
     return {
-        getRecentEntries: vi.fn().mockReturnValue({ entries: [
-            {
-                id: 1,
-                timestamp: '2025-01-15T10:00:00Z',
-                entryType: 'note',
-                content: 'This is a sample entry for testing purposes.',
-                importanceScore: 0.5,
-            },
-            {
-                id: 2,
-                timestamp: '2025-01-14T09:00:00Z',
-                entryType: 'decision',
-                content: 'Decided to use TypeScript for the project.',
-                importanceScore: 0.5,
-            },
-        ] }),
-        searchEntries: vi.fn().mockReturnValue({ entries: [] }),
+        getRecentEntries: vi.fn().mockReturnValue(mockEntries),
+        searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
+            if (options?.sortBy === 'timestamp') {
+                return mockEntries
+            }
+            return { entries: [] }
+        }),
         getActiveEntryCount: vi.fn().mockReturnValue(42),
         ...overrides,
     }
@@ -96,15 +102,18 @@ describe('buildJournalContext', () => {
     it('should truncate long content previews with ellipsis', () => {
         const longContent = 'A'.repeat(200)
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue({ entries: [
-                {
-                    id: 1,
-                    timestamp: '2025-01-15T10:00:00Z',
-                    entryType: 'note',
-                    content: longContent,
-                    importanceScore: 0.5,
-                },
-            ] }),
+            searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
+                if (options?.sortBy === 'timestamp') return { entries: [
+                    {
+                        id: 1,
+                        timestamp: '2025-01-15T10:00:00Z',
+                        entryType: 'note',
+                        content: longContent,
+                        importanceScore: 0.5,
+                    },
+                ] }
+                return { entries: [] }
+            }),
         })
         const context = { db } as never
 
@@ -117,7 +126,7 @@ describe('buildJournalContext', () => {
 
     it('should handle empty database', () => {
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
+            searchEntries: vi.fn().mockReturnValue({ entries: [] }),
             getActiveEntryCount: vi.fn().mockReturnValue(0),
         })
         const context = { db } as never
@@ -132,15 +141,18 @@ describe('buildJournalContext', () => {
 
     it('should handle entries with null content', () => {
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue({ entries: [
-                {
-                    id: 1,
-                    timestamp: '2025-01-15T10:00:00Z',
-                    entryType: 'note',
-                    content: null,
-                    importanceScore: 0.5,
-                },
-            ] }),
+            searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
+                if (options?.sortBy === 'timestamp') return { entries: [
+                    {
+                        id: 1,
+                        timestamp: '2025-01-15T10:00:00Z',
+                        entryType: 'note',
+                        content: null,
+                        importanceScore: 0.5,
+                    },
+                ] }
+                return { entries: [] }
+            }),
         })
         const context = { db } as never
 
