@@ -195,3 +195,4 @@ node_modules/
 .agents/workflows/git-generate-changelog.md
 .agents/workflows/git-impact-search.md
 .agents/workflows/git-velocity-report.md
+.agents/scripts/lib-agent-exec/interceptors/system-interceptor.ts
