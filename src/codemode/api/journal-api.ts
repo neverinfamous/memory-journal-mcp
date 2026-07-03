@@ -90,9 +90,37 @@ export class JournalApi {
         }
 
         // db-mcp bleedover: upsert maps to createEntry in journal context
-        const createEntryFn = this.core['createEntry']
-        if (createEntryFn) {
-            this.core['upsert'] = createEntryFn
+        const _createEntryFn = this.core['createEntry']
+        if (_createEntryFn) {
+            // Auto-resolve workspaceId from projectNumber if omitted by the script
+            const wrappedCreateEntryFn = async (...args: unknown[]): Promise<unknown> => {
+                const params = args[0]
+                if (isRecord(params) && params['workspace_id'] === undefined && params['workspaceId'] === undefined) {
+                    const projectNumber = params['project_number'] ?? params['projectNumber']
+                    if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
+                        try {
+                            const registryArr = parseProjectRegistry() as { name: string; project_number?: number | null; projectNumber?: number | null }[] | undefined
+                            if (registryArr) {
+                                const match = registryArr.find(p => p.projectNumber === projectNumber || p.project_number === projectNumber)
+                                if (match && typeof match.name === 'string') {
+                                    params['workspace_id'] = match.name
+                                }
+                            }
+                        } catch {
+                            // Silent fallback
+                        }
+                    }
+                }
+                return await _createEntryFn(...args)
+            }
+            
+            // Re-map all aliases that pointed to the original function
+            for (const key of Object.keys(this.core)) {
+                if (this.core[key] === _createEntryFn) {
+                    this.core[key] = wrappedCreateEntryFn
+                }
+            }
+            this.core['upsert'] = wrappedCreateEntryFn
         }
 
         // Cross-group: admin operations commonly attempted on core
