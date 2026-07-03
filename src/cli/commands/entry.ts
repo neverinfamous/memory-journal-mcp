@@ -344,7 +344,11 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             process.stderr.write(`Successfully created entry #${newEntry.id}\n`)
         }
     } catch (e) {
-        process.stderr.write("Failed to create entry: " + (e instanceof Error ? e.message : String(e)) + "\n")
+        if (e instanceof Error && e.message.includes('FOREIGN KEY constraint failed')) {
+            process.stderr.write(`🛠️ AUTONOMOUS HEALING: A FOREIGN KEY constraint failed. This usually means a target_id specified in relationships (or relatedIds) does not exist, or the project ID is invalid. Ensure you are passing a valid Entry ID (not a project ID) for relationships, and a valid project ID.\n`)
+        } else {
+            process.stderr.write("Failed to create entry: " + (e instanceof Error ? e.message : String(e)) + "\n")
+        }
         process.exit(1)
     } finally {
         db.close()
@@ -421,7 +425,11 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.stderr.write(`Successfully updated entry #${result.id} to version ${result.version}\n`)
         }
     } catch (e) {
-        process.stderr.write("Failed to update entry: " + (e instanceof Error ? e.message : String(e)) + "\n")
+        if (e instanceof Error && e.message.includes('FOREIGN KEY constraint failed')) {
+            process.stderr.write(`🛠️ AUTONOMOUS HEALING: A FOREIGN KEY constraint failed. This usually means a target_id specified in relationships (or relatedIds) does not exist, or the project ID is invalid. Ensure you are passing a valid Entry ID (not a project ID) for relationships, and a valid project ID.\n`)
+        } else {
+            process.stderr.write("Failed to update entry: " + (e instanceof Error ? e.message : String(e)) + "\n")
+        }
         process.exit(1)
     } finally {
         db.close()
