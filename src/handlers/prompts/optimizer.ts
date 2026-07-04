@@ -38,6 +38,8 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                             avgPerEntry?: unknown;
                         };
                         projectBreakdown?: { name?: string; project_number: number; entry_count: number }[];
+                        entriesByType?: Record<string, number>;
+                        causalMetrics?: Record<string, number>;
                     }
                     const stats = db.getStatistics('week', undefined, undefined, true, '*') as Stats
                     const totalEntries = typeof stats.totalEntries === 'number' ? stats.totalEntries : 'Unknown'
@@ -70,9 +72,31 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                         }
                     }
 
+                    let causalMetricsText = ''
+                    if (stats.causalMetrics) {
+                        const blockedBy = stats.causalMetrics['blocked_by'] ?? 0
+                        const resolved = stats.causalMetrics['resolved'] ?? 0
+                        const caused = stats.causalMetrics['caused'] ?? 0
+                        causalMetricsText = `\n  - Types: ${blockedBy} blocked_by | ${resolved} resolved | ${caused} caused`
+                    }
+
+                    let entryTypesText = ''
+                    if (stats.entriesByType) {
+                        const types = Object.entries(stats.entriesByType)
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 5) // top 5
+                            .map(([k, v]) => `${k} (${v})`)
+                            .join(', ')
+                        entryTypesText = `\n- Top Entry Types: ${types}`
+                    }
+
+                    const allTags = typeof db.listTags === 'function' ? db.listTags() : []
+                    const totalTags = allTags.length
+
                     statsSnippet = `**Global Database Health:**
 - Total Entries: ${totalEntries}
-- Active Relationships: ${totalRelationships} (Avg: ${avgPerEntry}/entry)
+- Total Unique Tags: ${totalTags}
+- Active Relationships: ${totalRelationships} (Avg: ${avgPerEntry}/entry)${causalMetricsText}${entryTypesText}
 - Orphans: ${orphanCount} (${orphanDensity} density)${projectBreakdownText}`
                 } catch {
                     // ignore
