@@ -18,6 +18,7 @@ import {
 export function getBatchTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager, progress } = context;
     return [
+
         {
             name: 'batch_create_entries',
             title: 'Batch Create Entries',

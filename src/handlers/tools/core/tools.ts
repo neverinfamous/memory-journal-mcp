@@ -213,7 +213,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
-                    const entry = db.getEntryById(input.entry_id)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const entry = db.getEntryById(input.entry_id, wsId)
                     if (!entry) {
                         return {
                             success: false,
@@ -261,7 +262,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, wsId)
                     return {
                         success: true,
@@ -291,7 +292,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryHistorySchema.parse(params)
-                    const current = db.getEntryById(input.entry_id)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const current = db.getEntryById(input.entry_id, wsId)
                     if (!current) {
                         return {
                             success: false,

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber, healAgentHallucinations } from '../schemas.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber, healAgentHallucinations, StrictProjectNumberSchema } from '../schemas.js'
 
 // ============================================================================
 // Shared Constants
@@ -170,11 +170,15 @@ export const CreateEntryOutputSchema = z
 export const GetEntryByIdSchema = z.object({
     entry_id: z.number().int(),
     include_relationships: z.boolean().optional().default(true),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
 })
 
 export const GetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('The numeric ID of the entry to retrieve'),
     include_relationships: z.boolean().optional().default(true).describe('If true, includes all linked relationships (causal, related) in the response'),
+    project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 export const EntryByIdOutputSchema = z
@@ -190,6 +194,7 @@ export const EntryByIdOutputSchema = z
 
 export const GetRecentEntriesSchema = z.object({
     limit: z.number().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
     sort_by: z
@@ -206,6 +211,7 @@ export const GetRecentEntriesSchemaMcp = z.object({
         .optional()
         .default(10)
         .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),
+    project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     is_personal: z.boolean().optional(),
     sort_by: z
@@ -223,10 +229,14 @@ export const GetRecentEntriesSchemaMcp = z.object({
 
 export const GetEntryHistorySchema = z.object({
     entry_id: z.number().int(),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
 })
 
 export const GetEntryHistorySchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('The numeric ID of the entry'),
+    project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 
 export const GetEntryHistoryOutputSchema = z

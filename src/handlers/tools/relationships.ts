@@ -8,7 +8,12 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
-import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
+import {
+    RelationshipOutputSchema,
+    relaxedNumber,
+    StrictProjectNumberSchema,
+} from './schemas.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
@@ -33,6 +38,8 @@ const LinkEntriesSchema = z.object({
         .optional()
         .default('references'),
     description: z.string().optional(),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
 })
 
 const LinkEntriesSchemaMcp = z
@@ -45,6 +52,8 @@ const LinkEntriesSchemaMcp = z
         to_id: relaxedNumber().optional(),
         source_id: relaxedNumber().optional(),
         target_id: relaxedNumber().optional(),
+        project_number: relaxedNumber().optional(),
+        workspace_id: z.string().optional(),
         relationship_type: z.string().optional(),
         type: z.string().optional(),
         rel: z.string().optional(),
@@ -57,6 +66,8 @@ const LinkEntriesSchemaMcp = z
         to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
         relationship_type: data.type ?? data.rel ?? data.relationship_type ?? 'references',
         description: data.description ?? data.message ?? data.text,
+        project_number: data.project_number,
+        workspace_id: data.workspace_id,
     }))
 
 const VisualizeInputSchema = z.object({
@@ -80,6 +91,8 @@ const VisualizeInputSchema = z.object({
         .describe('Filter to show only this relationship type'),
     depth: z.number().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
     limit: z.number().max(500).optional().default(20).describe('Maximum entries to include'),
+    project_number: StrictProjectNumberSchema.optional(),
+    workspace_id: z.string().optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
@@ -104,6 +117,8 @@ const VisualizeInputSchemaMcp = z.object({
     path: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(20).describe('Maximum entries to include'),
     keep: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional(),
+    workspace_id: z.string().optional(),
 }).transform(data => {
     // Collect all string queries into an array of tags
     let extractedTags = data.tags;
@@ -178,6 +193,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Guard: self-referential links are not meaningful
                     if (input.from_entry_id === input.to_entry_id) {
@@ -192,7 +208,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Guard: both entries must exist and not be soft-deleted.
                     // db.linkEntries only enforces FK against physical rows, so soft-deleted
                     // entries (deletedAt set) would pass the FK check silently.
-                    const fromEntry = db.getEntryById(input.from_entry_id)
+                    const fromEntry = db.getEntryById(input.from_entry_id, wsId)
                     if (!fromEntry || fromEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -201,7 +217,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                         }
                     }
-                    const toEntry = db.getEntryById(input.to_entry_id)
+                    const toEntry = db.getEntryById(input.to_entry_id, wsId)
                     if (!toEntry || toEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -285,8 +301,9 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     if (input.entry_id !== undefined) {
-                        const entry = db.getEntryById(input.entry_id)
+                        const entry = db.getEntryById(input.entry_id, wsId)
                         if (!entry || entry.deletedAt) {
                             return {
                                 ...formatHandlerError(
