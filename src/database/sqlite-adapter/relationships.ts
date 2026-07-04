@@ -169,7 +169,7 @@ export class RelationshipsManager {
             .prepare(
                 `SELECT COUNT(*) as orphan_count
                  FROM memory_journal m
-                 WHERE m.deleted_at IS NULL${filter} AND m.id NOT IN (
+                 WHERE m.deleted_at IS NULL${filter} AND m.importance < 0.2 AND m.id NOT IN (
                      SELECT from_entry_id FROM relationships
                      UNION
                      SELECT to_entry_id FROM relationships
