@@ -8,7 +8,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
   const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe', 'node', 'node.exe', 'python', 'python.exe', 'bun', 'bun.exe'];
   const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'] as const;
-  const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en'];
+  const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-e', '--eval'];
 
 
   const isCommand = payload.type === 'command';
@@ -138,7 +138,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .otherwise(() => false);
 
   if (shouldCheckPipes) {
-    const hasUnsafe = args.some(arg => {
+    const localInlineIdx = args.findIndex(a => inlineFlags.includes(a.toLowerCase()));
+    const hasUnsafe = args.some((arg, index) => {
+      // Avoid falsely triggering on semicolons or shell characters inside inline script bodies
+      if (localInlineIdx !== -1 && index === localInlineIdx + 1) {
+        return false;
+      }
       return match(arg)
         .with(P.string.includes('$('), () => true)
         .with(P.string.includes('`'), () => true)
@@ -361,16 +366,6 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       process.exit(1);
     })
 
-    // Inline Node/Python eval blocks (Blocking)
-    .with({ isCommand: true, cmd: P.union('node', 'node.exe'), args: P.when(a => a.some(arg => ['-e', '--eval', '-p', '--print'].includes(arg) || arg.startsWith('-e=') || arg.startsWith('--eval=') || arg.startsWith('-p=') || arg.startsWith('--print='))) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'node -e' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      console.error(`   Please use an 'eval' payload with \`interpreter: node\` instead.`);
-      process.exit(1);
-    })
-    .with({ isCommand: true, cmd: P.union('python', 'python.exe', 'python3', 'python3.exe'), args: P.when(a => a.some(arg => arg === '-c' || arg.startsWith('-c='))) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use inline 'python -c' in shell commands. PowerShell parsing will strip quotes and '--', breaking your script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
-      console.error(`   Please use an 'eval' payload with \`interpreter: python\` instead.`);
-      process.exit(1);
-    })
+
     .otherwise(() => {});
 }
