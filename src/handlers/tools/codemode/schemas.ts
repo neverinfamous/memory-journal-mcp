@@ -31,8 +31,8 @@ export const ExecuteCodeSchema = z.object({
     repo: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
     context: z.unknown().optional(),
-    timeout_ms: z.number().optional(),
-    timeout: z.number().optional(),
+    timeout_ms: z.coerce.number().optional(),
+    timeout: z.coerce.number().optional(),
     readonly: z.boolean().optional(),
 })
 
@@ -85,7 +85,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'If true, execution is restricted to read-only operations. Write tools will be filtered out of the API bridge.'
         ),
-    timeout: z
+    timeout: z.coerce
         .number()
         .optional()
         .describe(

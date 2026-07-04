@@ -136,8 +136,8 @@ export const SearchByDateRangeSchema = z.preprocess(
 export const SearchByDateRangeSchemaMcp = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z.object({
-    start_date: z.string().describe('Start date (use `start_date`, not `start`)'),
-    end_date: z.string().describe('End date (use `end_date`, not `end`)'),
+    start_date: z.string().describe('[REQUIRED] Start date (use `start_date`, not `start`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
+    end_date: z.string().describe('[REQUIRED] End date (use `end_date`, not `end`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),

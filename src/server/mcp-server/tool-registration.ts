@@ -12,6 +12,7 @@ import type { ResourceDefinition, PromptDefinition } from '../registration.js'
 import { VERSION } from '../../version.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
 import { SubscribeRequestSchema, UnsubscribeRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { logAgentIssue } from '../../utils/issue-logger.js'
 
 import type { ServerContext, ServerOptions } from './types.js'
 import type { ToolRegistration, ToolHandlerConfig } from '../../types/index.js'
@@ -278,6 +279,14 @@ export function createServerInstance(
                             recoverable: false,
                         }
                     }
+
+                    logAgentIssue({
+                        source: 'MCP',
+                        action: tool.name,
+                        input: args,
+                        error: (errorResult['error'] as string) ?? 'Unknown error'
+                    })
+
                     return {
                         content: [
                             {
@@ -486,6 +495,13 @@ export function createServerInstance(
                                 recoverable: false,
                             };
 
+                            logAgentIssue({
+                                source: 'MCP',
+                                action: requestedTool,
+                                input: toolArgs,
+                                error: errorResult.error
+                            });
+
                             const enriched = JSON.stringify({
                                 ...errorResult,
                                 _meta: { tokenEstimate: 0 },
@@ -556,6 +572,13 @@ export function createServerInstance(
                                     recoverable: false,
                                 }
 
+                                logAgentIssue({
+                                    source: 'MCP',
+                                    action: req.params?.name ?? 'unknown',
+                                    input: req.params?.arguments ?? {},
+                                    error: errorMessage
+                                })
+
                                 const enriched = JSON.stringify({
                                     ...errorResult,
                                     _meta: { tokenEstimate: 0 },
@@ -622,6 +645,14 @@ export function createServerInstance(
                             suggestion: 'Check input parameters against the tool schema',
                             recoverable: false,
                         }
+
+                        const fallbackReq = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
+                        logAgentIssue({
+                            source: 'MCP',
+                            action: fallbackReq?.params?.name ?? 'unknown',
+                            input: fallbackReq?.params?.arguments ?? {},
+                            error: errorMessage
+                        })
 
                         const enriched = JSON.stringify({
                             ...errorResult,

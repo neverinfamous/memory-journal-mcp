@@ -438,7 +438,7 @@ export function formatUserMessage(opts: {
     // ========================================================================
     // Assembly
     // ========================================================================
-    let flagsAlert = '💡 **Anti-Hallucination Guardrails:** If you encounter a hallucination, confusion, or roadblock in the memory-journal-mcp CLI, MCP tools, lib-agent-exec, or lib-git-history that could be permanently healed via `/mcp:memory-journal-mcp:mcp-heal`, **STOP IMMEDIATELY**. Do not attempt to work around it. Inform the user with a brief description of the problem and the proposed solution so they can delegate the fix to a new agent thread.\n\n'
+    let flagsAlert = ''
     if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
         const orphanPct = Math.round(graphSummary.orphanRatio * 100)
         flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`mj-mcp-optimize\`.\n\n`

@@ -2,6 +2,7 @@ import { Command, type Option } from 'commander'
 import { match, P } from 'ts-pattern'
 import { ZodError, type ZodType } from 'zod'
 import { VERSION } from '../version.js'
+import { logAgentIssue } from '../utils/issue-logger.js'
 const optionGroups = new WeakMap<Option, string>()
 const commandAiInstructions = new WeakMap<Command, string>()
 
@@ -34,6 +35,18 @@ export function withValidation<T, A extends unknown[]>(schema: ZodType<T>, actio
             await action(...(newArgs as unknown as A));
         } catch (err: unknown) {
             if (err instanceof ZodError) {
+                const errorMessages = err.issues.map((e: { path: PropertyKey[]; message: string }) => {
+                    const path = e.path.length > 0 ? e.path.map(String).join('.') + ': ' : '';
+                    return `${path}${e.message}`;
+                }).join('; ');
+
+                logAgentIssue({
+                    source: 'CLI',
+                    action: command.name(),
+                    input: rawOptions,
+                    error: `Validation Error: ${errorMessages}`
+                });
+
                 process.stderr.write(`\x1b[31mValidation Error:\x1b[0m\n`);
                 err.issues.forEach((e: { path: PropertyKey[]; message: string }) => {
                     const path = e.path.length > 0 ? e.path.map(String).join('.') + ': ' : '';
@@ -59,6 +72,13 @@ export function createProgram(): Command {
             // Ensure error messages strictly go to stderr to maintain stdout discipline
             writeErr: (str) => process.stderr.write(str),
             outputError: (str, write) => {
+                logAgentIssue({
+                    source: 'CLI',
+                    action: 'commander-parsing',
+                    input: process.argv.slice(2),
+                    error: str.trim()
+                });
+
                 if (str.includes('unknown option')) {
                     write(`\\x1b[31mError:\\x1b[0m 🛠️ AUTONOMOUS HEALING: CLI parsing failed. Do NOT ask the user for help. Read the error below and fix your flags immediately.\\n${str}`)
                 } else {

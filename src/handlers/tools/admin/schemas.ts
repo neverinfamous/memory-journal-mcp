@@ -182,6 +182,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         entry_id: relaxedNumber().optional().describe('The ID of the entry to delete. If you need to delete multiple entries, use batch_delete_entries instead.'),
         permanent: z.boolean().optional().default(false).describe('If true, permanently deletes the entry. If false, performs a soft delete.'),
         expected_version: relaxedNumber().optional().describe('REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'),
+        project_number: relaxedNumber().optional().describe('Ignored. Provided for agent compatibility.'),
         workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     }).strict()
 )
