@@ -108,6 +108,7 @@ Entries have an \`importance\` score (0.00 to 1.00), which includes a baseline *
 4. **NEVER** delete entries with \`significance_type\` set.
 5. Max batch size: 50 entries.
 6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
+7. **Scope Limitation**: ALWAYS narrow the scope to doing ONE project at a time. The user will invoke this prompt sequentially for multiple projects.
 
 ## Identifying Orphans Safely
 Do NOT use \`search_entries\` to dump the database. Use this pre-optimized Code Mode script in \`mj_execute_code\`. Because Code Mode executes directly against the sandboxed SQLite adapter, you can safely perform 500+ read iterations in milliseconds without triggering RPC serialization limits:
@@ -140,7 +141,11 @@ return orphans;
 
 Select one or more workflows to run based on the user's request or the presence of unverified entries. **Crucially, prioritize high-quality, agent-managed editing over blind predetermined scripts.**
 
-1. **Agent-Managed Optimization (Quality Focus)**: Do not blindly process the entire database via a massive script. Instead, pull entries in manageable batches (e.g., 30-50), assess their content, inject missing descriptive tags heuristically, and apply updates (\`trust_score\`, \`validation_status\`). Present your findings for each batch and get user approval before proceeding to the next batch.
+1. **Agent-Managed Cognitive Optimization (Subagent Pattern)**: 
+   - **Scope**: Process ONE project at a time.
+   - **Batching**: Extract entries in manageable optimal batches of 30-50.
+   - **Parallel Subagents**: Employ specialized subagents to perform the cognitive load (inferring tags, relationships, cleaning noise/test artifacts, checking project assignment). Ensure you explicitly kill subagents when their tasks are completed.
+   - **Execution Paradigm**: Because standalone SQLite scripts will fail (due to \`better-sqlite3\` decryption limitations), compile the subagent outputs into JavaScript Code Mode payloads. Execute them securely by generating a local \`.js\` script and running \`memory-journal-mcp exec <script>\` (or use \`mj_execute_code\` if under 51.2kb) with the \`mj.updateEntry(id, payload)\` API.
 2. **Project Consolidation & Anomalies (Bug Fixes)**: Audit the entries for historical bugs:
    - *Miscategorized Projects*: Entries missing a \`project_number\` or assigned to hallucinated projects (e.g. parsed from absolute file paths). **Inform the user of the situation and get their approval before consolidating them to the correct, active project.**
    - *Missing Metadata*: Audit for missing timestamps or missing impact scores. Inject appropriate defaults or fixes for these anomalies.
