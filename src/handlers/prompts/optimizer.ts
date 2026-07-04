@@ -37,8 +37,9 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                             totalRelationships?: unknown;
                             avgPerEntry?: unknown;
                         };
+                        projectBreakdown?: { name?: string; project_number: number; entry_count: number }[];
                     }
-                    const stats = db.getStatistics() as Stats
+                    const stats = db.getStatistics('week', undefined, undefined, true, '*') as Stats
                     const totalEntries = typeof stats.totalEntries === 'number' ? stats.totalEntries : 'Unknown'
                     
                     let totalRelationships: number | string = 'Unknown'
@@ -52,7 +53,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                     let orphanCount: number | string = 'Unknown'
                     let orphanDensity = 'Unknown'
                     try {
-                        orphanCount = db.getOrphanCount('default')
+                        orphanCount = db.getOrphanCount('*')
                         if (typeof totalEntries === 'number' && totalEntries > 0) {
                             orphanDensity = Math.round((orphanCount / totalEntries) * 100) + '%'
                         }
@@ -60,10 +61,19 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                         // fallback
                     }
 
-                    statsSnippet = `**Live Database Health:**
+                    let projectBreakdownText = ''
+                    if (stats.projectBreakdown && Array.isArray(stats.projectBreakdown)) {
+                        projectBreakdownText = '\n\n**Project Breakdown:**\n| Workspace | Project # | Entries |\n|---|---|---|\n'
+                        for (const p of stats.projectBreakdown) {
+                            const name = p.name || `Project ${p.project_number}`
+                            projectBreakdownText += `| ${name} | ${p.project_number} | ${p.entry_count} |\n`
+                        }
+                    }
+
+                    statsSnippet = `**Global Database Health:**
 - Total Entries: ${totalEntries}
 - Active Relationships: ${totalRelationships} (Avg: ${avgPerEntry}/entry)
-- Orphans: ${orphanCount} (${orphanDensity} density)`
+- Orphans: ${orphanCount} (${orphanDensity} density)${projectBreakdownText}`
                 } catch {
                     // ignore
                 }
@@ -89,7 +99,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                                 type: 'text',
                                 text: `# Journal Optimizer & Verification
 
-You are initiating a guided workflow for intelligently pruning and verifying the memory-journal-mcp database. Every operation uses the soft-delete system as a safe first pass.
+You are initiating a guided workflow for intelligently pruning and verifying the global memory journal database. Every operation uses the soft-delete system as a safe first pass.
 
 ${statsSnippet}
 
@@ -163,10 +173,11 @@ After a verification workflow, you MUST explicitly update the target entries usi
 
 To proceed:
 1. Review the live stats and the unverified recent entries.
-2. Tell the user your plan (which workflow you'll run).
-3. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
-4. If verifying, apply Tier 1 or Tier 2 steps, and then use the Scoring Protocol to update entries via \`mj_execute_code\`.
-5. Ask for user confirmation before deleting or consolidating projects!`,
+2. Output a concise Markdown table breaking down the total entries by workspace/project to the user (use the Project Breakdown data provided above).
+3. Tell the user your plan (which workflow you'll run).
+4. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
+5. If verifying, apply Tier 1 or Tier 2 steps, and then use the Scoring Protocol to update entries via \`mj_execute_code\`.
+6. Ask for user confirmation before deleting or consolidating projects!`,
                             },
                         },
                     ],
