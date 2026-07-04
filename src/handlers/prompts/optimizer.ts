@@ -119,7 +119,7 @@ let cursor = undefined;
 let processed = 0;
 
 while (processed < 500) {
-  const res = await mj.core.getRecentEntries({ limit: 50, cursor, workspace_id: 'default' });
+  const res = await mj.core.getRecentEntries({ limit: 50, cursor, workspace_id: '<target_workspace_id>' });
   if (!res.entries || res.entries.length === 0) break;
   
   for (const entry of res.entries) {
@@ -145,7 +145,7 @@ Select one or more workflows to run based on the user's request or the presence 
    - **Scope**: Process ONE project at a time.
    - **Batching**: Extract entries in manageable optimal batches of 30-50.
    - **Parallel Subagents**: Employ specialized subagents to perform the cognitive load (inferring tags, relationships, cleaning noise/test artifacts, checking project assignment). Ensure you explicitly kill subagents when their tasks are completed.
-   - **Execution Paradigm**: Because standalone SQLite scripts will fail (due to \`better-sqlite3\` decryption limitations), compile the subagent outputs into JavaScript Code Mode payloads. Execute them securely by generating a local \`.js\` script and running \`memory-journal-mcp exec <script>\` (or use \`mj_execute_code\` if under 51.2kb) with the \`mj.updateEntry(id, payload)\` API.
+   - **Execution Paradigm**: Always use the MCP server's built-in execution capabilities instead of writing standalone SQLite scripts. Users may have database encryption enabled with custom keys; using Code Mode (\`mj_execute_code\` or \`memory-journal-mcp exec <script>\`) transparently handles the connection and encryption for you. Compile the subagent outputs into a JavaScript Code Mode payload and use the \`mj.updateEntry(id, payload)\` API to apply the optimizations securely.
 2. **Project Consolidation & Anomalies (Bug Fixes)**: Audit the entries for historical bugs:
    - *Miscategorized Projects*: Entries missing a \`project_number\` or assigned to hallucinated projects (e.g. parsed from absolute file paths). **Inform the user of the situation and get their approval before consolidating them to the correct, active project.**
    - *Missing Metadata*: Audit for missing timestamps or missing impact scores. Inject appropriate defaults or fixes for these anomalies.
