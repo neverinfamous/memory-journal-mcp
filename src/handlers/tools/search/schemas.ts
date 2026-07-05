@@ -136,8 +136,14 @@ export const SearchByDateRangeSchema = z.preprocess(
 export const SearchByDateRangeSchemaMcp = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z.object({
-    start_date: z.string().describe('[REQUIRED] Start date (use `start_date`, not `start`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
-    end_date: z.string().describe('[REQUIRED] End date (use `end_date`, not `end`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
+    start_date: z.string().optional().refine(
+        (val): val is string => val !== undefined,
+        { message: "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). To get all recent entries without a date range, use the 'search_entries' or 'get_recent_entries' tool instead." }
+    ).describe('[REQUIRED] Start date (use `start_date`, not `start`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
+    end_date: z.string().optional().refine(
+        (val): val is string => val !== undefined,
+        { message: "🛠️ AUTONOMOUS HEALING: search_by_date_range requires 'start_date' and 'end_date' (YYYY-MM-DD). To get all recent entries without a date range, use the 'search_entries' or 'get_recent_entries' tool instead." }
+    ).describe('[REQUIRED] End date (use `end_date`, not `end`). Must provide an ISO-8601 date string (e.g. YYYY-MM-DD).'),
     cursor: z.string().optional().describe('Cursor for pagination'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),

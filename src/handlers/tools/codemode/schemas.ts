@@ -85,10 +85,14 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'If true, execution is restricted to read-only operations. Write tools will be filtered out of the API bridge.'
         ),
-    timeout: z.coerce
-        .number()
-        .optional()
-        .describe(
-            'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
-        ),
+    timeout: z.preprocess(
+        (val) => {
+            if (val === undefined || val === null) return undefined;
+            const num = Number(val);
+            return Number.isNaN(num) ? undefined : num;
+        },
+        z.number().optional()
+    ).describe(
+        'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
+    ),
 })

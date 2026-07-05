@@ -84,7 +84,7 @@ export function enforceAccessBoundary(
                 })
             }
             throw new PermissionError(
-                `Access to ${targetType} '${targetName}' denied: insufficient scope.`
+                `🛠️ AUTONOMOUS HEALING: Access to ${targetType} '${targetName}' denied: insufficient scope. You are attempting to use a tool that requires higher privileges (e.g. GitHub or Admin scope). Please use an alternative tool, run it natively via terminal if it's a CLI command, or ask the user to provide the necessary authorization.`
             )
         }
     }

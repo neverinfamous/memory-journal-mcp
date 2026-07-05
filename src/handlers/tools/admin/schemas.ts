@@ -170,11 +170,17 @@ export const DeleteEntrySchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
             const obj = { ...(val as Record<string, unknown>) };
+            let modified = false;
             if ('id' in obj && !('entry_id' in obj)) {
                 obj['entry_id'] = obj['id'];
                 delete obj['id'];
-                return obj;
+                modified = true;
             }
+            if ('project_number' in obj) {
+                delete obj['project_number'];
+                modified = true;
+            }
+            return modified ? obj : val;
         }
         return val;
     },

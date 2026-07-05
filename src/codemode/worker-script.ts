@@ -453,6 +453,9 @@ parentPort?.on('message', (msg: unknown) => {
                                 bytes += Buffer.byteLength(value, 'utf8') + 2 // include quotes
                             } else if (typeof value === 'number' || typeof value === 'boolean') {
                                 bytes += Buffer.byteLength(String(value), 'utf8')
+                            } else if (typeof value === 'bigint') {
+                                bytes += Buffer.byteLength(value.toString(), 'utf8') + 2 // Treat as string
+                                return value.toString()
                             } else {
                                 bytes += 5 // brackets/keys/null overhead
                             }

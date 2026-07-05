@@ -881,6 +881,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             obj['expected_version'] = obj['version'];
             delete obj['version'];
         }
+        if (obj['project_number'] !== undefined) {
+            delete obj['project_number'];
+        }
     }
     
     // team_get_recent hallucination: passing `q` or `query` or `keep`
