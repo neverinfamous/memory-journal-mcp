@@ -145,8 +145,6 @@ Agents frequently hallucinate Unix tools or specific flags that break natively i
    * **Fix**: Always use the native `read_url_content` tool. If you must use curl CLI, invoke `curl.exe` explicitly to bypass the PowerShell alias.
 2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content`, `ls` to `Get-ChildItem`, and lacks native Unix `grep` (often substituted with `Select-String`). Do NOT use these commands or their PowerShell cmdlet equivalents (`Get-Content`, `Get-ChildItem`, `Select-String`). They bypass the proxy's safety guardrails and will fail ungracefully if you hallucinate file paths.
    * **Fix**: You MUST use the agent-native tools instead: `view_file` (instead of cat/Get-Content), `list_dir` (instead of ls/Get-ChildItem), and `grep_search` (instead of grep/Select-String).
-3. **`node -e` or `python -c` (Inline Scripting)**: Executing `node -e "..."` or `python -c "..."` in the shell frequently breaks because PowerShell parsing strips unescaped quotes, corrupts complex Regex brackets inside double quotes, and eats `--` flags (treating them as PowerShell's end-of-parameters token).
-   * **Fix**: Always use the `eval` JSON payload with `"interpreter": "node"` or `"interpreter": "python"` to avoid shell parsing bugs, or write a temporary script to the scratch directory and use a `script` payload.
 4. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
    * **Fix**: Do NOT poll this in a loop. Use the `schedule` tool to set an asynchronous timer to check back later.
 

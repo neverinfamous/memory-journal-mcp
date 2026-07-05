@@ -411,7 +411,14 @@ export class ProcessController {
             process.exit(0);
           } else if (isOutdatedInfo) { if (!this.isJson) console.error(`\nℹ️  Outdated packages found (exit code 1).`);
             process.exit(0);
-          } else { if (!this.isJson) console.error(`\n❌ Command exited with code ${code}`);
+          } else {
+            let suppressRedundantExit = false;
+            if (this.payload.type === 'command' && typeof this.payload.command === 'string') {
+                if (['pnpm', 'npm', 'bun', 'yarn', 'node'].includes(this.payload.command)) {
+                    suppressRedundantExit = true;
+                }
+            }
+            if (!this.isJson && !suppressRedundantExit) console.error(`\n❌ Command exited with code ${code}`);
             if (process.platform === 'win32') {
                 if (BUILT_INS.includes(this.cmd.toLowerCase())) { if (!this.isJson) console.error(`\n   💡 AGENT HINT: '${this.cmd}' is a shell built-in, not an executable file. It should be routed through a system shell.\n${AUTONOMOUS_HEALING_MSG}`);
                 }

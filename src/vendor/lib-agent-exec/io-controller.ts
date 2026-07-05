@@ -207,7 +207,7 @@ export class IOController {
           if (method !== 'GET') {
             fetchOptions.body = bodyPayload;
           }
-          return fetch(filePath, fetchOptions).then(() => {}).catch(() => {});
+          return fetch(filePath, fetchOptions).then(res => res.arrayBuffer()).then(() => {}).catch(() => {});
         };
 
         return new Writable({

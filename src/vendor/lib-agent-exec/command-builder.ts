@@ -14,7 +14,7 @@ import {
   replTuiInterceptor, 
   systemInterceptor 
 } from './interceptors/index.js';
-import { replaceIntegrationContext, BUILT_INS } from './utils.js';
+import { replaceIntegrationContext, BUILT_INS, recordAgentIssue } from './utils.js';
 import { DEFAULT_ENV_VARS } from './environment.js';
 
 
@@ -192,6 +192,7 @@ function resolveWindowsCommand(cmd: string, cwd: string, payloadEnv?: Record<str
 
 export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean = false): { cmd: string; args: string[]; tempScriptPath: string | null; envOverrides: Record<string, string> } {
   const exitWithError = (message: string) => {
+    recordAgentIssue('FATAL_EXECUTION_ERROR', message);
     if (isJson) {
       console.log(JSON.stringify({ status: "error", message }));
       process.exit(1);
@@ -210,6 +211,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
     const hasPipeCommand = payload.type === 'command' && (payload.command.includes(' && ') || payload.command.includes(' || ') || payload.command.includes(' | ') || payload.command.includes(' > '));
     const hasPipeArg = payload.args?.some(a => a.trim() === '&&' || a.trim() === '||' || a.trim() === '|' || a.trim() === '>');
     if (hasPipeCommand || hasPipeArg) {
+      recordAgentIssue('POSIX_PIPES_IN_POWERSHELL', 'Native PowerShell does NOT support && or ||', { payload });
       if (isJson) {
         exitWithError(`Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.`);
       } else {
@@ -512,7 +514,8 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   });
 
   if (strippedQuotes) {
-    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Stop and notify user IMMEDIATELY to fix this command.\x1b[0m`);
+    recordAgentIssue('UNNECESSARY_QUOTES', 'Arguments wrapped in quotes were detected', { args: ctx.args });
+    console.error(`\n   💡 AGENT HINT: Arguments wrapped in quotes were detected.`);
     console.error(`   Because 'shell: false' is used, quotes are NOT needed for spaces. Auto-healing by stripping wrapping quotes...`);
   }
 
