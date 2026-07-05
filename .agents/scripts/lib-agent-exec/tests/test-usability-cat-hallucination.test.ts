@@ -25,6 +25,7 @@ test("systemInterceptor - cat hallucination throws anti-hallucination error", ()
     args,
     envOverrides,
     payload: { type: "command", command: "cat", args } as unknown as ExecPayload,
+    hasStdin: false,
   };
 
   try {

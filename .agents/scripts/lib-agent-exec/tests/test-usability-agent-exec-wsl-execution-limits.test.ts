@@ -39,15 +39,19 @@ describe('WSL Execution Limits', () => {
 
   test('respects truncateOutputLength under WSL', async () => {
     const payload = {
-      type: 'command',
+      type: 'eval',
       target: 'wsl2',
-      command: 'python3',
-      args: ['-c', 'print("A" * 2000)'],
+      interpreter: 'python3',
+      code: 'print("A" * 2000)',
       truncateOutputLength: 512,
       maxBuffer: 4096
     };
 
     const res = await runAgentExec(payload);
+    
+    if (res.code !== 0) {
+      console.log(res.stderr);
+    }
     
     expect(res.code).toBe(0);
     expect(res.stdout).toContain('... [STDOUT truncated to 512 chars.');
@@ -58,15 +62,19 @@ describe('WSL Execution Limits', () => {
     const outPath = path.join(scratchDir, 'out.txt');
     const errPath = path.join(scratchDir, 'err.txt');
     const payload = {
-      type: 'command',
+      type: 'eval',
       target: 'wsl2',
-      command: 'python3',
-      args: ['-c', 'import sys; print("A" * 1024 * 1024); print("B" * 1024 * 1024, file=sys.stderr)'],
+      interpreter: 'python3',
+      code: 'import sys; print("A" * 1024 * 1024); print("B" * 1024 * 1024, file=sys.stderr)',
       stdoutFile: outPath,
       stderrFile: errPath
     };
 
     const res = await runAgentExec(payload);
+    
+    if (res.code !== 0) {
+      console.log(res.stderr);
+    }
     
     expect(res.code).toBe(0);
     

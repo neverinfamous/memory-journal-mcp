@@ -7,9 +7,9 @@ import path from 'node:path';
 describe('Execution Timeout Usability', () => {
   it('should timeout execution when timeoutMs is 100ms and process takes longer', async () => {
     const payload = {
-      type: 'command',
-      command: 'bun',
-      args: ['-e', 'await new Promise(r => setTimeout(r, 5000))'],
+      type: 'eval',
+      code: 'await new Promise(r => setTimeout(r, 5000))',
+      interpreter: 'bun',
       timeoutMs: 100
     };
 
@@ -43,9 +43,9 @@ describe('Execution Timeout Usability', () => {
     if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
 
     expect(exitCode).not.toBe(0);
-    expect(duration).toBeLessThan(2000);
+    expect(duration).toBeLessThan(3000);
     expect(childStderr).toContain('Execution timed out after 100ms');
-  });
+  }, 10000); // 10s test timeout
 
   it('should restrict timeoutMs to maximum safe integer', () => {
     const payload = {

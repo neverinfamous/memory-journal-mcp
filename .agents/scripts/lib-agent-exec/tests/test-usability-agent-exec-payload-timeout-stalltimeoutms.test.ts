@@ -8,6 +8,7 @@ describe('Execution Stall Timeout Usability', () => {
   it('should timeout execution when stallTimeoutMs is 100ms and process takes longer without outputting anything', async () => {
     const payload = {
       type: 'eval',
+      interpreter: 'node',
       code: 'await new Promise(r => setTimeout(r, 5000))',
       stallTimeoutMs: 100
     };
@@ -42,7 +43,7 @@ describe('Execution Stall Timeout Usability', () => {
     if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
 
     expect(exitCode).not.toBe(0);
-    expect(duration).toBeLessThan(5000);
+    expect(duration).toBeLessThan(1500);
     expect(childStderr).toContain('stalled');
   });
 });

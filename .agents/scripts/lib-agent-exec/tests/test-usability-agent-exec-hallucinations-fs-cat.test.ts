@@ -24,7 +24,8 @@ test("systemInterceptor - cat file.txt as raw command payload throws anti-halluc
     cmdBasename: "cat file.txt",
     args,
     envOverrides,
-    payload: { type: "command", command: "cat file.txt" } as unknown as ExecPayload,
+    payload: { type: "command", command: "cat", args } as unknown as ExecPayload,
+    hasStdin: false,
   };
 
   try {

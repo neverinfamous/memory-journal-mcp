@@ -28,7 +28,7 @@ const basePayloadSchema = z.object({
   onSuccess: z.union([safeString, safeStringArray]).optional(),
   onFailure: z.union([safeString, safeStringArray]).optional(),
   webhookHeaders: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
-  webhookPayloadTemplate: z.unknown().transform(val => typeof val === 'string' ? val : JSON.stringify(val)).pipe(noNullString).optional(),
+  webhookPayloadTemplate: z.unknown().transform(val => typeof val === 'string' ? val : JSON.stringify(val)).pipe(safeString).optional(),
   webhookMethod: z.union([z.literal("GET"), z.literal("POST"), z.literal("PUT"), z.literal("PATCH"), z.literal("DELETE")]).optional(),
   webhookTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
   expectJsonEnvelope: lenientBoolean.optional(),

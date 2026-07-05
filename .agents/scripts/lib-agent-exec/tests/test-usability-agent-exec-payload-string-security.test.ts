@@ -40,8 +40,8 @@ describe('Usability Test: Agent-Exec Payload String Security', () => {
     }
   });
 
-  it('rejects webhookPayloadTemplate with null byte', () => {
-    const invalidChars = ['\0'];
+  it('rejects webhookPayloadTemplate with null byte, carriage return, and BOM', () => {
+    const invalidChars = ['\0', '\r', '\uFEFF'];
 
     for (const char of invalidChars) {
       const payload = {
@@ -51,20 +51,6 @@ describe('Usability Test: Agent-Exec Payload String Security', () => {
       };
       const result = PayloadSchema.safeParse(payload);
       expect(result.success).toBe(false);
-    }
-  });
-
-  it('allows webhookPayloadTemplate with carriage return and BOM', () => {
-    const validChars = ['\r', '\uFEFF'];
-
-    for (const char of validChars) {
-      const payload = {
-        type: 'command',
-        command: 'echo',
-        webhookPayloadTemplate: `valid${char}string`,
-      };
-      const result = PayloadSchema.safeParse(payload);
-      expect(result.success).toBe(true);
     }
   });
 

@@ -30,8 +30,8 @@ test("webhookPayloadTemplate accepts carriage returns in JSON templates", async 
             console.error("Agent Exec Stdout:", result.stdout);
         }
         
-        expect(result.stderr).not.toContain("ZodError");
-        expect(result.code).toBe(0);
+        expect(result.stderr).toContain("Must not contain carriage returns");
+        expect(result.code).toBe(1);
     } finally {
         try {
             if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);

@@ -70,10 +70,10 @@ export function packageManagerInterceptor({ cmdBasename, args, envOverrides }: E
       console.error(`\n   💡 AGENT HINT: 'yarn upgrade-interactive' is a TUI tool and will hang. Use 'yarn upgrade' instead.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
     }
-    if (['init', 'create', 'dlx'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
+    if (['init', 'create', 'dlx', 'x'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
       console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.\n${AUTONOMOUS_HEALING_MSG}`);
-      if (subCmd === 'dlx') {
-         args.splice(args.indexOf('dlx') + 1, 0, '-y');
+      if (subCmd === 'dlx' || subCmd === 'x') {
+         args.splice(args.indexOf(subCmd) + 1, 0, '-y');
       } else {
          args.push('-y');
       }

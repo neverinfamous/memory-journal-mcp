@@ -448,6 +448,10 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   args = parsedCmdArgs.args;
 
   if (payload.target !== 'wsl2') {
+    if (['bunx', 'bunx.cmd', 'bunx.exe'].includes(cmd.toLowerCase())) {
+      cmd = 'bun';
+      args = ['x', ...args];
+    }
     cmd = resolveWindowsCommand(cmd, cwd, payload.env);
   }
 

@@ -66,7 +66,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   }
 
   // 1. Mutating intercepts (safe to run before block checks)
-  match({ cmd, originalCmd, args, payload })
+  match({ cmd, originalCmd, args, payload, hasStdin })
     .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args: matchedArgs }) => {
       if (!matchedArgs.some(a => a.includes('BatchMode=yes'))) {
         console.error(`\n   💡 AGENT HINT: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
@@ -107,7 +107,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         }
       }
     })
-    .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
+    .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
       console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
@@ -380,7 +380,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     })
 
     // Search tool enforcement (FS Alias Hallucinations)
-    .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
+    .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
       console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })

@@ -585,10 +585,12 @@ export class IOController {
     }
 
     try {
+      let timeoutId: NodeJS.Timeout;
       await Promise.race([
         Promise.all(closePromises),
-        new Promise(resolve => setTimeout(resolve, 2000))
+        new Promise(resolve => { timeoutId = setTimeout(resolve, 2000); })
       ]);
+      clearTimeout(timeoutId!);
     } catch { /* ignore */ }
   }
 

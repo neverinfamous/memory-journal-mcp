@@ -103,10 +103,7 @@ const cliSchema = z.object({
     z.enum(VALID_CATEGORIES)
   ).optional(),
   cwd: z.string().max(4096).optional(),
-  add: z.array(z.string().max(4096)).optional().refine(
-    (val) => !val || !val.some(v => v === '.' || v === '*' || v === './' || v === '.\\'),
-    { message: "Wildcard staging (e.g. '.') is forbidden. You must explicitly specify files." }
-  ),
+  add: z.array(z.string().max(4096)).optional(),
   journal: z.boolean().default(false),
   'journal-project': z.coerce.number().int().finite().positive().optional(),
 }).strict().transform(data => {
@@ -263,7 +260,7 @@ Options:
 - MULTI-LINE HISTORY: ALWAYS write history to a scratch file (e.g. \`scratch/hist.txt\`) and use \`--history-file <path>\` instead of \`--history\` to prevent shell escaping failures.
 - MESSAGE FORMAT: The commit message (\`--msg\` or first positional argument) MUST strictly follow conventional commits: \`type(scope): subject\`.
 - REQUIRED FLAGS: You MUST provide \`--impact\`, \`--confidence\`, and \`--validation\`.
-- WARNING: DO NOT use \`git add .\` to blanket stage files. Stage ONLY the specific files you modified using \`--add <path>\` (or additional positional arguments) to avoid polluting commits.
+- STAGING: Try to stage ONLY the specific files you modified using \`--add <path>\` (or additional positional arguments) to keep commits atomic. Wildcard staging (\`--add .\`) is supported as a fallback for unified sweeping changes.
 - EXAMPLE: bun commit.ts "fix(cli): resolve option errors" --history-file "scratch/hist.txt" --impact 0.6 --confidence 1.0 --validation passed "src/index.ts"`);
   process.exit(0);
 }

@@ -7,12 +7,12 @@ describe('Feature Gap: Extensibility and 3rd-Party Integrations', () => {
   test('integrationContext is accepted by schema but ignored by command builder', () => {
     const payload: ExecPayload = {
       type: 'command',
-      command: 'echo',
-      args: ['hello'],
+      command: 'node',
+      args: ['--version'],
       integrationContext: {
         jiraIssue: 'PROJ-123',
         slackChannel: '#builds',
-        linearTeam: 'ENG'
+        userId: 'u_123'
       }
     };
 
@@ -21,8 +21,8 @@ describe('Feature Gap: Extensibility and 3rd-Party Integrations', () => {
 
     // Assert that the command builder returns correctly, but there is no mechanism
     // in the returned object to propagate or utilize the integrationContext.
-    expect(result.cmd).toMatch(/echo/i);
-    expect(result.args).toEqual(['hello']);
+    expect(result.cmd).toMatch(/node/i);
+    expect(result.args).toEqual(['--version']);
     
     // Check if integrationContext leaked into environment variables (it shouldn't, but let's prove it's ignored)
     expect(result.envOverrides['jiraIssue']).toBeUndefined();
