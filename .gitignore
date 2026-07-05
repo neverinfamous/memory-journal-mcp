@@ -198,3 +198,4 @@ node_modules/
 .agents/scripts/lib-agent-exec/interceptors/system-interceptor.ts
 
 .agents/agent-exec-issues.jsonl
+.agents/workflows/doc-audit.md
