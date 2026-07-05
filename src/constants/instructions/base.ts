@@ -17,9 +17,11 @@ export const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Help Resources
 
-Read \`memory://help\` for tool group index and available help resources.
-Read \`memory://help/gotchas\` for critical usage patterns, heuristics, and session summary rules.
-Read \`memory://help/{group}\` for per-group tool reference (parameters, annotations, examples).
+- **Agent Skill:** If available in your environment, load the \`memory-journal-mcp\` skill for high-level workflow guidelines.
+- **Dynamic Help:** Read \`memory://help\` for tool group index and available help resources.
+- **Gotchas:** Read \`memory://help/gotchas\` for critical usage patterns, heuristics, and session summary rules.
+- **Group Reference:** Read \`memory://help/{group}\` for per-group tool reference (parameters, annotations, examples).
+
 Only help resources for your enabled tool groups are registered.
 
 ## Essential Behaviors
