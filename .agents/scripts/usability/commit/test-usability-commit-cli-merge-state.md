@@ -14,7 +14,7 @@ Verify that `commit.ts` rejects commits when the repository is in an active merg
 3. **Attempt Commit:** Stage a mock change (`echo "test" > dummy.txt && git add dummy.txt`) and run `bun C:\Users\chris\Desktop\adamic\.agents\scripts\commit.ts --msg "feat(core): test merge state" --category Changed --impact 0.5 --confidence 0.5 --validation passed --no-history`.
 
 ### Phase 2: Meta-Cognitive Debugging
-1. The script should instantly abort with `Error: Repository is in a merge/rebase state. Resolve conflicts first.`
+1. The script should instantly abort with `❌ Repository is in a merge/rebase state. Resolve conflicts first.`
 2. If the commit miraculously succeeds, or throws an unhandled exception, formulate a hypothesis in `<appDataDir>\brain\<conversation-id>\scratch\hypothesis.txt`.
 3. If the script fails to detect the merge state, fix `commit.ts`.
 

@@ -96,7 +96,7 @@ describe('System Interceptor: Pipe and Operator Handling', () => {
         expect(didExit).toBe(true); 
     });
 
-    it('should rewrite powershell cat to Get-Content with multiple space-separated arguments without exiting', () => {
+    it('should block powershell cat inline commands and throw anti-hallucination error', () => {
         const payload: ExecPayload = { type: 'command', command: 'pwsh', args: ['-c', 'cat file1.txt file2.txt'] };
         let didExit = false;
         try {
@@ -104,8 +104,7 @@ describe('System Interceptor: Pipe and Operator Handling', () => {
         } catch (e: unknown) {
             if (e instanceof Error && e.message.startsWith('ProcessExitMock')) didExit = true;
         }
-        expect(didExit).toBe(false); 
-        expect(payload.args).toContain('Get-Content file1.txt file2.txt');
+        expect(didExit).toBe(true); 
     });
     it('should block unspaced operators with quotes (false negative)', () => {
         const payload: ExecPayload = { type: 'command', command: 'echo', args: ['"start"&&echo', '"end"'] };

@@ -69,7 +69,7 @@ Used for executing standard CLI binaries.
   "onFailure": "http://localhost:9999/fail", // Optional (string or array of strings)
   "webhookMethod": "POST", // Optional (GET, POST, PUT, PATCH, DELETE)
   "webhookHeaders": { "Authorization": "Bearer {{integrationContext.token}}" }, // Optional
-  "webhookPayloadTemplate": "{\"status\":\"{{envelope.status}}\",\"data\":{{envelope.data}}}", // Optional
+  "webhookPayloadTemplate": { "status": "{{envelope.status}}", "data": "{{envelope.data}}" }, // Optional (Accepts string, object, or array)
   "webhookTimeoutMs": 5000, // Optional
   "target": "wsl2" // Optional (routes execution natively into the WSL2 Linux VM)
 }
@@ -135,6 +135,7 @@ To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and m
 - **Interactive REPL Blocks**: Attempting to launch `node`, `python`, or `bash` without arguments or a script file will be intercepted and terminated immediately to prevent hanging.
 - **Shell Wrapper Blocking**: Wrapping standard tools (`git`, `docker`, `gh`, `npm`, `npx`, `bunx`, etc.) inside inline shell invocations (e.g., `pwsh -c "git log"`) bypasses the interceptor pipeline and is strictly blocked across native commands, `eval` snippets, and `script` payloads. Invoke the tool directly via a `command` payload, or write the raw script commands without an inline shell wrapper.
 - **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash$`, `sh$`, and `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging.
+- **Git Interception**: The bridge aggressively intercepts forbidden git flows. History commands (`git log`, `git shortlog`, `git show`) and raw `git commit` are completely blocked to prevent unparsable text dumps and interactive hanging. You MUST use the deterministic wrappers (`bun .\\.agents\\scripts\\get-git-history-json.ts` and `bun .\\.agents\\scripts\\commit.ts`). Interactive patching (`-p`) and interactive rebasing (`-i`) are also blocked.
 - **Quote Stripping**: Spurious quotes around arguments are stripped since the shell execution is bypassed.
 
 ## 🪤 Common PowerShell Hallucination Traps
@@ -145,7 +146,7 @@ Agents frequently hallucinate Unix tools or specific flags that break natively i
    * **Fix**: Always use the native `read_url_content` tool. If you must use curl CLI, invoke `curl.exe` explicitly to bypass the PowerShell alias.
 2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content`, `ls` to `Get-ChildItem`, and lacks native Unix `grep` (often substituted with `Select-String`). Do NOT use these commands or their PowerShell cmdlet equivalents (`Get-Content`, `Get-ChildItem`, `Select-String`). They bypass the proxy's safety guardrails and will fail ungracefully if you hallucinate file paths.
    * **Fix**: You MUST use the agent-native tools instead: `view_file` (instead of cat/Get-Content), `list_dir` (instead of ls/Get-ChildItem), and `grep_search` (instead of grep/Select-String).
-4. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
+3. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
    * **Fix**: Do NOT poll this in a loop. Use the `schedule` tool to set an asynchronous timer to check back later.
 
 ## Environment Variables & Immutability

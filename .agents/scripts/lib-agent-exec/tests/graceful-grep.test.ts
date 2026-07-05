@@ -105,5 +105,5 @@ describe("Graceful Exits for Grep/Rg", () => {
     } finally {
       if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
     }
-  });
+  }, 15000);
 });

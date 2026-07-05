@@ -7,9 +7,8 @@ import path from 'node:path';
 describe('Execution Stall Timeout Usability', () => {
   it('should timeout execution when stallTimeoutMs is 100ms and process takes longer without outputting anything', async () => {
     const payload = {
-      type: 'command',
-      command: 'bun',
-      args: ['-e', 'await new Promise(r => setTimeout(r, 5000))'],
+      type: 'eval',
+      code: 'await new Promise(r => setTimeout(r, 5000))',
       stallTimeoutMs: 100
     };
 

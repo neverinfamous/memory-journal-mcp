@@ -50,7 +50,7 @@ The single source of truth for all non-interactive agent terminal commands (`git
 ### 2. The Commit Wrapper (`commit.ts`)
 The engine for generating high-integrity conventional commits.
 - **Mechanism**: Generates high-integrity conventional commits. It strictly enforces conventional commit standards, calculates impacts/trust metadata, and embeds this data into the Git log via trailers.
-- **Agent Usage**: **NEVER** use `CHANGELOG.md` or raw `git commit`. **ALWAYS** immediately commit using the wrapper: `bun .\.agents\scripts\commit.ts --msg "type(scope): message" --category Changed --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed`.
+- **Agent Usage**: **NEVER** use `CHANGELOG.md` or raw `git commit`. **ALWAYS** immediately commit using the wrapper: `bun .\.agents\scripts\commit.ts --msg "type(scope): message" --impact <0.0-1.0> --confidence <0.0-1.0> --validation passed`. (Note: `--category` is optional and automatically inferred from the commit type).
 - **Additional Capabilities**: `commit.ts` natively supports several extended flags:
   - `--msg` / `--message` / `-m` / positional argument (commit subject)
   - `--add <path>` (explicit staging, can be used multiple times)

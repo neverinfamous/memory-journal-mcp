@@ -131,7 +131,7 @@ try {
     finalEnv[targetKey] = v;
   }
 
-  executeCommand(payload, cwd, cmd, args, finalEnv, tempScriptPath, isJson);
+  executeCommand(payload, cwd, cmd, args, finalEnv, tempScriptPath, isJson || !!payload.expectJsonEnvelope);
 
 } catch (err) {
   if (err instanceof SyntaxError) {

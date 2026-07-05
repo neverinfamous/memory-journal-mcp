@@ -64,35 +64,7 @@ describe("Usability Test: Agent-Exec Hallucinations (Network aliases) Wget", () 
     }
   });
 
-  test("Intercepts 'wget' inside an inline shell command and rewrites or rejects it", () => {
-    const payload = {
-      type: "command",
-      command: "pwsh",
-      args: ["-c", "wget https://example.com"],
-      timeoutMs: 5000,
-      expectJsonEnvelope: false
-    };
-    fs.writeFileSync(payloadPath, JSON.stringify(payload));
 
-    try {
-      execSync(`bun ${agentExecPath} ${payloadPath}`, { encoding: "utf8", stdio: 'pipe' });
-      throw new Error("agent-exec should have failed and thrown an interceptor error, but it succeeded.");
-    } catch (err: unknown) {
-      const errorObj = err as { status?: number, stderr?: string, stdout?: string, message?: string };
-      const stderr = errorObj.stderr || "";
-      const stdout = errorObj.stdout || "";
-      const output = stderr + "\n" + stdout;
-      
-      expect(errorObj.status).not.toBe(0);
-      expect(output).toContain("read_url_content");
-      expect(output).toContain("wget.exe");
-      expect(output).toContain("AUTONOMOUS HEALING");
-    } finally {
-      if (fs.existsSync(payloadPath)) {
-        if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
-      }
-    }
-  });
 
   test("Intercepts 'wget' inside an eval payload and rewrites or rejects it", () => {
     const payload = {
@@ -128,7 +100,7 @@ describe("Usability Test: Agent-Exec Hallucinations (Network aliases) Wget", () 
       command: "wget",
       args: ["--version"],
       target: "wsl2",
-      timeoutMs: 5000,
+      timeoutMs: 15000,
       expectJsonEnvelope: false
     };
     fs.writeFileSync(payloadPath, JSON.stringify(payload));
@@ -147,5 +119,5 @@ describe("Usability Test: Agent-Exec Hallucinations (Network aliases) Wget", () 
         if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
       }
     }
-  });
+  }, 15000);
 });

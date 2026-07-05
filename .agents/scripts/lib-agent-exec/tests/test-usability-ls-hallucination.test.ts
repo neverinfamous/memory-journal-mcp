@@ -67,4 +67,34 @@ describe("Usability Test: Agent-Exec Hallucinations (FS aliases)", () => {
       }
     }
   });
+
+  test("Intercepts 'ls' in eval payloads and throws anti-hallucination error", () => {
+    const payload = {
+      type: "eval",
+      code: "ls .",
+      interpreter: "pwsh",
+      timeoutMs: 5000,
+      expectJsonEnvelope: false
+    };
+    fs.writeFileSync(payloadPath, JSON.stringify(payload));
+
+    try {
+      execSync(`bun ${agentExecPath} ${payloadPath}`, { encoding: "utf8", stdio: 'pipe' });
+      throw new Error("agent-exec should have failed and thrown an interceptor error, but it succeeded.");
+    } catch (err: unknown) {
+      const errorObj = err as { status?: number, stderr?: string, stdout?: string };
+      const stderr = errorObj.stderr || "";
+      const stdout = errorObj.stdout || "";
+      const output = stderr + "\n" + stdout;
+      
+      expect(errorObj.status).not.toBe(0);
+      expect(output).toContain("list_dir");
+      expect(output).toContain("or its PowerShell cmdlet equivalent (Get-ChildItem)");
+      expect(output).toContain("AUTONOMOUS HEALING");
+    } finally {
+      if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
+    }
+  });
+
+
 });

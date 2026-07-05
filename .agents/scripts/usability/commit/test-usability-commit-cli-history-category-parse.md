@@ -15,7 +15,7 @@ Verify that `commit.ts` correctly extracts the explicitly provided Category pref
 
 ### Phase 2: Meta-Cognitive Debugging
 1. Extract the commit data using `bun C:\Users\chris\Desktop\adamic\.agents\scripts\get-git-history-json.ts --limit 1` within the mock repository.
-2. **CRITICAL CHECK:** Ensure that `metadata.category` in the JSON is exactly `Removed`, and the `History-Entry` does NOT include `Removed:`.
+2. **CRITICAL CHECK:** Ensure that `metadata.category` in the JSON is exactly `["Removed"]`, and the `History-Entry` does NOT include `Removed:`.
 3. If it is `Changed` (fallback for `refactor`) instead of `Removed`, or if it fails, formulate a hypothesis in `<appDataDir>\brain\<conversation-id>\scratch\hypothesis.txt`.
 4. Fix the logic in `commit.ts` if necessary.
 

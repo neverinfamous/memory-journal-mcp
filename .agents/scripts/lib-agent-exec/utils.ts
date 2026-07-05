@@ -84,7 +84,12 @@ export async function sendWebhook(
       }
       if (method !== 'GET') fetchOptions.body = body;
       try { 
-        await fetch(targetUrl, fetchOptions).then(res => res.arrayBuffer()).catch((err) => { 
+        await fetch(targetUrl, fetchOptions).then(async res => {
+          if (!res.ok) {
+            console.error(`❌ Webhook Error: HTTP ${res.status} ${res.statusText}`);
+          }
+          return res.arrayBuffer();
+        }).catch((err) => { 
           console.error(`❌ Webhook Error: Failed to invoke webhook: ${err.message}`); 
         }); 
       } catch (err) { 

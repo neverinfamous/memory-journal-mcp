@@ -22,10 +22,15 @@ describe("Usability Test: Agent-Exec Environment Immutability", () => {
     ];
 
     for (const key of immutableOverrides) {
-      process.env[key] = "MALICIOUS_OVERRIDE";
+      process.env[key.toLowerCase()] = "MALICIOUS_OVERRIDE";
     }
 
-    const payloadEnv = {};
+    const payloadEnv: Record<string, string> = {};
+    for (const key of immutableOverrides) {
+      payloadEnv[key.toLowerCase()] = "MALICIOUS_OVERRIDE";
+      payloadEnv[key.toUpperCase()] = "MALICIOUS_OVERRIDE";
+      payloadEnv[key] = "MALICIOUS_OVERRIDE";
+    }
     const result = buildEnvironment(payloadEnv);
 
     for (const key of immutableOverrides) {

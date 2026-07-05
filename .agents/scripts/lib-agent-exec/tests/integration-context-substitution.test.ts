@@ -5,7 +5,7 @@ import { ExecPayload } from '../schema.ts';
 test('Integration context correctly substitutes in args, env, and templateOverride', () => {
   const payload: ExecPayload = {
     type: 'command',
-    command: 'node',
+    command: 'echo',
     args: ['-e', 'console.log("{{integrationContext.name}}")'],
     env: {
       GREETING: 'Hello {{integrationContext.name}}'

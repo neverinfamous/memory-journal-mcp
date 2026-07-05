@@ -1,7 +1,9 @@
 import { test, expect, describe, afterEach, beforeEach } from 'bun:test';
 import { buildCommand } from "C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/command-builder.ts";
 import { ExecPayload } from "C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/schema.ts";
-
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 describe("TUI Programs Blocking", () => {
     let originalExit: typeof process.exit;
     let exitCodeCaught: number | null | undefined = null;
@@ -112,4 +114,15 @@ describe("TUI Programs Blocking", () => {
         expect(exited).toBe(true);
         expect(exitCode).toBe(1);
     });
+
+    test("script payload executing a file with vim inside should be intercepted", () => {
+        const scriptPath = path.join(os.tmpdir(), "hanging-tui-dummy.sh");
+        fs.writeFileSync(scriptPath, "vim file.txt");
+        const payload: ExecPayload = { type: "script", scriptPath, interpreter: "bash" };
+        const { exited, exitCode } = callBuild(payload);
+        try { fs.unlinkSync(scriptPath); } catch { /* ignore error */ }
+        expect(exited).toBe(true);
+        expect(exitCode).toBe(1);
+    });
 });
+

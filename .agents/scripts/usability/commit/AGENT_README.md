@@ -21,6 +21,7 @@ The tests verify that `commit.ts` strictly enforces:
 - `test-usability-commit-cli-validation-flags-impact.md` -> Tests error handling when `--impact` is missing.
 - `test-usability-commit-cli-validation-flags-msg.md` -> Tests error handling when `--msg` is missing.
 - `test-usability-commit-cli-validation-format-invalid.md` -> Tests parsing of an invalid conventional commit message.
+- `test-usability-commit-cli-validation-format-valid.md` -> Tests parsing of a valid conventional commit message.
 - `test-usability-commit-cli-validation-format-missing-scope.md` -> Tests parsing of a conventional commit missing the scope.
 - `test-usability-commit-cli-validation-format-breaking.md` -> Tests parsing of the breaking change indicator in the commit message.
 - `test-usability-commit-cli-validation-format-breaking-no-scope.md` -> Tests parsing of the breaking change indicator without a scope.

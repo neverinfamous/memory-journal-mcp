@@ -10,7 +10,7 @@ Verify that the `commit.ts` CLI successfully accepts the `--add` flag to stage s
 
 ### Phase 1: Adversarial Fuzzing
 1. **Setup Mock Repo:** Create a new directory `<appDataDir>\brain\<conversation-id>\scratch\test-repo-add` and initialize an empty git repository in it using `git init`.
-2. **Commit with Add Flag:** From within the mock repository, create two scratch files `dummy-add1.txt` and `dummy-add2.txt`. Do NOT run `git add`. Attempt a commit using the `--add` flag to stage only one file: `bun C:\Users\chris\Desktop\adamic\.agents\scripts\commit.ts --add dummy-add1.txt --msg "feat(core): test add flag" --category Added --impact 0.1 --confidence 0.9 --validation passed`.
+2. **Commit with Add Flag:** From within the mock repository, create two scratch files `dummy-add1.txt` and `dummy-add2.txt`. Do NOT run `git add`. Attempt a commit using the `--add` flag to stage only one file: `bun C:\Users\chris\Desktop\adamic\.agents\scripts\commit.ts --add dummy-add1.txt --msg "feat(core): test add flag" --category Added --impact 0.1 --confidence 0.9 --validation passed --no-history`.
 
 ### Phase 2: Meta-Cognitive Debugging
 1. Extract the commit data using `bun C:\Users\chris\Desktop\adamic\.agents\scripts\get-git-history-json.ts --limit 1` within the mock repository.

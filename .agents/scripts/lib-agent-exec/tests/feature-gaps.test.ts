@@ -20,8 +20,8 @@ describe('Feature Gaps & Integration Limitations', () => {
     // 3rd party integrations may need to wrap standard commands (e.g., executing within a special Slack logger wrapper).
     const payload = {
       type: 'command',
-      command: 'bun',
-      args: ['-e', '"hello"'],
+      command: 'echo',
+      args: ['hello'],
       templateOverride: 'WrapperCommand {{code}}', // Gap: ignored
       keepPayload: true
     } as unknown as import("../schema.ts").ExecPayload;

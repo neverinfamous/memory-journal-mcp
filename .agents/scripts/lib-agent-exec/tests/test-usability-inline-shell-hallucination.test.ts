@@ -49,4 +49,43 @@ describe("Usability Test: Agent-Exec Hallucinations (Inline Shell)", () => {
       }
     });
   }
+
+  const evalTestCases = [
+    { interpreter: "pwsh", code: 'pwsh -c "git log"', name: "eval pwsh: pwsh -c 'git log'" },
+    { interpreter: "pwsh", code: 'pwsh -Command "echo test"', name: "eval pwsh: pwsh -Command 'echo test'" },
+    { interpreter: "bash", code: 'bash -c "ls"', name: "eval bash: bash -c 'ls'" },
+    { interpreter: "pwsh", code: "powershell 'echo test'", name: "eval pwsh: powershell 'echo test' (implicit -Command)" },
+    { interpreter: "pwsh", code: "pwsh 'echo test'", name: "eval pwsh: pwsh 'echo test' (implicit -Command)" }
+  ];
+
+  for (const tc of evalTestCases) {
+    test(`Intercepts '${tc.name}' eval payload and throws anti-hallucination error`, () => {
+      const payload = {
+        type: "eval",
+        interpreter: tc.interpreter,
+        code: tc.code,
+        timeoutMs: 5000,
+        expectJsonEnvelope: false
+      };
+      fs.writeFileSync(payloadPath, JSON.stringify(payload));
+
+      try {
+        execSync(`bun ${agentExecPath} ${payloadPath}`, { encoding: "utf8", stdio: 'pipe' });
+        throw new Error(`agent-exec should have failed and thrown an interceptor error for ${tc.name}, but it succeeded.`);
+      } catch (err: unknown) {
+        const errorObj = err as { status?: number, stderr?: string, stdout?: string, message?: string };
+        const stderr = errorObj.stderr || "";
+        const stdout = errorObj.stdout || "";
+        const message = errorObj.message || "";
+        const output = stderr + "\n" + stdout + "\n" + message;
+        
+        expect(errorObj.status).not.toBe(0);
+        expect(output.toLowerCase()).toContain("payload");
+        expect(output.toLowerCase()).toContain("inline");
+        expect(output).toContain("AUTONOMOUS HEALING");
+      } finally {
+        if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
+      }
+    });
+  }
 });

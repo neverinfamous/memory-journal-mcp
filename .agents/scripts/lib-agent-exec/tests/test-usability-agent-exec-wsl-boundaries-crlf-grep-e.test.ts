@@ -23,7 +23,7 @@ describe('WSL2 CRLF Boundary Fidelity - grep -E', () => {
         bypassInterceptors: true
       }), 'utf8');
       
-      const agentExecPath = path.resolve(process.cwd(), '.agents/scripts/agent-exec.ts');
+      const agentExecPath = path.resolve(__dirname, '../agent-exec.ts');
       const result = spawnSync('bun', [agentExecPath, payloadPath], { encoding: 'utf8' });
       
       expect(result.status).toBe(0);

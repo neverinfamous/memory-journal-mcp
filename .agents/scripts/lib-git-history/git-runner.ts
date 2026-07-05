@@ -72,8 +72,13 @@ export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: Abo
           streamError = new Error(`Git process was killed with signal ${signal}`);
           reject(streamError);
         } else if ((code !== 0 && code !== null && code !== SIGPIPE_EXIT_CODE) || (signal && signal !== 'SIGPIPE')) {
-          streamError = new Error(`Git failed with code ${code} and signal ${signal}: ${errChunks.join('')}`);
-          reject(streamError);
+          const errText = errChunks.join('');
+          if (errText.includes("ambiguous argument 'HEAD': unknown revision") || errText.includes("bad default revision 'HEAD'")) {
+            resolve();
+          } else {
+            streamError = new Error(`Git failed with code ${code} and signal ${signal}: ${errText}`);
+            reject(streamError);
+          }
         } else {
           resolve();
         }

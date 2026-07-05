@@ -5,12 +5,11 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { z } from 'zod';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 const VALID_CATEGORIES = ['Added', 'Changed', 'Fixed', 'Removed', 'Security', 'Deprecated'] as const;
 const VALIDATION_STATES = ['passed', 'none', 'failed'] as const;
-const JOURNAL_IMPACT_THRESHOLD = 0.4;
-const CONVENTIONAL_COMMIT_REGEX = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s*(.+)$/;
+const CONVENTIONAL_COMMIT_REGEX = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s+(.+)$/;
 const HISTORY_CATEGORY_REGEX = /^([A-Za-z]+):\s*([\s\S]+)$/;
 const COMMIT_MSG_PREFIX = 'commit-msg-';
 const JOURNAL_PREFIX = 'journal-';
@@ -73,7 +72,12 @@ const TYPE_TO_CATEGORY: Record<string, typeof VALID_CATEGORIES[number]> = {
 };
 
 const cliSchema = z.object({
-  msg: z.string({ message: "Missing Commit Message! You must provide a commit message using `--msg \"...\"` or as the first positional argument." }).max(200),
+  msg: z.string({ message: "Missing Commit Message! You must provide a commit message using `--msg \"...\"` or as the first positional argument." })
+    .refine((val) => val.trim().split('\n')[0].length <= 200, { message: "Too big: expected commit subject (first line) to be <=200 characters" })
+    .refine((val) => {
+      const firstLine = val.trim().split('\n')[0];
+      return CONVENTIONAL_COMMIT_REGEX.test(firstLine);
+    }, { message: "must follow conventional commit format (e.g., 'feat(core): subject' or 'feat!: breaking')." }),
   history: z.string().optional(),
   'history-file': z.string().max(4096).optional(),
   'no-history': z.boolean().default(false),
@@ -94,13 +98,15 @@ const cliSchema = z.object({
         console.warn(`⚠️ AUTONOMOUS HEALING: Invalid category '${val}' mapped to '${mapped}'.`);
         return mapped;
       }
-      console.warn(`⚠️ AUTONOMOUS HEALING: Invalid category '${val}' mapped to 'Changed'.`);
-      return 'Changed';
+      return val;
     },
     z.enum(VALID_CATEGORIES)
   ).optional(),
   cwd: z.string().max(4096).optional(),
-  add: z.array(z.string().max(4096)).optional(),
+  add: z.array(z.string().max(4096)).optional().refine(
+    (val) => !val || !val.some(v => v === '.' || v === '*' || v === './' || v === '.\\'),
+    { message: "Wildcard staging (e.g. '.') is forbidden. You must explicitly specify files." }
+  ),
   journal: z.boolean().default(false),
   'journal-project': z.coerce.number().int().finite().positive().optional(),
 }).strict().transform(data => {
@@ -172,47 +178,56 @@ function parseArguments(): CliArgs {
     showHelpAndExit();
   }
 
-  if (!mergedValues.msg) {
-    fatalError('CRITICAL: Missing Commit Message!');
-  }
-
   const parsed = cliSchema.safeParse(mergedValues);
   if (!parsed.success) {
+    if (parsed.error.issues.some(err => err.path[0] === 'msg' && err.message.includes('Missing Commit Message!'))) {
+      fatalError('CRITICAL: Missing Commit Message!');
+    }
     console.error("🛠️ AUTONOMOUS HEALING: Invalid CLI arguments provided to commit.ts");
     parsed.error.issues.forEach(err => {
       const field = err.path.join('.');
       
       const formattedMsg = match(err)
-        .with({ code: 'too_small' }, (e) => `Too small: expected number to be >=${e.minimum}`)
-        .with({ code: 'too_big' }, (e) => `Too big: expected number to be <=${e.maximum}`)
+        .with({ code: 'too_small', type: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+        .with({ code: 'too_small', type: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+        .with({ code: 'too_small', type: 'number' }, (e) => `Too small: expected number to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
+        .with({ code: 'too_big', type: 'string' }, (e) => `Too big: expected string length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+        .with({ code: 'too_big', type: 'array' }, (e) => `Too big: expected array length to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
+        .with({ code: 'too_big', type: 'number' }, (e) => `Too big: expected number to be ${e.inclusive ? '<=' : '<'}${e.maximum}`)
         .with({ code: 'unrecognized_keys' }, (e) => `Unrecognized keys: ${e.keys.join(', ')}`)
-        .with({ code: 'invalid_value' }, (e) => {
-          if (e.path[0] === 'validation') {
-            return `Invalid validation status '${mergedValues.validation}'. You MUST append one of: ${VALIDATION_STATES.map(v => `'--validation ${v}'`).join(', ')} to your command.`;
-          }
-          if (e.path[0] === 'category') {
-            return `Invalid explicit category '${mergedValues.category}'. Must be one of: ${VALID_CATEGORIES.join(', ')}`;
-          }
-          return e.message;
-        })
-        .with({ code: 'invalid_type' }, (e) => {
-          if (e.message.includes('received undefined')) {
-            if (e.path[0] === 'validation') {
+        .with(
+          { code: 'invalid_value', path: ['validation'] },
+          () => {
+            if (mergedValues.validation === undefined) {
               return `Missing required flag. You MUST append one of: ${VALIDATION_STATES.map(v => `'--validation ${v}'`).join(', ')} to your command.`;
             }
-            if (e.path[0] === 'impact') {
-              return `Missing required flag. You MUST append an impact score (e.g. '--impact 0.5').`;
-            }
-            if (e.path[0] === 'confidence') {
-              return `Missing required flag. You MUST append a confidence score (e.g. '--confidence 1.0').`;
-            }
-            return `Missing required flag.`;
+            return `Invalid validation status '${mergedValues.validation}'. You MUST append one of: ${VALIDATION_STATES.map(v => `'--validation ${v}'`).join(', ')} to your command.`;
           }
-          if (e.message.includes('received NaN')) {
-            return `Invalid data type for --${String(e.path[0])}. Expected a number, but received a non-numeric value.`;
-          }
-          return e.message;
-        })
+        )
+        .with(
+          { code: 'invalid_value', path: ['category'] },
+          () => `Invalid explicit category '${mergedValues.category}'. Must be one of: ${VALID_CATEGORIES.join(', ')}`
+        )
+        .with(
+          { code: 'invalid_type', received: P.union('nan', 'NaN') },
+          (e) => `Invalid data type for --${String(e.path[0])}. Expected a number, but received a non-numeric value.`
+        )
+        .with(
+          { code: 'invalid_type', path: ['validation'] },
+          () => `Missing required flag. You MUST append one of: ${VALIDATION_STATES.map(v => `'--validation ${v}'`).join(', ')} to your command.`
+        )
+        .with(
+          { code: 'invalid_type', path: ['impact'] },
+          () => `Missing required flag. You MUST append an impact score (e.g. '--impact 0.5').`
+        )
+        .with(
+          { code: 'invalid_type', path: ['confidence'] },
+          () => `Missing required flag. You MUST append a confidence score (e.g. '--confidence 1.0').`
+        )
+        .with(
+          { code: 'invalid_type' },
+          () => `Missing required flag.`
+        )
         .otherwise((e) => e.message);
 
       const prefix = err.path.length > 0 ? `--${field}: ` : '';
@@ -253,15 +268,7 @@ Options:
   process.exit(0);
 }
 
-function validateCommitMessage(msg: string): string {
-  const firstLine = msg.trim().split('\n')[0];
-  const commitMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
-  if (!commitMatch) {
-    fatalError("Error: --msg must follow conventional commit format (e.g., 'feat(core): subject' or 'feat!: breaking').");
-  }
-  
-  return commitMatch[1];
-}
+
 
 function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
   if (filesToAdd && filesToAdd.length > 0) {
@@ -340,10 +347,8 @@ function cleanupTempFile(filepath: string): void {
   } catch { /* ignore */ }
 }
 
-function shouldCreateJournal(args: CliArgs, historyContent: string): boolean {
-  if (!args.journal) return false;
-  if (args.impact < JOURNAL_IMPACT_THRESHOLD && !historyContent) return false;
-  return true;
+function shouldCreateJournal(args: CliArgs, _historyContent: string): boolean {
+  return args.journal;
 }
 
 function generateHistoryEntry(args: CliArgs, type: string, historyContent: string): string {
@@ -352,7 +357,14 @@ function generateHistoryEntry(args: CliArgs, type: string, historyContent: strin
 
   let entry = parsedCategory.entry;
 
-  entry = entry.replace(/\n/g, '\n  ');
+  if (entry) {
+    entry = entry
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(line => line.trim() === '' ? '\u200B' : line)
+      .join('\n')
+      .replace(/\n/g, '\n  ');
+  }
 
   let body = `\n\nHistory-Category: ${category}`;
   
@@ -395,9 +407,6 @@ function executeCommit(header: string, body: string, cwd?: string): string {
 
 function createJournalEntry(sha: string, header: string, args: CliArgs, historyContent: string, cwd?: string): void {
   if (!shouldCreateJournal(args, historyContent)) {
-    if (args.journal && args.impact < JOURNAL_IMPACT_THRESHOLD && !historyContent) {
-      console.log(`\n📓 Skipping automated journal entry: impact (${args.impact}) is trivial and no history was provided.`);
-    }
     return;
   }
 
@@ -463,7 +472,9 @@ function main(): void {
       });
     }
 
-    const type = validateCommitMessage(args.msg);
+    const firstLine = args.msg.trim().split('\n')[0];
+    const commitMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
+    const type = commitMatch ? commitMatch[1] : 'chore';
     ensureStagedFiles(cwd, args.add);
     
     let historyContent = args.history || '';

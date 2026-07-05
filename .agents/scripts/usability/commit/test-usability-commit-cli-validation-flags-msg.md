@@ -10,7 +10,7 @@ Verify that the `commit.ts` CLI strictly provides an actionable error when the r
 
 ### Phase 1: Adversarial Fuzzing
 1. **Setup Mock Repo:** Create a new directory `<appDataDir>\brain\<conversation-id>\scratch\test-repo-flags-msg` and initialize an empty git repository in it using `git init`.
-2. **Missing Msg Flag:** From within the mock repository, create a scratch file `dummy.txt`, stage it with `git add dummy.txt`, and attempt to run `bun C:\Users\chris\Desktop\adamic\.agents\scripts\commit.ts` omitting `--msg` (but providing other mandatory flags like `--impact 0.5 --confidence 0.5`). Verify it fails with a custom 'Missing Commit Message' error.
+2. **Missing Msg Flag:** From within the mock repository, create a scratch file `dummy.txt`, stage it with `git add dummy.txt`, and attempt to run `bun C:\Users\chris\Desktop\adamic\.agents\scripts\commit.ts` omitting `--msg` (but providing other mandatory flags like `--impact 0.5 --confidence 0.5 --validation passed`). Verify it fails with a custom 'Missing Commit Message' error.
 
 ### Phase 2: Meta-Cognitive Debugging
 1. Ensure it fails with the exact message `❌ CRITICAL: Missing Commit Message!`.

@@ -236,6 +236,23 @@ test("replTuiInterceptor - watch command throws", () => {
   }
 });
 
+test("replTuiInterceptor - wsl watch ls command throws", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "wsl",
+    args: ["watch", "ls"],
+    envOverrides: {},
+    payload: { type: "command", command: "wsl", args: ["watch", "ls"] } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
 test("replTuiInterceptor - npx node throws", () => {
   const exitSpy = setupExitSpy();
   const context = {
@@ -299,6 +316,140 @@ test("replTuiInterceptor - docker-compose logs --follow throws", () => {
   try {
     expect(() => replTuiInterceptor(context)).toThrow("process.exit");
     expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - eval payload with /usr/bin/python throws", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "bash",
+    args: [],
+    envOverrides: {},
+    payload: { type: "eval", interpreter: "bash", code: "/usr/bin/python" } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - eval payload with C:\\Python39\\python.exe throws", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "pwsh.exe",
+    args: [],
+    envOverrides: {},
+    payload: { type: "eval", interpreter: "pwsh", code: "C:\\Python39\\python.exe" } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - eval payload with ./bash throws", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "bash",
+    args: [],
+    envOverrides: {},
+    payload: { type: "eval", interpreter: "bash", code: "./bash" } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - python -E hangs properly throws", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "python",
+    args: ["-E"],
+    envOverrides: {},
+    payload: { type: "command", command: "python", args: ["-E"] } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - bash --login hangs properly throws", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "bash",
+    args: ["--login"],
+    envOverrides: {},
+    payload: { type: "command", command: "bash", args: ["--login"] } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - node --experimental-repl-await hangs properly throws", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "node",
+    args: ["--experimental-repl-await"],
+    envOverrides: {},
+    payload: { type: "command", command: "node", args: ["--experimental-repl-await"] } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - node script.js does not throw", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "node",
+    args: ["script.js"],
+    envOverrides: {},
+    payload: { type: "command", command: "node", args: ["script.js"] } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).not.toThrow();
+  } finally {
+    exitSpy.restore();
+  }
+});
+
+test("replTuiInterceptor - python -c 'print(1)' does not throw", () => {
+  const exitSpy = setupExitSpy();
+  const context = {
+    cmdBasename: "python",
+    args: ["-c", "print(1)"],
+    envOverrides: {},
+    payload: { type: "command", command: "python", args: ["-c", "print(1)"] } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => replTuiInterceptor(context)).not.toThrow();
   } finally {
     exitSpy.restore();
   }

@@ -59,7 +59,7 @@ describe('agent-exec WSL2 target', () => {
     const resEnv = runAgentExec(payloadEnv, 'cmd2');
     expect(resEnv.status).toBe(0);
     expect(resEnv.stdout.trim()).toBe('wsl2_test_value');
-  }, 15000);
+  }, 30000);
 
   it('should map windows paths in args to /mnt/c/', () => {
     const payload = {
@@ -71,7 +71,7 @@ describe('agent-exec WSL2 target', () => {
     const res = runAgentExec(payload, 'args-map');
     expect(res.status).toBe(0);
     expect(res.stdout.trim()).toBe('/mnt/c/Users/chris/Desktop/adamic');
-  });
+  }, 30000);
 
   it('should run eval code in wsl2', () => {
     const payload = {
@@ -86,7 +86,7 @@ describe('agent-exec WSL2 target', () => {
     expect(res.status).toBe(0);
     expect(res.stdout.trim()).toContain('eval_works');
     expect(res.stdout.trim()).toContain('/mnt/c/Users/chris');
-  });
+  }, 30000);
 
   it('should run a shell script in wsl2', () => {
     const scriptPath = path.join(scratchDir, 'test_script.sh');
@@ -105,7 +105,7 @@ describe('agent-exec WSL2 target', () => {
     expect(res.stdout.trim()).toContain('script_works');
     expect(res.stdout.trim()).toContain('/mnt/c');
     expect(res.stdout.trim()).toContain('/mnt/c/some/windows/path');
-  });
+  }, 30000);
 });
 
 

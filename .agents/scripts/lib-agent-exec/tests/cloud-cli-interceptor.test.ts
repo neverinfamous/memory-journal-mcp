@@ -128,3 +128,22 @@ test("cloudCliInterceptor - gh run view --log throws and recommends schedule", (
     exitSpy.restore();
   }
 });
+
+test("cloudCliInterceptor - gh pr create throws if missing flags even with --repo provided", () => {
+  const exitSpy = setupExitSpy();
+  const envOverrides: Record<string, string> = {};
+  const args = ["--repo", "owner/repo", "pr", "create"];
+  const context = {
+    cmdBasename: "gh",
+    args,
+    envOverrides,
+    payload: { type: "command", command: "gh", args } as unknown as ExecPayload,
+  };
+
+  try {
+    expect(() => cloudCliInterceptor(context)).toThrow("process.exit");
+    expect(exitSpy.getExitCode()).toBe(1);
+  } finally {
+    exitSpy.restore();
+  }
+});

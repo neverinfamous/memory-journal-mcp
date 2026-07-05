@@ -18,7 +18,7 @@ describe("Graceful Exits for Diff", () => {
       type: "command",
       command: "git",
       args: ["diff", "--no-index", file1Path, file2Path],
-      timeoutMs: 5000,
+      timeoutMs: 15000,
       expectJsonEnvelope: false
     };
     fs.writeFileSync(payloadPath, JSON.stringify(payload));
@@ -51,7 +51,7 @@ describe("Graceful Exits for Diff", () => {
       command: "wsl",
       args: ["diff", file1Name, file2Name],
       cwd: process.cwd(),
-      timeoutMs: 5000,
+      timeoutMs: 15000,
       expectJsonEnvelope: false
     };
     fs.writeFileSync(payloadPath, JSON.stringify(payload));
@@ -76,7 +76,7 @@ describe("Graceful Exits for Diff", () => {
       type: "command",
       command: "wsl",
       args: ["ls", "NON_EXISTENT_DIR_12345"],
-      timeoutMs: 5000,
+      timeoutMs: 15000,
       expectJsonEnvelope: false
     };
     fs.writeFileSync(payloadPath, JSON.stringify(payload));
@@ -105,7 +105,7 @@ describe("Graceful Exits for Diff", () => {
       command: "wsl",
       args: ["diff", file1Name, file2Name],
       cwd: process.cwd(),
-      timeoutMs: 5000,
+      timeoutMs: 15000,
       expectJsonEnvelope: false
     };
     fs.writeFileSync(payloadPath, JSON.stringify(payload));

@@ -101,6 +101,21 @@ describe('Forced TTY flags stripping / blocking', () => {
      replTuiInterceptor(ctx);
      expect(exitCode).toBe(1);
   });
+  
+  it('strips -it and -ic from bash and python', () => {
+     let ctx = { cmdBasename: 'bash', args: ['-ic', 'echo hello'], envOverrides: {}, payload: { type: 'command' } } as unknown as import("../interceptors/types.ts").ExecutionContext;
+     replTuiInterceptor(ctx);
+     expect(ctx.args).toEqual(['-c', 'echo hello']);
+     
+     ctx = { cmdBasename: 'python', args: ['-itc', 'print("hi")'], envOverrides: {}, payload: { type: 'command' } } as unknown as import("../interceptors/types.ts").ExecutionContext;
+     replTuiInterceptor(ctx);
+     expect(ctx.args).toEqual(['-c', 'print("hi")']);
+     
+     ctx = { cmdBasename: 'bash', args: ['-it'], envOverrides: {}, payload: { type: 'command' } } as unknown as import("../interceptors/types.ts").ExecutionContext;
+     replTuiInterceptor(ctx);
+     expect(ctx.args).toEqual([]);
+     expect(exitCode).toBe(1); // Should be blocked after stripping because it becomes naked
+  });
 });
 
 

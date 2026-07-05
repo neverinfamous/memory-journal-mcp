@@ -1,5 +1,6 @@
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
+import fs from 'node:fs';
 export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {
   console.error("DEBUG EXECUTION:", JSON.stringify({cmdBasename, args, type: payload.type, command: 'command' in payload ? payload.command : undefined, code: 'code' in payload ? payload.code : undefined, scriptPath: 'scriptPath' in payload ? payload.scriptPath : undefined}));
   const replCommands = [
@@ -12,7 +13,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     'ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe', 'openssl', 'openssl.exe'
   ];
 
-  const baseTui = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted', 'watch', 'journalctl'];
+  const baseTui = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted', 'journalctl'];
   const tuiCommands = [...baseTui, ...baseTui.map(c => `${c}.exe`)];
 
   match({ cmdBasename, type: payload.type, hasStdin: !!payload.stdin, args })
@@ -25,23 +26,58 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
        process.exit(1);
     })
     .with({ type: 'command', hasStdin: false, cmdBasename: P.when((c: string) => replCommands.includes(c)) }, ({ cmdBasename, args }) => {
-      const explicitlyInteractive = args.includes('-i') || args.includes('--interactive') || (cmdBasename === 'php' && args.includes('-a'));
-      const isNodeDebug = ['node', 'node.exe', 'node.cmd'].includes(cmdBasename) && args.some(a => a === 'inspect' || a.startsWith('--inspect'));
-      const isDbRepl = ['mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'].includes(cmdBasename) && !args.some(a => ['-c', '--command', '-e', '--execute', '--eval'].includes(a));
-      const isNakedShell = ['ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe'].includes(cmdBasename) && args.filter(a => !a.startsWith('-') && !a.includes('@')).length === 0;
+      let wasInteractiveStripped = false;
+      const newArgs = [];
+      const usesPosixShortFlags = !['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(cmdBasename);
+      
+      for (const arg of args) {
+        if (arg === '-i' || arg === '--interactive' || (cmdBasename === 'php' && arg === '-a')) {
+          wasInteractiveStripped = true;
+          continue;
+        }
+        if (usesPosixShortFlags && /^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg)) {
+          const newArg = arg.replace(/[ti]/g, '');
+          if (newArg !== '-') {
+            newArgs.push(newArg);
+          }
+          wasInteractiveStripped = true;
+          continue;
+        }
+        newArgs.push(arg);
+      }
+      
+      if (wasInteractiveStripped) {
+        console.error(`\n   💡 AGENT HINT: Stripping interactive/TTY flags from ${cmdBasename} to prevent hanging.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        args.length = 0;
+        args.push(...newArgs);
+      }
 
-      if (args.length === 0 || explicitlyInteractive || isNodeDebug || isDbRepl || isNakedShell) {
-        const reason = isDbRepl ? `as a DB client without execution flags` : (isNakedShell ? `as a naked shell/connection without commands` : (isNodeDebug ? `with a debugging flag` : (explicitlyInteractive ? `with an interactive flag` : `without arguments or stdin`)));
-        console.error(`\n   💡 AGENT HINT: You attempted to start an interactive REPL (${cmdBasename} ${reason}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+      const blockReason = match({ cmdBasename: cmdBasename.toLowerCase(), args })
+        .with({ args: [] }, () => `without arguments or stdin`)
+        .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd'), args: P.when(a => a.some(arg => arg === 'inspect' || arg.startsWith('--inspect'))) }, () => `with a debugging flag`)
+        .with({ cmdBasename: P.union('mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'), args: P.when(a => !a.some(arg => ['-c', '--command', '-e', '--execute', '--eval'].includes(arg))) }, () => `as a DB client without execution flags`)
+        .with({ cmdBasename: P.union('ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe'), args: P.when(a => a.filter(arg => !arg.startsWith('-') && !arg.includes('@')).length === 0) }, () => `as a naked shell/connection without commands`)
+        .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'].includes(arg))) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-c' || arg === '-m')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-c')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg.toLowerCase() === '-c' || arg.toLowerCase() === '-command' || arg.toLowerCase() === '-file')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('ruby', 'ruby.exe', 'ruby.cmd', 'perl', 'perl.exe', 'perl.cmd'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-e' || arg === '-E')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('php', 'php.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-r')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('cmd', 'cmd.exe'), args: P.when(a => a.every(arg => arg.startsWith('/')) && !a.some(arg => arg.toLowerCase() === '/c')) }, () => `with only flags and no script execution flags`)
+        .otherwise(() => null);
+
+      if (blockReason !== null) {
+        console.error(`\n   💡 AGENT HINT: You attempted to start an interactive REPL (${cmdBasename} ${blockReason}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
         console.error(`   If you meant to execute code, use the 'eval' payload type, provide a script, or pass 'stdin'.`);
         process.exit(1);
       }
       
       if (['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(cmdBasename)) {
-        const isPythonInteractive = args.includes('-i') || args.some((a, i) => a === '-m' && args[i + 1] === 'pdb');
-        if (isPythonInteractive) {
-          console.error(`\n   💡 AGENT HINT: You attempted to start Python in interactive mode or with a debugger (-i or -m pdb).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+        const isPythonDebug = args.some((a, i) => a === '-m' && args[i + 1] === 'pdb');
+        if (isPythonDebug) {
+          console.error(`\n   💡 AGENT HINT: You attempted to start Python with a debugger (-m pdb).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
           console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
           process.exit(1);
         }
@@ -91,6 +127,10 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
        console.error(`\n   💡 AGENT HINT: 'pause' in cmd.exe waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
        process.exit(1);
     })
+    .with({ cmdBasename: P.union('watch', 'watch.exe') }, () => {
+       console.error(`\n   💡 AGENT HINT: 'watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       process.exit(1);
+    })
     .with({ cmdBasename: P.union('tail', 'tail.exe'), args: P.when(a => a.includes('-f') || a.includes('--follow')) }, () => {
        console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
        process.exit(1);
@@ -112,19 +152,21 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     })
     .otherwise(() => {});
 
-  const tuiRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${[...tuiCommands, 'watch', 'watch.exe', 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
-  const replRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\{|&|\\n|['"])(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
-  const interactiveFlagRegex = new RegExp(`(?:^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
+  const pathPrefix = `(?:[^\\s;\\|&'"]*[\\\\\\/])?`;
+  const tuiRegex = new RegExp(`(^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${pathPrefix})(${[...tuiCommands, 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
+  const replRegex = new RegExp(`(^|\\s|;|&&|\\|\\||\\{|&|\\n|['"])(${pathPrefix})(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
+  const interactiveFlagRegex = new RegExp(`(^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${pathPrefix})(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
   
   const isBlockedRepl = (body: string) => {
     if (interactiveFlagRegex.test(body)) return true;
     const match = replRegex.exec(body);
     if (!match) return false;
-    const before = body.slice(0, match.index + match[0].indexOf(match[1]));
+    const before = body.slice(0, match.index + match[1].length);
     if (before.trim().endsWith('|') || before.trim().endsWith('<')) return false;
     return true;
   };
 
+  const watchRegex = /watch(?:\.exe)?\s+/i;
   const tailFRegex = /tail(?:\\.exe)?.*(?:-f|--follow)/i;
   const dockerLogsRegex = /docker(?:-compose)?(?:\\.exe)?.*\\s+logs.*(?:-f|--follow)/i;
   const nodeWatchRegex = /(?:node|bun|npx|pnpx|bunx|yarn)(?:\\.exe|\\.cmd)?.*--watch/i;
@@ -136,10 +178,19 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const pwshNoExitRegex = /pwsh(?:\.exe)?\s+.*-noexit/i;
   const pwshUiRegex = /(?:Get-Credential|Show-Command|Out-GridView|Read-Host|PromptForChoice)/i;
   const inlineShellRegex = /(?:^|\s)(?:pwsh(?:\.exe)?|powershell(?:\.exe)?|bash(?:\.exe)?|sh(?:\.exe)?|wsl(?:\.exe)?|cmd(?:\.exe)?)\s+(?:-c|-command|\/c|-ec|-encodedcommand|-en)\b/i;
+  const implicitPwshRegex = /(?:^|\s)(?:pwsh(?:\.exe)?|powershell(?:\.exe)?)\s+(?!-(?:file|help|version|\?|\/?)\b)\S+/i;
 
-  const extractScriptBody = (type: string, cmd: string, cmdArgs: string[], code?: string): string | null => {
-    return match({ type, cmd: cmd.toLowerCase(), cmdArgs, code })
-      .with({ type: 'eval', code: P.string }, (p) => p.code)
+  const extractScriptBody = (type: string, cmd: string, cmdArgs: string[], code?: string, scriptPath?: string): string | null => {
+    return match({ type, cmd: cmd.toLowerCase(), cmdArgs, code, scriptPath })
+      .with({ type: 'eval', code: P.string }, (p) => p.code.replace(/^#.*$/gm, ''))
+      .with({ type: 'script', scriptPath: P.string }, (p) => {
+        try {
+          const content = fs.readFileSync(p.scriptPath, 'utf8');
+          return content.replace(/^#.*$/gm, '');
+        } catch {
+          return null;
+        }
+      })
       .with({ type: 'command', cmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe') }, (p) => {
         const idx = p.cmdArgs.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
         if (idx !== -1 && idx + 1 < p.cmdArgs.length) {
@@ -194,7 +245,13 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       .otherwise(() => null);
   };
 
-  const extractedScriptBody = extractScriptBody(payload.type, cmdBasename, args, 'code' in payload && typeof payload.code === 'string' ? payload.code : undefined);
+  const extractedScriptBody = extractScriptBody(
+    payload.type, 
+    cmdBasename, 
+    args, 
+    'code' in payload && typeof payload.code === 'string' ? payload.code : undefined,
+    'scriptPath' in payload && typeof payload.scriptPath === 'string' ? payload.scriptPath : undefined
+  );
 
   if (payload.type === 'command' && ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmdBasename)) {
     const cIndex = args.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
@@ -233,7 +290,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   match({ ...payload, scriptBody: extractedScriptBody })
     .with({ scriptBody: P.when(body => typeof body === 'string' && tuiRegex.test(body)) }, (p) => {
       const m = typeof p.scriptBody === 'string' ? tuiRegex.exec(p.scriptBody) : null;
-      const innerCmdBasename = m ? m[1].toLowerCase() : 'tui-app';
+      const innerCmdBasename = m ? m[3].toLowerCase() : 'tui-app';
       console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
       console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
@@ -241,11 +298,17 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && isBlockedRepl(body)) }, (p) => {
       const m = typeof p.scriptBody === 'string' ? (replRegex.exec(p.scriptBody) || interactiveFlagRegex.exec(p.scriptBody)) : null;
-      const innerCmdBasename = m ? m[1].toLowerCase() : 'repl-app';
+      const innerCmdBasename = m ? m[3].toLowerCase() : 'repl-app';
       console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
       console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
       process.exit(1);
+    })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && watchRegex.test(body)) }, () => {
+       console.error(`\n   💡 AGENT HINT: You wrapped 'watch' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       console.error(`   Because 'agent-exec.ts' is non-interactive, running continuous processes like 'watch' inside inline scripts will hang indefinitely.`);
+       console.error(`   Please use standard terminal commands instead.`);
+       process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && tailFRegex.test(body)) }, () => {
       console.error(`\n   💡 AGENT HINT: You wrapped 'tail' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
@@ -255,7 +318,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && tuiRegex.test(c)) }, (p) => {
        const m = typeof p.code === 'string' ? tuiRegex.exec(p.code) : null;
-       const innerCmdBasename = m ? m[1].toLowerCase() : 'tui-app';
+       const innerCmdBasename = m ? m[3].toLowerCase() : 'tui-app';
        console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
@@ -263,9 +326,15 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && isBlockedRepl(c)) }, (p) => {
        const m = typeof p.code === 'string' ? (replRegex.exec(p.code) || interactiveFlagRegex.exec(p.code)) : null;
-       const innerCmdBasename = m ? m[1].toLowerCase() : 'repl-app';
+       const innerCmdBasename = m ? m[3].toLowerCase() : 'repl-app';
        console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
+       console.error(`   Please use standard terminal commands instead.`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && watchRegex.test(c)) }, () => {
+       console.error(`\n   💡 AGENT HINT: You passed 'watch' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       console.error(`   Because 'agent-exec.ts' is non-interactive, running continuous processes like 'watch' natively will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
     })
@@ -331,6 +400,20 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && inlineShellRegex.test(c)) }, () => {
        console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
        console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
+       process.exit(1);
+    })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && implicitPwshRegex.test(body)) }, () => {
+       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
+       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
+       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && implicitPwshRegex.test(c)) }, () => {
+       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: DO NOT ask the user for help. You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
+       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
+       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
+       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
        process.exit(1);
     })
     .otherwise(() => {});

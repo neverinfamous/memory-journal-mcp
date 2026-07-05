@@ -61,8 +61,18 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
       process.exit(1);
     }
 
-    const subCmd1 = args.filter(a => !a.startsWith('-'))[0];
-    const subCmd2 = args.filter(a => !a.startsWith('-'))[1];
+    const posArgs = [];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i].startsWith('-')) {
+        if (['-R', '--repo', '--hostname'].includes(args[i]) && i + 1 < args.length && !args[i+1].startsWith('-')) {
+          i++;
+        }
+        continue;
+      }
+      posArgs.push(args[i]);
+    }
+    const subCmd1 = posArgs[0];
+    const subCmd2 = posArgs[1];
 
     match([subCmd1, subCmd2])
       .with(['pr', 'create'], () => {
