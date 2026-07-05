@@ -187,7 +187,7 @@ Select one or more workflows to run based on the user's request or the presence 
 3. **Importance Audit** (Pruning): Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
 4. **Type-Based Cleanup** (Pruning): e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
 5. **Tier 1: Fast Sanity Check** (Verification): For the \`Unverified Recent Entries\` provided above, instruct the agent to use the native MCP tool via Code Mode (e.g. \`mj.git.getCommitHistory({ techDebtAudit: true })\`) to verify that commits match the entry claims. Ensure structural changes were correctly reflected by running \`bun scripts/update-code-map.ts\` if applicable.
-6. **Tier 2: Deep Code & Drift Verification** (Verification): Use \`gh copilot\` for code validation. Verify semantic drift against \`src/filtering/tool-constants.ts\` (the SSoT) and the \`memory://instructions\` resource. Mandate that any new tools claimed in an entry MUST have corresponding testing coverage explicitly verified in \`test-server/codemode\`, \`test-server/standard\`, or \`test-server/usability\`. Remind agents to use \`bun scripts/update-code-map.ts\` instead of manually editing \`code-map.md\`.
+6. **Tier 2: Deep Code & Drift Verification** (Verification): Use \`gh copilot\` for code validation (if available and desired, otherwise fallback to standard file reading and manual validation). Verify semantic drift against \`src/filtering/tool-constants.ts\` (the SSoT) and the \`memory://instructions\` resource. Mandate that any new tools claimed in an entry MUST have corresponding testing coverage explicitly verified in \`test-server/codemode\`, \`test-server/standard\`, or \`test-server/usability\`. Remind agents to use \`bun scripts/update-code-map.ts\` instead of manually editing \`code-map.md\`.
 
 ### Scoring Protocol for Verification:
 After a verification workflow, you MUST explicitly update the target entries using \`mj_execute_code\` (e.g. \`mj.updateEntry(id, payload)\`):
@@ -198,10 +198,11 @@ After a verification workflow, you MUST explicitly update the target entries usi
 To proceed:
 1. Review the live stats and the unverified recent entries.
 2. Output a concise Markdown table breaking down the total entries by workspace/project to the user (use the Project Breakdown data provided above).
-3. Tell the user your plan (which workflow you'll run).
-4. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
-5. If verifying, apply Tier 1 or Tier 2 steps, and then use the Scoring Protocol to update entries via \`mj_execute_code\`.
-6. Ask for user confirmation before deleting or consolidating projects!`,
+3. Explicitly list the available workflows (Pruning, Consolidation, Tier 1/Tier 2 Verification) so the user understands their options. Let them know they can request verification on specific entries (even if they already passed) or use different subagents for the task.
+4. Tell the user your initial plan or recommendation based on the data.
+5. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
+6. If verifying, apply Tier 1 or Tier 2 steps, and then use the Scoring Protocol to update entries via \`mj_execute_code\`.
+7. Ask for user confirmation before deleting or consolidating projects, or before running intensive verification!`,
                             },
                         },
                     ],
