@@ -460,9 +460,9 @@ export function formatUserMessage(opts: {
     if (totalEntries > 0) {
         tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
     }
-    if (sysLines.length > 0) {
-        tableRows.push(`| **System** | ${sysLines.join('<br>')} |`)
-    }
+    // if (sysLines.length > 0) {
+    //     tableRows.push(`| **System** | ${sysLines.join('<br>')} |`)
+    // }
     if (configLines.length > 0) {
         tableRows.push(`| **Config** | ${configLines.join('<br>')} |`)
     }
