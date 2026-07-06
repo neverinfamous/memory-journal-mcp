@@ -191,11 +191,4 @@ logs/
 node_modules/
 
 # Adamic Workflows Copies
-.agents/workflows/git-audit-trust.md
-.agents/workflows/git-generate-changelog.md
-.agents/workflows/git-impact-search.md
-.agents/workflows/git-velocity-report.md
-.agents/scripts/lib-agent-exec/interceptors/system-interceptor.ts
-
-.agents/agent-exec-issues.jsonl
-.agents/workflows/doc-audit.md
+.agents/
