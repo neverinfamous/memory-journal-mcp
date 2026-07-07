@@ -73,12 +73,20 @@ export function gitInterceptor(ctx: ExecutionContext): void {
     )
     .with(
       { cmd: P.union('log', 'shortlog', 'show') },
-      ({ ctx }) => {
+      ({ ctx, args, cmd }) => {
         const cwd = ctx.payload.cwd || process.cwd();
         if (findEcosystemScript(cwd, 'get-git-history-json.ts') !== null) {
-          console.error(`\n   💡 AGENT HINT: 'git log', 'git shortlog', and 'git show' are forbidden via the shell to prevent unparsable text dumps.\n${AUTONOMOUS_HEALING_MSG}`);
-          console.error(`   You must use the designated wrapper instead: bun .\\.agents\\scripts\\get-git-history-json.ts`);
-          process.exit(1);
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to 'bun .\\.agents\\scripts\\get-git-history-json.ts' to prevent text dumps... (Frictionless Recovery)\n${AUTONOMOUS_HEALING_MSG}`);
+          ctx.cmdBasename = 'bun';
+          ctx.args = ['.\\.agents\\scripts\\get-git-history-json.ts', '--limit', '10'];
+          if (cmd === 'show') {
+            ctx.args.push('--stats');
+          }
+          const rangeArg = args.find(a => !a.startsWith('-') && a !== cmd && a !== '--no-pager');
+          if (rangeArg) {
+            ctx.args.push('--range', rangeArg);
+          }
+          return;
         }
         // Fallback to native (with --no-pager already injected)
         return;
@@ -136,7 +144,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       }
     )
     .with(
-      { cmd: P.union('merge', 'pull'), args: P.when((a: string[]) => !a.includes('--no-edit') && !a.includes('-m') && !a.includes('--message')) },
+      { cmd: P.union('merge', 'pull'), args: P.when((a: string[]) => !a.includes('--no-edit') && !a.includes('-m') && !a.includes('--message') && !a.includes('--abort') && !a.includes('--continue') && !a.includes('--quit')) },
       ({ cmd }) => {
         console.error(`\n   💡 AGENT HINT: 'git ${cmd}' may open an interactive editor for merge commits. Automatically injecting '--no-edit'.\n${AUTONOMOUS_HEALING_MSG}`);
         args.push('--no-edit');

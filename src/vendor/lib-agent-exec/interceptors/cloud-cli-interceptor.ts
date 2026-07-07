@@ -213,8 +213,13 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
       })
       .with([P.union('pr', 'issue', 'repo', 'run', 'release'), P.union('list', 'status', 'view')], () => {
         if (!args.includes('--json')) {
-          console.error(`\n   💡 AGENT HINT: 'gh ${subCmd1} ${subCmd2}' requires '--json' to output structured data. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-          process.exit(1);
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh command to output structured data... (Frictionless Recovery)\n${AUTONOMOUS_HEALING_MSG}`);
+          let jsonFields = 'url';
+          if (subCmd1 === 'pr' || subCmd1 === 'issue') jsonFields = 'number,title,state,url';
+          if (subCmd1 === 'repo') jsonFields = 'name,owner,url';
+          if (subCmd1 === 'run') jsonFields = 'databaseId,name,status,conclusion,url';
+          if (subCmd1 === 'release') jsonFields = 'tagName,name,createdAt,isDraft,isPrerelease';
+          args.push('--json', jsonFields);
         }
       })
       .with(['search', P._], () => {

@@ -127,7 +127,11 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       process.exit(1);
     })
     .with({ cmd: P.union('awk', 'sed', 'jq', 'jq.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically switching execution target to WSL2.\x1b[0m`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+    })
+    .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'), hasStdin: true }, () => {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
       ctx.payload.target = 'wsl2';
     })
     .with({ cmd: P.union('gh', 'gh.exe', 'pnpm', 'npm', 'docker', 'docker.exe') }, ({ args }) => {
@@ -413,8 +417,17 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
     // List dir tool enforcement (FS Alias Hallucinations)
     .with({ isCommand: true, originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
-      process.exit(1);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently routing '${originalCmd}' to WSL2 for frictionless execution... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+      if (['dir', 'dir.exe', 'gci', 'get-childitem', 'get-childitem.exe'].includes(originalCmd.toLowerCase())) {
+        ctx.cmdBasename = 'ls';
+        const payloadObj = ctx.payload as { command?: string };
+        if (typeof payloadObj.command === 'string') {
+          payloadObj.command = payloadObj.command.replace(new RegExp(`^${originalCmd}\\b`, 'i'), 'ls')
+            .replace(/\s-Path\b/gi, '');
+        }
+        ctx.args = ctx.args.filter(a => a.toLowerCase() !== '-path');
+      }
     })
 
 
