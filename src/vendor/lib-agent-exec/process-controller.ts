@@ -303,7 +303,7 @@ export class ProcessController {
         try {
           if (this.child.pid) {
             if (process.platform === 'win32') {
-              this.child.kill('SIGINT');
+              killProcessTree(this.child);
             } else {
               process.kill(-this.child.pid, 'SIGTERM');
             }

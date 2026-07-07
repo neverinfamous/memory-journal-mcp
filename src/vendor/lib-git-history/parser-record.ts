@@ -217,7 +217,7 @@ export function parseGitRecord(
       const key = keyRaw.toLowerCase().replace(/\s+/g, '-');
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
       const rawVal = colonIdx === -1 ? '' : t.slice(colonIdx + 1).trim();
-      let val = rawVal.replace(/\r?\n[ \t]+/g, '\n');
+      let val = rawVal.replace(/\r?\n[ \t]+/g, '\n').replace(/\u200B/g, '');
       
       if (val.length > MAX_TRAILER_LENGTH) {
         val = truncateSafely(val, MAX_TRAILER_LENGTH, '\n...[trailer truncated due to length]');

@@ -29,7 +29,7 @@ const basePayloadSchema = z.object({
   onSuccess: z.union([safeString, safeStringArray]).optional(),
   onFailure: z.union([safeString, safeStringArray]).optional(),
   webhookHeaders: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
-  webhookPayloadTemplate: noNullString.optional(),
+  webhookPayloadTemplate: z.unknown().transform(val => typeof val === 'string' ? val : JSON.stringify(val)).pipe(noNullString).optional(),
   webhookMethod: z.union([z.literal("GET"), z.literal("POST"), z.literal("PUT"), z.literal("PATCH"), z.literal("DELETE")]).optional(),
   webhookTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
   expectJsonEnvelope: lenientBoolean.optional(),
@@ -47,7 +47,7 @@ export const PayloadSchema = z.discriminatedUnion("type", [
   }),
   basePayloadSchema.extend({
     type: z.literal("eval"),
-    code: noNullString.refine(val => val.trim().length > 0, "code must not be empty"),
+    code: noNullString.max(10 * 1024 * 1024, "code exceeds maximum allowed length of 10MB").refine(val => val.trim().length > 0, "code must not be empty"),
     interpreter: safeString.optional(),
   })
 ]);

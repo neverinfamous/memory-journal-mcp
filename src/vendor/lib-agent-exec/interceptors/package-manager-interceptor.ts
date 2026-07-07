@@ -2,7 +2,8 @@
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
 
-export function packageManagerInterceptor({ cmdBasename, args, envOverrides }: ExecutionContext): void {
+export function packageManagerInterceptor(ctx: ExecutionContext): void {
+  const { cmdBasename, args, envOverrides } = ctx;
   if (['apt', 'apt-get'].includes(cmdBasename)) {
     envOverrides['DEBIAN_FRONTEND'] = 'noninteractive';
     if (!args.includes('-y') && !args.includes('--yes')) {
@@ -71,10 +72,10 @@ export function packageManagerInterceptor({ cmdBasename, args, envOverrides }: E
       console.error(`\n   💡 AGENT HINT: 'yarn upgrade-interactive' is a TUI tool and will hang. Use 'yarn upgrade' instead.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
     }
-    if (['init', 'create', 'dlx'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
+    if (['init', 'create', 'dlx', 'x'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
       console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.\n${AUTONOMOUS_HEALING_MSG}`);
-      if (subCmd === 'dlx') {
-         args.splice(args.indexOf('dlx') + 1, 0, '-y');
+      if (subCmd === 'dlx' || subCmd === 'x') {
+         args.splice(args.indexOf(subCmd) + 1, 0, '-y');
       } else {
          args.push('-y');
       }
@@ -94,10 +95,19 @@ export function packageManagerInterceptor({ cmdBasename, args, envOverrides }: E
   }
 
   if (['npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'].includes(cmdBasename)) {
-    envOverrides['CI'] = '1';
-    if (!args.includes('-y') && !args.includes('--yes')) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.\n${AUTONOMOUS_HEALING_MSG}`);
-      args.unshift('-y');
+    if (cmdBasename.startsWith('npx') && args[0] === 'tsx') {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'npx tsx' to 'pnpm exec tsx' to prevent interactive installation prompts... (Frictionless Recovery)\x1b[0m`);
+      ctx.cmdBasename = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+      if ('command' in ctx.payload) {
+         ctx.payload.command = ctx.cmdBasename;
+      }
+      args.unshift('exec');
+    } else {
+      envOverrides['CI'] = '1';
+      if (!args.includes('-y') && !args.includes('--yes')) {
+        console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+        args.unshift('-y');
+      }
     }
   }
 

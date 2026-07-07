@@ -118,6 +118,16 @@ function escapeUnixArg(arg: string, allowGlobs = false): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
+function sanitizeWslRegex(regexArg: string): string {
+  let sanitized = regexArg;
+  if (sanitized.startsWith('"') && sanitized.endsWith('"') && sanitized.length >= 2) {
+    sanitized = sanitized.slice(1, -1);
+  } else if (sanitized.startsWith("'") && sanitized.endsWith("'") && sanitized.length >= 2) {
+    sanitized = sanitized.slice(1, -1);
+  }
+  return sanitized;
+}
+
 function tokenizeArgs(str: string): string[] {
   const args: string[] = [];
   let currentArg = '';
@@ -294,15 +304,25 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
 
       if (p.target === 'wsl2') {
         localCmd = convertToWslPath(localCmd);
-        localArgs = localArgs.map(a => convertToWslPath(a));
+        
+        let grepRegexIdx = -1;
+        if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'].includes(localCmd.toLowerCase())) {
+          grepRegexIdx = localArgs.findIndex(a => !a.startsWith('-'));
+        }
+
+        localArgs = localArgs.map((a, idx) => {
+          if (idx === grepRegexIdx) return a;
+          return convertToWslPath(a);
+        });
 
         if (localCmd.toLowerCase() === 'diff' || localCmd.toLowerCase() === 'diff.exe') {
           if (!localArgs.includes('--strip-trailing-cr')) {
             localArgs.unshift('--strip-trailing-cr');
           }
-        } else if (['grep', 'grep.exe', 'egrep', 'fgrep'].includes(localCmd.toLowerCase())) {
+        } else if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'].includes(localCmd.toLowerCase())) {
           const nonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
           if (nonFlagIdx !== -1) {
+            localArgs[nonFlagIdx] = sanitizeWslRegex(localArgs[nonFlagIdx]);
             if (localArgs.includes('-E')) {
               localArgs[localArgs.indexOf('-E')] = '-P';
               localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
@@ -449,6 +469,10 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   args = parsedCmdArgs.args;
 
   if (payload.target !== 'wsl2') {
+    if (['bunx', 'bunx.cmd', 'bunx.exe'].includes(cmd.toLowerCase())) {
+      cmd = 'bun';
+      args = ['x', ...args];
+    }
     cmd = resolveWindowsCommand(cmd, cwd, payload.env);
   }
 
@@ -549,7 +573,13 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       wslEnvArgs.push(`${k}=${convertToWslPath(v)}`);
     }
 
-    const wslArgs = args.map(arg => {
+    let grepRegexIdx = -1;
+    if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'].includes(path.basename(cmd).toLowerCase())) {
+      grepRegexIdx = args.findIndex(a => !a.startsWith('-'));
+    }
+
+    const wslArgs = args.map((arg, idx) => {
+      if (idx === grepRegexIdx) return arg;
       if (/[a-zA-Z]:[/\\]/.test(arg)) {
         return convertToWslPath(arg);
       }

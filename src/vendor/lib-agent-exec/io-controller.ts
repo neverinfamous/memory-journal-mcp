@@ -181,13 +181,14 @@ export class IOController {
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
         let buffer: Buffer[] = [];
         let timer: NodeJS.Timeout | null = null;
-
-        const sendChunk = (data: Buffer): Promise<void> => {
+        const inFlightReqs: Set<Promise<void>> = new Set();
+        
+        const sendChunk = (data: Buffer) => {
           const method = this.payload.webhookMethod || 'POST';
           const headers: Record<string, string> = { ...this.payload.webhookHeaders };
           let bodyPayload: BodyInit = new Blob([new Uint8Array(data)]);
 
-          if ('webhookPayloadTemplate' in this.payload && this.payload.webhookPayloadTemplate) {
+          if (this.payload.webhookPayloadTemplate) {
             headers['Content-Type'] = headers['Content-Type'] || 'application/json';
             const chunkStr = data.toString('utf8');
             const vars = {
@@ -207,7 +208,14 @@ export class IOController {
           if (method !== 'GET') {
             fetchOptions.body = bodyPayload;
           }
-          return fetch(filePath, fetchOptions).then(res => res.arrayBuffer()).then(() => {}).catch(() => {});
+          const timeoutMs = this.payload.webhookTimeoutMs ?? 5000;
+          if (timeoutMs > 0) {
+            fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+          }
+          const req = fetch(filePath, fetchOptions).then(res => res.arrayBuffer()).then(() => {}).catch(() => {});
+          inFlightReqs.add(req);
+          req.finally(() => inFlightReqs.delete(req));
+          return req;
         };
 
         return new Writable({
@@ -224,13 +232,21 @@ export class IOController {
             callback();
           },
           final(callback) {
-            if (buffer.length > 0) {
-              const data = Buffer.concat(buffer);
-              buffer = [];
-              if (timer) clearTimeout(timer);
-              sendChunk(data).finally(() => callback());
+            const finish = () => {
+              if (buffer.length > 0) {
+                const data = Buffer.concat(buffer);
+                buffer = [];
+                if (timer) clearTimeout(timer);
+                sendChunk(data).finally(() => callback());
+              } else {
+                callback();
+              }
+            };
+
+            if (inFlightReqs.size > 0) {
+              Promise.all(Array.from(inFlightReqs)).finally(finish);
             } else {
-              callback();
+              finish();
             }
           }
         });
@@ -570,10 +586,12 @@ export class IOController {
     }
 
     try {
+      let timeoutId: NodeJS.Timeout;
       await Promise.race([
         Promise.all(closePromises),
-        new Promise(resolve => setTimeout(resolve, 2000))
+        new Promise(resolve => { timeoutId = setTimeout(resolve, 2000); })
       ]);
+      clearTimeout(timeoutId!);
     } catch { /* ignore */ }
   }
 
