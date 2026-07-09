@@ -204,10 +204,11 @@ export function systemInterceptor(ctx: ExecutionContext): void {
             
             return exactShellChars.some(op => {
                 let checkStr = finalState.unquoted;
+                checkStr = checkStr.replace(/<[^>]+>/g, '');
                 if (op === '>') {
                     checkStr = checkStr.replace(/=>/g, '').replace(/->/g, '');
                 } else if (op === '<') {
-                    checkStr = checkStr.replace(/<-/g, '').replace(/<[^>]+>/g, '');
+                    checkStr = checkStr.replace(/<-/g, '');
                 }
                 
                 if (!checkStr.includes(op)) return false;
