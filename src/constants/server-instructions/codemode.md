@@ -48,6 +48,10 @@ In Code Mode (`mj_execute_code`), you do NOT have native MCP tool schemas. You m
 ### `mj.admin`
 - `updateConfiguration(params)`
 - `registerProject(params)`
+- `updateProject(params)`
+- `deleteProject(params)`
+- `getProject(params)`
+- `listProjects(params)`
 - `updateEntry(params)`
 - `deleteEntry(params)`
 - `restoreEntry(params)`

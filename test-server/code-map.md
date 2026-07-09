@@ -308,7 +308,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 <!-- BEGIN: TOOL_MAPPING -->
 | Group | Tools |
 | ----- | ----- |
-| **Admin** | `update_entry`, `delete_entry`, `restore_entry`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `rebuild_vector_index`, `add_to_vector_index`, `merge_tags`, `search_audit_log`, `run_auto_prune`, `update_configuration` |
+| **Admin** | `update_entry`, `delete_entry`, `restore_entry`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `rebuild_vector_index`, `add_to_vector_index`, `merge_tags`, `search_audit_log`, `run_auto_prune`, `register_project`, `update_project`, `delete_project`, `list_projects`, `get_project`, `update_configuration` |
 | **Analytics** | `get_statistics`, `get_cross_project_insights` |
 | **Backup** | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
 | **Code Mode** | `mj_execute_code` |

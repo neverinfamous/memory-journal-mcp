@@ -85,11 +85,7 @@ export function generateTypescriptDeclarations(tools: ToolDefinition[]): string 
         dts += `    /** Get method list and examples for ${groupName} */\n`
         dts += `    function help(): Promise<unknown>;\n`
         
-        // Manual admin tools
-        if (groupName === 'admin') {
-            dts += `    /** Register a new project codebase into the system */\n`
-            dts += `    function registerProject(name: string, absolutePath: string, projectNumber?: number): Promise<{ success: boolean, message: string }>;\n`
-        }
+
         
         dts += `  }\n`
     }

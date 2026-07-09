@@ -133,6 +133,13 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         configure: 'updateConfiguration',
         auditLog: 'searchAuditLog',
         audit: 'searchAuditLog',
+        registerProject: 'registerProject',
+        updateProject: 'updateProject',
+        deleteProject: 'deleteProject',
+        removeProject: 'deleteProject',
+        getProject: 'getProject',
+        listProjects: 'listProjects',
+        projects: 'listProjects',
     
         update_entry: 'updateEntry',
         delete_entry: 'deleteEntry',
@@ -144,7 +151,12 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         batch_update_entries: 'batchUpdateEntries',
         batch_delete_entries: 'batchDeleteEntries',
         update_configuration: 'updateConfiguration',
-        search_audit_log: 'searchAuditLog',},
+        search_audit_log: 'searchAuditLog',
+        register_project: 'registerProject',
+        update_project: 'updateProject',
+        delete_project: 'deleteProject',
+        get_project: 'getProject',
+        list_projects: 'listProjects',},
     github: {
         issues: 'getGithubIssues',
         issue: 'getGithubIssue',
@@ -397,7 +409,6 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     testSimple: 'message',
     writeQuery: 'content',
     getEntryHistory: 'entry_id',
-    getProject: 'project_number',
 
     // Search
     searchEntries: 'query',
@@ -431,6 +442,10 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     batchDeleteEntries: 'entry_ids',
     searchAuditLog: 'tool_name',
     updateConfiguration: 'tool_filter',
+    registerProject: ['name', 'absolute_path', 'project_number'],
+    updateProject: ['name', 'new_name', 'absolute_path', 'project_number'],
+    deleteProject: 'name',
+    getProject: 'name',
 
     // GitHub
     getGithubIssue: 'issue_number',

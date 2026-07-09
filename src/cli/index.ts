@@ -38,7 +38,7 @@ addAgentInstructions(program,
 - 🛠️ AUTONOMOUS HEALING: DO NOT attempt to run \`node .../build/index.js\`. ALWAYS use the global \`memory-journal-mcp\` wrapper or \`bun src/cli/index.ts\`.`
 )
 
-import { projectCreateAction, projectListAction } from './commands/project.js'
+import { projectCreateAction, projectListAction, projectUpdateAction, projectDeleteAction } from './commands/project.js'
 
 // Setup 'project' command group
 const projectCmd = program
@@ -67,6 +67,23 @@ addAgentInstructions(projectCreateCmd,
 - The command will AUTOMATICALLY initialize the project in the database. You no longer need to run a secondary 'entry create' command.`
 )
 projectCreateCmd.action(projectCreateAction)
+
+const projectUpdateCmd = projectCmd
+    .command('update <name>')
+    .description('Update an existing project in the registry')
+withGroup(projectUpdateCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--path <path>', 'New absolute path to the local repository')
+        .option('--number <number>', 'New GitHub Project number')
+        .option('--rename <name>', 'Rename the project key')
+})
+projectUpdateCmd.action(projectUpdateAction)
+
+const projectDeleteCmd = projectCmd
+    .command('delete <name>')
+    .alias('remove')
+    .description('Remove a project from the global registry')
+projectDeleteCmd.action(projectDeleteAction)
 
 // Setup 'exec' command
 const execCmd = program

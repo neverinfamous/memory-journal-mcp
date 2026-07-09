@@ -9,7 +9,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in this test pass:
-`test_simple`, `trigger_progress`, `test_error_handling`, `mark_anchors_stale`
+`test_simple`, `test_error_handling`, `trigger_progress`, `mark_anchors_stale`
 
 **Instructions:**
 

@@ -9,7 +9,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 ## 1. Fuzz Phase
 
 Use the `mj_execute_code` tool to interact with the following tools in this test pass:
-`merge_tags`, `search_audit_log`, `run_auto_prune`, `update_configuration`, `registerProject`
+`update_configuration`, `register_project`, `update_project`, `delete_project`, `get_project`, `list_projects`, `merge_tags`, `search_audit_log`, `run_auto_prune`
 
 **Instructions:**
 

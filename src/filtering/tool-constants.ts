@@ -36,6 +36,11 @@ export const TOOL_GROUPS = {
     io: ['export_entries', 'export_markdown', 'import_markdown', 'import_external'],
     admin: [
         'update_configuration',
+        'register_project',
+        'update_project',
+        'delete_project',
+        'get_project',
+        'list_projects',
         'update_entry',
         'delete_entry',
         'restore_entry',

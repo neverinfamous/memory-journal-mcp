@@ -121,3 +121,75 @@ export async function projectCreateAction(name: string, options: Record<string, 
         process.stderr.write(`You may need to run 'memory-journal-mcp entry create' manually.\n`)
     }
 }
+
+export function projectUpdateAction(name: string, options: Record<string, unknown>, _command: Command): void {
+    if (!name || name.trim() === '') {
+        process.stderr.write('Project name is required.\n')
+        process.exit(1)
+    }
+
+    const config = loadConfig()
+    const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
+
+    if (!registry[name]) {
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
+        process.exit(1)
+    }
+
+    const project = registry[name] ?? { path: '' }
+    let modified = false
+
+    if (options['path'] != null) {
+        project.path = path.resolve(process.cwd(), options['path'] as string)
+        modified = true
+    }
+
+    if (options['number'] != null) {
+        const num = parseInt(options['number'] as string, 10)
+        if (!isNaN(num)) {
+            project.project_number = num
+            modified = true
+        }
+    }
+
+    const targetName = (options['rename'] as string | undefined) ?? name
+    if (targetName !== name) {
+        modified = true
+    }
+
+    if (!modified) {
+        process.stdout.write('No updates specified.\n')
+        return
+    }
+
+    const { [name]: removed, ...rest } = registry
+    void removed
+    const newRegistry = { ...rest, [targetName]: project }
+    config['projectRegistry'] = newRegistry
+    saveConfig(config)
+
+    process.stdout.write(`Project '${targetName}' successfully updated.\n`)
+}
+
+export function projectDeleteAction(name: string, _options: Record<string, unknown>, _command: Command): void {
+    if (!name || name.trim() === '') {
+        process.stderr.write('Project name is required.\n')
+        process.exit(1)
+    }
+
+    const config = loadConfig()
+    const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
+
+    if (!registry[name]) {
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: Project '${name}' not found.\n`)
+        process.exit(1)
+    }
+
+    const { [name]: removed, ...rest } = registry
+    void removed
+    config['projectRegistry'] = rest
+    saveConfig(config)
+
+    process.stdout.write(`Project '${name}' successfully deleted.\n`)
+}
+

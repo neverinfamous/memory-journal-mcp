@@ -515,3 +515,42 @@ export const RunAutoPruneOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+
+export const RegisterProjectSchemaMcp = z.object({
+    name: z.string().describe('The key/name of the project in the registry.'),
+    absolute_path: z.string().describe('The absolute path to the local repository.'),
+    project_number: relaxedNumber().optional().describe('The GitHub Project number, if applicable.'),
+}).strict()
+
+export const UpdateProjectSchemaMcp = z.object({
+    name: z.string().describe('The current key/name of the project.'),
+    new_name: z.string().optional().describe('The new key/name for the project (if renaming).'),
+    absolute_path: z.string().optional().describe('The new absolute path to the local repository.'),
+    project_number: relaxedNumber().optional().describe('The new GitHub Project number.'),
+}).strict()
+
+export const DeleteProjectSchemaMcp = z.object({
+    name: z.string().describe('The key/name of the project to delete.'),
+}).strict()
+
+export const GetProjectSchemaMcp = z.object({
+    name: z.string().describe('The key/name of the project to retrieve.'),
+}).strict()
+
+export const ListProjectsSchemaMcp = z.object({}).strict()
+
+export const ProjectOutputSchema = z.object({
+    success: z.boolean().optional(),
+    project: z.object({
+        name: z.string(),
+        path: z.string(),
+        project_number: z.number().optional(),
+    }).optional(),
+    projects: z.record(z.string(), z.object({
+        path: z.string(),
+        project_number: z.number().optional()
+    })).optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+}).extend(ErrorFieldsMixin.shape)
+
