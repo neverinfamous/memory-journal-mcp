@@ -60,6 +60,9 @@ withGroup(projectCreateCmd, 'Command Options', (cmd: Command) => {
         .option('--number <number>', 'GitHub Project number (optional)')
         .option('--skip-init', 'Skip automated database initialization entry')
 })
+addCoreOptions(projectCreateCmd)
+addDatabaseOptions(projectCreateCmd)
+addOutputOptions(projectCreateCmd)
 addAgentInstructions(projectCreateCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:

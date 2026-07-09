@@ -31,7 +31,7 @@ export function buildServerOptions(
     // Allow 'dbPath' as fallback for 'db' since memory-journal.config.json uses dbPath
     const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined);
     const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath);
-    const db = (rawDb === defaultDbPath && configDbPath) ? configDbPath : rawDb;
+    const db = ((rawDb === defaultDbPath || rawDb === undefined) && configDbPath) ? configDbPath : rawDb;
     
     const configTestDbPath = catchConfig(() => resolver.resolve<string>('testDbPath'), undefined);
     const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined);
