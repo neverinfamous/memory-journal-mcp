@@ -1,0 +1,365 @@
+{
+  "coverage": {
+    "totalTools": 108,
+    "testedTools": 108,
+    "missingTools": 0,
+    "percentage": "100.00%"
+  },
+  "missing": [],
+  "toolMap": {
+    "create_entry": [
+      "test-usability-core-mutations.md"
+    ],
+    "get_entry_by_id": [
+      "test-usability-core-read.md"
+    ],
+    "get_recent_entries": [
+      "test-usability-core-read.md"
+    ],
+    "get_entry_history": [
+      "test-usability-core-read.md"
+    ],
+    "test_simple": [
+      "test-usability-core-misc.md"
+    ],
+    "test_error_handling": [
+      "test-usability-core-misc.md"
+    ],
+    "trigger_progress": [
+      "test-usability-core-misc.md"
+    ],
+    "list_tags": [
+      "test-usability-core-read.md"
+    ],
+    "mark_anchors_stale": [
+      "test-usability-core-misc.md"
+    ],
+    "search_entries": [
+      "test-usability-search-core.md"
+    ],
+    "search_by_date_range": [
+      "test-usability-search-core.md"
+    ],
+    "semantic_search": [
+      "test-usability-search-vector.md"
+    ],
+    "get_vector_index_stats": [
+      "test-usability-search-vector.md"
+    ],
+    "list_deleted_entries": [
+      "test-usability-search-vector.md"
+    ],
+    "cross_team_search": [
+      "test-usability-search-core.md"
+    ],
+    "get_statistics": [
+      "test-usability-analytics.md"
+    ],
+    "get_cross_project_insights": [
+      "test-usability-analytics.md"
+    ],
+    "link_entries": [
+      "test-usability-relationships.md"
+    ],
+    "visualize_relationships": [
+      "test-usability-relationships.md"
+    ],
+    "export_entries": [
+      "test-usability-io.md"
+    ],
+    "export_markdown": [
+      "test-usability-io.md"
+    ],
+    "import_markdown": [
+      "test-usability-io.md"
+    ],
+    "import_external": [
+      "test-usability-io.md"
+    ],
+    "update_configuration": [
+      "test-usability-admin-system.md"
+    ],
+    "register_project": [
+      "test-usability-admin-system.md"
+    ],
+    "update_project": [
+      "test-usability-admin-system.md"
+    ],
+    "delete_project": [
+      "test-usability-admin-system.md"
+    ],
+    "get_project": [
+      "test-usability-admin-system.md"
+    ],
+    "list_projects": [
+      "test-usability-admin-system.md"
+    ],
+    "update_entry": [
+      "test-usability-admin-mutations.md"
+    ],
+    "delete_entry": [
+      "test-usability-admin-mutations.md"
+    ],
+    "restore_entry": [
+      "test-usability-admin-mutations.md"
+    ],
+    "rebuild_vector_index": [
+      "test-usability-admin-vector.md"
+    ],
+    "add_to_vector_index": [
+      "test-usability-admin-vector.md"
+    ],
+    "merge_tags": [
+      "test-usability-admin-system.md"
+    ],
+    "batch_create_entries": [
+      "test-usability-admin-batch.md"
+    ],
+    "batch_update_entries": [
+      "test-usability-admin-batch.md"
+    ],
+    "batch_delete_entries": [
+      "test-usability-admin-batch.md"
+    ],
+    "search_audit_log": [
+      "test-usability-admin-system.md"
+    ],
+    "run_auto_prune": [
+      "test-usability-admin-system.md"
+    ],
+    "get_github_issues": [
+      "test-usability-github-read.md"
+    ],
+    "get_github_prs": [
+      "test-usability-github-read.md"
+    ],
+    "get_github_issue": [
+      "test-usability-github-read.md"
+    ],
+    "get_github_pr": [
+      "test-usability-github-read.md"
+    ],
+    "get_github_context": [
+      "test-usability-github-read.md"
+    ],
+    "get_kanban_board": [
+      "test-usability-github-kanban.md"
+    ],
+    "move_kanban_item": [
+      "test-usability-github-kanban.md"
+    ],
+    "add_kanban_item": [
+      "test-usability-github-kanban.md"
+    ],
+    "delete_kanban_item": [
+      "test-usability-github-kanban.md"
+    ],
+    "create_github_issue_with_entry": [
+      "test-usability-github-issue-cycle.md"
+    ],
+    "close_github_issue_with_entry": [
+      "test-usability-github-issue-cycle.md"
+    ],
+    "get_github_milestones": [
+      "test-usability-github-milestones.md"
+    ],
+    "get_github_milestone": [
+      "test-usability-github-milestones.md"
+    ],
+    "create_github_milestone": [
+      "test-usability-github-milestones.md"
+    ],
+    "update_github_milestone": [
+      "test-usability-github-milestones.md"
+    ],
+    "delete_github_milestone": [
+      "test-usability-github-milestones.md"
+    ],
+    "get_repo_insights": [
+      "test-usability-github-issue-cycle.md"
+    ],
+    "get_copilot_reviews": [
+      "test-usability-github-issue-cycle.md"
+    ],
+    "get_commit_history": [
+      "test-usability-git-history.md"
+    ],
+    "search_commits": [
+      "test-usability-git-history.md"
+    ],
+    "get_release_info": [
+      "test-usability-git-history.md"
+    ],
+    "get_unreleased_commits": [
+      "test-usability-git-analysis.md"
+    ],
+    "analyze_commit_patterns": [
+      "test-usability-git-analysis.md"
+    ],
+    "check_entry_staleness": [
+      "test-usability-git-analysis.md"
+    ],
+    "backup_journal": [
+      "test-usability-backup.md"
+    ],
+    "list_backups": [
+      "test-usability-backup.md"
+    ],
+    "restore_backup": [
+      "test-usability-backup.md"
+    ],
+    "cleanup_backups": [
+      "test-usability-backup.md"
+    ],
+    "team_create_entry": [
+      "test-usability-team-mutations.md"
+    ],
+    "team_get_entry_by_id": [
+      "test-usability-team-core-read.md"
+    ],
+    "team_get_recent": [
+      "test-usability-team-core-read.md"
+    ],
+    "team_list_tags": [
+      "test-usability-team-core-read.md"
+    ],
+    "team_search": [
+      "test-usability-team-search.md"
+    ],
+    "team_search_by_date_range": [
+      "test-usability-team-search.md"
+    ],
+    "team_update_entry": [
+      "test-usability-team-mutations.md"
+    ],
+    "team_delete_entry": [
+      "test-usability-team-mutations.md"
+    ],
+    "team_restore_entry": [
+      "test-usability-team-mutations.md"
+    ],
+    "team_list_deleted_entries": [
+      "test-usability-team-search.md"
+    ],
+    "team_merge_tags": [
+      "test-usability-team-relationships.md"
+    ],
+    "team_batch_create_entries": [
+      "test-usability-team-batch.md"
+    ],
+    "team_batch_update_entries": [
+      "test-usability-team-batch.md"
+    ],
+    "team_batch_delete_entries": [
+      "test-usability-team-batch.md"
+    ],
+    "team_get_statistics": [
+      "test-usability-team-analytics.md"
+    ],
+    "team_link_entries": [
+      "test-usability-team-relationships.md"
+    ],
+    "team_visualize_relationships": [
+      "test-usability-team-relationships.md"
+    ],
+    "team_export_entries": [
+      "test-usability-team-io.md"
+    ],
+    "team_export_markdown": [
+      "test-usability-team-io.md"
+    ],
+    "team_import_markdown": [
+      "test-usability-team-io.md"
+    ],
+    "team_import_external": [
+      "test-usability-team-io.md"
+    ],
+    "team_backup": [
+      "test-usability-team-backup.md"
+    ],
+    "team_list_backups": [
+      "test-usability-team-backup.md"
+    ],
+    "team_semantic_search": [
+      "test-usability-team-vector.md"
+    ],
+    "team_get_vector_index_stats": [
+      "test-usability-team-vector.md"
+    ],
+    "team_rebuild_vector_index": [
+      "test-usability-team-vector.md"
+    ],
+    "team_add_to_vector_index": [
+      "test-usability-team-vector.md"
+    ],
+    "team_get_cross_project_insights": [
+      "test-usability-team-analytics.md"
+    ],
+    "team_get_collaboration_matrix": [
+      "test-usability-team-analytics.md"
+    ],
+    "team_add_member": [
+      "test-usability-team-members.md"
+    ],
+    "team_remove_member": [
+      "test-usability-team-members.md"
+    ],
+    "team_update_member_role": [
+      "test-usability-team-members.md"
+    ],
+    "team_list_members": [
+      "test-usability-team-members.md"
+    ],
+    "team_get_member": [
+      "test-usability-team-members.md"
+    ],
+    "team_add_author_alias": [
+      "test-usability-team-aliases.md"
+    ],
+    "team_remove_author_alias": [
+      "test-usability-team-aliases.md"
+    ],
+    "team_list_author_aliases": [
+      "test-usability-team-aliases.md"
+    ],
+    "team_resolve_author": [
+      "test-usability-team-aliases.md"
+    ],
+    "team_consolidate_authors": [
+      "test-usability-team-aliases.md"
+    ],
+    "mj_execute_code": [
+      "test-usability-admin-batch.md",
+      "test-usability-admin-mutations.md",
+      "test-usability-admin-system.md",
+      "test-usability-admin-vector.md",
+      "test-usability-analytics.md",
+      "test-usability-backup.md",
+      "test-usability-codemode.md",
+      "test-usability-core-misc.md",
+      "test-usability-core-mutations.md",
+      "test-usability-core-read.md",
+      "test-usability-git-analysis.md",
+      "test-usability-git-history.md",
+      "test-usability-github-issue-cycle.md",
+      "test-usability-github-kanban.md",
+      "test-usability-github-milestones.md",
+      "test-usability-github-read.md",
+      "test-usability-io.md",
+      "test-usability-relationships.md",
+      "test-usability-search-core.md",
+      "test-usability-search-vector.md",
+      "test-usability-team-aliases.md",
+      "test-usability-team-analytics.md",
+      "test-usability-team-backup.md",
+      "test-usability-team-batch.md",
+      "test-usability-team-core-read.md",
+      "test-usability-team-io.md",
+      "test-usability-team-members.md",
+      "test-usability-team-mutations.md",
+      "test-usability-team-relationships.md",
+      "test-usability-team-search.md",
+      "test-usability-team-vector.md"
+    ]
+  }
+}

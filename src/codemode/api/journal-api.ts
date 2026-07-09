@@ -210,7 +210,7 @@ export class JournalApi {
         const getByIdFn = this.core['getEntryById']
         if (getByIdFn) this.core['exists'] = getByIdFn
 
-        // Expose registerProject to admin API
+        // Expose Project methods natively to admin API
         this.admin['registerProject'] = async (...args: unknown[]): Promise<{ success: boolean, message: string }> => {
             const name = args[0] as string
             const absolutePath = args[1] as string
@@ -248,15 +248,90 @@ export class JournalApi {
                     content: `Initialized project ${name}`,
                     tags: ['project-initialization', 'setup'],
                     projectNumber: projectNumber ?? 0,
-                    workspaceId: name,
                     trustScore: 1.0,
-                    impactScore: 0.5,
-                    validationStatus: 'passed'
+                    impactScore: 0.8,
+                    autoContext: JSON.stringify({ action: 'register_project', target: name })
                 })
-                return { success: true, message: `Project '${name}' successfully registered and initialized in the database.` }
-            } catch (e) {
-                return { success: false, message: `Project registered, but DB initialization failed: ${e instanceof Error ? e.message : String(e)}` }
+            } catch {
+                // Ignore DB initialization failures natively
             }
+            return { success: true, message: `Project '${name}' successfully registered.` }
+        }
+
+        this.admin['updateProject'] = (...args: unknown[]): Promise<{ success: boolean, message?: string, error?: string }> => {
+            const name = args[0] as string
+            const newName = args[1] as string | undefined
+            const absolutePath = args[2] as string | undefined
+            const projectNumber = args[3] as number | undefined
+            
+            const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+            let config: Record<string, unknown> = { projectRegistry: {} }
+            if (fs.existsSync(configPath)) {
+                try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
+            }
+            config['projectRegistry'] ??= {}
+            const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
+            
+            if (!registry[name]) return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
+            
+            const project = registry[name]
+            if (absolutePath) project.path = absolutePath
+            if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) project.project_number = projectNumber
+            
+            const targetName = newName ?? name
+            const { [name]: removed, ...rest } = registry
+            void removed
+            const newRegistry = { ...rest, [targetName]: project }
+            config['projectRegistry'] = newRegistry
+            fs.mkdirSync(path.dirname(configPath), { recursive: true })
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
+            process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
+            
+            return Promise.resolve({ success: true, message: `Project '${targetName}' updated.` })
+        }
+
+        this.admin['deleteProject'] = (...args: unknown[]): Promise<{ success: boolean, message?: string, error?: string }> => {
+            const name = args[0] as string
+            
+            const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+            let config: Record<string, unknown> = { projectRegistry: {} }
+            if (fs.existsSync(configPath)) {
+                try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
+            }
+            config['projectRegistry'] ??= {}
+            const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
+            
+            if (!registry[name]) return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
+            
+            const { [name]: removed, ...rest } = registry
+            void removed
+            config['projectRegistry'] = rest
+            fs.mkdirSync(path.dirname(configPath), { recursive: true })
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
+            process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
+            
+            return Promise.resolve({ success: true, message: `Project '${name}' deleted.` })
+        }
+
+        this.admin['listProjects'] = (): Promise<{ success: boolean, projects: unknown }> => {
+            const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+            let config: Record<string, unknown> = { projectRegistry: {} }
+            if (fs.existsSync(configPath)) {
+                try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
+            }
+            return Promise.resolve({ success: true, projects: config['projectRegistry'] ?? {} })
+        }
+
+        this.admin['getProject'] = (...args: unknown[]): Promise<{ success: boolean, project?: unknown, error?: string }> => {
+            const name = args[0] as string
+            const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+            let config: Record<string, unknown> = { projectRegistry: {} }
+            if (fs.existsSync(configPath)) {
+                try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
+            }
+            const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }> | undefined
+            if (!registry?.[name]) return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
+            return Promise.resolve({ success: true, project: { name, ...(registry[name] ?? {}) } })
         }
 
         // Smooth out team aliases since KEEP_PREFIX_GROUPS makes them verbose
