@@ -43,56 +43,26 @@ The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify th
 > Under MCP SDK 1.29+ with strict Zod integration, the two ⚠️ findings (boolean and array coercion) now properly throw `VALIDATION_ERROR` rather than silently coercing. The new strict behavior, along with team-scoped permission rejections, is verified directly via the `test-server/scripts/test-sdk-boundaries.mjs` script.
 
 ### 11.4 Empty Parameter (`{}`) Sweep — Critical Tools
-- MCP server instructions auto-received before starting.
-- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
-- Seed data from `test-seed.md` must be present.
 
-**Workflow after testing:**
+Ensure that submitting empty parameters gracefully returns structured validation errors without crashing the server or returning `-32602`.
 
-1. Create a plan to fix any issues found, using `code-map.md` as source of truth.
-2. If code changed: update `UNRELEASED.md`, commit (no push). If clean pass: no changelog. Stop for **USER** to run `pnpm run check`.
-3. After user verification, re-test fixes with direct MCP calls.
-4. Provide brief final summary with **Total Token Estimate** (sum `_meta.tokenEstimate` from all responses, or read `memory://metrics/summary`).
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Empty create | `create_entry` (no arguments) | `VALIDATION_ERROR`: content required |
+| Empty search | `search_entries` (no arguments) | `VALIDATION_ERROR`: query required |
+| Empty semantic | `semantic_search` (no arguments) | `VALIDATION_ERROR`: query required |
+| Empty update | `update_entry` (no arguments) | `VALIDATION_ERROR`: entry_id required |
+| Empty delete | `delete_entry` (no arguments) | `VALIDATION_ERROR`: entry_id required |
+| Empty team create | `team_create_entry` (no arguments) | `VALIDATION_ERROR`: project_number/content required |
 
 ---
 
-## Phase 11: Error Handling Verification
+## Success Criteria
 
-### 11.1 Prompt Handler Validation
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-> [!NOTE]
-> Prompts are tested via the existing script `test-server/scripts/test-prompts.mjs`. Run it directly — do **not** use a browser or try to invoke `get_prompt` through the MCP client.
-
-**Command:**
-
-```
-node test-server/scripts/test-prompts.mjs
-```
-
-| Test                         | Expected Result                                                     |
-| ---------------------------- | ------------------------------------------------------------------- |
-| List all prompts             | 19 prompts listed (11 workflow + 6 GitHub + 1 adversarial + 1 team) |
-| All 19 named prompt calls    | 19/19 PASS with non-empty `messages[0].content.text`                |
-| `nonexistent-prompt`         | MCP error returned (code `-32602`)                                  |
-| `find-related({})` (no args) | Error returned gracefully                                           |
-| **Overall**                  | `21 pass, 0 fail (21 total)`                                        |
-
-### 11.2 Structured Error Response Verification
-
-Every tool must return `{success: false, error, code, category, suggestion, recoverable}` for errors — **never raw MCP exceptions**. Verify the pattern across representative tools from each group.
-
-| Group      | Tool                                   | Error Trigger                                      | Expected Result                                                                    |
-| ---------- | -------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **core**   | `create_entry`                         | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, `category:"validation"`, enum in error |
-| **core**   | `get_entry_by_id`                      | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
-| **search** | `search_by_date_range`                 | `start_date: "2026-12-31", end_date: "2026-01-01"` | `success:false`, `code:"VALIDATION_ERROR"`, `suggestion` with date hint            |
-| **admin**  | `update_entry`                         | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
-| **admin**  | `batch_update_entries`                 | `updates: [{ entry_id: 999999, content: "x" }]`    | `success:false`, `code:"AGGREGATE_ERROR"`, `aggregated_errors` array returned      |
-| **admin**  | `merge_tags`                           | `source_tag: "x", target_tag: "x"`                 | `success:false`, same-tag error with `category:"validation"`                       |
-| **backup** | `restore_backup`                       | `filename: "nonexistent.db"`                       | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `details.resourceType`               |
-| **github** | `get_github_issue`                     | `issue_number: 999999`                             | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
-| **team**   | `team_create_entry(project_number: 5)` | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
-| **team**   | `team_update_entry(project_number: 5)` | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
-
-*Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified by executing `node test-server/scripts/test-sdk-boundaries.mjs`.*
+- Agent reports the Total Token Estimate in the final summary.
+- Numeric coercion boundary violations (e.g. string for limit) return structured `VALIDATION_ERROR` rather than raw `-32602`.
+- Float values allowed for weights, but rejected for integer IDs.
+- Empty parameter calls gracefully return structured `VALIDATION_ERROR`.
 

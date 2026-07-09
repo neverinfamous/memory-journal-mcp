@@ -64,6 +64,7 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 32. `test-git.md`
 33. `test-tool-group-io.md`
 34. `test-tool-group-relationships.md`
+35. `test-config-reload.md`
 
 ## Telemetry Collection
 

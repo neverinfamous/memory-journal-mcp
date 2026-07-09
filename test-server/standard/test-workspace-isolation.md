@@ -1,34 +1,83 @@
-# Workspace Isolation Test
-> Run this against a clean database instance.
+# Re-Test memory-journal-mcp — Workspace Isolation
 
-## Phase 1: Workspace Initialization
-1. Create an entry in workspace "alpha": "Initial research on neural networks for NLP."
-2. Create an entry in workspace "beta": "Quarterly financial projections for Q3."
+**Scope:** Verify strict data isolation between multiple workspaces using the `workspace_id` parameter across CRUD, Search, and Analytics.
 
-## Phase 2: Recent Entries Isolation
-1. Get recent entries for workspace "alpha". Verify only the NLP research is returned.
-2. Get recent entries for workspace "beta". Verify only the financial projections are returned.
+**Prerequisites:**
 
-## Phase 3: Search Isolation
-1. Search entries for "research" in workspace "alpha". Verify the entry is found.
-2. Search entries for "research" in workspace "beta". Verify the entry is NOT found.
+- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+- **Required Tool Groups:** `core`, `search`, `analytics`, `team`
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Test against a clean database or ensure unique workspace IDs are used for the test to avoid interference.
 
-## Phase 4: Date Range Search Isolation
-1. Search by date range (from 1 month ago to today) in workspace "alpha". Verify only the alpha entry is returned.
-2. Search by date range in workspace "beta". Verify only the beta entry is returned.
+**Workflow after testing:**
 
-## Phase 5: Statistics Isolation
-1. Get statistics for workspace "alpha". Total entries should be 1.
-2. Get statistics for workspace "beta". Total entries should be 1.
+1. Create a plan to fix any issues found or potential improvement opportunities.
+2. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `pnpm run check`.
+3. After user completes verification, re-test fixes with direct MCP calls.
+4. Provide a very brief final summary including the **Total Token Estimate**.
 
-## Phase 6: Cross-Workspace Search
-1. Search entries with `workspace_id` parameter omitted (or using special wildcard logic if applicable to the server, though usually omission means default). *Note: The server uses default workspace if omitted, so this should only return entries in the 'default' workspace unless specifically queried.*
+---
 
-## Phase 7: Moving Entries
-1. Update the alpha entry (the NLP research), setting its `workspace_id` to "beta".
-2. Get recent entries for workspace "alpha" — it should now be empty.
-3. Get recent entries for workspace "beta" — it should now contain both entries.
+## Phase 17: Workspace Isolation
 
-## Phase 8: Team Database Isolation
-1. Switch to team operations (if applicable).
-2. Perform similar operations using team tools (e.g., `team_create_entry`) using workspaces "alpha" and "beta" to ensure team data is also isolated correctly.
+### 17.1 Workspace Initialization
+
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Create in Alpha | `create_entry(workspace_id: "alpha", content: "Initial research on neural networks for NLP.")` | `success: true`, entry created with `workspaceId: "alpha"` |
+| Create in Beta | `create_entry(workspace_id: "beta", content: "Quarterly financial projections for Q3.")` | `success: true`, entry created with `workspaceId: "beta"` |
+
+### 17.2 Recent Entries Isolation
+
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Alpha recent | `get_recent_entries(workspace_id: "alpha", limit: 5)` | Returns only the NLP research entry |
+| Beta recent | `get_recent_entries(workspace_id: "beta", limit: 5)` | Returns only the financial projections entry |
+
+### 17.3 Search Isolation
+
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Alpha search | `search_entries(workspace_id: "alpha", query: "research")` | Returns the alpha NLP entry |
+| Beta search | `search_entries(workspace_id: "beta", query: "research")` | Returns 0 entries |
+
+### 17.4 Date Range Isolation
+
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Alpha date range | `search_by_date_range(workspace_id: "alpha", start_date: "2020-01-01", end_date: "2030-01-01")` | Returns only the alpha entry |
+| Beta date range | `search_by_date_range(workspace_id: "beta", start_date: "2020-01-01", end_date: "2030-01-01")` | Returns only the beta entry |
+
+### 17.5 Statistics Isolation
+
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Alpha stats | `get_statistics(workspace_id: "alpha")` | Total entries count correctly scoped to alpha |
+| Beta stats | `get_statistics(workspace_id: "beta")` | Total entries count correctly scoped to beta |
+
+### 17.6 Cross-Workspace Isolation
+
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Default search | `search_entries(query: "research")` | Returns 0 entries (unless default workspace contains "research") |
+
+### 17.7 Team Database Isolation
+
+| Test | Command/Action | Expected Result |
+| --- | --- | --- |
+| Team create | `team_create_entry(workspace_id: "alpha", content: "Team alpha plan", project_number: 5)` | Entry created in alpha team DB |
+| Team search | `team_search(workspace_id: "beta", query: "alpha")` | Returns 0 entries |
+
+---
+
+## Success Criteria
+
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Agent reports the Total Token Estimate in the final summary.
+- Entries created in "alpha" are strictly isolated from "beta".
+- `get_recent_entries`, `search_entries`, `search_by_date_range`, and `get_statistics` respect `workspace_id`.
+- Team DB tools also enforce `workspace_id` isolation.

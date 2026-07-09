@@ -40,6 +40,8 @@
 | `run_auto_prune`      | Prune entries    | N/A                                            | Should succeed (defaults)         | `project_number: "abc"` |
 | `update_configuration`| Update config    | `instruction_level: "invalid"`                 | Should succeed (defaults)         | `briefing_entries: "abc"` |
 
+> **Note:** `registerProject` is an Admin method but is intentionally exposed exclusively via Code Mode API (`mj.admin.registerProject`) to ensure secure file-system validation. It is not tested here via direct MCP calls; it is covered in the `codemode` test track.
+
 ### Specific Domain Checks
 
 - **Same-Tag Merging**: Ensure `merge_tags` where `source_tag` == `target_tag` returns a structured error.

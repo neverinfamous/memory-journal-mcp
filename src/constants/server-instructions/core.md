@@ -108,10 +108,10 @@ When committing changes to the repository, you MUST use the `commit.ts` wrapper 
 
 - **Automated Journaling**: ALWAYS append the `--journal` flag to your commit command. This automatically spins up the `memory-journal-mcp` CLI in the background to log your commit as a structured entry.
 - **Scoring**: You must provide accurate scores: `--impact <0.1-1.0>` (blast radius) and `--confidence <0.1-1.0>` (verification level). **NEVER "rubber stamp" 1.0** without rigorous validation; accurately reflect verification.
-- **Category & Validation**: Provide `--category <Category>` and `--validation <passed|failed|none>`.
+- **Validation**: Provide `--validation <passed|failed|none>`.
 
 Example:
-`bun .agents/scripts/commit.ts --msg "refactor(core): adhere to 500-line modularity rule" --category Changed --confidence 0.8 --impact 0.4 --validation passed --journal --add src/`
+`bun .agents/scripts/commit.ts --msg "refactor(core): adhere to 500-line modularity rule" --confidence 0.8 --impact 0.4 --validation passed --journal --add src/`
 
 ## Available Tools
 

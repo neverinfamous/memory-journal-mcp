@@ -172,7 +172,7 @@ GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
 # Optional
 GITHUB_ORG_TOKEN=ghp_...        # For organization projects
-PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing
+PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create`)
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
 MCP_CORS_ORIGIN=                 # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host

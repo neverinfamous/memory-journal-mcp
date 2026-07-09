@@ -22,7 +22,7 @@ The server supports the standard MCP `resources/subscribe` capability. You can s
 
 ## Available Tools
 
-- **Configuration**: `update_configuration`
+- **Configuration**: `update_configuration`, `registerProject`
 - **Entry Mutations**: `update_entry`, `delete_entry`, `restore_entry`
 - **Batch Operations**: `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`
 - **Vector Index**: `rebuild_vector_index`, `add_to_vector_index`
