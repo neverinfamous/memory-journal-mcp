@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Admin Tool Group
 
-**Scope:** Deterministic verification of Admin operations (`update_entry`, `delete_entry`, `merge_tags`, `list_tags`, `add_to_vector_index`, `rebuild_vector_index`) against strict error handling constraints.
+**Scope:** Deterministic verification of Admin operations (`update_entry`, `delete_entry`, `restore_entry`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries`, `rebuild_vector_index`, `add_to_vector_index`, `merge_tags`, `search_audit_log`, `run_auto_prune`, `update_configuration`) against strict error handling constraints.
 
 **Prerequisites:**
 
@@ -36,6 +36,9 @@
 | `batch_update_entries`| Valid updates    | `updates: []`                                  | ⚠️ Should return validation error | `updates: "abc"`  |
 | `batch_delete_entries`| Valid deletes    | `entry_ids: []`                                | ⚠️ Should return validation error | `entry_ids: "abc"`|
 | `search_audit_log`    | Valid search     | `limit: -1`                                    | ⚠️ Should return validation error | `limit: "abc"`    |
+| `rebuild_vector_index`| Rebuild index    | N/A                                            | Should succeed (defaults)         | N/A               |
+| `run_auto_prune`      | Prune entries    | N/A                                            | Should succeed (defaults)         | `project_number: "abc"` |
+| `update_configuration`| Update config    | `instruction_level: "invalid"`                 | Should succeed (defaults)         | `briefing_entries: "abc"` |
 
 ### Specific Domain Checks
 

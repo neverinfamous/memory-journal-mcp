@@ -13,6 +13,9 @@ import { getZodTypeString } from '../type-generator.js'
 import type { ToolDispatcher, GroupApiRecord } from './types.js'
 import { parseProjectRegistry } from './types.js'
 import { createGroupApi, toolNameToMethodName } from './group-factory.js'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 
 function isRecord(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null && !Array.isArray(val)
@@ -206,6 +209,55 @@ export class JournalApi {
         }
         const getByIdFn = this.core['getEntryById']
         if (getByIdFn) this.core['exists'] = getByIdFn
+
+        // Expose registerProject to admin API
+        this.admin['registerProject'] = async (...args: unknown[]): Promise<{ success: boolean, message: string }> => {
+            const name = args[0] as string
+            const absolutePath = args[1] as string
+            const projectNumber = args[2] as number | undefined
+            
+            const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+            let config: Record<string, unknown> = { projectRegistry: {} }
+            if (fs.existsSync(configPath)) {
+                try {
+                    config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+                } catch {
+                    // Ignore parse error
+                }
+            }
+            config['projectRegistry'] ??= {}
+            const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
+            registry[name] = { path: absolutePath }
+            if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
+                registry[name].project_number = projectNumber
+            }
+            fs.mkdirSync(path.dirname(configPath), { recursive: true })
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
+            
+            // Update env for subsequent parseProjectRegistry calls
+            process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
+            
+            const createEntryFn = this.core['createEntry']
+            if (!createEntryFn) {
+                return { success: true, message: `Project '${name}' registered, but createEntry tool is missing. DB init skipped.` }
+            }
+            try {
+                await createEntryFn({
+                    entryType: 'project_decision',
+                    significanceType: 'architecture',
+                    content: `Initialized project ${name}`,
+                    tags: ['project-initialization', 'setup'],
+                    projectNumber: projectNumber ?? 0,
+                    workspaceId: name,
+                    trustScore: 1.0,
+                    impactScore: 0.5,
+                    validationStatus: 'passed'
+                })
+                return { success: true, message: `Project '${name}' successfully registered and initialized in the database.` }
+            } catch (e) {
+                return { success: false, message: `Project registered, but DB initialization failed: ${e instanceof Error ? e.message : String(e)}` }
+            }
+        }
 
         // Smooth out team aliases since KEEP_PREFIX_GROUPS makes them verbose
         const teamDeleteEntryFn = this.team['teamDeleteEntry']

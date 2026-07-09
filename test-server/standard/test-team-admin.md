@@ -118,4 +118,4 @@
 
 | Test        | Command/Action                                                        | Expected Result                 |
 | ----------- | --------------------------------------------------------------------- | ------------------------------- |
-| Delete test | `delete_entry(project_number: 5, entry_id: <team_test_id>)` on teamDb | Test entries removed (optional) |
+| Delete test | `team_delete_entry(project_number: 5, entry_id: <team_test_id>)` | Test entries removed (optional) |

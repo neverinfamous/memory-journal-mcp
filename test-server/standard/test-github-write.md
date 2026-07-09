@@ -1,6 +1,6 @@
-# Re-Test memory-journal-mcp — GitHub Integration
+# Re-Test memory-journal-mcp — GitHub Integration (Writes)
 
-**Scope:** 16 GitHub tools — read-only tools, issue lifecycle, Kanban, milestones, repository insights, Copilot reviews, and test cleanup.
+**Scope:** GitHub write tools — issue lifecycle, Kanban mutations, milestones lifecycle, and test cleanup.
 
 **Prerequisites:**
 
@@ -24,7 +24,9 @@
 
 ---
 
-## Phase 13: GitHub Integration (Writes)\n\n### 13.2 Issue Lifecycle Tools
+## Phase 13: GitHub Integration (Writes)
+
+### 13.2 Issue Lifecycle Tools
 
 > [!CAUTION]
 > These tools **create and close real GitHub issues**. Use with awareness.
@@ -69,7 +71,7 @@
 | Milestone resource   | Read `memory://github/milestones/memory-journal-mcp`                                             | Static resource lists open milestones with completion %                                                           |
 | Milestone detail     | Read `memory://milestones/memory-journal-mcp/<N>`                                                | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
 
-### 13.7 GitHub Test Cleanup\n
+### 13.7 GitHub Test Cleanup
 
 > [!IMPORTANT]
 > After GitHub testing, ensure all test artifacts are removed. Use the checklist below.

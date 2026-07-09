@@ -36,17 +36,17 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 
 ## 🎯 What Sets Us Apart
 
-**103 MCP Tools** · **28 Workflow Prompts** · **49 Resources** · **11 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query history, create checkpoints, and hand off context between sessions via `/session-summary`. Briefings adapt dynamically (CI health, local Git status, unreleased changes).          |
-| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones, Copilot Reviews, and Insights. Switch contexts across multiple repositories seamlessly via `PROJECT_REGISTRY`.                                |
-| **Knowledge & Search**        | 8 relationship types with Mermaid graphs. Hybrid Search combines FTS5, semantic vector similarity, and heuristics. Auto-pruning maintains vector relevance by soft-deleting low-value entries.       |
-| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API.                                                                                                          |
-| **Team Collaboration**      | 39 tools for collaboration: cross-project insights, RBAC, matrix. |
-| **Data & Architecture**       | Markdown roundtripping, unified IO namespace, JSON exports, automated backup/restore, SQLCipher encryption, OAuth 2.1 authentication, HTTP/SSE Transport, and structured error handling.             |
-| **Agent Collaboration**       | Agents share context, suggest reusable rules/skills, and triage issues, review PRs, and audit code via GitHub Commander.                                                                             |
+| **Session Intelligence**      | Auto-query history, create checkpoints, and hand off context between sessions. Briefings adapt dynamically to your workspace.                                                                        |
+| **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Switch contexts across multiple repositories seamlessly.                                                                                 |
+| **Knowledge & Search**        | Find entries instantly using hybrid search and visualize relationships with Mermaid graphs. Auto-prune low-value entries to maintain search relevance.                                               |
+| **Code Mode**                 | Execute multi-step operations efficiently in a secure sandbox to drastically reduce token usage.                                                                                                     |
+| **Team Collaboration**        | Share databases across teams with cross-project insights and role-based access control.                                                                                                              |
+| **Data & Architecture**       | Export schemas safely, sync Markdown directories, secure data with encryption and automated backups, and handle errors effectively.                                                                  |
+| **Agent Collaboration**       | Share context between agents, suggest reusable rules, and automate tasks like issue triage and PR reviews.                                                                                           |
 
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
@@ -76,7 +76,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 103   | All tools (default)      |
+| `full`               | All   | All tools (default)      |
 | `starter`            | 16    | Core + search + codemode |
 | `essential`          | 10    | Minimal footprint        |
 | `readonly`           | 30    | Disable all mutations    |
@@ -93,7 +93,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **103 MCP Tools** (11 Groups)
+### 🛠️ **MCP Tools**
 
 | Group           | Tools | Description                                                                                                                                                                                       |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -111,11 +111,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **28 Workflow Prompts**
+### 🎯 **Workflow Prompts**
 
 Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **49 Resources**
+### 📡 **Resources**
 
 28 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus 10 template resources, 7 dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`), and 4 alias resources. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 

@@ -13,7 +13,6 @@
 | Project staleness| `memory://staleness`        |
 | Report history  | `memory://insights/reports` |
 | Agent context   | `memory://agent-context/{repo}` |
-| Full context    | `get-context-bundle` prompt |
 
 ## Help Resources
 

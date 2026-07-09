@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **103 tools** across **11 groups** (Core, Search, Analytics, Backup, Diagnostics, Batch, Flags/Team, Workflows, GitHub, Aliases, CodeMode), **49 resources**, and **28 prompts**.
+Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **over 100 tools** across **multiple groups** (Core, Search, Analytics, Backup, Diagnostics, Batch, Flags/Team, Workflows, GitHub, Aliases, CodeMode), **dozens of resources**, and **multiple workflow prompts**.
 
 **Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
@@ -63,7 +63,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 
 ### Database
 
-- Schema migrations in `src/database/migrations/` via `MigrationManager` (versioned 001 to 007)
+- Schema migrations in `src/database/core/schema.ts` (using Drizzle ORM)
 - Backward compatible with self-healing legacy database retrofitting — never break existing data
 - Consider index implications for new queries
 
@@ -99,9 +99,9 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
-│   ├── tools/                  # 103 tool handlers (11 groups)
-│   ├── resources/              # 49 resource handlers
-│   └── prompts/                # 28 prompt handlers
+│   ├── tools/                  # tool handlers (multiple groups)
+│   ├── resources/              # resource handlers
+│   └── prompts/                # prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/

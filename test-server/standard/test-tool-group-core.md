@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Core Tool Group
 
-**Scope:** Deterministic verification of the Core tool group (`create_entry`, `create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) against the strict error handling matrix.
+**Scope:** Deterministic verification of the Core and Analytics tool groups (`create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `list_tags`, `test_simple`, `trigger_progress`, `test_error_handling`, `mark_anchors_stale`, `get_statistics`, `get_cross_project_insights`) against the strict error handling matrix.
 
 **Prerequisites:**
 
@@ -33,11 +33,16 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 | Tool                   | Happy Path          | Domain Error Test              | Zod Empty Param (`{}`)            | Zod Type Mismatch             |
 | ---------------------- | ------------------- | ------------------------------ | --------------------------------- | ----------------------------- |
 | `create_entry`         | Create normal entry | `entry_type: "invalid"`        | ⚠️ Should return validation error | `content: 123`                |
-| `create_entry` | Create with string  | N/A                            | ⚠️ Should return validation error | N/A (requires 1 string param) |
 | `get_entry_by_id`      | Fetch existing      | `entry_id: 999999` (not found) | ⚠️ Should return validation error | `entry_id: "abc"`             |
-| `get_entry_history`    | Fetch history       | `entry_id: 999999` (not found) | ⚠️ Should return validation error | `entry_id: "abc"`             |
 | `get_recent_entries`   | Fetch recent        | N/A                            | Should succeed (defaults)         | `limit: "abc"`                |
+| `get_entry_history`    | Fetch history       | `entry_id: 999999` (not found) | ⚠️ Should return validation error | `entry_id: "abc"`             |
+| `list_tags`            | Fetch tags          | N/A                            | Should succeed (defaults)         | `project_number: "abc"`       |
+| `test_simple`          | Run test simple     | N/A                            | Should succeed (defaults)         | N/A                           |
+| `trigger_progress`     | Trigger progress    | N/A                            | Should succeed (defaults)         | N/A                           |
+| `test_error_handling`  | Test errors         | `error_type: "invalid"`        | ⚠️ Should return validation error | `error_type: 123`             |
+| `mark_anchors_stale`   | Mark stale          | N/A                            | Should succeed (defaults)         | `project_number: "abc"`       |
 | `get_statistics`       | Fetch stats         | N/A                            | Should succeed (defaults)         | `start_date: 123`             |
+| `get_cross_project_insights` | Fetch insights | N/A                         | Should succeed (defaults)         | `min_entries: "abc"`          |
 
 ### Specific Domain Checks
 

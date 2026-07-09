@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — GitHub Tool Group
 
-**Scope:** Deterministic verification of the GitHub suite against the strict error handling matrix.
+**Scope:** Deterministic verification of the GitHub suite (`get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context`, `get_kanban_board`, `move_kanban_item`, `add_kanban_item`, `delete_kanban_item`, `create_github_issue_with_entry`, `close_github_issue_with_entry`, `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`, `get_repo_insights`, `get_copilot_reviews`) against the strict error handling matrix.
 
 **Prerequisites:**
 
@@ -27,12 +27,24 @@
 
 | Tool                            | Domain Error Test                                    | Zod Empty Param (`{}`)                                  |
 | ------------------------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| `get_github_issues`             | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
+| `get_github_prs`                | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
 | `get_github_issue`              | `issue_number: 999999` -> Not found structural error | ⚠️ Should return validation error                       |
 | `get_github_pr`                 | `pr_number: 999999` -> Not found structural error    | ⚠️ Should return validation error                       |
-| `get_github_milestone`          | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
-| `close_github_issue_with_entry` | Close already closed issue                           | ⚠️ Should return validation error                       |
+| `get_github_context`            | N/A                                                  | Should succeed                                          |
 | `get_kanban_board`              | `project_number: 999999` -> Not found                | ⚠️ Returns CONFIGURATION_ERROR (auto-detect precedence) |
 | `move_kanban_item`              | `target_status: "Nonexistent"`                       | ⚠️ Should return validation error                       |
+| `add_kanban_item`               | `content_id: 999999` -> Not found                    | ⚠️ Should return validation error                       |
+| `delete_kanban_item`            | `item_id: 999999` -> Not found                       | ⚠️ Should return validation error                       |
+| `create_github_issue_with_entry`| Invalid parameters                                   | ⚠️ Should return validation error                       |
+| `close_github_issue_with_entry` | Close already closed issue                           | ⚠️ Should return validation error                       |
+| `get_github_milestones`         | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
+| `get_github_milestone`          | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
+| `create_github_milestone`       | Invalid dates                                        | ⚠️ Should return validation error                       |
+| `update_github_milestone`       | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
+| `delete_github_milestone`       | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
+| `get_repo_insights`             | `sections: ["invalid"]`                              | Should succeed (defaults if auto-context exists)        |
+| `get_copilot_reviews`           | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
 
 ### Specific Domain Checks
 

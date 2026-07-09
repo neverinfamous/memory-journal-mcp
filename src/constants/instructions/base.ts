@@ -13,7 +13,6 @@ export const CORE_INSTRUCTIONS = `# memory-journal-mcp
 | Project staleness| \`memory://staleness\`        |
 | Report history  | \`memory://insights/reports\` |
 | Agent context   | \`memory://agent-context/{repo}\` |
-| Full context    | \`get-context-bundle\` prompt |
 
 ## Help Resources
 

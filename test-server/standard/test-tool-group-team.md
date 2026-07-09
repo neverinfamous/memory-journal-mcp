@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Team Tool Group
 
-**Scope:** Deterministic verification of Team tools (`team_create_entry(project_number: 5)`, `team_search(project_number: 5)`, `team_update_entry`, `team_batch_create_entries`, etc.) against strict error handling constraints.
+**Scope:** Deterministic verification of Team tools (`team_create_entry`, `team_search`, `team_update_entry`, `team_batch_create_entries`, etc.) against strict error handling constraints.
 
 **Prerequisites:**
 
@@ -30,14 +30,45 @@
 | Tool                                           | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
-| `team_create_entry(project_number: 5)`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
-| `team_update_entry(project_number: 5)`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `team_batch_create_entries(project_number: 5)` | `entries: []`                                        | ⚠️ Should return validation error | `entries: "abc"`  |
-| `team_batch_update_entries(project_number: 5)` | `updates: []`                                        | ⚠️ Should return validation error | `updates: "abc"`  |
-| `team_batch_delete_entries(project_number: 5)` | `entry_ids: []`                                      | ⚠️ Should return validation error | `entry_ids: "abc"`|
-| `team_search_by_date_range(project_number: 5)` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
-| `team_merge_tags(project_number: 5)`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
-| `cross_team_search`                            | `team_dbs: ["invalid"]`                              | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_create_entry`                            | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
+| `team_get_entry_by_id`                         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_get_recent`                              | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
+| `team_list_tags`                               | N/A                                                  | Should succeed (defaults)         | `project_number: "abc"` |
+| `team_search`                                  | N/A                                                  | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_search_by_date_range`                    | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_list_deleted_entries`                    | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
+| `team_update_entry`                            | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_delete_entry`                            | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_restore_entry`                           | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_merge_tags`                              | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
+| `team_batch_create_entries`                    | `entries: []`                                        | ⚠️ Should return validation error | `entries: "abc"`  |
+| `team_batch_update_entries`                    | `updates: []`                                        | ⚠️ Should return validation error | `updates: "abc"`  |
+| `team_batch_delete_entries`                    | `entry_ids: []`                                      | ⚠️ Should return validation error | `entry_ids: "abc"`|
+| `team_get_statistics`                          | N/A                                                  | Should succeed (defaults)         | `start_date: 123` |
+| `team_get_cross_project_insights`              | N/A                                                  | Should succeed (defaults)         | `min_entries: "abc"` |
+| `team_get_collaboration_matrix`                | N/A                                                  | Should succeed (defaults)         | `start_date: 123` |
+| `team_link_entries`                            | `from_entry_id: 999999`                              | ⚠️ Should return validation error | `from_entry_id: "abc"` |
+| `team_visualize_relationships`                 | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_export_entries`                          | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
+| `team_export_markdown`                         | `output_dir: "../../etc"`                            | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_import_markdown`                         | `source_dir: "../../etc"`                            | ⚠️ Should return validation error | `dry_run: "abc"`  |
+| `team_import_external`                         | `source_dir: "../../etc"`                            | ⚠️ Should return validation error | `source_format: 123` |
+| `team_backup`                                  | `name: "../../etc"`                                  | Should succeed (defaults)         | `name: 123`       |
+| `team_list_backups`                            | N/A                                                  | Should succeed (defaults)         | N/A               |
+| `team_semantic_search`                         | Vector manager unavailable                           | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_get_vector_index_stats`                  | N/A                                                  | Should succeed (defaults)         | N/A               |
+| `team_rebuild_vector_index`                    | N/A                                                  | Should succeed (defaults)         | N/A               |
+| `team_add_to_vector_index`                     | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_add_member`                              | N/A                                                  | ⚠️ Should return validation error | `role: 123`       |
+| `team_remove_member`                           | N/A                                                  | ⚠️ Should return validation error | `username: 123`   |
+| `team_update_member_role`                      | N/A                                                  | ⚠️ Should return validation error | `role: 123`       |
+| `team_list_members`                            | N/A                                                  | Should succeed (defaults)         | N/A               |
+| `team_get_member`                              | N/A                                                  | ⚠️ Should return validation error | `username: 123`   |
+| `team_add_author_alias`                        | N/A                                                  | ⚠️ Should return validation error | `author_id: 123`  |
+| `team_remove_author_alias`                     | N/A                                                  | ⚠️ Should return validation error | `alias: 123`      |
+| `team_list_author_aliases`                     | N/A                                                  | ⚠️ Should return validation error | `author_id: 123`  |
+| `team_resolve_author`                          | N/A                                                  | ⚠️ Should return validation error | `alias: 123`      |
+| `team_consolidate_authors`                     | N/A                                                  | ⚠️ Should return validation error | `target_author_id: 123` |
 
 ### Specific Domain Checks
 

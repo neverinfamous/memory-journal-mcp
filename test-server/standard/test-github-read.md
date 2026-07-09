@@ -62,16 +62,7 @@
 | Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Returns structured `CONFIGURATION_ERROR` in multi-workspace environments (or auto-detects in single-workspace) |
 | No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`                                        |
 
-### 13.7 GitHub Test Cleanup
 
-> [!IMPORTANT]
-> After GitHub testing, ensure all test artifacts are removed. Use the checklist below.
-
-| Cleanup Step           | Command/Action                                                    |
-| ---------------------- | ----------------------------------------------------------------- |
-| Close test issues      | `close_github_issue_with_entry` for any unclosed test issues      |
-| Delete test milestones | `delete_github_milestone` for any test milestones still on GitHub |
-| Verify project board   | `get_kanban_board(project_number: 5)` — no orphaned test items    |
 
 ---
 
@@ -83,4 +74,3 @@
 - `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
 - `get_repo_insights` returns correct data based on `sections` parameter
 - `get_copilot_reviews` — referenced in test docs but not re-executed (verified in schema check only; see prior sessions)
-- All GitHub test artifacts cleaned up after testing

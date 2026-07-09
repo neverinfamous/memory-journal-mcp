@@ -50,24 +50,24 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 
 | Feature                       | Description                                                                                                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                            |
-| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                      |
-| **Dynamic Project Routing**   | Seamlessly switch contexts and access CI/Issue tracking across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                           |
-| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                        |
-| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5 keywords, semantic vector similarity, auto-heuristics, and date-range filters                                                                                  |
-| **Code Mode**                 | Execute multi-step operations in a trusted-admin execution environment — up to 90% token savings via `mj.*` API                                                                                      |
-| **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens  |
-| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                             |
-| **Heuristic Scoring**         | Compute `trust_score` (veracity) and `impact_score` (blast radius) for entries to optimize context delivery and vector prioritization                                                                |
-| **Team Collaboration**        | 39 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, RBAC, and member management |
-| **Data Interoperability**     | Bidirectional Markdown roundtripping, unified IO namespace, and schema-safe JSON exports with hard bounds-checked path traversal defenses                                                            |
-| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                |
-| **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                      |
-| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                   |
-| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                            |
-| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([docs](https://github.com/neverinfamous/memory-journal-mcp/wiki))                                         |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules        |
-| **GitHub Commander**          | Pipeline skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](https://github.com/neverinfamous/memory-journal-mcp/wiki/Skills))                              |
+| **Session Intelligence**      | Auto-query project history, create checkpoints, and hand off context between sessions automatically.                                                                                                 |
+| **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Access Copilot reviews and repository insights.                                                                                          |
+| **Dynamic Project Routing**   | Switch contexts seamlessly and access CI/Issue tracking across multiple repositories from a single server instance.                                                                                  |
+| **Knowledge Graphs**          | Link specifications, implementations, tests, and PRs visually using Mermaid diagrams.                                                                                                                |
+| **Hybrid Search**             | Find entries instantly using a blend of keyword, semantic, and date-range searches.                                                                                                                  |
+| **Code Mode**                 | Execute multi-step operations efficiently in a sandboxed environment to reduce token usage.                                                                                                          |
+| **Adaptive Session Briefing** | Deliver real-time workspace context dynamically, including live CI health, local Git status, and unreleased changes.                                                                                 |
+| **Reports & Analytics**       | Generate standups, retrospectives, PR summaries, digests, and period analyses.                                                                                                                       |
+| **Heuristic Scoring**         | Optimize context delivery by scoring entries based on veracity and impact.                                                                                                                           |
+| **Team Collaboration**        | Share databases across teams with cross-project insights, author attribution, and role-based access control.                                                                                         |
+| **Data Interoperability**     | Export schemas safely, sync Markdown directories, and maintain a unified IO namespace.                                                                                                               |
+| **Backup & Restore**          | Secure data with automated scheduling, retention policies, and one-command restores.                                                                                                                 |
+| **Auto-Pruning**              | Soft-delete low-value entries automatically to maintain search relevance over long-running projects.                                                                                                 |
+| **Security & Transport**      | Ensure secure connections with OAuth 2.1, Streamable HTTP, rate limiting, and SQL injection prevention.                                                                                              |
+| **Structured Error Handling** | Provide agents with classification, remediation hints, and recoverability signals on every tool call.                                                                                                |
+| **Agent Collaboration**       | Share context between IDE agents and Copilot. Search review findings and let agents suggest reusable rules.                                                                                          |
+| **Native Agent Skills**       | Establish permanent AI behavior and architecture rules using bundled foundational coding paradigms.                                                                                                  |
+| **GitHub Commander**          | Audit code, triage issues, review PRs, and run sprint milestones via automated pipeline skills.                                                                                                      |
 
 ---
 
@@ -171,7 +171,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **MCP Tools** (11 Groups)
+### 🛠️ **MCP Tools**
 
 | Group           | Tools | Description                                                                                                                                                                                 |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -189,11 +189,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **28 Workflow Prompts**
+### 🎯 **Workflow Prompts**
 
 Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **49 Resources**
+### 📡 **Resources**
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, and `localTime`
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries

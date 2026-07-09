@@ -1,13 +1,13 @@
-# Re-Test memory-journal-mcp — Backup & Export Tool Group
+# Re-Test memory-journal-mcp — Backup Tool Group
 
-**Scope:** Deterministic verification of Backup/Export tools (`backup_journal`, `restore_backup`, `export_entries`, `cleanup_backups`) against the strict error handling constraints.
+**Scope:** Deterministic verification of Backup tools (`backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups`) against the strict error handling constraints.
 
 **Prerequisites:**
 
 - **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas (e.g., Team Tools, Admin Tools).
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
-- **Required Tool Groups:** `backup`, `codemode`, `io`
+- **Required Tool Groups:** `backup`, `codemode`
 - Confirm MCP server instructions were auto-received before starting.
 - **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
 - Seed data from `test-seed.md` must be present (S11, S12 for cross-DB; S15–S17 for team cross-project insights). `TEAM_DB_PATH` configured. MCP server instructions auto-injected.
@@ -29,13 +29,11 @@
 | ----------------- | ------------------------------------------- | ---------------------------- | ------------------- |
 | `restore_backup`  | `filename: "nonexistent.db"`                | ⚠️ Validation error required | N/A                 |
 | `backup_journal`  | `name: "../../etc/passwd"` (Path traversal) | Success (Timestamp default)  | N/A                 |
-| `export_entries`  | N/A                                         | N/A                          | `limit: "abc"`      |
+| `list_backups`    | N/A                                         | N/A                          | N/A                 |
 | `cleanup_backups` | N/A                                         | N/A                          | `keep_count: "abc"` |
 
 ### Specific Domain Checks
 
-- **Silent Filter Bug check**: `export_entries(format: "json", tags: ["xyz"], limit: 100)`. If output lacks filter enforcement (returns completely unfiltered rows), mark as ⚠️.
-- **Date Ignorance Bug**: `export_entries(start_date: "2099-01-01")`. Should return 0 results. If results exist, handler is ignoring filters.
 - **Cleanup Count Limitation**: `cleanup_backups(keep_count: 0)`. Verify structural error block due to Zod min limit (should be min 1).
 
 ## Success Criteria

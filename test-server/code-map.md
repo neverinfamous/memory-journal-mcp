@@ -438,6 +438,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `prepare-retro` | Prepare a sprint retrospective (What went well, What could improve, Action items... |
 | `prepare-standup` | Prepare a daily standup summary (Yesterday, Today, Blockers) |
 | `project-milestone-tracker` | Track progress against a specific project milestone |
+| `project-setup` | Guide for initializing and registering a new project in the memory-journal-mcp g... |
 | `project-status-summary` | Generate a comprehensive status summary for a GitHub project |
 | `session-summary` | Create a formatted session summary entry |
 | `team-session-summary` | Create a formatted team session summary entry |

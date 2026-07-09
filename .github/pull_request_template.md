@@ -31,8 +31,7 @@ Brief description of the changes in this PR.
 **How did you test these changes?**
 
 - [ ] Manual testing in Cursor
-- [ ] Docker lite build tested
-- [ ] Docker full build tested
+- [ ] Docker build tested
 - [ ] Database migration tested
 - [ ] Existing functionality verified
 - [ ] New functionality tested
@@ -46,7 +45,7 @@ Brief description of the changes in this PR.
 ## 📱 Environment Tested
 
 - **OS:** [e.g. Windows 11, macOS 14, Ubuntu 22.04]
-- **Node.js:** [e.g. 20.x, 22.x]
+- **Node.js:** [e.g. 24.x, 26.x]
 - **Docker:** [e.g. 24.0.6]
 - **MCP Client:** [e.g. Cursor 0.42.3]
 
@@ -79,7 +78,6 @@ Brief description of the changes in this PR.
 ## 🐳 Docker Impact
 
 - [ ] No Docker changes
-- [ ] Dockerfile.lite updated
 - [ ] Dockerfile updated
 - [ ] New dependencies added
 - [ ] Image size impact: [increase/decrease by X MB]
@@ -102,7 +100,7 @@ Brief description of the changes in this PR.
 - [ ] Tests pass locally
 - [ ] No new warnings or errors introduced
 - [ ] Relevant documentation updated
-- [ ] Changes work in both lite and full Docker variants
+- [ ] Changes work in Docker variant
 
 ## 🖼️ Screenshots
 

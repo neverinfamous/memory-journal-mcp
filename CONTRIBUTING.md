@@ -14,7 +14,7 @@ Thank you for your interest in contributing to the Memory Journal MCP Server! Th
 
 ### Prerequisites
 
-- **Node.js 24+** (see `engines` in `package.json`)
+- **Node.js 24+** (Node.js 26.x LTS recommended)
 - **npm** (comes with Node.js)
 - **Git** (for version control and GitHub integration testing)
 - **Docker** (optional, for container testing)
@@ -227,9 +227,9 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # 103 tool handlers (11 groups)
-│   ├── resources/              # 49 resource handlers
-│   └── prompts/                # 28 prompt handlers
+│   ├── tools/                  # tool handlers (multiple groups)
+│   ├── resources/              # resource handlers
+│   └── prompts/                # prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/

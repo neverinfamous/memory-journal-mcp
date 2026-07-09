@@ -16,6 +16,21 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         if (obj['severity'] !== undefined && obj['flag_type'] === undefined) { obj['flag_type'] = obj['severity']; delete obj['severity']; }
         if (obj['msg'] !== undefined && obj['message'] === undefined) { obj['message'] = obj['msg']; delete obj['msg']; }
         if (obj['sort'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['sort']; delete obj['sort']; }
+        if (obj['sortBy'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['sortBy']; delete obj['sortBy']; }
+        if (obj['orderBy'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['orderBy']; delete obj['orderBy']; }
+        if (obj['order_by'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['order_by']; delete obj['order_by']; }
+        
+        if (typeof obj['sort_by'] === 'string') {
+            const lowerSort = obj['sort_by'].toLowerCase();
+            if (lowerSort.endsWith('_asc')) {
+                obj['sort_by'] = obj['sort_by'].replace(/_asc$/i, '');
+                if (obj['sort_order'] === undefined) obj['sort_order'] = 'asc';
+            } else if (lowerSort.endsWith('_desc')) {
+                obj['sort_by'] = obj['sort_by'].replace(/_desc$/i, '');
+                if (obj['sort_order'] === undefined) obj['sort_order'] = 'desc';
+            }
+        }
+
         if (obj['comment'] !== undefined && obj['resolution'] === undefined) { obj['resolution'] = obj['comment']; delete obj['comment']; }
         if (obj['version'] !== undefined && obj['expected_version'] === undefined) { obj['expected_version'] = obj['version']; delete obj['version']; }
         if (obj['repo'] !== undefined && obj['repo_name'] === undefined) { obj['repo_name'] = obj['repo']; delete obj['repo']; }

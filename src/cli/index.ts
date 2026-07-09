@@ -38,14 +38,35 @@ addAgentInstructions(program,
 - 🛠️ AUTONOMOUS HEALING: DO NOT attempt to run \`node .../build/index.js\`. ALWAYS use the global \`memory-journal-mcp\` wrapper or \`bun src/cli/index.ts\`.`
 )
 
-// Setup agent healing for 'project' hallucination
-program
-    .command('project [args...]', { hidden: true })
-    .allowUnknownOption()
-    .action(() => {
-        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'project' command does not exist. To find project IDs, query the MCP resource memory://agent-context/{repo}.\n`);
-        process.exit(1);
-    });
+import { projectCreateAction, projectListAction } from './commands/project.js'
+
+// Setup 'project' command group
+const projectCmd = program
+    .command('project')
+    .description('Manage projects in the memory-journal-mcp global registry')
+
+projectCmd
+    .command('list')
+    .description('List all registered projects')
+    .option('--json', 'Output as JSON')
+    .action(projectListAction)
+
+const projectCreateCmd = projectCmd
+    .command('create <name>')
+    .description('Register a new project in the global registry')
+withGroup(projectCreateCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--path <path>', 'Absolute path to the local repository (required)')
+        .option('--number <number>', 'GitHub Project number (optional)')
+        .option('--skip-init', 'Skip automated database initialization entry')
+})
+addAgentInstructions(projectCreateCmd,
+    `
+🤖 AI AGENT INSTRUCTIONS:
+- Run this command first when initializing a new codebase.
+- The command will AUTOMATICALLY initialize the project in the database. You no longer need to run a secondary 'entry create' command.`
+)
+projectCreateCmd.action(projectCreateAction)
 
 // Setup 'exec' command
 const execCmd = program
