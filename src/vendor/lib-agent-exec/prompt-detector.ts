@@ -56,9 +56,7 @@ export function checkPrompt(tail: string): boolean {
     // Pagers
     .when(l => /more\s*\(\d+%\)/i.test(l), () => true)
     
-    // Progress Bars
-    .when(l => /(?:\[(?:█|▓|░|=|#|-|>|\s)+\]|(?:█|▓|░)+)\s*(?:\d+%|\d+(?:\.\d+)?[KMGT]?[iI]?B|\d+\/\d+)/i.test(l), () => true)
-    .when(l => /(?:progress|receiving|extracting|downloading|uploading|resolving|fetching).*?(?:\d+%|\[(?:█|▓|░|=|#|-|>|\s)+\]|done|added \d+|resolved \d+)/i.test(l), () => true)
+
     
     // Default
     .otherwise(() => false);

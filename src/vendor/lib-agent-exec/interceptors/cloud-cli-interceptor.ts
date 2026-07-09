@@ -12,7 +12,7 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
     }
     const subCmd = args.filter(a => !a.startsWith('-'))[0];
     if (['init', 'create'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename} ${subCmd}' is highly interactive. Automatically injecting '-y' to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} ${subCmd}' is highly interactive. Automatically injecting '-y' to prevent hanging... (Frictionless Recovery)`);
       args.push('-y');
     }
   }
@@ -44,7 +44,7 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
     const subCmd = args.filter(a => !a.startsWith('-'))[0];
     if (['apply', 'destroy'].includes(subCmd)) {
       if (!args.includes('-auto-approve')) {
-        console.error(`\n   💡 AGENT HINT: Automatically injecting '-auto-approve' into ${cmdBasename} ${subCmd} to prevent prompt hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-auto-approve' into ${cmdBasename} ${subCmd} to prevent prompt hanging... (Frictionless Recovery)`);
         args.push('-auto-approve');
       }
     }
@@ -213,7 +213,7 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
       })
       .with([P.union('pr', 'issue', 'repo', 'run', 'release'), P.union('list', 'status', 'view')], () => {
         if (!args.includes('--json')) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh command to output structured data... (Frictionless Recovery)\n${AUTONOMOUS_HEALING_MSG}`);
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh command to output structured data... (Frictionless Recovery)`);
           let jsonFields = 'url';
           if (subCmd1 === 'pr' || subCmd1 === 'issue') jsonFields = 'number,title,state,url';
           if (subCmd1 === 'repo') jsonFields = 'name,owner,url';

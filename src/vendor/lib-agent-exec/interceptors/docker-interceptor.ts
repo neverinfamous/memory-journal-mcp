@@ -16,8 +16,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     if (subCmd === 'logs') {
       const hasFollow = args.some(a => a === '-f' || a === '--follow');
       if (hasFollow) {
-        console.error(`\n   💡 AGENT HINT: 'kubectl logs -f' runs indefinitely and will cause a timeout.\n${AUTONOMOUS_HEALING_MSG}`);
-        console.error(`   Auto-healing: Automatically stripping '-f / --follow' flag...`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'kubectl logs -f' runs indefinitely and will cause a timeout. Automatically stripping '-f / --follow' flag... (Frictionless Recovery)`);
         for (let i = args.length - 1; i >= 0; i--) {
           if (args[i] === '-f' || args[i] === '--follow') args.splice(i, 1);
         }
@@ -86,7 +85,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
   if (dockerCmds.includes(cmdBasename) && subCmd === 'plugin' && args.includes('install')) {
     if (!args.includes('--grant-all-permissions')) {
-      console.error(`\n   💡 AGENT HINT: 'docker plugin install' asks for confirmation. Automatically injecting '--grant-all-permissions'.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker plugin install' asks for confirmation. Automatically injecting '--grant-all-permissions'... (Frictionless Recovery)`);
       args.push('--grant-all-permissions');
     }
   }
@@ -118,8 +117,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (isLogsCmd) {
     const hasFollow = args.some(a => a === '-f' || a === '--follow' || a.startsWith('--follow='));
     if (hasFollow) {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename} logs -f' runs indefinitely and will cause a timeout.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Auto-healing: Automatically stripping '-f / --follow' flag...`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} logs -f' runs indefinitely and will cause a timeout. Automatically stripping '-f / --follow' flag... (Frictionless Recovery)`);
       for (let i = args.length - 1; i >= 0; i--) {
         if (args[i] === '-f' || args[i] === '--follow' || args[i].startsWith('--follow=')) args.splice(i, 1);
       }
@@ -133,14 +131,12 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (isUpCmd) {
     const hasDetach = args.some(a => a === '-d' || a === '--detach');
     if (!hasDetach) {
-      console.error(`\n   💡 AGENT HINT: 'docker compose up' was called without '-d' or '--detach'.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Auto-healing: Automatically appending '-d' flag to prevent indefinite blocking...`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose up' was called without '-d' or '--detach'. Automatically appending '-d' flag to prevent indefinite blocking... (Frictionless Recovery)`);
       args.push('-d');
     }
     const watchIdx = args.findIndex(a => a === '--watch');
     if (watchIdx !== -1) {
-      console.error(`\n   💡 AGENT HINT: 'docker compose up --watch' runs indefinitely and will cause a timeout.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Auto-healing: Automatically stripping '--watch' flag...`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose up --watch' runs indefinitely and will cause a timeout. Automatically stripping '--watch' flag... (Frictionless Recovery)`);
       args.splice(watchIdx, 1);
     }
   }
@@ -172,7 +168,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   if (isRmCmd) {
     const hasForce = args.some(a => a === '-f' || a === '--force');
     if (!hasForce) {
-      console.error(`\n   💡 AGENT HINT: 'docker compose rm' asks for confirmation. Automatically appending '-f' flag to prevent indefinite blocking...\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker compose rm' asks for confirmation. Automatically appending '-f' flag to prevent indefinite blocking... (Frictionless Recovery)`);
       args.push('-f');
     }
   }
@@ -180,14 +176,14 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   const pruneCategories = ['system', 'image', 'volume', 'network', 'container', 'builder'];
   if (dockerCmds.includes(cmdBasename) && pruneCategories.includes(subCmd) && args.includes('prune')) {
     if (!args.includes('-f') && !args.includes('--force')) {
-      console.error(`\n   💡 AGENT HINT: 'docker ${subCmd} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker ${subCmd} prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
       args.push('-f');
     }
   }
 
   if (isBuildxPlugin && buildxSubCmd === 'prune') {
     if (!args.includes('-f') && !args.includes('--force')) {
-      console.error(`\n   💡 AGENT HINT: 'docker buildx prune' asks for confirmation. Automatically injecting '-f' to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'docker buildx prune' asks for confirmation. Automatically injecting '-f' to prevent hanging... (Frictionless Recovery)`);
       args.push('-f');
     }
   }
@@ -201,9 +197,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
       arg.startsWith('--interactive')
     );
     if (hasTtyFlag) {
-      console.error(`\n   💡 AGENT HINT: You attempted to run a Docker command with a TTY flag.\n${AUTONOMOUS_HEALING_MSG}`);
-      console.error(`   Because 'agent-exec.ts' uses \`shell: false\` and pipes stdio, TTY allocation is NOT supported.`);
-      console.error(`   Auto-healing: Automatically stripping TTY flags (-t, --tty) to prevent process hanging...`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: You attempted to run a Docker command with a TTY flag. Because 'agent-exec.ts' uses \`shell: false\` and pipes stdio, TTY allocation is NOT supported. Automatically stripping TTY flags (-t, --tty) to prevent process hanging... (Frictionless Recovery)`);
       
       const requiresInteractive = !!payload.stdin;
       if (!requiresInteractive) {
@@ -252,7 +246,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
 
     if ((isComposeExec || isComposeRun) && !args.includes('-T')) {
       const targetCmd = isComposeExec ? 'exec' : 'run';
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-T' into docker compose ${targetCmd} to forcefully disable TTY allocation.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-T' into docker compose ${targetCmd} to forcefully disable TTY allocation... (Frictionless Recovery)`);
       const targetIndex = args.indexOf(targetCmd);
       if (targetIndex !== -1) {
         args.splice(targetIndex + 1, 0, '-T');

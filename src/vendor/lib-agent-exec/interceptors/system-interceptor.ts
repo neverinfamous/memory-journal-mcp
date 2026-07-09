@@ -75,7 +75,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   }
 
   // 1. Mutating intercepts (safe to run before block checks)
-  match({ cmd, originalCmd, args, payload, hasStdin })
+  match({ cmd, originalCmd, args, payload, hasStdin, isCommand })
     .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args: matchedArgs }) => {
       if (!matchedArgs.some(a => a.includes('BatchMode=yes'))) {
         console.error(`\n   💡 AGENT HINT: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
@@ -203,13 +203,20 @@ export function systemInterceptor(ctx: ExecutionContext): void {
             }, initialState);
             
             return exactShellChars.some(op => {
-                if (!finalState.unquoted.includes(op)) return false;
+                let checkStr = finalState.unquoted;
+                if (op === '>') {
+                    checkStr = checkStr.replace(/=>/g, '').replace(/->/g, '');
+                } else if (op === '<') {
+                    checkStr = checkStr.replace(/<-/g, '').replace(/<[^>]+>/g, '');
+                }
                 
-                const hasSpacesAround = finalState.unquoted.includes(` ${op} `) || finalState.unquoted.startsWith(`${op} `) || finalState.unquoted.endsWith(` ${op}`);
+                if (!checkStr.includes(op)) return false;
+                
+                const hasSpacesAround = checkStr.includes(` ${op} `) || checkStr.startsWith(`${op} `) || checkStr.endsWith(` ${op}`);
                 const isShell = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'].includes(cmdBasename.toLowerCase());
                 
                 return match({ 
-                    isExact: finalState.unquoted.trim() === op,
+                    isExact: checkStr.trim() === op,
                     hasSpacesAround, 
                     isShell, 
                     argsLen: args.length,
@@ -424,9 +431,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         const payloadObj = ctx.payload as { command?: string };
         if (typeof payloadObj.command === 'string') {
           payloadObj.command = payloadObj.command.replace(new RegExp(`^${originalCmd}\\b`, 'i'), 'ls')
-            .replace(/\s-Path\b/gi, '');
+            .replace(/\s-Path\b/gi, '')
+            .replace(/\s\/s\b/gi, ' -R')
+            .replace(/\s-Recurse\b/gi, ' -R');
         }
-        ctx.args = ctx.args.filter(a => a.toLowerCase() !== '-path');
+        ctx.args = ctx.args.filter(a => a.toLowerCase() !== '-path')
+          .map(a => ['/s', '-recurse'].includes(a.toLowerCase()) ? '-R' : a);
       }
     })
 
