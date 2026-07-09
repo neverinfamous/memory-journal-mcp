@@ -4,7 +4,7 @@ import { match, P } from 'ts-pattern';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import os from 'node:os';
+
 
 export function systemInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, args, payload } = ctx;
@@ -275,8 +275,26 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       if (scriptContent) {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline ${interpreter} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
         const ext = interpreter.startsWith('python') ? 'py' : (interpreter === 'bun' ? 'ts' : 'js');
-        const tmpFile = path.join(os.tmpdir(), `agent_inline_script_${Date.now()}.${ext}`);
+        
+        const targetCwd = ctx.payload.cwd || process.cwd();
+        let outDir = targetCwd;
+        const scratchDir = path.join(targetCwd, '.agents', 'scratch');
+        if (fs.existsSync(scratchDir)) {
+          outDir = scratchDir;
+        }
+        
+        const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.${ext}`);
         fs.writeFileSync(tmpFile, scriptContent);
+        
+        process.on('exit', () => {
+          try {
+            if (fs.existsSync(tmpFile)) {
+              fs.unlinkSync(tmpFile);
+            }
+          } catch {
+            // ignore
+          }
+        });
         
         ctx.args.splice(flagIdx, 2, tmpFile);
       } else {
