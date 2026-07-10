@@ -297,6 +297,9 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     if (contentArg !== undefined && options.content === undefined) {
         options.content = contentArg;
     }
+    if (options.description !== undefined && options.content === undefined) {
+        options.content = options.description;
+    }
 
     const { db, config } = await getDb(options, command)
 
@@ -362,6 +365,9 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
 
     if (contentArg !== undefined && options.content === undefined) {
         options.content = contentArg;
+    }
+    if (options.description !== undefined && options.content === undefined) {
+        options.content = options.description;
     }
 
     const { db, config } = await getDb(options, command)

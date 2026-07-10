@@ -163,6 +163,7 @@ export const adminPruneOptionsSchema = pruningOptionsSchema
 export const baseEntryOptionsSchema = z.object({
     file: z.string().optional(),
     content: z.string().optional(),
+    description: z.string().optional(),
     title: z.string().optional(),
     type: z.string().optional(),
     category: z.string().optional(),

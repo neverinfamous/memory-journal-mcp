@@ -224,6 +224,7 @@ withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
     cmd
         .option('-f, --file <path>', 'Load markdown content from a file')
         .option('-c, --content <string>', 'Raw markdown content string')
+        .option('-d, --description <string>', 'Alias for --content (Auto-healing agent hallucination)')
         .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
         .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
         .option('--category <type>', 'Entry type (alias)')
@@ -268,6 +269,7 @@ withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--expected-version <number>', 'Expected version of the entry (for concurrent modification safety)')
         .option('-f, --file <path>', 'Load new markdown content from a file')
         .option('-c, --content <string>', 'Raw new markdown content string')
+        .option('-d, --description <string>', 'Alias for --content (Auto-healing agent hallucination)')
         .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
         .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
         .option('--category <type>', 'Entry type (alias)')
