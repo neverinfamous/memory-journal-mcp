@@ -1,5 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
 
 export interface AgentIssue {
     timestamp: string
@@ -16,7 +17,9 @@ export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp'>): void {
     }
 
     try {
-        const rootDir = process.cwd()
+        const __filename = fileURLToPath(import.meta.url)
+        const __dirname = path.dirname(__filename)
+        const rootDir = path.resolve(__dirname, '..', '..')
         const logsDir = path.join(rootDir, 'logs')
         
         if (!fs.existsSync(logsDir)) {
