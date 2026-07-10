@@ -420,14 +420,28 @@ addCoreOptions(analyticsInsightsCmd)
 addDatabaseOptions(analyticsInsightsCmd)
 analyticsInsightsCmd.action(withValidation(analyticsSchema, analyticsInsightsAction))
 
-// Setup agent healing for 'session' hallucination
-program
-    .command('session [args...]', { hidden: true })
-    .allowUnknownOption()
-    .action(() => {
-        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'session' command does not exist in the CLI. If you are looking for session summaries, use 'entry search "session summary" --project <repo>' or use the 'search' command directly.\n`);
-        process.exit(1);
-    });
+// Setup alias for 'session' to 'search'
+const sessionCmd = program
+    .command('session [args...]')
+    .description('Search for session summaries (Alias for search "session summary")')
+withGroup(sessionCmd, 'Command Options', (cmd: Command) => {
+    cmd
+        .option('--mode <mode>', 'Search mode: auto, fts, semantic, hybrid', 'auto')
+        .option('--limit <number>', 'Maximum number of results to return', '50')
+        .option('--team', 'Search team database')
+})
+addOutputOptions(sessionCmd)
+addCoreOptions(sessionCmd)
+addDatabaseOptions(sessionCmd)
+addAgentInstructions(sessionCmd,
+    `
+🤖 AI AGENT INSTRUCTIONS:
+- This is a convenience alias. It behaves exactly like the 'search' command, but prepends 'session ' to your query if arguments are provided, or defaults to 'session summary'.`
+)
+sessionCmd.action(withValidation(searchSchema, async (args: string[], options: ReturnType<typeof searchSchema.parse>, command: Command) => {
+    const query = args.length > 0 ? "session " + args.join(" ") : "session summary";
+    await searchAction(query, options, command);
+}))
 
 // Auto-heal snake_case flags hallucinatory arguments to kebab-case
 const args = process.argv.map(arg => {
