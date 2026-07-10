@@ -7,7 +7,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   if (['apt', 'apt-get'].includes(cmdBasename)) {
     envOverrides['DEBIAN_FRONTEND'] = 'noninteractive';
     if (!args.includes('-y') && !args.includes('--yes')) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into apt/apt-get command to prevent prompt hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into apt/apt-get command to prevent prompt hanging.... (Frictionless Recovery)`);
       args.unshift('-y');
     }
   }
@@ -15,7 +15,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   if (['apk'].includes(cmdBasename)) {
     if (args.includes('add') || args.includes('del')) {
        if (!args.includes('--no-interactive')) {
-         console.error(`\n   💡 AGENT HINT: Automatically injecting '--no-interactive' into apk command.\n${AUTONOMOUS_HEALING_MSG}`);
+         console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-interactive' into apk command.... (Frictionless Recovery)`);
          args.push('--no-interactive');
        }
     }
@@ -23,14 +23,14 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
 
   if (['pacman', 'pacman.exe'].includes(cmdBasename)) {
     if (!args.includes('--noconfirm')) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '--noconfirm' into pacman command.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--noconfirm' into pacman command.... (Frictionless Recovery)`);
       args.push('--noconfirm');
     }
   }
 
   if (['yum', 'dnf'].includes(cmdBasename)) {
     if (!args.includes('-y')) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} command.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} command.... (Frictionless Recovery)`);
       args.push('-y');
     }
   }
@@ -39,7 +39,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     if (!args.includes('-y') && !args.includes('--yes')) {
       const subCmd = args.filter(a => !a.startsWith('-'))[0];
       if (['install', 'create', 'update', 'upgrade', 'remove', 'uninstall'].includes(subCmd)) {
-        console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
         args.push('-y');
       }
     }
@@ -51,7 +51,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     const pipArgs = isPythonPip ? args.slice(mIndex + 2) : args;
     const subCmd = pipArgs.filter(a => !a.startsWith('-'))[0];
     if (subCmd === 'uninstall' && !pipArgs.includes('-y') && !pipArgs.includes('--yes')) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into pip uninstall to prevent prompt hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into pip uninstall to prevent prompt hanging.... (Frictionless Recovery)`);
       args.push('-y');
     }
   }
@@ -62,7 +62,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
 
     const isYarnOrPnpm = cmdBasename.includes('yarn') || cmdBasename.includes('pnpm');
     if (args.includes('--interactive') || (isYarnOrPnpm && args.includes('-i'))) {
-      console.error(`\n   💡 AGENT HINT: Stripping interactive flag from ${cmdBasename} command...\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripping interactive flag from ${cmdBasename} command... (Frictionless Recovery)`);
       for (let i = args.length - 1; i >= 0; i--) {
         if (args[i] === '--interactive' || (isYarnOrPnpm && args[i] === '-i')) args.splice(i, 1);
       }
@@ -73,7 +73,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       process.exit(1);
     }
     if (['init', 'create', 'dlx', 'x'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
-      console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
       if (subCmd === 'dlx' || subCmd === 'x') {
          args.splice(args.indexOf(subCmd) + 1, 0, '-y');
       } else {
@@ -105,7 +105,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     } else {
       envOverrides['CI'] = '1';
       if (!args.includes('-y') && !args.includes('--yes')) {
-        console.error(`\n   💡 AGENT HINT: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.... (Frictionless Recovery)`);
         args.unshift('-y');
       }
     }

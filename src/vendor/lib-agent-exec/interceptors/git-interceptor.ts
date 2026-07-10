@@ -51,7 +51,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
           if (hasWrapper) {
             const message = args[mIndex + 1];
             console.error(`\n   💡 AGENT HINT: 'git commit' is intercepted for safety.`);
-            console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to 'bun .\\.agents\\scripts\\commit.ts' with default scores... (Frictionless Recovery)\n${AUTONOMOUS_HEALING_MSG}`);
+            console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to 'bun .\\.agents\\scripts\\commit.ts' with default scores... (Frictionless Recovery)`);
             ctx.cmdBasename = 'bun';
             ctx.args = ['.\\.agents\\scripts\\commit.ts', '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
             return;
@@ -76,7 +76,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       ({ ctx, args, cmd }) => {
         const cwd = ctx.payload.cwd || process.cwd();
         if (findEcosystemScript(cwd, 'get-git-history-json.ts') !== null) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to 'bun .\\.agents\\scripts\\get-git-history-json.ts' to prevent text dumps... (Frictionless Recovery)\n${AUTONOMOUS_HEALING_MSG}`);
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to 'bun .\\.agents\\scripts\\get-git-history-json.ts' to prevent text dumps... (Frictionless Recovery)`);
           ctx.cmdBasename = 'bun';
           ctx.args = ['.\\.agents\\scripts\\get-git-history-json.ts', '--limit', '10'];
           if (cmd === 'show') {

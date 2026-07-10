@@ -38,7 +38,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     const firstTokenBase = path.basename(firstToken).replace(/\.exe$/, '');
     if (networkAliases.includes(firstTokenBase) && !firstToken.endsWith('.exe') && payload.target !== 'wsl2') {
       const nativeExe = firstTokenBase === 'wget' ? 'wget.exe' : 'curl.exe';
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${firstToken}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${firstToken}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     }
   }
@@ -56,21 +56,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     const cmdStr = tokens.find((t: string) => networkAliases.includes(t));
     if (cmdStr) {
       const nativeExe = cmdStr === 'wget' ? 'wget.exe' : 'curl.exe';
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     }
 
     const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe'];
     const searchCmdStr = tokens.find((t: string) => fsSearchAliases.includes(t));
     if (searchCmdStr) {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${searchCmdStr}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${searchCmdStr}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     }
 
     const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
     const listCmdStr = tokens.find((t: string) => fsListAliases.includes(t));
     if (listCmdStr) {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${listCmdStr}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${listCmdStr}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     }
   }
@@ -79,7 +79,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   match({ cmd, originalCmd, args, payload, hasStdin, isCommand })
     .with({ cmd: P.union('ssh', 'ssh.exe', 'scp', 'scp.exe', 'sftp', 'sftp.exe') }, ({ args: matchedArgs }) => {
       if (!matchedArgs.some(a => a.includes('BatchMode=yes'))) {
-        console.error(`\n   💡 AGENT HINT: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-o BatchMode=yes' into ${cmdBasename} command to prevent password prompt hanging.... (Frictionless Recovery)`);
         ctx.args.unshift('-o', 'BatchMode=yes');
       }
       if (!matchedArgs.some(a => a.includes('StrictHostKeyChecking='))) {
@@ -89,21 +89,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ cmd: P.union('ping', 'ping.exe') }, ({ args }) => {
       if (process.platform === 'win32' || cmd === 'ping.exe') {
         if (args.includes('-t')) {
-          console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+          console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
           for (let i = args.length - 1; i >= 0; i--) {
             if (args[i] === '-t') args.splice(i, 1);
           }
         }
       } else {
         if (!args.includes('-c')) {
-          console.error(`\n   💡 AGENT HINT: 'ping' on Unix runs indefinitely without '-c'. Injecting '-c 4'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: 'ping' on Unix runs indefinitely without '-c'. Injecting '-c 4'.... (Frictionless Recovery)`);
           args.unshift('-c', '4');
         }
       }
     })
     .with({ cmd: P.union('sudo', 'sudo.exe') }, ({ args: matchedArgs }) => {
       if (process.platform !== 'win32' && !matchedArgs.includes('-n') && !matchedArgs.includes('--non-interactive')) {
-        console.error(`\n   💡 AGENT HINT: Automatically injecting '-n' (non-interactive) into sudo command to prevent password prompt hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-n' (non-interactive) into sudo command to prevent password prompt hanging.... (Frictionless Recovery)`);
         ctx.args.unshift('-n');
       }
     })
@@ -124,7 +124,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
     })
     .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('awk', 'sed', 'jq', 'jq.exe') }, () => {
@@ -138,7 +138,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ cmd: P.union('gh', 'gh.exe', 'pnpm', 'npm', 'docker', 'docker.exe') }, ({ args }) => {
       const isLogin = args.some(a => a === 'login' || a === 'auth');
       if (isLogin) {
-        console.error(`\n   💡 AGENT HINT: Interactive login commands like '${cmdBasename} ${args.join(' ')}' hang the agent.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Blocking execution. Please instruct the user to run this in their own terminal appended with '--agent-bypass'.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: Interactive login commands like '${cmdBasename} ${args.join(' ')}' hang the agent.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Blocking execution. Authentication must be handled externally.\x1b[0m`);
         process.exit(1);
       }
     })
@@ -148,7 +148,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const searchArgs = scriptFlagIdx === -1 ? matchedArgs : matchedArgs.slice(0, scriptFlagIdx);
       
       if (!searchArgs.some(a => a.toLowerCase() === '-noninteractive')) {
-        console.error(`\n   💡 AGENT HINT: Automatically injecting '-NonInteractive' into ${cmdBasename} command to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-NonInteractive' into ${cmdBasename} command to prevent hanging.... (Frictionless Recovery)`);
         ctx.args.unshift('-NonInteractive');
       }
       if (!searchArgs.some(a => a.toLowerCase() === '-noprofile')) {
@@ -234,7 +234,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         .otherwise(() => false);
     });
     if (hasUnsafe) {
-      console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings and will fail.`);
       console.error(`   To use shell features, please use a 'script' payload type or pipe natively in PowerShell.`);
       process.exit(1);
@@ -300,13 +300,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     })
     // Shell inline rules
     .with({ isCommand: true, originalCmd: P.union(...shells), hasInlineCmd: true, inlineFlag: P.union('-ec', '-encodedcommand', '-en') }, () => {
-      console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), hasInlineCmd: false, args: P.when((a: string[]) => {
       return a.length > 0 && !a.some(arg => ['-file', '-help', '-version', '-?', '/?'].includes(arg.toLowerCase()));
     }) }, () => {
-      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
@@ -316,7 +316,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         const stripped = getUnquoted(s);
         return stripped.includes('&&') || stripped.includes('||') || stripped.includes('|') || stripped.includes('>');
     }) }, () => {
-      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. You MUST use semicolons (;) for simple commands, or use a WSL2 JSON payload for POSIX pipelines.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. You MUST use semicolons (;) for simple commands, or use a WSL2 JSON payload for POSIX pipelines.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
 
@@ -331,26 +331,26 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const netCmdStr = tokens.find(t => networkAliases.includes(t));
       if (netCmdStr) {
         const nativeExe = netCmdStr === 'wget' ? 'wget.exe' : 'curl.exe';
-        console.error(`\n   💡 AGENT HINT: Do NOT use '${netCmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: Do NOT use '${netCmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
 
       const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe'];
       const searchCmdStr = tokens.find(t => fsSearchAliases.includes(t));
       if (searchCmdStr) {
-        console.error(`\n   💡 AGENT HINT: Do NOT use '${searchCmdStr}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: Do NOT use '${searchCmdStr}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
 
       const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
       const listCmdStr = tokens.find(t => fsListAliases.includes(t));
       if (listCmdStr) {
-        console.error(`\n   💡 AGENT HINT: Do NOT use '${listCmdStr}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: Do NOT use '${listCmdStr}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
 
       const wrappedShell = (cmdBasename === 'wsl.exe' || cmdBasename === 'wsl') ? (args.find((a: string) => ['bash', 'sh', 'pwsh', 'powershell'].includes(a.toLowerCase())) || cmdBasename) : cmdBasename;
-      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${wrappedShell} ${flag}). This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${wrappedShell} ${flag}). This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
@@ -359,50 +359,50 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
     // Interactive blocks
     .with({ cmd: P.union('su', 'su.exe', 'passwd', 'passwd.exe', 'chsh', 'chsh.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('ssh-keygen', 'ssh-keygen.exe') }, () => {
       if (!args.includes('-f') || !args.includes('-N')) {
-        console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         console.error(`   Please provide '-f <path>' and '-N ""' to run non-interactively. Blocking execution.`);
         process.exit(1);
       }
     })
     .with({ cmd: P.union('runas', 'runas.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('sudo', 'sudo.exe'), isWin32: true }, () => {
-      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
 
     // Indefinite Hang Blocks
     .with({ cmd: P.union('watch', 'watch.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('tail', 'tail.exe') }, () => {
       if (args.includes('-f') || args.includes('--follow') || args.some(a => a.startsWith('--follow='))) {
-        console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
     })
     .with({ cmd: P.union('journalctl', 'journalctl.exe') }, () => {
       if (args.includes('-f') || args.includes('--follow')) {
-        console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
     })
 
     // Native tool enforcement
     .with({ isCommand: true, hasStdin: false, cmd: P.union('cat', 'cat.exe', 'wc', 'wc.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe', 'find', 'find.exe', 'findstr', 'findstr.exe', 'gpg', 'gpg.exe'), positionalArgs: P.when(pa => pa.length === 0) }, () => {
-      console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('xargs', 'xargs.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
@@ -413,13 +413,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         .otherwise(() => false);
       
       if (!isSafe) {
-        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
       if (!args.some(a => ['-r', '-R', '--recursive', '--files', '--help', '-h'].includes(a))) {
-        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments, no recursive flag, and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments, no recursive flag, and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
         process.exit(1);
       }
     })
@@ -427,13 +427,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ isCommand: true, originalCmd: P.union('curl', 'wget', 'invoke-webrequest', 'iwr'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
       const cmdStr = originalCmd;
       const nativeExe = originalCmd === 'wget' ? 'wget.exe' : 'curl.exe';
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
 
     // Search tool enforcement (FS Alias Hallucinations)
     .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool, fix the command parameters yourself, OR launch a subagent to fix it using the '/mcp:memory-journal-mcp:mcp-heal' prompt.\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: You MUST autonomously invoke the correct native tool or fix the command parameters yourself.\x1b[0m`);
       process.exit(1);
     })
 
