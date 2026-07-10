@@ -420,6 +420,15 @@ addCoreOptions(analyticsInsightsCmd)
 addDatabaseOptions(analyticsInsightsCmd)
 analyticsInsightsCmd.action(withValidation(analyticsSchema, analyticsInsightsAction))
 
+// Setup agent healing for 'session' hallucination
+program
+    .command('session [args...]', { hidden: true })
+    .allowUnknownOption()
+    .action(() => {
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'session' command does not exist in the CLI. If you are looking for session summaries, use 'entry search "session summary" --project <repo>' or use the 'search' command directly.\n`);
+        process.exit(1);
+    });
+
 // Auto-heal snake_case flags hallucinatory arguments to kebab-case
 const args = process.argv.map(arg => {
     if (arg.startsWith('--') && arg.includes('_')) {
