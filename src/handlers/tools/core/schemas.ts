@@ -178,7 +178,7 @@ export const GetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('The numeric ID of the entry to retrieve'),
     include_relationships: z.boolean().optional().default(true).describe('If true, includes all linked relationships (causal, related) in the response'),
     project_number: relaxedNumber().optional(),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key. [ANTI-HALLUCINATION] If an entry returns RESOURCE_NOT_FOUND, it might belong to another workspace. Set workspace_id: "*" to search globally.'),
 })
 
 export const EntryByIdOutputSchema = z

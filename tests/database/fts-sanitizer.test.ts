@@ -24,7 +24,7 @@ describe('sanitizeFtsQuery', () => {
     it('removes special characters outside phrases', () => {
         expect(sanitizeFtsQuery('hello (world)')).toBe('hello world')
         expect(sanitizeFtsQuery('DROP TABLE users;')).toBe('DROP TABLE users')
-        expect(sanitizeFtsQuery('word-with-hyphen some_underscore')).toBe('word-with-hyphen some_underscore')
+        expect(sanitizeFtsQuery('word-with-hyphen some_underscore')).toBe('word with hyphen some_underscore')
     })
 
     it('preserves asterisk at the end of tokens', () => {

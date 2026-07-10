@@ -72,7 +72,7 @@ export const SearchEntriesSchemaMcp = z.preprocess(
             'Search strategy: auto (default, heuristic-based), fts (FTS5 keyword), semantic (vector), hybrid (RRF fusion of FTS5+vector)'
         ),
     limit: relaxedNumber().optional().default(10),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key. [ANTI-HALLUCINATION] If an entry is missing, it might belong to another workspace. Set workspace_id: "*" to search globally.'),
     is_personal: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
     issue_number: relaxedNumber().optional(),

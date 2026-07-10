@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import * as fs from 'fs'
 
 const callTool = (
     name: any,
@@ -54,6 +55,11 @@ describe('Search Tool Handlers - Coverage', () => {
     const teamDbPath = './.test-output/vitest/test-search-team-cov.db'
 
     beforeAll(async () => {
+        try {
+            if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath)
+            if (fs.existsSync(teamDbPath)) fs.unlinkSync(teamDbPath)
+        } catch {}
+        
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
         teamDb = new DatabaseAdapter(teamDbPath)
@@ -114,13 +120,9 @@ describe('Search Tool Handlers - Coverage', () => {
         db.close()
         teamDb.close()
         try {
-            const fs = require('node:fs')
-            for (const p of [testDbPath, teamDbPath]) {
-                if (fs.existsSync(p)) fs.unlinkSync(p)
-            }
-        } catch {
-            // Ignore cleanup errors
-        }
+            if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath)
+            if (fs.existsSync(teamDbPath)) fs.unlinkSync(teamDbPath)
+        } catch {}
     })
 
     // ========================================================================

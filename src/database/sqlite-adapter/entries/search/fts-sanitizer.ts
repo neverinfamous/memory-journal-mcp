@@ -33,8 +33,9 @@ export function sanitizeFtsQuery(query: string): string {
         return ' ' // Replace the matched phrase with space in the remaining text
     })
 
-    // Phase 2: Strip any remaining unbalanced quotes
-    const noQuotes = withoutPhrases.replace(/"/g, ' ')
+    // Phase 2: Strip any remaining unbalanced quotes and replace hyphens with spaces
+    // Bare hyphens in FTS5 cause syntax errors. We replace them with spaces so they become implicit AND matches.
+    const noQuotes = withoutPhrases.replace(/"/g, ' ').replace(/-/g, ' ')
 
     // Phase 3: Tokenize and sanitize the non-phrase portion
     const tokens = noQuotes.split(/\s+/)

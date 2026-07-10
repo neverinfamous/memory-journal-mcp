@@ -4,6 +4,7 @@ import { match, P } from 'ts-pattern';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 
 
 export function systemInterceptor(ctx: ExecutionContext): void {
@@ -276,12 +277,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline ${interpreter} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
         const ext = interpreter.startsWith('python') ? 'py' : (interpreter === 'bun' ? 'ts' : 'js');
         
-        const targetCwd = ctx.payload.cwd || process.cwd();
-        let outDir = targetCwd;
-        const scratchDir = path.join(targetCwd, '.agents', 'scratch');
-        if (fs.existsSync(scratchDir)) {
-          outDir = scratchDir;
-        }
+        const outDir = os.tmpdir();
         
         const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.${ext}`);
         fs.writeFileSync(tmpFile, scriptContent);
