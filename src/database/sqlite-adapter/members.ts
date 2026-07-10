@@ -3,6 +3,7 @@ import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfac
 
 export class MembersManager {
     private db: IDatabaseConnection
+    private rbacActiveCache: boolean | null = null
 
     constructor(db: IDatabaseConnection) {
         this.db = db
@@ -55,6 +56,8 @@ export class MembersManager {
                 [author, role, addedBy ?? null, displayName ?? null]
             )
 
+            this.rbacActiveCache = true
+
             const member = this.getMember(author)
             if (!member) {
                 throw new QueryError(`Failed to retrieve newly added member: ${author}`)
@@ -75,6 +78,7 @@ export class MembersManager {
             // Check if any rows were affected (SQLite specific hack, usually requires native checking,
             // but for simplicity, we'll assume it succeeded if no error was thrown.
             // A more robust way is to check if it exists first.
+            this.rbacActiveCache = null
             return true
         } catch (error) {
             if (error instanceof Error) {
@@ -168,7 +172,12 @@ export class MembersManager {
     }
 
     isRbacActive(): boolean {
-        return this.getMemberCount() > 0
+        if (this.rbacActiveCache !== null) {
+            return this.rbacActiveCache
+        }
+        const isActive = this.getMemberCount() > 0
+        this.rbacActiveCache = isActive
+        return isActive
     }
 
     resolveRole(author: string, defaultRole: TeamRole | 'denied' = 'denied'): TeamRole | null {
