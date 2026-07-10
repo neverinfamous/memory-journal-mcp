@@ -55,17 +55,18 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 23. `test-team-rbac.md`
 24. `test-team-aliases.md`
 25. `test-tool-group-core.md`
-26. `test-tool-group-admin.md`
-27. `test-tool-group-backup.md`
-28. `test-tool-group-search.md`
-29. `test-tool-group-github.md`
-30. `test-tool-group-team.md`
-31. `test-payload-optimization.md`
-32. `test-workspace-isolation.md`
-33. `test-git.md`
-34. `test-tool-group-io.md`
-35. `test-tool-group-relationships.md`
-36. `test-config-reload.md`
+26. `test-tool-group-analytics.md`
+27. `test-tool-group-admin.md`
+28. `test-tool-group-backup.md`
+29. `test-tool-group-search.md`
+30. `test-tool-group-github.md`
+31. `test-tool-group-team.md`
+32. `test-payload-optimization.md`
+33. `test-workspace-isolation.md`
+34. `test-tool-group-git.md`
+35. `test-tool-group-io.md`
+36. `test-tool-group-relationships.md`
+37. `test-config-reload.md`
 
 ## Telemetry Collection
 

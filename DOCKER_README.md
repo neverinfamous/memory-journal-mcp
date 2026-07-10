@@ -74,14 +74,14 @@ Before addressing the user's first request:
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
-| Filter               | Tools | Use Case                 |
-| -------------------- | ----- | ------------------------ |
-| `full`               | All   | All tools (default)      |
-| `starter`            | 16    | Core + search + codemode |
-| `essential`          | 10    | Minimal footprint        |
-| `readonly`           | 30    | Disable all mutations    |
-| `-github`            | 85    | Exclude a group          |
-| `-github,-analytics` | 83    | Exclude multiple groups  |
+| Filter               | Use Case                 |
+| -------------------- | ------------------------ |
+| `full`               | All tools (default)      |
+| `starter`            | Core + search + codemode |
+| `essential`          | Minimal footprint        |
+| `readonly`           | Disable all mutations    |
+| `-github`            | Exclude a group          |
+| `-github,-analytics` | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -95,19 +95,19 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🛠️ **MCP Tools**
 
-| Group           | Tools | Description                                                                                                                                                                                       |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
-| `core`          | 9     | Entry CRUD, tags, test, staleness                                                                                                                                                                 |
-| `search`        | 6     | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                                                |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                                                                                                    |
-| `io`            | 4     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                                                    |
-| `admin`         | 11    | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                            |
-| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
-| `git`           | 6     | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                                                    |
-| `team`          | 39    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, RBAC member management (requires `TEAM_DB_PATH`) |
+| Group           | Description                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
+| `core`          | Entry CRUD, tags, test, staleness                                                                                                                                                                 |
+| `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
+| `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
+| `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
+| `io`            | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                                                    |
+| `admin`         | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                            |
+| `github`        | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
+| `git`           | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
+| `backup`        | Backup, list, restore, cleanup                                                                                                                                                                    |
+| `team`          | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, RBAC member management (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -117,7 +117,7 @@ Time period analysis, goal tracking, PR & issue command, session summaries, adve
 
 ### 📡 **Resources**
 
-28 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus 10 template resources, 7 dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`), and 4 alias resources. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`). **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
 
@@ -128,7 +128,7 @@ Code executes in a **worker_threads sandbox** with multiple layers of security. 
 - **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
-- **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
+- **Full API access** — all 11 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured error response to the agent instead of a raw MCP protocol exception.
 
 ---

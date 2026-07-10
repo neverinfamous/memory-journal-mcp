@@ -23,7 +23,7 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 ## Tooling Standards
 
 - **Copilot CLI**: Always reference and use `gh copilot`, NOT the deprecated binary.
-- **Package Manager**: Always use `pnpm`. Do NOT use `npm` or `yarn`. Use `pnpm install`, `pnpm run build`, `pnpm test`, etc.
+- **Package Manager**: Always use `pnpm`. Do NOT use `npm` or `yarn` (except for installing `pnpm` globally in CI pipelines or querying the npm registry). Use `pnpm install`, `pnpm run build`, `pnpm test`, etc.
 
 ## Coding Standards
 

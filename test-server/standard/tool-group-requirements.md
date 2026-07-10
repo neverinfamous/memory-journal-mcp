@@ -16,7 +16,6 @@ This document maps each standard testing prompt to the specific MCP tool groups 
 | `test-core-semantic.md` | `admin`, `analytics`, `codemode`, `search` |
 | `test-errors-boundaries.md` | `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team` |
 | `test-errors-prompts.md` | `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team` |
-| `test-git.md` | `git` |
 | `test-github-read.md` | `codemode`, `github` |
 | `test-github-write.md` | `codemode`, `github` |
 | `test-integrity.md` | `admin`, `analytics`, `codemode`, `core`, `io`, `relationships`, `search` |
@@ -30,8 +29,10 @@ This document maps each standard testing prompt to the specific MCP tool groups 
 | `test-team-crud.md` | `team`, `codemode` |
 | `test-team-rbac.md` | `team`, `admin` |
 | `test-tool-group-admin.md` | `admin`, `codemode`, `core` |
+| `test-tool-group-analytics.md` | `analytics`, `codemode` |
 | `test-tool-group-backup.md` | `backup`, `codemode`, `io` |
-| `test-tool-group-core.md` | `analytics`, `codemode`, `core` |
+| `test-tool-group-core.md` | `codemode`, `core` |
+| `test-tool-group-git.md` | `git` |
 | `test-tool-group-github.md` | `codemode`, `github` |
 | `test-tool-group-search.md` | `codemode`, `search` |
 | `test-tool-group-team.md` | `codemode`, `team` |

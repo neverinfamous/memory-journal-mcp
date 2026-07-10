@@ -30,7 +30,7 @@ Brief description of the changes in this PR.
 
 **How did you test these changes?**
 
-- [ ] Manual testing in Cursor
+- [ ] Manual testing in client
 - [ ] Docker build tested
 - [ ] Database migration tested
 - [ ] Existing functionality verified
@@ -47,7 +47,7 @@ Brief description of the changes in this PR.
 - **OS:** [e.g. Windows 11, macOS 14, Ubuntu 22.04]
 - **Node.js:** [e.g. 24.x, 26.x]
 - **Docker:** [e.g. 24.0.6]
-- **MCP Client:** [e.g. Cursor 0.42.3]
+- **MCP Client:** [e.g. Cursor, VS Code, Antigravity]
 
 ## 🔄 Breaking Changes
 

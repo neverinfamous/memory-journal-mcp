@@ -40,7 +40,7 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 - _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
-**[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
+**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
@@ -150,14 +150,14 @@ Before addressing the user's first request:
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
-| Filter               | Tools | Use Case                 |
-| -------------------- | ----- | ------------------------ |
-| `full`               | All   | All tools (default)      |
-| `starter`            | 16    | Core + search + codemode |
-| `essential`          | 10    | Minimal footprint        |
-| `readonly`           | 30    | Disable all mutations    |
-| `-github`            | 85    | Exclude a group          |
-| `-github,-analytics` | 83    | Exclude multiple groups  |
+| Filter               | Use Case                 |
+| -------------------- | ------------------------ |
+| `full`               | All tools (default)      |
+| `starter`            | Core + search + codemode |
+| `essential`          | Minimal footprint        |
+| `readonly`           | Disable all mutations    |
+| `-github`            | Exclude a group          |
+| `-github,-analytics` | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -173,19 +173,19 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🛠️ **MCP Tools**
 
-| Group           | Tools | Description                                                                                                                                                                                 |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `git`           | 5     | Commit history mining, release tracking, and commit analytics                                                                                                                               |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                     |
-| `core`          | 8     | Entry CRUD, tags, test                                                                                                                                                                      |
-| `search`        | 6     | Text search, date range, semantic, vector stats, cross-team                                                                                                                                 |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                                          |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                                                                                              |
-| `io`            | 4     | JSON/Markdown export, Markdown directory roundtripping, and external knowledge base imports (`import_external`)                                                                             |
-| `admin`         | 11    | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                      |
-| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                        |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                                              |
-| `team`          | 39    | CRUD, search, cross-team search, stats, relationships, IO (imports/exports), backup, vector search, cross-project insights, matrix, RBAC (requires `TEAM_DB_PATH`) |
+| Group           | Description                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
+| `core`          | Entry CRUD, tags, test, staleness                                                                                                                                                                 |
+| `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
+| `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
+| `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
+| `io`            | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                                                    |
+| `admin`         | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                            |
+| `github`        | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
+| `git`           | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
+| `backup`        | Backup, list, restore, cleanup                                                                                                                                                                    |
+| `team`          | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, RBAC member management (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -225,7 +225,7 @@ Time period analysis, goal tracking, PR & issue command, session summaries, adve
 - `memory://insights/team-collaboration` - Team collaboration metrics
 - `memory://insights/reports` - Generated scheduled report snapshots and delivery statuses
 
-**22 Template Resources** (14 base templates + 8 dynamic `{repo}` variants):
+**Template Resources** (base templates + dynamic `{repo}` variants):
 
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue

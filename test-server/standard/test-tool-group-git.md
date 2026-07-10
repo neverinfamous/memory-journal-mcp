@@ -1,4 +1,4 @@
-# Re-Test memory-journal-mcp — Git History Mining
+# Re-Test memory-journal-mcp — Git Tool Group
 
 **Scope:** 6 git history mining tools — commit history, search commits, release info, unreleased commits, analytics, and staleness check.
 

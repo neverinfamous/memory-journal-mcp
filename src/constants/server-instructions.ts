@@ -13,10 +13,14 @@ import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 import { CORE_INSTRUCTIONS, CODE_MODE_INSTRUCTIONS } from './instructions/base.js';
 import { CORE_HELP } from './instructions/core.js';
 import { SEARCH_HELP } from './instructions/search.js';
+import { ANALYTICS_HELP } from './instructions/analytics.js';
+import { RELATIONSHIPS_HELP } from './instructions/relationships.js';
+import { IO_HELP } from './instructions/io.js';
 import { ADMIN_HELP } from './instructions/admin.js';
 import { CODEMODE_HELP } from './instructions/codemode.js';
 import { GIT_HELP } from './instructions/git.js';
 import { GITHUB_HELP } from './instructions/github.js';
+import { BACKUP_HELP } from './instructions/backup.js';
 import { GOTCHAS_HELP } from './instructions/gotchas.js';
 import { TEMPLATES_HELP } from './instructions/templates.js';
 import { TEAM_HELP } from './instructions/team.js';
@@ -54,7 +58,7 @@ export interface LatestEntrySnapshot {
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "admin", "codemode","github","git","templates","team"]
+const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team", "codemode", "templates"];
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -180,11 +184,15 @@ export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
 export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([
   ["core", CORE_HELP],
   ["search", SEARCH_HELP],
+  ["analytics", ANALYTICS_HELP],
+  ["relationships", RELATIONSHIPS_HELP],
+  ["io", IO_HELP],
   ["admin", ADMIN_HELP],
-  ["codemode", CODEMODE_HELP],
-  ["git", GIT_HELP],
   ["github", GITHUB_HELP],
+  ["git", GIT_HELP],
+  ["backup", BACKUP_HELP],
+  ["team", TEAM_HELP],
+  ["codemode", CODEMODE_HELP],
   ["gotchas", GOTCHAS_HELP],
-  ["templates", TEMPLATES_HELP],
-  ["team", TEAM_HELP]
+  ["templates", TEMPLATES_HELP]
 ])
