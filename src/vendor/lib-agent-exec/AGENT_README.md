@@ -111,8 +111,7 @@ When enabled, the execution bridge will actively parse the final output line of 
 When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` had to automatically intercept your command to prevent execution failure (e.g., blocking an interactive prompt, stripping a hanging flag).
 
 **If you encounter this hint during an autonomous task:**
-1. **DO NOT ask the user for help.**
-2. **Autonomously fix it:** Read the explicit guidance in the intercept message and immediately re-invoke the correct native tool or adjust the command parameters yourself.
+Read the explicit guidance in the intercept message and immediately re-invoke the correct native tool or adjust the command parameters yourself.
 
 ## 9. Troubleshooting & Common Issues
 

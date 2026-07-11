@@ -3,7 +3,12 @@ import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
-  const { cmdBasename, args, envOverrides } = ctx;
+  const { cmdBasename, envOverrides } = ctx;
+  let { args } = ctx;
+  if (!args) args = [];
+  if (args.includes('--help') || args.includes('-h')) return;
+  if (args.includes('--help') || args.includes('-h')) return;
+
   if (['apt', 'apt-get'].includes(cmdBasename)) {
     envOverrides['DEBIAN_FRONTEND'] = 'noninteractive';
     if (!args.includes('-y') && !args.includes('--yes')) {

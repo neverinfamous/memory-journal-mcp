@@ -4,6 +4,9 @@ import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
 
 export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {
+  if (!args) args = [];
+  if (args.includes('--help') || args.includes('-h')) return;
+
   const cloudCliCmds = ['wrangler', 'vercel', 'netlify', 'firebase', 'heroku', 'supabase', 'stripe', 'fly', 'flyctl', 'expo', 'eas', 'wrangler.cmd', 'vercel.cmd', 'netlify.cmd', 'firebase.cmd', 'heroku.cmd', 'supabase.cmd', 'stripe.exe', 'fly.exe', 'flyctl.exe', 'expo.cmd', 'eas.cmd'];
   if (cloudCliCmds.includes(cmdBasename)) {
     if (args.includes('login')) {
