@@ -4,6 +4,6 @@ export const RELATIONSHIPS_HELP = `# Relationships Operations
 
 ## Available Tools
 
-- **Linking**: \`link_entries\`
-- **Visualization**: \`visualize_relationships\`
+- \`link_entries\`: Create a relationship between two journal entries.
+- \`visualize_relationships\`: Generate a Mermaid diagram visualization of entry relationships.
 `;

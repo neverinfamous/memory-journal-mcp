@@ -4,8 +4,11 @@ export const SEARCH_HELP = `# Search Operations
 
 ## Available Tools
 
-- **Core Search**: \`search_entries\`, \`search_by_date_range\`, \`cross_team_search\`
-- **Vector/Semantic**: \`semantic_search\`, \`get_vector_index_stats\`
-- **Recycle Bin**: \`list_deleted_entries\`
+- \`search_entries\`: Search journal entries. Use \`mode\` (\`auto\`, \`fts\`, \`semantic\`, \`hybrid\`). Supports \`workspace_id\`, filters, \`sort_by\`, cursor pagination, facets, and highlights.
+- \`search_by_date_range\`: Search journal entries within a date range with optional filters, \`workspace_id\`, \`sort_by\`, and cursor pagination.
+- \`cross_team_search\`: Search across multiple configured team databases simultaneously.
+- \`semantic_search\`: Perform semantic/vector search on journal entries using AI embeddings.
+- \`get_vector_index_stats\`: Get statistics about the semantic search vector index.
+- \`list_deleted_entries\`: List recently soft-deleted entries that can be restored.
 
 `;

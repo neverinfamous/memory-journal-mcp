@@ -3,6 +3,6 @@ export const ANALYTICS_HELP = `# Analytics Operations
 
 ## Available Tools
 
-- **Metrics**: \`get_statistics\`
-- **Insights**: \`get_cross_project_insights\`
+- \`get_statistics\`: Get journal statistics and analytics (supports \`workspace_id\` filtering).
+- \`get_cross_project_insights\`: Analyze patterns across all GitHub Projects tracked in journal entries.
 `;
