@@ -2,14 +2,14 @@
 
 > **This test is optimized for an autonomous agent.**
 >
-> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
+> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls  to ensure tests hit the test database instead of production.
 
 This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Git History operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
 
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
-`get_commit_history`, `search_commits`, `get_release_info`
+`get_commit_history`, `get_release_info`, `search_commits`
 
 **Instructions:**
 

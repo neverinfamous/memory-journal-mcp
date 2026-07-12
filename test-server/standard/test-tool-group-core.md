@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Core Tool Group
 
-**Scope:** Deterministic verification of the Core tool group (`create_entry`, `get_entry_by_id`, `get_recent_entries`, `get_entry_history`, `test_simple`, `test_error_handling`, `trigger_progress`, `list_tags`, `mark_anchors_stale`) against the strict error handling matrix.
+**Scope:** Deterministic verification of the Core tool group (`create_entry`, `get_entry_by_id`, `get_entry_history`, `get_recent_entries`, `list_tags`, `mark_anchors_stale`, `test_error_handling`, `test_simple`, `trigger_progress`) against the strict error handling matrix.
 
 **Prerequisites:**
 
@@ -13,7 +13,7 @@
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
 2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing.
 4. **Commit**: Immediately commit passing changes using the `bun .\.agents\scripts\commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify with `pnpm run check` yourself—you are autonomous.

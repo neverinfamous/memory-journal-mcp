@@ -2,14 +2,14 @@
 
 > **This test is optimized for an autonomous agent.**
 >
-> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
+> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls  to ensure tests hit the test database instead of production.
 
 This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Team Members operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
 
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
-`team_add_member`, `team_remove_member`, `team_update_member_role`, `team_list_members`, `team_get_member`
+`team_add_member`, `team_get_member`, `team_list_members`, `team_remove_member`, `team_update_member_role`
 
 **Instructions:**
 

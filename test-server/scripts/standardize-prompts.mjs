@@ -87,6 +87,9 @@ for (const file of files) {
     'Use direct tool calls to interact with tools that accept workspace contextualization'
   );
   
+  // Fix logic flaw: remove any lingering '(including `mj_execute_code`)' since usability tests don't use Code Mode
+  updatedContent = updatedContent.replace(/\(including `mj_execute_code`\)/g, '');
+  
   updatedContent = fixHallucinations(updatedContent);
   
   if (content !== updatedContent) {
@@ -103,6 +106,7 @@ if (fs.existsSync(teamFilePath)) {
   fs.writeFileSync(path.join(standardDir, 'test-tool-group-team-part1.md'), content);
   fs.writeFileSync(path.join(standardDir, 'test-tool-group-team-part2.md'), content);
   fs.writeFileSync(path.join(standardDir, 'test-tool-group-team-part3.md'), content);
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-team-part4.md'), content);
   fs.unlinkSync(teamFilePath);
 }
 
@@ -191,6 +195,7 @@ const codemodeHallucinationFixes = {
   'mj.semantic.semanticSearch': 'mj.search.semanticSearch',
   'mj.semantic.vectorStats': 'mj.search.getVectorIndexStats',
   'mj.team.bulkCreate': 'mj.team.teamBatchCreateEntries',
+  'mj.team.bulkUpdate': 'mj.team.teamBatchUpdateEntries',
   'mj.team.bulkDelete': 'mj.team.teamBatchDeleteEntries',
   'mj.team.aliases': 'mj.team.teamListAuthorAliases',
   'mj.team.setRole': 'mj.team.teamUpdateMemberRole',

@@ -6,8 +6,8 @@
 
 | File                              | Purpose                                                                                                                                               | When to Read          |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| [`standard/`](standard/README.md) | **Standard Modular Tests** — Directory containing 22 modular test files across feature and stress-test tiers. See `standard/README.md` for full list. | **Always start here** |
-| [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 20 phase-aligned Code Mode test prompts. See `codemode/README.md` for full list.                   | After standard tests  |
+| [`standard/`](standard/README.md) | **Standard Modular Tests** — Directory containing modular test files across feature and stress-test tiers. See `standard/coordinator-workflow.md` for full list. | **Always start here** |
+| [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing phase-aligned Code Mode test prompts. See `codemode/coordinator-workflow.md` for full list.                   | After standard tests  |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
 | [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 103 tools across 11 groups + codemode | Reference |
@@ -152,7 +152,7 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 5. **Run integration test scripts** for instruction levels, annotations, prompts, and scheduler (see Script Reference above).
 6. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
 7. Report findings returning proper handler formatting.
-8. (Optional) Run Code Mode tests from `codemode/` — see `codemode/README.md` for the 20-file module list and dependency DAG.
+8. (Optional) Run Code Mode tests from `codemode/` — see `codemode/coordinator-workflow.md` for the module list and dependency DAG.
 
 ## Troubleshooting
 

@@ -13,7 +13,7 @@
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
 2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing.
 4. **Commit**: Immediately commit passing changes using the `bun .\.agents\scripts\commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify with `pnpm run check` yourself—you are autonomous.
@@ -29,16 +29,10 @@
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
 | `team_create_entry`                            | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
-| `team_get_entry_by_id`                         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
 | `team_get_recent`                              | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
-| `team_list_tags`                               | N/A                                                  | Should succeed (defaults)         | `project_number: "abc"` |
-| `team_search`                                  | N/A                                                  | ⚠️ Should return validation error | `limit: "abc"`    |
-| `team_search_by_date_range`                    | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
 | `team_list_deleted_entries`                    | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
 | `team_update_entry`                            | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `team_delete_entry`                            | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
 | `team_restore_entry`                           | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `team_merge_tags`                              | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
 
 ### Specific Domain Checks
 

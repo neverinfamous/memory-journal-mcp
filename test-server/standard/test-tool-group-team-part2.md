@@ -13,7 +13,7 @@
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
 2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing.
 4. **Commit**: Immediately commit passing changes using the `bun .\.agents\scripts\commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify with `pnpm run check` yourself—you are autonomous.
@@ -28,22 +28,9 @@
 | Tool                                           | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
-| `team_batch_create_entries`                    | `entries: []`                                        | ⚠️ Should return validation error | `entries: "abc"`  |
-| `team_batch_update_entries`                    | `updates: []`                                        | ⚠️ Should return validation error | `updates: "abc"`  |
 | `team_batch_delete_entries`                    | `entry_ids: []`                                      | ⚠️ Should return validation error | `entry_ids: "abc"`|
 | `team_get_statistics`                          | N/A                                                  | Should succeed (defaults)         | `start_date: 123` |
 | `team_link_entries`                            | `from_entry_id: 999999`                              | ⚠️ Should return validation error | `from_entry_id: "abc"` |
-| `team_visualize_relationships`                 | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `team_export_entries`                          | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
-| `team_export_markdown`                         | `output_dir: "../../etc"`                            | ⚠️ Should return validation error | `limit: "abc"`    |
-| `team_import_markdown`                         | `source_dir: "../../etc"`                            | ⚠️ Should return validation error | `dry_run: "abc"`  |
-| `team_import_external`                         | `source_dir: "../../etc"`                            | ⚠️ Should return validation error | `source_format: 123` |
-| `team_backup`                                  | `name: "../../etc"`                                  | Should succeed (defaults)         | `name: 123`       |
-| `team_list_backups`                            | N/A                                                  | Should succeed (defaults)         | N/A               |
-| `team_semantic_search`                         | Vector manager unavailable                           | ⚠️ Should return validation error | `limit: "abc"`    |
-| `team_get_vector_index_stats`                  | N/A                                                  | Should succeed (defaults)         | N/A               |
-| `team_rebuild_vector_index`                    | N/A                                                  | Should succeed (defaults)         | N/A               |
-| `team_add_to_vector_index`                     | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
 
 ### Specific Domain Checks
 

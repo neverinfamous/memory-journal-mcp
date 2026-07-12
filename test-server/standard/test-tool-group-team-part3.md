@@ -13,7 +13,7 @@
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
 2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing.
 4. **Commit**: Immediately commit passing changes using the `bun .\.agents\scripts\commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify with `pnpm run check` yourself—you are autonomous.
@@ -28,18 +28,8 @@
 | Tool                                           | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
-| `team_get_cross_project_insights`              | N/A                                                  | Should succeed (defaults)         | `min_entries: "abc"` |
-| `team_get_collaboration_matrix`                | N/A                                                  | Should succeed (defaults)         | `start_date: 123` |
-| `team_add_member`                              | N/A                                                  | ⚠️ Should return validation error | `role: 123`       |
 | `team_remove_member`                           | N/A                                                  | ⚠️ Should return validation error | `username: 123`   |
-| `team_update_member_role`                      | N/A                                                  | ⚠️ Should return validation error | `role: 123`       |
-| `team_list_members`                            | N/A                                                  | Should succeed (defaults)         | N/A               |
-| `team_get_member`                              | N/A                                                  | ⚠️ Should return validation error | `username: 123`   |
-| `team_add_author_alias`                        | N/A                                                  | ⚠️ Should return validation error | `author_id: 123`  |
-| `team_remove_author_alias`                     | N/A                                                  | ⚠️ Should return validation error | `alias: 123`      |
 | `team_list_author_aliases`                     | N/A                                                  | ⚠️ Should return validation error | `author_id: 123`  |
-| `team_resolve_author`                          | N/A                                                  | ⚠️ Should return validation error | `alias: 123`      |
-| `team_consolidate_authors`                     | N/A                                                  | ⚠️ Should return validation error | `target_author_id: 123` |
 
 ### Specific Domain Checks
 
