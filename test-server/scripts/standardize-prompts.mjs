@@ -106,26 +106,32 @@ if (fs.existsSync(teamFilePath)) {
   fs.unlinkSync(teamFilePath);
 }
 
-const standardFiles = fs.readdirSync(standardDir).filter(f => f.endsWith('.md') && f.startsWith('test-tool-group-'));
+const standardFiles = fs.readdirSync(standardDir).filter(f => f.endsWith('.md') && f !== 'README.md' && f !== 'coordinator-workflow.md' && f !== 'tool-group-requirements.md');
 
 for (const file of standardFiles) {
   const filePath = path.join(standardDir, file);
   let content = fs.readFileSync(filePath, 'utf8');
   const assignedTools = reverseMap[file] || [];
   
-  if (assignedTools.length > 0) {
+  let fixedContent = fixHallucinations(content);
+  
+  // Inject boilerplate from prompt-template.md
+  const templatePath = path.join(__dirname, 'prompt-template.md');
+  if (fs.existsSync(templatePath)) {
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    // Replace everything from **Prerequisites:** up to the first --- separator
+    fixedContent = fixedContent.replace(/\*\*Prerequisites:\*\*[\s\S]*?(?=\n---)/, templateContent.trim());
+  }
+
+  if (assignedTools.length > 0 && file.startsWith('test-tool-group-')) {
     const toolsString = assignedTools.map(t => `\`${t}\``).join(', ');
     
     const regex = /\*\*Scope:\*\* Deterministic verification of the (.*?) tool group \((.*?)\) against the strict error handling matrix\./;
     if (regex.test(content)) {
-      content = content.replace(regex, `**Scope:** Deterministic verification of the $1 tool group (${toolsString}) against the strict error handling matrix.`);
+      fixedContent = fixedContent.replace(regex, `**Scope:** Deterministic verification of the $1 tool group (${toolsString}) against the strict error handling matrix.`);
       updated++;
     }
-  }
-  
-  let fixedContent = fixHallucinations(content);
-  
-  if (assignedTools.length > 0) {
+    
     const lines = fixedContent.split('\n');
     const resultLines = [];
     for (const line of lines) {

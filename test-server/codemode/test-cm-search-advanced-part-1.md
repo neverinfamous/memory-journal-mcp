@@ -126,39 +126,4 @@ return {
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
-- `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
-- FTS correctly parses standard keyword/phrase syntax (OR, NOT, "phrases")
-- FTS detects unsafe queries (like `test's`) and seamlessly drops to `LIKE` fallback without crashing
-- Hybrid search utilizes RRF mode automatically when heuristics warrant it
-- `exact_match: true` successfully maps to `fuzzy_match: false` resulting in exact matching
-- `exact_match: false` successfully maps to `fuzzy_match: true` resulting in Levenshtein matching
-- FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
-- FTS5 LIKE fallback works for special characters (`test's`, `100%`)
-- `search_entries` gracefully falls back to fuzzy Levenshtein matching via Code Mode when `fuzzy_match` is true and FTS yields zero results
-- `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
-- Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
-- `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
-- `search_by_date_range` rejects invalid date format with structured error
-- `search_by_date_range` rejects inverted date range (start > end) with structured error
-- `search_entries` rejects queries exceeding 250 characters with structured Zod error
-- `search_by_date_range` filters by `project_number`
-- `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
-- `semantic_search` correctly filters results downstream using `tags` and `is_personal`
-- `semantic_search` with custom threshold returns fewer results
-- `semantic_search` quality gate hint shown even with `hint_on_empty: false`
-- `get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
-- `rebuild_vector_index` and `add_to_vector_index` work via Code Mode
-- `get_statistics` returns all 4 enhanced analytics metrics via Code Mode
-- `get_cross_project_insights` returns schema-compliant response
-> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
-- `search_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- `get_recent_entries` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- `search_by_date_range` with `sort_by: 'importance'` returns entries sorted by importance with `importanceScore` field
-- Default `sort_by` (timestamp) produces zero overhead — no `importanceScore` field present
-- `search_entries` and `search_by_date_range` correctly respect the `include_archived` filter via Code Mode scripts
-- Keyset cursor pagination (`cursor` & `next_cursor`) works reliably across FTS, semantic, and date range searches via Code Mode scripts
-- `search_entries` with `include_highlights: true` returns snippets with FTS query terms highlighted via Code Mode
-- `search_entries` with `include_facets: true` returns aggregate tag and entryType distribution counts via Code Mode
-- Hybrid mode properly supports `fts_weight` and `semantic_weight` dynamic biasing multipliers via Code Mode
-- FTS query parser safely preserves balanced double-quotes for true phrase matching without crashing the sandbox
+
