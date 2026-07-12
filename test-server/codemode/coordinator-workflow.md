@@ -59,20 +59,24 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 25. `test-cm-team-batch.md`
 26. `test-cm-team-analytics-relationships.md`
 27. `test-cm-team-admin-part-2.md`
-28. `test-cm-team-aliases.md`
-29. `test-cm-team-rbac.md`
-30. `test-cm-team-vector-errors-part-1.md`
-31. `test-cm-team-vector-errors-part-2.md`
-32. `test-cm-team-vector-errors-part-3.md` (Includes cleanup)
-33. `test-cm-error-matrix-part-1.md`
-34. `test-cm-error-matrix-part-2.md`
-35. `test-cm-error-matrix-part-3.md`
-36. `test-cm-error-matrix-part-4.md`
-37. `test-cm-payload-optimization.md`
-38. `test-cm-hallucination-smoothing.md`
-39. `test-cm-session-summary-healing.md`
-40. `test-config-reload.md`
-41. `test-git.md`
+28. `test-cm-team-admin-part-3.md`
+29. `test-cm-team-aliases.md`
+30. `test-cm-team-rbac.md`
+31. `test-cm-team-vector-errors-part-1.md`
+32. `test-cm-team-vector-errors-part-2.md`
+33. `test-cm-team-vector-errors-part-3.md`
+34. `test-cm-team-vector-errors-part-4.md` (Includes cleanup)
+35. `test-cm-error-matrix-part-1.md`
+36. `test-cm-error-matrix-part-2.md`
+37. `test-cm-error-matrix-part-3.md`
+38. `test-cm-error-matrix-part-4.md`
+39. `test-cm-error-matrix-part-5.md`
+40. `test-cm-payload-optimization.md`
+41. `test-cm-hallucination-smoothing.md`
+42. `test-cm-hallucination-smoothing-part-2.md`
+43. `test-cm-session-summary-healing.md`
+44. `test-config-reload.md`
+45. `test-git.md`
 
 ## Telemetry Collection
 

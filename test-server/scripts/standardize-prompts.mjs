@@ -43,6 +43,15 @@ for (const [tool, files] of Object.entries(toolMapData.toolMap)) {
 }
 
 const usabilityDir = path.join(__dirname, '..', 'usability');
+
+const isolationFilePath = path.join(usabilityDir, 'test-usability-workspace-isolation.md');
+if (fs.existsSync(isolationFilePath)) {
+  let isoContent = fs.readFileSync(isolationFilePath, 'utf8');
+  fs.writeFileSync(path.join(usabilityDir, 'test-usability-workspace-isolation-part1.md'), isoContent);
+  fs.writeFileSync(path.join(usabilityDir, 'test-usability-workspace-isolation-part2.md'), isoContent);
+  fs.unlinkSync(isolationFilePath);
+}
+
 const files = fs.readdirSync(usabilityDir).filter(f => f.endsWith('.md') && f.startsWith('test-'));
 
 let updated = 0;
@@ -58,19 +67,35 @@ for (const file of files) {
     targetPrefix = 'Use the following tools in this test pass:';
     idx = lines.findIndex(l => l.includes(targetPrefix));
   }
+  if (idx === -1) {
+    targetPrefix = 'Use direct tool calls to interact with tools that accept workspace contextualization (e.g., `search_entries`, `get_recent_entries`, `get_statistics`) in this test pass.';
+    idx = lines.findIndex(l => l.includes(targetPrefix));
+  }
+  if (idx === -1) {
+    targetPrefix = 'Use direct tool calls to interact with tools that accept workspace contextualization in this test pass:';
+    idx = lines.findIndex(l => l.includes(targetPrefix));
+  }
   
-  if (idx !== -1 && idx + 1 < lines.length) {
+  if (idx !== -1) {
     // Fix logic flaw: usability tests should test tools directly, not via Code Mode
     if (lines[idx].includes('`mj_execute_code`')) {
       lines[idx] = 'Use the following tools in this test pass:';
+    }
+    if (lines[idx].includes('workspace contextualization')) {
+      lines[idx] = 'Use direct tool calls to interact with tools that accept workspace contextualization in this test pass:';
     }
     
     const assignedTools = reverseMap[file] || [];
     // Format the tools line as backticked, comma-separated list
     const toolsLine = assignedTools.map(t => `\`${t}\``).join(', ');
     
-    // Replace the next line with the new tools list
-    lines[idx + 1] = toolsLine;
+    if (idx + 1 < lines.length) {
+       if (lines[idx+1].startsWith('`') || lines[idx+1].includes('`')) {
+           lines[idx + 1] = toolsLine;
+       } else {
+           lines.splice(idx + 1, 0, toolsLine);
+       }
+    }
   }
   
   let updatedContent = lines.join('\n');
@@ -81,11 +106,6 @@ for (const file of files) {
   // Fix logic flaw: edit generator script instead of markdown file directly
   updatedContent = updatedContent.replace(/edit this markdown file directly/g, 'edit the generator scripts directly');
   
-  // Fix logic flaw: workspace isolation test also needs mj_execute_code removed
-  updatedContent = updatedContent.replace(
-    /Use the `mj_execute_code` tool to interact with tools that accept workspace contextualization/g,
-    'Use direct tool calls to interact with tools that accept workspace contextualization'
-  );
   
   // Fix logic flaw: remove any lingering '(including `mj_execute_code`)' since usability tests don't use Code Mode
   updatedContent = updatedContent.replace(/\(including `mj_execute_code`\)/g, '');
@@ -95,8 +115,10 @@ for (const file of files) {
   
   // Fix hallucinated project admin parameters
   updatedContent = updatedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
-  updatedContent = updatedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj"');
+  updatedContent = updatedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj", is_active: false');
   updatedContent = updatedContent.replace(/project_number: 999999, project_name: "ghost"/g, 'name: "ghost"');
+  updatedContent = updatedContent.replace(/project_name: "test-proj"/g, 'name: "test-proj"');
+  updatedContent = updatedContent.replace(/project_name: "ghost"/g, 'name: "ghost"');
   
   // Fix parameter drift: project_number -> workspace_id
   updatedContent = updatedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
@@ -148,8 +170,10 @@ for (const file of standardFiles) {
   
   // Fix hallucinated project admin parameters
   fixedContent = fixedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
-  fixedContent = fixedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj"');
+  fixedContent = fixedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj", is_active: false');
   fixedContent = fixedContent.replace(/project_number: 999999, project_name: "ghost"/g, 'name: "ghost"');
+  fixedContent = fixedContent.replace(/project_name: "test-proj"/g, 'name: "test-proj"');
+  fixedContent = fixedContent.replace(/project_name: "ghost"/g, 'name: "ghost"');
   
   // Fix parameter drift: project_number -> workspace_id
   fixedContent = fixedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');

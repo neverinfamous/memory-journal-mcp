@@ -26,13 +26,13 @@
 
 | Test                   | Command/Action                                                                                              | Expected Result                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Register new project   | `register_project(project_name: "test-proj", default_owner: "dev", github_repo: "user/test-proj")`          | Project registered, returns project details including `project_number`             |
+| Register new project   | `register_project(name: "test-proj", default_owner: "dev", github_repo: "user/test-proj")`          | Project registered, returns project details including `project_number`             |
 | List projects          | `list_projects`                                                                                             | Returns all projects, including the newly registered "test-proj"                   |
 | Get project            | `get_project(name: "test-proj")`                                                         | Returns the specific details for the "test-proj" project                           |
 | Update project         | `update_project(name: "test-proj", new_name: "updated-proj")`      | Project is updated and marked inactive                                             |
 | Delete project         | `delete_project(name: "test-proj")`                                                      | Project is deleted                                                                 |
 | Get deleted project    | `get_project(name: "test-proj")`                                                         | Structured error: `{ success: false, error: "Project not found..." }`              |
-| Register duplicate     | `register_project(project_name: "test-proj", default_owner: "dev")` (run twice)                             | Second call may fail or succeed depending on unique constraint logic (verify schema)|
+| Register duplicate     | `register_project(name: "test-proj", default_owner: "dev")` (run twice)                             | Second call may fail or succeed depending on unique constraint logic (verify schema)|
 | Invalid project update | `update_project(name: "ghost")`                                             | Structured error: `{ success: false, error: "Project not found..." }`              |
 
 ---
