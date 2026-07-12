@@ -78,21 +78,21 @@ return {
 
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
-const board = await mj.github.getKanbanBoard({ project_number: 5 })
+const board = await mj.github.getKanbanBoard({ workspace_id: "test-ws" })
 const hasItems = board.columns?.some((c) => c.items?.length > 0)
 const itemId = board.columns?.flatMap((c) => c.items ?? []).find((i) => i)?.id
 
 let moveResult = null
 if (itemId) {
   moveResult = await mj.github.moveKanbanItem({
-    project_number: 5,
+    workspace_id: "test-ws",
     item_id: itemId,
     target_status: 'In progress',
   })
 }
 
 const badMove = await mj.github.moveKanbanItem({
-  project_number: 5,
+  workspace_id: "test-ws",
   item_id: itemId || 'fake-id',
   target_status: 'Nonexistent Status',
 })

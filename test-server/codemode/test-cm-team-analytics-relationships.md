@@ -47,26 +47,26 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ project_number: 5, limit: 2 })
+const r = await mj.team.teamGetRecent({ workspace_id: "test-ws", limit: 2 })
 if (!r.success) return { success: false, error: r.error }
 const [a, b] = r.entries.map((e) => e.id)
 
 const linked = await mj.team.teamLinkEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
   description: 'CM4 team link test',
 })
 const dup = await mj.team.teamLinkEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   from_entry_id: a,
   to_entry_id: b,
   relationship_type: 'references',
 })
-const viz = await mj.team.teamVisualizeRelationships({ project_number: 5, entry_id: a })
+const viz = await mj.team.teamVisualizeRelationships({ workspace_id: "test-ws", entry_id: a })
 const vizTag = await mj.team.teamVisualizeRelationships({
-  project_number: 5,
+  workspace_id: "test-ws",
   tag: 'codemode4-team-test',
 })
 
@@ -92,5 +92,5 @@ return {
 ## Success Criteria
 
 - `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- `team_link_entries(project_number: 5)` creates relationships with duplicate detection
-- `team_visualize_relationships(project_number: 5)` returns Mermaid diagram with node/edge counts
+- `team_link_entries(workspace_id: "test-ws")` creates relationships with duplicate detection
+- `team_visualize_relationships(workspace_id: "test-ws")` returns Mermaid diagram with node/edge counts

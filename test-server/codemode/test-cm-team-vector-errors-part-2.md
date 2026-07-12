@@ -9,7 +9,7 @@ Test team vector search, cross-project insights, and comprehensive cross-tool er
 - **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
-- Seed data S15–S17 are team DB entries with `project_number: 5`, required for `team_get_cross_project_insights`.
+- Seed data S15–S17 are team DB entries with `workspace_id: "test-ws"`, required for `team_get_cross_project_insights`.
 
 **Workflow after testing:**
 
@@ -31,33 +31,33 @@ Test team vector search, cross-project insights, and comprehensive cross-tool er
 const rebuild = await mj.team.teamRebuildVectorIndex({})
 const stats = await mj.team.teamGetVectorIndexStats({})
 
-const recent = await mj.team.teamGetRecent({ project_number: 5, limit: 1 })
+const recent = await mj.team.teamGetRecent({ workspace_id: "test-ws", limit: 1 })
 let addResult = { success: false }
 if (recent.success && recent.entries && recent.entries.length > 0) {
   addResult = await mj.team.teamAddToVectorIndex({
-    project_number: 5,
+    workspace_id: "test-ws",
     entry_id: recent.entries[0].id,
   })
 }
 
 const addBad = await mj.team.teamAddToVectorIndex({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: 999999,
 })
 
 const search = await mj.team.teamSemanticSearch({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'standup',
 })
 let relatedById = { entries: [] }
 if (recent.success && recent.entries && recent.entries.length > 0) {
   relatedById = await mj.team.teamSemanticSearch({
-    project_number: 5,
+    workspace_id: "test-ws",
     entry_id: recent.entries[0].id,
   })
 }
 const strict = await mj.team.teamSemanticSearch({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'standup',
   similarity_threshold: 0.5,
 })

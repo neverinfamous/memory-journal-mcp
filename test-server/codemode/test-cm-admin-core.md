@@ -29,7 +29,7 @@ const hasEntries = tags.tags?.length > 0
 
 // Create source tag for merge
 await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'CM4 merge test entry',
   tags: ['cm4-old-tag'],
 })

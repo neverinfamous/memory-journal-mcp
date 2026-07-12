@@ -7,6 +7,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 ## 1. Fuzz Phase
 
 Use direct tool calls to interact with tools that accept workspace contextualization in this test pass:
+
 `search_by_date_range`, `search_entries`, `team_create_entry`, `team_search`
 
 **Instructions:**

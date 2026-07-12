@@ -33,7 +33,7 @@ const created = await mj.github.createGithubIssueWithEntry({
   title: 'CM4 Test: Code Mode Issue',
   body: 'Created via Code Mode test',
   labels: ['test'],
-  project_number: 5,
+  workspace_id: "test-ws",
   tags: ['codemode4-test'],
 })
 const issueNum = created.issue?.number
@@ -43,7 +43,7 @@ const closed = await mj.github.closeGithubIssueWithEntry({
   resolution_notes: 'CM4 test complete',
   comment: 'Closing via Code Mode',
   move_to_done: true,
-  project_number: 5,
+  workspace_id: "test-ws",
 })
 
 const alreadyClosed = await mj.github.closeGithubIssueWithEntry({
@@ -155,7 +155,7 @@ return {
 
 | Cleanup Step      | Code                                                                                                                                                                                                           |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Verify no orphans | `const b = await mj.github.getKanbanBoard({ project_number: 5 }); const testItems = b.columns?.flatMap(c => c.items ?? []).filter(i => i.title?.includes("CM4")); return { orphans: testItems?.length ?? 0 };` |
+| Verify no orphans | `const b = await mj.github.getKanbanBoard({ workspace_id: "test-ws" }); const testItems = b.columns?.flatMap(c => c.items ?? []).filter(i => i.title?.includes("CM4")); return { orphans: testItems?.length ?? 0 };` |
 
 ---
 

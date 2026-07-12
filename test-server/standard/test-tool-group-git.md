@@ -28,6 +28,12 @@
 | --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
 
 ---
+| `analyze_commit_patterns` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `check_entry_staleness` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_commit_history` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_release_info` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_unreleased_commits` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `search_commits` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ## Success Criteria
 

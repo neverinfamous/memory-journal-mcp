@@ -29,7 +29,7 @@ Test core CRUD operations through the Code Mode mj.* API bridge (Advanced cases)
 
 ```javascript
 // Test code:
-// NOTE: To test this properly, you must provide `project_number: 5` as a parameter
+// NOTE: To test this properly, you must provide `workspace_id: "test-ws"` as a parameter
 // to the OUTER `mj_execute_code` schema, NOT inside this javascript payload.
 
 const injected = await mj.core.createEntry({
@@ -58,15 +58,15 @@ return {
 // Create some entries
 const b = await mj.admin.batchCreateEntries({
   entries: [
-    { project_number: 5, content: 'Pagination 1' },
-    { project_number: 5, content: 'Pagination 2' }
+    { workspace_id: "test-ws", content: 'Pagination 1' },
+    { workspace_id: "test-ws", content: 'Pagination 2' }
   ]
 })
 
 // Page 1 (limit 1)
-const page1 = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
+const page1 = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 })
 // Page 2 (limit 10)
-const page2 = await mj.core.getRecentEntries({ project_number: 5, cursor: page1.next_cursor, limit: 10 })
+const page2 = await mj.core.getRecentEntries({ workspace_id: "test-ws", cursor: page1.next_cursor, limit: 10 })
 
 // Cleanup
 await mj.admin.batchDeleteEntries({ entry_ids: b.entryIds })
@@ -89,7 +89,7 @@ return {
 // NOTE: To test this properly, you must provide `auto_version: true` as a parameter
 // to the OUTER `mj_execute_code` schema.
 
-const entry = await mj.core.createEntry({ project_number: 5, content: 'Auto version test' })
+const entry = await mj.core.createEntry({ workspace_id: "test-ws", content: 'Auto version test' })
 
 // Update WITHOUT providing expected_version - should succeed because of outer `auto_version: true`
 const updated = await mj.admin.updateEntry({
@@ -115,7 +115,7 @@ return {
 // Test code:
 // Provide project_number as a string instead of a number
 const entry = await mj.core.createEntry({
-  project_number: '5',
+  workspace_id: "test-ws",
   content: 'String resolve test'
 })
 

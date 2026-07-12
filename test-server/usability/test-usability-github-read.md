@@ -7,6 +7,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
+
 `get_github_context`, `get_github_issue`, `get_github_issues`, `get_github_pr`, `get_github_prs`
 
 **Instructions:**

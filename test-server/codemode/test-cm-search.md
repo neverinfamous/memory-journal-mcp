@@ -29,11 +29,11 @@ Test search, semantic search, date range, analytics, and vector index operations
 >
 > ```javascript
 > await mj.core.createEntry({
-> project_number: 5, >   content: "This is a test's string with 100% coverage",
+> workspace_id: "test-ws", >   content: "This is a test's string with 100% coverage",
 >   issue_number: 44,
 >   pr_status: 'merged',
 >   workflow_run_id: 12345,
->   project_number: 5,
+>   workspace_id: "test-ws",
 >   is_personal: true,
 > })
 > ```
@@ -42,35 +42,35 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 | Test            | Code                                                                                                             | Expected Result                 |
 | --------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Basic query     | `return await mj.search.searchEntries({ project_number: 5, query: "architecture" });`                            | ≥ 2 results (S1, S11)           |
-| Phrase          | `return await mj.search.searchEntries({ project_number: 5, query: '"error handling"' });`                        | ≥ 1 result (S2)                 |
-| Prefix          | `return await mj.search.searchEntries({ project_number: 5, query: "auth*" });`                                   | ≥ 2 results (S1, S8)            |
-| FTS5 NOT        | `return await mj.search.searchEntries({ project_number: 5, query: "deploy NOT staging", mode: "fts" });`         | Returns S3 but NOT S5           |
-| FTS5 OR         | `return await mj.search.searchEntries({ project_number: 5, query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
-| LIKE fallback   | `return await mj.search.searchEntries({ project_number: 5, query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
-| Special chars   | `return await mj.search.searchEntries({ project_number: 5, query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
-| Fuzzy fallback  | `return await mj.search.searchEntries({ project_number: 5, query: "architeqture", mode: "fts", fuzzy_match: true });` | ≥ 1 result (S1/S11)             |
-| Fuzzy off       | `return await mj.search.searchEntries({ project_number: 5, query: "architeqture", mode: "fts", fuzzy_match: false });`| 0 results                       |
-| Hybrid auto     | `return await mj.search.searchEntries({ project_number: 5, query: "performance architecture fix" });`              | Heuristic RRF triggering S7     |
-| Forced semantic | `return await mj.search.searchEntries({ project_number: 5, query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
+| Basic query     | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "architecture" });`                            | ≥ 2 results (S1, S11)           |
+| Phrase          | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: '"error handling"' });`                        | ≥ 1 result (S2)                 |
+| Prefix          | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "auth*" });`                                   | ≥ 2 results (S1, S8)            |
+| FTS5 NOT        | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "deploy NOT staging", mode: "fts" });`         | Returns S3 but NOT S5           |
+| FTS5 OR         | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
+| LIKE fallback   | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
+| Special chars   | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
+| Fuzzy fallback  | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "architeqture", mode: "fts", fuzzy_match: true });` | ≥ 1 result (S1/S11)             |
+| Fuzzy off       | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "architeqture", mode: "fts", fuzzy_match: false });`| 0 results                       |
+| Hybrid auto     | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "performance architecture fix" });`              | Heuristic RRF triggering S7     |
+| Forced semantic | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
 
 ### 21.2 Search Filters
 
 ```javascript
 // Test code:
-const byIssue = await mj.search.searchEntries({ project_number: 5, issue_number: 44 })
-const byPr = await mj.search.searchEntries({ project_number: 5, pr_status: 'merged' })
-const byWorkflow = await mj.search.searchEntries({ project_number: 5, workflow_run_id: 12345 })
-const byProject = await mj.search.searchEntries({ project_number: 5 })
+const byIssue = await mj.search.searchEntries({ workspace_id: "test-ws", issue_number: 44 })
+const byPr = await mj.search.searchEntries({ workspace_id: "test-ws", pr_status: 'merged' })
+const byWorkflow = await mj.search.searchEntries({ workspace_id: "test-ws", workflow_run_id: 12345 })
+const byProject = await mj.search.searchEntries({ workspace_id: "test-ws" })
 const personal = await mj.search.searchEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'test',
   is_personal: true,
 })
-const tagged = await mj.search.searchEntries({ project_number: 5, tags: ['testing'] })
-const typed = await mj.search.searchEntries({ project_number: 5, entry_type: 'planning' })
+const tagged = await mj.search.searchEntries({ workspace_id: "test-ws", tags: ['testing'] })
+const typed = await mj.search.searchEntries({ workspace_id: "test-ws", entry_type: 'planning' })
 const dated = await mj.search.searchEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: '2026-12-31',
 })
@@ -103,7 +103,7 @@ return {
 ```javascript
 // Test code:
 const results = await mj.search.searchEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'architecture',
   limit: 20,
 })
@@ -126,33 +126,33 @@ return {
 ```javascript
 // Test code:
 const basic = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: '2026-12-31',
 })
 const withType = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'planning',
 })
 const withTags = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   tags: ['deploy'],
 })
 const withPersonal = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   is_personal: true,
 })
 const withProject = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: '2026-12-31',
-  project_number: 5,
+  workspace_id: "test-ws",
 })
 return {
   basicCount: basic.entries.length,
@@ -176,9 +176,9 @@ return {
 
 | Test                | Code                                                                                                                 | Expected Result                                             |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Invalid date format | `return await mj.search.searchByDateRange({ project_number: 5, start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
-| Inverted date range | `return await mj.search.searchByDateRange({ project_number: 5, start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
-| Query too long      | `return await mj.search.searchEntries({ project_number: 5, query: "a".repeat(300) });`                               | `{ success: false, error: "..." }` with Zod validation hint |
+| Invalid date format | `return await mj.search.searchByDateRange({ workspace_id: "test-ws", start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
+| Inverted date range | `return await mj.search.searchByDateRange({ workspace_id: "test-ws", start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
+| Query too long      | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "a".repeat(300) });`                               | `{ success: false, error: "..." }` with Zod validation hint |
 
 ## Success Criteria
 

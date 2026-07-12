@@ -31,7 +31,7 @@ Test all 4 payload optimization features via Code Mode: Kanban throttling (`summ
 const failures = []
 
 // Summary mode: items should be empty, itemCount present
-const summary = await mj.github.getKanbanBoard({ project_number: 5, summary_only: true })
+const summary = await mj.github.getKanbanBoard({ workspace_id: "test-ws", summary_only: true })
 if (summary.columns) {
   if (!summary.summaryOnly) failures.push('summaryOnly flag not set')
   for (const col of summary.columns) {
@@ -45,7 +45,7 @@ if (summary.columns) {
 }
 
 // Item limit: truncated flag on columns exceeding limit
-const limited = await mj.github.getKanbanBoard({ project_number: 5, item_limit: 2 })
+const limited = await mj.github.getKanbanBoard({ workspace_id: "test-ws", item_limit: 2 })
 if (limited.columns) {
   for (const col of limited.columns) {
     if (col.items?.length > 2)
@@ -58,13 +58,13 @@ if (limited.columns) {
 }
 
 // Zero limit = summary mode
-const zeroLimit = await mj.github.getKanbanBoard({ project_number: 5, item_limit: 0 })
+const zeroLimit = await mj.github.getKanbanBoard({ workspace_id: "test-ws", item_limit: 0 })
 if (zeroLimit.columns && !zeroLimit.summaryOnly) {
   failures.push('item_limit: 0 should set summaryOnly: true')
 }
 
 // Default (no params) — itemCount always present
-const defaultBoard = await mj.github.getKanbanBoard({ project_number: 5 })
+const defaultBoard = await mj.github.getKanbanBoard({ workspace_id: "test-ws" })
 if (defaultBoard.columns) {
   for (const col of defaultBoard.columns) {
     if (typeof col.itemCount !== 'number')
@@ -167,11 +167,11 @@ return {
 const failures = []
 
 // At limit — should accept
-const atLimit = await mj.core.getRecentEntries({ project_number: 5, limit: 500 })
+const atLimit = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 500 })
 if (atLimit.success === false) failures.push('limit 500 rejected: ' + atLimit.error)
 
 // Over limit — should reject
-const overLimit = await mj.core.getRecentEntries({ project_number: 5, limit: 501 })
+const overLimit = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 501 })
 if (overLimit.success !== false) failures.push('limit 501 should be rejected')
 
 // GitHub issues over limit
@@ -183,15 +183,15 @@ const prsOver = await mj.github.getGithubPrs({ limit: 501 })
 if (prsOver.success !== false) failures.push('github PRs limit 501 should be rejected')
 
 // Search over limit
-const searchOver = await mj.search.searchEntries({ project_number: 5, query: 'test', limit: 501 })
+const searchOver = await mj.search.searchEntries({ workspace_id: "test-ws", query: 'test', limit: 501 })
 if (searchOver.success !== false) failures.push('search limit 501 should be rejected')
 
 // Test cursor pagination
-const cursorPage1 = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
+const cursorPage1 = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 })
 if (!cursorPage1.next_cursor) failures.push('cursorPage1 missing next_cursor')
 
 if (cursorPage1.next_cursor) {
-  const cursorPage2 = await mj.core.getRecentEntries({ project_number: 5, limit: 1, cursor: cursorPage1.next_cursor })
+  const cursorPage2 = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1, cursor: cursorPage1.next_cursor })
   if (cursorPage1.entries[0]?.id === cursorPage2.entries?.[0]?.id) {
     failures.push('cursor pagination returned identical first item')
   }

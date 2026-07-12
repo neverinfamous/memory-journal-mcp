@@ -27,8 +27,8 @@ Test batch operations and audit telemetry via Code Mode.
 // Batch Create
 const bCreated = await mj.admin.batchCreateEntries({
   entries: [
-    { project_number: 5, content: 'CM4 batch entry 1' },
-    { project_number: 5, content: 'CM4 batch entry 2' }
+    { workspace_id: "test-ws", content: 'CM4 batch entry 1' },
+    { workspace_id: "test-ws", content: 'CM4 batch entry 2' }
   ]
 })
 const [id1, id2] = bCreated.entryIds
@@ -48,7 +48,7 @@ const bDeleted = await mj.admin.batchDeleteEntries({
 // Verify Aliases (Hallucination Fallbacks)
 const bAliasCreated = await mj.admin.batchCreateEntries({
   entries: [
-    { project_number: 5, content: 'CM4 alias entry 1' }
+    { workspace_id: "test-ws", content: 'CM4 alias entry 1' }
   ]
 })
 await mj.admin.batchDeleteEntries({

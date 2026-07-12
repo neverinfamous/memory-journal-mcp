@@ -20,7 +20,7 @@ Test that mangled headers (`## Accomplishments`) or completely missing headers i
 ```javascript
 // Test 1: mj.core.createEntry with mangled headers
 const entry1 = await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   tags: ['session-summary'],
   entry_type: 'retrospective',
   auto_context: { commits: ['abc1234'] },
@@ -38,7 +38,7 @@ const entry1 = await mj.core.createEntry({
 
 // Test 2: mj.team.teamCreateEntry with NO headers
 const entry2 = await mj.team.teamCreateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   tags: ['session-summary'],
   entry_type: 'retrospective',
   auto_context: { commits: ['abc1234'] },
@@ -48,7 +48,7 @@ const entry2 = await mj.team.teamCreateEntry({
 // Test 3: mj.team.teamUpdateEntry healing headers
 const updateRes = await mj.team.teamUpdateEntry({
   entry_id: entry2.id ?? entry2.entry?.id,
-  project_number: 5,
+  workspace_id: "test-ws",
   content: `
 ## Done
 - Updated
@@ -71,7 +71,7 @@ const hasAccomplished3 = updateRes.entry?.content?.includes('## Accomplished');
 
 // Cleanup
 await mj.admin.deleteEntry({ entry_id: entry1.id ?? entry1.entry?.id, permanent: true });
-await mj.team.teamDeleteEntry({ project_number: 5, entry_id: entry2.id ?? entry2.entry?.id, expected_version: updateRes.entry?.version ?? 2 });
+await mj.team.teamDeleteEntry({ workspace_id: "test-ws", entry_id: entry2.id ?? entry2.entry?.id, expected_version: updateRes.entry?.version ?? 2 });
 
 return {
   test1Success: entry1.success,

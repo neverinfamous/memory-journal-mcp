@@ -43,7 +43,7 @@ try {
   const createResult = await mj.github.createGithubIssueWithEntry({
     title: 'CM6 Test Kanban',
     body: 'Test kanban body',
-    project_number: 5,
+    workspace_id: "test-ws",
     tags: ['test-kanban']
   })
   if (!createResult.success) throw new Error('Could not create issue')

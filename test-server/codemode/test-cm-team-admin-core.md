@@ -24,18 +24,18 @@ Test team administration (update, delete, merge tags, restore) through Code Mode
 
 ```javascript
 // Test code:
-const r = await mj.team.teamGetRecent({ project_number: 5, limit: 1 })
+const r = await mj.team.teamGetRecent({ workspace_id: "test-ws", limit: 1 })
 if (!r.success) return { success: false, error: r.error }
 const id = r.entries[0].id
 
 const updated = await mj.team.teamUpdateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: id,
   content: 'CM4 updated team content',
   tags: ['cm4-updated-team'],
 })
 const verify = await mj.team.teamGetEntryById({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: id,
 })
 if (!verify.success) return { success: false, error: verify.error }
@@ -43,7 +43,7 @@ const v1 = verify.entry?.version
 
 let conflictCaught = false
 const update2 = await mj.team.teamUpdateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: id,
   expected_version: v1 - 1, // deliberately stale (it incremented on previous update)
   content: 'CM4 locking update 2'
@@ -53,12 +53,12 @@ if (!update2.success && update2.error?.includes('VERSION_CONFLICT')) {
 }
 // Merge tags
 await mj.team.teamCreateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'CM4 merge source',
   tags: ['cm4-team-old'],
 })
 const merged = await mj.team.teamMergeTags({
-  project_number: 5,
+  workspace_id: "test-ws",
   source_tag: 'cm4-team-old',
   target_tag: 'cm4-team-new',
 })
@@ -68,46 +68,46 @@ const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
 
 // Soft delete and recovery
 const toDelete = await mj.team.teamCreateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'CM4 delete and recover me',
 })
 const deleted = await mj.team.teamDeleteEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: toDelete.entry.id,
 })
 const deletedList = await mj.team.teamListDeletedEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
 })
 if (!deletedList.success) return { success: false, error: deletedList.error }
 const isDeleted = deletedList.entries?.some((e) => e.id === toDelete.entry.id)
 const restored = await mj.team.teamRestoreEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: toDelete.entry.id,
 })
 const verifyDeleted = await mj.team.teamListDeletedEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
 })
 const isNoLongerDeleted = !verifyDeleted.entries?.some((e) => e.id === toDelete.entry.id)
 
 // Archiving & Keyset pagination
 const archived = await mj.team.teamUpdateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: toDelete.entry.id,
   is_archived: true,
 })
 const verifyArchived = await mj.team.teamGetEntryById({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: toDelete.entry.id,
 })
 const isArchived = verifyArchived.entry?.isArchived === true
 
 // Clean up
 await mj.team.teamDeleteEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: toDelete.entry.id,
 })
 
-const pag1 = await mj.team.teamGetRecent({ project_number: 5, limit: 2 })
+const pag1 = await mj.team.teamGetRecent({ workspace_id: "test-ws", limit: 2 })
 const hasCursor = typeof pag1.next_cursor === 'string'
 
 return {
@@ -145,9 +145,9 @@ return {
 
 ## Success Criteria
 
-- `team_update_entry(project_number: 5)` updates content, tags, and entry_type
-- `team_update_entry(project_number: 5)` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
-- `team_delete_entry(project_number: 5)` soft-deletes team entries
-- `team_merge_tags(project_number: 5)` consolidates tags — source removed, entries re-tagged
+- `team_update_entry(workspace_id: "test-ws")` updates content, tags, and entry_type
+- `team_update_entry(workspace_id: "test-ws")` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
+- `team_delete_entry(workspace_id: "test-ws")` soft-deletes team entries
+- `team_merge_tags(workspace_id: "test-ws")` consolidates tags — source removed, entries re-tagged
 - Team soft-delete recovery (`team_restore_entry`, `team_list_deleted_entries`) is functional via Code Mode scripts
 - Keyset cursor pagination and archiving filters (`is_archived`) are supported on team entries via Code Mode scripts

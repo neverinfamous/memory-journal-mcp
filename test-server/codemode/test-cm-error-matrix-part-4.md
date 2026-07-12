@@ -28,21 +28,21 @@ Systematic verification of structured error handling across remaining API groups
 
 ```javascript
 // Test code:
-const createEmpty = await mj.team.teamCreateEntry({ project_number: 5 })
-const getByIdEmpty = await mj.team.teamGetEntryById({ project_number: 5 })
-const recentEmpty = await mj.team.teamGetRecent({ project_number: 5 })
-const searchEmpty = await mj.team.teamSearch({ project_number: 5 })
+const createEmpty = await mj.team.teamCreateEntry({ workspace_id: "test-ws" })
+const getByIdEmpty = await mj.team.teamGetEntryById({ workspace_id: "test-ws" })
+const recentEmpty = await mj.team.teamGetRecent({ workspace_id: "test-ws" })
+const searchEmpty = await mj.team.teamSearch({ workspace_id: "test-ws" })
 const tagsEmpty = await mj.team.teamListTags({})
-const dateRangeEmpty = await mj.team.teamSearchByDateRange({ project_number: 5 })
-const updateEmpty = await mj.team.teamUpdateEntry({ project_number: 5 })
-const deleteEmpty = await mj.team.teamDeleteEntry({ project_number: 5 })
-const mergeEmpty = await mj.team.teamMergeTags({ project_number: 5 })
-const linkEmpty = await mj.team.teamLinkEntries({ project_number: 5 })
-const vizEmpty = await mj.team.teamVisualizeRelationships({ project_number: 5 })
-const exportEmpty = await mj.team.teamExportEntries({ project_number: 5 })
+const dateRangeEmpty = await mj.team.teamSearchByDateRange({ workspace_id: "test-ws" })
+const updateEmpty = await mj.team.teamUpdateEntry({ workspace_id: "test-ws" })
+const deleteEmpty = await mj.team.teamDeleteEntry({ workspace_id: "test-ws" })
+const mergeEmpty = await mj.team.teamMergeTags({ workspace_id: "test-ws" })
+const linkEmpty = await mj.team.teamLinkEntries({ workspace_id: "test-ws" })
+const vizEmpty = await mj.team.teamVisualizeRelationships({ workspace_id: "test-ws" })
+const exportEmpty = await mj.team.teamExportEntries({ workspace_id: "test-ws" })
 const backupEmpty = await mj.team.teamBackup({})
 const listBackupsEmpty = await mj.team.teamListBackups({})
-const semanticEmpty = await mj.team.teamSemanticSearch({ project_number: 5 })
+const semanticEmpty = await mj.team.teamSemanticSearch({ workspace_id: "test-ws" })
 const vecStatsEmpty = await mj.team.teamGetVectorIndexStats({})
 const statsEmpty = await mj.team.teamGetStatistics({})
 const insightsEmpty = await mj.team.teamGetCrossProjectInsights({})
@@ -50,15 +50,15 @@ const crossTeamSearchTypeMismatch = await mj.search.crossTeamSearch({ team_dbs: 
 
 // Type mismatches
 const createNumContent = await mj.team.teamCreateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 123,
 })
 const updateStrId = await mj.team.teamUpdateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: 'abc',
   content: 'test',
 })
-const teamSearchTypeMismatch = await mj.team.teamSearch({ project_number: 5, query: 123 })
+const teamSearchTypeMismatch = await mj.team.teamSearch({ workspace_id: "test-ws", query: 123 })
 
 return {
   createEmptyError: createEmpty.success === false,

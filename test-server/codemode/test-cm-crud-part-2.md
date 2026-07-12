@@ -36,11 +36,11 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 delete test' })
+const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 delete test' })
 const id = created.entry.id
 const soft = await mj.admin.deleteEntry({ entry_id: id, permanent: false })
 const searchAfterSoft = await mj.search.searchEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'CM3 delete test',
   limit: 5,
 })
@@ -66,8 +66,8 @@ return {
 
 | Test               | Code                                                                                                                                                                                             | Expected Result      |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
-| is_personal: true  | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 5, is_personal: true }); return { count: r.entries.length, allPersonal: r.entries.every(e => e.isPersonal === true) };`    | `allPersonal: true`  |
-| is_personal: false | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 5, is_personal: false }); return { count: r.entries.length, nonePersonal: r.entries.every(e => e.isPersonal === false) };` | `nonePersonal: true` |
+| is_personal: true  | `const r = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 5, is_personal: true }); return { count: r.entries.length, allPersonal: r.entries.every(e => e.isPersonal === true) };`    | `allPersonal: true`  |
+| is_personal: false | `const r = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 5, is_personal: false }); return { count: r.entries.length, nonePersonal: r.entries.every(e => e.isPersonal === false) };` | `nonePersonal: true` |
 
 ### 20.9 test_simple & error_handling via Code Mode
 
@@ -81,8 +81,8 @@ return {
 
 | Test               | Code                                                                                                                                                                                                     | Expected Result                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| With project_owner | `const r = await mj.core.createEntry({ project_number: 5, content: "CM3 owner test", project_number: 5, project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
-| auto_context off   | `const r = await mj.core.createEntry({ project_number: 5, content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
+| With project_owner | `const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 owner test", workspace_id: "test-ws", project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
+| auto_context off   | `const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
 ## Cleanup
 
 After testing, remove test entries created during Phase 20:

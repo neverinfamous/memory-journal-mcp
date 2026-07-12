@@ -30,6 +30,11 @@
 | `update_configuration`| Update config    | `instruction_level: "invalid"`                 | Should succeed (defaults)         | `briefing_entries: "abc"` |
 
 > **Note:** `registerProject` is an Admin method but is intentionally exposed exclusively via Code Mode API (`mj.admin.registerProject`) to ensure secure file-system validation. It is not tested here via direct MCP calls; it is covered in the `codemode` test track.
+| `delete_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `list_projects` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `register_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `update_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

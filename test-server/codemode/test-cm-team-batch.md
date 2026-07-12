@@ -26,7 +26,7 @@ Test team batch operations through Code Mode.
 // Test code:
 // Batch Create
 const bCreated = await mj.team.teamBatchCreateEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   entries: [
     { content: 'CM4 team batch 1' },
     { content: 'CM4 team batch 2' }
@@ -37,7 +37,7 @@ const [id1, id2] = bCreated.entryIds
 
 // Batch Update
 const bUpdated = await mj.team.teamBatchUpdateEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   updates: [
     { entry_id: id1, content: 'CM4 team batch 1 updated' }
   ]
@@ -45,19 +45,19 @@ const bUpdated = await mj.team.teamBatchUpdateEntries({
 
 // Batch Delete
 const bDeleted = await mj.team.teamBatchDeleteEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_ids: [id1, id2]
 })
 
 // Verify Aliases
 const bAliasCreated = await mj.team.teamBatchCreateEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   entries: [
     { content: 'CM4 team alias 1' }
   ]
 })
 await mj.team.teamBatchDeleteEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_ids: bAliasCreated.entryIds
 })
 

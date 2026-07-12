@@ -100,8 +100,8 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 
 ### \`mj.team\`
 - \`teamCreateEntry(params)\`, \`teamGetEntryById(params)\` (or \`read()\`), \`teamGetRecent(params)\`, \`teamListTags(params)\`
-- \`teamSearch(params)\`, \`teamSearchByDateRange(params)\`, \`teamSemanticSearch(params)\`, \`teamListDeletedEntries(params)\` (or \`trash()\`)
-- \`teamUpdateEntry(params)\`, \`teamDeleteEntry(params)\`, \`teamRestoreEntry(params)\`
+- \`teamSearch(params)\`, \`teamSearchByDateRange(params)\`, \`teamSemanticSearch(params)\`
+- \`teamUpdateEntry(params)\`, \`teamDeleteEntry(params)\`, \`teamRestoreEntry(params)\`, \`teamListDeletedEntries(params)\` (or \`trash()\`)
 - \`teamMergeTags(params)\`, \`teamLinkEntries(params)\`, \`teamVisualizeRelationships(params)\`
 - \`teamBatchCreateEntries(params)\`, \`teamBatchUpdateEntries(params)\`, \`teamBatchDeleteEntries(params)\`
 - \`teamGetStatistics(params)\` (or \`stats()\`), \`teamGetCrossProjectInsights(params)\`, \`teamGetCollaborationMatrix(params)\`

@@ -32,13 +32,13 @@ const register = await mj.admin.registerProject({
 const pNum = register.projectNumber
 
 // 2. Get project
-const getP = pNum ? await mj.admin.getProject({ project_number: pNum }) : null
+const getP = pNum ? await mj.admin.getProject({ name: pNum }) : null
 
 // 3. Update project
 let updateP = null
 if (pNum) {
   updateP = await mj.admin.updateProject({
-    project_number: pNum,
+    name: pNum,
     metadata: { framework: 'nextjs' }
   })
 }
@@ -49,7 +49,7 @@ const listP = await mj.admin.listProjects({})
 // 5. Delete project
 let deleteP = null
 if (pNum) {
-  deleteP = await mj.admin.deleteProject({ project_number: pNum })
+  deleteP = await mj.admin.deleteProject({ name: pNum })
 }
 
 return {

@@ -7,6 +7,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
+
 `team_link_entries`, `team_merge_tags`, `team_visualize_relationships`
 
 **Instructions:**

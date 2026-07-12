@@ -29,7 +29,7 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 ```javascript
 // Test code:
 const entry = await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'CM3 full-params test entry',
   entry_type: 'technical_note',
   tags: ['codemode3-test', 'full-params'],
@@ -38,7 +38,7 @@ const entry = await mj.core.createEntry({
   workflow_run_id: 555,
   workflow_name: 'test-ci',
   workflow_status: 'completed',
-  project_number: 5,
+  workspace_id: "test-ws",
   is_personal: false,
 })
 return {
@@ -72,7 +72,7 @@ return {
 ```javascript
 // Test code:
 const entry = await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'CM3 shared entry for team verification',
   share_with_team: true,
   tags: ['codemode3-team'],
@@ -132,15 +132,15 @@ return {
 
 | Test                 | Code                                                                                                      | Expected Result                                        |
 | -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Invalid entry_type   | `return await mj.core.createEntry({ project_number: 5, content: "test", entry_type: "invalid" });`        | `{ success: false, error: "..." }` listing valid types |
-| Invalid significance | `return await mj.core.createEntry({ project_number: 5, content: "test", significance_type: "invalid" });` | `{ success: false, error: "..." }` listing valid types |
-| Empty content        | `return await mj.core.createEntry({ project_number: 5, content: "" });`                                   | `{ success: false, error: "..." }` min length error    |
+| Invalid entry_type   | `return await mj.core.createEntry({ workspace_id: "test-ws", content: "test", entry_type: "invalid" });`        | `{ success: false, error: "..." }` listing valid types |
+| Invalid significance | `return await mj.core.createEntry({ workspace_id: "test-ws", content: "test", significance_type: "invalid" });` | `{ success: false, error: "..." }` listing valid types |
+| Empty content        | `return await mj.core.createEntry({ workspace_id: "test-ws", content: "" });`                                   | `{ success: false, error: "..." }` min length error    |
 
 ### 20.4 Get Entry By ID — Details
 
 ```javascript
 // Test code:
-const recent = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
+const recent = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 })
 const id = recent.entries[0].id
 const full = await mj.core.getEntryById({ entry_id: id })
 const noRels = await mj.core.getEntryById({ entry_id: id, include_relationships: false })
@@ -168,7 +168,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 update test' })
+const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 update test' })
 const id = created.entry.id
 const updated = await mj.admin.updateEntry({
   entry_id: id,

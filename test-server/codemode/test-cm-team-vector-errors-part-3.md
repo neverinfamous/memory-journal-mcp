@@ -9,7 +9,7 @@ Test team vector search, cross-project insights, and comprehensive cross-tool er
 - **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
-- Seed data S15–S17 are team DB entries with `project_number: 5`, required for `team_get_cross_project_insights`.
+- Seed data S15–S17 are team DB entries with `workspace_id: "test-ws"`, required for `team_get_cross_project_insights`.
 
 **Workflow after testing:**
 
@@ -36,7 +36,7 @@ Test team vector search, cross-project insights, and comprehensive cross-tool er
 const errors = {}
 
 // Core errors
-errors.createEmpty = await mj.core.createEntry({ project_number: 5, content: '' })
+errors.createEmpty = await mj.core.createEntry({ workspace_id: "test-ws", content: '' })
 errors.getNotFound = await mj.core.getEntryById({ entry_id: 999999 })
 errors.updateNotFound = await mj.admin.updateEntry({ entry_id: 999999, content: 'x' })
 errors.deleteNotFound = await mj.admin.deleteEntry({ entry_id: 999999, expected_version: 1 })
@@ -70,21 +70,21 @@ errors.addVectorBad = await mj.admin.addToVectorIndex({ entry_id: 999999 })
 
 // Team errors
 errors.teamGetNotFound = await mj.team.teamGetEntryById({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: 999999,
 })
 errors.teamUpdateNotFound = await mj.team.teamUpdateEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: 999999,
   content: 'x',
 })
 errors.teamDeleteNotFound = await mj.team.teamDeleteEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: 999999,
   expected_version: 1,
 })
 errors.teamLinkBad = await mj.team.teamLinkEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   from_entry_id: 999999,
   to_entry_id: 1,
   relationship_type: 'references',
@@ -92,7 +92,7 @@ errors.teamLinkBad = await mj.team.teamLinkEntries({
 
 // Team vector errors (only true error paths)
 errors.teamAddVectorBad = await mj.team.teamAddToVectorIndex({
-  project_number: 5,
+  workspace_id: "test-ws",
   entry_id: 999999,
 })
 
@@ -134,7 +134,7 @@ After testing, remove all entries and backups created during Phases 25-27:
 
 ```javascript
 // Cleanup code:
-const entries = await mj.search.searchEntries({ project_number: 5, query: 'CM4', limit: 50 })
+const entries = await mj.search.searchEntries({ workspace_id: "test-ws", query: 'CM4', limit: 50 })
 const cm4Entries = entries.entries.filter(
   (e) => e.content?.includes('CM4') || e.tags?.some((t) => t.startsWith('codemode4'))
 )
@@ -147,16 +147,16 @@ for (const e of cm4Entries) {
 
 // Clean up team entries created during Phase 28
 const teamEntries = await mj.team.teamSearch({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'CM4',
   limit: 50,
 })
 if (teamEntries.success) {
   for (const e of teamEntries.entries ?? []) {
     if (e.content?.includes('CM4')) {
-      const getVersion = await mj.team.teamGetEntryById({ project_number: 5, entry_id: e.id })
+      const getVersion = await mj.team.teamGetEntryById({ workspace_id: "test-ws", entry_id: e.id })
       const del = await mj.team.teamDeleteEntry({
-        project_number: 5,
+        workspace_id: "test-ws",
         entry_id: e.id,
         expected_version: getVersion.entry?.version ?? 1,
       })
@@ -176,8 +176,8 @@ return { cleaned: results.length, details: results }
 
 - `team_rebuild_vector_index` indexes team entries via Code Mode
 - `team_get_vector_index_stats` returns vector stats via Code Mode
-- `team_semantic_search(project_number: 5)` with threshold filtering works via Code Mode
-- `team_add_to_vector_index(project_number: 5)` succeeds for existing, errors for nonexistent via Code Mode
+- `team_semantic_search(workspace_id: "test-ws")` with threshold filtering works via Code Mode
+- `team_add_to_vector_index(workspace_id: "test-ws")` succeeds for existing, errors for nonexistent via Code Mode
 - `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode

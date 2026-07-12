@@ -32,7 +32,7 @@ Test cross-group orchestration: journal health dashboards, GitHub-journal covera
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const stats = await mj.analytics.getStatistics({})
-const recent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
+const recent = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 5 })
 const tags = await mj.core.listTags({})
 return {
   totalEntries: stats.totalEntries,
@@ -57,7 +57,7 @@ const issues = await mj.github.getGithubIssues({ limit: 3 })
 const results = []
 for (const issue of (issues.issues || []).slice(0, 2)) {
   const entries = await mj.search.searchEntries({
-    project_number: 5,
+    workspace_id: "test-ws",
     query: `#${issue.number}`,
     limit: 3,
   })
@@ -82,7 +82,7 @@ const tagList = await mj.core.listTags({})
 const topTags = (tagList.tags || []).sort((a, b) => b.count - a.count).slice(0, 3)
 const report = []
 for (const tag of topTags) {
-  const entries = await mj.search.searchEntries({ project_number: 5, query: tag.name, limit: 2 })
+  const entries = await mj.search.searchEntries({ workspace_id: "test-ws", query: tag.name, limit: 2 })
   report.push({ tag: tag.name, count: tag.count, sampleEntries: entries.entries.length })
 }
 return { analyzedTags: report.length, report }
@@ -97,7 +97,7 @@ return { analyzedTags: report.length, report }
 
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
-const recent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
+const recent = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 5 })
 const withRelationships = []
 for (const entry of recent.entries.slice(0, 3)) {
   const detail = await mj.core.getEntryById({ entry_id: entry.id })
@@ -122,7 +122,7 @@ return { checked: Math.min(recent.entries.length, 3), withRelationships }
 ```javascript
 // Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const entry = await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'Code Mode pipeline test: semantic indexing verification ZQJKM',
   tags: ['codemode-pipeline-test'],
   entry_type: 'technical_note',

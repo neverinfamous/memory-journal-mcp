@@ -27,7 +27,7 @@ Test semantic search, analytics, and vector index operations through the Code Mo
 
 ```javascript
 // Test code:
-const related = await mj.core.getRecentEntries({ project_number: 5, limit: 1 })
+const related = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 })
 const basic = await mj.search.semanticSearch({ query: 'improving performance' })
 const byId = await mj.search.semanticSearch({ entry_id: related.entries[0].id })
 const strict = await mj.search.semanticSearch({
@@ -116,8 +116,8 @@ return {
 
 | Test                  | Code                                                                                                                                                | Expected Result                                    |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Rebuild index         | `await mj.admin.batchCreateEntries({ entries: [{ content: "test", project_number: 5 }], auto_index: false }); return await mj.admin.rebuildVectorIndex({});` | `{ success: true, entriesIndexed: N }` where N > 0 |
-| Add existing to index | `const r = await mj.core.getRecentEntries({ project_number: 5, limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
+| Rebuild index         | `await mj.admin.batchCreateEntries({ entries: [{ content: "test", workspace_id: "test-ws" }], auto_index: false }); return await mj.admin.rebuildVectorIndex({});` | `{ success: true, entriesIndexed: N }` where N > 0 |
+| Add existing to index | `const r = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 }); return await mj.admin.addToVectorIndex({ entry_id: r.entries[0].id });` | `{ success: true, entryId: N }`                    |
 | Add nonexistent       | `return await mj.admin.addToVectorIndex({ entry_id: 999999 });`                                                                                     | `{ success: false, error: "..." }`                 |
 
 ---

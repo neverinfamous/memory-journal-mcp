@@ -31,20 +31,20 @@ Test semantic search, analytics, and vector index operations through the Code Mo
 ```javascript
 // Setup: create test entries with different importance profiles
 const e1 = await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'IMPSORT_TEST_LOW: no significance, no relationships',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
 })
 const e2 = await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'IMPSORT_TEST_HIGH: milestone with relationships',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
   significance_type: 'milestone',
 })
 const e3 = await mj.core.createEntry({
-  project_number: 5,
+  workspace_id: "test-ws",
   content: 'IMPSORT_TEST_MED: decision with causal link',
   entry_type: 'test_entry',
   tags: ['importance-sort-test'],
@@ -69,7 +69,7 @@ await mj.relationships.linkEntries({
 
 // T1: search_entries with sort_by: 'importance'
 const impSearch = await mj.search.searchEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'IMPSORT_TEST',
   sort_by: 'importance',
   mode: 'fts',
@@ -78,25 +78,25 @@ const impSearch = await mj.search.searchEntries({
 
 // T2: search_entries with default sort_by (timestamp)
 const tsSearch = await mj.search.searchEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   query: 'IMPSORT_TEST',
   limit: 10,
 })
 
 // T3: get_recent_entries with sort_by: 'importance'
 const impRecent = await mj.core.getRecentEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   limit: 5,
   sort_by: 'importance',
 })
 
 // T4: get_recent_entries with default sort_by (timestamp)
-const tsRecent = await mj.core.getRecentEntries({ project_number: 5, limit: 5 })
+const tsRecent = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 5 })
 
 // T5: search_by_date_range with sort_by: 'importance'
 const today = new Date().toISOString().split('T')[0]
 const impDateRange = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: today,
   sort_by: 'importance',
@@ -105,7 +105,7 @@ const impDateRange = await mj.search.searchByDateRange({
 
 // T6: search_by_date_range with default sort_by (timestamp)
 const tsDateRange = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: today,
   limit: 5,
@@ -166,17 +166,17 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntry({ project_number: 5, content: 'CM3 search archiving pagination test' })
+const created = await mj.core.createEntry({ workspace_id: "test-ws", content: 'CM3 search archiving pagination test' })
 const id = created.entry.id
 await mj.admin.updateEntry({ entry_id: id, is_archived: true })
 
-const searchArchivedOff = await mj.search.searchEntries({ project_number: 5, query: "search archiving pagination", include_archived: false })
+const searchArchivedOff = await mj.search.searchEntries({ workspace_id: "test-ws", query: "search archiving pagination", include_archived: false })
 const isArchivedHidden = !searchArchivedOff.entries?.some(e => e.id === id)
 
-const searchArchivedOn = await mj.search.searchEntries({ project_number: 5, query: "search archiving pagination", include_archived: true })
+const searchArchivedOn = await mj.search.searchEntries({ workspace_id: "test-ws", query: "search archiving pagination", include_archived: true })
 const isArchivedVisible = searchArchivedOn.entries?.some(e => e.id === id)
 
-const searchPagPage1 = await mj.search.searchEntries({ project_number: 5, query: "test", limit: 2 })
+const searchPagPage1 = await mj.search.searchEntries({ workspace_id: "test-ws", query: "test", limit: 2 })
 const hasSearchCursor = typeof searchPagPage1.next_cursor === 'string'
 
 // Clean up
@@ -201,10 +201,10 @@ return {
 
 ```javascript
 // Test code:
-const withHighlights = await mj.search.searchEntries({ project_number: 5, query: "architecture", include_highlights: true, mode: "fts" })
-const withFacets = await mj.search.searchEntries({ project_number: 5, query: "test", include_facets: true })
-const withWeights = await mj.search.searchEntries({ project_number: 5, query: "performance", mode: "hybrid", fts_weight: 2.0, semantic_weight: 0.1 })
-const withQuotes = await mj.search.searchEntries({ project_number: 5, query: '"error handling" AND "performance"', mode: "fts" })
+const withHighlights = await mj.search.searchEntries({ workspace_id: "test-ws", query: "architecture", include_highlights: true, mode: "fts" })
+const withFacets = await mj.search.searchEntries({ workspace_id: "test-ws", query: "test", include_facets: true })
+const withWeights = await mj.search.searchEntries({ workspace_id: "test-ws", query: "performance", mode: "hybrid", fts_weight: 2.0, semantic_weight: 0.1 })
+const withQuotes = await mj.search.searchEntries({ workspace_id: "test-ws", query: '"error handling" AND "performance"', mode: "fts" })
 
 return {
   hasHighlights: Array.isArray(withHighlights.highlights) && withHighlights.highlights.length >= 0,

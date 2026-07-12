@@ -28,9 +28,9 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 ```javascript
 // Test code:
-const jsonExport = await mj.team.teamExportEntries({ project_number: 5, format: 'json', limit: 5 })
+const jsonExport = await mj.team.teamExportEntries({ workspace_id: "test-ws", format: 'json', limit: 5 })
 const mdExport = await mj.team.teamExportEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   format: 'markdown',
   limit: 5,
 })
@@ -40,20 +40,20 @@ const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode
 const ioExport = await mj.team.teamExportMarkdown({
   output_dir: MOCK_DIR,
   limit: 5,
-  project_number: 5,
+  workspace_id: "test-ws",
 })
 
 const ioImport = await mj.team.teamImportMarkdown({
   source_dir: MOCK_DIR,
   dry_run: true,
-  project_number: 5,
+  workspace_id: "test-ws",
 })
 
 const ioExtImport = await mj.team.teamImportExternal({
   source_dir: MOCK_DIR,
   source_format: 'obsidian',
   dry_run: true,
-  project_number: 5,
+  workspace_id: "test-ws",
 })
 if (!jsonExport.success) return { success: false, error: jsonExport.error }
 if (!mdExport.success) return { success: false, error: mdExport.error }
@@ -137,14 +137,14 @@ return {
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- `team_update_entry(project_number: 5)` updates content, tags, and entry_type
-- `team_update_entry(project_number: 5)` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
-- `team_delete_entry(project_number: 5)` soft-deletes team entries
-- `team_merge_tags(project_number: 5)` consolidates tags — source removed, entries re-tagged
+- `team_update_entry(workspace_id: "test-ws")` updates content, tags, and entry_type
+- `team_update_entry(workspace_id: "test-ws")` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
+- `team_delete_entry(workspace_id: "test-ws")` soft-deletes team entries
+- `team_merge_tags(workspace_id: "test-ws")` consolidates tags — source removed, entries re-tagged
 - `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- `team_link_entries(project_number: 5)` creates relationships with duplicate detection
-- `team_visualize_relationships(project_number: 5)` returns Mermaid diagram with node/edge counts
-- `team_export_entries(project_number: 5)` exports JSON and markdown with filters
+- `team_link_entries(workspace_id: "test-ws")` creates relationships with duplicate detection
+- `team_visualize_relationships(workspace_id: "test-ws")` returns Mermaid diagram with node/edge counts
+- `team_export_entries(workspace_id: "test-ws")` exports JSON and markdown with filters
 - `team_backup` creates named and auto-named backups
 - `team_list_backups` returns backup metadata
 - `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings

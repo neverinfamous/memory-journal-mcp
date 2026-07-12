@@ -29,12 +29,12 @@ Test that common agent hallucinations (`user`, `msg`, `severity`, `version`, `se
 // Test code:
 // 1. sort -> sort_by
 const listSort = await mj.team.teamSearch({
-  project_number: 5,
+  workspace_id: "test-ws",
   sort: 'priority'
 })
 
 // 2. version -> expected_version, text/message -> content
-const entry = await mj.core.createEntry({ project_number: 5, text: 'Alias entry' })
+const entry = await mj.core.createEntry({ workspace_id: "test-ws", text: 'Alias entry' })
 const updated = await mj.admin.updateEntry({
   entry_id: entry.id,
   message: 'Updated alias',
@@ -43,14 +43,14 @@ const updated = await mj.admin.updateEntry({
 
 // 3. search/q -> query, mode -> instruction_level
 const searched = await mj.search.searchEntries({
-  project_number: 5,
+  workspace_id: "test-ws",
   q: 'Alias'
 })
 const configMode = await mj.admin.updateConfiguration({ mode: 'standard' })
 
 // 4. filename -> source_dir (for io import)
 let ioError = false;
-const ioRes = await mj.io.importExternal({ project_number: 5, filename: '/fake/dir' });
+const ioRes = await mj.io.importExternal({ workspace_id: "test-ws", filename: '/fake/dir' });
 if (!ioRes.success && !ioRes.error.includes('source_dir')) {
   ioError = true; // Expect structured error but not validation error about missing source_dir
 }
@@ -85,7 +85,7 @@ const c1 = await mj.admin.updateConfiguration({ briefing_entries: 5 })
 const c2 = await mj.admin.updateConfiguration({ briefing_entries: 4 })
 
 // mj.core.getEntryHistory -> getEntryHistory
-const entry = await mj.core.createEntry({ project_number: 5, content: 'History test' })
+const entry = await mj.core.createEntry({ workspace_id: "test-ws", content: 'History test' })
 await mj.admin.updateEntry({ entry_id: entry.id, content: 'History test updated' })
 const history = await mj.core.getEntryHistory({ entry_id: entry.id })
 
@@ -94,8 +94,8 @@ const role = await mj.team.teamUpdateMemberRole({ target_user: 'tester99', role:
 const aliases = await mj.team.teamListAuthorAliases({})
 
 // mj.search.searchEntries / readQuery -> searchEntries
-const readQ1 = await mj.search.searchEntries({ project_number: 5, query: 'History test' })
-const readQ2 = await mj.search.searchEntries({ project_number: 5, query: 'History test' })
+const readQ1 = await mj.search.searchEntries({ workspace_id: "test-ws", query: 'History test' })
+const readQ2 = await mj.search.searchEntries({ workspace_id: "test-ws", query: 'History test' })
 
 // Cleanup
 await mj.admin.deleteEntry({ entry_id: entry.id, permanent: true })
@@ -127,16 +127,16 @@ Test that tools technically defined in one group (e.g. `semantic` or `admin`) bu
 // Test code:
 
 // mj.search.semanticSearch -> mj.search.semanticSearch
-const semantic = await mj.search.semanticSearch({ project_number: 5, query: 'test' })
+const semantic = await mj.search.semanticSearch({ workspace_id: "test-ws", query: 'test' })
 
 // mj.search.getVectorIndexStats -> mj.search.getVectorIndexStats
-const vStats = await mj.search.getVectorIndexStats({ project_number: 5 })
+const vStats = await mj.search.getVectorIndexStats({ workspace_id: "test-ws" })
 
 // mj.admin.searchAuditLog -> mj.admin.searchAuditLog
 const audit = await mj.admin.searchAuditLog({ limit: 1 })
 
 // mj.search.listDeletedEntries -> mj.search.listDeletedEntries
-const deleted = await mj.search.listDeletedEntries({ project_number: 5 })
+const deleted = await mj.search.listDeletedEntries({ workspace_id: "test-ws" })
 
 return {
   semanticSuccess: semantic.success,
@@ -182,7 +182,7 @@ const result = await (async () => {
   
   // 5. Array proxy interception & hardened Code Mode array proxies
   // Use createEntry instead of searchEntries to correctly test Non-Array Proxy Error
-  const createResult = await mj.core.createEntry({ project_number: 5, content: 'x' })
+  const createResult = await mj.core.createEntry({ workspace_id: "test-ws", content: 'x' })
   let proxyError = false
   try {
     createResult.forEach(item => console.log(item))
@@ -193,7 +193,7 @@ const result = await (async () => {
   await mj.admin.deleteEntry({ entry_id: createResult.id, permanent: true })
   
   // Newly hardened 'Code Mode' array proxies: test support for .length, [0], .indexOf, .includes, .map, .filter
-  const listResult = await mj.search.searchEntries({ project_number: 5, limit: 1 })
+  const listResult = await mj.search.searchEntries({ workspace_id: "test-ws", limit: 1 })
   let arrayProxiesHardened = false
   try {
     const len = listResult.length

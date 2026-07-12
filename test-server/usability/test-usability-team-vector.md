@@ -7,6 +7,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
+
 `team_add_to_vector_index`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_semantic_search`
 
 **Instructions:**

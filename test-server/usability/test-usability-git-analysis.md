@@ -7,6 +7,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
+
 `analyze_commit_patterns`, `check_entry_staleness`, `get_unreleased_commits`
 
 **Instructions:**

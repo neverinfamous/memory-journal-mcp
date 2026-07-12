@@ -30,19 +30,19 @@ Systematic verification of structured error handling across all `mj.*` API group
 
 ```javascript
 // Test code:
-const createEmpty = await mj.core.createEntry({ project_number: 5 })
-const createMinEmpty = await mj.core.createEntry({ project_number: 5, })
+const createEmpty = await mj.core.createEntry({ workspace_id: "test-ws" })
+const createMinEmpty = await mj.core.createEntry({ workspace_id: "test-ws", })
 const getByIdEmpty = await mj.core.getEntryById({})
-const recentEmpty = await mj.core.getRecentEntries({ project_number: 5 })
+const recentEmpty = await mj.core.getRecentEntries({ workspace_id: "test-ws" })
 const statsEmpty = await mj.analytics.getStatistics({})
 const tagsEmpty = await mj.core.listTags({})
 const getHistoryEmpty = await mj.core.getEntryHistory({})
 
 // Type mismatches
-const contentNum = await mj.core.createEntry({ project_number: 5, content: 123 })
-const limitStr = await mj.core.getRecentEntries({ project_number: 5, limit: 'abc' })
+const contentNum = await mj.core.createEntry({ workspace_id: "test-ws", content: 123 })
+const limitStr = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 'abc' })
 const idStr = await mj.core.getEntryById({ entry_id: 'abc' })
-const limitNeg = await mj.core.getRecentEntries({ project_number: 5, limit: -1 })
+const limitNeg = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: -1 })
 const historyIdStr = await mj.core.getEntryHistory({ entry_id: 'abc' })
 
 return {
@@ -80,25 +80,25 @@ return {
 
 ```javascript
 // Test code:
-const searchEmpty = await mj.search.searchEntries({ project_number: 5 })
-const dateRangeEmpty = await mj.search.searchByDateRange({ project_number: 5 })
+const searchEmpty = await mj.search.searchEntries({ workspace_id: "test-ws" })
+const dateRangeEmpty = await mj.search.searchByDateRange({ workspace_id: "test-ws" })
 const semanticEmpty = await mj.search.semanticSearch({})
 const vectorStatsEmpty = await mj.search.getVectorIndexStats({})
 
 // Boundary tests
-const limitOver = await mj.search.searchEntries({ project_number: 5, query: 'test', limit: 501 })
+const limitOver = await mj.search.searchEntries({ workspace_id: "test-ws", query: 'test', limit: 501 })
 const thresholdStr = await mj.search.semanticSearch({ query: 'test', similarity_threshold: 'abc' })
 const dateInvalid = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: 'Jan 1',
   end_date: 'Jan 31',
 })
 const dateInverted = await mj.search.searchByDateRange({
-  project_number: 5,
+  workspace_id: "test-ws",
   start_date: '2026-12-31',
   end_date: '2026-01-01',
 })
-const searchTypeMismatch = await mj.search.searchEntries({ project_number: 5, query: 'test', fts_weight: 'abc', include_highlights: 'abc' })
+const searchTypeMismatch = await mj.search.searchEntries({ workspace_id: "test-ws", query: 'test', fts_weight: 'abc', include_highlights: 'abc' })
 
 return {
   searchEmptyHandled: searchEmpty.success === false || Array.isArray(searchEmpty.entries),

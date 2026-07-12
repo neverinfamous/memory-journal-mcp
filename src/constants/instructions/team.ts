@@ -15,8 +15,8 @@ The team database features a Role-Based Access Control (RBAC) system for team me
 ## Available Tools
 
 - **Core**: \`team_create_entry\`, \`team_get_entry_by_id\`, \`team_get_recent\`, \`team_list_tags\`
-- **Search & Semantic**: \`team_search\`, \`team_search_by_date_range\`, \`team_semantic_search\`, \`team_get_vector_index_stats\`, \`team_rebuild_vector_index\`, \`team_add_to_vector_index\`, \`team_list_deleted_entries\`
-- **Mutations**: \`team_update_entry\`, \`team_delete_entry\`, \`team_restore_entry\`, \`team_merge_tags\`
+- **Search & Semantic**: \`team_search\`, \`team_search_by_date_range\`, \`team_semantic_search\`, \`team_get_vector_index_stats\`, \`team_rebuild_vector_index\`, \`team_add_to_vector_index\`
+- **Mutations**: \`team_update_entry\`, \`team_delete_entry\`, \`team_restore_entry\`, \`team_list_deleted_entries\`, \`team_merge_tags\`
 - **Batch Operations**: \`team_batch_create_entries\`, \`team_batch_update_entries\`, \`team_batch_delete_entries\`
 - **Analytics & Graphs**: \`team_get_statistics\`, \`team_get_cross_project_insights\`, \`team_get_collaboration_matrix\`, \`team_link_entries\`, \`team_visualize_relationships\`
 - **I/O & Backup**: \`team_export_entries\`, \`team_export_markdown\`, \`team_import_markdown\`, \`team_import_external\`, \`team_backup\`, \`team_list_backups\`

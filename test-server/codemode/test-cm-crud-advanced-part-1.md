@@ -27,7 +27,7 @@ Test core CRUD operations through the Code Mode mj.* API bridge (Advanced cases)
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 personal toggle test' })
+const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 personal toggle test' })
 const id = created.entry.id
 
 // Toggle to non-personal
@@ -57,13 +57,13 @@ return {
 
 | Test                    | Code                                                                                                                                                                                                                                       | Expected Result                                                      |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ project_number: 5, content: "CM3 issue link", issue_number: 1, project_number: 5 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
+| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 issue link", issue_number: 1, workspace_id: "test-ws" }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
 
 ### 20.13 Get Entry History
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 history test v1' })
+const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 history test v1' })
 const id = created.entry.id
 
 await mj.admin.updateEntry({ entry_id: id, content: 'CM3 history test v2' })
@@ -92,22 +92,22 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 recovery test' })
+const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 recovery test' })
 const id = created.entry.id
 await mj.admin.deleteEntry({ entry_id: id, permanent: false })
-const deletedList = await mj.search.listDeletedEntries({ project_number: 5 })
+const deletedList = await mj.search.listDeletedEntries({ workspace_id: "test-ws" })
 const isDeleted = deletedList.entries?.some(e => e.id === id)
 const restored = await mj.admin.restoreEntry({ entry_id: id })
-const verifyDeleted = await mj.search.listDeletedEntries({ project_number: 5 })
+const verifyDeleted = await mj.search.listDeletedEntries({ workspace_id: "test-ws" })
 const isNoLongerDeleted = !verifyDeleted.entries?.some(e => e.id === id)
 
 const archived = await mj.admin.updateEntry({ entry_id: id, is_archived: true })
-const archivedOff = await mj.core.getRecentEntries({ project_number: 5, limit: 10, include_archived: false })
+const archivedOff = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 10, include_archived: false })
 const isArchivedHidden = !archivedOff.entries?.some(e => e.id === id)
-const archivedOn = await mj.core.getRecentEntries({ project_number: 5, limit: 10, include_archived: true })
+const archivedOn = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 10, include_archived: true })
 const isArchivedVisible = archivedOn.entries?.some(e => e.id === id)
 
-const pagPage1 = await mj.core.getRecentEntries({ project_number: 5, limit: 2 })
+const pagPage1 = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 2 })
 const hasCursor = typeof pagPage1.next_cursor === 'string'
 
 return {
@@ -133,7 +133,7 @@ return {
 
 ```javascript
 // Test code:
-const created = await mj.core.createEntry({ project_number: 5,  content: 'CM3 locking test' })
+const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 locking test' })
 const id = created.entry.id
 const v1 = created.entry.version
 
