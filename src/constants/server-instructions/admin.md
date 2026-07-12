@@ -3,8 +3,8 @@
 
 ### Auto-Prune
 
-On server startup, the auto-prune system implements a graduated data lifecycle (Active → Archived → Soft-Deleted → Hard-Deleted) for old entries with low significance scores.
-- **Configurable Thresholds**: Controlled via `--archive-older-than-days`, `--prune-older-than-days` (soft-delete), `--hard-delete-older-than-days`, and `--prune-importance-threshold`.
+On server startup, the auto-prune system automatically soft-deletes old entries with low significance scores.
+- **Configurable Thresholds**: Controlled via `--prune-older-than-days` (soft-delete) and `--prune-importance-threshold`.
 - **Exclusion Rules**: Specific tags can be exempted from auto-pruning using `--prune-exclude-tags <tags>` (e.g. `architecture`, `never-prune`).
 - **Dry Run**: Server administrators can preview what would be processed without mutating the database by using the `--prune-dry-run` flag.
 
