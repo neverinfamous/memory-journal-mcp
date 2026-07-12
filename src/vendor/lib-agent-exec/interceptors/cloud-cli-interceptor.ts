@@ -124,7 +124,7 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         if (args.includes('--log')) {
           console.error(`\n   💡 AGENT HINT: If the job is still in progress, 'gh run view --log' will fail with code 1. Do NOT poll in a tight loop. Instead, use your 'schedule' tool to set a 60-second timer to wait asynchronously.\n`);
           process.exit(1);
-        } else if (!args.includes('--json')) {
+        } else if (!args.includes('--json') && !args.includes('--log-failed')) {
           console.error(`\n   💡 AGENT HINT: 'gh run view' requires '--json' to output structured data. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
         }
