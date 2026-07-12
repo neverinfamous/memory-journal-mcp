@@ -249,7 +249,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 ### **Static Code Validation**
 
-- ✅ **18 blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
 - ✅ **50KB code size limit** — prevents payload-based resource exhaustion
 
 ### **Runtime Protection**
@@ -419,7 +419,7 @@ chmod 700 /shared/team-data
 - [x] Code Mode sandbox isolation (worker_threads V8 isolate + vm.createContext)
 - [x] Code Mode V8 codeGeneration restrictions (eval/Function disabled at engine level)
 - [x] Code Mode frozen built-in prototypes (constructor chain escape prevention)
-- [x] Code Mode blocked patterns (18 static regex rules)
+- [x] Code Mode blocked patterns (Multiple static regex rules)
 - [x] Code Mode Proxy constructor nullified in sandbox context
 - [x] Code Mode RPC allowlist validation (host-side method authorization)
 - [x] Code Mode readonly Proxy traps (structured errors for stripped methods)

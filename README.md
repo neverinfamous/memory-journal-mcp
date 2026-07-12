@@ -71,7 +71,7 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 
 ---
 
-### Multi-Tenancy (Workspaces)
+### Isolate Environments with Multi-Tenancy
 
 Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
 
@@ -143,7 +143,7 @@ Before addressing the user's first request:
 
 ---
 
-### Tool Filtering
+### Control Access with Tool Filtering
 
 > [!IMPORTANT]
 > All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
@@ -169,7 +169,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ---
 
-## 📋 Core Capabilities
+## 📋 Unlock Core Capabilities
 
 ### 🛠️ **MCP Tools**
 
@@ -253,13 +253,13 @@ Code executes in a **worker_threads sandbox** designed as a secure multi-tenant 
 
 - **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
 - **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
-- **Static code validation** — 18 regex rules blocking `require()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, and filesystem/network access
+- **Static code validation** — Multiple static regex rules blocking `require()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, and filesystem/network access
 - **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
 - **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
 - **Egress boundary enforcement** — result serialization capped to prevent OOM via oversized payloads
-- **Full API access** — all 11 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
+- **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured `{ success: false, error: "..." }` response to the agent instead of a raw MCP protocol exception.
 
 ### ⚡ Code Mode Only (Maximum Token Savings)
@@ -295,7 +295,7 @@ _Note: Configuration is resolved using strict precedence: `CLI flags > Environme
 
 > 🛠️ **Debugging Configuration:** Run `memory-journal-mcp --dump-config` (or pass `--dump-config` as an arg) to print the fully resolved configuration payload with automatically redacted secrets. This is the primary method for diagnosing overriding issues.
 
-### Basic Configuration
+### Configure Basics Quickly
 
 > 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create` in your terminal to automatically bootstrap and update your MCP configuration!
 
@@ -314,7 +314,7 @@ _Note: Configuration is resolved using strict precedence: `CLI flags > Environme
 }
 ```
 
-### Advanced Configuration (Recommended)
+### Power Up with Advanced Configuration
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
 
@@ -428,7 +428,7 @@ You control exactly what additional content your agent sees across three dimensi
 
 Restart your MCP client and start journaling!
 
-### Option 3: HTTP/SSE Transport (Remote Access)
+### HTTP/SSE Transport (Remote Access)
 
 > 🔒 **Security Posture: Stdio vs HTTP**
 >
@@ -528,7 +528,7 @@ memory-journal-mcp --transport http --port 3000 \
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
-### GitHub Integration Configuration
+### Integrate Seamlessly with GitHub
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
@@ -750,8 +750,8 @@ flowchart TB
     subgraph MCP["MCP Server Capabilities"]
         direction LR
         Tools["🛠️ MCP Tools"]
-        Resources["📡 71 Resources"]
-        Prompts["💬 29 Prompts"]
+        Resources["📡 Resources"]
+        Prompts["💬 Prompts"]
     end
 
     subgraph Storage["Persistence Layer"]

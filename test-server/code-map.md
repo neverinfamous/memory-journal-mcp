@@ -114,7 +114,7 @@ src/
 │   │   ├── param-normalizer.ts     # Parameter normalization (snake_case ↔ camelCase, positional → named, type coercion)
 │   │   └── types.ts                # API bridge TypeScript types
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
-│   ├── security.ts                 # Code validation (18 blocked patterns, 50KB code size limit, injection prevention)
+│   ├── security.ts                 # Code validation (Comprehensive blocked patterns, 50KB code size limit, injection prevention)
 │   ├── type-generator.ts           # Zod schema-to-TypeScript declaration generator
 │   ├── types.ts                    # Sandbox TypeScript types
 │   └── index.ts                    # Barrel
@@ -193,15 +193,15 @@ src/
 │       └── types.ts                # GitHub integration internal types
 │
 └── handlers/
-    ├── tools/                      # 103 tool handlers (11 groups) — see § Handler Map below
+    ├── tools/                      # Tool handlers — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod output schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
-    │   ├── core/                   # Core tool group (7 tools, refactored from flat file)
+    │   ├── core/                   # Core tool group (refactored from flat file)
     │   │   ├── index.ts            # Barrel
     │   │   ├── schemas.ts          # Core Zod input/output schemas (dual-schema: strict + MCP)
     │   │   └── tools.ts            # Core tool handlers (create_entry, get_entry_by_id, get_recent_entries, etc.)
-    │   ├── search/                 # Search tool group (6 tools)
+    │   ├── search/                 # Search tool group
     │   │   ├── index.ts            # Barrel — composes all search tools
     │   │   ├── schemas.ts          # Search Zod input/output schemas
     │   │   ├── helpers.ts          # Search helper functions
@@ -213,13 +213,13 @@ src/
     │   │   ├── cross-team.ts       # Cross-team search logic
     │   │   ├── hybrid.ts           # RRF (Reciprocal Rank Fusion) hybrid logic
     │   │   └── misc-tools.ts       # get_vector_index_stats, list_deleted_entries
-    │   ├── analytics.ts            # Analytics tool group (2 tools)
-    │   ├── relationships.ts        # Relationships tool group (2 tools)
-    │   ├── io/                     # IO tool group (4 tools, refactored from flat file)
+    │   ├── analytics.ts            # Analytics tool group
+    │   ├── relationships.ts        # Relationships tool group
+    │   ├── io/                     # IO tool group (refactored from flat file)
     │   │   ├── index.ts            # Barrel
     │   │   ├── schemas.ts          # IO Zod input/output schemas
     │   │   └── tools.ts            # IO tool handlers (export_entries, export_markdown, import_markdown, import_external)
-    │   ├── admin/                  # Admin tool group (11 tools, refactored from flat file)
+    │   ├── admin/                  # Admin tool group (refactored from flat file)
     │   │   ├── index.ts            # Barrel — composes all admin tools
     │   │   ├── schemas.ts          # Admin Zod input/output schemas
     │   │   ├── core-tools.ts       # Core admin tools (update_entry, delete_entry, restore_entry)
@@ -227,16 +227,16 @@ src/
     │   │   ├── misc-tools.ts       # Misc admin tools (merge_tags, search_audit_log)
     │   │   ├── vector-tools.ts     # Vector admin tools (rebuild_vector_index, add_to_vector_index)
     │   │   └── update_configuration.ts # Runtime config update tool (update_configuration)
-    │   ├── backup.ts               # Backup tool group (4 tools)
-    │   ├── codemode/               # Code Mode tool group (1 tool, refactored from flat file)
+    │   ├── backup.ts               # Backup tool group
+    │   ├── codemode/               # Code Mode tool group (refactored from flat file)
     │   │   ├── index.ts            # Barrel
     │   │   ├── schemas.ts          # Code Mode Zod input/output schemas
     │   │   ├── handler.ts          # mj_execute_code handler (sandbox dispatch, project registry resolution)
     │   │   └── singleton-state.ts  # Code Mode singleton state (sandbox pool, session context)
-    │   ├── team/                   # Team tool group (44 tools)
+    │   ├── team/                   # Team tool group
     │   │   ├── index.ts            # Barrel — composes all team sub-modules
     │   │   ├── helpers.ts          # Shared team helpers (author batch-fetch, constants)
-    │   │   ├── schemas.ts          # Team Zod input/output schemas (all 31 tools)
+    │   │   ├── schemas.ts          # Team Zod input/output schemas
     │   │   ├── core-tools.ts       # Core team tools (create, get_by_id, get_recent, list_tags)
     │   │   ├── search-tools.ts     # Search team tools (search, search_by_date_range)
     │   │   ├── admin-tools.ts      # Admin team tools (update, delete, merge_tags)
@@ -255,7 +255,7 @@ src/
     │       ├── read-tools.ts       # Read-only GitHub tools (get_github_issues, get_github_prs, get_github_issue, get_github_pr, get_github_context)
     │       ├── issue-tools.ts      # Issue lifecycle tools (create_github_issue_with_entry, close_github_issue_with_entry)
     │       ├── kanban-tools.ts     # Kanban tools (get_kanban_board, move_kanban_item)
-    │       ├── milestone-tools.ts  # Milestone CRUD tools (5 tools)
+    │       ├── milestone-tools.ts  # Milestone CRUD tools
     │       ├── insights-tools.ts   # Insights tool (get_repo_insights)
     │       ├── copilot-tools.ts    # Copilot tool (get_copilot_reviews)
     │       └── mutation-tools.ts   # Mutation tools barrel
@@ -285,9 +285,9 @@ src/
     │
     └── prompts/                    # Prompt handlers
         ├── index.ts                # Prompt registration barrel
-        ├── workflow.ts             # 11 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
-        ├── github.ts               # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
-        ├── adversarial.ts          # 8 adversarial prompts (adversarial-plan-review, adversarial-audit-code-quality, etc)
+        ├── workflow.ts             # Workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
+        ├── github.ts               # GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
+        ├── adversarial.ts          # Adversarial prompts (adversarial-plan-review, adversarial-audit-code-quality, etc)
 
 skills/
 ├── bun/                            # Bun ecosystem conventions and testing patterns
@@ -330,12 +330,12 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `error-fields-mixin.ts`    | Re-export stub → `utils/errors/error-response-fields.ts` (canonical SSoT)                                                                     |
 | `../version.ts`            | Version SSoT — reads `package.json`, exports `VERSION`                                                                                        |
 | `github/helpers.ts`        | GitHub repo auto-detection, error formatting, token scrubbing                                                                                 |
-| `github/schemas.ts`        | Zod input/output schemas for all 18 GitHub tools                                                                                              |
+| `github/schemas.ts`        | Zod input/output schemas for all GitHub tools                                                                                              |
 | `github/mutation-tools.ts` | GitHub mutation tools barrel (re-exports issue + kanban + milestone tools)                                                                    |
 
 ---
 
-## Resources (49 total)
+## Resources
 
 > **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 49, though they map to the capabilities listed below.
 
@@ -410,8 +410,6 @@ The `memory://briefing` resource is modular — each section is a separate file:
 ---
 
 ## Prompts (`src/handlers/prompts/`)
-
-28 prompts total.
 
 <!-- BEGIN: PROMPTS -->
 | Prompt | Description |

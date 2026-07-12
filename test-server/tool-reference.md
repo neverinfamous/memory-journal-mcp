@@ -1,8 +1,8 @@
 # Tool Reference
 
-Complete reference of all **108 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all tools organized by logical tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
-> **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
+> **Tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
 > Use [Tool Filtering](#️-tool-filtering) to select the groups you need. See [Code Mode](#-recommended-code-mode-maximum-token-savings) for the `mj.*` API that exposes every tool below through sandboxed JavaScript.
 
@@ -10,7 +10,22 @@ Complete reference of all **108 tools** organized by 11 tool groups. Each group 
 
 ---
 
-## codemode (1 tool)
+## 🌟 Recommended: Code Mode (Maximum Token Savings)
+
+Code Mode (`mj_execute_code`) dramatically reduces token usage (70–90%) and is included by default in all presets.
+
+Code executes in a **sandboxed VM context** with:
+
+- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
+- **Rate limiting** — 60 executions per minute per client
+- **Hard timeouts** — configurable execution limit (default 30s)
+- **Full API access** — all tool groups available via `mj.*`
+
+**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`
+
+---
+
+## codemode
 
 Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*` API.
 
@@ -20,7 +35,7 @@ Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*
 
 ---
 
-## core (9 tools + Code Mode)
+## core
 
 Entry lifecycle — create, retrieve, tags, and test.
 
@@ -38,7 +53,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 ---
 
-## search (6 tools + Code Mode)
+## search
 
 Full-text, date-range, and semantic/vector search.
 
@@ -53,7 +68,7 @@ Full-text, date-range, and semantic/vector search.
 
 ---
 
-## analytics (2 tools + Code Mode)
+## analytics
 
 Statistics, cross-project insights, and analytics.
 
@@ -64,7 +79,7 @@ Statistics, cross-project insights, and analytics.
 
 ---
 
-## relationships (2 tools + Code Mode)
+## relationships
 
 Link entries and visualize knowledge graphs.
 
@@ -75,7 +90,7 @@ Link entries and visualize knowledge graphs.
 
 ---
 
-## io (4 tools + Code Mode)
+## io
 
 Export and import journal data in multiple formats, including Markdown roundtripping.
 
@@ -88,7 +103,7 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 ---
 
-## admin (17 tools + Code Mode)
+## admin
 
 Entry mutations, vector index management, tag maintenance, and audit log search.
 
@@ -114,7 +129,7 @@ Entry mutations, vector index management, tag maintenance, and audit log search.
 
 ---
 
-## github (18 tools + Code Mode)
+## github
 
 GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights, issue lifecycle, and Copilot Reviews.
 
@@ -141,7 +156,7 @@ GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights
 
 ---
 
-## git (6 tools + Code Mode)
+## git
 
 Commit history mining, release tracking, and commit analytics using `simple-git`.
 
@@ -156,7 +171,7 @@ Commit history mining, release tracking, and commit analytics using `simple-git`
 
 ---
 
-## backup (4 tools + Code Mode)
+## backup
 
 Database backup, restore, and retention management.
 
@@ -169,7 +184,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (39 tools + Code Mode)
+## team
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -269,14 +284,14 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
-| Filter               | Tools | Use Case                 |
-| -------------------- | ----- | ------------------------ |
-| `full`               | 108   | All tools (default)      |
-| `starter`            | 16    | Core + search + codemode |
-| `essential`          | 10    | Minimal footprint        |
-| `readonly`           | 32    | Disable all mutations    |
-| `-github`            | 90    | Exclude a group          |
-| `-github,-analytics` | 88    | Exclude multiple groups  |
+| Filter               | Use Case                 |
+| -------------------- | ------------------------ |
+| `full`               | All tools (default)      |
+| `starter`            | Core + search + codemode |
+| `essential`          | Minimal footprint        |
+| `readonly`           | Disable all mutations    |
+| `-github`            | Exclude a group          |
+| `-github,-analytics` | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -284,17 +299,4 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `backup`, `team`, `codemode`
 
----
 
-## 🌟 Recommended: Code Mode (Maximum Token Savings)
-
-Code Mode (`mj_execute_code`) dramatically reduces token usage (70–90%) and is included by default in all presets.
-
-Code executes in a **sandboxed VM context** with:
-
-- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
-- **Rate limiting** — 60 executions per minute per client
-- **Hard timeouts** — configurable execution limit (default 30s)
-- **Full API access** — all 10 tool groups available via `mj.*`
-
-**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`

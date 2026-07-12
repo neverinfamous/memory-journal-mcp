@@ -8,11 +8,11 @@
 
 ## 🗺️ Context & Navigation
 
-The Memory Journal MCP is a sophisticated, multi-tenant SQLite-backed MCP server. It provides 100+ tools for journal management, GitHub integration, analytics, vector search, and team collaboration.
+The Memory Journal MCP is a sophisticated, multi-tenant SQLite-backed MCP server. It provides a comprehensive suite of tools for journal management, GitHub integration, analytics, vector search, and team collaboration.
 
 **Critical Reference Files:**
 - **Code Map**: `test-server/code-map.md` - Start here for any architectural questions. It documents the directory tree, handler-to-tool mappings, error hierarchy, and key constants.
-- **Tool Reference**: `test-server/tool-reference.md` - Complete reference of all 100+ tools organized by 11 tool groups.
+- **Tool Reference**: `test-server/tool-reference.md` - Complete reference of all tools organized into logical tool groups.
 - **Security Policy**: `SECURITY.md` - Defines strict security and validation boundaries.
 
 ---
@@ -21,7 +21,7 @@ The Memory Journal MCP is a sophisticated, multi-tenant SQLite-backed MCP server
 
 When orchestrating workflows or performing multi-step operations on behalf of a user, **always prioritize Code Mode**. 
 
-- **Token Savings**: It reduces token usage by 70-90% by letting you compose logic across all 11 tool groups in a single sandboxed JavaScript execution.
+- **Token Savings**: It reduces token usage by 70-90% by letting you compose logic across all tool groups in a single sandboxed JavaScript execution.
 - **Sandbox Security**: Executes in a secure worker thread with frozen prototypes, static validation rules blocking `require()` and `eval()`, and strict execution bounds.
 - **API Surface**: Exposed via the `mj.*` API (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`).
 - **Readonly Contract**: Mutations are safely blocked if the server is running with the `--tool-filter readonly` flag.
