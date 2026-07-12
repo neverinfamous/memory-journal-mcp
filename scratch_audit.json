@@ -1,0 +1,590 @@
+{
+  "missing": [
+    "get_commit_history",
+    "search_commits",
+    "get_release_info",
+    "get_unreleased_commits",
+    "analyze_commit_patterns",
+    "check_entry_staleness"
+  ],
+  "toolToFiles": {
+    "mj_execute_code": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-core-crud-create.md",
+      "test-core-infra.md",
+      "test-core-io.md",
+      "test-core-project-admin.md",
+      "test-core-relationships.md",
+      "test-core-search-fts.md",
+      "test-core-semantic.md",
+      "test-errors-boundaries.md",
+      "test-errors-prompts.md",
+      "test-github-issue-cycle.md",
+      "test-github-kanban.md",
+      "test-github-milestones.md",
+      "test-github-read.md",
+      "test-integrity-part1.md",
+      "test-integrity-part2.md",
+      "test-kanban-lifecycle.md",
+      "test-payload-optimization.md",
+      "test-resources.md",
+      "test-schemas.md",
+      "test-seed.md",
+      "test-team-aliases.md",
+      "test-team-analytics.md",
+      "test-team-backup.md",
+      "test-team-crud.md",
+      "test-team-io.md",
+      "test-team-mutations.md",
+      "test-team-rbac.md",
+      "test-team-relationships.md",
+      "test-team-vector.md",
+      "test-tool-group-admin.md",
+      "test-tool-group-analytics.md",
+      "test-tool-group-backup.md",
+      "test-tool-group-core.md",
+      "test-tool-group-git.md",
+      "test-tool-group-github.md",
+      "test-tool-group-io.md",
+      "test-tool-group-relationships.md",
+      "test-tool-group-search.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md",
+      "test-workspace-isolation.md"
+    ],
+    "create_entry": [
+      "test-core-admin-system.md",
+      "test-core-crud-create.md",
+      "test-core-infra.md",
+      "test-errors-boundaries.md",
+      "test-errors-prompts.md",
+      "test-integrity-part1.md",
+      "test-seed.md",
+      "test-team-crud.md",
+      "test-tool-group-core.md",
+      "test-workspace-isolation.md"
+    ],
+    "get_entry_by_id": [
+      "test-core-crud-read.md",
+      "test-errors-boundaries.md",
+      "test-errors-prompts.md",
+      "test-integrity-part1.md",
+      "test-integrity-part2.md",
+      "test-team-crud.md",
+      "test-tool-group-core.md"
+    ],
+    "get_recent_entries": [
+      "test-core-crud-read.md",
+      "test-core-search-filters.md",
+      "test-errors-boundaries.md",
+      "test-integrity-part1.md",
+      "test-integrity-part2.md",
+      "test-payload-optimization.md",
+      "test-tool-group-core.md",
+      "test-workspace-isolation.md"
+    ],
+    "get_entry_history": [
+      "test-core-crud-read.md",
+      "test-integrity-part1.md",
+      "test-tool-group-core.md"
+    ],
+    "test_simple": [
+      "test-core-infra.md",
+      "test-tool-group-core.md"
+    ],
+    "test_error_handling": [
+      "test-core-infra.md",
+      "test-tool-group-core.md"
+    ],
+    "trigger_progress": [
+      "test-core-infra.md",
+      "test-tool-group-core.md"
+    ],
+    "list_tags": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-integrity-part1.md",
+      "test-tool-group-core.md"
+    ],
+    "mark_anchors_stale": [
+      "test-tool-group-core.md"
+    ],
+    "search_entries": [
+      "test-core-admin-system.md",
+      "test-core-search-filters.md",
+      "test-core-search-fts.md",
+      "test-errors-boundaries.md",
+      "test-integrity-part1.md",
+      "test-payload-optimization.md",
+      "test-seed.md",
+      "test-tool-group-search.md",
+      "test-workspace-isolation.md"
+    ],
+    "search_by_date_range": [
+      "test-core-search-filters.md",
+      "test-core-search-fts.md",
+      "test-errors-prompts.md",
+      "test-integrity-part1.md",
+      "test-integrity-part2.md",
+      "test-payload-optimization.md",
+      "test-team-crud.md",
+      "test-tool-group-search.md",
+      "test-workspace-isolation.md"
+    ],
+    "semantic_search": [
+      "test-core-semantic.md",
+      "test-errors-boundaries.md",
+      "test-integrity-part2.md",
+      "test-seed.md",
+      "test-team-vector.md",
+      "test-tool-group-search.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "get_vector_index_stats": [
+      "test-core-semantic.md",
+      "test-tool-group-search.md"
+    ],
+    "list_deleted_entries": [
+      "test-core-crud-read.md",
+      "test-team-mutations.md",
+      "test-tool-group-search.md"
+    ],
+    "cross_team_search": [
+      "test-team-crud.md",
+      "test-tool-group-search.md"
+    ],
+    "get_statistics": [
+      "test-core-infra.md",
+      "test-core-semantic.md",
+      "test-integrity-part2.md",
+      "test-team-analytics.md",
+      "test-tool-group-analytics.md",
+      "test-workspace-isolation.md"
+    ],
+    "get_cross_project_insights": [
+      "test-core-semantic.md",
+      "test-seed.md",
+      "test-team-analytics.md",
+      "test-tool-group-analytics.md"
+    ],
+    "link_entries": [
+      "test-core-relationships.md",
+      "test-integrity-part2.md",
+      "test-team-relationships.md",
+      "test-tool-group-relationships.md"
+    ],
+    "visualize_relationships": [
+      "test-core-relationships.md",
+      "test-team-relationships.md",
+      "test-tool-group-relationships.md"
+    ],
+    "export_entries": [
+      "test-core-io.md",
+      "test-integrity-part2.md",
+      "test-team-io.md",
+      "test-tool-group-io.md"
+    ],
+    "export_markdown": [
+      "test-core-io.md",
+      "test-team-io.md",
+      "test-tool-group-io.md"
+    ],
+    "import_markdown": [
+      "test-core-io.md",
+      "test-team-io.md",
+      "test-tool-group-io.md"
+    ],
+    "import_external": [
+      "test-core-io.md",
+      "test-team-io.md",
+      "test-tool-group-io.md"
+    ],
+    "update_configuration": [
+      "test-config-reload.md",
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-tool-group-admin.md"
+    ],
+    "register_project": [
+      "test-core-project-admin.md"
+    ],
+    "update_project": [
+      "test-core-project-admin.md"
+    ],
+    "delete_project": [
+      "test-core-project-admin.md"
+    ],
+    "get_project": [
+      "test-core-project-admin.md"
+    ],
+    "list_projects": [
+      "test-core-project-admin.md"
+    ],
+    "update_entry": [
+      "test-core-crud-read.md",
+      "test-errors-boundaries.md",
+      "test-errors-prompts.md",
+      "test-integrity-part1.md",
+      "test-team-mutations.md",
+      "test-tool-group-admin.md"
+    ],
+    "delete_entry": [
+      "test-core-crud-read.md",
+      "test-errors-boundaries.md",
+      "test-integrity-part1.md",
+      "test-integrity-part2.md",
+      "test-team-mutations.md",
+      "test-tool-group-admin.md"
+    ],
+    "restore_entry": [
+      "test-core-crud-read.md",
+      "test-team-mutations.md",
+      "test-tool-group-admin.md"
+    ],
+    "rebuild_vector_index": [
+      "test-core-semantic.md",
+      "test-seed.md",
+      "test-tool-group-admin.md"
+    ],
+    "add_to_vector_index": [
+      "test-core-semantic.md",
+      "test-team-vector.md",
+      "test-tool-group-admin.md"
+    ],
+    "merge_tags": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-errors-prompts.md",
+      "test-integrity-part1.md",
+      "test-team-mutations.md",
+      "test-tool-group-admin.md"
+    ],
+    "batch_create_entries": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-team-crud.md",
+      "test-tool-group-admin.md"
+    ],
+    "batch_update_entries": [
+      "test-core-admin-batch.md",
+      "test-errors-prompts.md",
+      "test-team-crud.md",
+      "test-tool-group-admin.md"
+    ],
+    "batch_delete_entries": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-team-crud.md",
+      "test-tool-group-admin.md"
+    ],
+    "search_audit_log": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-tool-group-admin.md"
+    ],
+    "run_auto_prune": [
+      "test-core-admin-batch.md",
+      "test-tool-group-admin.md"
+    ],
+    "get_github_issues": [
+      "test-github-read.md",
+      "test-payload-optimization.md",
+      "test-resources.md",
+      "test-tool-group-github.md"
+    ],
+    "get_github_prs": [
+      "test-github-read.md",
+      "test-payload-optimization.md",
+      "test-tool-group-github.md"
+    ],
+    "get_github_issue": [
+      "test-errors-prompts.md",
+      "test-github-read.md",
+      "test-kanban-lifecycle.md",
+      "test-payload-optimization.md",
+      "test-tool-group-github.md"
+    ],
+    "get_github_pr": [
+      "test-github-read.md",
+      "test-payload-optimization.md",
+      "test-tool-group-github.md"
+    ],
+    "get_github_context": [
+      "test-core-crud-create.md",
+      "test-github-read.md",
+      "test-tool-group-github.md"
+    ],
+    "get_kanban_board": [
+      "test-github-kanban.md",
+      "test-kanban-lifecycle.md",
+      "test-payload-optimization.md",
+      "test-tool-group-github.md"
+    ],
+    "move_kanban_item": [
+      "test-github-kanban.md",
+      "test-kanban-lifecycle.md",
+      "test-tool-group-github.md"
+    ],
+    "add_kanban_item": [
+      "test-kanban-lifecycle.md",
+      "test-tool-group-github.md"
+    ],
+    "delete_kanban_item": [
+      "test-kanban-lifecycle.md",
+      "test-tool-group-github.md"
+    ],
+    "create_github_issue_with_entry": [
+      "test-github-issue-cycle.md",
+      "test-github-kanban.md",
+      "test-github-milestones.md",
+      "test-tool-group-github.md"
+    ],
+    "close_github_issue_with_entry": [
+      "test-github-issue-cycle.md",
+      "test-github-kanban.md",
+      "test-github-milestones.md",
+      "test-tool-group-github.md"
+    ],
+    "get_github_milestones": [
+      "test-github-milestones.md",
+      "test-tool-group-github.md"
+    ],
+    "get_github_milestone": [
+      "test-github-milestones.md",
+      "test-tool-group-github.md"
+    ],
+    "create_github_milestone": [
+      "test-github-milestones.md",
+      "test-tool-group-github.md"
+    ],
+    "update_github_milestone": [
+      "test-github-milestones.md",
+      "test-tool-group-github.md"
+    ],
+    "delete_github_milestone": [
+      "test-github-milestones.md",
+      "test-tool-group-github.md"
+    ],
+    "get_repo_insights": [
+      "test-github-read.md",
+      "test-tool-group-github.md"
+    ],
+    "get_copilot_reviews": [
+      "test-github-read.md",
+      "test-tool-group-github.md"
+    ],
+    "get_commit_history": [],
+    "search_commits": [],
+    "get_release_info": [],
+    "get_unreleased_commits": [],
+    "analyze_commit_patterns": [],
+    "check_entry_staleness": [],
+    "backup_journal": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-tool-group-backup.md"
+    ],
+    "list_backups": [
+      "test-core-admin-backup.md",
+      "test-tool-group-backup.md"
+    ],
+    "restore_backup": [
+      "test-core-admin-backup.md",
+      "test-core-admin-batch.md",
+      "test-core-admin-system.md",
+      "test-errors-prompts.md",
+      "test-tool-group-backup.md"
+    ],
+    "cleanup_backups": [
+      "test-core-admin-backup.md",
+      "test-tool-group-backup.md"
+    ],
+    "team_create_entry": [
+      "test-errors-boundaries.md",
+      "test-errors-prompts.md",
+      "test-seed.md",
+      "test-team-crud.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md",
+      "test-workspace-isolation.md"
+    ],
+    "team_get_entry_by_id": [
+      "test-team-crud.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_get_recent": [
+      "test-team-crud.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_list_tags": [
+      "test-team-crud.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_search": [
+      "test-team-crud.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md",
+      "test-workspace-isolation.md"
+    ],
+    "team_search_by_date_range": [
+      "test-team-crud.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_update_entry": [
+      "test-errors-prompts.md",
+      "test-team-mutations.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_delete_entry": [
+      "test-team-mutations.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_restore_entry": [
+      "test-team-mutations.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_list_deleted_entries": [
+      "test-team-mutations.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_merge_tags": [
+      "test-team-mutations.md",
+      "test-tool-group-team-part1.md"
+    ],
+    "team_batch_create_entries": [
+      "test-team-crud.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_batch_update_entries": [
+      "test-team-crud.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_batch_delete_entries": [
+      "test-team-crud.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_get_statistics": [
+      "test-team-analytics.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_link_entries": [
+      "test-team-relationships.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_visualize_relationships": [
+      "test-team-relationships.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_export_entries": [
+      "test-team-io.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_export_markdown": [
+      "test-team-io.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_import_markdown": [
+      "test-team-io.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_import_external": [
+      "test-team-io.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_backup": [
+      "test-team-backup.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_list_backups": [
+      "test-team-backup.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_semantic_search": [
+      "test-team-vector.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_get_vector_index_stats": [
+      "test-team-vector.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_rebuild_vector_index": [
+      "test-team-vector.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_add_to_vector_index": [
+      "test-team-vector.md",
+      "test-tool-group-team-part2.md"
+    ],
+    "team_get_cross_project_insights": [
+      "test-seed.md",
+      "test-team-analytics.md",
+      "test-tool-group-team-part1.md",
+      "test-tool-group-team-part2.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_get_collaboration_matrix": [
+      "test-team-analytics.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_add_member": [
+      "test-team-rbac.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_remove_member": [
+      "test-team-rbac.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_update_member_role": [
+      "test-team-rbac.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_list_members": [
+      "test-team-rbac.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_get_member": [
+      "test-team-rbac.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_add_author_alias": [
+      "test-team-aliases.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_remove_author_alias": [
+      "test-team-aliases.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_list_author_aliases": [
+      "test-team-aliases.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_resolve_author": [
+      "test-team-aliases.md",
+      "test-tool-group-team-part3.md"
+    ],
+    "team_consolidate_authors": [
+      "test-team-aliases.md",
+      "test-tool-group-team-part3.md"
+    ]
+  }
+}
