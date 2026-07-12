@@ -27,12 +27,6 @@
 
 | Test                  | Command/Action                                 | Expected Result                                          |
 | --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
-| Get commit history    | `get_commit_history(limit: 5)`                 | Returns last 5 commits                                   |
-| Search commits        | `search_commits(query: "initial")`             | Returns commits matching "initial"                       |
-| Get release info      | `get_release_info()`                           | Returns info for the latest release                      |
-| Get unreleased commits| `get_unreleased_commits()`                     | Returns unreleased commits                               |
-| Analyze commit pattern| `analyze_commit_patterns(days: 30)`            | Returns commit analytics for last 30 days                |
-| Check entry staleness | `check_entry_staleness(entry_id: <N>)`         | Returns staleness analysis against recent git activity   |
 
 ---
 

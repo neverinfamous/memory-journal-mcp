@@ -69,13 +69,15 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
 37. `test-tool-group-backup.md`
 38. `test-tool-group-search.md`
 39. `test-tool-group-github.md`
-40. `test-tool-group-team.md`
-41. `test-payload-optimization.md`
-42. `test-workspace-isolation.md`
-43. `test-tool-group-git.md`
-44. `test-tool-group-io.md`
-45. `test-tool-group-relationships.md`
-46. `test-config-reload.md`
+40. `test-tool-group-team-part1.md`
+41. `test-tool-group-team-part2.md`
+42. `test-tool-group-team-part3.md`
+43. `test-payload-optimization.md`
+44. `test-workspace-isolation.md`
+45. `test-tool-group-git.md`
+46. `test-tool-group-io.md`
+47. `test-tool-group-relationships.md`
+48. `test-config-reload.md`
 
 ## Telemetry Collection
 

@@ -50,13 +50,13 @@ const bDeleted = await mj.team.teamBatchDeleteEntries({
 })
 
 // Verify Aliases
-const bAliasCreated = await mj.team.bulkCreate({
+const bAliasCreated = await mj.team.teamBatchCreateEntries({
   project_number: 5,
   entries: [
     { content: 'CM4 team alias 1' }
   ]
 })
-await mj.team.bulkDelete({
+await mj.team.teamBatchDeleteEntries({
   project_number: 5,
   entry_ids: bAliasCreated.entryIds
 })

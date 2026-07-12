@@ -46,12 +46,12 @@ const bDeleted = await mj.admin.batchDeleteEntries({
 })
 
 // Verify Aliases (Hallucination Fallbacks)
-const bAliasCreated = await mj.admin.bulkCreate({
+const bAliasCreated = await mj.admin.batchCreateEntries({
   entries: [
     { project_number: 5, content: 'CM4 alias entry 1' }
   ]
 })
-await mj.admin.bulkDelete({
+await mj.admin.batchDeleteEntries({
   entry_ids: bAliasCreated.entryIds
 })
 
@@ -102,5 +102,5 @@ return {
 ## Success Criteria
 
 - Admin batch operations (`batchCreateEntries`, `batchUpdateEntries`, `batchDeleteEntries`) execute successfully via Code Mode
-- Code Mode correctly resolves fallback aliases like `mj.admin.bulkCreate`
+- Code Mode correctly resolves fallback aliases like `mj.admin.batchCreateEntries`
 - `searchAuditLog` successfully queries and limits audit telemetry

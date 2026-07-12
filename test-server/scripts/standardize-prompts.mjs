@@ -96,6 +96,16 @@ for (const file of files) {
 }
 
 const standardDir = path.join(__dirname, '..', 'standard');
+
+const teamFilePath = path.join(standardDir, 'test-tool-group-team.md');
+if (fs.existsSync(teamFilePath)) {
+  const content = fs.readFileSync(teamFilePath, 'utf8');
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-team-part1.md'), content);
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-team-part2.md'), content);
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-team-part3.md'), content);
+  fs.unlinkSync(teamFilePath);
+}
+
 const standardFiles = fs.readdirSync(standardDir).filter(f => f.endsWith('.md') && f.startsWith('test-tool-group-'));
 
 for (const file of standardFiles) {
@@ -113,9 +123,68 @@ for (const file of standardFiles) {
     }
   }
   
-  const fixedContent = fixHallucinations(content);
+  let fixedContent = fixHallucinations(content);
+  
+  if (assignedTools.length > 0) {
+    const lines = fixedContent.split('\n');
+    const resultLines = [];
+    for (const line of lines) {
+      if (line.trim().startsWith('|') && !line.includes('Tool') && !line.includes('---') && !line.includes('All Team Tools') && !line.includes('All Admin Tools') && !line.includes('All GitHub Tools')) {
+        const match = line.match(/`([^`]+)`/);
+        if (match && !assignedTools.includes(match[1])) {
+          continue;
+        }
+      }
+      resultLines.push(line);
+    }
+    fixedContent = resultLines.join('\n');
+  }
+
   if (content !== fixedContent || assignedTools.length > 0) {
     fs.writeFileSync(filePath, fixedContent);
+  }
+}
+
+const codemodeDir = path.join(__dirname, '..', 'codemode');
+const codemodeFiles = fs.readdirSync(codemodeDir).filter(f => f.endsWith('.md'));
+
+const codemodeHallucinationFixes = {
+  'mj.admin.bulkCreate': 'mj.admin.batchCreateEntries',
+  'mj.admin.bulkDelete': 'mj.admin.batchDeleteEntries',
+  'mj.admin.config': 'mj.admin.updateConfiguration',
+  'mj.admin.listDeletedEntries': 'mj.search.listDeletedEntries',
+  'mj.analytics.stats': 'mj.analytics.getStatistics',
+  'mj.core.history': 'mj.core.getEntryHistory',
+  'mj.core.recent': 'mj.core.getRecentEntries',
+  'mj.core.get': 'mj.core.getEntryById',
+  'mj.core.searchAuditLog': 'mj.admin.searchAuditLog',
+  'mj.core.vectorStats': 'mj.search.getVectorIndexStats',
+  'mj.core.listDeletedEntries': 'mj.search.listDeletedEntries',
+  'mj.search.readQuery': 'mj.search.searchEntries',
+  'mj.search.read_query': 'mj.search.searchEntries',
+  'mj.semantic.semanticSearch': 'mj.search.semanticSearch',
+  'mj.semantic.vectorStats': 'mj.search.getVectorIndexStats',
+  'mj.team.bulkCreate': 'mj.team.teamBatchCreateEntries',
+  'mj.team.bulkDelete': 'mj.team.teamBatchDeleteEntries',
+  'mj.team.aliases': 'mj.team.teamListAuthorAliases',
+  'mj.team.setRole': 'mj.team.teamUpdateMemberRole',
+  'mj.team.createEntry': 'mj.team.teamCreateEntry',
+  'mj.team.deleteEntry': 'mj.team.teamDeleteEntry',
+  'mj.team.updateEntry': 'mj.team.teamUpdateEntry',
+};
+
+for (const file of codemodeFiles) {
+  const filePath = path.join(codemodeDir, file);
+  let content = fs.readFileSync(filePath, 'utf8');
+  let fixedContent = content;
+  
+  for (const [bad, good] of Object.entries(codemodeHallucinationFixes)) {
+    fixedContent = fixedContent.replace(new RegExp('\\b' + bad.replace(/\./g, '\\.') + '\\b', 'g'), good);
+  }
+  
+  if (content !== fixedContent) {
+    fs.writeFileSync(filePath, fixedContent);
+    updated++;
   }
 }
 

@@ -46,7 +46,7 @@ const searched = await mj.core.searchEntries({
   project_number: 5,
   q: 'Alias'
 })
-const configMode = await mj.admin.config({ mode: 'standard' })
+const configMode = await mj.admin.updateConfiguration({ mode: 'standard' })
 
 // 4. filename -> source_dir (for io import)
 let ioError = false;
@@ -80,22 +80,22 @@ return {
 ```javascript
 // Test code:
 
-// mj.admin.config -> updateConfiguration
-const c1 = await mj.admin.config({ briefing_entries: 5 })
-const c2 = await mj.admin.config({ briefing_entries: 4 })
+// mj.admin.updateConfiguration -> updateConfiguration
+const c1 = await mj.admin.updateConfiguration({ briefing_entries: 5 })
+const c2 = await mj.admin.updateConfiguration({ briefing_entries: 4 })
 
-// mj.core.history -> getEntryHistory
+// mj.core.getEntryHistory -> getEntryHistory
 const entry = await mj.core.createEntry({ project_number: 5, content: 'History test' })
 await mj.core.updateEntry({ entry_id: entry.id, content: 'History test updated' })
-const history = await mj.core.history({ entry_id: entry.id })
+const history = await mj.core.getEntryHistory({ entry_id: entry.id })
 
 // Team Aliases
-const role = await mj.team.setRole({ target_user: 'tester99', role: 'contributor' })
-const aliases = await mj.team.aliases({})
+const role = await mj.team.teamUpdateMemberRole({ target_user: 'tester99', role: 'contributor' })
+const aliases = await mj.team.teamListAuthorAliases({})
 
-// mj.search.read_query / readQuery -> searchEntries
-const readQ1 = await mj.search.readQuery({ project_number: 5, query: 'History test' })
-const readQ2 = await mj.search.read_query({ project_number: 5, query: 'History test' })
+// mj.search.searchEntries / readQuery -> searchEntries
+const readQ1 = await mj.search.searchEntries({ project_number: 5, query: 'History test' })
+const readQ2 = await mj.search.searchEntries({ project_number: 5, query: 'History test' })
 
 // Cleanup
 await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
@@ -126,17 +126,17 @@ Test that tools technically defined in one group (e.g. `semantic` or `admin`) bu
 ```javascript
 // Test code:
 
-// mj.core.semanticSearch -> mj.semantic.semanticSearch
+// mj.core.semanticSearch -> mj.search.semanticSearch
 const semantic = await mj.core.semanticSearch({ project_number: 5, query: 'test' })
 
-// mj.core.vectorStats -> mj.semantic.vectorStats
-const vStats = await mj.core.vectorStats({ project_number: 5 })
+// mj.search.getVectorIndexStats -> mj.search.getVectorIndexStats
+const vStats = await mj.search.getVectorIndexStats({ project_number: 5 })
 
-// mj.core.searchAuditLog -> mj.admin.searchAuditLog
-const audit = await mj.core.searchAuditLog({ limit: 1 })
+// mj.admin.searchAuditLog -> mj.admin.searchAuditLog
+const audit = await mj.admin.searchAuditLog({ limit: 1 })
 
-// mj.core.listDeletedEntries -> mj.admin.listDeletedEntries
-const deleted = await mj.core.listDeletedEntries({ project_number: 5 })
+// mj.search.listDeletedEntries -> mj.search.listDeletedEntries
+const deleted = await mj.search.listDeletedEntries({ project_number: 5 })
 
 return {
   semanticSuccess: semantic.success,
@@ -241,8 +241,8 @@ return result
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Parameter aliases map successfully (`sort` → `sort_by`, `version` → `expected_version`, `search`/`q` → `query`, `text`/`message` → `content`, `mode` → `instruction_level`, `filename` → `source_dir`)
-- Method aliases map successfully (`mj.admin.config`, `mj.core.history`, `mj.team.setRole`, `mj.team.aliases`, `mj.search.read_query`)
-- Cross-group constructor wiring works (`mj.core.semanticSearch`, `mj.core.vectorStats`, `mj.core.searchAuditLog`, `mj.core.listDeletedEntries`)
+- Method aliases map successfully (`mj.admin.updateConfiguration`, `mj.core.getEntryHistory`, `mj.team.teamUpdateMemberRole`, `mj.team.teamListAuthorAliases`, `mj.search.searchEntries`)
+- Cross-group constructor wiring works (`mj.core.semanticSearch`, `mj.search.getVectorIndexStats`, `mj.admin.searchAuditLog`, `mj.search.listDeletedEntries`)
 - `sleep()` and `setTimeout` globals exist and resolve in Sandbox
 - `await getConfig()` returns server configuration inside Sandbox
 - `readResource("memory://...")` throws a structured guidance error pointing to tools

@@ -43,7 +43,6 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 
 | Test               | Action                                                             | Verification                                                     |
 | ------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| Filter Ignored Bug | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")` | ⚠️ SHOULD return 0. If returns all, handler is ignoring filters. |
 
 ## Success Criteria
 
