@@ -75,7 +75,8 @@
       "test-seed.md",
       "test-tool-group-core.md",
       "test-usability-core-mutations.md",
-      "test-usability-workspace-isolation-part1.md"
+      "test-usability-workspace-isolation-part1.md",
+      "test-workspace-isolation.md"
     ],
     "create_github_issue_with_entry": [
       "test-github-issue-cycle.md",
@@ -228,7 +229,8 @@
       "test-payload-optimization.md",
       "test-tool-group-core.md",
       "test-usability-core-read.md",
-      "test-usability-workspace-isolation-part1.md"
+      "test-usability-workspace-isolation-part1.md",
+      "test-workspace-isolation.md"
     ],
     "get_release_info": [
       "test-tool-group-git.md",
@@ -246,7 +248,8 @@
       "test-team-analytics.md",
       "test-tool-group-analytics.md",
       "test-usability-analytics.md",
-      "test-usability-workspace-isolation-part1.md"
+      "test-usability-workspace-isolation-part1.md",
+      "test-workspace-isolation.md"
     ],
     "get_unreleased_commits": [
       "test-tool-group-git.md",
@@ -414,7 +417,8 @@
       "test-payload-optimization.md",
       "test-tool-group-search.md",
       "test-usability-search-core.md",
-      "test-usability-workspace-isolation-part2.md"
+      "test-usability-workspace-isolation-part2.md",
+      "test-workspace-isolation.md"
     ],
     "search_commits": [
       "test-tool-group-git.md",
@@ -430,7 +434,8 @@
       "test-seed.md",
       "test-tool-group-search.md",
       "test-usability-search-core.md",
-      "test-usability-workspace-isolation-part2.md"
+      "test-usability-workspace-isolation-part2.md",
+      "test-workspace-isolation.md"
     ],
     "semantic_search": [
       "test-core-semantic.md",
@@ -488,7 +493,8 @@
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-mutations.md",
-      "test-usability-workspace-isolation-part2.md"
+      "test-usability-workspace-isolation-part2.md",
+      "test-workspace-isolation.md"
     ],
     "team_delete_entry": [
       "test-team-mutations.md",
@@ -615,7 +621,8 @@
       "test-team-crud.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-search.md",
-      "test-usability-workspace-isolation-part2.md"
+      "test-usability-workspace-isolation-part2.md",
+      "test-workspace-isolation.md"
     ],
     "team_search_by_date_range": [
       "test-team-crud.md",
@@ -659,7 +666,6 @@
       "test-usability-core-misc.md"
     ],
     "update_configuration": [
-      "test-config-reload.md",
       "test-core-admin-backup.md",
       "test-core-admin-batch.md",
       "test-core-admin-system.md",

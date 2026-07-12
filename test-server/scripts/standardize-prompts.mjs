@@ -140,6 +140,10 @@ for (const file of files) {
   updatedContent = updatedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   updatedContent = updatedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   
+  // Fix logic flaw: replace git add and git commit with commit.ts
+  updatedContent = updatedContent.replace(/Run `git add \.` and `git commit -m "[^"]+"` to save your changes locally\./g, 'Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`.');
+  updatedContent = updatedContent.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
+  
   // Fix hallucinated project admin parameters
   updatedContent = updatedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
   updatedContent = updatedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj", is_active: false');
@@ -208,6 +212,9 @@ for (const file of standardFiles) {
 
   fixedContent = fixFormatting(fixedContent);
   
+  // Fix double workspace_id in test-workspace-isolation.md
+  fixedContent = fixedContent.replace(/team_create_entry\(workspace_id: "alpha", content: "Team alpha plan", workspace_id: "test-ws"\)/g, 'team_create_entry(workspace_id: "alpha", content: "Team alpha plan")');
+
   // Inject boilerplate from prompt-template.md
   const templatePath = path.join(__dirname, 'prompt-template.md');
   if (fs.existsSync(templatePath)) {
@@ -336,6 +343,17 @@ for (const file of codemodeFiles) {
   // Fix project_number: pNum in getProject/updateProject/deleteProject
   fixedContent = fixedContent.replace(/project_number: pNum/g, 'name: pNum');
   
+  // Fix boilerplate for codemode tests to align with autonomous verification
+  fixedContent = fixedContent.replace(
+    /3\. If you made code changes\/fixes, update `UNRELEASED\.md` and commit without pushing\. If tests pass cleanly, do NOT update `UNRELEASED\.md`\. Then, stop so the \*\*USER\*\* can verify with `pnpm run check`\.\r?\n4\. After user completes verification, re-test fixes with direct MCP calls\./g,
+    '3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n4. **Commit**: Immediately commit passing changes using the `bun .\\\\.agents\\\\scripts\\\\commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.'
+  );
+
+  fixedContent = fixedContent.replace(
+    /including changes to `constants\/server-instructions\.ts` or this file\. \*\*If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code \(e\.g\., `codemode\.ts`\) so future agents succeed automatically\.\*\*/g,
+    'including changes to `src/constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**'
+  );
+
   fixedContent = fixFormatting(fixedContent);
   
   if (content !== fixedContent) {
