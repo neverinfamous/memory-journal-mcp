@@ -21,7 +21,7 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
    - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
    - The user will verify the live fixes in a completely new run/pass in a separate thread.
 4. **Commit**:
-   - Once all local tests pass, the subagent will commit the code (`git commit -m "Optimize [group] tool usage"`), summarize findings, and exit. If no modifications were needed, no commit is required.
+   - Once all local tests pass, the subagent will commit the code (`bun .\.agents\scripts\commit.ts --msg "Optimize [group] tool usage"`), summarize findings, and exit. If no modifications were needed, no commit is required.
    - Once the subagent completes, mark the task as done and move to the next test in the queue.
 5. **Code Mode Error Testing Protocol**:
    - Subagents executing Code Mode test matrices must anticipate structured `VALIDATION_ERROR` payloads with `{ success: false }` for type mismatches, rather than expecting sandbox crashes or thrown `ZodError` messages.

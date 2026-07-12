@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - **Required Tool Groups:** `codemode`, `git`
 - Do NOT call individual tools directly. All tests must be orchestrated through `mj_execute_code` using the `mj.git.*` namespace.
 - **IMPORTANT**: In multi-workspace environments, pass `repo: "memory-journal-mcp"` to Git methods.

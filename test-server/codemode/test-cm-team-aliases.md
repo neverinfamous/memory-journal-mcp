@@ -6,7 +6,6 @@ Test team author alias management tools and role-based access limits through Cod
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - You MUST ensure `CODEMODE_INTERNAL_FULL_ACCESS: "true"` is set in your environment/config OR your user is already bootstrapped as an admin. Otherwise, Code Mode scripts will receive `PERMISSION_DENIED` errors when trying to manage aliases.

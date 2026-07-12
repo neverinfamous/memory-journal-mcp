@@ -138,6 +138,7 @@ for (const file of files) {
   
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
   updatedContent = updatedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
+  updatedContent = updatedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   
   // Fix hallucinated project admin parameters
   updatedContent = updatedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
@@ -146,8 +147,6 @@ for (const file of files) {
   updatedContent = updatedContent.replace(/project_name: "test-proj"/g, 'name: "test-proj"');
   updatedContent = updatedContent.replace(/project_name: "ghost"/g, 'name: "ghost"');
   
-  // Fix parameter drift: project_number -> workspace_id
-  updatedContent = updatedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
 
   updatedContent = fixHallucinations(updatedContent);
   updatedContent = fixFormatting(updatedContent);
@@ -202,8 +201,11 @@ for (const file of standardFiles) {
   fixedContent = fixedContent.replace(/project_name: "test-proj"/g, 'name: "test-proj"');
   fixedContent = fixedContent.replace(/project_name: "ghost"/g, 'name: "ghost"');
   
-  // Fix parameter drift: project_number -> workspace_id
-  fixedContent = fixedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
+  
+  // Fix logic flaw: remove parameter drift hallucination (use_test_db)
+  fixedContent = fixedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
+  fixedContent = fixedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
+
   fixedContent = fixFormatting(fixedContent);
   
   // Inject boilerplate from prompt-template.md
@@ -326,10 +328,10 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(/project_name: "test-proj"/g, 'name: "test-proj"');
   fixedContent = fixedContent.replace(/project_name: "ghost"/g, 'name: "ghost"');
   
-  // Fix parameter drift: project_number -> workspace_id
-  fixedContent = fixedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
-  fixedContent = fixedContent.replace(/project_number: '5'/g, 'workspace_id: "test-ws"');
-  fixedContent = fixedContent.replace(/project_number: "5"/g, 'workspace_id: "test-ws"');
+  
+  // Fix logic flaw: remove parameter drift hallucination (use_test_db)
+  fixedContent = fixedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
+  fixedContent = fixedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   
   // Fix project_number: pNum in getProject/updateProject/deleteProject
   fixedContent = fixedContent.replace(/project_number: pNum/g, 'name: pNum');

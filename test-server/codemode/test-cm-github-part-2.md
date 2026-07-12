@@ -6,7 +6,6 @@ Test all 16 GitHub tools via Code Mode: read-only lookups, error paths, Kanban o
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.

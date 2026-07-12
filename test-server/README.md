@@ -147,12 +147,11 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 
 1. Read the server instructions you received during initialization, then `memory://briefing`.
 2. Navigate to the `standard/` directory and **always run `standard/test-seed.md` first** — all other test files depend on it.
-3. Run any combination of the independent test files in `standard/` (`test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-kanban-lifecycle.md`, `test-errors.md`, `test-integrity.md`, `test-payload-optimization.md`, `test-tool-group-*.md`, `test-team.md`).
-4. Each file is self-contained — pick the one relevant to your current task or run them in any order.
-5. **Run integration test scripts** for instruction levels, annotations, prompts, and scheduler (see Script Reference above).
-6. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
-7. Report findings returning proper handler formatting.
-8. (Optional) Run Code Mode tests from `codemode/` — see `codemode/coordinator-workflow.md` for the module list and dependency DAG.
+3. See `standard/coordinator-workflow.md` for the complete sequence queue and dependency DAG. You may run them in the specified order or individually if their dependencies are met.
+4. **Run integration test scripts** for instruction levels, annotations, prompts, and scheduler (see Script Reference above).
+5. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
+6. Report findings returning proper handler formatting.
+7. (Optional) Run Code Mode tests from `codemode/` — see `codemode/coordinator-workflow.md` for the module list and dependency DAG.
 
 ## Troubleshooting
 
