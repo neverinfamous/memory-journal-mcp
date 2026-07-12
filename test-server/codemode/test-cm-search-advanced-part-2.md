@@ -239,5 +239,5 @@ return {
 ext_cursor) works reliably across FTS, semantic, and date range searches via Code Mode scripts
 - search_entries with include_highlights: true returns snippets with FTS query terms highlighted via Code Mode
 - search_entries with include_facets: true returns aggregate tag and entryType distribution counts via Code Mode
-- Hybrid mode properly supports ts_weight and semantic_weight dynamic biasing multipliers via Code Mode
+- Hybrid mode properly supports ts_weight and semantic_weight dynamic biasing multipliers via Code Mode
 - FTS query parser safely preserves balanced double-quotes for true phrase matching without crashing the sandbox

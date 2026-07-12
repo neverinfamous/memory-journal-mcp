@@ -255,6 +255,27 @@ for (const file of codemodeFiles) {
   for (const [bad, good] of Object.entries(codemodeHallucinationFixes)) {
     fixedContent = fixedContent.replace(new RegExp('\\b' + bad.replace(/\./g, '\\.') + '\\b', 'g'), good);
   }
+
+  // Fix PowerShell here-string corruption and unescaped characters in markdown files
+  fixedContent = fixedContent.replace(/"@\r?\n\r?\n\s*=\s*@"\r?\n/g, '');
+  
+  // Strip control characters (excluding newline/carriage return/tab) that corrupted the file
+  fixedContent = fixedContent.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]+/g, '');
+  
+  // Fix specific typos caused by previous corruption (idempotent)
+  fixedContent = fixedContent.replace(/\b(?:f+)?uzzy_match\b/g, 'fuzzy_match');
+  fixedContent = fixedContent.replace(/\b(?:e+)?xact_match\b/g, 'exact_match');
+  fixedContent = fixedContent.replace(/\b(?:e+)?ntry_type\b/g, 'entry_type');
+  fixedContent = fixedContent.replace(/\b(?:e+)?nd_date\b/g, 'end_date');
+  fixedContent = fixedContent.replace(/\(\s*(?:e+)?ntry_id\)/g, '(entry_id)');
+  
+  // Clean up overzealous regex damage from previous passes
+  fixedContent = fixedContent.replace(/vectorAa*vailable/g, 'vectorAvailable');
+  fixedContent = fixedContent.replace(/contextAa*vailable/g, 'contextAvailable');
+  fixedContent = fixedContent.replace(/unaa*vailable/g, 'unavailable');
+  fixedContent = fixedContent.replace(/aa*vailableStatuses/g, 'availableStatuses');
+  fixedContent = fixedContent.replace(/team_r*ebuild_vector_index/g, 'team_rebuild_vector_index');
+  fixedContent = fixedContent.replace(/team_a*dd_to_vector_index/g, 'team_add_to_vector_index');
   
   if (content !== fixedContent) {
     fs.writeFileSync(filePath, fixedContent);

@@ -187,29 +187,26 @@ return {
 - search_entries respects mode: 'fts' and mode: 'semantic' explicitly via Code Mode
 - search_entries auto-mode correctly evaluates conversational RRF heuristic via Code Mode
 - FTS correctly parses standard keyword/phrase syntax (OR, NOT, "phrases")
-- FTS detects unsafe queries (like 	est's) and seamlessly drops to LIKE fallback without crashing
+- FTS detects unsafe queries (like 	test's) and seamlessly drops to LIKE fallback without crashing
 - Hybrid search utilizes RRF mode automatically when heuristics warrant it
-- xact_match: true successfully maps to uzzy_match: false resulting in exact matching
-- xact_match: false successfully maps to uzzy_match: true resulting in Levenshtein matching
+- exact_match: true successfully maps to fuzzy_match: false resulting in exact matching
+- exact_match: false successfully maps to fuzzy_match: true resulting in Levenshtein matching
 - FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
-- FTS5 LIKE fallback works for special characters (	est's, 100%)
-- search_entries gracefully falls back to fuzzy Levenshtein matching via Code Mode when uzzy_match is true and FTS yields zero results
-- search_entries filters work: issue_number, pr_status, workflow_run_id, project_number, is_personal, 	ags, ntry_type, start_date, nd_date
+- FTS5 LIKE fallback works for special characters (	test's, 100%)
+- search_entries gracefully falls back to fuzzy Levenshtein matching via Code Mode when fuzzy_match is true and FTS yields zero results
+- search_entries filters work: issue_number, pr_status, workflow_run_id, project_number, is_personal, 	tags, entry_type, start_date, end_date
 - Cross-DB search returns entries with source: 'personal' and source: 'team'
-- search_by_date_range with filters (ntry_type, 	ags, is_personal) works
+- search_by_date_range with filters (entry_type, 	tags, is_personal) works
 - search_by_date_range rejects invalid date format with structured error
 - search_by_date_range rejects inverted date range (start > end) with structured error
 - search_entries rejects queries exceeding 250 characters with structured Zod error
 - search_by_date_range filters by project_number
-"@
-
- = @"
-- semantic_search processes Related by ID (ntry_id) lookups avoiding query strings
-- semantic_search correctly filters results downstream using 	ags and is_personal
+- semantic_search processes Related by ID (entry_id) lookups avoiding query strings
+- semantic_search correctly filters results downstream using 	tags and is_personal
 - semantic_search with custom threshold returns fewer results
 - semantic_search quality gate hint shown even with hint_on_empty: false
-- get_vector_index_stats returns vailable, itemCount, modelName, dimensions
-- ebuild_vector_index and dd_to_vector_index work via Code Mode
+- get_vector_index_stats returns available, itemCount, modelName, dimensions
+- rebuild_vector_index and add_to_vector_index work via Code Mode
 - get_statistics returns all 4 enhanced analytics metrics via Code Mode
 - get_cross_project_insights returns schema-compliant response
 > **Note**: When updating schemas or validation logic, please refer to the /zod skill for best practices on Standard Schema and Safe Parsing.
