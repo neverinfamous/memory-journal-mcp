@@ -29,7 +29,8 @@ Test search, semantic search, date range, analytics, and vector index operations
 >
 > ```javascript
 > await mj.core.createEntry({
-> workspace_id: "test-ws", >   content: "This is a test's string with 100% coverage",
+>   workspace_id: "test-ws",
+>   content: "This is a test's string with 100% coverage",
 >   issue_number: 44,
 >   pr_status: 'merged',
 >   workflow_run_id: 12345,
@@ -152,7 +153,6 @@ const withProject = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
   start_date: '2026-01-01',
   end_date: '2026-12-31',
-  workspace_id: "test-ws",
 })
 return {
   basicCount: basic.entries.length,

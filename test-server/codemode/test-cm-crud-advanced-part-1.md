@@ -57,7 +57,7 @@ return {
 
 | Test                    | Code                                                                                                                                                                                                                                       | Expected Result                                                      |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 issue link", issue_number: 1, workspace_id: "test-ws" }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
+| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 issue link", issue_number: 1 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
 
 ### 20.13 Get Entry History
 

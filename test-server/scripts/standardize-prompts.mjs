@@ -31,6 +31,20 @@ function fixHallucinations(text) {
   return fixed;
 }
 
+function fixFormatting(text) {
+  let fixed = text;
+  // Fix bad regex replace resulting in > workspace_id: "test-ws", > content:
+  fixed = fixed.replace(/> workspace_id: "test-ws", >\s*content:/g, '>   workspace_id: "test-ws",\n>   content:');
+  
+  // Clean up duplicate workspace_id caused by replacing project_number: 5 in an object that already has workspace_id
+  fixed = fixed.replace(/workspace_id:\s*"test-ws",([^}]+?),\s*workspace_id:\s*"test-ws"/g, 'workspace_id: "test-ws",$1');
+  
+  // Clean up edge cases where it appears twice back-to-back
+  fixed = fixed.replace(/workspace_id:\s*"test-ws",\s*workspace_id:\s*"test-ws"/g, 'workspace_id: "test-ws"');
+  
+  return fixed;
+}
+
 // Build reverse map: file -> tools
 for (const [tool, files] of Object.entries(toolMapData.toolMap)) {
   if (tool === 'mj_execute_code') {
@@ -136,6 +150,7 @@ for (const file of files) {
   updatedContent = updatedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
 
   updatedContent = fixHallucinations(updatedContent);
+  updatedContent = fixFormatting(updatedContent);
   
   if (content !== updatedContent) {
     fs.writeFileSync(filePath, updatedContent);
@@ -189,6 +204,7 @@ for (const file of standardFiles) {
   
   // Fix parameter drift: project_number -> workspace_id
   fixedContent = fixedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
+  fixedContent = fixFormatting(fixedContent);
   
   // Inject boilerplate from prompt-template.md
   const templatePath = path.join(__dirname, 'prompt-template.md');
@@ -317,6 +333,8 @@ for (const file of codemodeFiles) {
   
   // Fix project_number: pNum in getProject/updateProject/deleteProject
   fixedContent = fixedContent.replace(/project_number: pNum/g, 'name: pNum');
+  
+  fixedContent = fixFormatting(fixedContent);
   
   if (content !== fixedContent) {
     fs.writeFileSync(filePath, fixedContent);

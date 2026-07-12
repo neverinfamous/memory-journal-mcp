@@ -132,13 +132,13 @@ return {
 
 | Test               | Code                                                                                                                                                      | Expected Result                    |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Invalid entry_type | `return await mj.team.teamCreateEntry({ workspace_id: "test-ws", content: "test", entry_type: "invalid", workspace_id: "test-ws" });`                                 | `{ success: false, error: "..." }` |
-| Nonexistent get    | `return await mj.team.teamGetEntryById({ workspace_id: "test-ws", entry_id: 999999, workspace_id: "test-ws" });`                                                      | `{ success: false, error: "..." }` |
-| Nonexistent update | `return await mj.team.teamUpdateEntry({ workspace_id: "test-ws", entry_id: 999999, content: "x", workspace_id: "test-ws" });`                                         | `{ success: false, error: "..." }` |
-| Nonexistent delete | `return await mj.team.teamDeleteEntry({ workspace_id: "test-ws", entry_id: 999999, workspace_id: "test-ws" });`                                                       | `{ success: false, error: "..." }` |
-| Invalid date range | `return await mj.team.teamSearchByDateRange({ workspace_id: "test-ws", start_date: "Jan 1", end_date: "Jan 31", workspace_id: "test-ws" });`                          | `{ success: false, error: "..." }` |
+| Invalid entry_type | `return await mj.team.teamCreateEntry({ workspace_id: "test-ws", content: "test", entry_type: "invalid" });`                                 | `{ success: false, error: "..." }` |
+| Nonexistent get    | `return await mj.team.teamGetEntryById({ workspace_id: "test-ws", entry_id: 999999 });`                                                      | `{ success: false, error: "..." }` |
+| Nonexistent update | `return await mj.team.teamUpdateEntry({ workspace_id: "test-ws", entry_id: 999999, content: "x" });`                                         | `{ success: false, error: "..." }` |
+| Nonexistent delete | `return await mj.team.teamDeleteEntry({ workspace_id: "test-ws", entry_id: 999999 });`                                                       | `{ success: false, error: "..." }` |
+| Invalid date range | `return await mj.team.teamSearchByDateRange({ workspace_id: "test-ws", start_date: "Jan 1", end_date: "Jan 31" });`                          | `{ success: false, error: "..." }` |
 | Merge same tag     | `return await mj.team.teamMergeTags({ source_tag: "x", target_tag: "x", workspace_id: "test-ws" });`                                                            | `{ success: false, error: "..." }` |
-| Link nonexistent   | `return await mj.team.teamLinkEntries({ workspace_id: "test-ws", from_entry_id: 999999, to_entry_id: 1, relationship_type: "references", workspace_id: "test-ws" });` | `{ success: false, error: "..." }` |
+| Link nonexistent   | `return await mj.team.teamLinkEntries({ workspace_id: "test-ws", from_entry_id: 999999, to_entry_id: 1, relationship_type: "references" });` | `{ success: false, error: "..." }` |
 
 ### 28.3 Team Date Range Search
 

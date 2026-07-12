@@ -81,7 +81,7 @@ return {
 
 | Test               | Code                                                                                                                                                                                                     | Expected Result                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| With project_owner | `const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 owner test", workspace_id: "test-ws", project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
+| With project_owner | `const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 owner test", project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
 | auto_context off   | `const r = await mj.core.createEntry({ workspace_id: "test-ws", content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
 ## Cleanup
 

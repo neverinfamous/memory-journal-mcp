@@ -38,7 +38,6 @@ const entry = await mj.core.createEntry({
   workflow_run_id: 555,
   workflow_name: 'test-ci',
   workflow_status: 'completed',
-  workspace_id: "test-ws",
   is_personal: false,
 })
 return {
