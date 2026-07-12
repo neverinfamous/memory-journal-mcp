@@ -8,7 +8,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 
 ## 1. Fuzz Phase
 
-Use the `mj_execute_code` tool to interact with tools that accept workspace contextualization (e.g., `search_entries`, `get_recent_entries`, `get_statistics`) in this test pass.
+Use direct tool calls to interact with tools that accept workspace contextualization (e.g., `search_entries`, `get_recent_entries`, `get_statistics`) in this test pass.
 
 **Instructions:**
 

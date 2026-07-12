@@ -9,6 +9,28 @@ const toolMapPath = path.join(__dirname, 'tool-map.json');
 const toolMapData = JSON.parse(fs.readFileSync(toolMapPath, 'utf8'));
 const reverseMap = {};
 
+const hallucinationFixes = {
+  'github_create_issue': 'create_github_issue_with_entry',
+  'github_close_issue': 'close_github_issue_with_entry',
+  'repo_insights': 'get_repo_insights',
+  'copilot_reviews': 'get_copilot_reviews',
+  'add_author_alias': 'team_add_author_alias',
+  'remove_author_alias': 'team_remove_author_alias',
+  'list_author_aliases': 'team_list_author_aliases',
+  'resolve_author': 'team_resolve_author',
+  'consolidate_authors': 'team_consolidate_authors'
+};
+
+function fixHallucinations(text) {
+  let fixed = text;
+  for (const [bad, good] of Object.entries(hallucinationFixes)) {
+    // We use a regex with negative lookbehind/lookahead to avoid matching substring parts,
+    // but \\b works for these tool names since they are composed of word chars.
+    fixed = fixed.replace(new RegExp('\\b' + bad + '\\b', 'g'), good);
+  }
+  return fixed;
+}
+
 // Build reverse map: file -> tools
 for (const [tool, files] of Object.entries(toolMapData.toolMap)) {
   if (tool === 'mj_execute_code') continue;
@@ -59,6 +81,14 @@ for (const file of files) {
   // Fix logic flaw: edit generator script instead of markdown file directly
   updatedContent = updatedContent.replace(/edit this markdown file directly/g, 'edit the generator scripts directly');
   
+  // Fix logic flaw: workspace isolation test also needs mj_execute_code removed
+  updatedContent = updatedContent.replace(
+    /Use the `mj_execute_code` tool to interact with tools that accept workspace contextualization/g,
+    'Use direct tool calls to interact with tools that accept workspace contextualization'
+  );
+  
+  updatedContent = fixHallucinations(updatedContent);
+  
   if (content !== updatedContent) {
     fs.writeFileSync(filePath, updatedContent);
     updated++;
@@ -79,9 +109,13 @@ for (const file of standardFiles) {
     const regex = /\*\*Scope:\*\* Deterministic verification of the (.*?) tool group \((.*?)\) against the strict error handling matrix\./;
     if (regex.test(content)) {
       content = content.replace(regex, `**Scope:** Deterministic verification of the $1 tool group (${toolsString}) against the strict error handling matrix.`);
-      fs.writeFileSync(filePath, content);
       updated++;
     }
+  }
+  
+  const fixedContent = fixHallucinations(content);
+  if (content !== fixedContent || assignedTools.length > 0) {
+    fs.writeFileSync(filePath, fixedContent);
   }
 }
 

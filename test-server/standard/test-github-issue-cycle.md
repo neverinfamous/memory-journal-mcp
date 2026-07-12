@@ -1,4 +1,4 @@
-# Re-Test memory-journal-mcp — GitHub Integration (Writes)
+# Re-Test memory-journal-mcp — GitHub Integration (Issue Lifecycle)
 
 **Scope:** GitHub write tools — issue lifecycle, Kanban mutations, milestones lifecycle, and test cleanup.
 
@@ -24,7 +24,6 @@
 
 ---
 
-## Phase 13: GitHub Integration (Writes)
 
 ### 13.2 Issue Lifecycle Tools
 
@@ -41,46 +40,6 @@
 | Close with comment            | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Done", comment: "Closing comment", tags: ["resolved"])`                                                                 | Issue closed with comment posted, entry tagged                                                                                                                                                                                                                |
 | Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                   |
 | Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }` |
-
-### 13.3 Kanban Tools
-
-| Test                | Command/Action                                                                     | Expected Result                                                       |
-| ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Get board           | `get_kanban_board(project_number: 5)`                                              | Returns board structure with columns/items                            |
-| Kanban resource     | Read `memory://kanban/5`                                                           | JSON board data                                                       |
-| Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                |
-| Move item           | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
-| Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
-| Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
-
-### 13.4 Milestone Tools
-
-> [!CAUTION]
-> These tools **create, modify, and delete real GitHub milestones**. Clean up test milestones after testing.
-
-| Test                 | Command/Action                                                                                   | Expected Result                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| List milestones      | `get_github_milestones(state: "open")`                                                           | Returns milestones array with `completion_percentage`, `open_issues`                                              |
-| List all states      | `get_github_milestones(state: "all")`                                                            | Returns both open and closed milestones                                                                           |
-| Get milestone detail | `get_github_milestone(milestone_number: <N>)`                                                    | Returns single milestone with full metadata                                                                       |
-| Create milestone     | `create_github_milestone(title: "Test Milestone", description: "Testing", due_on: "YYYY-MM-DD")` | Returns `success: true`, created milestone with number and URL (⚠️ `due_on` must be `YYYY-MM-DD`, not ISO 8601)   |
-| Update milestone     | `update_github_milestone(milestone_number: <new>, description: "Updated description")`           | Returns `success: true`, updated milestone                                                                        |
-| Close milestone      | `update_github_milestone(milestone_number: <new>, state: "closed")`                              | Milestone state changed to `closed`                                                                               |
-| Delete milestone     | `delete_github_milestone(milestone_number: <new>, confirm: true)`                                | Returns `success: true`, milestone removed from GitHub                                                            |
-| Get nonexistent      | `get_github_milestone(milestone_number: 999999)`                                                 | Structured error: `{ error: "Milestone #999999 not found" }`                                                      |
-| Milestone resource   | Read `memory://github/milestones/memory-journal-mcp`                                             | Static resource lists open milestones with completion %                                                           |
-| Milestone detail     | Read `memory://milestones/memory-journal-mcp/<N>`                                                | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
-
-### 13.7 GitHub Test Cleanup
-
-> [!IMPORTANT]
-> After GitHub testing, ensure all test artifacts are removed. Use the checklist below.
-
-| Cleanup Step           | Command/Action                                                    |
-| ---------------------- | ----------------------------------------------------------------- |
-| Close test issues      | `close_github_issue_with_entry` for any unclosed test issues      |
-| Delete test milestones | `delete_github_milestone` for any test milestones still on GitHub |
-| Verify project board   | `get_kanban_board(project_number: 5)` — no orphaned test items    |
 
 ---
 

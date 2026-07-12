@@ -104,23 +104,23 @@
       "test-tool-group-admin.md"
     ],
     "register_project": [
-      "test-usability-admin-system.md",
+      "test-usability-admin-projects.md",
       "test-tool-group-admin.md"
     ],
     "update_project": [
-      "test-usability-admin-system.md",
+      "test-usability-admin-projects.md",
       "test-tool-group-admin.md"
     ],
     "delete_project": [
-      "test-usability-admin-system.md",
+      "test-usability-admin-projects.md",
       "test-tool-group-admin.md"
     ],
     "get_project": [
-      "test-usability-admin-system.md",
+      "test-usability-admin-projects.md",
       "test-tool-group-admin.md"
     ],
     "list_projects": [
-      "test-usability-admin-system.md",
+      "test-usability-admin-projects.md",
       "test-tool-group-admin.md"
     ],
     "update_entry": [
@@ -232,11 +232,11 @@
       "test-tool-group-github.md"
     ],
     "get_repo_insights": [
-      "test-usability-github-issue-cycle.md",
+      "test-usability-github-insights.md",
       "test-tool-group-github.md"
     ],
     "get_copilot_reviews": [
-      "test-usability-github-issue-cycle.md",
+      "test-usability-github-insights.md",
       "test-tool-group-github.md"
     ],
     "get_commit_history": [
@@ -436,6 +436,7 @@
       "test-tool-group-team.md"
     ],
     "mj_execute_code": [
+      "test-usability-codemode.md",
       "test-cm-admin-batch.md",
       "test-cm-admin-core.md",
       "test-cm-admin-projects.md",
