@@ -19,11 +19,10 @@ Certain boundary tests (e.g., massive payload execution) exceed typical token co
 
 | Script               | Purpose                                                                                                      | Associated Workflow |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `test-http.mjs`      | Verifies HTTP transport 413 Payload Too Large limits                                                         | `test-integrity.md` |
-| `test-long-mcp.mjs`  | Verifies the maximum `content` length capacity limits (50k/100k boundaries)                                  | `test-integrity.md` |
+| `test-http.mjs`      | Verifies HTTP transport 413 Payload Too Large limits                                                         | `test-integrity-part1.md` |
+| `test-long-mcp.mjs`  | Verifies the maximum `content` length capacity limits (50k/100k boundaries)                                  | `test-integrity-part2.md` |
 | `verify-schemas.mjs` | Programmatically verifies that all output schemas are strictly defined for `structuredContent` compatibility | `test-schemas.md`   |
 | `test-subscribe.mjs` | Validates MCP real-time resource subscriptions and scope-based authorization boundaries                      | `test-core-infra.md`|
-| `test-encryption.mjs`| Validates SQLCipher encryption-at-rest functionality, ensuring proper decryption with DB_ENCRYPTION_KEY        | Independent Tool    |
 
 ## Track Token Consumption
 

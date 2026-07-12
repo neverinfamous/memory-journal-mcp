@@ -41,7 +41,13 @@ async function getDb(options: ServerOptionsSchema & { team?: boolean }, command:
     return { db, serverOptions }
 }
 
-export async function searchAction(query: string, options: z.infer<typeof searchSchema>, command: Command): Promise<void> {
+export async function searchAction(query: string | undefined, options: z.infer<typeof searchSchema>, command: Command): Promise<void> {
+    const finalQuery = query ?? options.query ?? options.term ?? options.keyword;
+    if (!finalQuery) {
+        process.stderr.write("🛠️ AUTONOMOUS HEALING: Missing search query. You must provide a query as a positional argument (e.g. `mj search \"query\"`) or via a flag (e.g. `mj search --query \"query\"`).\n");
+        process.exit(1);
+    }
+
     const { db, serverOptions } = await getDb(options, command)
     
     try {
@@ -51,9 +57,9 @@ export async function searchAction(query: string, options: z.infer<typeof search
 
         if (mode === 'semantic') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-            result = await vectorManager.search(query, limit)
+            result = await vectorManager.search(finalQuery, limit)
         } else {
-            result = db.searchEntries(query, {
+            result = db.searchEntries(finalQuery, {
                 limit,
                 fuzzy_match: mode === 'auto',
                 auto_correct: mode === 'auto',

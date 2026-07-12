@@ -4,12 +4,12 @@
 >
 > **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls (including `mj_execute_code`) to ensure tests hit the test database instead of production.
 
-This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Admin System operations using Code Mode (`mj_execute_code`). The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
+This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Admin System operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
 
 ## 1. Fuzz Phase
 
-Use the `mj_execute_code` tool to interact with the following tools in this test pass:
-`update_configuration`, `merge_tags`, `search_audit_log`, `run_auto_prune`
+Use the following tools in this test pass:
+`update_configuration`, `register_project`, `update_project`, `delete_project`, `get_project`, `list_projects`, `merge_tags`, `search_audit_log`, `run_auto_prune`
 
 **Instructions:**
 
@@ -43,4 +43,4 @@ If you made any codebase changes in the Heal Phase:
 
 ## 4. Continuous Improvement
 
-If during this test you discover a blind spot, a new hallucination vector, or a way to make this very testing prompt more effective, you are encouraged to edit this markdown file directly to permanently improve the testing apparatus. Commit any prompt improvements alongside your codebase fixes.
+If during this test you discover a blind spot, a new hallucination vector, or a way to make this very testing prompt more effective, you are encouraged to edit the generator scripts directly to permanently improve the testing apparatus. Commit any prompt improvements alongside your codebase fixes.

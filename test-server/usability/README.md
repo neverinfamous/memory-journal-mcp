@@ -21,18 +21,37 @@ Because testing and healing all tools at once exhausts an agent's context window
 
 ## Test Modules
 
-- `test-usability-codemode.md` - Core sandbox and proxy mechanics.
-- `test-usability-crud-mutations.md`
-- `test-usability-core.md`
-- `test-usability-search.md`
+- `test-usability-codemode.md`
+- `test-usability-core-read.md`
+- `test-usability-core-misc.md`
+- `test-usability-core-mutations.md`
+- `test-usability-admin-batch.md`
+- `test-usability-admin-vector.md`
+- `test-usability-admin-system.md`
+- `test-usability-admin-projects.md`
+- `test-usability-admin-mutations.md`
+- `test-usability-search-core.md`
+- `test-usability-search-vector.md`
 - `test-usability-analytics.md`
 - `test-usability-relationships.md`
 - `test-usability-io.md`
-- `test-usability-admin.md`
-- `test-usability-github-issues.md`
-- `test-usability-github-projects.md`
+- `test-usability-github-read.md`
+- `test-usability-github-kanban.md`
+- `test-usability-github-issue-cycle.md`
+- `test-usability-github-insights.md`
+- `test-usability-github-milestones.md`
+- `test-usability-git-history.md`
+- `test-usability-git-analysis.md`
 - `test-usability-backup.md`
-- `test-usability-team-core.md`
-- `test-usability-team-search-analytics.md`
-- `test-usability-team-io-admin.md`
-- `test-usability-team-rbac.md`
+- `test-usability-team-core-read.md`
+- `test-usability-team-mutations.md`
+- `test-usability-team-batch.md`
+- `test-usability-team-search.md`
+- `test-usability-team-analytics.md`
+- `test-usability-team-relationships.md`
+- `test-usability-team-io.md`
+- `test-usability-team-backup.md`
+- `test-usability-team-vector.md`
+- `test-usability-team-members.md`
+- `test-usability-team-aliases.md`
+- `test-usability-workspace-isolation.md`

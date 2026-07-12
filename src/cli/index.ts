@@ -315,10 +315,13 @@ entryCmd
 
 // Setup 'search' command
 const searchCmd = program
-    .command('search <query>')
+    .command('search [query]')
     .description('Search journal entries')
 withGroup(searchCmd, 'Command Options', (cmd: Command) => {
     cmd
+        .option('--query, -q <string>', 'Search query (alias for positional argument)')
+        .option('--term <string>', 'Search query (alias)')
+        .option('--keyword <string>', 'Search query (alias)')
         .option('--mode <mode>', 'Search mode: auto, fts, semantic, hybrid', 'auto')
         .option('--limit <number>', 'Maximum number of results to return', '50')
         .option('--team', 'Search team database')

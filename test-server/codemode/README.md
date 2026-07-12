@@ -23,10 +23,10 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                | Phase | Focus                                                 | When to Run        |
 | ------------------- | :---: | ----------------------------------------------------- | ------------------ |
-| `test-cm-crud.md`   |  20   | Create/read/update/delete, error paths | After Phases 16–19 |
-| `test-cm-crud-advanced.md` | 20B | Recovery, history tracking, archiving, pagination, full params | After Phase 20 |
+| `test-cm-crud-part-1.md`<br>`test-cm-crud-part-2.md` |  20   | Create/read/update/delete, error paths | After Phases 16–19 |
+| `test-cm-crud-advanced-part-1.md`<br>`test-cm-crud-advanced-part-2.md` | 20B | Recovery, history tracking, archiving, pagination, full params | After Phase 20 |
 | `test-cm-search.md` |  21   | FTS5, filters, date range | After Phases 16–19 |
-| `test-cm-search-advanced.md` | 21B | Semantic search, archiving & pagination, analytics | After Phase 21 |
+| `test-cm-search-advanced-part-1.md`<br>`test-cm-search-advanced-part-2.md` | 21B | Semantic search, archiving & pagination, analytics | After Phase 21 |
 
 ### Workflows & Relationships (from CM-3)
 
@@ -40,17 +40,17 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 | File                            |    Phase    | Focus                                                                 | When to Run        |
 | ------------------------------- | :---------: | --------------------------------------------------------------------- | ------------------ |
-| `test-cm-github.md`             |     25      | GitHub 18 tools (read, Kanban, issues, milestones, insights)          | After Phases 16–19 |
+| `test-cm-github-part-1.md`<br>`test-cm-github-part-2.md` |     25      | GitHub 18 tools (read, Kanban, issues, milestones, insights)          | After Phases 16–19 |
 | `test-cm-kanban-lifecycle.md`   |    25.1     | End-to-end Code Mode pipelined execution of Kanban lifecycle tools    | After Phases 16–19 |
 | `test-cm-io.md`                 |     26      | IO namespaces, Markdown orchestration roundtrips, and file schemas    | After Phases 16–19 |
-| `test-cm-admin-backup.md`       |     27      | Tag management, batch operations, backup lifecycle                                      | After Phases 16–19 |
+| `test-cm-admin-projects.md`<br>`test-cm-admin-core.md`<br>`test-cm-admin-batch.md`<br>`test-cm-backup.md` |     27      | Project management, core admin, batch ops, backup lifecycle           | After Phases 16–19 |
 | `test-cm-team-crud.md`          |  28.1–28.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
-| `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, batch operations, recovery, archiving, pagination, analytics, relationships, IO logic, backup | After Team CRUD    |
-| `test-cm-team-vector-errors.md` | 28.10–28.11 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
-| `test-cm-team-rbac.md`          | 28.16       | Team member management tools and RBAC enforcement                     | After Team Admin   |
-| `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches (Part 1) | After Phases 16–19 |
-| `test-cm-error-matrix-2.md`     |    29B      | Systematic `{}` Zod sweeps + type mismatches (Part 2) | After Phase 29 |
-| `test-cm-hallucination-smoothing.md` |  31     | Hallucination smoothing, cross-group wiring, sandbox aliases, and `context` param | After Phases 16–19 |
+| `test-cm-team-admin-core.md`<br>`test-cm-team-batch.md`<br>`test-cm-team-analytics-relationships.md`<br>`test-cm-team-admin-part-2.md` |  28.4–28.9  | Team admin, batch operations, recovery, archiving, analytics, relationships, IO logic, backup | After Team CRUD    |
+| `test-cm-team-vector-errors-part-1.md`<br>`test-cm-team-vector-errors-part-2.md` | 28.10–28.11 | Team vector/insights, cross-tool error verification + cleanup         | After Team Admin   |
+| `test-cm-team-aliases.md`<br>`test-cm-team-rbac.md` | 28.16–28.17 | Team author alias and member RBAC operations                          | After Team Admin   |
+| `test-cm-error-matrix-part-1.md`<br>`test-cm-error-matrix-part-2.md` |     29      | Systematic `{}` Zod sweeps + type mismatches (Part 1)                 | After Phases 16–19 |
+| `test-cm-error-matrix-part-3.md`|    29B      | Systematic `{}` Zod sweeps + type mismatches (Part 2)                 | After Phase 29     |
+| `test-cm-hallucination-smoothing.md`<br>`test-cm-session-summary-healing.md`<br>`test-config-reload.md`<br>`test-git.md` |  31-31.5    | Hallucination smoothing, aliases, session summary healing, config reload, git | After Phases 16–19 |
 
 ### Cross-Cutting Optimization Tests
 

@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **103 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **108 tools** organized by 11 tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -88,13 +88,18 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 
 ---
 
-## admin (12 tools + Code Mode)
+## admin (17 tools + Code Mode)
 
 Entry mutations, vector index management, tag maintenance, and audit log search.
 
 | Tool                   | Description                                                                                                                                                            |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `update_configuration` | Dynamically update the running server configuration (e.g., briefing depth, token limits) without restarting.                                                           |
+| `register_project`     | Register a new project in the global registry. This is required before the agent can switch context to this repository.                                                |
+| `update_project`       | Update the details (path, number, or name) of an existing project in the registry.                                                                                     |
+| `delete_project`       | Remove a project from the global registry.                                                                                                                             |
+| `get_project`          | Get details of a specific registered project.                                                                                                                          |
+| `list_projects`        | List all registered projects.                                                                                                                                          |
 | `update_entry`         | Update an existing journal entry (content, type, tags, and 14 metadata fields including trust, impact, significance, project, issue, PR, and workflow). Pass `expected_version` for optimistic locking. Pass `null` to clear a field. |
 | `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                                                   |
 | `restore_entry`        | Restore a soft-deleted journal entry.                                                                                                                                  |
@@ -266,12 +271,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 103   | All tools (default)      |
+| `full`               | 108   | All tools (default)      |
 | `starter`            | 16    | Core + search + codemode |
 | `essential`          | 10    | Minimal footprint        |
-| `readonly`           | 30    | Disable all mutations    |
-| `-github`            | 85    | Exclude a group          |
-| `-github,-analytics` | 83    | Exclude multiple groups  |
+| `readonly`           | 32    | Disable all mutations    |
+| `-github`            | 90    | Exclude a group          |
+| `-github,-analytics` | 88    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

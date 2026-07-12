@@ -196,6 +196,9 @@ export const updateEntryOptionsSchema = baseEntryOptionsSchema.extend({
 })
 
 export const searchOptionsSchema = z.object({
+    query: z.string().optional(),
+    term: z.string().optional(),
+    keyword: z.string().optional(),
     mode: z.enum(['auto', 'fts', 'semantic', 'hybrid']).optional(),
     team: z.boolean().optional(),
     limit: z.coerce.number().optional()
