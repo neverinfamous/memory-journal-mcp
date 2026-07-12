@@ -70,7 +70,7 @@ const hasContext2 = entry2.entry?.content?.includes('## Context for Next Session
 const hasAccomplished3 = updateRes.entry?.content?.includes('## Accomplished');
 
 // Cleanup
-await mj.core.deleteEntry({ entry_id: entry1.id ?? entry1.entry?.id, permanent: true });
+await mj.admin.deleteEntry({ entry_id: entry1.id ?? entry1.entry?.id, permanent: true });
 await mj.team.teamDeleteEntry({ project_number: 5, entry_id: entry2.id ?? entry2.entry?.id, expected_version: updateRes.entry?.version ?? 2 });
 
 return {

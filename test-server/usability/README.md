@@ -13,7 +13,7 @@ When an agent fails, they are instructed to permanently heal the codebase using 
 
 Because testing and healing all tools at once exhausts an agent's context window, we test them by group using separate threads/subagents.
 
-1. **Pick a test file** (e.g., `test-usability-core.md`).
+1. **Pick a test file** (e.g., `test-usability-core-read.md`).
 2. **Spawn a subagent** (or start a new thread) and feed them the file.
 3. **Wait for the Checkpoint**: The subagent will pause and ask you to manually refresh the MCP server whenever it makes a codebase change. 
 4. **Verify**: Say "ready" to let the subagent verify their fix.

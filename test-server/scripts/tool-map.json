@@ -280,39 +280,39 @@
       "test-core-admin-backup.md",
       "test-core-admin-batch.md",
       "test-core-admin-system.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-system.md"
     ],
     "register_project": [
       "test-cm-admin-projects.md",
       "test-core-project-admin.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-projects.md"
     ],
     "update_project": [
       "test-cm-admin-projects.md",
       "test-core-project-admin.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-projects.md"
     ],
     "delete_project": [
       "test-cm-admin-projects.md",
       "test-cm-kanban-lifecycle.md",
       "test-core-project-admin.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-projects.md"
     ],
     "get_project": [
       "test-cm-admin-projects.md",
       "test-cm-kanban-lifecycle.md",
       "test-core-project-admin.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-projects.md"
     ],
     "list_projects": [
       "test-cm-admin-projects.md",
       "test-core-project-admin.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-projects.md"
     ],
     "update_entry": [
@@ -331,7 +331,7 @@
       "test-errors-prompts.md",
       "test-integrity-part1.md",
       "test-team-mutations.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-mutations.md"
     ],
     "delete_entry": [
@@ -350,14 +350,14 @@
       "test-integrity-part1.md",
       "test-integrity-part2.md",
       "test-team-mutations.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-mutations.md"
     ],
     "restore_entry": [
       "test-cm-crud-advanced-part-1.md",
       "test-core-crud-read.md",
       "test-team-mutations.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part1.md",
       "test-usability-admin-mutations.md"
     ],
     "rebuild_vector_index": [
@@ -365,7 +365,7 @@
       "test-cm-search-advanced-part-1.md",
       "test-core-semantic.md",
       "test-seed.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-vector.md"
     ],
     "add_to_vector_index": [
@@ -375,7 +375,7 @@
       "test-cm-team-vector-errors-part-2.md",
       "test-core-semantic.md",
       "test-team-vector.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-vector.md"
     ],
     "merge_tags": [
@@ -388,7 +388,7 @@
       "test-errors-prompts.md",
       "test-integrity-part1.md",
       "test-team-mutations.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-system.md"
     ],
     "batch_create_entries": [
@@ -399,7 +399,7 @@
       "test-core-admin-batch.md",
       "test-core-admin-system.md",
       "test-team-crud.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-batch.md"
     ],
     "batch_update_entries": [
@@ -407,7 +407,7 @@
       "test-core-admin-batch.md",
       "test-errors-prompts.md",
       "test-team-crud.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-batch.md"
     ],
     "batch_delete_entries": [
@@ -417,7 +417,7 @@
       "test-core-admin-batch.md",
       "test-core-admin-system.md",
       "test-team-crud.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-batch.md"
     ],
     "search_audit_log": [
@@ -428,13 +428,13 @@
       "test-core-admin-backup.md",
       "test-core-admin-batch.md",
       "test-core-admin-system.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-system.md"
     ],
     "run_auto_prune": [
       "test-cm-admin-core.md",
       "test-core-admin-batch.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-system.md"
     ],
     "get_github_issues": [
@@ -445,7 +445,7 @@
       "test-github-read.md",
       "test-payload-optimization.md",
       "test-resources.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-read.md"
     ],
     "get_github_prs": [
@@ -455,7 +455,7 @@
       "test-cm-payload-optimization.md",
       "test-github-read.md",
       "test-payload-optimization.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-read.md"
     ],
     "get_github_issue": [
@@ -468,7 +468,7 @@
       "test-github-read.md",
       "test-kanban-lifecycle.md",
       "test-payload-optimization.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-read.md"
     ],
     "get_github_pr": [
@@ -479,7 +479,7 @@
       "test-cm-team-vector-errors-part-2.md",
       "test-github-read.md",
       "test-payload-optimization.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-read.md"
     ],
     "get_github_context": [
@@ -488,7 +488,7 @@
       "test-cm-github-part-1.md",
       "test-core-crud-create.md",
       "test-github-read.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-read.md"
     ],
     "get_kanban_board": [
@@ -500,7 +500,7 @@
       "test-github-kanban.md",
       "test-kanban-lifecycle.md",
       "test-payload-optimization.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-kanban.md"
     ],
     "move_kanban_item": [
@@ -508,19 +508,19 @@
       "test-cm-kanban-lifecycle.md",
       "test-github-kanban.md",
       "test-kanban-lifecycle.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-kanban.md"
     ],
     "add_kanban_item": [
       "test-cm-kanban-lifecycle.md",
       "test-kanban-lifecycle.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-kanban.md"
     ],
     "delete_kanban_item": [
       "test-cm-kanban-lifecycle.md",
       "test-kanban-lifecycle.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-kanban.md"
     ],
     "create_github_issue_with_entry": [
@@ -529,7 +529,7 @@
       "test-github-issue-cycle.md",
       "test-github-kanban.md",
       "test-github-milestones.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part1.md",
       "test-usability-github-issue-cycle.md"
     ],
     "close_github_issue_with_entry": [
@@ -538,14 +538,14 @@
       "test-github-issue-cycle.md",
       "test-github-kanban.md",
       "test-github-milestones.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-issue-cycle.md"
     ],
     "get_github_milestones": [
       "test-cm-error-matrix-part-3.md",
       "test-cm-github-part-1.md",
       "test-github-milestones.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-milestones.md"
     ],
     "get_github_milestone": [
@@ -554,38 +554,38 @@
       "test-cm-github-part-2.md",
       "test-cm-team-vector-errors-part-2.md",
       "test-github-milestones.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-milestones.md"
     ],
     "create_github_milestone": [
       "test-cm-github-part-2.md",
       "test-github-milestones.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-milestones.md"
     ],
     "update_github_milestone": [
       "test-cm-github-part-2.md",
       "test-github-milestones.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-milestones.md"
     ],
     "delete_github_milestone": [
       "test-cm-github-part-2.md",
       "test-github-milestones.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-milestones.md"
     ],
     "get_repo_insights": [
       "test-cm-error-matrix-part-3.md",
       "test-cm-github-part-2.md",
       "test-github-read.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-insights.md"
     ],
     "get_copilot_reviews": [
       "test-cm-github-part-2.md",
       "test-github-read.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-usability-github-insights.md"
     ],
     "get_commit_history": [
@@ -673,24 +673,24 @@
       "test-cm-error-matrix-part-3.md",
       "test-cm-team-admin-core.md",
       "test-cm-team-crud.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-core-read.md"
     ],
     "team_get_recent": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-core.md",
       "test-cm-team-analytics-relationships.md",
       "test-cm-team-crud.md",
       "test-cm-team-vector-errors-part-1.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-core-read.md"
     ],
     "team_list_tags": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-core.md",
       "test-cm-team-crud.md",
       "test-team-crud.md",
@@ -698,10 +698,10 @@
       "test-usability-team-core-read.md"
     ],
     "team_search": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-hallucination-smoothing.md",
       "test-cm-team-crud.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-tool-group-team-part2.md",
@@ -710,17 +710,17 @@
       "test-workspace-isolation.md"
     ],
     "team_search_by_date_range": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-crud.md",
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-search.md"
     ],
     "team_update_entry": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-core.md",
       "test-cm-team-crud.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-errors-prompts.md",
       "test-team-mutations.md",
       "test-tool-group-team-part1.md",
@@ -729,10 +729,10 @@
       "test-usability-team-mutations.md"
     ],
     "team_delete_entry": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-core.md",
       "test-cm-team-crud.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-mutations.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-mutations.md"
@@ -750,7 +750,7 @@
       "test-usability-team-search.md"
     ],
     "team_merge_tags": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-core.md",
       "test-cm-team-crud.md",
       "test-team-mutations.md",
@@ -778,30 +778,30 @@
       "test-usability-team-batch.md"
     ],
     "team_get_statistics": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-analytics-relationships.md",
       "test-team-analytics.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-analytics.md"
     ],
     "team_link_entries": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-analytics-relationships.md",
       "test-cm-team-crud.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-relationships.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-relationships.md"
     ],
     "team_visualize_relationships": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-analytics-relationships.md",
       "test-team-relationships.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-relationships.md"
     ],
     "team_export_entries": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-part-2.md",
       "test-team-io.md",
       "test-tool-group-team-part2.md",
@@ -826,23 +826,23 @@
       "test-usability-team-io.md"
     ],
     "team_backup": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-part-2.md",
       "test-team-backup.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-backup.md"
     ],
     "team_list_backups": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-admin-part-2.md",
       "test-team-backup.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-backup.md"
     ],
     "team_semantic_search": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-vector-errors-part-1.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-vector.md",
       "test-tool-group-team-part1.md",
       "test-tool-group-team-part2.md",
@@ -850,31 +850,31 @@
       "test-usability-team-vector.md"
     ],
     "team_get_vector_index_stats": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-vector-errors-part-1.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-vector.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-vector.md"
     ],
     "team_rebuild_vector_index": [
       "test-cm-team-vector-errors-part-1.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-vector.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-vector.md"
     ],
     "team_add_to_vector_index": [
       "test-cm-team-vector-errors-part-1.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-team-vector.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-vector.md"
     ],
     "team_get_cross_project_insights": [
-      "test-cm-error-matrix-part-3.md",
+      "test-cm-error-matrix-part-4.md",
       "test-cm-team-vector-errors-part-1.md",
-      "test-cm-team-vector-errors-part-2.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-seed.md",
       "test-team-analytics.md",
       "test-tool-group-team-part1.md",
@@ -1020,12 +1020,12 @@
       "test-team-rbac.md",
       "test-team-relationships.md",
       "test-team-vector.md",
-      "test-tool-group-admin.md",
+      "test-tool-group-admin-part2.md",
       "test-tool-group-analytics.md",
       "test-tool-group-backup.md",
       "test-tool-group-core.md",
       "test-tool-group-git.md",
-      "test-tool-group-github.md",
+      "test-tool-group-github-part2.md",
       "test-tool-group-io.md",
       "test-tool-group-relationships.md",
       "test-tool-group-search.md",

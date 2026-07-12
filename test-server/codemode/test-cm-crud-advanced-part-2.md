@@ -38,7 +38,7 @@ const injected = await mj.core.createEntry({
 })
 
 // Cleanup
-await mj.core.deleteEntry({ entry_id: injected.id, permanent: true })
+await mj.admin.deleteEntry({ entry_id: injected.id, permanent: true })
 
 return {
   injectedSuccess: injected.success,
@@ -92,13 +92,13 @@ return {
 const entry = await mj.core.createEntry({ project_number: 5, content: 'Auto version test' })
 
 // Update WITHOUT providing expected_version - should succeed because of outer `auto_version: true`
-const updated = await mj.core.updateEntry({
+const updated = await mj.admin.updateEntry({
   entry_id: entry.id,
   content: 'Auto version updated'
 })
 
 // Cleanup
-await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
+await mj.admin.deleteEntry({ entry_id: entry.id, permanent: true })
 
 return {
   updatedSuccess: updated.success
@@ -120,7 +120,7 @@ const entry = await mj.core.createEntry({
 })
 
 // Cleanup
-await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
+await mj.admin.deleteEntry({ entry_id: entry.id, permanent: true })
 
 return {
   stringResolveSuccess: entry.success,
@@ -149,7 +149,7 @@ After testing, remove test entries created during Phase 20:
 | Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
 | Delete history test entry| `delete_entry(entry_id: <history_test_id>, permanent: true)`|
 | Delete recovery test entry| `delete_entry(entry_id: <recovery_test_id>, permanent: true)`|
-| Delete locking test entry| `mj.core.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
+| Delete locking test entry| `mj.admin.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
 
 ---
 

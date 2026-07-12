@@ -35,14 +35,14 @@ const listSort = await mj.team.teamSearch({
 
 // 2. version -> expected_version, text/message -> content
 const entry = await mj.core.createEntry({ project_number: 5, text: 'Alias entry' })
-const updated = await mj.core.updateEntry({
+const updated = await mj.admin.updateEntry({
   entry_id: entry.id,
   message: 'Updated alias',
   version: entry.version
 })
 
 // 3. search/q -> query, mode -> instruction_level
-const searched = await mj.core.searchEntries({
+const searched = await mj.search.searchEntries({
   project_number: 5,
   q: 'Alias'
 })
@@ -56,7 +56,7 @@ if (!ioRes.success && !ioRes.error.includes('source_dir')) {
 }
 
 // Cleanup
-await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
+await mj.admin.deleteEntry({ entry_id: entry.id, permanent: true })
 
 return {
   listSortMapped: listSort.success && Array.isArray(listSort.entries),
@@ -86,7 +86,7 @@ const c2 = await mj.admin.updateConfiguration({ briefing_entries: 4 })
 
 // mj.core.getEntryHistory -> getEntryHistory
 const entry = await mj.core.createEntry({ project_number: 5, content: 'History test' })
-await mj.core.updateEntry({ entry_id: entry.id, content: 'History test updated' })
+await mj.admin.updateEntry({ entry_id: entry.id, content: 'History test updated' })
 const history = await mj.core.getEntryHistory({ entry_id: entry.id })
 
 // Team Aliases
@@ -98,7 +98,7 @@ const readQ1 = await mj.search.searchEntries({ project_number: 5, query: 'Histor
 const readQ2 = await mj.search.searchEntries({ project_number: 5, query: 'History test' })
 
 // Cleanup
-await mj.core.deleteEntry({ entry_id: entry.id, permanent: true })
+await mj.admin.deleteEntry({ entry_id: entry.id, permanent: true })
 
 return {
   configAlias: c1.success && c2.success,
@@ -126,8 +126,8 @@ Test that tools technically defined in one group (e.g. `semantic` or `admin`) bu
 ```javascript
 // Test code:
 
-// mj.core.semanticSearch -> mj.search.semanticSearch
-const semantic = await mj.core.semanticSearch({ project_number: 5, query: 'test' })
+// mj.search.semanticSearch -> mj.search.semanticSearch
+const semantic = await mj.search.semanticSearch({ project_number: 5, query: 'test' })
 
 // mj.search.getVectorIndexStats -> mj.search.getVectorIndexStats
 const vStats = await mj.search.getVectorIndexStats({ project_number: 5 })
@@ -190,10 +190,10 @@ const result = await (async () => {
     proxyError = e.message.includes('CodeMode Non-Array Proxy Error')
   }
   // cleanup the test entry
-  await mj.core.deleteEntry({ entry_id: createResult.id, permanent: true })
+  await mj.admin.deleteEntry({ entry_id: createResult.id, permanent: true })
   
   // Newly hardened 'Code Mode' array proxies: test support for .length, [0], .indexOf, .includes, .map, .filter
-  const listResult = await mj.core.searchEntries({ project_number: 5, limit: 1 })
+  const listResult = await mj.search.searchEntries({ project_number: 5, limit: 1 })
   let arrayProxiesHardened = false
   try {
     const len = listResult.length
@@ -242,7 +242,7 @@ return result
 
 - Parameter aliases map successfully (`sort` → `sort_by`, `version` → `expected_version`, `search`/`q` → `query`, `text`/`message` → `content`, `mode` → `instruction_level`, `filename` → `source_dir`)
 - Method aliases map successfully (`mj.admin.updateConfiguration`, `mj.core.getEntryHistory`, `mj.team.teamUpdateMemberRole`, `mj.team.teamListAuthorAliases`, `mj.search.searchEntries`)
-- Cross-group constructor wiring works (`mj.core.semanticSearch`, `mj.search.getVectorIndexStats`, `mj.admin.searchAuditLog`, `mj.search.listDeletedEntries`)
+- Cross-group constructor wiring works (`mj.search.semanticSearch`, `mj.search.getVectorIndexStats`, `mj.admin.searchAuditLog`, `mj.search.listDeletedEntries`)
 - `sleep()` and `setTimeout` globals exist and resolve in Sandbox
 - `await getConfig()` returns server configuration inside Sandbox
 - `readResource("memory://...")` throws a structured guidance error pointing to tools

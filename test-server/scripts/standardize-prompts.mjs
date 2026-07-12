@@ -106,6 +106,22 @@ if (fs.existsSync(teamFilePath)) {
   fs.unlinkSync(teamFilePath);
 }
 
+const adminFilePath = path.join(standardDir, 'test-tool-group-admin.md');
+if (fs.existsSync(adminFilePath)) {
+  const content = fs.readFileSync(adminFilePath, 'utf8');
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-admin-part1.md'), content);
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-admin-part2.md'), content);
+  fs.unlinkSync(adminFilePath);
+}
+
+const githubFilePath = path.join(standardDir, 'test-tool-group-github.md');
+if (fs.existsSync(githubFilePath)) {
+  const content = fs.readFileSync(githubFilePath, 'utf8');
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-github-part1.md'), content);
+  fs.writeFileSync(path.join(standardDir, 'test-tool-group-github-part2.md'), content);
+  fs.unlinkSync(githubFilePath);
+}
+
 const standardFiles = fs.readdirSync(standardDir).filter(f => f.endsWith('.md') && f !== 'README.md' && f !== 'coordinator-workflow.md' && f !== 'tool-group-requirements.md');
 
 for (const file of standardFiles) {
@@ -160,10 +176,14 @@ const codemodeHallucinationFixes = {
   'mj.admin.config': 'mj.admin.updateConfiguration',
   'mj.admin.listDeletedEntries': 'mj.search.listDeletedEntries',
   'mj.analytics.stats': 'mj.analytics.getStatistics',
+  'mj.core.deleteEntry': 'mj.admin.deleteEntry',
   'mj.core.history': 'mj.core.getEntryHistory',
   'mj.core.recent': 'mj.core.getRecentEntries',
   'mj.core.get': 'mj.core.getEntryById',
   'mj.core.searchAuditLog': 'mj.admin.searchAuditLog',
+  'mj.core.searchEntries': 'mj.search.searchEntries',
+  'mj.core.semanticSearch': 'mj.search.semanticSearch',
+  'mj.core.updateEntry': 'mj.admin.updateEntry',
   'mj.core.vectorStats': 'mj.search.getVectorIndexStats',
   'mj.core.listDeletedEntries': 'mj.search.listDeletedEntries',
   'mj.search.readQuery': 'mj.search.searchEntries',

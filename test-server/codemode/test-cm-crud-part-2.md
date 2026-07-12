@@ -97,7 +97,7 @@ After testing, remove test entries created during Phase 20:
 | Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
 | Delete history test entry| `delete_entry(entry_id: <history_test_id>, permanent: true)`|
 | Delete recovery test entry| `delete_entry(entry_id: <recovery_test_id>, permanent: true)`|
-| Delete locking test entry| `mj.core.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
+| Delete locking test entry| `mj.admin.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
 
 ---
 
