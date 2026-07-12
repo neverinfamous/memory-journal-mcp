@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -28,12 +27,12 @@
 
 | #   | Test                 | Command                                                                   | Expected Result                                                                                |
 | --- | -------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1   | Summary mode         | `get_kanban_board(project_number: 5, summary_only: true)`                 | `summaryOnly: true`, all columns have `items: []`, each column has `itemCount ≥ 0`             |
-| 2   | Item limit           | `get_kanban_board(project_number: 5, item_limit: 2)`                      | Columns with >2 items show `truncated: true`, `items.length ≤ 2`, `itemCount` shows full count |
-| 3   | Zero limit = summary | `get_kanban_board(project_number: 5, item_limit: 0)`                      | Same behavior as `summary_only: true` — empty items, `summaryOnly: true`                       |
-| 4   | Default throttling   | `get_kanban_board(project_number: 5)`                                     | Default `item_limit: 25` applied. `itemCount` present on all columns                           |
-| 5   | Over-limit rejected  | `get_kanban_board(project_number: 5, item_limit: 101)`                    | Structured validation error (max 100)                                                          |
-| 6   | Combined params      | `get_kanban_board(project_number: 5, summary_only: false, item_limit: 5)` | `summaryOnly` is `false` or absent, items present but capped at 5 per column                   |
+| 1   | Summary mode         | `get_kanban_board(workspace_id: "test-ws", summary_only: true)`                 | `summaryOnly: true`, all columns have `items: []`, each column has `itemCount ≥ 0`             |
+| 2   | Item limit           | `get_kanban_board(workspace_id: "test-ws", item_limit: 2)`                      | Columns with >2 items show `truncated: true`, `items.length ≤ 2`, `itemCount` shows full count |
+| 3   | Zero limit = summary | `get_kanban_board(workspace_id: "test-ws", item_limit: 0)`                      | Same behavior as `summary_only: true` — empty items, `summaryOnly: true`                       |
+| 4   | Default throttling   | `get_kanban_board(workspace_id: "test-ws")`                                     | Default `item_limit: 25` applied. `itemCount` present on all columns                           |
+| 5   | Over-limit rejected  | `get_kanban_board(workspace_id: "test-ws", item_limit: 101)`                    | Structured validation error (max 100)                                                          |
+| 6   | Combined params      | `get_kanban_board(workspace_id: "test-ws", summary_only: false, item_limit: 5)` | `summaryOnly` is `false` or absent, items present but capped at 5 per column                   |
 
 ## Success Criteria
 
@@ -79,14 +78,14 @@
 
 | #   | Test                | Command                                                        | Expected Result                 |
 | --- | ------------------- | -------------------------------------------------------------- | ------------------------------- |
-| 14  | Under limit         | `get_recent_entries(project_number: 5, limit: 100)`            | Accepted, returns ≤ 100 entries |
-| 15  | At limit            | `get_recent_entries(project_number: 5, limit: 500)`            | Accepted, returns ≤ 500 entries |
-| 16  | Over limit (core)   | `get_recent_entries(project_number: 5, limit: 501)`            | Structured validation error     |
+| 14  | Under limit         | `get_recent_entries(workspace_id: "test-ws", limit: 100)`            | Accepted, returns ≤ 100 entries |
+| 15  | At limit            | `get_recent_entries(workspace_id: "test-ws", limit: 500)`            | Accepted, returns ≤ 500 entries |
+| 16  | Over limit (core)   | `get_recent_entries(workspace_id: "test-ws", limit: 501)`            | Structured validation error     |
 | 17  | Over limit (issues) | `get_github_issues(limit: 501)`                                | Structured validation error     |
 | 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                                   | Structured validation error     |
-| 19  | Over limit (search) | `search_entries(project_number: 5, query: "test", limit: 501)` | Structured validation error     |
-| 20  | Cursor keyset (1)   | `get_recent_entries(project_number: 5, limit: 1)`              | Returns 1 entry and a `next_cursor` string |
-| 21  | Cursor keyset (2)   | `get_recent_entries(project_number: 5, limit: 1, cursor: "<next_cursor_from_test_20>")` | Returns distinct next entry and a new `next_cursor` |
+| 19  | Over limit (search) | `search_entries(workspace_id: "test-ws", query: "test", limit: 501)` | Structured validation error     |
+| 20  | Cursor keyset (1)   | `get_recent_entries(workspace_id: "test-ws", limit: 1)`              | Returns 1 entry and a `next_cursor` string |
+| 21  | Cursor keyset (2)   | `get_recent_entries(workspace_id: "test-ws", limit: 1, cursor: "<next_cursor_from_test_20>")` | Returns distinct next entry and a new `next_cursor` |
 
 ### Verification Checks
 

@@ -90,6 +90,17 @@ for (const file of files) {
   // Fix logic flaw: remove any lingering '(including `mj_execute_code`)' since usability tests don't use Code Mode
   updatedContent = updatedContent.replace(/\(including `mj_execute_code`\)/g, '');
   
+  // Fix logic flaw: remove parameter drift hallucination (use_test_db)
+  updatedContent = updatedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
+  
+  // Fix hallucinated project admin parameters
+  updatedContent = updatedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
+  updatedContent = updatedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj"');
+  updatedContent = updatedContent.replace(/project_number: 999999, project_name: "ghost"/g, 'name: "ghost"');
+  
+  // Fix parameter drift: project_number -> workspace_id
+  updatedContent = updatedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
+
   updatedContent = fixHallucinations(updatedContent);
   
   if (content !== updatedContent) {
@@ -134,6 +145,14 @@ for (const file of standardFiles) {
   const assignedTools = reverseMap[file] || [];
   
   let fixedContent = fixHallucinations(content);
+  
+  // Fix hallucinated project admin parameters
+  fixedContent = fixedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
+  fixedContent = fixedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj"');
+  fixedContent = fixedContent.replace(/project_number: 999999, project_name: "ghost"/g, 'name: "ghost"');
+  
+  // Fix parameter drift: project_number -> workspace_id
+  fixedContent = fixedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
   
   // Inject boilerplate from prompt-template.md
   const templatePath = path.join(__dirname, 'prompt-template.md');

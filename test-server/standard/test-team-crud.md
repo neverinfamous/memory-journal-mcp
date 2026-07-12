@@ -5,7 +5,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -47,37 +46,37 @@
 
 | Test               | Command/Action                                                                         | Expected Result                                             |
 | ------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Basic create       | `team_create_entry(project_number: 5, content: "Team test entry")`                     | `success: true`, `entry` with `author` field auto-populated |
-| Explicit author    | `team_create_entry(project_number: 5, content: "...", author: "TestBot")`              | `author: "TestBot"` in response                             |
-| With tags          | `team_create_entry(project_number: 5, content: "...", tags: ["team-test"])`            | Entry created with tags                                     |
-| With issue linking | `team_create_entry(project_number: 5, content: "...", issue_number: <N>)`              | `issueUrl` auto-populated from cached repo info             |
-| With entry type    | `team_create_entry(project_number: 5, content: "...", entry_type: "project_decision")` | Entry type set correctly                                    |
-| Invalid entry_type | `team_create_entry(project_number: 5, content: "...", entry_type: "invalid")`          | Structured error: `{ success: false, error: "..." }`        |
+| Basic create       | `team_create_entry(workspace_id: "test-ws", content: "Team test entry")`                     | `success: true`, `entry` with `author` field auto-populated |
+| Explicit author    | `team_create_entry(workspace_id: "test-ws", content: "...", author: "TestBot")`              | `author: "TestBot"` in response                             |
+| With tags          | `team_create_entry(workspace_id: "test-ws", content: "...", tags: ["team-test"])`            | Entry created with tags                                     |
+| With issue linking | `team_create_entry(workspace_id: "test-ws", content: "...", issue_number: <N>)`              | `issueUrl` auto-populated from cached repo info             |
+| With entry type    | `team_create_entry(workspace_id: "test-ws", content: "...", entry_type: "project_decision")` | Entry type set correctly                                    |
+| Invalid entry_type | `team_create_entry(workspace_id: "test-ws", content: "...", entry_type: "invalid")`          | Structured error: `{ success: false, error: "..." }`        |
 
 ### 14.2 Team Batch Operations
 
 | Test               | Command/Action                                                                         | Expected Result                                             |
 | ------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Team Batch Create  | `team_batch_create_entries(project_number: 5, entries: [{ content: "T1" }, { content: "T2" }])` | `success: true`, returns array of new entry IDs with `author` |
-| Team Batch Limit   | `team_batch_create_entries(project_number: 5, entries: [51 items])`                    | Structured error: `{ success: false, error: "..." }`        |
-| Team Batch Update  | `team_batch_update_entries(project_number: 5, updates: [{ entry_id: <id1>, content: "U1" }])`   | `success: true` and array of updated IDs                    |
-| Team Batch Delete  | `team_batch_delete_entries(project_number: 5, entry_ids: [<id1>, <id2>])`              | `success: true` and count of deleted entries                |
+| Team Batch Create  | `team_batch_create_entries(workspace_id: "test-ws", entries: [{ content: "T1" }, { content: "T2" }])` | `success: true`, returns array of new entry IDs with `author` |
+| Team Batch Limit   | `team_batch_create_entries(workspace_id: "test-ws", entries: [51 items])`                    | Structured error: `{ success: false, error: "..." }`        |
+| Team Batch Update  | `team_batch_update_entries(workspace_id: "test-ws", updates: [{ entry_id: <id1>, content: "U1" }])`   | `success: true` and array of updated IDs                    |
+| Team Batch Delete  | `team_batch_delete_entries(workspace_id: "test-ws", entry_ids: [<id1>, <id2>])`              | `success: true` and count of deleted entries                |
 
 ### 14.3 Team Read Tools
 
 | Test                 | Command/Action                                                        | Expected Result                                  |
 | -------------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
-| Get recent           | `team_get_recent(project_number: 5, limit: 5)`                        | `entries` array (each with `author`), `count`    |
-| Default limit        | `team_get_recent(project_number: 5)`                                  | Returns up to 10 entries (default)               |
-| Get recent pag. pg 1 | `team_get_recent(project_number: 5, limit: 2)`                        | Returns 2 entries and a non-empty `next_cursor`  |
-| Get recent pag. pg 2 | `team_get_recent(project_number: 5, limit: 2, cursor: "<next_cursor>")`| Returns next page of entries sequentially        |
-| Search by text       | `team_search(project_number: 5, query: "team test", mode: "fts")`     | Matching entries with `author` field             |
-| Search (archived off)| `team_search(project_number: 5, query: "test", include_archived: false)`| Excludes archived team entries from results      |
-| Search (archived on) | `team_search(project_number: 5, query: "test", include_archived: true)` | Returns archived team entries in results         |
-| Search by tags       | `team_search(project_number: 5, tags: ["team-test"])`                 | Tag-filtered results                             |
-| Combined search      | `team_search(project_number: 5, query: "test", tags: ["team-test"])`  | Text + tag filtered results                      |
-| Hybrid search        | `team_search(project_number: 5, query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
-| No query/tags        | `team_search(project_number: 5)`                                      | Returns recent entries (fallback to `getRecent`) |
+| Get recent           | `team_get_recent(workspace_id: "test-ws", limit: 5)`                        | `entries` array (each with `author`), `count`    |
+| Default limit        | `team_get_recent(workspace_id: "test-ws")`                                  | Returns up to 10 entries (default)               |
+| Get recent pag. pg 1 | `team_get_recent(workspace_id: "test-ws", limit: 2)`                        | Returns 2 entries and a non-empty `next_cursor`  |
+| Get recent pag. pg 2 | `team_get_recent(workspace_id: "test-ws", limit: 2, cursor: "<next_cursor>")`| Returns next page of entries sequentially        |
+| Search by text       | `team_search(workspace_id: "test-ws", query: "team test", mode: "fts")`     | Matching entries with `author` field             |
+| Search (archived off)| `team_search(workspace_id: "test-ws", query: "test", include_archived: false)`| Excludes archived team entries from results      |
+| Search (archived on) | `team_search(workspace_id: "test-ws", query: "test", include_archived: true)` | Returns archived team entries in results         |
+| Search by tags       | `team_search(workspace_id: "test-ws", tags: ["team-test"])`                 | Tag-filtered results                             |
+| Combined search      | `team_search(workspace_id: "test-ws", query: "test", tags: ["team-test"])`  | Text + tag filtered results                      |
+| Hybrid search        | `team_search(workspace_id: "test-ws", query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
+| No query/tags        | `team_search(workspace_id: "test-ws")`                                      | Returns recent entries (fallback to `getRecent`) |
 
 | Missing project no.  | `team_search(query: "test")`                                          | `{ success: false, code: "VALIDATION_ERROR" }`  |
 | Cross-team search    | `cross_team_search(query: "test")`                                    | Searches all configured team DBs, returns entries tagged with `team_db` |
@@ -88,10 +87,10 @@
 
 | Test             | Command/Action                                                                          | Expected Result                                                  |
 | ---------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Get by ID        | `team_get_entry_by_id(project_number: 5, entry_id: <team_entry_id>)`                    | `success: true`, `entry` with `author`, optional `relationships` |
+| Get by ID        | `team_get_entry_by_id(workspace_id: "test-ws", entry_id: <team_entry_id>)`                    | `success: true`, `entry` with `author`, optional `relationships` |
 | With importance  | Inspect response                                                                        | `importance` object with `score` (0.0-1.0) and `breakdown`       |
-| No relationships | `team_get_entry_by_id(project_number: 5, entry_id: <id>, include_relationships: false)` | Response omits `relationships` array                             |
-| Nonexistent ID   | `team_get_entry_by_id(project_number: 5, entry_id: 999999)`                             | Structured error: `{ success: false, error: "..." }`             |
+| No relationships | `team_get_entry_by_id(workspace_id: "test-ws", entry_id: <id>, include_relationships: false)` | Response omits `relationships` array                             |
+| Nonexistent ID   | `team_get_entry_by_id(workspace_id: "test-ws", entry_id: 999999)`                             | Structured error: `{ success: false, error: "..." }`             |
 
 ### 14.5 Team Tags
 
@@ -104,7 +103,7 @@
 
 | Test             | Command/Action                                                                                                          | Expected Result                                      |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Basic date range | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31")`                        | Returns `entries` array with `author` field, `count` |
-| With entry_type  | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "standup")` | Only `standup` entries returned                      |
-| With tags filter | `team_search_by_date_range(project_number: 5, start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
-| Invalid date     | `team_search_by_date_range(project_number: 5, start_date: "Jan 1", end_date: "Jan 31")`                                 | Structured error with YYYY-MM-DD hint                |
+| Basic date range | `team_search_by_date_range(workspace_id: "test-ws", start_date: "2026-01-01", end_date: "2026-12-31")`                        | Returns `entries` array with `author` field, `count` |
+| With entry_type  | `team_search_by_date_range(workspace_id: "test-ws", start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "standup")` | Only `standup` entries returned                      |
+| With tags filter | `team_search_by_date_range(workspace_id: "test-ws", start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
+| Invalid date     | `team_search_by_date_range(workspace_id: "test-ws", start_date: "Jan 1", end_date: "Jan 31")`                                 | Structured error with YYYY-MM-DD hint                |

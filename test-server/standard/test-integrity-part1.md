@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -29,14 +28,14 @@ Create entries with specific data, then read them back to verify nothing is lost
 
 | Test                   | Create Action                                                                                                                                                                                                                     | Read-Back Verification                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| All fields persist     | `create_entry(content: "RT1", entry_type: "technical_note", tags: ["rt-test"], pr_number: 42, pr_status: "open", workflow_run_id: 100, workflow_name: "CI", workflow_status: "completed", project_number: 5, is_personal: false)` | `get_entry_by_id` — verify every field matches exactly                        |
-| Unicode content        | `create_entry(project_number: 5, content: "日本語テスト 🎉 Ñoño — em dash")`                                                                                                                                                      | `get_entry_by_id` — verify content is byte-identical                          |
-| Long content           | `create_entry(project_number: 5, content: <10,000+ char string>)`                                                                                                                                                                 | `get_entry_by_id` — verify content length matches                             |
+| All fields persist     | `create_entry(content: "RT1", entry_type: "technical_note", tags: ["rt-test"], pr_number: 42, pr_status: "open", workflow_run_id: 100, workflow_name: "CI", workflow_status: "completed", workspace_id: "test-ws", is_personal: false)` | `get_entry_by_id` — verify every field matches exactly                        |
+| Unicode content        | `create_entry(workspace_id: "test-ws", content: "日本語テスト 🎉 Ñoño — em dash")`                                                                                                                                                      | `get_entry_by_id` — verify content is byte-identical                          |
+| Long content           | `create_entry(workspace_id: "test-ws", content: <10,000+ char string>)`                                                                                                                                                                 | `get_entry_by_id` — verify content length matches                             |
 | 12.6 Bad Expected Version | `update_entry(entry_id: <history_id>, content: "bad version", expected_version: 9999)` | Fails with `VALIDATION_ERROR` (version mismatch) |
 | 12.7 Revision Eviction | Update entry 12 times to produce 12 revisions, then `get_entry_history(entry_id: <history_id>)` | Returns ≤10 revisions (oldest evicted). The first two snapshot contents are no longer present. |
-| Multiline content      | `create_entry(project_number: 5, content: "Line 1\nLine 2\nLine 3")`                                                                                                                                                              | `get_entry_by_id` — verify newlines preserved                                 |
-| HTML-like content      | `create_entry(project_number: 5, content: "<script>alert('xss')</script>")`                                                                                                                                                       | `get_entry_by_id` — content stored as-is (no sanitization of journal content) |
-| Update preserves unset | `create_entry(project_number: 5, content: "Original", tags: ["a","b"])` then `update_entry(project_number: 5, entry_id: N, content: "Updated")`                                                                                   | `get_entry_by_id` — tags still `["a","b"]`, only content changed              |
+| Multiline content      | `create_entry(workspace_id: "test-ws", content: "Line 1\nLine 2\nLine 3")`                                                                                                                                                              | `get_entry_by_id` — verify newlines preserved                                 |
+| HTML-like content      | `create_entry(workspace_id: "test-ws", content: "<script>alert('xss')</script>")`                                                                                                                                                       | `get_entry_by_id` — content stored as-is (no sanitization of journal content) |
+| Update preserves unset | `create_entry(workspace_id: "test-ws", content: "Original", tags: ["a","b"])` then `update_entry(workspace_id: "test-ws", entry_id: N, content: "Updated")`                                                                                   | `get_entry_by_id` — tags still `["a","b"]`, only content changed              |
 
 ### 12.1.2 Boundary Values
 
@@ -45,16 +44,16 @@ Create entries with specific data, then read them back to verify nothing is lost
 
 | Test                   | Command/Action                                                                              | Expected Result                                                   |
 | ---------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Max content length     | `create_entry(project_number: 5, content: <50,000 char string>)`                            | Entry created successfully (50k chars)                            |
-| Content above max      | `create_entry(project_number: 5, content: <100,000 char string>)`                           | Structured validation error (`<= 50000 characters`)               |
-| Empty tags array       | `create_entry(project_number: 5, content: "test", tags: [])`                                | Entry created with empty tags                                     |
-| Single-char tag        | `create_entry(project_number: 5, content: "test", tags: ["a"])`                             | Entry created — verify tag stored and retrievable via `list_tags` |
-| Max limit on recent    | `get_recent_entries(project_number: 5, limit: 500)`                                         | Returns ≤ 500 entries                                             |
-| Over max limit         | `get_recent_entries(project_number: 5, limit: 501)`                                         | Structured validation error (`limit: Too big`)                    |
-| Limit = 1              | `get_recent_entries(project_number: 5, limit: 1)`                                           | Returns exactly 1 entry                                           |
-| Search with max limit  | `search_entries(project_number: 5, query: "test", limit: 500)`                              | Returns ≤ 500 entries                                             |
-| Date at epoch boundary | `search_by_date_range(project_number: 5, start_date: "1970-01-01", end_date: "1970-01-02")` | Returns 0 entries (no crash)                                      |
-| Future date range      | `search_by_date_range(project_number: 5, start_date: "2099-01-01", end_date: "2099-12-31")` | Returns 0 entries (no crash, no false results)                    |
+| Max content length     | `create_entry(workspace_id: "test-ws", content: <50,000 char string>)`                            | Entry created successfully (50k chars)                            |
+| Content above max      | `create_entry(workspace_id: "test-ws", content: <100,000 char string>)`                           | Structured validation error (`<= 50000 characters`)               |
+| Empty tags array       | `create_entry(workspace_id: "test-ws", content: "test", tags: [])`                                | Entry created with empty tags                                     |
+| Single-char tag        | `create_entry(workspace_id: "test-ws", content: "test", tags: ["a"])`                             | Entry created — verify tag stored and retrievable via `list_tags` |
+| Max limit on recent    | `get_recent_entries(workspace_id: "test-ws", limit: 500)`                                         | Returns ≤ 500 entries                                             |
+| Over max limit         | `get_recent_entries(workspace_id: "test-ws", limit: 501)`                                         | Structured validation error (`limit: Too big`)                    |
+| Limit = 1              | `get_recent_entries(workspace_id: "test-ws", limit: 1)`                                           | Returns exactly 1 entry                                           |
+| Search with max limit  | `search_entries(workspace_id: "test-ws", query: "test", limit: 500)`                              | Returns ≤ 500 entries                                             |
+| Date at epoch boundary | `search_by_date_range(workspace_id: "test-ws", start_date: "1970-01-01", end_date: "1970-01-02")` | Returns 0 entries (no crash)                                      |
+| Future date range      | `search_by_date_range(workspace_id: "test-ws", start_date: "2099-01-01", end_date: "2099-12-31")` | Returns 0 entries (no crash, no false results)                    |
 
 ### 12.1.3 Tag Operations Integrity
 
@@ -64,8 +63,8 @@ Create entries with specific data, then read them back to verify nothing is lost
 | Source tag deleted after merge | `merge_tags(source_tag: "old", target_tag: "new")` then `list_tags`           | `"old"` no longer in tag list                                                      |
 | Target tag has combined count  | After merge, `list_tags`                                                      | `"new"` count equals sum of old source + old target counts                         |
 | Case normalization             | Create with tag `"CamelCase"`, verify with `get_entry_by_id`                  | Tag is automatically normalized to lowercase `"camelcase"`                         |
-| Tag with spaces                | `create_entry(project_number: 5, content: "test", tags: ["tag with spaces"])` | Entry created and tag retrievable (spaces convert to hyphens: `"tag-with-spaces"`) |
-| Duplicate tags in array        | `create_entry(project_number: 5, content: "test", tags: ["dup", "dup"])`      | Entry created — duplicates either deduplicated or stored as-is                     |
+| Tag with spaces                | `create_entry(workspace_id: "test-ws", content: "test", tags: ["tag with spaces"])` | Entry created and tag retrievable (spaces convert to hyphens: `"tag-with-spaces"`) |
+| Duplicate tags in array        | `create_entry(workspace_id: "test-ws", content: "test", tags: ["dup", "dup"])`      | Entry created — duplicates either deduplicated or stored as-is                     |
 
 ---
 

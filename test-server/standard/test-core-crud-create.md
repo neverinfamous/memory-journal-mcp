@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -27,19 +26,19 @@
 
 | Test                 | Command/Action                                                                                                                 | Expected Result                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Minimal create       | `create_entry(project_number: 5, content: "Test entry")`                                                               | Returns entry ID                                                                      |
-| Full create          | `create_entry(project_number: 5, content: "...", entry_type: "planning", tags: ["test"])`                                      | Entry created with metadata                                                           |
-| With GitHub linking  | `create_entry(project_number: 5, ..., issue_number: <N>)`                                                                      | Entry links to issue                                                                  |
-| issueUrl auto-pop    | `create_entry(project_number: 5, content: "...", issue_number: <N>)` — omit issueUrl                                           | `issueUrl` auto-populated from cached repo info (requires prior `get_github_context`) |
-| Invalid entry_type   | `create_entry(project_number: 5, content: "test", entry_type: "invalid")`                                                      | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
-| Invalid significance | `create_entry(project_number: 5, content: "test", significance_type: "invalid")`                                               | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
-| With PR fields       | `create_entry(project_number: 5, content: "PR test", pr_number: 67, pr_status: "merged")`                                      | Entry created with `prNumber`, `prStatus` fields persisted                            |
-| With workflow fields | `create_entry(project_number: 5, content: "CI test", workflow_run_id: 123, workflow_name: "CI", workflow_status: "completed")` | Entry created with all workflow fields persisted                                      |
-| With project_owner   | `create_entry(content: "...", project_number: 5, project_owner: "neverinfamous")`                                              | Entry created with `projectOwner` field                                               |
-| auto_context off     | `create_entry(project_number: 5, content: "No context", auto_context: false)`                                                  | Entry created without auto-generated context                                          |
-| share_with_team      | `create_entry(project_number: 5, content: "Shared entry", share_with_team: true)`                                              | Entry in personal DB + team DB; response has `sharedWithTeam: true`, `author`         |
-| Default Type         | `create_entry(project_number: 5, content: "Type omitted")`                                                                     | Type defaults to "note"                                                               |
-| Unrecognized Fields  | `create_entry(project_number: 5, content: "...", random_field: "ignore_me")`                                                   | Safe ignore (no crash), entry creates normally                                        |
+| Minimal create       | `create_entry(workspace_id: "test-ws", content: "Test entry")`                                                               | Returns entry ID                                                                      |
+| Full create          | `create_entry(workspace_id: "test-ws", content: "...", entry_type: "planning", tags: ["test"])`                                      | Entry created with metadata                                                           |
+| With GitHub linking  | `create_entry(workspace_id: "test-ws", ..., issue_number: <N>)`                                                                      | Entry links to issue                                                                  |
+| issueUrl auto-pop    | `create_entry(workspace_id: "test-ws", content: "...", issue_number: <N>)` — omit issueUrl                                           | `issueUrl` auto-populated from cached repo info (requires prior `get_github_context`) |
+| Invalid entry_type   | `create_entry(workspace_id: "test-ws", content: "test", entry_type: "invalid")`                                                      | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
+| Invalid significance | `create_entry(workspace_id: "test-ws", content: "test", significance_type: "invalid")`                                               | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
+| With PR fields       | `create_entry(workspace_id: "test-ws", content: "PR test", pr_number: 67, pr_status: "merged")`                                      | Entry created with `prNumber`, `prStatus` fields persisted                            |
+| With workflow fields | `create_entry(workspace_id: "test-ws", content: "CI test", workflow_run_id: 123, workflow_name: "CI", workflow_status: "completed")` | Entry created with all workflow fields persisted                                      |
+| With project_owner   | `create_entry(content: "...", workspace_id: "test-ws", project_owner: "neverinfamous")`                                              | Entry created with `projectOwner` field                                               |
+| auto_context off     | `create_entry(workspace_id: "test-ws", content: "No context", auto_context: false)`                                                  | Entry created without auto-generated context                                          |
+| share_with_team      | `create_entry(workspace_id: "test-ws", content: "Shared entry", share_with_team: true)`                                              | Entry in personal DB + team DB; response has `sharedWithTeam: true`, `author`         |
+| Default Type         | `create_entry(workspace_id: "test-ws", content: "Type omitted")`                                                                     | Type defaults to "note"                                                               |
+| Unrecognized Fields  | `create_entry(workspace_id: "test-ws", content: "...", random_field: "ignore_me")`                                                   | Safe ignore (no crash), entry creates normally                                        |
 | Create No Project    | `create_entry(content: "No project test")` (without `project_number`)                                                          | Fails with `VALIDATION_ERROR` ("Missing project_number..."). *(Note: If `DEFAULT_PROJECT_NUMBER` is configured on the server, this will succeed instead of erroring. If so, remove the default and re-test).* |
 
 

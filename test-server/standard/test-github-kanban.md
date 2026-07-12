@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -26,11 +25,11 @@
 
 | Test                | Command/Action                                                                     | Expected Result                                                       |
 | ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Get board           | `get_kanban_board(project_number: 5)`                                              | Returns board structure with columns/items                            |
+| Get board           | `get_kanban_board(workspace_id: "test-ws")`                                              | Returns board structure with columns/items                            |
 | Kanban resource     | Read `memory://kanban/5`                                                           | JSON board data                                                       |
 | Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                |
-| Move item           | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
-| Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
+| Move item           | `move_kanban_item(workspace_id: "test-ws", item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
+| Move invalid status | `move_kanban_item(workspace_id: "test-ws", item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
 | Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
 
 ---

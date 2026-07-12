@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -27,7 +26,7 @@
 
 | Test                        | Command/Action                                                                                  | Expected Result                                         |
 | --------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Link persists after re-read | `link_entries(from: A, to: B, type: "references")` then `get_entry_by_id(project_number: 5, A)` | Relationships array includes the link                   |
+| Link persists after re-read | `link_entries(from: A, to: B, type: "references")` then `get_entry_by_id(workspace_id: "test-ws", A)` | Relationships array includes the link                   |
 | Duplicate link detection    | Link A→B twice with same type                                                                   | Second call returns `duplicate: true`                   |
 | Reverse link allowed        | Link B→A after A→B exists                                                                       | Succeeds — reverse direction is a separate relationship |
 | Link to soft-deleted entry  | Soft-delete B, then `link_entries(from: A, to: B)`                                              | Structured error — target entry not found or hidden     |
@@ -52,8 +51,8 @@
 | `get_statistics` date filter         | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")`                             | ⚠️ Should return 0 entries. If returns all, handler ignores date filter |
 | `export_entries` tag filter          | `export_entries(format: "json", tags: ["nonexistent-tag-xyz"], limit: 100)`                    | Should return 0 entries. If returns all, filter is ignored              |
 | `export_entries` date filter         | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)`                         | Should return 0 entries. If returns all, date filter is ignored         |
-| `search_by_date_range` with filters  | `search_by_date_range(project_number: 5, ..., entry_type: "nonexistent_type")`                 | Structured validation error rejecting the invalid enum value            |
-| `get_recent_entries` personal filter | `get_recent_entries(project_number: 5, limit: 100, is_personal: true)` vs `is_personal: false` | Results should be mutually exclusive                                    |
+| `search_by_date_range` with filters  | `search_by_date_range(workspace_id: "test-ws", ..., entry_type: "nonexistent_type")`                 | Structured validation error rejecting the invalid enum value            |
+| `get_recent_entries` personal filter | `get_recent_entries(workspace_id: "test-ws", limit: 100, is_personal: true)` vs `is_personal: false` | Results should be mutually exclusive                                    |
 
 ---
 

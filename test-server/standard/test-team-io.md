@@ -5,7 +5,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -27,11 +26,11 @@
 
 | Test               | Command/Action                                                                      | Expected Result                           |
 | ------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------- |
-| Export JSON        | `team_export_entries(project_number: 5, format: "json", limit: 5)`                  | `format: "json"`, `data` string, `count`  |
-| Export markdown    | `team_export_entries(project_number: 5, format: "markdown", limit: 5)`              | `format: "markdown"`, `data` string       |
-| IO Export markdown | `team_export_markdown(project_number: 5, output_dir: "tmp_team_md", limit: 5)`      | Generates local `.md` files in target dir |
-| IO Import external | `team_import_external(project_number: 5, markdown_content: "...", dry_run: true)` | Parses external wiki format |
-| IO Import dry run  | `team_import_markdown(project_number: 5, source_dir: "tmp_team_md", dry_run: true)` | Returns mock counts, resolves `author`    |
+| Export JSON        | `team_export_entries(workspace_id: "test-ws", format: "json", limit: 5)`                  | `format: "json"`, `data` string, `count`  |
+| Export markdown    | `team_export_entries(workspace_id: "test-ws", format: "markdown", limit: 5)`              | `format: "markdown"`, `data` string       |
+| IO Export markdown | `team_export_markdown(workspace_id: "test-ws", output_dir: "tmp_team_md", limit: 5)`      | Generates local `.md` files in target dir |
+| IO Import external | `team_import_external(workspace_id: "test-ws", markdown_content: "...", dry_run: true)` | Parses external wiki format |
+| IO Import dry run  | `team_import_markdown(workspace_id: "test-ws", source_dir: "tmp_team_md", dry_run: true)` | Returns mock counts, resolves `author`    |
 
 ---
 

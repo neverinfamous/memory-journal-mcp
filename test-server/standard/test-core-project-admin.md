@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -29,12 +28,12 @@
 | ---------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Register new project   | `register_project(project_name: "test-proj", default_owner: "dev", github_repo: "user/test-proj")`          | Project registered, returns project details including `project_number`             |
 | List projects          | `list_projects`                                                                                             | Returns all projects, including the newly registered "test-proj"                   |
-| Get project            | `get_project(project_number: <new_project_number>)`                                                         | Returns the specific details for the "test-proj" project                           |
-| Update project         | `update_project(project_number: <new_project_number>, project_name: "updated-proj", is_active: false)`      | Project is updated and marked inactive                                             |
-| Delete project         | `delete_project(project_number: <new_project_number>)`                                                      | Project is deleted                                                                 |
-| Get deleted project    | `get_project(project_number: <new_project_number>)`                                                         | Structured error: `{ success: false, error: "Project not found..." }`              |
+| Get project            | `get_project(name: "test-proj")`                                                         | Returns the specific details for the "test-proj" project                           |
+| Update project         | `update_project(name: "test-proj", new_name: "updated-proj")`      | Project is updated and marked inactive                                             |
+| Delete project         | `delete_project(name: "test-proj")`                                                      | Project is deleted                                                                 |
+| Get deleted project    | `get_project(name: "test-proj")`                                                         | Structured error: `{ success: false, error: "Project not found..." }`              |
 | Register duplicate     | `register_project(project_name: "test-proj", default_owner: "dev")` (run twice)                             | Second call may fail or succeed depending on unique constraint logic (verify schema)|
-| Invalid project update | `update_project(project_number: 999999, project_name: "ghost")`                                             | Structured error: `{ success: false, error: "Project not found..." }`              |
+| Invalid project update | `update_project(name: "ghost")`                                             | Structured error: `{ success: false, error: "Project not found..." }`              |
 
 ---
 

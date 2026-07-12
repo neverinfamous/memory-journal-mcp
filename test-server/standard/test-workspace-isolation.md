@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -68,7 +67,7 @@
 
 | Test | Command/Action | Expected Result |
 | --- | --- | --- |
-| Team create | `team_create_entry(workspace_id: "alpha", content: "Team alpha plan", project_number: 5)` | Entry created in alpha team DB |
+| Team create | `team_create_entry(workspace_id: "alpha", content: "Team alpha plan", workspace_id: "test-ws")` | Entry created in alpha team DB |
 | Team search | `team_search(workspace_id: "beta", query: "alpha")` | Returns 0 entries |
 
 ---

@@ -4,7 +4,6 @@
 
 **Prerequisites:**
 
-- **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 - **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
@@ -56,8 +55,8 @@ Every tool must return `{success: false, error, code, category, suggestion, reco
 | **admin**  | `merge_tags`                           | `source_tag: "x", target_tag: "x"`                 | `success:false`, same-tag error with `category:"validation"`                       |
 | **backup** | `restore_backup`                       | `filename: "nonexistent.db"`                       | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `details.resourceType`               |
 | **github** | `get_github_issue`                     | `issue_number: 999999`                             | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
-| **team**   | `team_create_entry(project_number: 5)` | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
-| **team**   | `team_update_entry(project_number: 5)` | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
+| **team**   | `team_create_entry(workspace_id: "test-ws")` | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
+| **team**   | `team_update_entry(workspace_id: "test-ws")` | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
 
 *Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified by executing `node test-server/scripts/test-sdk-boundaries.mjs`.*
 

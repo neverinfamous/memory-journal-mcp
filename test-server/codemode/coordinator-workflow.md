@@ -32,47 +32,47 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 
 ## Test Sequence Queue (Dependency DAG)
 
-7. `test-cm-sandbox-basics.md` (**MUST PASS FIRST**)
-8. `test-cm-api-discovery.md`
-9. `test-cm-readonly.md`
-10. `test-cm-security.md`
-11. `test-cm-crud-part-1.md`
-12. `test-cm-crud-part-2.md`
-13. `test-cm-crud-advanced-part-1.md`
-14. `test-cm-crud-advanced-part-2.md`
-15. `test-cm-search.md`
-16. `test-cm-search-advanced-part-1.md`
-17. `test-cm-search-advanced-part-2.md`
-18. `test-cm-workflows.md`
-19. `test-cm-orchestration.md`
-20. `test-cm-relationships.md` (Includes cleanup for 12-14)
-21. `test-cm-github-part-1.md`
-22. `test-cm-github-part-2.md`
-23. `test-cm-kanban-lifecycle.md`
-24. `test-cm-io.md`
-25. `test-cm-admin-projects.md`
-26. `test-cm-admin-core.md`
-27. `test-cm-admin-batch.md`
-28. `test-cm-backup.md`
-29. `test-cm-team-crud.md`
-30. `test-cm-team-admin-core.md`
-31. `test-cm-team-batch.md`
-32. `test-cm-team-analytics-relationships.md`
-33. `test-cm-team-admin-part-2.md`
-34. `test-cm-team-aliases.md`
-35. `test-cm-team-rbac.md`
-36. `test-cm-team-vector-errors-part-1.md`
-37. `test-cm-team-vector-errors-part-2.md`
-38. `test-cm-team-vector-errors-part-3.md` (Includes cleanup)
-39. `test-cm-error-matrix-part-1.md`
-40. `test-cm-error-matrix-part-2.md`
-41. `test-cm-error-matrix-part-3.md`
-42. `test-cm-error-matrix-part-4.md`
-43. `test-cm-payload-optimization.md`
-44. `test-cm-hallucination-smoothing.md`
-45. `test-cm-session-summary-healing.md`
-46. `test-config-reload.md`
-47. `test-git.md`
+1. `test-cm-sandbox-basics.md` (**MUST PASS FIRST**)
+2. `test-cm-api-discovery.md`
+3. `test-cm-readonly.md`
+4. `test-cm-security.md`
+5. `test-cm-crud-part-1.md`
+6. `test-cm-crud-part-2.md`
+7. `test-cm-crud-advanced-part-1.md`
+8. `test-cm-crud-advanced-part-2.md`
+9. `test-cm-search.md`
+10. `test-cm-search-advanced-part-1.md`
+11. `test-cm-search-advanced-part-2.md`
+12. `test-cm-workflows.md`
+13. `test-cm-orchestration.md`
+14. `test-cm-relationships.md` (Includes cleanup for 12-14)
+15. `test-cm-github-part-1.md`
+16. `test-cm-github-part-2.md`
+17. `test-cm-kanban-lifecycle.md`
+18. `test-cm-io.md`
+19. `test-cm-admin-projects.md`
+20. `test-cm-admin-core.md`
+21. `test-cm-admin-batch.md`
+22. `test-cm-backup.md`
+23. `test-cm-team-crud.md`
+24. `test-cm-team-admin-core.md`
+25. `test-cm-team-batch.md`
+26. `test-cm-team-analytics-relationships.md`
+27. `test-cm-team-admin-part-2.md`
+28. `test-cm-team-aliases.md`
+29. `test-cm-team-rbac.md`
+30. `test-cm-team-vector-errors-part-1.md`
+31. `test-cm-team-vector-errors-part-2.md`
+32. `test-cm-team-vector-errors-part-3.md` (Includes cleanup)
+33. `test-cm-error-matrix-part-1.md`
+34. `test-cm-error-matrix-part-2.md`
+35. `test-cm-error-matrix-part-3.md`
+36. `test-cm-error-matrix-part-4.md`
+37. `test-cm-payload-optimization.md`
+38. `test-cm-hallucination-smoothing.md`
+39. `test-cm-session-summary-healing.md`
+40. `test-config-reload.md`
+41. `test-git.md`
 
 ## Telemetry Collection
 
