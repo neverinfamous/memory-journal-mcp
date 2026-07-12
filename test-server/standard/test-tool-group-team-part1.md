@@ -32,6 +32,11 @@
 | `team_list_deleted_entries`                    | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
 | `team_update_entry`                            | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
 | `team_restore_entry`                           | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_add_author_alias` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_batch_create_entries` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_get_collaboration_matrix` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_import_markdown` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_rebuild_vector_index` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

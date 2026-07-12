@@ -29,6 +29,14 @@
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
 | `team_remove_member`                           | N/A                                                  | ⚠️ Should return validation error | `username: 123`   |
 | `team_list_author_aliases`                     | N/A                                                  | ⚠️ Should return validation error | `author_id: 123`  |
+| `team_add_to_vector_index` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_batch_update_entries` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_export_entries` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_get_entry_by_id` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_get_vector_index_stats` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_list_tags` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_search_by_date_range` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_visualize_relationships` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

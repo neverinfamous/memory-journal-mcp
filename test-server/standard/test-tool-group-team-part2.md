@@ -30,6 +30,13 @@
 | `team_batch_delete_entries`                    | `entry_ids: []`                                      | ⚠️ Should return validation error | `entry_ids: "abc"`|
 | `team_get_statistics`                          | N/A                                                  | Should succeed (defaults)         | `start_date: 123` |
 | `team_link_entries`                            | `from_entry_id: 999999`                              | ⚠️ Should return validation error | `from_entry_id: "abc"` |
+| `team_add_member` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_delete_entry` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_get_cross_project_insights` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_list_members` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_remove_author_alias` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_search` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_update_member_role` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

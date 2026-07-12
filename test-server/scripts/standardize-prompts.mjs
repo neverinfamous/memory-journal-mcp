@@ -33,7 +33,15 @@ function fixHallucinations(text) {
 
 // Build reverse map: file -> tools
 for (const [tool, files] of Object.entries(toolMapData.toolMap)) {
-  if (tool === 'mj_execute_code') continue;
+  if (tool === 'mj_execute_code') {
+    if (!reverseMap['test-usability-codemode.md']) {
+      reverseMap['test-usability-codemode.md'] = [];
+    }
+    if (!reverseMap['test-usability-codemode.md'].includes('mj_execute_code')) {
+      reverseMap['test-usability-codemode.md'].push('mj_execute_code');
+    }
+    continue;
+  }
   for (const file of files) {
     if (!reverseMap[file]) {
       reverseMap[file] = [];
@@ -89,12 +97,16 @@ for (const file of files) {
     // Format the tools line as backticked, comma-separated list
     const toolsLine = assignedTools.map(t => `\`${t}\``).join(', ');
     
-    if (idx + 1 < lines.length) {
-       if (lines[idx+1].startsWith('`') || lines[idx+1].includes('`')) {
-           lines[idx + 1] = toolsLine;
-       } else {
-           lines.splice(idx + 1, 0, toolsLine);
-       }
+    // Clean up empty lines and old tools lines
+    while (idx + 1 < lines.length && (lines[idx + 1].trim() === '' || lines[idx + 1].startsWith('`') || lines[idx + 1].includes('`'))) {
+        lines.splice(idx + 1, 1);
+    }
+    
+    // Insert an empty line, the tools line, and another empty line
+    if (toolsLine) {
+        lines.splice(idx + 1, 0, '', toolsLine, '');
+    } else {
+        lines.splice(idx + 1, 0, '');
     }
   }
   
@@ -197,14 +209,28 @@ for (const file of standardFiles) {
     
     const lines = fixedContent.split('\n');
     const resultLines = [];
+    const foundTools = new Set();
     for (const line of lines) {
       if (line.trim().startsWith('|') && !line.includes('Tool') && !line.includes('---') && !line.includes('All Team Tools') && !line.includes('All Admin Tools') && !line.includes('All GitHub Tools')) {
         const match = line.match(/`([^`]+)`/);
-        if (match && !assignedTools.includes(match[1])) {
-          continue;
+        if (match) {
+          if (!assignedTools.includes(match[1])) {
+            continue;
+          }
+          foundTools.add(match[1]);
         }
       }
       resultLines.push(line);
+    }
+    const missingTools = assignedTools.filter(t => !foundTools.has(t));
+    if (missingTools.length > 0) {
+      let insertIndex = resultLines.findIndex(l => l.startsWith('### Specific Domain Checks'));
+      if (insertIndex === -1) insertIndex = resultLines.findIndex(l => l.startsWith('## Success Criteria'));
+      if (insertIndex === -1) insertIndex = resultLines.length;
+      while (insertIndex > 0 && resultLines[insertIndex - 1].trim() === '') insertIndex--;
+      const addedLines = missingTools.map(t => `| \`${t}\` | Auto-injected missing test | ⚠️ Should return validation error | \`param: "abc"\` |`);
+      resultLines.splice(insertIndex, 0, ...addedLines);
+      updated++;
     }
     fixedContent = resultLines.join('\n');
   }
@@ -276,6 +302,21 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(/aa*vailableStatuses/g, 'availableStatuses');
   fixedContent = fixedContent.replace(/team_r*ebuild_vector_index/g, 'team_rebuild_vector_index');
   fixedContent = fixedContent.replace(/team_a*dd_to_vector_index/g, 'team_add_to_vector_index');
+  
+  // Fix hallucinated project admin parameters
+  fixedContent = fixedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
+  fixedContent = fixedContent.replace(/project_name: "updated-proj", is_active: false/g, 'new_name: "updated-proj", is_active: false');
+  fixedContent = fixedContent.replace(/project_number: 999999, project_name: "ghost"/g, 'name: "ghost"');
+  fixedContent = fixedContent.replace(/project_name: "test-proj"/g, 'name: "test-proj"');
+  fixedContent = fixedContent.replace(/project_name: "ghost"/g, 'name: "ghost"');
+  
+  // Fix parameter drift: project_number -> workspace_id
+  fixedContent = fixedContent.replace(/project_number: 5/g, 'workspace_id: "test-ws"');
+  fixedContent = fixedContent.replace(/project_number: '5'/g, 'workspace_id: "test-ws"');
+  fixedContent = fixedContent.replace(/project_number: "5"/g, 'workspace_id: "test-ws"');
+  
+  // Fix project_number: pNum in getProject/updateProject/deleteProject
+  fixedContent = fixedContent.replace(/project_number: pNum/g, 'name: pNum');
   
   if (content !== fixedContent) {
     fs.writeFileSync(filePath, fixedContent);

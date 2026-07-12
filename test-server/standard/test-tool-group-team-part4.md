@@ -28,6 +28,14 @@
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
 | `team_merge_tags`                              | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
+| `team_backup` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_consolidate_authors` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_export_markdown` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_get_member` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_import_external` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_list_backups` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_resolve_author` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_semantic_search` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 
