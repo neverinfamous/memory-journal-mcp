@@ -277,7 +277,7 @@ Run with **only Code Mode enabled** — a single tool that provides access to it
 }
 ```
 
-This exposes just `mj_execute_code`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all 11 tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist.
+This exposes just `mj_execute_code`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist.
 
 #### Disabling Code Mode
 
@@ -428,7 +428,7 @@ You control exactly what additional content your agent sees across three dimensi
 
 Restart your MCP client and start journaling!
 
-### HTTP/SSE Transport (Remote Access)
+### Connect Remotely with HTTP/SSE Transport
 
 > 🔒 **Security Posture: Stdio vs HTTP**
 >
@@ -711,7 +711,7 @@ export GITHUB_TOKEN="your_token"              # For Projects/Issues/PRs
 
 **Scopes:** `repo`, `project`, `read:org` (org-level project discovery only)
 
-### GitHub Management Capabilities
+### Manage GitHub Seamlessly
 
 Memory Journal provides a **hybrid approach** to GitHub management:
 
@@ -735,7 +735,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 
 **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
 
-### GitHub Commander Workflows
+### Automate with GitHub Commander Workflows
 
 The server natively bundles the `github-commander` agent skill (accessible via `memory://skills/github-commander`). This extends your AI assistant with 9 autonomous DevOps workflows for repository stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
 

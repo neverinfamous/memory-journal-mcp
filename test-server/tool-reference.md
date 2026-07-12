@@ -27,11 +27,11 @@ Code executes in a **sandboxed VM context** with:
 
 ## codemode
 
-Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*` API.
+Sandboxed JavaScript execution that exposes all tool groups through the `mj.*` API.
 
 | Tool              | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mj_execute_code` | Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. Enables multi-step workflows in a single call, reducing token usage by 70-90%. API groups: `mj.core.*` (or `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.export.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`. Use `mj.help()` for method listing. Aliases: `query` (search, q), `output_dir` (path, filepath), `keep_count` (keep), `target_user` (user, assignee), `flag_type` (severity), `workspace_id` (team, project). Returns the last expression value. |
+| `mj_execute_code` | Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. Enables multi-step workflows in a single call, reducing token usage by 70-90%. API groups: `mj.core.*` (or `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.git.*`, `mj.backup.*`, `mj.team.*`. Use `mj.help()` for method listing. Aliases: `query` (search, q), `output_dir` (path, filepath), `keep_count` (keep), `target_user` (user, assignee), `flag_type` (severity), `workspace_id` (team, project). Returns the last expression value. |
 
 ---
 
@@ -297,6 +297,6 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Custom Selection:** List individual tool names to create your own whitelist: `--tool-filter "create_entry,search_entries,semantic_search"`
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `backup`, `team`, `codemode`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`
 
 

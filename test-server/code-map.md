@@ -337,7 +337,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources
 
-> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods to 49, though they map to the capabilities listed below.
+> **Note**: The server also registers 6 alias endpoints (e.g., `memory://status`, `memory://tools`, `memory://journal/recent`) for backward compatibility. This brings the dynamic resource count reported by `ListMcpResources` or internal methods, though they map to the capabilities listed below.
 
 ### Static Resources
 
