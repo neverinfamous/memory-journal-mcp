@@ -311,7 +311,13 @@ const cmSplits = [
   { file: 'test-cm-team-crud.md', marker: '### 28.2 Team Error Paths', phase: 'Phase 28' },
   { file: 'test-cm-payload-optimization.md', marker: '### 30.3 MAX_QUERY_LIMIT & Cursor Pagination', phase: 'Phase 30' },
   { file: 'test-cm-sandbox-basics.md', marker: '### 16.4 Timeout Handling', phase: 'Phase 16' },
-  { file: 'test-cm-hallucination-smoothing.md', marker: '### 31.3 Cross-Group Constructor Wiring', phase: 'Phase 31' }
+  { file: 'test-cm-hallucination-smoothing.md', marker: '### 31.3 Cross-Group Constructor Wiring', phase: 'Phase 31' },
+  { file: 'test-cm-crud-part-1.md', marker: '### 20.4 Get Entry By ID — Details', phase: 'Phase 20' },
+  { file: 'test-cm-crud-part-2.md', marker: '### 20.8 Get Recent Entries — Filters', phase: 'Phase 20' },
+  { file: 'test-cm-crud-advanced-part-1.md', marker: '### 20.14 Soft-Delete Recovery, Archiving & Cursor Pagination', phase: 'Phase 20B' },
+  { file: 'test-cm-search-advanced-part-2.md', marker: '### 21.10 Keyset Pagination & Archiving in Search', phase: 'Phase 21B' },
+  { file: 'test-cm-error-matrix-part-1.md', marker: '### 29.2 Search Group — Empty Params & Type Mismatches', phase: 'Phase 29' },
+  { file: 'test-cm-error-matrix-part-2.md', marker: '### 29.5 Backup Group — Empty Params & Security', phase: 'Phase 29B' }
 ];
 
 for (const splitInfo of cmSplits) {
@@ -330,8 +336,17 @@ for (const splitInfo of cmSplits) {
       const part2 = header.replace(splitInfo.phase, `${splitInfo.phase} (Part 2)`).trim() + '\n\n' + splitInfo.marker + sections[1];
       
       const nameWithoutExt = splitInfo.file.replace('.md', '');
-      fs.writeFileSync(path.join(codemodeDir, `${nameWithoutExt}-part-1.md`), part1);
-      fs.writeFileSync(path.join(codemodeDir, `${nameWithoutExt}-part-2.md`), part2);
+      let outName1 = `${nameWithoutExt}-part-1.md`;
+      let outName2 = `${nameWithoutExt}-part-2.md`;
+      if (nameWithoutExt.includes('-part-1')) {
+         outName1 = nameWithoutExt.replace('-part-1', '-part-1a') + '.md';
+         outName2 = nameWithoutExt.replace('-part-1', '-part-1b') + '.md';
+      } else if (nameWithoutExt.includes('-part-2')) {
+         outName1 = nameWithoutExt.replace('-part-2', '-part-2a') + '.md';
+         outName2 = nameWithoutExt.replace('-part-2', '-part-2b') + '.md';
+      }
+      fs.writeFileSync(path.join(codemodeDir, outName1), part1);
+      fs.writeFileSync(path.join(codemodeDir, outName2), part2);
       fs.unlinkSync(filePath);
     }
   }

@@ -34,9 +34,9 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 
 To avoid context exhaustion, the test queue has been split into multiple parts:
 
-- [Part 1: Core & Search (1-13)](coordinator-workflow-part-1.md)
-- [Part 2: GitHub, IO, Admin, Backup (14-24)](coordinator-workflow-part-2.md)
-- [Part 3: Team, Errors, Optimization, Config (25-49)](coordinator-workflow-part-3.md)
+- [Part 1: Core & Search (1-17)](coordinator-workflow-part-1.md)
+- [Part 2: GitHub, IO, Admin, Backup (18-28)](coordinator-workflow-part-2.md)
+- [Part 3: Team, Errors, Optimization, Config (29-54)](coordinator-workflow-part-3.md)
 
 Please execute the parts in order.
 

@@ -2,7 +2,7 @@
 
 Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read, update, delete with full parameters and error paths.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 20 — ~15 test cases covering CRUD via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 20 (Part 2) — ~15 test cases covering CRUD via Code Mode.
 
 **Prerequisites:**
 
@@ -22,117 +22,6 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 ---
 
 ## Phase 20: Core CRUD via Code Mode
-
-### 20.1 Create Entry — Full Parameters
-
-```javascript
-// Test code:
-const entry = await mj.core.createEntry({
-  workspace_id: "test-ws",
-  content: 'CM3 full-params test entry',
-  entry_type: 'technical_note',
-  tags: ['codemode3-test', 'full-params'],
-  pr_number: 99,
-  pr_status: 'open',
-  workflow_run_id: 555,
-  workflow_name: 'test-ci',
-  workflow_status: 'completed',
-  is_personal: false,
-})
-return {
-  success: entry.success,
-  id: entry.entry?.id,
-  type: entry.entry?.entryType,
-  prNumber: entry.entry?.prNumber,
-  prStatus: entry.entry?.prStatus,
-  workflowRunId: entry.entry?.workflowRunId,
-  workflowName: entry.entry?.workflowName,
-  workflowStatus: entry.entry?.workflowStatus,
-  projectNumber: entry.entry?.projectNumber,
-  isPersonal: entry.entry?.isPersonal,
-}
-```
-
-| Check            | Expected           |
-| ---------------- | ------------------ |
-| `success`        | `true`             |
-| `type`           | `"technical_note"` |
-| `prNumber`       | `99`               |
-| `prStatus`       | `"open"`           |
-| `workflowRunId`  | `555`              |
-| `workflowName`   | `"test-ci"`        |
-| `workflowStatus` | `"completed"`      |
-| `projectNumber`  | `5`                |
-| `isPersonal`     | `false`            |
-
-### 20.2 Create with share_with_team
-
-```javascript
-// Test code:
-const entry = await mj.core.createEntry({
-  workspace_id: "test-ws",
-  content: 'CM3 shared entry for team verification',
-  share_with_team: true,
-  tags: ['codemode3-team'],
-})
-return {
-  success: entry.success,
-  sharedWithTeam: entry.sharedWithTeam,
-  author: entry.author,
-  entryId: entry.entry?.id,
-}
-```
-
-| Check            | Expected         |
-| ---------------- | ---------------- |
-| `success`        | `true`           |
-| `sharedWithTeam` | `true`           |
-| `author`         | Non-empty string |
-
-### 20.2.1 Create with workspace_id and Verify Isolation
-
-```javascript
-// Test code:
-// Create an entry in workspace ws-a
-const entryA = await mj.core.createEntry({
-  content: 'CM3 workspace-a entry',
-  workspace_id: 'ws-a'
-})
-
-// Search in workspace ws-b (should be empty for our string)
-const searchB = await mj.search.searchEntries({
-  query: 'CM3 workspace-a entry',
-  workspace_id: 'ws-b'
-})
-
-// Get recent from workspace ws-a (should contain the entry)
-const recentA = await mj.core.getRecentEntries({
-  limit: 10,
-  workspace_id: 'ws-a'
-})
-
-return {
-  success: entryA.success,
-  workspaceA: entryA.entry?.workspaceId,
-  searchBCount: searchB.count,
-  recentAContains: recentA.entries?.some(e => e.content === 'CM3 workspace-a entry')
-}
-```
-
-| Check             | Expected |
-| ----------------- | -------- |
-| `success`         | `true`   |
-| `workspaceA`      | `"ws-a"` |
-| `searchBCount`    | `0`      |
-| `recentAContains` | `true`   |
-
-### 20.3 Create Entry — Error Paths
-
-| Test                 | Code                                                                                                      | Expected Result                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Invalid entry_type   | `return await mj.core.createEntry({ workspace_id: "test-ws", content: "test", entry_type: "invalid" });`        | `{ success: false, error: "..." }` listing valid types |
-| Invalid significance | `return await mj.core.createEntry({ workspace_id: "test-ws", content: "test", significance_type: "invalid" });` | `{ success: false, error: "..." }` listing valid types |
-| Empty content        | `return await mj.core.createEntry({ workspace_id: "test-ws", content: "" });`                                   | `{ success: false, error: "..." }` min length error    |
 
 ### 20.4 Get Entry By ID — Details
 

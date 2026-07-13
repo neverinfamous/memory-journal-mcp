@@ -2,7 +2,7 @@
 
 Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read, update, delete with full parameters and error paths.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 20 — ~15 test cases covering CRUD via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 20 (Part 2) — ~15 test cases covering CRUD via Code Mode.
 
 **Prerequisites:**
 
@@ -22,44 +22,6 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 ---
 
 ## Phase 20: Core CRUD via Code Mode
-
-### 20.6 Update Entry — Error Paths
-
-| Test               | Code                                                                         | Expected Result                                       |
-| ------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Nonexistent ID     | `return await mj.admin.updateEntry({ entry_id: 999999, content: "fail" });`  | `{ success: false, error: "Entry 999999 not found" }` |
-| Invalid entry_type | `return await mj.admin.updateEntry({ entry_id: 1, entry_type: "invalid" });` | `{ success: false, error: "..." }`                    |
-| Expect Version Error | `return await mj.admin.updateEntry({ entry_id: 1, expected_version: 0 });` | `true` (throws VALIDATION_ERROR) |
-
-### 20.7 Delete Entry
-
-```javascript
-// Test code:
-const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 delete test' })
-const id = created.entry.id
-const soft = await mj.admin.deleteEntry({ entry_id: id, permanent: false })
-const searchAfterSoft = await mj.search.searchEntries({
-  workspace_id: "test-ws",
-  query: 'CM3 delete test',
-  limit: 5,
-})
-const hiddenFromSearch = !searchAfterSoft.entries.some((e) => e.id === id)
-const perm = await mj.admin.deleteEntry({ entry_id: id, permanent: true })
-const notFound = await mj.admin.deleteEntry({ entry_id: 999999 })
-return {
-  softSuccess: soft.success,
-  hiddenFromSearch,
-  permSuccess: perm.success,
-  notFoundError: notFound.success === false,
-}
-```
-
-| Check              | Expected |
-| ------------------ | -------- |
-| `softSuccess`      | `true`   |
-| `hiddenFromSearch` | `true`   |
-| `permSuccess`      | `true`   |
-| `notFoundError`    | `true`   |
 
 ### 20.8 Get Recent Entries — Filters
 
