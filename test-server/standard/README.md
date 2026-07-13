@@ -1,7 +1,7 @@
 # Standard Feature Tests
 
 ## Value Proposition
-**Validate Capabilities Instantly.** Ensure rock-solid reliability across 103 MCP tools. Catch regressions early. Maintain perfect data integrity. Empower AI agents with deterministic, isolated test workflows.
+**Validate Capabilities Instantly.** Ensure rock-solid reliability across 108 MCP tools. Catch regressions early. Maintain perfect data integrity. Empower AI agents with deterministic, isolated test workflows.
 
 > **This README is optimized for AI agent consumption.**
 
