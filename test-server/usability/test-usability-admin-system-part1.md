@@ -16,7 +16,7 @@ Use the following tools in this test pass:
 - Try natural, ambiguous scripting (e.g., guessing property names, forgetting `await`, assuming incorrect return types like arrays instead of objects).
 - Explicitly test alias mappings if applicable (e.g., passing `keep`, `path`, `q`, `mode`, `text`, `message`, or `description`).
 - Try to execute MCP Prompts as if they were tools to verify that the server heals this.
-- For mutation/destructive tools, call them without expected constraints (like omitting `expected_version` or `permanent: true`) to test optimistic concurrency and explicit traps.
+- For mutation/destructive tools, call them without expected constraints (like omitting `expected_version`) to test optimistic concurrency and explicit traps.
 - Do not try to bypass the sandbox, simply test the API surface.
 - Note any errors, exceptions, or unexpected behavior.
 
@@ -25,7 +25,7 @@ Use the following tools in this test pass:
 If you encounter any failures, data corruption, or lack of actionable error messages:
 
 1. STOP. Do not just work around the issue in your script.
-2. Read the hardening guidelines in `skills/mj-mcp-heal/SKILL.md`.
+2. Read the hardening guidelines in `/mcp:memory-journal-mcp:mcp-heal prompt`.
 3. Locate the appropriate file in the codebase (e.g., schemas in `src/handlers/tools/[group]/schemas.ts`, proxies in `src/codemode/worker-api-proxy.ts`, or dispatch logic).
 4. Apply the permanent fix. Ensure that both strict validation schemas and MCP relaxed schemas are appropriately hardened.
 
@@ -37,7 +37,7 @@ If you made any codebase changes in the Heal Phase:
 
 1. Run `pnpm run check` locally to verify that all validation passes (linting, tests, types).
 2. DO NOT perform live server verification. DO NOT pause or wait for a server restart.
-3. Immediately commit passing changes using the `bun .\.agents\scripts\commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.
+3. Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.
 4. Conclude the test and report your findings.
 
 ## 4. Continuous Improvement
