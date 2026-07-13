@@ -32,55 +32,13 @@ Systematically execute all Code Mode tests in `test-server/codemode/` to verify 
 
 ## Test Sequence Queue (Dependency DAG)
 
-1. `test-cm-sandbox-basics-part-1.md` (**MUST PASS FIRST**)
-2. `test-cm-sandbox-basics-part-2.md`
-3. `test-cm-api-discovery.md`
-4. `test-cm-readonly.md`
-5. `test-cm-security.md`
-6. `test-cm-crud-part-1.md`
-7. `test-cm-crud-part-2.md`
-8. `test-cm-crud-advanced-part-1.md`
-9. `test-cm-crud-advanced-part-2.md`
-10. `test-cm-search-part-1.md`
-11. `test-cm-search-part-2.md`
-12. `test-cm-search-advanced-part-1.md`
-13. `test-cm-search-advanced-part-2.md`
-14. `test-cm-workflows.md`
-15. `test-cm-orchestration.md`
-16. `test-cm-relationships.md` (Includes cleanup for 14-16)
-17. `test-cm-github-part-1.md`
-18. `test-cm-github-part-2.md`
-19. `test-cm-kanban-lifecycle.md`
-20. `test-cm-io.md`
-21. `test-cm-admin-projects.md`
-22. `test-cm-admin-core.md`
-23. `test-cm-admin-batch.md`
-24. `test-cm-backup.md`
-25. `test-cm-team-crud-part-1.md`
-26. `test-cm-team-crud-part-2.md`
-27. `test-cm-team-admin-core.md`
-28. `test-cm-team-batch.md`
-29. `test-cm-team-analytics-relationships.md`
-30. `test-cm-team-admin-part-2.md`
-31. `test-cm-team-admin-part-3.md`
-32. `test-cm-team-aliases.md`
-33. `test-cm-team-rbac.md`
-34. `test-cm-team-vector-errors-part-1.md`
-35. `test-cm-team-vector-errors-part-2.md`
-36. `test-cm-team-vector-errors-part-3.md`
-37. `test-cm-team-vector-errors-part-4.md` (Includes cleanup)
-38. `test-cm-error-matrix-part-1.md`
-39. `test-cm-error-matrix-part-2.md`
-40. `test-cm-error-matrix-part-3.md`
-41. `test-cm-error-matrix-part-4.md`
-42. `test-cm-error-matrix-part-5.md`
-43. `test-cm-payload-optimization-part-1.md`
-44. `test-cm-payload-optimization-part-2.md`
-45. `test-cm-hallucination-smoothing.md`
-46. `test-cm-hallucination-smoothing-part-2.md`
-47. `test-cm-session-summary-healing.md`
-48. `test-config-reload.md`
-49. `test-git.md`
+To avoid context exhaustion, the test queue has been split into multiple parts:
+
+- [Part 1: Core & Search (1-13)](coordinator-workflow-part-1.md)
+- [Part 2: GitHub, IO, Admin, Backup (14-24)](coordinator-workflow-part-2.md)
+- [Part 3: Team, Errors, Optimization, Config (25-49)](coordinator-workflow-part-3.md)
+
+Please execute the parts in order.
 
 ## Telemetry Collection
 
