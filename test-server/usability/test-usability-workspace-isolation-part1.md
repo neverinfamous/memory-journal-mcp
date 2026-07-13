@@ -8,7 +8,7 @@ This prompt instructs you to organically test the structural boundaries, data in
 
 Use direct tool calls to interact with tools that accept workspace contextualization in this test pass:
 
-`create_entry`, `get_recent_entries`, `get_statistics`, `search_entries`
+`create_entry`, `get_recent_entries`
 
 **Instructions:**
 
@@ -37,7 +37,7 @@ If you encounter any failures, data corruption, data leaks between workspaces, o
 
 If you made any codebase changes in the Heal Phase:
 
-1. Run `pnpm run check` locally to verify that all validation passes (linting, tests, types).
+1. Run `pnpm run lint` and `npx tsc --noEmit` locally to verify that all validation passes (linting, tests, types).
 2. DO NOT perform live server verification. DO NOT pause or wait for a server restart.
 3. Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.
 4. Conclude the test and report your findings.

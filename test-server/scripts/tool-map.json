@@ -87,7 +87,7 @@
     "create_github_milestone": [
       "test-github-milestones.md",
       "test-tool-group-github-part2.md",
-      "test-usability-github-milestones-part1.md"
+      "test-usability-github-milestones-part2.md"
     ],
     "cross_team_search": [
       "test-tool-group-search-part2.md",
@@ -104,7 +104,7 @@
     "delete_github_milestone": [
       "test-github-milestones.md",
       "test-tool-group-github-part2.md",
-      "test-usability-github-milestones-part2.md"
+      "test-usability-github-milestones-part3.md"
     ],
     "delete_kanban_item": [
       "test-kanban-lifecycle.md",
@@ -114,7 +114,7 @@
     "delete_project": [
       "test-core-project-admin.md",
       "test-tool-group-admin-part1.md",
-      "test-usability-admin-projects-part2.md"
+      "test-usability-admin-projects-part3.md"
     ],
     "export_entries": [
       "test-core-io.md",
@@ -177,7 +177,7 @@
       "test-payload-optimization.md",
       "test-resources.md",
       "test-tool-group-github-part1.md",
-      "test-usability-github-read-part1.md"
+      "test-usability-github-read-part2.md"
     ],
     "get_github_milestone": [
       "test-github-milestones.md",
@@ -199,7 +199,7 @@
       "test-github-read.md",
       "test-payload-optimization.md",
       "test-tool-group-github-part1.md",
-      "test-usability-github-read-part2.md"
+      "test-usability-github-read-part3.md"
     ],
     "get_kanban_board": [
       "test-github-kanban.md",
@@ -240,7 +240,7 @@
       "test-integrity-part2.md",
       "test-tool-group-analytics-part1.md",
       "test-usability-analytics.md",
-      "test-usability-workspace-isolation-part1.md",
+      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "get_unreleased_commits": [
@@ -281,7 +281,7 @@
     "list_projects": [
       "test-core-project-admin.md",
       "test-tool-group-admin-part1.md",
-      "test-usability-admin-projects-part1.md"
+      "test-usability-admin-projects-part2.md"
     ],
     "list_tags": [
       "test-core-admin-backup.md",
@@ -412,7 +412,7 @@
       "test-payload-optimization.md",
       "test-tool-group-search-part1.md",
       "test-usability-search-core-part1.md",
-      "test-usability-workspace-isolation-part2.md",
+      "test-usability-workspace-isolation-part3.md",
       "test-workspace-isolation.md"
     ],
     "search_commits": [
@@ -429,7 +429,7 @@
       "test-seed.md",
       "test-tool-group-search-part1.md",
       "test-usability-search-core-part2.md",
-      "test-usability-workspace-isolation-part1.md",
+      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "semantic_search": [
@@ -478,7 +478,7 @@
     "team_consolidate_authors": [
       "test-team-aliases.md",
       "test-tool-group-team-part4.md",
-      "test-usability-team-aliases-part2.md"
+      "test-usability-team-aliases-part3.md"
     ],
     "team_create_entry": [
       "test-errors-boundaries.md",
@@ -487,7 +487,7 @@
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-mutations-part1.md",
-      "test-usability-workspace-isolation-part2.md",
+      "test-usability-workspace-isolation-part3.md",
       "test-workspace-isolation.md"
     ],
     "team_delete_entry": [
@@ -574,7 +574,7 @@
     "team_list_members": [
       "test-team-rbac.md",
       "test-tool-group-team-part2.md",
-      "test-usability-team-members-part1.md"
+      "test-usability-team-members-part2.md"
     ],
     "team_list_tags": [
       "test-team-crud.md",
@@ -599,12 +599,12 @@
     "team_remove_member": [
       "test-team-rbac.md",
       "test-tool-group-team-part3.md",
-      "test-usability-team-members-part2.md"
+      "test-usability-team-members-part3.md"
     ],
     "team_resolve_author": [
       "test-team-aliases.md",
       "test-tool-group-team-part4.md",
-      "test-usability-team-aliases-part1.md"
+      "test-usability-team-aliases-part2.md"
     ],
     "team_restore_entry": [
       "test-team-mutations.md",
@@ -615,7 +615,7 @@
       "test-team-crud.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-search-part1.md",
-      "test-usability-workspace-isolation-part2.md",
+      "test-usability-workspace-isolation-part4.md",
       "test-workspace-isolation.md"
     ],
     "team_search_by_date_range": [
