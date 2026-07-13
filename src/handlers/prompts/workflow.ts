@@ -372,7 +372,7 @@ Determine which of the 4 layers needs modification:
 The most robust way to prevent a hallucination is to explicitly instruct the agent via the tools list or initialization payload.
 
 * **Schema \`.describe()\` Tags:** When an agent hallucinates a property, update the Zod schema. Add an explicit "Anti-Hallucination Hint" in the \`.describe()\` string. These surface directly in the JSON Schema that agents see on \`tools/list\`.
-* **Server Instructions:** If a structural hallucination persists, update the markdown fragments in \`src/constants/server-instructions/\` and run the generator script (\`pnpm run generate:instructions\`). **DO NOT** edit \`src/constants/server-instructions.ts\` directly, as it is auto-generated and your changes will be overwritten!
+* **Server Instructions:** If a structural hallucination persists, update the markdown fragments in \`src/constants/instructions/markdown/\` and run the generator script (\`pnpm run generate:instructions\`). **DO NOT** edit \`src/constants/server-instructions.ts\` directly, as it is auto-generated and your changes will be overwritten!
 
 ### Layer 2: Dispatcher Healing (Frictionless Recovery)
 If agents consistently hallucinate inputs that can be logically inferred or normalized, heal them silently in the dispatcher (\`src/codemode/api/group-factory.ts\` or \`param-normalizer.ts\`) before they reach Zod validation.

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectRoot = resolve(__dirname, '..')
 const instructionsDir = resolve(projectRoot, 'src/constants/instructions')
-const mdDir = resolve(projectRoot, 'src/constants/server-instructions')
+const mdDir = resolve(projectRoot, 'src/constants/instructions/markdown')
 
 /**
  * Escape content for use inside a JS/TS template literal.

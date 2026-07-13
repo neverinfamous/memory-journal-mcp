@@ -123,7 +123,10 @@ function runConfig(filter) {
             env: {
                 ...process.env,
                 TEST_DB_PATH: ':memory:',
-                TEST_TEAM_DB_PATH: ':memory:'
+                TEST_TEAM_DB_PATH: ':memory:',
+                DB_ENCRYPTION_KEY: '',
+                MJ_DB_ENCRYPTION_KEY: '',
+                GITHUB_DB_PATH: ':memory:'
             }
         })
 
