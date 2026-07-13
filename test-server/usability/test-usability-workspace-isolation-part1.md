@@ -8,6 +8,8 @@ This prompt instructs you to organically test the structural boundaries, data in
 
 Use direct tool calls to interact with tools that accept workspace contextualization in this test pass:
 
+`create_entry`, `get_recent_entries`, `get_statistics`, `search_entries`
+
 **Instructions:**
 
 - Do not perfectly structure your initial calls. Act intuitively as an agent.

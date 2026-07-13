@@ -74,6 +74,7 @@
       "test-seed.md",
       "test-tool-group-core.md",
       "test-usability-core-mutations.md",
+      "test-usability-workspace-isolation-part1.md",
       "test-workspace-isolation.md"
     ],
     "create_github_issue_with_entry": [
@@ -221,6 +222,7 @@
       "test-payload-optimization.md",
       "test-tool-group-core.md",
       "test-usability-core-read.md",
+      "test-usability-workspace-isolation-part1.md",
       "test-workspace-isolation.md"
     ],
     "get_release_info": [
@@ -238,6 +240,7 @@
       "test-integrity-part2.md",
       "test-tool-group-analytics.md",
       "test-usability-analytics.md",
+      "test-usability-workspace-isolation-part1.md",
       "test-workspace-isolation.md"
     ],
     "get_unreleased_commits": [
@@ -404,6 +407,7 @@
       "test-payload-optimization.md",
       "test-tool-group-search.md",
       "test-usability-search-core.md",
+      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "search_commits": [
@@ -420,6 +424,7 @@
       "test-seed.md",
       "test-tool-group-search.md",
       "test-usability-search-core.md",
+      "test-usability-workspace-isolation-part1.md",
       "test-workspace-isolation.md"
     ],
     "semantic_search": [
@@ -477,6 +482,7 @@
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-mutations.md",
+      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "team_delete_entry": [
@@ -604,6 +610,7 @@
       "test-team-crud.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-search.md",
+      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "team_search_by_date_range": [

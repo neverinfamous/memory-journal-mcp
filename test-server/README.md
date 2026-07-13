@@ -8,6 +8,7 @@
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | [`standard/`](standard/README.md) | **Standard Modular Tests** — Directory containing modular test files across feature and stress-test tiers. See `standard/coordinator-workflow.md` for full list. | **Always start here** |
 | [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing phase-aligned Code Mode test prompts. See `codemode/coordinator-workflow.md` for full list.                   | After standard tests  |
+| [`usability/`](usability/README.md) | **Usability & Hallucination Tests** — Directory containing organic testing prompts to explicitly trigger agent hallucinations. See `usability/coordinator-workflow.md` for full list. | After standard tests  |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
 | [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 108 tools across 11 groups + codemode | Reference |
