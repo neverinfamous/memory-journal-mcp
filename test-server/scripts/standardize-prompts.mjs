@@ -79,7 +79,27 @@ const splitFiles = [
   'test-usability-github-read.md',
   'test-usability-github-milestones.md',
   'test-usability-team-members.md',
-  'test-usability-team-aliases.md'
+  'test-usability-team-aliases.md',
+  'test-usability-github-kanban.md',
+  'test-usability-git-analysis.md',
+  'test-usability-backup.md',
+  'test-usability-admin-batch.md',
+  'test-usability-search-core.md',
+  'test-usability-admin-mutations.md',
+  'test-usability-io.md',
+  'test-usability-git-history.md',
+  'test-usability-core-read.md',
+  'test-usability-search-vector.md',
+  'test-usability-core-misc.md',
+  'test-usability-admin-system.md',
+  'test-usability-team-vector.md',
+  'test-usability-team-batch.md',
+  'test-usability-team-mutations.md',
+  'test-usability-team-io.md',
+  'test-usability-team-analytics.md',
+  'test-usability-team-core-read.md',
+  'test-usability-team-relationships.md',
+  'test-usability-team-search.md'
 ];
 
 for (const sf of splitFiles) {
@@ -160,8 +180,12 @@ for (const file of files) {
   updatedContent = updatedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   
   // Fix logic flaw: replace git add and git commit with commit.ts
-  updatedContent = updatedContent.replace(/Run `git add \.` and `git commit -m "[^"]+"` to save your changes locally\./g, 'Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`.');
-  updatedContent = updatedContent.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
+  updatedContent = updatedContent.replace(/Run `git add \.` and `git commit -m "[^"]+"` to save your changes locally\./g, 'Immediately commit passing changes using the `bun .\\.agents\\scripts\\commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.');
+  
+  // Catch already replaced ones
+  updatedContent = updatedContent.replace(/Immediately commit passing changes using the `bun [^`]+` utility\. Do NOT use raw `git commit`\.(?! WARNING:)/g, 'Immediately commit passing changes using the `bun .\\.agents\\scripts\\commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.');
+
+  updatedContent = updatedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`bun .\\.agents\\scripts\\commit.ts');
   
   // Fix hallucinated project admin parameters
   updatedContent = updatedContent.replace(/project_number: <new_project_number>/g, 'name: "test-proj"');
@@ -192,20 +216,15 @@ if (fs.existsSync(teamFilePath)) {
   fs.unlinkSync(teamFilePath);
 }
 
-const adminFilePath = path.join(standardDir, 'test-tool-group-admin.md');
-if (fs.existsSync(adminFilePath)) {
-  const content = fs.readFileSync(adminFilePath, 'utf8');
-  fs.writeFileSync(path.join(standardDir, 'test-tool-group-admin-part1.md'), content);
-  fs.writeFileSync(path.join(standardDir, 'test-tool-group-admin-part2.md'), content);
-  fs.unlinkSync(adminFilePath);
-}
-
-const githubFilePath = path.join(standardDir, 'test-tool-group-github.md');
-if (fs.existsSync(githubFilePath)) {
-  const content = fs.readFileSync(githubFilePath, 'utf8');
-  fs.writeFileSync(path.join(standardDir, 'test-tool-group-github-part1.md'), content);
-  fs.writeFileSync(path.join(standardDir, 'test-tool-group-github-part2.md'), content);
-  fs.unlinkSync(githubFilePath);
+const splitGroups = ['core', 'search', 'git', 'io', 'backup', 'analytics', 'relationships', 'admin', 'github'];
+for (const grp of splitGroups) {
+  const fp = path.join(standardDir, `test-tool-group-${grp}.md`);
+  if (fs.existsSync(fp)) {
+    const content = fs.readFileSync(fp, 'utf8');
+    fs.writeFileSync(path.join(standardDir, `test-tool-group-${grp}-part1.md`), content);
+    fs.writeFileSync(path.join(standardDir, `test-tool-group-${grp}-part2.md`), content);
+    fs.unlinkSync(fp);
+  }
 }
 
 const standardFiles = fs.readdirSync(standardDir).filter(f => f.endsWith('.md') && f !== 'README.md' && f !== 'coordinator-workflow.md' && f !== 'tool-group-requirements.md');
@@ -291,7 +310,8 @@ const cmSplits = [
   { file: 'test-cm-search.md', marker: '### 21.3 Cross-DB Search', phase: 'Phase 21' },
   { file: 'test-cm-team-crud.md', marker: '### 28.2 Team Error Paths', phase: 'Phase 28' },
   { file: 'test-cm-payload-optimization.md', marker: '### 30.3 MAX_QUERY_LIMIT & Cursor Pagination', phase: 'Phase 30' },
-  { file: 'test-cm-sandbox-basics.md', marker: '### 16.4 Timeout Handling', phase: 'Phase 16' }
+  { file: 'test-cm-sandbox-basics.md', marker: '### 16.4 Timeout Handling', phase: 'Phase 16' },
+  { file: 'test-cm-hallucination-smoothing.md', marker: '### 31.3 Cross-Group Constructor Wiring', phase: 'Phase 31' }
 ];
 
 for (const splitInfo of cmSplits) {
@@ -407,17 +427,17 @@ for (const file of codemodeFiles) {
   // Fix boilerplate for codemode tests to align with autonomous verification
   fixedContent = fixedContent.replace(
     /3\. If you made code changes\/fixes, update `UNRELEASED\.md` and commit without pushing\. If tests pass cleanly, do NOT update `UNRELEASED\.md`\. Then, stop so the \*\*USER\*\* can verify with `pnpm run check`\.\r?\n4\. After user completes verification, re-test fixes with direct MCP calls\./g,
-    '3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.'
+    '3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n4. **Commit**: Immediately commit passing changes using the `bun .\\.agents\\scripts\\commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.'
   );
 
   fixedContent = fixedContent.replace(
     /2\. \*\*Local Verification\*\*: If you or a subagent modifies the codebase, you MUST run the full validation pipeline \(`pnpm run check`\) locally and fix any issues BEFORE committing\. Pay strict attention to ESLint and TypeScript compiler outputs\. You MUST fix all validation issues prior to committing\. Do NOT ignore warnings or errors\. Follow strict TypeScript guidelines: NEVER use `any` \(use `unknown` with type guards\), avoid unsafe typecasts, and ensure explicit return types\.\n3\. \*\*Commit\*\*: Immediately commit passing changes using the `bun \.\/\.agents\/scripts\/commit\.ts` utility\. Do NOT use raw `git commit`\. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous\.\n3\. Provide a very brief/g,
-    '2. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n3. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.\n4. Provide a very brief'
+    '2. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n3. **Commit**: Immediately commit passing changes using the `bun .\\.agents\\scripts\\commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.\n4. Provide a very brief'
   );
 
   fixedContent = fixedContent.replace(
     /2\. If you made code changes\/fixes, update `UNRELEASED\.md` and commit without pushing\. Then, stop so the \*\*USER\*\* can verify with `pnpm run check`\.\n3\. Provide a very brief/g,
-    '2. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n3. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.\n4. Provide a very brief'
+    '2. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n3. **Commit**: Immediately commit passing changes using the `bun .\\.agents\\scripts\\commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.\n4. Provide a very brief'
   );
 
 
@@ -426,8 +446,8 @@ for (const file of codemodeFiles) {
     'including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**'
   );
 
-  fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts`/g, '`bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>`');
-  fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts --msg/g, '`bun ./.agents/scripts/commit.ts --msg');
+  fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts`/g, '`bun .\\.agents\\scripts\\commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>`');
+  fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts --msg/g, '`bun .\\.agents\\scripts\\commit.ts --msg');
 
 
   fixedContent = fixFormatting(fixedContent);

@@ -22,7 +22,7 @@
 42. `test-cm-error-matrix-part-5.md`
 43. `test-cm-payload-optimization-part-1.md`
 44. `test-cm-payload-optimization-part-2.md`
-45. `test-cm-hallucination-smoothing.md`
+45. `test-cm-hallucination-smoothing-part-1.md`
 46. `test-cm-hallucination-smoothing-part-2.md`
 47. `test-cm-session-summary-healing.md`
 48. `test-config-reload.md`
