@@ -201,7 +201,16 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const tools = await getAllToolDefinitionsAsync(context)
+                const rawTools = await getAllToolDefinitionsAsync(context)
+
+                // Filter out tools disabled by --tool-filter, UNLESS codemode is enabled.
+                // Code Mode exposes the full API surface area via the sandbox,
+                // so we must register all help resources for the agent to reference.
+                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
+                const tools = rawTools.filter(t => {
+                    if (!context.filterConfig || hasCodeMode) return true;
+                    return context.filterConfig.enabledTools.has(t.name);
+                });
 
                 // Group tools by their group field
                 const groups = new Map<string, { names: string[]; readOnly: boolean }>()
@@ -260,7 +269,12 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 // Resolve dynamic tool data for this group
-                const tools = await getAllToolDefinitionsAsync(context)
+                const rawTools = await getAllToolDefinitionsAsync(context)
+                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
+                const tools = rawTools.filter(t => {
+                    if (!context.filterConfig || hasCodeMode) return true;
+                    return context.filterConfig.enabledTools.has(t.name);
+                });
                 const groupTools = tools.filter((t) => t.group === groupName)
 
                 // Check for static help content (codemode, github, etc.)

@@ -83,16 +83,16 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 ### Filter-Aware Instructions (Phase 1.3B)
 
-- [ ] 9/9 filter configs pass section presence/absence checks
-- [ ] `full` includes CORE + COPILOT + CODE_MODE + GITHUB_INTEGRATION + SEARCH_ROW
-- [ ] `codemode` omits COPILOT + GITHUB_INTEGRATION + SEARCH_ROW
-- [ ] `essential` — CORE + CODE_MODE only
-- [ ] `starter` — CORE + CODE_MODE + SEARCH_ROW
-- [ ] `core` — CORE only
-- [ ] `full -codemode` — COPILOT + GITHUB_INTEGRATION + SEARCH_ROW, no CODE_MODE
-- [ ] `full -github` — CODE_MODE + SEARCH_ROW, no COPILOT/GITHUB_INTEGRATION
-- [ ] `readonly` — CORE + SEARCH_ROW, no CODE_MODE/COPILOT/GITHUB_INTEGRATION
-- [ ] `full --instruction-level essential` — omits GITHUB_INTEGRATION but keeps COPILOT + CODE_MODE
+- [ ] 8/8 filter configs pass section presence/absence checks
+- [ ] Dynamic help resources (`memory://help/*`) accurately reflect enabled groups
+- [ ] `full (all groups)` — all tools and sections
+- [ ] `codemode only` — all tools/groups exposed due to sandbox access
+- [ ] `essential` — all tools/groups exposed due to sandbox access
+- [ ] `starter` — all tools/groups exposed due to sandbox access
+- [ ] `core only` — CORE + Help, NO code mode or other tools
+- [ ] `full -codemode` — CORE + Help, NO code mode
+- [ ] `full -github` — all tools/groups exposed due to sandbox access
+- [ ] `readonly` — all tools/groups exposed due to sandbox access
 
 ### Tool Annotations (Phase 1.3C)
 
