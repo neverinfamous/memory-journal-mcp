@@ -58,52 +58,8 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 | cpuTimeMs numeric    | `return 1;` | `metrics.cpuTimeMs` is a number                                       |
 | memoryUsedMb numeric | `return 1;` | `metrics.memoryUsedMb` is a number                                    |
 
-### 16.4 Timeout Handling
-
-| Test                    | Code                                  | Expected Result                                            |
-| ----------------------- | ------------------------------------- | ---------------------------------------------------------- |
-| Custom timeout succeeds | `return "fast";` with `timeout: 5000` | `{ success: true, result: "fast" }`                        |
-| Infinite loop timeout   | `while(true) {}` with `timeout: 2000` | `{ success: false, error: "..." }` with timeout indication |
-
-### 16.5 Admin Tool Verification
-
-Validate that Code Mode can successfully call admin tools:
-
-| Test                    | Code                                                                                                                                                                                                                                                                              | Expected Result                                                                                                                                                                 |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Search audit log        | `const res = await mj.admin.searchAuditLog({ limit: 5 }); return res.count >= 0;` | `{ success: true, result: true }` (meaning the audit log search returns a valid response)                                                                |
-
-### 16.6 Telemetry Resource Verification
-
-After the preceding test phases have executed several tool calls, verify that the telemetry metrics resources contain valid tracking data:
-
-| Test                    | Code                                                                                                                                         | Expected Result                                                                                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Summary resource exists | Read `memory://metrics/summary` | Resource returns YAML-style text containing `total_calls`, `total_duration_ms`, `tools_called`, and `up_since` fields |
-| Latency resource exists | `const entries = await mj.core.getRecentEntries({ limit: 1 }); return "latency data seeded";`<br>Then read `memory://metrics/latency` | Resource returns YAML-style text containing `p50_ms`, `p95_ms`, `p99_ms`, `min_ms`, `max_ms`, `count` fields for at least one tool            |
-| Graceful empty          | Read `memory://metrics/latency` on a fresh server with no prior tool calls                                                                    | Returns `note: No latency data recorded yet.` (graceful empty state)                                                                         |
-| Resources metrics exists| Read `memory://help` then `memory://metrics/resources` | Resource returns YAML-style text containing `uri`, `read_count`, and `error_count` fields for at least one resource |
-| Resources empty         | Read `memory://metrics/resources` on a fresh server with no prior reads | Returns `note: No resource reads recorded yet.` (graceful empty state) |
-
-
----
-
 ## Success Criteria
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- Simple expressions return correct types: integer, string, object, null, boolean
-- Circular object references are safely serialized as "[Circular]" without crashing
-- Async/await resolves correctly inside sandbox
-- Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
-- `fetch` is explicitly `undefined` (Code Mode cannot scrape `/metrics` directly)
-- `mj_execute_code` gracefully handles omitting the `code` parameter without a raw error
-- `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
-- Custom `timeout` parameter accepted and enforced
-- Infinite loop terminated with structured error (not hang or crash)
-- Verified index schema via `_executeRawQueryUnsafe` check returning all three new composite and partial indexes
-> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
-- `memory://metrics/summary` returns aggregate session telemetry with `total_calls` and `total_duration_ms`
-- `memory://metrics/latency` returns per-tool percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields after tool calls have been made
-- `memory://metrics/resources` returns URI read telemetry after resource reads have occurred
-
+- See part 2 for remaining success criteria.

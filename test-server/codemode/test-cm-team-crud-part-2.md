@@ -2,7 +2,7 @@
 
 Test team CRUD operations, error paths, and date range search through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 28.1–28.3 — ~15 test cases covering team create, read, search, and error paths via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 28 (Part 2).1–28.3 — ~15 test cases covering team create, read, search, and error paths via Code Mode.
 
 **Prerequisites:**
 
@@ -27,105 +27,6 @@ Test team CRUD operations, error paths, and date range search through Code Mode.
 > Requires `TEAM_DB_PATH` to be configured. If not configured, all team tools should return structured `{ success: false, error: "Team database not configured..." }`.
 >
 > **`team_delete_entry(workspace_id: "test-ws")` is soft-delete only** — no `permanent` flag.
-
-### 28.1 Team CRUD
-
-```javascript
-// Test code:
-const created = await mj.team.teamCreateEntry({
-  workspace_id: "test-ws",
-  content: 'CM4 team entry test',
-  tags: ['codemode4-team-test'],
-  entry_type: 'standup',
-})
-if (!created.success) return { createSuccess: false, error: created.error }
-
-const withAuthor = await mj.team.teamCreateEntry({
-  workspace_id: "test-ws",
-  content: 'CM4 team explicit author',
-  author: 'CM4Bot',
-})
-if (!withAuthor.success) return { explicitAuthorSuccess: false, error: withAuthor.error }
-
-const recent = await mj.team.teamGetRecent({ workspace_id: "test-ws", limit: 5 })
-const search = await mj.team.teamSearch({
-  workspace_id: "test-ws",
-  query: 'CM4 team entry test',
-})
-const tagSearch = await mj.team.teamSearch({
-  workspace_id: "test-ws",
-  tags: ['codemode4-team-test'],
-})
-const combined = await mj.team.teamSearch({
-  workspace_id: "test-ws",
-  query: 'team',
-  tags: ['codemode4-team-test'],
-})
-const hybridAuto = await mj.team.teamSearch({
-  workspace_id: "test-ws",
-  query: 'how did we fix performance',
-})
-const forcedFts = await mj.team.teamSearch({
-  workspace_id: "test-ws",
-  query: 'CM4',
-  mode: 'fts',
-})
-const noArgs = await mj.team.teamSearch({ workspace_id: "test-ws" })
-
-const crossTeam = await mj.search.crossTeamSearch({ query: 'CM4 team' })
-const crossTeamSpecific = await mj.search.crossTeamSearch({ query: 'CM4 team', team_dbs: ['primary'] })
-
-
-// New: get by ID, list tags
-const detail = await mj.team.teamGetEntryById({
-  workspace_id: "test-ws",
-  entry_id: created.entry.id,
-})
-const detailNoRels = await mj.team.teamGetEntryById({
-  workspace_id: "test-ws",
-  entry_id: created.entry.id,
-  include_relationships: false,
-})
-const tags = await mj.team.teamListTags({ workspace_id: "test-ws" })
-
-return {
-  createSuccess: created.success,
-  createAuthor: created.entry?.author,
-  explicitAuthor: withAuthor.entry?.author,
-  recentCount: recent.entries?.length ?? 0,
-  recentHasAuthor: !!recent.entries?.[0]?.author,
-  searchCount: search.entries?.length ?? 0,
-  tagSearchCount: tagSearch.entries?.length ?? 0,
-  combinedCount: combined.entries?.length ?? 0,
-  hybridAutoCount: hybridAuto.entries?.length ?? 0,
-  forcedFtsCount: forcedFts.entries?.length ?? 0,
-  noArgsCount: noArgs.entries?.length ?? 0,
-  crossTeamCount: crossTeam.entries?.length ?? 0,
-  crossTeamSpecificCount: crossTeamSpecific.entries?.length ?? 0,
-
-  detailHasEntry: !!detail.entry,
-  detailHasImportance: !!detail.importance,
-  detailNoRelsEmpty: !detailNoRels.relationships?.length,
-  tagCount: tags.tags?.length ?? 0,
-}
-```
-
-| Check                    | Expected                          |
-| ------------------------ | --------------------------------- |
-| `createSuccess`          | `true`                            |
-| `createAuthor`           | Non-empty string (auto-populated) |
-| `explicitAuthor`         | `"CM4Bot"`                        |
-| `recentHasAuthor`        | `true`                            |
-| `searchCount`            | ≥ 1                               |
-| `tagSearchCount`         | ≥ 1                               |
-| `hybridAutoCount`        | ≥ 0                               |
-| `forcedFtsCount`         | ≥ 1                               |
-| `crossTeamCount`         | ≥ 1                               |
-| `crossTeamSpecificCount` | ≥ 1                               |
-
-| `detailHasEntry`         | `true`                            |
-| `tagCount`               | ≥ 1                               |
-
 
 ### 28.2 Team Error Paths
 

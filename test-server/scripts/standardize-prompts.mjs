@@ -74,6 +74,25 @@ if (fs.existsSync(isolationFilePath)) {
   fs.unlinkSync(isolationFilePath);
 }
 
+const splitFiles = [
+  'test-usability-admin-projects.md',
+  'test-usability-github-read.md',
+  'test-usability-github-milestones.md',
+  'test-usability-team-members.md',
+  'test-usability-team-aliases.md'
+];
+
+for (const sf of splitFiles) {
+  const p = path.join(usabilityDir, sf);
+  if (fs.existsSync(p)) {
+    const content = fs.readFileSync(p, 'utf8');
+    fs.writeFileSync(path.join(usabilityDir, sf.replace('.md', '-part1.md')), content);
+    fs.writeFileSync(path.join(usabilityDir, sf.replace('.md', '-part2.md')), content);
+    fs.unlinkSync(p);
+  }
+}
+
+
 const files = fs.readdirSync(usabilityDir).filter(f => f.endsWith('.md') && f.startsWith('test-'));
 
 let updated = 0;
@@ -266,7 +285,39 @@ for (const file of standardFiles) {
 }
 
 const codemodeDir = path.join(__dirname, '..', 'codemode');
+
+const cmSplits = [
+  { file: 'test-cm-search.md', marker: '### 21.3 Cross-DB Search', phase: 'Phase 21' },
+  { file: 'test-cm-team-crud.md', marker: '### 28.2 Team Error Paths', phase: 'Phase 28' },
+  { file: 'test-cm-payload-optimization.md', marker: '### 30.3 MAX_QUERY_LIMIT & Cursor Pagination', phase: 'Phase 30' },
+  { file: 'test-cm-sandbox-basics.md', marker: '### 16.4 Timeout Handling', phase: 'Phase 16' }
+];
+
+for (const splitInfo of cmSplits) {
+  const filePath = path.join(codemodeDir, splitInfo.file);
+  if (fs.existsSync(filePath)) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const sections = content.split(splitInfo.marker);
+    if (sections.length === 2) {
+      let part1 = sections[0].trim();
+      const matchCriteria = content.match(/## Success Criteria[\s\S]*/);
+      if (matchCriteria) {
+        part1 += '\n\n' + matchCriteria[0].replace(/- .*/g, '').trim() + '\n- See part 2 for remaining success criteria.\n';
+      }
+
+      let header = sections[0].substring(0, sections[0].indexOf('### '));
+      const part2 = header.replace(splitInfo.phase, `${splitInfo.phase} (Part 2)`).trim() + '\n\n' + splitInfo.marker + sections[1];
+      
+      const nameWithoutExt = splitInfo.file.replace('.md', '');
+      fs.writeFileSync(path.join(codemodeDir, `${nameWithoutExt}-part-1.md`), part1);
+      fs.writeFileSync(path.join(codemodeDir, `${nameWithoutExt}-part-2.md`), part2);
+      fs.unlinkSync(filePath);
+    }
+  }
+}
+
 const codemodeFiles = fs.readdirSync(codemodeDir).filter(f => f.endsWith('.md'));
+
 
 const codemodeHallucinationFixes = {
   'mj.admin.bulkCreate': 'mj.admin.batchCreateEntries',

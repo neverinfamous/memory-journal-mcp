@@ -1,14 +1,14 @@
-# memory-journal-mcp Usability & Hallucination Test: Admin Projects
+# memory-journal-mcp Usability & Hallucination Test: Team Aliases
 
 > **This test is optimized for an autonomous agent.**
 
-This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Admin Projects operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
+This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Team Aliases operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
 
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
 
-`delete_project`, `get_project`, `list_projects`, `register_project`, `update_project`
+`team_consolidate_authors`, `team_remove_author_alias`
 
 **Instructions:**
 

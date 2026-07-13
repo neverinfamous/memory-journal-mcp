@@ -1,14 +1,14 @@
-# memory-journal-mcp Usability & Hallucination Test: Github Milestones
+# memory-journal-mcp Usability & Hallucination Test: Admin Projects
 
 > **This test is optimized for an autonomous agent.**
 
-This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Github Milestones operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
+This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Admin Projects operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
 
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
 
-`create_github_milestone`, `delete_github_milestone`, `get_github_milestone`, `get_github_milestones`, `update_github_milestone`
+`get_project`, `list_projects`, `register_project`
 
 **Instructions:**
 

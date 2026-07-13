@@ -1,14 +1,14 @@
-# memory-journal-mcp Usability & Hallucination Test: Github Read
+# memory-journal-mcp Usability & Hallucination Test: Team Members
 
 > **This test is optimized for an autonomous agent.**
 
-This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Github Read operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
+This prompt instructs you to organically test the structural boundaries, data integrity, and hallucination vectors of Team Members operations using direct tool calls. The goal is to explicitly fuzz data schemas and permanently harden the codebase against destructive agent behavior.
 
 ## 1. Fuzz Phase
 
 Use the following tools in this test pass:
 
-`get_github_context`, `get_github_issue`, `get_github_issues`, `get_github_pr`, `get_github_prs`
+`team_add_member`, `team_get_member`, `team_list_members`
 
 **Instructions:**
 
