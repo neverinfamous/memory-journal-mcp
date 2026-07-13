@@ -127,7 +127,7 @@ After testing, remove test entries created during Phase 20:
 - `trigger_progress` returns success via Code Mode
 - `restore_entry` and `list_deleted_entries` are functional and callable via Code Mode scripts
 - Keyset cursor pagination and `is_archived` status filters execute successfully via Code Mode scripts
-- `mj_execute_code` outer `project_number` parameter automatically injects into mutation tools inside the sandbox (Sandbox Wrapper Pattern)
+- `mj_execute_code` outer `workspace_id` parameter automatically injects into mutation tools inside the sandbox (Sandbox Wrapper Pattern)
 - `get_recent_entries` pagination exposes a correct `hasMore` convenience boolean
 - `mj_execute_code` outer `auto_version: true` parameter automatically prefetches and injects `expected_version` for updates
-- String-based `project_number` parameters (`"5"`) auto-resolve to numeric safely without throwing VALIDATION_ERROR
+- Number-based `workspace_id` parameters (`5`) auto-resolve to string safely without throwing VALIDATION_ERROR

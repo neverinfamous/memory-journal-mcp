@@ -228,6 +228,7 @@ for (const file of standardFiles) {
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
   fixedContent = fixedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   fixedContent = fixedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
+  fixedContent = fixedContent.replace(/\r?\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '\n');
 
   fixedContent = fixFormatting(fixedContent);
   
@@ -395,6 +396,13 @@ for (const file of codemodeFiles) {
   
   // Fix project_number: pNum in getProject/updateProject/deleteProject
   fixedContent = fixedContent.replace(/project_number: pNum/g, 'name: pNum');
+
+  // Fix Code Mode wrapper parameter hallucination
+  fixedContent = fixedContent.replace(/outer `project_number` parameter/g, 'outer `workspace_id` parameter');
+  fixedContent = fixedContent.replace(/String-based `project_number` parameters \(`"5"`\) auto-resolve to numeric safely/g, 'Number-based `workspace_id` parameters (`5`) auto-resolve to string safely');
+  fixedContent = fixedContent.replace(/workflow_run_id, project_number, is_personal/g, 'workflow_run_id, workspace_id, is_personal');
+  fixedContent = fixedContent.replace(/filters by project_number/g, 'filters by workspace_id');
+
   
   // Fix boilerplate for codemode tests to align with autonomous verification
   fixedContent = fixedContent.replace(

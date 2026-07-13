@@ -133,13 +133,13 @@ return {
 - FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
 - FTS5 LIKE fallback works for special characters (	test's, 100%)
 - search_entries gracefully falls back to fuzzy Levenshtein matching via Code Mode when fuzzy_match is true and FTS yields zero results
-- search_entries filters work: issue_number, pr_status, workflow_run_id, project_number, is_personal, 	tags, entry_type, start_date, end_date
+- search_entries filters work: issue_number, pr_status, workflow_run_id, workspace_id, is_personal, 	tags, entry_type, start_date, end_date
 - Cross-DB search returns entries with source: 'personal' and source: 'team'
 - search_by_date_range with filters (entry_type, 	tags, is_personal) works
 - search_by_date_range rejects invalid date format with structured error
 - search_by_date_range rejects inverted date range (start > end) with structured error
 - search_entries rejects queries exceeding 250 characters with structured Zod error
-- search_by_date_range filters by project_number
+- search_by_date_range filters by workspace_id
 - semantic_search processes Related by ID (entry_id) lookups avoiding query strings
 - semantic_search correctly filters results downstream using 	tags and is_personal
 - semantic_search with custom threshold returns fewer results
