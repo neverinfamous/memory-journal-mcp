@@ -14,7 +14,7 @@ export default defineConfig({
         include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',
-            reporter: ['text', 'html', 'json-summary', 'lcov'],
+            reporter: ['text', 'text-summary', 'html', 'json-summary', 'lcov'],
             reportsDirectory: '.test-output/coverage',
             include: ['src/**/*.ts'],
             exclude: [
