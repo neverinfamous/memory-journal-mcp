@@ -15,6 +15,3 @@ Because testing and healing all tools at once exhausts an agent's context window
 
 Please refer to [`coordinator-workflow.md`](./coordinator-workflow.md) for the complete workflow and the sequential list of test modules to execute.
 
-## Test Modules
-
-Please refer to [`coordinator-workflow.md`](./coordinator-workflow.md) for the complete and sequential list of test modules to execute.
