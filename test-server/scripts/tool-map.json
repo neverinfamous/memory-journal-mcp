@@ -14,7 +14,6 @@
     ],
     "add_to_vector_index": [
       "test-core-semantic.md",
-      "test-team-vector.md",
       "test-tool-group-admin-part2.md",
       "test-usability-admin-vector.md"
     ],
@@ -75,7 +74,6 @@
       "test-seed.md",
       "test-tool-group-core.md",
       "test-usability-core-mutations.md",
-      "test-usability-workspace-isolation-part1.md",
       "test-workspace-isolation.md"
     ],
     "create_github_issue_with_entry": [
@@ -91,7 +89,6 @@
       "test-usability-github-milestones.md"
     ],
     "cross_team_search": [
-      "test-team-crud.md",
       "test-tool-group-search.md",
       "test-usability-search-core.md"
     ],
@@ -100,7 +97,6 @@
       "test-errors-boundaries.md",
       "test-integrity-part1.md",
       "test-integrity-part2.md",
-      "test-team-mutations.md",
       "test-tool-group-admin-part1.md",
       "test-usability-admin-mutations.md"
     ],
@@ -122,13 +118,11 @@
     "export_entries": [
       "test-core-io.md",
       "test-integrity-part2.md",
-      "test-team-io.md",
       "test-tool-group-io.md",
       "test-usability-io.md"
     ],
     "export_markdown": [
       "test-core-io.md",
-      "test-team-io.md",
       "test-tool-group-io.md",
       "test-usability-io.md"
     ],
@@ -144,7 +138,6 @@
     "get_cross_project_insights": [
       "test-core-semantic.md",
       "test-seed.md",
-      "test-team-analytics.md",
       "test-tool-group-analytics.md",
       "test-usability-analytics.md"
     ],
@@ -156,8 +149,7 @@
       "test-integrity-part2.md",
       "test-payload-optimization.md",
       "test-tool-group-core.md",
-      "test-usability-core-read.md",
-      "test-usability-workspace-isolation-part1.md"
+      "test-usability-core-read.md"
     ],
     "get_entry_history": [
       "test-core-crud-read.md",
@@ -229,7 +221,6 @@
       "test-payload-optimization.md",
       "test-tool-group-core.md",
       "test-usability-core-read.md",
-      "test-usability-workspace-isolation-part1.md",
       "test-workspace-isolation.md"
     ],
     "get_release_info": [
@@ -245,10 +236,8 @@
       "test-core-infra.md",
       "test-core-semantic.md",
       "test-integrity-part2.md",
-      "test-team-analytics.md",
       "test-tool-group-analytics.md",
       "test-usability-analytics.md",
-      "test-usability-workspace-isolation-part1.md",
       "test-workspace-isolation.md"
     ],
     "get_unreleased_commits": [
@@ -262,20 +251,17 @@
     ],
     "import_external": [
       "test-core-io.md",
-      "test-team-io.md",
       "test-tool-group-io.md",
       "test-usability-io.md"
     ],
     "import_markdown": [
       "test-core-io.md",
-      "test-team-io.md",
       "test-tool-group-io.md",
       "test-usability-io.md"
     ],
     "link_entries": [
       "test-core-relationships.md",
       "test-integrity-part2.md",
-      "test-team-relationships.md",
       "test-tool-group-relationships.md",
       "test-usability-relationships.md"
     ],
@@ -286,7 +272,6 @@
     ],
     "list_deleted_entries": [
       "test-core-crud-read.md",
-      "test-team-mutations.md",
       "test-tool-group-search.md",
       "test-usability-search-vector.md"
     ],
@@ -313,7 +298,6 @@
       "test-core-admin-system.md",
       "test-errors-prompts.md",
       "test-integrity-part1.md",
-      "test-team-mutations.md",
       "test-tool-group-admin-part2.md",
       "test-usability-admin-system.md"
     ],
@@ -392,7 +376,6 @@
     ],
     "restore_entry": [
       "test-core-crud-read.md",
-      "test-team-mutations.md",
       "test-tool-group-admin-part1.md",
       "test-usability-admin-mutations.md"
     ],
@@ -417,7 +400,6 @@
       "test-payload-optimization.md",
       "test-tool-group-search.md",
       "test-usability-search-core.md",
-      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "search_commits": [
@@ -434,7 +416,6 @@
       "test-seed.md",
       "test-tool-group-search.md",
       "test-usability-search-core.md",
-      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "semantic_search": [
@@ -442,7 +423,6 @@
       "test-errors-boundaries.md",
       "test-integrity-part2.md",
       "test-seed.md",
-      "test-team-vector.md",
       "test-tool-group-search.md",
       "test-usability-search-vector.md"
     ],
@@ -493,7 +473,6 @@
       "test-team-crud.md",
       "test-tool-group-team-part1.md",
       "test-usability-team-mutations.md",
-      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "team_delete_entry": [
@@ -621,7 +600,6 @@
       "test-team-crud.md",
       "test-tool-group-team-part2.md",
       "test-usability-team-search.md",
-      "test-usability-workspace-isolation-part2.md",
       "test-workspace-isolation.md"
     ],
     "team_search_by_date_range": [
@@ -677,7 +655,6 @@
       "test-errors-boundaries.md",
       "test-errors-prompts.md",
       "test-integrity-part1.md",
-      "test-team-mutations.md",
       "test-tool-group-admin-part1.md",
       "test-usability-admin-mutations.md"
     ],
@@ -693,7 +670,6 @@
     ],
     "visualize_relationships": [
       "test-core-relationships.md",
-      "test-team-relationships.md",
       "test-tool-group-relationships.md",
       "test-usability-relationships.md"
     ]

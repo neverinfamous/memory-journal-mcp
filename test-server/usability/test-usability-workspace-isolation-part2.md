@@ -8,8 +8,6 @@ This prompt instructs you to organically test the structural boundaries, data in
 
 Use direct tool calls to interact with tools that accept workspace contextualization in this test pass:
 
-`search_by_date_range`, `search_entries`, `team_create_entry`, `team_search`
-
 **Instructions:**
 
 - Do not perfectly structure your initial calls. Act intuitively as an agent.

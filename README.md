@@ -194,52 +194,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
-- `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, and `localTime`
-- `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
-- `memory://recent` - 10 most recent entries
-- `memory://significant` - Significant milestones and breakthroughs
-- `memory://graph/recent` - Live Mermaid diagram of recent relationships
-- `memory://health` - Server health & diagnostics
-- `memory://graph/actions` - CI/CD narrative graph
-- `memory://actions/recent` - Recent workflow runs
-- `memory://tags` - All tags with usage counts
-- `memory://statistics` - Journal statistics
-- `memory://rules` - User rules file content for agent awareness
-- `memory://workflows` - Available agent workflows summary
-- `memory://skills` - Agent skills index (names, paths, excerpts)
-- `memory://github/status` - GitHub repository status overview
-- `memory://github/insights` - Repository stars, forks, and 14-day traffic summary
-- `memory://github/milestones` - Open milestones with completion percentages
-- `memory://team/recent` - Recent team entries with author attribution
-- `memory://team/statistics` - Team entry counts, types, and author breakdown
-- `memory://help` - Tool group index with descriptions and tool counts
-- `memory://metrics/summary` - Aggregate tool call metrics since server start (calls, errors, token estimates, duration) — HIGH priority
-- `memory://metrics/tokens` - Per-tool token usage breakdown sorted by output token cost — MEDIUM priority
-- `memory://metrics/resources` - Per-resource usage counters (read frequency and recency) — MEDIUM priority
-- `memory://metrics/system` - Process-level metrics: memory (MB), uptime (s), Node.js version, platform — MEDIUM priority
-- `memory://metrics/users` - Per-user call counts (populated when OAuth user identifiers are present) — LOW priority
-- `memory://metrics/latency` - Per-tool latency percentiles (p50/p95/p99) with min/max bounds — MEDIUM priority
-- `memory://audit` - Last 50 write/admin tool call entries from the JSONL operational telemetry log (requires `AUDIT_LOG_PATH`)
-- `memory://staleness` - Project staleness overview
-- `memory://insights/digest` - Aggregate insights digest
-- `memory://insights/team-collaboration` - Team collaboration metrics
-- `memory://insights/reports` - Generated scheduled report snapshots and delivery statuses
-
-**Template Resources** (base templates + dynamic `{repo}` variants):
-
-- `memory://projects/{number}/timeline` - Project activity timeline
-- `memory://issues/{issue_number}/entries` - Entries linked to issue
-- `memory://prs/{pr_number}/entries` - Entries linked to PR
-- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
-- `memory://kanban/{project_number}` - GitHub Project Kanban board
-- `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
-- `memory://milestones/{number}` - Milestone detail with completion progress
-- `memory://staleness/{project_number}` - Project staleness detailed breakdown
-- `memory://commits/{project_number}` - Commits list
-- `memory://commits/{project_number}/by-issue` - Commits grouped by referenced issue
-- `memory://commits/{project_number}/by-pr` - Commits grouped by referenced PR
-- `memory://help/{group}` - Per-group tool reference with parameters and annotations
-- `memory://briefing/{repo}` - Context targeted to a specific repository
+See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
 
 _Note: The `memory://briefing`, `memory://graph/actions`, `memory://actions/recent`, `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, `memory://milestones/{number}`, `memory://kanban/{project_number}`, and `memory://kanban/{project_number}/diagram` resources also accept an optional `/{repo}` path suffix for cross-repo targeting._
 
@@ -651,14 +606,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 
 **MCP Server Tools (Read + Kanban + Milestones + Issue Lifecycle):**
 
-- `get_github_issues` / `get_github_issue` - Query issues
-- `get_github_prs` / `get_github_pr` - Query pull requests
-- `get_github_context` - Full repository context
-- `get_kanban_board` / `add_kanban_item` / `move_kanban_item` / `delete_kanban_item` - **Kanban management**
-- `get_github_milestones` / `get_github_milestone` - **Milestone tracking with completion %**
-- `create_github_milestone` / `update_github_milestone` / `delete_github_milestone` - **Milestone CRUD**
-- `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
-- `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
+See the **[Complete tools reference](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)** for all supported GitHub integration capabilities, including query commands, Kanban management, milestone tracking, analytics, and issue lifecycle events.
 
 > **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, Milestones, timeline resources, context linking). Standard GitHub mutations (create/close issues, merge PRs, manage releases) are handled directly by agents via `gh` CLI.
 

@@ -270,6 +270,8 @@ const codemodeFiles = fs.readdirSync(codemodeDir).filter(f => f.endsWith('.md'))
 
 const codemodeHallucinationFixes = {
   'mj.admin.bulkCreate': 'mj.admin.batchCreateEntries',
+  'mj.admin.bulkUpdate': 'mj.admin.batchUpdateEntries',
+  'mj.admin.batchUpdate': 'mj.admin.batchUpdateEntries',
   'mj.admin.bulkDelete': 'mj.admin.batchDeleteEntries',
   'mj.admin.config': 'mj.admin.updateConfiguration',
   'mj.admin.listDeletedEntries': 'mj.search.listDeletedEntries',
@@ -346,7 +348,7 @@ for (const file of codemodeFiles) {
   // Fix boilerplate for codemode tests to align with autonomous verification
   fixedContent = fixedContent.replace(
     /3\. If you made code changes\/fixes, update `UNRELEASED\.md` and commit without pushing\. If tests pass cleanly, do NOT update `UNRELEASED\.md`\. Then, stop so the \*\*USER\*\* can verify with `pnpm run check`\.\r?\n4\. After user completes verification, re-test fixes with direct MCP calls\./g,
-    '3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n4. **Commit**: Immediately commit passing changes using the `bun .\\\\.agents\\\\scripts\\\\commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.'
+    '3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.'
   );
 
   fixedContent = fixedContent.replace(
