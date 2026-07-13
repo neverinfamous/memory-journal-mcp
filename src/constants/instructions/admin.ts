@@ -22,14 +22,12 @@ The server supports the standard MCP \`resources/subscribe\` capability. You can
 
 ## Available Tools
 
-- \`update_configuration\`: Dynamically update the running server configuration without restarting.
-- \`register_project\` / \`update_project\` / \`delete_project\` / \`get_project\` / \`list_projects\`: Manage project workspaces in the global registry.
-- \`update_entry\`: Update an existing journal entry. Pass \`expected_version\` for optimistic locking. Pass \`null\` to clear a field. Supports 14 metadata fields.
-- \`delete_entry\` / \`restore_entry\`: Soft-delete or restore a journal entry.
-- \`batch_create_entries\` / \`batch_update_entries\` / \`batch_delete_entries\`: Bulk operations (Max 50 per batch). \`batch_update_entries\` supports \`expected_version\` per entry.
-- \`rebuild_vector_index\` / \`add_to_vector_index\`: Manage the semantic search vector index.
-- \`merge_tags\`: Merge a source tag into a target tag (source is deleted).
-- \`run_auto_prune\`: Manually trigger the auto-prune background job for stale entries.
-- \`search_audit_log\`: Search operational telemetry audit logs by tool name, user, date range, status, or category.
+- **Configuration**: \`update_configuration\`
+- **Project Lifecycle**: \`register_project\`, \`update_project\`, \`delete_project\`, \`get_project\`, \`list_projects\`
+- **Entry Mutations**: \`update_entry\`, \`delete_entry\`, \`restore_entry\`
+- **Batch Operations**: \`batch_create_entries\`, \`batch_update_entries\`, \`batch_delete_entries\`
+- **Vector Index**: \`rebuild_vector_index\`, \`add_to_vector_index\`
+- **Maintenance**: \`merge_tags\`, \`run_auto_prune\`
+- **Auditing**: \`search_audit_log\`
 
 `;

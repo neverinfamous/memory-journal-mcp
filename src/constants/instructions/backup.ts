@@ -5,8 +5,5 @@ export const BACKUP_HELP = `# Backup Operations
 
 ## Available Tools
 
-- \`backup_journal\`: Create a timestamped backup of the journal database.
-- \`list_backups\`: List all available backup files with their sizes and creation dates.
-- \`restore_backup\`: Restore the journal database from a backup file (automatically creates a pre-restore backup).
-- \`cleanup_backups\`: Delete old backup files, keeping only the most recent N backups.
+- **Backup**: \`backup_journal\`, \`list_backups\`, \`restore_backup\`, \`cleanup_backups\`
 `;

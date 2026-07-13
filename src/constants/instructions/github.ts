@@ -23,14 +23,10 @@ When the user has GitHub Copilot code review enabled:
 
 ## Available Tools
 
-- \`get_github_issues\` / \`get_github_prs\`: List issues or pull requests. Leave \`owner\`/\`repo\` empty to auto-detect.
-- \`get_github_issue\` / \`get_github_pr\`: Get detailed information about a specific issue or PR.
-- \`create_github_issue_with_entry\` / \`close_github_issue_with_entry\`: Manage issues while automatically logging journal entries.
-- \`get_copilot_reviews\`: Get Copilot's code review findings for a PR, returning review state and file-level comments.
-- \`get_github_context\`: Get current repository context including branch, open issues, and open PRs.
-- \`get_repo_insights\`: Get repository insights (stars, forks, traffic, referrers, paths). Use \`sections\` to control token usage.
-- \`get_kanban_board\`: View a GitHub Project v2 as a Kanban board with items grouped by Status column.
-- \`add_kanban_item\` / \`move_kanban_item\` / \`delete_kanban_item\`: Manage items on a GitHub Project v2 Kanban board.
-- \`get_github_milestones\` / \`get_github_milestone\` / \`create_github_milestone\` / \`update_github_milestone\` / \`delete_github_milestone\`: Manage GitHub milestones for tracking project progress.
+- **Issues**: \`get_github_issues\`, \`get_github_issue\`, \`create_github_issue_with_entry\`, \`close_github_issue_with_entry\`
+- **Pull Requests**: \`get_github_prs\`, \`get_github_pr\`, \`get_copilot_reviews\`
+- **Context & Insights**: \`get_github_context\`, \`get_repo_insights\`
+- **Kanban**: \`get_kanban_board\`, \`add_kanban_item\`, \`move_kanban_item\`, \`delete_kanban_item\`
+- **Milestones**: \`get_github_milestones\`, \`get_github_milestone\`, \`create_github_milestone\`, \`update_github_milestone\`, \`delete_github_milestone\`
 
 `;

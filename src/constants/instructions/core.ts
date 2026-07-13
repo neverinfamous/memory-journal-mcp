@@ -115,12 +115,8 @@ Example:
 
 ## Available Tools
 
-- \`create_entry\`: Create a new journal entry. Supports \`workspace_id\` for multi-tenancy.
-- \`get_entry_by_id\`: Get a specific journal entry by ID with full details.
-- \`get_recent_entries\`: Get recent journal entries. Supports \`sort_by\` (timestamp or importance), cursor pagination, and \`workspace_id\`.
-- \`get_entry_history\`: Get the revision history of a specific entry (capped at 10 revisions).
-- \`list_tags\`: List all available tags.
-- \`mark_anchors_stale\`: Mark explicit relationships between entries as stale or out-of-date.
-- \`test_simple\` / \`test_error_handling\` / \`trigger_progress\`: Testing tools for evaluating server behavior and notifications.
+- **Entry Lifecycle**: \`create_entry\`, \`get_entry_by_id\`, \`get_recent_entries\`, \`get_entry_history\`
+- **Taxonomy & Graph**: \`list_tags\`, \`mark_anchors_stale\`
+- **Testing Tools**: \`test_simple\`, \`test_error_handling\`, \`trigger_progress\`
 
 `;

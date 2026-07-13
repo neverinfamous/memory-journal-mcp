@@ -8,11 +8,8 @@ export const GIT_HELP = `# Git History Mining
 
 ## Available Tools
 
-- \`get_commit_history\`: Fetch the commit history of the repository (with optional range or limit).
-- \`search_commits\`: Search commit messages or authors within the repository.
-- \`get_release_info\`: Retrieve information about a specific release tag (commit count, timestamp).
-- \`get_unreleased_commits\`: Track commits merged since the last release tag.
-- \`analyze_commit_patterns\`: Identify frequent contributors and frequently modified files.
-- \`check_entry_staleness\`: Evaluate journal entry staleness by cross-referencing with recent git activity.
+- **History**: \`get_commit_history\`, \`search_commits\`
+- **Releases**: \`get_release_info\`, \`get_unreleased_commits\`
+- **Analytics**: \`analyze_commit_patterns\`, \`check_entry_staleness\`
 
 `;
