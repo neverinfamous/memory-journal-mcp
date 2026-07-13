@@ -1,6 +1,5 @@
 # Memory Journal MCP - Config Reload Test (Code Mode)
 
-> **CRITICAL:** You MUST pass `use_test_db: true` as a top-level parameter in ALL MCP tool calls to ensure tests hit the test database instead of production.
 
 
 This document provides a guided walkthrough for testing the dynamic configuration update capabilities of the memory-journal-mcp server using Code Mode.

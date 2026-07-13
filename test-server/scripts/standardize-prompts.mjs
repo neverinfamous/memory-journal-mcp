@@ -413,6 +413,7 @@ for (const file of codemodeFiles) {
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
   fixedContent = fixedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   fixedContent = fixedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
+  fixedContent = fixedContent.replace(/\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   
   // Fix project_number: pNum in getProject/updateProject/deleteProject
   fixedContent = fixedContent.replace(/project_number: pNum/g, 'name: pNum');
