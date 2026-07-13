@@ -6,7 +6,7 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - **Network:** Disabled. \`fetch()\` throws \`SandboxNetworkError\`. Node network modules are stripped.
 - **Globals:** \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
 - **Positional Arguments:** \`create("note")\`, \`searchEntries("performance")\`, \`mj.backup.backupJournal("snapshot")\`.
-- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`issue_id\`→\`issue_number\`, \`q\`/\`search\`/\`term\`/\`keyword\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`version\`→\`expected_version\`, \`team\`/\`project\`→\`workspace_id\`/\`project_number\`).
+- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`query\` (search, q), \`output_dir\` (path, filepath), \`keep_count\` (keep), \`target_user\` (user, assignee), \`flag_type\` (severity), \`workspace_id\` (team, project)).
 - **Arrays & Methods:** Proxies seamlessly support native array properties/methods (e.g., \`.length\`, \`[0]\`, \`.map()\`, \`.filter()\`, \`.includes()\`, \`.shift()\`, \`.concat()\`). Calling an unsupported method returns an actionable \`VALIDATION_ERROR\` rather than crashing.
 - **Async/Await:** Do NOT access \`Promise\` objects synchronously. Always \`await\` async operations. Missing \`await\` statements will be intercepted and return an actionable \`VALIDATION_ERROR\`.
 
