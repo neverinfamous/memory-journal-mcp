@@ -411,9 +411,13 @@ for (const file of codemodeFiles) {
   );
 
   fixedContent = fixedContent.replace(
-    /including changes to `constants\/server-instructions\.ts` or this file\. \*\*If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code \(e\.g\., `codemode\.ts`\) so future agents succeed automatically\.\*\*/g,
-    'including changes to `src/constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**'
+    /including changes to `(?:src\/)?constants\/server-instructions\.ts`(?: or this file\.)? \*\*If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code \(e\.g\., `(?:src\/filtering\/tool-filter\.ts|codemode\.ts)`\) so future agents succeed automatically\.\*\*/g,
+    'including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**'
   );
+
+  fixedContent = fixedContent.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts`/g, '`bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>`');
+  fixedContent = fixedContent.replace(/`bun \.\\\\\.agents\\\\scripts\\\\commit\.ts --msg/g, '`bun ./.agents/scripts/commit.ts --msg');
+
 
   fixedContent = fixFormatting(fixedContent);
   

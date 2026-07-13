@@ -18,8 +18,11 @@ export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp'>): void {
 
     try {
         const __filename = fileURLToPath(import.meta.url)
-        const __dirname = path.dirname(__filename)
-        const rootDir = path.resolve(__dirname, '..', '..')
+        let rootDir = path.dirname(__filename)
+        while (!fs.existsSync(path.join(rootDir, 'package.json')) && rootDir !== path.parse(rootDir).root) {
+            rootDir = path.dirname(rootDir)
+        }
+        
         const logsDir = path.join(rootDir, 'logs')
         
         if (!fs.existsSync(logsDir)) {
