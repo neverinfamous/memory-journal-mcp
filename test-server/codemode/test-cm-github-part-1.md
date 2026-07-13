@@ -71,7 +71,7 @@ return {
 | Nonexistent issue     | `return await mj.github.getGithubIssue({ issue_number: 999999 });`         | `{ error: "Issue #999999 not found" }`     |
 | Nonexistent PR        | `return await mj.github.getGithubPr({ pr_number: 999999 });`               | `{ error: "PR #999999 not found" }`        |
 | Nonexistent milestone | `return await mj.github.getGithubMilestone({ milestone_number: 999999 });` | `{ error: "Milestone #999999 not found" }` |
-| Nonexistent Kanban    | `return await mj.github.getKanbanBoard({ project_number: 99999 });`        | Structured error with project not found    |
+| Nonexistent Kanban    | `return await mj.github.getKanbanBoard({ workspace_id: 99999 });`        | Structured error with project not found    |
 
 ### 25.3 Kanban Tools
 

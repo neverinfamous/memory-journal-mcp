@@ -154,6 +154,6 @@ rm *_metrics.json
 - `get_statistics` returns all 4 enhanced analytics metrics
 - `memory://github/status` returns compact JSON with CI, issues, PRs, milestones
 - Verified that all composite and partial performance indexes exist and are valid in the database schema
-- `secureDispatcher` correctly auto-resolves a `repo` string (e.g., "memory-journal-mcp") into its numeric `project_number` based on the configuration registry.
+- `secureDispatcher` correctly auto-resolves a `repo` string (e.g., "memory-journal-mcp") into its numeric `workspace_id` based on the configuration registry.
 - Prometheus `/metrics` endpoint exports tool tracking data correctly when `--metrics-export` is enabled
 - Metrics persistence loads and saves telemetry across server restarts when `--persist-metrics` is enabled

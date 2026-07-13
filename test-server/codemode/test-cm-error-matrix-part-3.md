@@ -34,7 +34,7 @@ const insightsEmpty = await mj.github.getRepoInsights({})
 const issueBadNum = await mj.github.getGithubIssue({ issue_number: 999999 })
 const prBadNum = await mj.github.getGithubPr({ pr_number: 999999 })
 const msBadNum = await mj.github.getGithubMilestone({ milestone_number: 999999 })
-const kanbanBadNum = await mj.github.getKanbanBoard({ project_number: 99999 })
+const kanbanBadNum = await mj.github.getKanbanBoard({ workspace_id: 99999 })
 
 const issueEmpty = await mj.github.getGithubIssue({})
 const prEmpty = await mj.github.getGithubPr({})

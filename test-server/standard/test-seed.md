@@ -42,7 +42,7 @@ These entries ensure every FTS5 query pattern in `test-core-search.md` returns a
 
 ### 0.2 Filter & GitHub-Linked Entries
 
-These entries ensure filter tests (`issue_number`, `pr_status`, `workflow_run_id`, `project_number`) return results.
+These entries ensure filter tests (`issue_number`, `pr_status`, `workflow_run_id`, `workspace_id`) return results.
 
 | #   | Tool           | Params                                                                                                                                                                                                                                     | Enables Tests                                                                            |
 | --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
@@ -63,22 +63,22 @@ These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) ret
 ### 0.4 Cross-Project Insights Seed
 
 > [!IMPORTANT]
-> `get_cross_project_insights` and `team_get_cross_project_insights` require a **minimum of 3 entries** sharing the same `project_number` before they appear in results (default `min_entries: 3`). S7 already has `workspace_id: "test-ws"` — add S13–S14 to reach the threshold in the personal journal. S15–S17 seed the team DB with project-linked entries.
+> `get_cross_project_insights` and `team_get_cross_project_insights` require a **minimum of 3 entries** sharing the same `workspace_id` before they appear in results (default `min_entries: 3`). S7 already has `workspace_id: "test-ws"` — add S13–S14 to reach the threshold in the personal journal. S15–S17 seed the team DB with project-linked entries.
 
-**Personal journal — complete project #5 to 3 entries:**
+**Personal journal — complete workspace test-ws to 3 entries:**
 
 | #   | Tool           | Params                                                                                                                                                                                               | Enables Tests                                                                     |
 | --- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| S13 | `create_entry` | `content: "Completed sprint planning for project #5: scoped auth and deploy milestones"`, `entry_type: "planning"`, `workspace_id: "test-ws"`, `tags: ["planning", "sprint"]`                              | `workspace_id: "test-ws"` filter, `get_cross_project_insights` non-zero `project_count` |
-| S14 | `create_entry` | `content: "Project #5 retrospective: identified bottlenecks in deployment pipeline and action items"`, `entry_type: "personal_reflection"`, `workspace_id: "test-ws"`, `tags: ["retrospective", "deploy"]` | `get_cross_project_insights` — 3rd entry to meet `min_entries: 3` for project 5   |
+| S13 | `create_entry` | `content: "Completed sprint planning for workspace test-ws: scoped auth and deploy milestones"`, `entry_type: "planning"`, `workspace_id: "test-ws"`, `tags: ["planning", "sprint"]`                              | `workspace_id: "test-ws"` filter, `get_cross_project_insights` non-zero `project_count` |
+| S14 | `create_entry` | `content: "workspace test-ws retrospective: identified bottlenecks in deployment pipeline and action items"`, `entry_type: "personal_reflection"`, `workspace_id: "test-ws"`, `tags: ["retrospective", "deploy"]` | `get_cross_project_insights` — 3rd entry to meet `min_entries: 3` for project 5   |
 
 **Team DB — seed 3 project-linked entries:**
 
 | #   | Tool                                   | Params                                                                                                                                                                                                                 | Enables Tests                                                                         |
 | --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| S15 | `team_create_entry(workspace_id: "test-ws")` | `content: "Team kickoff for project #5: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `workspace_id: "test-ws"`, `tags: ["kickoff", "project"]`, `author: "alice"`                                      | `team_get_cross_project_insights` non-zero `project_count`                            |
-| S16 | `team_create_entry(workspace_id: "test-ws")` | `content: "Project #5 mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `workspace_id: "test-ws"`, `tags: ["standup", "project"]`, `author: "bob"`                     | `team_get_cross_project_insights` — 2nd team entry for project 5                      |
-| S17 | `team_create_entry(workspace_id: "test-ws")` | `content: "Project #5 release review: all acceptance criteria met, feature flags enabled for rollout"`, `entry_type: "standup"`, `workspace_id: "test-ws"`, `tags: ["release", "project", "team-shared"]`, `author: "alice"` | `team_get_cross_project_insights` — 3rd team entry to meet `min_entries: 3` threshold |
+| S15 | `team_create_entry(workspace_id: "test-ws")` | `content: "Team kickoff for workspace test-ws: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `workspace_id: "test-ws"`, `tags: ["kickoff", "project"]`, `author: "alice"`                                      | `team_get_cross_project_insights` non-zero `project_count`                            |
+| S16 | `team_create_entry(workspace_id: "test-ws")` | `content: "workspace test-ws mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `workspace_id: "test-ws"`, `tags: ["standup", "project"]`, `author: "bob"`                     | `team_get_cross_project_insights` — 2nd team entry for project 5                      |
+| S17 | `team_create_entry(workspace_id: "test-ws")` | `content: "workspace test-ws release review: all acceptance criteria met, feature flags enabled for rollout"`, `entry_type: "standup"`, `workspace_id: "test-ws"`, `tags: ["release", "project", "team-shared"]`, `author: "alice"` | `team_get_cross_project_insights` — 3rd team entry to meet `min_entries: 3` threshold |
 
 ### 0.5 Post-Seed Verification
 

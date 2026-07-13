@@ -29,7 +29,7 @@
 | `get_github_issue`              | `issue_number: 999999` -> Not found structural error | ⚠️ Should return validation error                       |
 | `get_github_pr`                 | `pr_number: 999999` -> Not found structural error    | ⚠️ Should return validation error                       |
 | `get_github_context`            | N/A                                                  | Should succeed                                          |
-| `get_kanban_board`              | `project_number: 999999` -> Not found                | ⚠️ Returns CONFIGURATION_ERROR (auto-detect precedence) |
+| `get_kanban_board`              | `workspace_id: 999999` -> Not found                | ⚠️ Returns CONFIGURATION_ERROR (auto-detect precedence) |
 | `move_kanban_item`              | `target_status: "Nonexistent"`                       | ⚠️ Should return validation error                       |
 | `add_kanban_item`               | `content_id: 999999` -> Not found                    | ⚠️ Should return validation error                       |
 | `delete_kanban_item`            | `item_id: 999999` -> Not found                       | ⚠️ Should return validation error                       |

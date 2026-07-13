@@ -32,7 +32,7 @@ Test core CRUD operations through the Code Mode mj.* API bridge (Advanced cases)
 // to the OUTER `mj_execute_code` schema, NOT inside this javascript payload.
 
 const injected = await mj.core.createEntry({
-  // Deliberately omitting project_number here to test auto-injection from the wrapper
+  // Deliberately omitting workspace_id here to test auto-injection from the wrapper
   content: 'Sandbox wrapper injection test'
 })
 
@@ -108,11 +108,11 @@ return {
 | ---------------- | -------- |
 | `updatedSuccess` | `true`   |
 
-### 20.19 String project_number Auto-Resolve
+### 20.19 String workspace_id Auto-Resolve
 
 ```javascript
 // Test code:
-// Provide project_number as a string instead of a number
+// Provide workspace_id as a string instead of a number
 const entry = await mj.core.createEntry({
   workspace_id: "test-ws",
   content: 'String resolve test'

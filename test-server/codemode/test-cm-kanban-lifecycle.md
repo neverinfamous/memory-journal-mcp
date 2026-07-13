@@ -51,7 +51,7 @@ try {
 
   // 2. Remove from default Kanban to test direct linkage
   const initBoard = await mj.github.getKanbanBoard({
-    project_number: PROJECT_NUM,
+    workspace_id: PROJECT_NUM,
     owner: OWNER,
     repo: REPO,
   })
@@ -65,7 +65,7 @@ try {
   }
   if (initItemId) {
     const deleteInitResult = await mj.github.deleteKanbanItem({
-      project_number: PROJECT_NUM,
+      workspace_id: PROJECT_NUM,
       item_id: initItemId,
       owner: OWNER,
       repo: REPO,
@@ -78,7 +78,7 @@ try {
 
   // Now add it back to test addKanbanItem
   const addResult = await mj.github.addKanbanItem({
-    project_number: PROJECT_NUM,
+    workspace_id: PROJECT_NUM,
     issue_number: testIssue,
     owner: OWNER,
     repo: REPO,
@@ -89,7 +89,7 @@ try {
 
   // 3. Move across statuses
   const projectInfo = await mj.github.getKanbanBoard({
-    project_number: PROJECT_NUM,
+    workspace_id: PROJECT_NUM,
     owner: OWNER,
     repo: REPO,
   })
@@ -98,7 +98,7 @@ try {
   const targetOption = projectInfo.statusOptions.find((o) => o.name === 'Ready')
 
   const moveResult = await mj.github.moveKanbanItem({
-    project_number: PROJECT_NUM,
+    workspace_id: PROJECT_NUM,
     item_id: addResult.itemId,
     target_status: targetOption.name,
     owner: OWNER,
@@ -118,7 +118,7 @@ try {
     }
 
     const verifyProject = await mj.github.getKanbanBoard({
-      project_number: PROJECT_NUM,
+      workspace_id: PROJECT_NUM,
       owner: OWNER,
       repo: REPO,
     })
@@ -152,7 +152,7 @@ try {
 
   // 5. Tear down
   const deleteResult = await mj.github.deleteKanbanItem({
-    project_number: PROJECT_NUM,
+    workspace_id: PROJECT_NUM,
     item_id: addResult.itemId,
     owner: OWNER,
     repo: REPO,
@@ -163,7 +163,7 @@ try {
 
   await mj.github.closeGithubIssueWithEntry({
     issue_number: testIssue,
-    project_number: PROJECT_NUM,
+    workspace_id: PROJECT_NUM,
     resolution_notes: 'Testing complete',
     comment: 'Testing complete'
   })

@@ -26,7 +26,7 @@
 
 | Test                   | Command/Action                                                                                              | Expected Result                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Register new project   | `register_project(name: "test-proj", default_owner: "dev", github_repo: "user/test-proj")`          | Project registered, returns project details including `project_number`             |
+| Register new project   | `register_project(name: "test-proj", default_owner: "dev", github_repo: "user/test-proj")`          | Project registered, returns project details including `workspace_id`             |
 | List projects          | `list_projects`                                                                                             | Returns all projects, including the newly registered "test-proj"                   |
 | Get project            | `get_project(name: "test-proj")`                                                         | Returns the specific details for the "test-proj" project                           |
 | Update project         | `update_project(name: "test-proj", new_name: "updated-proj")`      | Project is updated and marked inactive                                             |

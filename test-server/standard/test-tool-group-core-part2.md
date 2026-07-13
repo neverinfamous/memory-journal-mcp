@@ -31,7 +31,7 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 | `test_simple`          | Run test simple     | N/A                            | Should succeed (defaults)         | N/A                           |
 | `trigger_progress`     | Trigger progress    | N/A                            | Should succeed (defaults)         | N/A                           |
 | `test_error_handling`  | Test errors         | `error_type: "invalid"`        | ⚠️ Should return validation error | `error_type: 123`             |
-| `mark_anchors_stale`   | Mark stale          | N/A                            | Should succeed (defaults)         | `project_number: "abc"`       |
+| `mark_anchors_stale`   | Mark stale          | N/A                            | Should succeed (defaults)         | `workspace_id: "abc"`       |
 
 ### Specific Domain Checks
 

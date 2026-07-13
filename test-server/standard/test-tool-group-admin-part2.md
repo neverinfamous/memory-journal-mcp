@@ -31,7 +31,7 @@
 | `batch_delete_entries`| Valid deletes    | `entry_ids: []`                                | ⚠️ Should return validation error | `entry_ids: "abc"`|
 | `search_audit_log`    | Valid search     | `limit: -1`                                    | ⚠️ Should return validation error | `limit: "abc"`    |
 | `rebuild_vector_index`| Rebuild index    | N/A                                            | Should succeed (defaults)         | N/A               |
-| `run_auto_prune`      | Prune entries    | N/A                                            | Should succeed (defaults)         | `project_number: "abc"` |
+| `run_auto_prune`      | Prune entries    | N/A                                            | Should succeed (defaults)         | `workspace_id: "abc"` |
 
 > **Note:** `registerProject` is an Admin method but is intentionally exposed exclusively via Code Mode API (`mj.admin.registerProject`) to ensure secure file-system validation. It is not tested here via direct MCP calls; it is covered in the `codemode` test track.
 

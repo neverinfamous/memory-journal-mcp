@@ -32,7 +32,7 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 | `get_entry_by_id`      | Fetch existing      | `entry_id: 999999` (not found) | ⚠️ Should return validation error | `entry_id: "abc"`             |
 | `get_recent_entries`   | Fetch recent        | N/A                            | Should succeed (defaults)         | `limit: "abc"`                |
 | `get_entry_history`    | Fetch history       | `entry_id: 999999` (not found) | ⚠️ Should return validation error | `entry_id: "abc"`             |
-| `list_tags`            | Fetch tags          | N/A                            | Should succeed (defaults)         | `project_number: "abc"`       |
+| `list_tags`            | Fetch tags          | N/A                            | Should succeed (defaults)         | `workspace_id: "abc"`       |
 
 ### Specific Domain Checks
 

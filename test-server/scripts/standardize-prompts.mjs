@@ -179,6 +179,10 @@ for (const file of files) {
   updatedContent = updatedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   updatedContent = updatedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   
+  updatedContent = updatedContent.replace(/\bproject_number\b/g, 'workspace_id');
+  updatedContent = updatedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
+  updatedContent = updatedContent.replace(/project #5/gi, 'workspace test-ws');
+  
   // Fix logic flaw: replace git add and git commit with commit.ts
   updatedContent = updatedContent.replace(/Run `git add \.` and `git commit -m "[^"]+"` to save your changes locally\./g, 'Immediately commit passing changes using the `bun .\\.agents\\scripts\\commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.');
   
@@ -248,6 +252,10 @@ for (const file of standardFiles) {
   fixedContent = fixedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   fixedContent = fixedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   fixedContent = fixedContent.replace(/> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
+
+  fixedContent = fixedContent.replace(/\bproject_number\b/g, 'workspace_id');
+  fixedContent = fixedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
+  fixedContent = fixedContent.replace(/project #5/gi, 'workspace test-ws');
 
   fixedContent = fixFormatting(fixedContent);
   
@@ -439,6 +447,10 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(/workflow_run_id, project_number, is_personal/g, 'workflow_run_id, workspace_id, is_personal');
   fixedContent = fixedContent.replace(/filters by project_number/g, 'filters by workspace_id');
 
+  fixedContent = fixedContent.replace(/\bproject_number\b/g, 'workspace_id');
+  fixedContent = fixedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
+  fixedContent = fixedContent.replace(/project #5/gi, 'workspace test-ws');
+
   
   // Fix boilerplate for codemode tests to align with autonomous verification
   fixedContent = fixedContent.replace(
@@ -460,6 +472,12 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(
     /including changes to `(?:src\/)?constants\/server-instructions\.ts`(?: or this file\.)? \*\*If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code \(e\.g\., `(?:src\/filtering\/tool-filter\.ts|codemode\.ts)`\) so future agents succeed automatically\.\*\*/g,
     'including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**'
+  );
+
+  // Fix test-git.md and test-config-reload.md boilerplate
+  fixedContent = fixedContent.replace(
+    /1\. Create a plan to fix any issues found\.\r?\n2\. If code changes made, commit without pushing\.\r?\n3\. Stop for \*\*USER\*\* verification\.\r?\n4\. Re-test\.\r?\n5\. Provide brief final summary including Total Token Estimate\./g,
+    '1. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the full validation pipeline (`pnpm run check`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n2. **Commit**: Immediately commit passing changes using the `bun .\\.agents\\scripts\\commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run check` yourself, you are autonomous.\n3. Provide brief final summary including Total Token Estimate.'
   );
 
   fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts`/g, '`bun .\\.agents\\scripts\\commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>`');

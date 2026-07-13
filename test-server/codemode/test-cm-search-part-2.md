@@ -109,7 +109,7 @@ return {
 | `typeAllPlanning` | `true` (if any planning entries exist) |
 | `tagCount`        | ≥ 1 (entries with "deploy" tag)        |
 | `personalCount`   | ≥ 0                                    |
-| `projectCount`    | ≥ 0 (entries linked to project #5)     |
+| `projectCount`    | ≥ 0 (entries linked to workspace test-ws)     |
 
 ### 21.5 Search by Date Range & Input — Error Paths
 

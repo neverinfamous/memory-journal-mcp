@@ -30,7 +30,7 @@
 | Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                |
 | Move item           | `move_kanban_item(workspace_id: "test-ws", item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
 | Move invalid status | `move_kanban_item(workspace_id: "test-ws", item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
-| Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
+| Board nonexistent   | `get_kanban_board(workspace_id: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
 
 ---
 
@@ -43,7 +43,7 @@
 - `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
 - `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
 - `close_github_issue_with_entry` returns structured error for already-closed issues
-- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
+- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_WORKSPACE_ID`
 - Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
 - `memory://milestones/{repo}/{number}` returns milestone with completion %, issue counts, and hint
 - All GitHub test artifacts cleaned up after testing

@@ -35,7 +35,7 @@
 | Create with full params       | `create_github_issue_with_entry(title: "Test: Full", body: "Description", labels: ["test"], workspace_id: "test-ws", initial_status: "In Progress", entry_content: "Custom journal text", tags: ["test"])` | Issue created with body/labels, project item in "In Progress", journal entry uses custom content                                                                                                                                                              |
 | Close with comment            | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Done", comment: "Closing comment", tags: ["resolved"])`                                                                 | Issue closed with comment posted, entry tagged                                                                                                                                                                                                                |
 | Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                   |
-| Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }` |
+| Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_WORKSPACE_ID` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "workspace_id required when move_to_done is true" }` |
 
 ---
 
@@ -48,7 +48,7 @@
 - `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
 - `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
 - `close_github_issue_with_entry` returns structured error for already-closed issues
-- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
+- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_WORKSPACE_ID`
 - Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
 - `memory://milestones/{repo}/{number}` returns milestone with completion %, issue counts, and hint
 - All GitHub test artifacts cleaned up after testing

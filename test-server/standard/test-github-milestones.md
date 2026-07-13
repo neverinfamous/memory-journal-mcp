@@ -58,7 +58,7 @@
 - `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
 - `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
 - `close_github_issue_with_entry` returns structured error for already-closed issues
-- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
+- `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_WORKSPACE_ID`
 - Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
 - `memory://milestones/{repo}/{number}` returns milestone with completion %, issue counts, and hint
 - All GitHub test artifacts cleaned up after testing

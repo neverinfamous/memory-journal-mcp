@@ -39,7 +39,7 @@
 | share_with_team      | `create_entry(workspace_id: "test-ws", content: "Shared entry", share_with_team: true)`                                              | Entry in personal DB + team DB; response has `sharedWithTeam: true`, `author`         |
 | Default Type         | `create_entry(workspace_id: "test-ws", content: "Type omitted")`                                                                     | Type defaults to "note"                                                               |
 | Unrecognized Fields  | `create_entry(workspace_id: "test-ws", content: "...", random_field: "ignore_me")`                                                   | Safe ignore (no crash), entry creates normally                                        |
-| Create No Project    | `create_entry(content: "No project test")` (without `project_number`)                                                          | Fails with `VALIDATION_ERROR` ("Missing project_number..."). *(Note: If `DEFAULT_PROJECT_NUMBER` is configured on the server, this will succeed instead of erroring. If so, remove the default and re-test).* |
+| Create No Project    | `create_entry(content: "No project test")` (without `workspace_id`)                                                          | Fails with `VALIDATION_ERROR` ("Missing workspace_id..."). *(Note: If `DEFAULT_WORKSPACE_ID` is configured on the server, this will succeed instead of erroring. If so, remove the default and re-test).* |
 
 
 
@@ -51,5 +51,5 @@
 - create_entry rejects invalid entry_type and significance_type with structured errors
 - create_entry with issue_number auto-populates issueUrl from cached repo info
 - Creating entries with tags stores and returns tags properly
-- Creating an entry without a project_number correctly triggers a validation error
+- Creating an entry without a workspace_id correctly triggers a validation error
 

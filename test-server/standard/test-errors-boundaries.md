@@ -52,7 +52,7 @@ Ensure that submitting empty parameters gracefully returns structured validation
 | Empty semantic | `semantic_search` (no arguments) | `VALIDATION_ERROR`: query required |
 | Empty update | `update_entry` (no arguments) | `VALIDATION_ERROR`: entry_id required |
 | Empty delete | `delete_entry` (no arguments) | `VALIDATION_ERROR`: entry_id required |
-| Empty team create | `team_create_entry` (no arguments) | `VALIDATION_ERROR`: project_number/content required |
+| Empty team create | `team_create_entry` (no arguments) | `VALIDATION_ERROR`: workspace_id/content required |
 
 ---
 
