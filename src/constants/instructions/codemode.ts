@@ -4,9 +4,9 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 
 ## Sandbox Environment
 - **Network:** Disabled. \`fetch()\` throws \`SandboxNetworkError\`. Node network modules are stripped.
-- **Globals:** \`createEntry()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
-- **Positional Arguments:** \`createEntry("note")\`, \`searchEntries("performance")\`, \`mj.backup.backupJournal("snapshot")\`.
-- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`q\`/\`search\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`team\`/\`project\`→\`workspace_id\`).
+- **Globals:** \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
+- **Positional Arguments:** \`create("note")\`, \`searchEntries("performance")\`, \`mj.backup.backupJournal("snapshot")\`.
+- **Healing Aliases:** The proxy auto-heals common hallucinations (e.g., \`text\`/\`message\`/\`description\`→\`content\`, \`entry\`/\`id\`→\`entry_id\`, \`issue_id\`→\`issue_number\`, \`q\`/\`search\`/\`term\`/\`keyword\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`severity\`→\`flag_type\`, \`version\`→\`expected_version\`, \`team\`/\`project\`→\`workspace_id\`/\`project_number\`).
 - **Arrays & Methods:** Proxies seamlessly support native array properties/methods (e.g., \`.length\`, \`[0]\`, \`.map()\`, \`.filter()\`, \`.includes()\`, \`.shift()\`, \`.concat()\`). Calling an unsupported method returns an actionable \`VALIDATION_ERROR\` rather than crashing.
 - **Async/Await:** Do NOT access \`Promise\` objects synchronously. Always \`await\` async operations. Missing \`await\` statements will be intercepted and return an actionable \`VALIDATION_ERROR\`.
 
@@ -32,8 +32,8 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`crossTeamSearch(params)\`
 
 ### \`mj.analytics\`
-- \`getStatistics(params)\`
-- \`getCrossProjectInsights(params)\`
+- \`getStatistics(params)\` (or \`getStats()\`)
+- \`getCrossProjectInsights(params)\` (or \`getInsights()\`)
 
 ### \`mj.relationships\`
 - \`linkEntries(params)\`
@@ -99,13 +99,13 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - \`cleanupBackups(params)\`
 
 ### \`mj.team\`
-- \`teamCreateEntry(params)\`, \`teamGetEntryById(params)\`, \`teamGetRecent(params)\`, \`teamListTags(params)\`
+- \`teamCreateEntry(params)\`, \`teamGetEntryById(params)\` (or \`read()\`), \`teamGetRecent(params)\`, \`teamListTags(params)\`
 - \`teamSearch(params)\`, \`teamSearchByDateRange(params)\`, \`teamSemanticSearch(params)\`
-- \`teamUpdateEntry(params)\`, \`teamDeleteEntry(params)\`, \`teamRestoreEntry(params)\`, \`teamListDeletedEntries(params)\`
+- \`teamUpdateEntry(params)\`, \`teamDeleteEntry(params)\`, \`teamRestoreEntry(params)\`, \`teamListDeletedEntries(params)\` (or \`trash()\`)
 - \`teamMergeTags(params)\`, \`teamLinkEntries(params)\`, \`teamVisualizeRelationships(params)\`
 - \`teamBatchCreateEntries(params)\`, \`teamBatchUpdateEntries(params)\`, \`teamBatchDeleteEntries(params)\`
-- \`teamGetStatistics(params)\`, \`teamGetCrossProjectInsights(params)\`, \`teamGetCollaborationMatrix(params)\`
-- \`teamExportEntries(params)\`, \`teamExportMarkdown(params)\`, \`teamImportMarkdown(params)\`, \`teamImportExternal(params)\`
+- \`teamGetStatistics(params)\` (or \`stats()\`), \`teamGetCrossProjectInsights(params)\`, \`teamGetCollaborationMatrix(params)\`
+- \`teamExportEntries(params)\` (or \`export()\`), \`teamExportMarkdown(params)\`, \`teamImportMarkdown(params)\` (or \`importMd()\`), \`teamImportExternal(params)\`
 - \`teamBackup(params)\`, \`teamListBackups(params)\`
 - \`teamGetVectorIndexStats(params)\`, \`teamRebuildVectorIndex(params)\`, \`teamAddToVectorIndex(params)\`
 - \`teamAddMember(params)\`, \`teamRemoveMember(params)\`, \`teamUpdateMemberRole(params)\`, \`teamListMembers(params)\`, \`teamGetMember(params)\`

@@ -228,7 +228,7 @@ for (const file of standardFiles) {
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
   fixedContent = fixedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   fixedContent = fixedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
-  fixedContent = fixedContent.replace(/\r?\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '\n');
+  fixedContent = fixedContent.replace(/> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
 
   fixedContent = fixFormatting(fixedContent);
   
