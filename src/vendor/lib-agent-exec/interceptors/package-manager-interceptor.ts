@@ -89,6 +89,10 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       if (!args.includes('--no-fund') && cmdBasename.startsWith('npm')) args.push('--no-fund');
       if (!args.includes('--no-audit') && cmdBasename.startsWith('npm')) args.push('--no-audit');
     }
+    if (subCmd && subCmd.startsWith('test')) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors for test command to prevent false positives from coverage/progress output.... (Frictionless Recovery)`);
+      ctx.payload.bypassInterceptors = true;
+    }
     if (['login', 'adduser', 'publish'].includes(subCmd)) {
       if (subCmd === 'publish' && process.env.NPM_TOKEN) {
          // allow if token exists

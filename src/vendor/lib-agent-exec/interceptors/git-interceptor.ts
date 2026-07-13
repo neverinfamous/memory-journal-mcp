@@ -47,6 +47,14 @@ export function gitInterceptor(ctx: ExecutionContext): void {
         const hasWrapper = findEcosystemScript(cwd, 'commit.ts') !== null;
         const mIndex = args.findIndex(a => a === '-m' || a === '--message');
         
+        if (args.includes('--amend')) {
+          if (hasWrapper) {
+            console.error(`\n   🛠️ AUTONOMOUS HEALING: 'git commit --amend' is forbidden when using the commit.ts wrapper because it breaks the Memory Journal tracking.`);
+            console.error(`   Because 'agent-exec.ts' requires strict tracking, this is blocked. Please create a new commit or bypass the interceptor if you must amend.`);
+            process.exit(1);
+          }
+        }
+
         if (mIndex !== -1 && mIndex + 1 < args.length) {
           if (hasWrapper) {
             const message = args[mIndex + 1];
@@ -78,13 +86,67 @@ export function gitInterceptor(ctx: ExecutionContext): void {
         if (findEcosystemScript(cwd, 'get-git-history-json.ts') !== null) {
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to 'bun .\\.agents\\scripts\\get-git-history-json.ts' to prevent text dumps... (Frictionless Recovery)`);
           ctx.cmdBasename = 'bun';
-          ctx.args = ['.\\.agents\\scripts\\get-git-history-json.ts', '--limit', '10'];
+          ctx.args = ['.\\.agents\\scripts\\get-git-history-json.ts'];
           if (cmd === 'show') {
             ctx.args.push('--stats');
           }
-          const rangeArg = args.find(a => !a.startsWith('-') && a !== cmd && a !== '--no-pager');
+
+          let limit = '10';
+          const nIndex = args.indexOf('-n');
+          if (nIndex !== -1 && nIndex + 1 < args.length) {
+            limit = args[nIndex + 1];
+          }
+          
+          // Check for numeric flags like -1, -5
+          for (let i = 0; i < args.length; i++) {
+            if (/^-\d+$/.test(args[i])) {
+              limit = args[i].substring(1);
+            }
+          }
+          
+          ctx.args.push('--limit', limit);
+
+          if (args.includes('-p') || args.includes('--patch')) {
+            ctx.args.push('--include-patch');
+          }
+
+          const valueFlags = ['-n', '--max-count', '--skip', '--author', '--committer', '--grep', '--since', '--after', '--until', '--before'];
+          let rangeArg: string | undefined;
+          let pathArg: string | undefined;
+
+          // Simple heuristic: if it contains a slash, ends in extension, or exists on disk, it's a path.
+          // Otherwise, if it has '..', it's a range.
+          for (let i = 0; i < args.length; i++) {
+            if (valueFlags.includes(args[i])) {
+              i++;
+              continue;
+            }
+            if (!args[i].startsWith('-') && args[i] !== cmd && args[i] !== '--no-pager') {
+              const arg = args[i];
+              if (arg === '--') continue; // separator
+              
+              if (arg.includes('..')) {
+                rangeArg = arg;
+              } else if (arg.includes('/') || arg.includes('\\') || arg.includes('.')) {
+                pathArg = arg;
+              } else {
+                // If it's a single commit SHA or branch name without '..', we treat it as a range (e.g., git log main)
+                // But it could be a file like 'README.md'.
+                // If we already have a range, subsequent non-flags are likely paths.
+                if (rangeArg) {
+                  pathArg = arg;
+                } else {
+                  rangeArg = arg;
+                }
+              }
+            }
+          }
+
           if (rangeArg) {
             ctx.args.push('--range', rangeArg);
+          }
+          if (pathArg) {
+            ctx.args.push('--path', pathArg);
           }
           return;
         }
