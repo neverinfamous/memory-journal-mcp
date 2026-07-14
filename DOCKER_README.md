@@ -113,7 +113,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🎯 **Workflow Prompts**
 
-Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Session briefing, time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
 
@@ -128,7 +128,7 @@ Code executes in a **worker_threads sandbox** with multiple layers of security. 
 - **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
-- **Full API access** — all 11 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
+- **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured error response to the agent instead of a raw MCP protocol exception.
 
 ---
@@ -296,7 +296,7 @@ docker run --rm -p 3000:3000 \
   --transport http --port 3000 --server-host 0.0.0.0
 ```
 
-- **Features**: OAuth 2.1, 7 Security Headers, Rate Limiting, CORS, and more.
+- **Features**: OAuth 2.1, Security Headers, Rate Limiting, CORS, and more.
 - **Stateless Mode**: Add `--stateless` to the command above.
 
 **[See the full HTTP/SSE Transport & Endpoints documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport)**

@@ -191,7 +191,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🎯 **Workflow Prompts**
 
-Time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Session briefing, time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
 See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
@@ -614,7 +614,7 @@ See the **[Complete tools reference](https://github.com/neverinfamous/memory-jou
 
 ### Automate with GitHub Commander Workflows
 
-The server natively bundles the `github-commander` agent skill (accessible via `memory://skills/github-commander`). This extends your AI assistant with 9 autonomous DevOps workflows for repository stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
+The server natively bundles the `github-commander` agent skill (accessible via `memory://skills/github-commander`). This extends your AI assistant with autonomous DevOps workflows for repository stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
 
 ## 🏗️ Architecture
 
