@@ -24,15 +24,15 @@
 
 | Tool                   | Happy Path             | Domain Error Test                                                       | Zod Empty Param (`{}`)            | Zod Type Mismatch                             |
 | ---------------------- | ---------------------- | ----------------------------------------------------------------------- | --------------------------------- | --------------------------------------------- |
-| `list_deleted_entries` | List soft-deleted      | N/A                                                                     | Should succeed (defaults)         | `limit: "abc"`                                |
-| `cross_team_search`    | Search multiple DBs    | Database missing (degrades gracefully with error in output)             | ⚠️ Should return validation error | `team_dbs: "abc", limit: "abc"`               |
-| `get_vector_index_stats` | Fetch index stats    | N/A                                                                     | Should succeed (defaults)         | N/A                                           |
 
 ## 2. Integrity & Boundary Testing
 
 | Test                  | Action                                                                    | Verification                                                                       |
 | --------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Soft Delete Isolation | Search after deleting entry                                               | Verify deleted entry does not appear in search results or semantic search results. |
+| `cross_team_search` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_vector_index_stats` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `list_deleted_entries` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ## Success Criteria
 
@@ -43,5 +43,5 @@
 - Zod boundary limits prevent crashes.
 - Invalid dates return structured Domain/Validation errors.
 - No raw `-32602` responses.
-- Invalid `sort_by` value returns structured Zod validation error.
-- Valid `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending.
+- Invalid `sortBy` value returns structured Zod validation error.
+- Valid `sortBy: 'importance'` returns entries with `importanceScore` field sorted descending.

@@ -30,9 +30,9 @@
 | Link with description | `team_link_entries(workspace_id: "test-ws", from_entry_id: <A>, to_entry_id: <B>, relationship_type: "implements", description: "...")` | Relationship created with `description`              |
 | Duplicate link        | Call `team_link_entries(workspace_id: "test-ws")` again with same params                                                                | `duplicate: true`, `message`                         |
 | Link nonexistent      | `team_link_entries(workspace_id: "test-ws", from_entry_id: 999999, to_entry_id: <B>, ...)`                                              | Structured error: `{ success: false, error: "..." }` |
-| Visualize by entry    | `team_visualize_relationships(workspace_id: "test-ws", entry_id: <A>)`                                                                  | `mermaid` string, `nodeCount`, `edgeCount`           |
+| Visualize by entry    | `team_visualize_relationships(workspace_id: "test-ws", id: <A>)`                                                                  | `mermaid` string, `nodeCount`, `edgeCount`           |
 | Visualize by tag      | `team_visualize_relationships(workspace_id: "test-ws", tag: "team-test")`                                                               | Mermaid diagram scoped to tag                        |
-| Visualize nonexistent | `team_visualize_relationships(workspace_id: "test-ws", entry_id: 999999)`                                                               | Structured error or empty diagram                    |
+| Visualize nonexistent | `team_visualize_relationships(workspace_id: "test-ws", id: 999999)`                                                               | Structured error or empty diagram                    |
 
 ---
 

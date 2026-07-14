@@ -27,13 +27,13 @@
 | Test                 | Command/Action                                                                                                                 | Expected Result                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | Minimal create       | `create_entry(workspace_id: "test-ws", content: "Test entry")`                                                               | Returns entry ID                                                                      |
-| Full create          | `create_entry(workspace_id: "test-ws", content: "...", entry_type: "planning", tags: ["test"])`                                      | Entry created with metadata                                                           |
-| With GitHub linking  | `create_entry(workspace_id: "test-ws", ..., issue_number: <N>)`                                                                      | Entry links to issue                                                                  |
-| issueUrl auto-pop    | `create_entry(workspace_id: "test-ws", content: "...", issue_number: <N>)` — omit issueUrl                                           | `issueUrl` auto-populated from cached repo info (requires prior `get_github_context`) |
-| Invalid entry_type   | `create_entry(workspace_id: "test-ws", content: "test", entry_type: "invalid")`                                                      | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
+| Full create          | `create_entry(workspace_id: "test-ws", content: "...", type: "planning", tags: ["test"])`                                      | Entry created with metadata                                                           |
+| With GitHub linking  | `create_entry(workspace_id: "test-ws", ..., issueNumber: <N>)`                                                                      | Entry links to issue                                                                  |
+| issueUrl auto-pop    | `create_entry(workspace_id: "test-ws", content: "...", issueNumber: <N>)` — omit issueUrl                                           | `issueUrl` auto-populated from cached repo info (requires prior `get_github_context`) |
+| Invalid type   | `create_entry(workspace_id: "test-ws", content: "test", type: "invalid")`                                                      | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
 | Invalid significance | `create_entry(workspace_id: "test-ws", content: "test", significance_type: "invalid")`                                               | Structured error: `{ success: false, error: "..." }` listing valid enum values        |
-| With PR fields       | `create_entry(workspace_id: "test-ws", content: "PR test", pr_number: 67, pr_status: "merged")`                                      | Entry created with `prNumber`, `prStatus` fields persisted                            |
-| With workflow fields | `create_entry(workspace_id: "test-ws", content: "CI test", workflow_run_id: 123, workflow_name: "CI", workflow_status: "completed")` | Entry created with all workflow fields persisted                                      |
+| With PR fields       | `create_entry(workspace_id: "test-ws", content: "PR test", pr_number: 67, prStatus: "merged")`                                      | Entry created with `prNumber`, `prStatus` fields persisted                            |
+| With workflow fields | `create_entry(workspace_id: "test-ws", content: "CI test", workflowRunId: 123, workflow_name: "CI", workflow_status: "completed")` | Entry created with all workflow fields persisted                                      |
 | With project_owner   | `create_entry(content: "...", project_owner: "neverinfamous")`                                              | Entry created with `projectOwner` field                                               |
 | auto_context off     | `create_entry(workspace_id: "test-ws", content: "No context", auto_context: false)`                                                  | Entry created without auto-generated context                                          |
 | share_with_team      | `create_entry(workspace_id: "test-ws", content: "Shared entry", share_with_team: true)`                                              | Entry in personal DB + team DB; response has `sharedWithTeam: true`, `author`         |
@@ -48,8 +48,8 @@
 - Agent reports the Total Token Estimate in the final summary.
 - create_entry persists all optional fields: PR fields, workflow fields, projectOwner, utoContext
 - create_entry with share_with_team: true creates entries in both personal and team DBs
-- create_entry rejects invalid entry_type and significance_type with structured errors
-- create_entry with issue_number auto-populates issueUrl from cached repo info
+- create_entry rejects invalid type and significance_type with structured errors
+- create_entry with issueNumber auto-populates issueUrl from cached repo info
 - Creating entries with tags stores and returns tags properly
 - Creating an entry without a workspace_id correctly triggers a validation error
 

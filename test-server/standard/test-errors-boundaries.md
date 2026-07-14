@@ -28,13 +28,13 @@ The Dual-Schema pattern allows `.optional()` on the SDK-facing schema. Verify th
 | --------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
 | String limit (core)   | `get_recent_entries(workspace_id: "test-ws", limit: "abc")`         | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
 | String limit (search) | `search_entries(workspace_id: "test-ws", query: "x", limit: "abc")`         | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
-| String weight         | `search_entries(workspace_id: "test-ws", query: "x", fts_weight: "abc")`    | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
-| Float weight          | `search_entries(workspace_id: "test-ws", query: "x", fts_weight: 1.5)`      | Success — float is valid for weight multipliers                      |
-| String entry_id       | `get_entry_by_id(workspace_id: "test-ws", entry_id: "abc")`         | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
-| String threshold      | `semantic_search(query: "x", similarity_threshold: "abc")`    | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
+| String weight         | `search_entries(workspace_id: "test-ws", query: "x", ftsWeight: "abc")`    | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
+| Float weight          | `search_entries(workspace_id: "test-ws", query: "x", ftsWeight: 1.5)`      | Success — float is valid for weight multipliers                      |
+| String id       | `get_entry_by_id(workspace_id: "test-ws", id: "abc")`         | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
+| String threshold      | `semantic_search(query: "x", similarityThreshold: "abc")`    | `VALIDATION_ERROR`: structured, not raw `-32602`                     |
 | Negative limit        | `get_recent_entries(workspace_id: "test-ws", limit: -1)`            | `VALIDATION_ERROR`: min boundary enforced (`>=1`)                    |
 | Zero limit            | `get_recent_entries(workspace_id: "test-ws", limit: 0)`             | `VALIDATION_ERROR`: min boundary enforced (`>=1`)                    |
-| Float entry_id        | `get_entry_by_id(workspace_id: "test-ws", entry_id: 1.5)`           | `VALIDATION_ERROR`: non-integer rejected                             |
+| Float id        | `get_entry_by_id(workspace_id: "test-ws", id: 1.5)`           | `VALIDATION_ERROR`: non-integer rejected                             |
 | Boolean where string  | `create_entry(workspace_id: "test-ws", content: true)`              | ⚠️ SDK coerces to string `"true"` — accepted (expected SDK behavior) |
 | Array where string    | `create_entry(workspace_id: "test-ws", content: ["array"])`         | ⚠️ SDK coerces to `'["array"]'` — accepted (expected SDK behavior)   |
 
@@ -50,8 +50,8 @@ Ensure that submitting empty parameters gracefully returns structured validation
 | Empty create | `create_entry` (no arguments) | `VALIDATION_ERROR`: content required |
 | Empty search | `search_entries` (no arguments) | `VALIDATION_ERROR`: query required |
 | Empty semantic | `semantic_search` (no arguments) | `VALIDATION_ERROR`: query required |
-| Empty update | `update_entry` (no arguments) | `VALIDATION_ERROR`: entry_id required |
-| Empty delete | `delete_entry` (no arguments) | `VALIDATION_ERROR`: entry_id required |
+| Empty update | `update_entry` (no arguments) | `VALIDATION_ERROR`: id required |
+| Empty delete | `delete_entry` (no arguments) | `VALIDATION_ERROR`: id required |
 | Empty team create | `team_create_entry` (no arguments) | `VALIDATION_ERROR`: workspace_id/content required |
 
 ---

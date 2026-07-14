@@ -24,14 +24,14 @@
 
 | Tool                            | Domain Error Test                                    | Zod Empty Param (`{}`)                                  |
 | ------------------------------- | ---------------------------------------------------- | ------------------------------------------------------- |
-| `close_github_issue_with_entry` | Close already closed issue                           | ⚠️ Should return validation error                       |
-| `get_github_milestones`         | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
-| `get_github_milestone`          | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
-| `create_github_milestone`       | Invalid dates                                        | ⚠️ Should return validation error                       |
-| `update_github_milestone`       | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
-| `delete_github_milestone`       | `milestone_number: 999999` -> Not found error        | ⚠️ Should return validation error                       |
-| `get_repo_insights`             | `sections: ["invalid"]`                              | Should succeed (defaults if auto-context exists)        |
-| `get_copilot_reviews`           | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
+| `close_github_issue_with_entry` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `create_github_milestone` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `delete_github_milestone` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_copilot_reviews` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_github_milestone` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_github_milestones` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `get_repo_insights` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `update_github_milestone` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

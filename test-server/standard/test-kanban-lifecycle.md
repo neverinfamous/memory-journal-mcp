@@ -38,13 +38,13 @@
 
 | #   | Test                           | Command                                                           | Expected Result                                                          |
 | --- | ------------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 2   | Link existing issue to Project | `add_kanban_item(issue_number: <#>)`                              | Success, returns `itemId` indicating it is tethered to the board.        |
+| 2   | Link existing issue to Project | `add_kanban_item(issueNumber: <#>)`                              | Success, returns `itemId` indicating it is tethered to the board.        |
 | 3   | Move issue to target status    | `move_kanban_item(item_id: "<ID>", target_status: "In Progress")` | Success moving to "In Progress".                                         |
 | 4   | Untether item from Project     | `delete_kanban_item(item_id: "<ID>")`                             | Success, removes from Kanban column without closing the actual Issue/PR. |
 
 ### Verification Checks
 
-- `add_kanban_item` strictly utilizes integer `issue_number` seamlessly resolving it to `nodeId`.
+- `add_kanban_item` strictly utilizes integer `issueNumber` seamlessly resolving it to `nodeId`.
 - Item moves dynamically to non-default column natively.
 - `delete_kanban_item` explicitly purges from topological board representation smoothly.
 
@@ -56,4 +56,4 @@
 
 - Complete Add -> Move -> Remove pipeline succeeds consecutively.
 - Token count optimized through `itemDirectory` vs traditional bloated pagination.
-- Ensure the issue survives the `delete_kanban_item` mutation (check state `get_github_issue(issue_number: <#>)` is NOT closed).
+- Ensure the issue survives the `delete_kanban_item` mutation (check state `get_github_issue(issueNumber: <#>)` is NOT closed).

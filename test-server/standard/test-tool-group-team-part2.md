@@ -28,7 +28,7 @@
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
 | `team_batch_delete_entries`                    | `entry_ids: []`                                      | ⚠️ Should return validation error | `entry_ids: "abc"`|
-| `team_get_statistics`                          | N/A                                                  | Should succeed (defaults)         | `start_date: 123` |
+| `team_get_statistics`                          | N/A                                                  | Should succeed (defaults)         | `fromDate: 123` |
 | `team_link_entries`                            | `from_entry_id: 999999`                              | ⚠️ Should return validation error | `from_entry_id: "abc"` |
 | `team_add_member` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `team_delete_entry` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |

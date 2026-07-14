@@ -28,7 +28,7 @@
 | Batch Create          | `batch_create_entries(entries: [{ workspace_id: "test-ws", content: "B1" }, { workspace_id: "test-ws", content: "B2" }])` | Array of two entry IDs returned |
 | Batch Create Limit    | `batch_create_entries(entries: [51 items])`                 | Structured error: `{ success: false, error: "..." }` exceeding 50 limit          |
 | Batch Create No Project | `batch_create_entries(entries: [{ content: "No project" }])` | `{ success: false }` with structured error: "Missing workspace_id..." |
-| Batch Update          | `batch_update_entries(updates: [{ entry_id: <id1>, content: "U1" }, { entry_id: <id2>, content: "U2" }])` | `success: true` and array of IDs       |
+| Batch Update          | `batch_update_entries(updates: [{ id: <id1>, content: "U1" }, { id: <id2>, content: "U2" }])` | `success: true` and array of IDs       |
 | Batch Delete          | `batch_delete_entries(entry_ids: [<id1>, <id2>])`           | `success: true` and count of deleted entries                                     |
 | Run Auto Prune        | `run_auto_prune(workspace_id: "test-ws")`                         | `success: true` and count of pruned (hard-deleted) entries                       |
 

@@ -27,11 +27,11 @@
 | Tool                                           | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
 | All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
-| `team_create_entry`                            | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
+| `team_create_entry`                            | `type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
 | `team_get_recent`                              | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
 | `team_list_deleted_entries`                    | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
-| `team_update_entry`                            | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `team_restore_entry`                           | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_update_entry`                            | `id: 999999`                                   | ⚠️ Should return validation error | `id: "abc"` |
+| `team_restore_entry`                           | `id: 999999`                                   | ⚠️ Should return validation error | `id: "abc"` |
 | `team_add_author_alias` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `team_batch_create_entries` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `team_get_collaboration_matrix` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |

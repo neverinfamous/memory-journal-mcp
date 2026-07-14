@@ -35,8 +35,8 @@
 
 | Test                 | Command/Action                                                                      | Expected Result                                                                           |
 | -------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Default insights     | `team_get_cross_project_insights`                                                   | `project_count ≥ 1`, project 5 with `entry_count ≥ 3`, `top_tags` and `time_distribution` |
-| Insights with dates  | `team_get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered — project 5 visible if S15–S17 fall within range                            |
+| Default insights     | `team_get_cross_project_insights`                                                   | `project_count ≥ 1`, project 5 with `entryCount ≥ 3`, `topTags` and `timeDistribution` |
+| Insights with dates  | `team_get_cross_project_insights(fromDate: "2026-01-01", toDate: "2026-03-01")` | Date-filtered — project 5 visible if S15–S17 fall within range                            |
 | Insights min_entries | `team_get_cross_project_insights(min_entries: 1)`                                   | Same or more projects than default (`min_entries: 3`)                                     |
 | Empty result         | `team_get_cross_project_insights(min_entries: 9999)`                                | `project_count: 0`, `projects: []`, `message` present                                     |
 

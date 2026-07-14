@@ -29,10 +29,10 @@
 | Rebuild team index      | `team_rebuild_vector_index`                                                         | `success: true`, `entriesIndexed` > 0               |
 | Team vector stats       | `team_get_vector_index_stats`                                                       | `available`, `itemCount`, `modelName`, `dimensions` |
 | Team semantic query     | `team_semantic_search(workspace_id: "test-ws", query: "team standup")`                    | ≥ 1 result with `similarity` score                  |
-| Team related by ID      | `team_semantic_search(workspace_id: "test-ws", entry_id: <team_entry_id>)`                | Semantically similar team entries bypassing strings |
-| Team semantic threshold | `team_semantic_search(workspace_id: "test-ws", query: "test", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)         |
-| Team add to index       | `team_add_to_vector_index(workspace_id: "test-ws", entry_id: <team_entry_id>)`            | `success: true`, `entryId` in response              |
-| Team add nonexistent    | `team_add_to_vector_index(workspace_id: "test-ws", entry_id: 999999)`                     | `{ success: false, error: "..." }`                  |
+| Team related by ID      | `team_semantic_search(workspace_id: "test-ws", id: <team_entry_id>)`                | Semantically similar team entries bypassing strings |
+| Team semantic threshold | `team_semantic_search(workspace_id: "test-ws", query: "test", similarityThreshold: 0.5)` | Fewer results than default threshold (0.25)         |
+| Team add to index       | `team_add_to_vector_index(workspace_id: "test-ws", id: <team_entry_id>)`            | `success: true`, `entryId` in response              |
+| Team add nonexistent    | `team_add_to_vector_index(workspace_id: "test-ws", id: 999999)`                     | `{ success: false, error: "..." }`                  |
 
 ---
 

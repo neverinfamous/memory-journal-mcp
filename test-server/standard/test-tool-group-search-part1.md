@@ -24,17 +24,17 @@
 
 | Tool                   | Happy Path             | Domain Error Test                                                       | Zod Empty Param (`{}`)            | Zod Type Mismatch                             |
 | ---------------------- | ---------------------- | ----------------------------------------------------------------------- | --------------------------------- | --------------------------------------------- |
-| `search_entries`       | Search by valid string | N/A                                                                     | ⚠️ Should return validation error | `limit: "abc", fts_weight: "abc", include_highlights: "abc"`  |
-| `search_by_date_range` | Search valid range     | `start_date: "2026-12-31", end_date: "2026-01-01"` (inverted)           | ⚠️ Should return validation error | `start_date: "Jan 1"`                         |
-| `semantic_search`      | Search by meaning      | Vector manager unavailable (returns `{ success: false, error: "..." }`) | ⚠️ Should return validation error | `limit: "abc"`, `similarity_threshold: "abc"` |
+| `search_entries`       | Search by valid string | N/A                                                                     | ⚠️ Should return validation error | `limit: "abc", ftsWeight: "abc", include_highlights: "abc"`  |
+| `search_by_date_range` | Search valid range     | `fromDate: "2026-12-31", toDate: "2026-01-01"` (inverted)           | ⚠️ Should return validation error | `fromDate: "Jan 1"`                         |
+| `semantic_search`      | Search by meaning      | Vector manager unavailable (returns `{ success: false, error: "..." }`) | ⚠️ Should return validation error | `limit: "abc"`, `similarityThreshold: "abc"` |
 
 ## 2. Integrity & Boundary Testing
 
 | Test                  | Action                                                                    | Verification                                                                       |
 | --------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Soft Delete Isolation | Search after deleting entry                                               | Verify deleted entry does not appear in search results or semantic search results. |
-| Filter Ignored Bug    | `search_by_date_range` with `issue_number: 44`                            | ⚠️ Verify if issue filter applies (should not silently ignore).                    |
-| Filter Ignored Bug    | `search_by_date_range` with `workflow_run_id: 999`                        | ⚠️ Verify if filter applies.                                                       |
+| Filter Ignored Bug    | `search_by_date_range` with `issueNumber: 44`                            | ⚠️ Verify if issue filter applies (should not silently ignore).                    |
+| Filter Ignored Bug    | `search_by_date_range` with `workflowRunId: 999`                        | ⚠️ Verify if filter applies.                                                       |
 
 ## Success Criteria
 
@@ -45,5 +45,5 @@
 - Zod boundary limits prevent crashes.
 - Invalid dates return structured Domain/Validation errors.
 - No raw `-32602` responses.
-- Invalid `sort_by` value returns structured Zod validation error.
-- Valid `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending.
+- Invalid `sortBy` value returns structured Zod validation error.
+- Valid `sortBy: 'importance'` returns entries with `importanceScore` field sorted descending.

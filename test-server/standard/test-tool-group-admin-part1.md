@@ -24,7 +24,7 @@
 
 | Tool                  | Happy Path       | Domain Error Test                              | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | --------------------- | ---------------- | ---------------------------------------------- | --------------------------------- | ----------------- |
-| `delete_entry`        | Soft delete      | `entry_id: 999999` (not found)                 | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `delete_entry`        | Soft delete      | `id: 999999` (not found)                 | ⚠️ Should return validation error | `id: "abc"` |
 
 | `delete_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `list_projects` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |

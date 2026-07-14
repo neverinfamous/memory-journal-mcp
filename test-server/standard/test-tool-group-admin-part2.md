@@ -24,8 +24,8 @@
 
 | Tool                  | Happy Path       | Domain Error Test                              | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | --------------------- | ---------------- | ---------------------------------------------- | --------------------------------- | ----------------- |
-| `merge_tags`          | Merge valid tags | `source_tag: "nonexistent", target_tag: "abc"` | ⚠️ Should return validation error | `source_tag: 123` |
-| `add_to_vector_index` | Add valid        | `entry_id: 999999`                             | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `add_to_vector_index` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `merge_tags` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `update_configuration` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `update_entry` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `update_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
@@ -40,7 +40,6 @@
 
 | Test                  | Action         | Verification                                                            |
 | --------------------- | -------------- | ----------------------------------------------------------------------- |
-| Merge Integrity       | `merge_tags`   | Ensure source tag is deleted and target tag count equals original sums. |
 
 ## Success Criteria
 

@@ -108,7 +108,7 @@
 - `memory://briefing/<repo>` returns repo-scoped briefing
 - `memory://help/[group]` resources exist for all 10 API groups (`core`, `search`, `analytics`, `relationships`, `io`, `export`, `admin`, `github`, `backup`, `team`).
 - `memory://metrics/summary` returns session-level metrics
-- `memory://metrics/latency` returns per-tool latency percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields (or a graceful empty message if no tool calls have been made)
+- `memory://metrics/latency` returns per-tool latency percentile data with `p50Ms`, `p95Ms`, `p99Ms` fields (or a graceful empty message if no tool calls have been made)
 - `memory://metrics/resources` returns read access counts and error counts for all accessed URIs, or a graceful empty message if no reads have occurred
 - `memory://audit` returns last 50 audit entries
 - `memory://insights/digest` handles empty digest gracefully

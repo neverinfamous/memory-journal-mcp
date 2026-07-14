@@ -47,8 +47,8 @@
 
 | Test | Command/Action | Expected Result |
 | --- | --- | --- |
-| Alpha date range | `search_by_date_range(workspace_id: "alpha", start_date: "2020-01-01", end_date: "2030-01-01")` | Returns only the alpha entry |
-| Beta date range | `search_by_date_range(workspace_id: "beta", start_date: "2020-01-01", end_date: "2030-01-01")` | Returns only the beta entry |
+| Alpha date range | `search_by_date_range(workspace_id: "alpha", fromDate: "2020-01-01", toDate: "2030-01-01")` | Returns only the alpha entry |
+| Beta date range | `search_by_date_range(workspace_id: "beta", fromDate: "2020-01-01", toDate: "2030-01-01")` | Returns only the beta entry |
 
 ### 17.5 Statistics Isolation
 

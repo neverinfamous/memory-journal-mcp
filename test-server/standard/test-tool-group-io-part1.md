@@ -30,7 +30,7 @@
 ### Specific Domain Checks
 
 - **Silent Filter Bug check**: `export_entries(format: "json", tags: ["xyz"], limit: 100)`. If output lacks filter enforcement (returns completely unfiltered rows), mark as ⚠️.
-- **Date Ignorance Bug**: `export_entries(start_date: "2099-01-01")`. Should return 0 results. If results exist, handler is ignoring filters.
+- **Date Ignorance Bug**: `export_entries(fromDate: "2099-01-01")`. Should return 0 results. If results exist, handler is ignoring filters.
 - **Path Traversal Defense**: Ensure `export_markdown`, `import_markdown`, and `import_external` correctly reject paths containing `..` or paths outside `ALLOWED_IO_ROOTS`.
 
 ## Success Criteria

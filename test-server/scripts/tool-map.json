@@ -13,6 +13,7 @@
       "test-usability-github-kanban-part1.md"
     ],
     "add_to_vector_index": [
+      "test-cm-admin-core.md",
       "test-core-semantic-part3.md",
       "test-tool-group-admin-part2.md",
       "test-usability-admin-vector.md"
@@ -407,6 +408,7 @@
       "test-usability-github-kanban-part2.md"
     ],
     "rebuild_vector_index": [
+      "test-cm-admin-core.md",
       "test-core-semantic-part3.md",
       "test-seed.md",
       "test-tool-group-admin-part3.md",

@@ -30,18 +30,18 @@
 | Export JSON Lrg | `export_entries(format: "json", limit: 5000)`                          | JSON export with `truncated: true` flag set (if 5MB payload exceeded) |
 | Export markdown | `export_entries(format: "markdown", limit: 5)`                         | Markdown export with `content` string                                 |
 | Export with tag | `export_entries(format: "json", tags: ["architecture"], limit: 10)`    | Only entries with "architecture" tag returned                         |
-| Export future   | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)` | Returns 0 entries (date filter enforced)                              |
+| Export future   | `export_entries(format: "json", fromDate: "2099-01-01", limit: 100)` | Returns 0 entries (date filter enforced)                              |
 
 ### 2. Markdown File Orchestration (`export_markdown` & `import_markdown`)
 
 | Test                   | Command/Action                                                                                                             | Expected Result                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
 | Setup temp dir         | Use run_command or write_to_file to ensure a temp test folder exists (`test_export`)                                       | Temporary directory is ready           |
-| Basic Export Map       | `export_markdown(output_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", limit: 5)`      | Outputs `exported_count` matches limit |
+| Basic Export Map       | `export_markdown(output_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", limit: 5)`      | Outputs `exportedCount` matches limit |
 | View Exported Node     | `run_command` (cat/get-content) on one of the exported files in `test_export`                                              | Validates JSON frontmatter generated   |
 | Import Dry Run         | `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: true)` | Returns structured count of items      |
-| Create Invalid File    | Use `write_to_file` to create `invalid.md` in `test_export` with `entry_type: "invalid_type"` in its YAML frontmatter.     | File created successfully              |
-| Import Aggregated Error| `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: false)`| Returns structured ErrorResponse with `code: AGGREGATE_ERROR` and an `aggregated_errors` array of objects (containing `message` and optionally `name`) for each item failure |
+| Create Invalid File    | Use `write_to_file` to create `invalid.md` in `test_export` with `type: "invalid_type"` in its YAML frontmatter.     | File created successfully              |
+| Import Aggregated Error| `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: false)`| Returns structured ErrorResponse with `code: AGGREGATE_ERROR` and an `aggregatedErrors` array of objects (containing `message` and optionally `name`) for each item failure |
 | Path Traversal Defense | `export_markdown(output_dir: "../../etc/passwd")`                                                                          | Structured error rejecting `..` paths  |
 
 ### 3. External Tool Orchestration (`import_external`)
@@ -62,6 +62,6 @@
 - `export_markdown` reliably targets OS local directories and generates correctly named files.
 - `import_markdown` gracefully executes dry run detection parsing.
 - `import_external` gracefully handles Notion, Obsidian, and Logseq formats parsing and dry runs.
-- `import_markdown` successfully aggregates partial failures (e.g., `invalid.md`) into a structured `AGGREGATE_ERROR` response with an `aggregated_errors` array of specific item failures (e.g., `[{ "message": "..." }]`).
+- `import_markdown` successfully aggregates partial failures (e.g., `invalid.md`) into a structured `AGGREGATE_ERROR` response with an `aggregatedErrors` array of specific item failures (e.g., `[{ "message": "..." }]`).
 - IO tooling throws structured path traversal errors `..` on local directory injections or when missing `ALLOWED_IO_ROOTS`.
 - Large JSON exports return `truncated: true` to prevent memory exhaustion when the payload exceeds 5MB.

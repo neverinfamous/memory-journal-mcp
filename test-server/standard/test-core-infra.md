@@ -27,7 +27,7 @@
 | Test               | Command/Action         | Expected Result                                                                                 |
 | ------------------ | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | Basic connectivity | `test_simple`          | Returns echo message                                                                            |
-| Error handling     | `test_error_handling(error_type: "validation", message: "Test")` | Returns a structured error response with the requested error type               |
+| Error handling     | `test_error_handling(code: "validation", message: "Test")` | Returns a structured error response with the requested error type               |
 | Trigger progress   | `trigger_progress`     | Emits progress notifications and returns complete                                               |
 | Health resource    | Read `memory://health` | Shows DB stats, tool filter status, vector index health                                         |
 | Health team block  | Read `memory://health` | Includes `teamDatabase` block with `configured`, `entryCount`, `path` (requires `TEAM_DB_PATH`) |
@@ -36,7 +36,7 @@
 | Enhanced analytics | `get_statistics`       | Returns `decisionDensity`, `relationshipComplexity`, `activityTrend`, `causalMetrics`           |
 | Database Indexes   | Run raw check via SQLite or verify in health/schema checks | `idx_memory_journal_active_timestamp`, `idx_memory_journal_active_recent`, `idx_memory_journal_type_timestamp` exist |
 | Repo Auto-Resolve  | `create_entry(content: "auto-resolve", repo: "memory-journal-mcp")` | `success: true` with `projectNumber: 5` auto-resolved from the project registry. *(Note: Requires memory-journal-mcp to be in registry)* |
-| Latency resource   | Read `memory://metrics/latency` | Returns per-tool percentile data (`p50_ms`, `p95_ms`, `p99_ms`, `min_ms`, `max_ms`, `count`) after prior tool calls, or graceful empty note if no tool calls have been recorded |
+| Latency resource   | Read `memory://metrics/latency` | Returns per-tool percentile data (`p50Ms`, `p95Ms`, `p99Ms`, `minMs`, `maxMs`, `count`) after prior tool calls, or graceful empty note if no tool calls have been recorded |
 
 ### 1.2 Briefing Resource
 
@@ -146,7 +146,7 @@ rm *_metrics.json
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
 - `test_simple` returns echo message
-- `test_error_handling` correctly returns structured errors based on `error_type`
+- `test_error_handling` correctly returns structured errors based on `code`
 - `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete Markdown string with all expected context
 - Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)

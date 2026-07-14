@@ -24,13 +24,13 @@
 
 | Tool                   | Happy Path         | Domain Error Test                                                       | Zod Empty Param (`{}`)            | Zod Type Mismatch             |
 | ---------------------- | ------------------ | ----------------------------------------------------------------------- | --------------------------------- | ----------------------------- |
-| `import_markdown`      | Import valid dir   | `source_dir: "../../etc"` (Path traversal)                              | ⚠️ Should return validation error | `dry_run: "abc"`              |
-| `import_external`      | Import valid dir   | `source_dir: "../../etc"` (Path traversal)                              | ⚠️ Should return validation error | `source_format: 123`          |
+| `import_external` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `import_markdown` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 
 - **Silent Filter Bug check**: `export_entries(format: "json", tags: ["xyz"], limit: 100)`. If output lacks filter enforcement (returns completely unfiltered rows), mark as ⚠️.
-- **Date Ignorance Bug**: `export_entries(start_date: "2099-01-01")`. Should return 0 results. If results exist, handler is ignoring filters.
+- **Date Ignorance Bug**: `export_entries(fromDate: "2099-01-01")`. Should return 0 results. If results exist, handler is ignoring filters.
 - **Path Traversal Defense**: Ensure `export_markdown`, `import_markdown`, and `import_external` correctly reject paths containing `..` or paths outside `ALLOWED_IO_ROOTS`.
 
 ## Success Criteria

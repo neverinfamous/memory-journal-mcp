@@ -24,7 +24,7 @@
 
 | Tool                      | Happy Path         | Domain Error Test                                                       | Zod Empty Param (`{}`)            | Zod Type Mismatch             |
 | ------------------------- | ------------------ | ----------------------------------------------------------------------- | --------------------------------- | ----------------------------- |
-| `visualize_relationships` | Visualize entry    | `entry_id: 999999` (not found)                                          | Should succeed (defaults)         | `entry_id: "abc"`             |
+| `visualize_relationships` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

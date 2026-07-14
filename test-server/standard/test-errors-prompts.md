@@ -47,16 +47,16 @@ Every tool must return `{success: false, error, code, category, suggestion, reco
 
 | Group      | Tool                                   | Error Trigger                                      | Expected Result                                                                    |
 | ---------- | -------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **core**   | `create_entry`                         | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, `category:"validation"`, enum in error |
-| **core**   | `get_entry_by_id`                      | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
-| **search** | `search_by_date_range`                 | `start_date: "2026-12-31", end_date: "2026-01-01"` | `success:false`, `code:"VALIDATION_ERROR"`, `suggestion` with date hint            |
-| **admin**  | `update_entry`                         | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
-| **admin**  | `batch_update_entries`                 | `updates: [{ entry_id: 999999, content: "x" }]`    | `success:false`, `code:"AGGREGATE_ERROR"`, `aggregated_errors` array returned      |
+| **core**   | `create_entry`                         | `type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, `category:"validation"`, enum in error |
+| **core**   | `get_entry_by_id`                      | `id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
+| **search** | `search_by_date_range`                 | `fromDate: "2026-12-31", toDate: "2026-01-01"` | `success:false`, `code:"VALIDATION_ERROR"`, `suggestion` with date hint            |
+| **admin**  | `update_entry`                         | `id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
+| **admin**  | `batch_update_entries`                 | `updates: [{ id: 999999, content: "x" }]`    | `success:false`, `code:"AGGREGATE_ERROR"`, `aggregatedErrors` array returned      |
 | **admin**  | `merge_tags`                           | `source_tag: "x", target_tag: "x"`                 | `success:false`, same-tag error with `category:"validation"`                       |
 | **backup** | `restore_backup`                       | `filename: "nonexistent.db"`                       | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `details.resourceType`               |
-| **github** | `get_github_issue`                     | `issue_number: 999999`                             | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
-| **team**   | `team_create_entry(workspace_id: "test-ws")` | `entry_type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
-| **team**   | `team_update_entry(workspace_id: "test-ws")` | `entry_id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
+| **github** | `get_github_issue`                     | `issueNumber: 999999`                             | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `category:"resource"`                |
+| **team**   | `team_create_entry(workspace_id: "test-ws")` | `type: "invalid"`                            | `success:false`, `code:"VALIDATION_ERROR"`, enum listed in error                   |
+| **team**   | `team_update_entry(workspace_id: "test-ws")` | `id: 999999`                                 | `success:false`, `code:"RESOURCE_NOT_FOUND"`, `recoverable:true`                   |
 
 *Note: Team tools requiring `TEAM_AUTHOR` and protocol-level boundary validations are verified by executing `node test-server/scripts/test-sdk-boundaries.mjs`.*
 

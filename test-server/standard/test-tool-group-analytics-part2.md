@@ -28,7 +28,7 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 
 | Tool                         | Happy Path     | Domain Error Test | Zod Empty Param (`{}`)    | Zod Type Mismatch     |
 | ---------------------------- | -------------- | ----------------- | ------------------------- | --------------------- |
-| `get_cross_project_insights` | Fetch insights | N/A               | Should succeed (defaults) | `min_entries: "abc"`  |
+| `get_cross_project_insights`             | Fetch stats    | N/A               | Should succeed (defaults) | `fromDate: 123`     |
 
 ### Specific Domain Checks
 

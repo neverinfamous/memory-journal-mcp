@@ -27,11 +27,11 @@
 | Vector index stats     | `get_vector_index_stats`                                           | Shows `itemCount`, `modelName`, `dimensions`                                        |
 | Rebuild index          | `rebuild_vector_index`                                             | `entriesIndexed` > 0 (indexes seed entries)                                         |
 | Semantic query         | `semantic_search(query: "improving performance")`                  | ≥ 1 result — S7, S10 semantically similar                                           |
-| Related by ID          | `semantic_search(entry_id: <S7_id>)`                               | Returns S10 natively, no query string required, bypassing inference                 |
-| Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)                                         |
-| Personal filter        | `semantic_search(query: "test", is_personal: true)`                | Only personal entries in results                                                    |
+| Related by ID          | `semantic_search(id: <S7_id>)`                               | Returns S10 natively, no query string required, bypassing inference                 |
+| Custom threshold       | `semantic_search(query: "performance", similarityThreshold: 0.5)` | Fewer results than default threshold (0.25)                                         |
+| Personal filter        | `semantic_search(query: "test", isPersonal: true)`                | Only personal entries in results                                                    |
 | Tags filter            | `semantic_search(query: "test", tags: ["testing"])`                | Only entries with "testing" tag in results                                          |
-| Dates filter           | `semantic_search(query: "test", start_date: "2026-01-01")`         | Only newer entries in results                                                       |
+| Dates filter           | `semantic_search(query: "test", fromDate: "2026-01-01")`         | Only newer entries in results                                                       |
 | Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Noise results with quality gate `hint` still shown (only advisory hints suppressed) |
 | Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Noise results with quality gate `hint` (all hints shown)                            |
 
@@ -41,13 +41,13 @@
 | ------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | Stats group by month     | `get_statistics(group_by: "month")`                                            | Periods grouped by month                                                                 |
 | Stats group by day       | `get_statistics(group_by: "day")`                                              | Periods grouped by day                                                                   |
-| Stats with dates         | `get_statistics(start_date: "2026-01-01", end_date: "2026-03-01")`             | Returns `dateRange` in response; results filtered to date range                          |
+| Stats with dates         | `get_statistics(fromDate: "2026-01-01", toDate: "2026-03-01")`             | Returns `dateRange` in response; results filtered to date range                          |
 | Stats project breakdown  | `get_statistics(project_breakdown: true)`                                      | Returns `projectBreakdown` array with per-project stats                                  |
-| Cross-project insights   | `get_cross_project_insights`                                                   | `project_count ≥ 1`, `projects` array with project 5 (entry_count ≥ 3, top_tags present) |
-| Insights with dates      | `get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered project insights — project 5 visible if S7/S13/S14 within range            |
+| Cross-project insights   | `get_cross_project_insights`                                                   | `project_count ≥ 1`, `projects` array with project 5 (entryCount ≥ 3, topTags present) |
+| Insights with dates      | `get_cross_project_insights(fromDate: "2026-01-01", toDate: "2026-03-01")` | Date-filtered project insights — project 5 visible if S7/S13/S14 within range            |
 | Insights min_entries     | `get_cross_project_insights(min_entries: 1)`                                   | Same or more projects than default (min_entries: 3)                                      |
-| Add to vector index      | `add_to_vector_index(entry_id: <existing_id>)`                                 | `success: true`, `entryId` in response                                                   |
-| Add nonexistent to index | `add_to_vector_index(entry_id: 999999)`                                        | Returns `{ success: false, error: "..." }`                                               |
+| Add to vector index      | `add_to_vector_index(id: <existing_id>)`                                 | `success: true`, `entryId` in response                                                   |
+| Add nonexistent to index | `add_to_vector_index(id: 999999)`                                        | Returns `{ success: false, error: "..." }`                                               |
 
 ---
 
@@ -56,10 +56,10 @@
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- `semantic_search` accepts `entry_id` (Related by ID) in lieu of `query` string
-- `semantic_search` incorporates metadata filtering (`tags`, `entry_type`, dates) into similarity results
-- `semantic_search` with custom `similarity_threshold` affects result count
+- `semantic_search` accepts `id` (Related by ID) in lieu of `query` string
+- `semantic_search` incorporates metadata filtering (`tags`, `type`, dates) into similarity results
+- `semantic_search` with custom `similarityThreshold` affects result count
 - `get_statistics` returns all 4 enhanced analytics metrics with correct groupings
 - `get_cross_project_insights` returns `project_count ≥ 1` with seed entries S7, S13, S14 present (project 5 has 3 entries, meeting `min_entries: 3`)
-- `get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
+- `get_cross_project_insights` response includes `topTags`, `firstEntry`, `lastEntry`, `activeDays`, `timeDistribution` per project
 - `get_cross_project_insights` returns all required schema fields (including `projects: []`) when empty (tested with `min_entries: 9999`)

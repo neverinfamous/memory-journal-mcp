@@ -24,8 +24,8 @@
 
 | Tool              | Domain Error Test                           | Zod Empty Param (`{}`)       | Zod Type Mismatch   |
 | ----------------- | ------------------------------------------- | ---------------------------- | ------------------- |
-| `restore_backup`  | `filename: "nonexistent.db"`                | ⚠️ Validation error required | N/A                 |
-| `cleanup_backups` | N/A                                         | N/A                          | `keep_count: "abc"` |
+| `cleanup_backups` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `restore_backup` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

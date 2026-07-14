@@ -53,11 +53,11 @@
 
 | #   | Test                  | Command                                                       | Expected Result                                                                 |
 | --- | --------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 7   | Default truncation    | `get_github_issue(issue_number: <N>)`                         | `body` ≤ 800 chars if original was longer, `bodyTruncated` flag present         |
-| 8   | Full body             | `get_github_issue(issue_number: <N>, truncate_body: 0)`       | Full body returned, `bodyTruncated: false`                                      |
-| 9   | Custom truncation     | `get_github_issue(issue_number: <N>, truncate_body: 100)`     | Body ≤ 100 chars if original was longer, `bodyFullLength` shows original length |
-| 10  | Include comments      | `get_github_issue(issue_number: <N>, include_comments: true)` | `comments` array present in response, `commentCount` matches array length       |
-| 11  | Default no comments   | `get_github_issue(issue_number: <N>)`                         | No `comments` array in response (or `comments` absent)                          |
+| 7   | Default truncation    | `get_github_issue(issueNumber: <N>)`                         | `body` ≤ 800 chars if original was longer, `bodyTruncated` flag present         |
+| 8   | Full body             | `get_github_issue(issueNumber: <N>, truncate_body: 0)`       | Full body returned, `bodyTruncated: false`                                      |
+| 9   | Custom truncation     | `get_github_issue(issueNumber: <N>, truncate_body: 100)`     | Body ≤ 100 chars if original was longer, `bodyFullLength` shows original length |
+| 10  | Include comments      | `get_github_issue(issueNumber: <N>, include_comments: true)` | `comments` array present in response, `commentCount` matches array length       |
+| 11  | Default no comments   | `get_github_issue(issueNumber: <N>)`                         | No `comments` array in response (or `comments` absent)                          |
 | 12  | PR default truncation | `get_github_pr(pr_number: <N>)`                               | `bodyTruncated` flag present on the PR response                                 |
 | 13  | PR full body          | `get_github_pr(pr_number: <N>, truncate_body: 0)`             | Full body returned, `bodyTruncated: false`                                      |
 
@@ -74,7 +74,7 @@
 ## 16.3 MAX_QUERY_LIMIT & Cursor Pagination
 
 > [!NOTE]
-> `MAX_QUERY_LIMIT` is 500 — enforced on `get_recent_entries`, `get_github_issues`, `get_github_prs`, `search_entries`, and `search_by_date_range`. Core and Team search tools also support O(1) keyset pagination via the `cursor` parameter and `next_cursor` output.
+> `MAX_QUERY_LIMIT` is 500 — enforced on `get_recent_entries`, `get_github_issues`, `get_github_prs`, `search_entries`, and `search_by_date_range`. Core and Team search tools also support O(1) keyset pagination via the `cursor` parameter and `nextCursor` output.
 
 | #   | Test                | Command                                                        | Expected Result                 |
 | --- | ------------------- | -------------------------------------------------------------- | ------------------------------- |
@@ -84,8 +84,8 @@
 | 17  | Over limit (issues) | `get_github_issues(limit: 501)`                                | Structured validation error     |
 | 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                                   | Structured validation error     |
 | 19  | Over limit (search) | `search_entries(workspace_id: "test-ws", query: "test", limit: 501)` | Structured validation error     |
-| 20  | Cursor keyset (1)   | `get_recent_entries(workspace_id: "test-ws", limit: 1)`              | Returns 1 entry and a `next_cursor` string |
-| 21  | Cursor keyset (2)   | `get_recent_entries(workspace_id: "test-ws", limit: 1, cursor: "<next_cursor_from_test_20>")` | Returns distinct next entry and a new `next_cursor` |
+| 20  | Cursor keyset (1)   | `get_recent_entries(workspace_id: "test-ws", limit: 1)`              | Returns 1 entry and a `nextCursor` string |
+| 21  | Cursor keyset (2)   | `get_recent_entries(workspace_id: "test-ws", limit: 1, cursor: "<next_cursor_from_test_20>")` | Returns distinct next entry and a new `nextCursor` |
 
 ### Verification Checks
 
@@ -93,7 +93,7 @@
 - `limit: 501` returns `{success: false, error: "..."}` with validation message — not a raw `-32602`
 - The error message references the limit or max value
 - Keyset cursor pagination successfully traverses distinct entries (no duplicates across pages)
-- `next_cursor` is present when results are returned
+- `nextCursor` is present when results are returned
 
 ---
 
@@ -126,7 +126,7 @@
 - Body truncation defaults to 800 chars with metadata flags
 - `include_comments: true` returns comment data
 - `MAX_QUERY_LIMIT` (500) enforced on core, github, and search tools
-- O(1) keyset cursor pagination correctly returns `next_cursor` and allows distinct forward traversal
+- O(1) keyset cursor pagination correctly returns `nextCursor` and allows distinct forward traversal
 - Code Mode 100KB cap produces agent-guidance error with KB values
 - No raw `-32602` errors from any new parameter
 - Agent reports the Total Token Estimate in the final summary

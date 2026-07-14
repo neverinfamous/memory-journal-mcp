@@ -246,12 +246,17 @@ if (fs.existsSync(teamFilePath)) {
 const splitGroups = { core: 2, search: 2, git: 2, io: 2, backup: 2, analytics: 2, relationships: 2, admin: 4, github: 2 };
 for (const [grp, parts] of Object.entries(splitGroups)) {
   const fp = path.join(standardDir, `test-tool-group-${grp}.md`);
+  let content;
   if (fs.existsSync(fp)) {
-    const content = fs.readFileSync(fp, 'utf8');
+    content = fs.readFileSync(fp, 'utf8');
+    fs.unlinkSync(fp);
+  } else if (fs.existsSync(fp.replace('.md', '-part1.md'))) {
+    content = fs.readFileSync(fp.replace('.md', '-part1.md'), 'utf8');
+  }
+  if (content) {
     for (let i = 1; i <= parts; i++) {
         fs.writeFileSync(path.join(standardDir, `test-tool-group-${grp}-part${i}.md`), content);
     }
-    fs.unlinkSync(fp);
   }
 }
 
@@ -322,6 +327,40 @@ for (const file of standardFiles) {
   fixedContent = fixedContent.replace(/\bproject_number\b/g, 'workspace_id');
   fixedContent = fixedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
   fixedContent = fixedContent.replace(/project #5/gi, 'workspace test-ws');
+
+  // Fix standard parameter hallucinations
+  fixedContent = fixedContent.replace(/\bstart_date\b/g, 'fromDate');
+  fixedContent = fixedContent.replace(/\bend_date\b/g, 'toDate');
+  fixedContent = fixedContent.replace(/\binclude_archived\b/g, 'includeArchived');
+  fixedContent = fixedContent.replace(/\bis_archived\b/g, 'isArchived');
+  fixedContent = fixedContent.replace(/\bis_personal\b/g, 'isPersonal');
+  fixedContent = fixedContent.replace(/\bissue_number\b/g, 'issueNumber');
+  fixedContent = fixedContent.replace(/\bpr_status\b/g, 'prStatus');
+  fixedContent = fixedContent.replace(/\bworkflow_run_id\b/g, 'workflowRunId');
+  fixedContent = fixedContent.replace(/\bfts_weight\b/g, 'ftsWeight');
+  fixedContent = fixedContent.replace(/\bsemantic_weight\b/g, 'semanticWeight');
+  fixedContent = fixedContent.replace(/\bfuzzy_match\b/g, 'fuzzyMatch');
+  fixedContent = fixedContent.replace(/\bsimilarity_threshold\b/g, 'similarityThreshold');
+  fixedContent = fixedContent.replace(/\bsort_by\b/g, 'sortBy');
+  fixedContent = fixedContent.replace(/\bnext_cursor\b/g, 'nextCursor');
+  fixedContent = fixedContent.replace(/\bactive_days\b/g, 'activeDays');
+  fixedContent = fixedContent.replace(/\btime_distribution\b/g, 'timeDistribution');
+  fixedContent = fixedContent.replace(/\bfirst_entry\b/g, 'firstEntry');
+  fixedContent = fixedContent.replace(/\blast_entry\b/g, 'lastEntry');
+  fixedContent = fixedContent.replace(/\bentry_count\b/g, 'entryCount');
+  fixedContent = fixedContent.replace(/\brelationship_count\b/g, 'relationshipCount');
+  fixedContent = fixedContent.replace(/\bexported_count\b/g, 'exportedCount');
+  fixedContent = fixedContent.replace(/\btop_tags\b/g, 'topTags');
+  fixedContent = fixedContent.replace(/\bentry_type\b/g, 'type');
+  fixedContent = fixedContent.replace(/\bentry_id\b/g, 'id');
+  fixedContent = fixedContent.replace(/\berror_type\b/g, 'code');
+  fixedContent = fixedContent.replace(/\baggregated_errors\b/g, 'aggregatedErrors');
+  fixedContent = fixedContent.replace(/\bblocked_by\b/g, 'blockedBy');
+  fixedContent = fixedContent.replace(/\bmax_ms\b/g, 'maxMs');
+  fixedContent = fixedContent.replace(/\bmin_ms\b/g, 'minMs');
+  fixedContent = fixedContent.replace(/\bp50_ms\b/g, 'p50Ms');
+  fixedContent = fixedContent.replace(/\bp95_ms\b/g, 'p95Ms');
+  fixedContent = fixedContent.replace(/\bp99_ms\b/g, 'p99Ms');
 
   // Fix legacy hallucinated note in admin tests (add to standardDir loop)
   fixedContent = fixedContent.replace(/> \*\*Note:\*\* `?registerProject`? is an Admin method but is intentionally exposed exclusively via Code Mode API[^\n]*\n(?:> [^\n]*\n)*/g, '');
@@ -486,6 +525,7 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(/\b(?:e+)?ntry_type\b/g, 'entry_type');
   fixedContent = fixedContent.replace(/\b(?:e+)?nd_date\b/g, 'end_date');
   fixedContent = fixedContent.replace(/\(\s*(?:e+)?ntry_id\)/g, '(entry_id)');
+  fixedContent = fixedContent.replace(/ext_cursor\) works reliably across FTS, semantic, and date range searches via Code Mode scripts \/ - See part 2 for remaining success criteria\./g, 'next_cursor) works reliably across FTS, semantic, and date range searches via Code Mode scripts.');
   
   // Clean up overzealous regex damage from previous passes
   fixedContent = fixedContent.replace(/vectorAa*vailable/g, 'vectorAvailable');

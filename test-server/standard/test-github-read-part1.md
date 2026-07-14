@@ -29,14 +29,14 @@
 | Context               | `get_github_context`                           | Returns repo, branch, issues, PRs                        |
 | List issues           | `get_github_issues(limit: 5)`                  | Returns open issues                                      |
 | Issue milestone data  | Inspect issue objects                          | Issues include `milestone` field (if assigned)           |
-| Get issue             | `get_github_issue(issue_number: <N>)`          | Returns issue details                                    |
+| Get issue             | `get_github_issue(issueNumber: <N>)`          | Returns issue details                                    |
 | List PRs              | `get_github_prs(limit: 5)`                     | Returns open PRs                                         |
 | List closed issues    | `get_github_issues(state: "closed", limit: 3)` | Returns closed issues                                    |
 | List all issues       | `get_github_issues(state: "all", limit: 3)`    | Returns both open and closed issues                      |
 | List closed PRs       | `get_github_prs(state: "closed", limit: 3)`    | Returns closed/merged PRs                                |
 | List all PRs          | `get_github_prs(state: "all", limit: 3)`       | Returns both open and closed PRs                         |
 | Get PR                | `get_github_pr(pr_number: <N>)`                | Returns PR details (use known closed PR)                 |
-| Get nonexistent issue | `get_github_issue(issue_number: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
+| Get nonexistent issue | `get_github_issue(issueNumber: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
 | Get nonexistent PR    | `get_github_pr(pr_number: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
 
 ### 13.5 Repository Insights Tool\n

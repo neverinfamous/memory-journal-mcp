@@ -30,7 +30,7 @@
 | Duplicate link detection    | Link A→B twice with same type                                                                   | Second call returns `duplicate: true`                   |
 | Reverse link allowed        | Link B→A after A→B exists                                                                       | Succeeds — reverse direction is a separate relationship |
 | Link to soft-deleted entry  | Soft-delete B, then `link_entries(from: A, to: B)`                                              | Structured error — target entry not found or hidden     |
-| All relationship types      | Create links with each type: `references`, `implements`, `blocked_by`, `resolved`, `caused`     | All succeed                                             |
+| All relationship types      | Create links with each type: `references`, `implements`, `blockedBy`, `resolved`, `caused`     | All succeed                                             |
 
 ### 12.2.2 Search Isolation After Delete
 
@@ -48,11 +48,11 @@
 
 | Test                                 | Command/Action                                                                                 | Expected Result                                                         |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `get_statistics` date filter         | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")`                             | ⚠️ Should return 0 entries. If returns all, handler ignores date filter |
+| `get_statistics` date filter         | `get_statistics(fromDate: "2099-01-01", toDate: "2099-12-31")`                             | ⚠️ Should return 0 entries. If returns all, handler ignores date filter |
 | `export_entries` tag filter          | `export_entries(format: "json", tags: ["nonexistent-tag-xyz"], limit: 100)`                    | Should return 0 entries. If returns all, filter is ignored              |
-| `export_entries` date filter         | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)`                         | Should return 0 entries. If returns all, date filter is ignored         |
-| `search_by_date_range` with filters  | `search_by_date_range(workspace_id: "test-ws", ..., entry_type: "nonexistent_type")`                 | Structured validation error rejecting the invalid enum value            |
-| `get_recent_entries` personal filter | `get_recent_entries(workspace_id: "test-ws", limit: 100, is_personal: true)` vs `is_personal: false` | Results should be mutually exclusive                                    |
+| `export_entries` date filter         | `export_entries(format: "json", fromDate: "2099-01-01", limit: 100)`                         | Should return 0 entries. If returns all, date filter is ignored         |
+| `search_by_date_range` with filters  | `search_by_date_range(workspace_id: "test-ws", ..., type: "nonexistent_type")`                 | Structured validation error rejecting the invalid enum value            |
+| `get_recent_entries` personal filter | `get_recent_entries(workspace_id: "test-ws", limit: 100, isPersonal: true)` vs `isPersonal: false` | Results should be mutually exclusive                                    |
 
 ---
 
@@ -62,7 +62,7 @@ After testing, permanently delete all entries created during Phase 12.2. Since n
 
 | Cleanup Step       | Command/Action                                                     |
 | ------------------ | ------------------------------------------------------------------ |
-| Purge test entries | Call `delete_entry(entry_id: N, permanent: true)` for all test IDs |
+| Purge test entries | Call `delete_entry(id: N, permanent: true)` for all test IDs |
 
 ---
 
