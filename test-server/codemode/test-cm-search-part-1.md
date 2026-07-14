@@ -6,19 +6,21 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
-2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
 4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
-
 ---
 
 ## Phase 21: Search & Semantics via Code Mode
@@ -30,11 +32,11 @@ Test search, semantic search, date range, analytics, and vector index operations
 > await mj.core.createEntry({
 >   workspace_id: "test-ws",
 >   content: "This is a test's string with 100% coverage",
->   issue_number: 44,
->   pr_status: 'merged',
->   workflow_run_id: 12345,
+>   issueNumber: 44,
+>   prStatus: 'merged',
+>   workflowRunId: 12345,
 >   workspace_id: "test-ws",
->   is_personal: true,
+>   isPersonal: true,
 > })
 > ```
 
@@ -49,8 +51,8 @@ Test search, semantic search, date range, analytics, and vector index operations
 | FTS5 OR         | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "deploy OR release", mode: "fts" });`          | ≥ 2 results (S3, S4, S5)        |
 | LIKE fallback   | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "test's", mode: "fts" });`                     | ≥ 1 result (S6)                 |
 | Special chars   | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "100%", mode: "fts" });`                       | ≥ 1 result (S6)                 |
-| Fuzzy fallback  | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "architeqture", mode: "fts", fuzzy_match: true });` | ≥ 1 result (S1/S11)             |
-| Fuzzy off       | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "architeqture", mode: "fts", fuzzy_match: false });`| 0 results                       |
+| Fuzzy fallback  | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "architeqture", mode: "fts", fuzzyMatch: true });` | ≥ 1 result (S1/S11)             |
+| Fuzzy off       | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "architeqture", mode: "fts", fuzzyMatch: false });`| 0 results                       |
 | Hybrid auto     | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "performance architecture fix" });`              | Heuristic RRF triggering S7     |
 | Forced semantic | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
 
@@ -58,21 +60,21 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 ```javascript
 // Test code:
-const byIssue = await mj.search.searchEntries({ workspace_id: "test-ws", issue_number: 44 })
-const byPr = await mj.search.searchEntries({ workspace_id: "test-ws", pr_status: 'merged' })
-const byWorkflow = await mj.search.searchEntries({ workspace_id: "test-ws", workflow_run_id: 12345 })
+const byIssue = await mj.search.searchEntries({ workspace_id: "test-ws", issueNumber: 44 })
+const byPr = await mj.search.searchEntries({ workspace_id: "test-ws", prStatus: 'merged' })
+const byWorkflow = await mj.search.searchEntries({ workspace_id: "test-ws", workflowRunId: 12345 })
 const byProject = await mj.search.searchEntries({ workspace_id: "test-ws" })
 const personal = await mj.search.searchEntries({
   workspace_id: "test-ws",
   query: 'test',
-  is_personal: true,
+  isPersonal: true,
 })
 const tagged = await mj.search.searchEntries({ workspace_id: "test-ws", tags: ['testing'] })
-const typed = await mj.search.searchEntries({ workspace_id: "test-ws", entry_type: 'planning' })
+const typed = await mj.search.searchEntries({ workspace_id: "test-ws", type: 'planning' })
 const dated = await mj.search.searchEntries({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
+  fromDate: '2026-01-01',
+  toDate: '2026-12-31',
 })
 return {
   issueResults: byIssue.entries.length,
@@ -83,7 +85,7 @@ return {
   taggedResults: tagged.entries.length,
   typedResults: typed.entries.length,
   datedResults: dated.entries.length,
-  allPersonal: personal.entries.every((e) => e.isPersonal === true || e.is_personal === true),
+  allPersonal: personal.entries.every((e) => e.isPersonal === true || e.isPersonal === true),
 }
 ```
 

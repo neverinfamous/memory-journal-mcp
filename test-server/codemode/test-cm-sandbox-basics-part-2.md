@@ -6,19 +6,21 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
-2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
 4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
-
 ---
 
 ## Phase 16: Sandbox Basics
@@ -45,7 +47,7 @@ After the preceding test phases have executed several tool calls, verify that th
 | Test                    | Code                                                                                                                                         | Expected Result                                                                                                                              |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Summary resource exists | Read `memory://metrics/summary` | Resource returns YAML-style text containing `total_calls`, `total_duration_ms`, `tools_called`, and `up_since` fields |
-| Latency resource exists | `const entries = await mj.core.getRecentEntries({ limit: 1 }); return "latency data seeded";`<br>Then read `memory://metrics/latency` | Resource returns YAML-style text containing `p50_ms`, `p95_ms`, `p99_ms`, `min_ms`, `max_ms`, `count` fields for at least one tool            |
+| Latency resource exists | `const entries = await mj.core.getRecentEntries({ limit: 1 }); return "latency data seeded";`<br>Then read `memory://metrics/latency` | Resource returns YAML-style text containing `p50Ms`, `p95Ms`, `p99Ms`, `minMs`, `maxMs`, `count` fields for at least one tool            |
 | Graceful empty          | Read `memory://metrics/latency` on a fresh server with no prior tool calls                                                                    | Returns `note: No latency data recorded yet.` (graceful empty state)                                                                         |
 | Resources metrics exists| Read `memory://help` then `memory://metrics/resources` | Resource returns YAML-style text containing `uri`, `read_count`, and `error_count` fields for at least one resource |
 | Resources empty         | Read `memory://metrics/resources` on a fresh server with no prior reads | Returns `note: No resource reads recorded yet.` (graceful empty state) |
@@ -69,6 +71,6 @@ After the preceding test phases have executed several tool calls, verify that th
 - Verified index schema via `_executeRawQueryUnsafe` check returning all three new composite and partial indexes
 > **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - `memory://metrics/summary` returns aggregate session telemetry with `total_calls` and `total_duration_ms`
-- `memory://metrics/latency` returns per-tool percentile data with `p50_ms`, `p95_ms`, `p99_ms` fields after tool calls have been made
+- `memory://metrics/latency` returns per-tool percentile data with `p50Ms`, `p95Ms`, `p99Ms` fields after tool calls have been made
 - `memory://metrics/resources` returns URI read telemetry after resource reads have occurred
 

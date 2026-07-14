@@ -6,19 +6,21 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
-2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
 4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
-
 ---
 
 ## Phase 21: Search & Semantics via Code Mode
@@ -30,11 +32,11 @@ Test search, semantic search, date range, analytics, and vector index operations
 > await mj.core.createEntry({
 >   workspace_id: "test-ws",
 >   content: "This is a test's string with 100% coverage",
->   issue_number: 44,
->   pr_status: 'merged',
->   workflow_run_id: 12345,
+>   issueNumber: 44,
+>   prStatus: 'merged',
+>   workflowRunId: 12345,
 >   workspace_id: "test-ws",
->   is_personal: true,
+>   isPersonal: true,
 > })
 > ```
 
@@ -67,31 +69,31 @@ return {
 // Test code:
 const basic = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
+  fromDate: '2026-01-01',
+  toDate: '2026-12-31',
 })
 const withType = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
-  entry_type: 'planning',
+  fromDate: '2026-01-01',
+  toDate: '2026-12-31',
+  type: 'planning',
 })
 const withTags = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
+  fromDate: '2026-01-01',
+  toDate: '2026-12-31',
   tags: ['deploy'],
 })
 const withPersonal = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
-  is_personal: true,
+  fromDate: '2026-01-01',
+  toDate: '2026-12-31',
+  isPersonal: true,
 })
 const withProject = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: '2026-12-31',
+  fromDate: '2026-01-01',
+  toDate: '2026-12-31',
 })
 return {
   basicCount: basic.entries.length,
@@ -115,8 +117,8 @@ return {
 
 | Test                | Code                                                                                                                 | Expected Result                                             |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Invalid date format | `return await mj.search.searchByDateRange({ workspace_id: "test-ws", start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
-| Inverted date range | `return await mj.search.searchByDateRange({ workspace_id: "test-ws", start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
+| Invalid date format | `return await mj.search.searchByDateRange({ workspace_id: "test-ws", fromDate: "Jan 1", toDate: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
+| Inverted date range | `return await mj.search.searchByDateRange({ workspace_id: "test-ws", fromDate: "2026-12-31", toDate: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
 | Query too long      | `return await mj.search.searchEntries({ workspace_id: "test-ws", query: "a".repeat(300) });`                               | `{ success: false, error: "..." }` with Zod validation hint |
 
 ## Success Criteria
@@ -128,20 +130,20 @@ return {
 - FTS correctly parses standard keyword/phrase syntax (OR, NOT, "phrases")
 - FTS detects unsafe queries (like 	test's) and seamlessly drops to LIKE fallback without crashing
 - Hybrid search utilizes RRF mode automatically when heuristics warrant it
-- exact_match: true successfully maps to fuzzy_match: false resulting in exact matching
-- exact_match: false successfully maps to fuzzy_match: true resulting in Levenshtein matching
+- exact_match: true successfully maps to fuzzyMatch: false resulting in exact matching
+- exact_match: false successfully maps to fuzzyMatch: true resulting in Levenshtein matching
 - FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
 - FTS5 LIKE fallback works for special characters (	test's, 100%)
-- search_entries gracefully falls back to fuzzy Levenshtein matching via Code Mode when fuzzy_match is true and FTS yields zero results
-- search_entries filters work: issue_number, pr_status, workflow_run_id, workspace_id, is_personal, 	tags, entry_type, start_date, end_date
+- search_entries gracefully falls back to fuzzy Levenshtein matching via Code Mode when fuzzyMatch is true and FTS yields zero results
+- search_entries filters work: issueNumber, prStatus, workflowRunId, workspace_id, isPersonal, 	tags, type, fromDate, toDate
 - Cross-DB search returns entries with source: 'personal' and source: 'team'
-- search_by_date_range with filters (entry_type, 	tags, is_personal) works
+- search_by_date_range with filters (type, 	tags, isPersonal) works
 - search_by_date_range rejects invalid date format with structured error
 - search_by_date_range rejects inverted date range (start > end) with structured error
 - search_entries rejects queries exceeding 250 characters with structured Zod error
 - search_by_date_range filters by workspace_id
-- semantic_search processes Related by ID (entry_id) lookups avoiding query strings
-- semantic_search correctly filters results downstream using 	tags and is_personal
+- semantic_search processes Related by ID (id) lookups avoiding query strings
+- semantic_search correctly filters results downstream using 	tags and isPersonal
 - semantic_search with custom threshold returns fewer results
 - semantic_search quality gate hint shown even with hint_on_empty: false
 - get_vector_index_stats returns available, itemCount, modelName, dimensions

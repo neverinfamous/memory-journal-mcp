@@ -6,19 +6,21 @@ Test relationship linking (all types), duplicate detection, error paths, and Mer
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
-2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
 4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
-
 ---
 
 ## Phase 24: Relationships & Visualization via Code Mode
@@ -45,7 +47,7 @@ const impl = await mj.relationships.linkEntries({
 const blocked = await mj.relationships.linkEntries({
   from_entry_id: ids[0],
   to_entry_id: ids[3],
-  relationship_type: 'blocked_by',
+  relationship_type: 'blockedBy',
 })
 const resolved = await mj.relationships.linkEntries({
   from_entry_id: ids[1],
@@ -123,19 +125,19 @@ return {
 const r = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 })
 const id = r.entries[0].id
 
-const viz = await mj.relationships.visualizeRelationships({ entry_id: id })
+const viz = await mj.relationships.visualizeRelationships({ id: id })
 const vizTags = await mj.relationships.visualizeRelationships({ tags: ['architecture'] })
-const vizDeep = await mj.relationships.visualizeRelationships({ entry_id: id, depth: 3 })
-const vizLimit = await mj.relationships.visualizeRelationships({ entry_id: id, limit: 5 })
-const vizBad = await mj.relationships.visualizeRelationships({ entry_id: 999999 })
+const vizDeep = await mj.relationships.visualizeRelationships({ id: id, depth: 3 })
+const vizLimit = await mj.relationships.visualizeRelationships({ id: id, limit: 5 })
+const vizBad = await mj.relationships.visualizeRelationships({ id: 999999 })
 return {
   hasMermaid: typeof viz.mermaid === 'string' && viz.mermaid.length > 0,
   hasLegend: !!viz.legend,
-  entryCount: viz.entry_count,
-  relCount: viz.relationship_count,
+  entryCount: viz.entryCount,
+  relCount: viz.relationshipCount,
   tagVizHasMermaid: typeof vizTags.mermaid === 'string',
-  deepEntryCount: vizDeep.entry_count,
-  limitEntryCount: vizLimit.entry_count,
+  deepEntryCount: vizDeep.entryCount,
+  limitEntryCount: vizLimit.entryCount,
   badNotFound: !!vizBad.error && vizBad.error.includes('not found'),
 }
 ```
@@ -162,7 +164,7 @@ for (const e of cmEntries.entries) {
     e.content?.includes('Code Mode') &&
     (e.tags?.includes('codemode-test') || e.tags?.includes('codemode-pipeline-test'))
   ) {
-    const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true })
+    const del = await mj.admin.deleteEntry({ id: e.id, permanent: true })
     results.push({ id: e.id, deleted: del.success })
   }
 }
@@ -175,7 +177,7 @@ return { cleaned: results.length, details: results }
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- All relationship types (`references`, `implements`, `blocked_by`, `resolved`, `caused`) create via Code Mode
+- All relationship types (`references`, `implements`, `blockedBy`, `resolved`, `caused`) create via Code Mode
 - `link_entries` with `description` persists the description
 - Duplicate detection returns `duplicate: true`
 - Nonexistent IDs return `success: false` with descriptive message

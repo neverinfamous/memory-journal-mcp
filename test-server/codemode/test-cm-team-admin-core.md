@@ -6,16 +6,21 @@ Test team administration (update, delete, merge tags, restore) through Code Mode
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities.
-2. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
-3. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
-3. Provide a very brief final summary including **Total Token Estimate**.
-
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
+3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
+4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
+5. Provide a very brief final summary.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 ---
 
 ## Phase 28: Team Admin Core via Code Mode
@@ -30,13 +35,13 @@ const id = r.entries[0].id
 
 const updated = await mj.team.teamUpdateEntry({
   workspace_id: "test-ws",
-  entry_id: id,
+  id: id,
   content: 'CM4 updated team content',
   tags: ['cm4-updated-team'],
 })
 const verify = await mj.team.teamGetEntryById({
   workspace_id: "test-ws",
-  entry_id: id,
+  id: id,
 })
 if (!verify.success) return { success: false, error: verify.error }
 const v1 = verify.entry?.version
@@ -44,8 +49,8 @@ const v1 = verify.entry?.version
 let conflictCaught = false
 const update2 = await mj.team.teamUpdateEntry({
   workspace_id: "test-ws",
-  entry_id: id,
-  expected_version: v1 - 1, // deliberately stale (it incremented on previous update)
+  id: id,
+  expectedVersion: v1 - 1, // deliberately stale (it incremented on previous update)
   content: 'CM4 locking update 2'
 })
 if (!update2.success && update2.error?.includes('VERSION_CONFLICT')) {
@@ -73,7 +78,7 @@ const toDelete = await mj.team.teamCreateEntry({
 })
 const deleted = await mj.team.teamDeleteEntry({
   workspace_id: "test-ws",
-  entry_id: toDelete.entry.id,
+  id: toDelete.entry.id,
 })
 const deletedList = await mj.team.teamListDeletedEntries({
   workspace_id: "test-ws",
@@ -82,7 +87,7 @@ if (!deletedList.success) return { success: false, error: deletedList.error }
 const isDeleted = deletedList.entries?.some((e) => e.id === toDelete.entry.id)
 const restored = await mj.team.teamRestoreEntry({
   workspace_id: "test-ws",
-  entry_id: toDelete.entry.id,
+  id: toDelete.entry.id,
 })
 const verifyDeleted = await mj.team.teamListDeletedEntries({
   workspace_id: "test-ws",
@@ -92,23 +97,23 @@ const isNoLongerDeleted = !verifyDeleted.entries?.some((e) => e.id === toDelete.
 // Archiving & Keyset pagination
 const archived = await mj.team.teamUpdateEntry({
   workspace_id: "test-ws",
-  entry_id: toDelete.entry.id,
-  is_archived: true,
+  id: toDelete.entry.id,
+  isArchived: true,
 })
 const verifyArchived = await mj.team.teamGetEntryById({
   workspace_id: "test-ws",
-  entry_id: toDelete.entry.id,
+  id: toDelete.entry.id,
 })
 const isArchived = verifyArchived.entry?.isArchived === true
 
 // Clean up
 await mj.team.teamDeleteEntry({
   workspace_id: "test-ws",
-  entry_id: toDelete.entry.id,
+  id: toDelete.entry.id,
 })
 
 const pag1 = await mj.team.teamGetRecent({ workspace_id: "test-ws", limit: 2 })
-const hasCursor = typeof pag1.next_cursor === 'string'
+const hasCursor = typeof pag1.nextCursor === 'string'
 
 return {
   updateSuccess: updated.success,
@@ -145,9 +150,9 @@ return {
 
 ## Success Criteria
 
-- `team_update_entry(workspace_id: "test-ws")` updates content, tags, and entry_type
+- `team_update_entry(workspace_id: "test-ws")` updates content, tags, and type
 - `team_update_entry(workspace_id: "test-ws")` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
 - `team_delete_entry(workspace_id: "test-ws")` soft-deletes team entries
 - `team_merge_tags(workspace_id: "test-ws")` consolidates tags — source removed, entries re-tagged
 - Team soft-delete recovery (`team_restore_entry`, `team_list_deleted_entries`) is functional via Code Mode scripts
-- Keyset cursor pagination and archiving filters (`is_archived`) are supported on team entries via Code Mode scripts
+- Keyset cursor pagination and archiving filters (`isArchived`) are supported on team entries via Code Mode scripts

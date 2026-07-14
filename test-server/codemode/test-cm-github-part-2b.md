@@ -17,7 +17,7 @@ const created = await mj.github.createGithubIssueWithEntry({
 const issueNum = created.issue?.number
 
 const closed = await mj.github.closeGithubIssueWithEntry({
-  issue_number: issueNum,
+  issueNumber: issueNum,
   resolution_notes: 'CM4 test complete',
   comment: 'Closing via Code Mode',
   move_to_done: true,
@@ -25,7 +25,7 @@ const closed = await mj.github.closeGithubIssueWithEntry({
 })
 
 const alreadyClosed = await mj.github.closeGithubIssueWithEntry({
-  issue_number: issueNum,
+  issueNumber: issueNum,
 })
 
 return {
@@ -107,7 +107,7 @@ const prs = await mj.github.getGithubPrs({ limit: 1 })
 const prNum = prs.pullRequests?.[0]?.number
 let reviewed = null
 if (prNum) {
-  reviewed = await mj.github.getCopilotReviews({ pr_number: prNum })
+  reviewed = await mj.github.getCopilotReviews({ prNumber: prNum })
 }
 
 return {

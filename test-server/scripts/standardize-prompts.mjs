@@ -49,6 +49,47 @@ function fixFormatting(text) {
   return fixed;
 }
 
+function fixParameterHallucinations(text) {
+  let fixed = text;
+  fixed = fixed.replace(/\bstart_date\b/g, 'fromDate');
+  fixed = fixed.replace(/\bend_date\b/g, 'toDate');
+  fixed = fixed.replace(/\binclude_archived\b/g, 'includeArchived');
+  fixed = fixed.replace(/\bis_archived\b/g, 'isArchived');
+  fixed = fixed.replace(/\bis_personal\b/g, 'isPersonal');
+  fixed = fixed.replace(/\bissue_number\b/g, 'issueNumber');
+  fixed = fixed.replace(/\bpr_status\b/g, 'prStatus');
+  fixed = fixed.replace(/\bpr_number\b/g, 'prNumber');
+  fixed = fixed.replace(/\btrust_score\b/g, 'trustScore');
+  fixed = fixed.replace(/\bimpact_score\b/g, 'impactScore');
+  fixed = fixed.replace(/\bexpected_version\b/g, 'expectedVersion');
+  fixed = fixed.replace(/\bworkflow_run_id\b/g, 'workflowRunId');
+  fixed = fixed.replace(/\bfts_weight\b/g, 'ftsWeight');
+  fixed = fixed.replace(/\bsemantic_weight\b/g, 'semanticWeight');
+  fixed = fixed.replace(/\bfuzzy_match\b/g, 'fuzzyMatch');
+  fixed = fixed.replace(/\bsimilarity_threshold\b/g, 'similarityThreshold');
+  fixed = fixed.replace(/\bsort_by\b/g, 'sortBy');
+  fixed = fixed.replace(/\bnext_cursor\b/g, 'nextCursor');
+  fixed = fixed.replace(/\bactive_days\b/g, 'activeDays');
+  fixed = fixed.replace(/\btime_distribution\b/g, 'timeDistribution');
+  fixed = fixed.replace(/\bfirst_entry\b/g, 'firstEntry');
+  fixed = fixed.replace(/\blast_entry\b/g, 'lastEntry');
+  fixed = fixed.replace(/\bentry_count\b/g, 'entryCount');
+  fixed = fixed.replace(/\brelationship_count\b/g, 'relationshipCount');
+  fixed = fixed.replace(/\bexported_count\b/g, 'exportedCount');
+  fixed = fixed.replace(/\btop_tags\b/g, 'topTags');
+  fixed = fixed.replace(/\bentry_type\b/g, 'type');
+  fixed = fixed.replace(/\bentry_id\b/g, 'id');
+  fixed = fixed.replace(/\berror_type\b/g, 'code');
+  fixed = fixed.replace(/\baggregated_errors\b/g, 'aggregatedErrors');
+  fixed = fixed.replace(/\bblocked_by\b/g, 'blockedBy');
+  fixed = fixed.replace(/\bmax_ms\b/g, 'maxMs');
+  fixed = fixed.replace(/\bmin_ms\b/g, 'minMs');
+  fixed = fixed.replace(/\bp50_ms\b/g, 'p50Ms');
+  fixed = fixed.replace(/\bp95_ms\b/g, 'p95Ms');
+  fixed = fixed.replace(/\bp99_ms\b/g, 'p99Ms');
+  return fixed;
+}
+
 // Build reverse map: file -> tools
 for (const [tool, files] of Object.entries(toolMapData.toolMap)) {
   if (tool === 'mj_execute_code') {
@@ -301,42 +342,8 @@ for (const file of standardFiles) {
   fixedContent = fixedContent.replace(/project #5/gi, 'workspace test-ws');
 
   // Fix standard parameter hallucinations
-  fixedContent = fixedContent.replace(/\bstart_date\b/g, 'fromDate');
-  fixedContent = fixedContent.replace(/\bend_date\b/g, 'toDate');
-  fixedContent = fixedContent.replace(/\binclude_archived\b/g, 'includeArchived');
-  fixedContent = fixedContent.replace(/\bis_archived\b/g, 'isArchived');
-  fixedContent = fixedContent.replace(/\bis_personal\b/g, 'isPersonal');
-  fixedContent = fixedContent.replace(/\bissue_number\b/g, 'issueNumber');
-  fixedContent = fixedContent.replace(/\bpr_status\b/g, 'prStatus');
-  fixedContent = fixedContent.replace(/\bpr_number\b/g, 'prNumber');
-  fixedContent = fixedContent.replace(/\btrust_score\b/g, 'trustScore');
-  fixedContent = fixedContent.replace(/\bimpact_score\b/g, 'impactScore');
-  fixedContent = fixedContent.replace(/\bexpected_version\b/g, 'expectedVersion');
-  fixedContent = fixedContent.replace(/\bworkflow_run_id\b/g, 'workflowRunId');
-  fixedContent = fixedContent.replace(/\bfts_weight\b/g, 'ftsWeight');
-  fixedContent = fixedContent.replace(/\bsemantic_weight\b/g, 'semanticWeight');
-  fixedContent = fixedContent.replace(/\bfuzzy_match\b/g, 'fuzzyMatch');
-  fixedContent = fixedContent.replace(/\bsimilarity_threshold\b/g, 'similarityThreshold');
-  fixedContent = fixedContent.replace(/\bsort_by\b/g, 'sortBy');
-  fixedContent = fixedContent.replace(/\bnext_cursor\b/g, 'nextCursor');
-  fixedContent = fixedContent.replace(/\bactive_days\b/g, 'activeDays');
-  fixedContent = fixedContent.replace(/\btime_distribution\b/g, 'timeDistribution');
-  fixedContent = fixedContent.replace(/\bfirst_entry\b/g, 'firstEntry');
-  fixedContent = fixedContent.replace(/\blast_entry\b/g, 'lastEntry');
-  fixedContent = fixedContent.replace(/\bentry_count\b/g, 'entryCount');
-  fixedContent = fixedContent.replace(/\brelationship_count\b/g, 'relationshipCount');
-  fixedContent = fixedContent.replace(/\bexported_count\b/g, 'exportedCount');
-  fixedContent = fixedContent.replace(/\btop_tags\b/g, 'topTags');
-  fixedContent = fixedContent.replace(/\bentry_type\b/g, 'type');
-  fixedContent = fixedContent.replace(/\bentry_id\b/g, 'id');
-  fixedContent = fixedContent.replace(/\berror_type\b/g, 'code');
-  fixedContent = fixedContent.replace(/\baggregated_errors\b/g, 'aggregatedErrors');
-  fixedContent = fixedContent.replace(/\bblocked_by\b/g, 'blockedBy');
-  fixedContent = fixedContent.replace(/\bmax_ms\b/g, 'maxMs');
-  fixedContent = fixedContent.replace(/\bmin_ms\b/g, 'minMs');
-  fixedContent = fixedContent.replace(/\bp50_ms\b/g, 'p50Ms');
-  fixedContent = fixedContent.replace(/\bp95_ms\b/g, 'p95Ms');
-  fixedContent = fixedContent.replace(/\bp99_ms\b/g, 'p99Ms');
+  fixedContent = fixParameterHallucinations(fixedContent);
+
 
   // Fix legacy hallucinated note in admin tests (add to standardDir loop)
   fixedContent = fixedContent.replace(/> \*\*Note:\*\* `?registerProject`? is an Admin method but is intentionally exposed exclusively via Code Mode API[^\n]*\n(?:> [^\n]*\n)*/g, '');
@@ -577,6 +584,21 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts`/g, '`bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>`');
   fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts --msg/g, '`bun ./.agents/scripts/commit.ts --msg');
 
+
+  // Fix parameter drift hallucinations
+  fixedContent = fixParameterHallucinations(fixedContent);
+
+  // Inject boilerplate from prompt-template.md for codemode files
+  const templatePath = path.join(__dirname, 'prompt-template.md');
+  if (fs.existsSync(templatePath)) {
+    let templateContent = fs.readFileSync(templatePath, 'utf8');
+    // Replace standard tool instruction with codemode instruction
+    templateContent = templateContent.replace(
+      /- \*\*Use direct MCP tools exclusively\.\*\* Do NOT use Code Mode \(`mj_execute_code`\) for these tests\. Code Mode tests are handled separately in the `codemode` track\. If you must use a script to supplement a test, use a standard Node\/shell script\./g,
+      '- **Use codemode directly for all tests, NOT the terminal or scripts!**\n- Code Mode is included in all tool filtering presets by default.'
+    );
+    fixedContent = fixedContent.replace(/\*\*Prerequisites:\*\*[\s\S]*?(?=\n---)/, templateContent.trim());
+  }
 
   fixedContent = fixFormatting(fixedContent);
   

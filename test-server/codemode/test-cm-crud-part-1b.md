@@ -6,19 +6,21 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
-2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
 3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
 4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
-
 ---
 
 ## Phase 20: Core CRUD via Code Mode
@@ -29,8 +31,8 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 // Test code:
 const recent = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 })
 const id = recent.entries[0].id
-const full = await mj.core.getEntryById({ entry_id: id })
-const noRels = await mj.core.getEntryById({ entry_id: id, include_relationships: false })
+const full = await mj.core.getEntryById({ id: id })
+const noRels = await mj.core.getEntryById({ id: id, include_relationships: false })
 return {
   hasEntryType: typeof full.entry?.entryType === 'string',
   hasContent: typeof full.entry?.content === 'string',
@@ -58,12 +60,12 @@ return {
 const created = await mj.core.createEntry({ workspace_id: "test-ws",  content: 'CM3 update test' })
 const id = created.entry.id
 const updated = await mj.admin.updateEntry({
-  entry_id: id,
+  id: id,
   content: 'CM3 updated content',
   tags: ['codemode3-updated'],
-  entry_type: 'bug_fix',
+  type: 'bug_fix',
 })
-const verify = await mj.core.getEntryById({ entry_id: id })
+const verify = await mj.core.getEntryById({ id: id })
 return {
   updateSuccess: updated.success,
   newContent: verify.entry?.content,
@@ -85,27 +87,27 @@ return {
 
 - `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
 - `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
-- `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
+- `create_entry` rejects invalid `type` and `significance_type` with structured errors
 - `create_entry` rejects empty content with structured error
 - `create_entry` with `project_owner` persists the field
 - `create_entry` with `auto_context: false` creates entry without auto-generated context
-- `create_entry` with `issue_number` auto-populates `issueUrl`
+- `create_entry` with `issueNumber` auto-populates `issueUrl`
 - `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
 - `get_entry_by_id` with `include_relationships: false` omits relationship data
-- `update_entry` updates content, tags, and entry_type — verified via read-back
-- `update_entry` `is_personal` toggle correctly changes personal status
+- `update_entry` updates content, tags, and type — verified via read-back
+- `update_entry` `isPersonal` toggle correctly changes personal status
 - `update_entry` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
 - `update_entry` returns structured error for nonexistent IDs
 - `delete_entry` soft delete hides entry from search
 - `delete_entry` permanent delete and nonexistent ID both return structured responses
-- `get_recent_entries` with `is_personal` filter returns correctly filtered entries
+- `get_recent_entries` with `isPersonal` filter returns correctly filtered entries
 - `get_entry_history` returns multiple historical snapshots successfully via Code Mode
 - `test_simple` callable via Code Mode
 - `test_error_handling` returns structured errors via Code Mode
 - `trigger_progress` returns success via Code Mode
 - `restore_entry` and `list_deleted_entries` are functional and callable via Code Mode scripts
-- Keyset cursor pagination and `is_archived` status filters execute successfully via Code Mode scripts
+- Keyset cursor pagination and `isArchived` status filters execute successfully via Code Mode scripts
 - `mj_execute_code` outer `workspace_id` parameter automatically injects into mutation tools inside the sandbox (Sandbox Wrapper Pattern)
 - `get_recent_entries` pagination exposes a correct `hasMore` convenience boolean
-- `mj_execute_code` outer `auto_version: true` parameter automatically prefetches and injects `expected_version` for updates
+- `mj_execute_code` outer `auto_version: true` parameter automatically prefetches and injects `expectedVersion` for updates
 - Number-based `workspace_id` parameters (`5`) auto-resolve to string safely without throwing VALIDATION_ERROR

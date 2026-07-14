@@ -6,18 +6,21 @@ Test semantic search, analytics, and vector index operations through the Code Mo
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found.
-2. Use code-map.md as a source of truth.
-3. If you made code changes/fixes, update UNRELEASED.md and commit.
-4. Re-test fixes with direct MCP calls.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
+3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
+4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
 5. Provide a very brief final summary.
-
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 ---
 
 ## Phase 21B: Semantics & Analytics via Code Mode
@@ -25,27 +28,27 @@ Test semantic search, analytics, and vector index operations through the Code Mo
 ### 21.9 Importance-Sorted Search
 
 > [!NOTE]
-> These tests validate the `sort_by: 'importance'` parameter across `search_entries`, `get_recent_entries`, and `search_by_date_range`. Setup: create entries with varying importance signals.
+> These tests validate the `sortBy: 'importance'` parameter across `search_entries`, `get_recent_entries`, and `search_by_date_range`. Setup: create entries with varying importance signals.
 
 ```javascript
 // Setup: create test entries with different importance profiles
 const e1 = await mj.core.createEntry({
   workspace_id: "test-ws",
   content: 'IMPSORT_TEST_LOW: no significance, no relationships',
-  entry_type: 'test_entry',
+  type: 'test_entry',
   tags: ['importance-sort-test'],
 })
 const e2 = await mj.core.createEntry({
   workspace_id: "test-ws",
   content: 'IMPSORT_TEST_HIGH: milestone with relationships',
-  entry_type: 'test_entry',
+  type: 'test_entry',
   tags: ['importance-sort-test'],
   significance_type: 'milestone',
 })
 const e3 = await mj.core.createEntry({
   workspace_id: "test-ws",
   content: 'IMPSORT_TEST_MED: decision with causal link',
-  entry_type: 'test_entry',
+  type: 'test_entry',
   tags: ['importance-sort-test'],
   significance_type: 'decision',
 })
@@ -66,54 +69,54 @@ await mj.relationships.linkEntries({
   relationship_type: 'resolved',
 })
 
-// T1: search_entries with sort_by: 'importance'
+// T1: search_entries with sortBy: 'importance'
 const impSearch = await mj.search.searchEntries({
   workspace_id: "test-ws",
   query: 'IMPSORT_TEST',
-  sort_by: 'importance',
+  sortBy: 'importance',
   mode: 'fts',
   limit: 10,
 })
 
-// T2: search_entries with default sort_by (timestamp)
+// T2: search_entries with default sortBy (timestamp)
 const tsSearch = await mj.search.searchEntries({
   workspace_id: "test-ws",
   query: 'IMPSORT_TEST',
   limit: 10,
 })
 
-// T3: get_recent_entries with sort_by: 'importance'
+// T3: get_recent_entries with sortBy: 'importance'
 const impRecent = await mj.core.getRecentEntries({
   workspace_id: "test-ws",
   limit: 5,
-  sort_by: 'importance',
+  sortBy: 'importance',
 })
 
-// T4: get_recent_entries with default sort_by (timestamp)
+// T4: get_recent_entries with default sortBy (timestamp)
 const tsRecent = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 5 })
 
-// T5: search_by_date_range with sort_by: 'importance'
+// T5: search_by_date_range with sortBy: 'importance'
 const today = new Date().toISOString().split('T')[0]
 const impDateRange = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: today,
-  sort_by: 'importance',
+  fromDate: '2026-01-01',
+  toDate: today,
+  sortBy: 'importance',
   limit: 5,
 })
 
-// T6: search_by_date_range with default sort_by (timestamp)
+// T6: search_by_date_range with default sortBy (timestamp)
 const tsDateRange = await mj.search.searchByDateRange({
   workspace_id: "test-ws",
-  start_date: '2026-01-01',
-  end_date: today,
+  fromDate: '2026-01-01',
+  toDate: today,
   limit: 5,
 })
 
 // Cleanup
-await mj.admin.deleteEntry({ entry_id: e1.entry.id, permanent: true })
-await mj.admin.deleteEntry({ entry_id: e2.entry.id, permanent: true })
-await mj.admin.deleteEntry({ entry_id: e3.entry.id, permanent: true })
+await mj.admin.deleteEntry({ id: e1.entry.id, permanent: true })
+await mj.admin.deleteEntry({ id: e2.entry.id, permanent: true })
+await mj.admin.deleteEntry({ id: e3.entry.id, permanent: true })
 
 return {
   searchImportance: {
