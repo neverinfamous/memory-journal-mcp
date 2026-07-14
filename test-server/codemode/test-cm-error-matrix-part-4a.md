@@ -69,15 +69,7 @@ return {
   updateEmptyError: updateEmpty.success === false,
   deleteEmptyError: deleteEmpty.success === false,
   mergeEmptyError: mergeEmpty.success === false,
-  linkEmptyError: linkEmpty.success === false,
-  backupOk: backupEmpty.success === false || backupEmpty.success === true,
-  semanticEmptyError: semanticEmpty.success === false,
-  statsOk: statsEmpty.success === false || typeof statsEmpty.totalEntries === 'number',
-  insightsOk: insightsEmpty.success === false || typeof insightsEmpty.project_count === 'number',
-  createNumContentError: createNumContent.success === false,
-  updateStrIdError: updateStrId.success === false,
-  teamSearchTypeMismatchError: teamSearchTypeMismatch.success === false,
-  crossTeamSearchTypeMismatchError: crossTeamSearchTypeMismatch.success === false,
+  
 }
 ```
 
@@ -91,9 +83,3 @@ return {
 | `updateEmptyError`      | `true` (entry_id required)            |
 | `deleteEmptyError`      | `true` (entry_id required)            |
 | `mergeEmptyError`       | `true` (source/target required)       |
-| `linkEmptyError`        | `true` (from/to entry_id required)    |
-| `createNumContentError` | `true` (content must be string)       |
-| `teamSearchTypeMismatchError` | `true` (type mismatches caught) |
-| `crossTeamSearchTypeMismatchError` | `true` (type mismatches caught) |
-
-

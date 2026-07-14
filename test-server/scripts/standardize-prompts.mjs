@@ -260,32 +260,6 @@ for (const [grp, parts] of Object.entries(splitGroups)) {
 }
 
 
-const splitStandardFiles = {
-  'test-core-admin-backup.md': 2,
-  'test-core-admin-batch.md': 2,
-  'test-core-admin-system.md': 2,
-  'test-core-semantic.md': 3,
-  'test-payload-optimization.md': 4,
-  'test-resources.md': 2,
-  'test-github-read.md': 2
-};
-
-for (const [sf, parts] of Object.entries(splitStandardFiles)) {
-  const p = path.join(standardDir, sf);
-  let content;
-  if (fs.existsSync(p)) {
-    content = fs.readFileSync(p, 'utf8');
-    fs.unlinkSync(p);
-  } else if (fs.existsSync(p.replace('.md', '-part1.md'))) {
-    content = fs.readFileSync(p.replace('.md', '-part1.md'), 'utf8');
-  }
-  if (content) {
-    for (let i = 1; i <= parts; i++) {
-        fs.writeFileSync(path.join(standardDir, sf.replace('.md', `-part${i}.md`)), content);
-    }
-  }
-}
-
 const standardFiles = fs.readdirSync(standardDir).filter(f => f.endsWith('.md') && f !== 'README.md' && f !== 'coordinator-workflow.md' && f !== 'tool-group-requirements.md');
 
 for (const file of standardFiles) {

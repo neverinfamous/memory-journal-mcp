@@ -11,13 +11,13 @@
 35. `test-cm-team-aliases.md`
 36. `test-cm-team-rbac.md`
 37. `test-cm-team-vector-errors-part-1.md`
-38. `test-cm-team-vector-errors-part-3.md` (Includes cleanup)
+38. `test-cm-team-vector-errors-part-2.md` (Includes cleanup)
 39. `test-cm-error-matrix-part-1.md`
 40. `test-cm-error-matrix-part-2a.md`
 41. `test-cm-error-matrix-part-2b.md`
 42. `test-cm-error-matrix-part-3.md`
-43. `test-cm-error-matrix-part-4.md`
-44. `test-cm-error-matrix-part-5.md`
+43. `test-cm-error-matrix-part-4a.md`
+43b. `test-cm-error-matrix-part-4b.md`
 45. `test-cm-payload-optimization-part-1.md`
 46. `test-cm-payload-optimization-part-2.md`
 47. `test-cm-hallucination-smoothing-part-1.md`

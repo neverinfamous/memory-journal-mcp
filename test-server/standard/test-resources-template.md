@@ -22,39 +22,6 @@
 
 ## Phase 10: All Resources
 
-### 1.1 Static Resources
-
-| Resource          | URI                                    | Test                                                                                                                                |
-| ----------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Briefing          | `memory://briefing`                    | Returns pre-formatted Markdown string containing a dense 2-column context table                                |
-| Instructions      | `memory://instructions`                | Full server instructions — verify it references all 61 tools and key resources                                                      |
-| Recent entries    | `memory://recent`                      | Read, verify 10 entries with typed fields                                                                                           |
-| Significant       | `memory://significant`                 | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                             |
-| Significant order | `memory://significant`                 | Compare adjacent entries: `entries[0].importance >= entries[1].importance` etc.                                                     |
-| Health            | `memory://health`                      | Shows DB stats, tool filter status, vector index health                                                                             |
-| GitHub status     | `memory://github/status`               | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary (includes milestones)                                               |
-| GitHub milestones | `memory://github/milestones`           | Open milestones with completion percentages                                                                                         |
-| Actions recent    | `memory://actions/recent`              | Recent workflow runs (verify graceful output when no workflow entries exist)                                                        |
-| Team recent       | `memory://team/recent`                 | Author-enriched entries, `source: "team"`, `count`                                                                                  |
-| Team statistics   | `memory://team/statistics`             | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                      |
-| Help index        | `memory://help`                        | Lists all tool groups with counts, descriptions, and `totalTools`                                                                   |
-| Help group detail | `memory://help/{group}`                | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                              |
-| Rules             | `memory://rules`                       | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                          |
-| Workflows         | `memory://workflows`                   | Workflow summary (requires `MEMORY_JOURNAL_WORKFLOW_SUMMARY` or `--workflow-summary`); returns `{ configured: false }` when not set |
-| Skills            | `memory://skills`                      | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                      |
-
-| Metrics summary   | `memory://metrics/summary`             | Session metrics: tool calls, token estimates, cache hits, uptime                                                                    |
-| Metrics tokens    | `memory://metrics/tokens`              | Token breakdown: per-tool token usage and totals                                                                                    |
-| Metrics system    | `memory://metrics/system`              | System metrics: memory usage, database stats, vector index health                                                                   |
-| Metrics users     | `memory://metrics/users`               | Per-user metrics (when multi-user sessions active)                                                                                  |
-| Metrics latency   | `memory://metrics/latency`             | Per-tool latency percentiles (p50/p95/p99) with min/max bounds                                                                      |
-| Metrics resources | `memory://metrics/resources`           | Resource read telemetry (counts, error rates, timestamps) per accessed URI                                                          |
-| Audit log         | `memory://audit`                       | Last 50 audit entries with tool name, timestamp, and result                                                                         |
-| Insights digest   | `memory://insights/digest`             | Cross-project digest snapshot (graceful empty if no digest available)                                                               |
-| Insights team     | `memory://insights/team-collaboration` | Team collaboration matrix with `authorActivity` and `impactFactor` (graceful if team DB not configured)                             |
-| Insights reports  | `memory://insights/reports`            | Last 5 scheduled digest report snapshots and previews                                                                               |
-| Project staleness | `memory://staleness`                   | Overview of staleness across all projects                                                                                           |
-
 ### 1.2 Template Resources — Happy Path
 
 > [!CAUTION]

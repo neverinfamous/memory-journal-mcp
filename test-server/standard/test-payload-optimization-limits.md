@@ -1,6 +1,6 @@
-# Re-Test memory-journal-mcp — Admin Batch Operations
+# Re-Test memory-journal-mcp — Payload Optimization
 
-**Scope:** Tag management, entry export, and backup/restore operations.
+**Scope:** Cross-cutting verification of all 4 payload optimization features — Kanban throttling, body truncation, MAX_QUERY_LIMIT enforcement (with cursor keyset pagination), and Code Mode result cap.
 
 **Prerequisites:**
 
@@ -20,28 +20,29 @@
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 ---
 
+## 16.3 MAX_QUERY_LIMIT & Cursor Pagination
 
-### 5.3 Batch Operations
+> [!NOTE]
+> `MAX_QUERY_LIMIT` is 500 — enforced on `get_recent_entries`, `get_github_issues`, `get_github_prs`, `search_entries`, and `search_by_date_range`. Core and Team search tools also support O(1) keyset pagination via the `cursor` parameter and `nextCursor` output.
 
-| Test                  | Command/Action                                              | Expected Result                                                                  |
-| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Batch Create          | `batch_create_entries(entries: [{ workspace_id: "test-ws", content: "B1" }, { workspace_id: "test-ws", content: "B2" }])` | Array of two entry IDs returned |
-| Batch Create Limit    | `batch_create_entries(entries: [51 items])`                 | Structured error: `{ success: false, error: "..." }` exceeding 50 limit          |
-| Batch Create No Project | `batch_create_entries(entries: [{ content: "No project" }])` | `{ success: false }` with structured error: "Missing workspace_id..." |
-| Batch Update          | `batch_update_entries(updates: [{ id: <id1>, content: "U1" }, { id: <id2>, content: "U2" }])` | `success: true` and array of IDs       |
-| Batch Delete          | `batch_delete_entries(entry_ids: [<id1>, <id2>])`           | `success: true` and count of deleted entries                                     |
-| Run Auto Prune        | `run_auto_prune(workspace_id: "test-ws")`                         | `success: true` and count of pruned (hard-deleted) entries                       |
+| #   | Test                | Command                                                        | Expected Result                 |
+| --- | ------------------- | -------------------------------------------------------------- | ------------------------------- |
+| 14  | Under limit         | `get_recent_entries(workspace_id: "test-ws", limit: 100)`            | Accepted, returns ≤ 100 entries |
+| 15  | At limit            | `get_recent_entries(workspace_id: "test-ws", limit: 500)`            | Accepted, returns ≤ 500 entries |
+| 16  | Over limit (core)   | `get_recent_entries(workspace_id: "test-ws", limit: 501)`            | Structured validation error     |
+| 17  | Over limit (issues) | `get_github_issues(limit: 501)`                                | Structured validation error     |
+| 18  | Over limit (PRs)    | `get_github_prs(limit: 501)`                                   | Structured validation error     |
+| 19  | Over limit (search) | `search_entries(workspace_id: "test-ws", query: "test", limit: 501)` | Structured validation error     |
+| 20  | Cursor keyset (1)   | `get_recent_entries(workspace_id: "test-ws", limit: 1)`              | Returns 1 entry and a `nextCursor` string |
+| 21  | Cursor keyset (2)   | `get_recent_entries(workspace_id: "test-ws", limit: 1, cursor: "<next_cursor_from_test_20>")` | Returns distinct next entry and a new `nextCursor` |
 
-## Success Criteria
+### Verification Checks
 
-> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+- `limit: 500` accepted across all paginated tools
+- `limit: 501` returns `{success: false, error: "..."}` with validation message — not a raw `-32602`
+- The error message references the limit or max value
+- Keyset cursor pagination successfully traverses distinct entries (no duplicates across pages)
+- `nextCursor` is present when results are returned
 
-- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- `merge_tags` consolidates duplicate tags correctly — verified via `list_tags` and entry re-check
-- `merge_tags` returns structured error when source equals target or source tag nonexistent
-- `backup_journal` rejects names containing path traversal characters (`../`) with structured errors
-- `restore_backup` with nonexistent filename returns structured error
-- `batch_create_entries` enforces max 50 limit with structured error
-- `batch_delete_entries` soft-deletes multiple entries atomically
-- `search_audit_log` successfully returns filtered audit logs
-- `update_configuration` successfully modifies runtime config and returns `updated` keys
+---
+

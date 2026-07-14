@@ -1,6 +1,6 @@
-# Re-Test memory-journal-mcp — Admin System (Tags, Config, Audit)
+# Re-Test memory-journal-mcp — Payload Optimization
 
-**Scope:** Tag management, entry export, and backup/restore operations.
+**Scope:** Cross-cutting verification of all 4 payload optimization features — Kanban throttling, body truncation, MAX_QUERY_LIMIT enforcement (with cursor keyset pagination), and Code Mode result cap.
 
 **Prerequisites:**
 
@@ -20,33 +20,29 @@
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 ---
 
-
-## Phase 7: Admin & Backup Tools
-
-### 5.1 Tags
-
-| Test              | Command/Action                                                                   | Expected Result                                                             |
-| ----------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| List tags         | `list_tags`                                                                      | Returns all tags with counts                                                |
-| Create source tag | `create_entry(workspace_id: "test-ws", content: "Test tag merge", tags: ["test-old"])` | Creates "test-old" tag (pre-req)                                            |
-| Merge tags        | `merge_tags(source_tag: "test-old", target_tag: "test-new")`                     | Merges source into target, deletes source                                   |
-| Verify merge      | `list_tags` + `search_entries(workspace_id: "test-ws", query: "Test tag merge")`       | "test-old" gone, "test-new" exists, entry now has "test-new" tag            |
-| Merge same tag    | `merge_tags(source_tag: "test-new", target_tag: "test-new")`                     | Structured error: `{ success: false, error: "..." }` (source equals target) |
-| Merge nonexistent | `merge_tags(source_tag: "nonexistent-xyz", target_tag: "x")`                     | Structured error: `{ success: false, error: "Source tag not found: ..." }`  |
+## 16.1 Kanban Throttling (`get_kanban_board`)
 
 > [!NOTE]
-> If `restore_backup` is tested after `merge_tags`, the restored backup will revert the merge. This is expected behavior. Verify merge worked immediately after calling `merge_tags`, before any backup restoration.
+> `get_kanban_board` accepts two new payload optimization parameters: `summary_only` (boolean) and `item_limit` (number, default 25, max 100). When `summary_only: true`, items are stripped and only column-level `itemCount` metadata is returned.
+
+| #   | Test                 | Command                                                                   | Expected Result                                                                                |
+| --- | -------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1   | Summary mode         | `get_kanban_board(workspace_id: "test-ws", summary_only: true)`                 | `summaryOnly: true`, all columns have `items: []`, each column has `itemCount ≥ 0`             |
+| 2   | Item limit           | `get_kanban_board(workspace_id: "test-ws", item_limit: 2)`                      | Columns with >2 items show `truncated: true`, `items.length ≤ 2`, `itemCount` shows full count |
+| 3   | Zero limit = summary | `get_kanban_board(workspace_id: "test-ws", item_limit: 0)`                      | Same behavior as `summary_only: true` — empty items, `summaryOnly: true`                       |
+| 4   | Default throttling   | `get_kanban_board(workspace_id: "test-ws")`                                     | Default `item_limit: 25` applied. `itemCount` present on all columns                           |
+| 5   | Over-limit rejected  | `get_kanban_board(workspace_id: "test-ws", item_limit: 101)`                    | Structured validation error (max 100)                                                          |
+| 6   | Combined params      | `get_kanban_board(workspace_id: "test-ws", summary_only: false, item_limit: 5)` | `summaryOnly` is `false` or absent, items present but capped at 5 per column                   |
 
 ## Success Criteria
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
 - Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- `merge_tags` consolidates duplicate tags correctly — verified via `list_tags` and entry re-check
-- `merge_tags` returns structured error when source equals target or source tag nonexistent
-- `backup_journal` rejects names containing path traversal characters (`../`) with structured errors
-- `restore_backup` with nonexistent filename returns structured error
-- `batch_create_entries` enforces max 50 limit with structured error
-- `batch_delete_entries` soft-deletes multiple entries atomically
-- `search_audit_log` successfully returns filtered audit logs
-- `update_configuration` successfully modifies runtime config and returns `updated` keys
+- `summaryOnly` flag is `true` in response for tests #1 and #3
+- `itemCount` is a number on every column in all responses
+- `truncated: true` appears on columns where total items exceed `item_limit`
+- `item_limit: 101` produces a structured validation error, not a raw `-32602`
+
+---
+

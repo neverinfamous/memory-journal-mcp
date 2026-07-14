@@ -1,6 +1,6 @@
-# Re-Test memory-journal-mcp — Admin Backup
+# Re-Test memory-journal-mcp — Payload Optimization
 
-**Scope:** Tag management, entry export, and backup/restore operations.
+**Scope:** Cross-cutting verification of all 4 payload optimization features — Kanban throttling, body truncation, MAX_QUERY_LIMIT enforcement (with cursor keyset pagination), and Code Mode result cap.
 
 **Prerequisites:**
 
@@ -20,29 +20,36 @@
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 ---
 
+## 16.4 Code Mode Result Cap
 
-### 5.2 Backup & Restore
+> [!NOTE]
+> The default Code Mode result size cap is 100KB (configurable via `CODE_MODE_MAX_RESULT_SIZE` env var or `--codemode-max-result-size` CLI flag). Oversized results return structured errors with agent-guidance messaging.
 
-| Test                  | Command/Action                                              | Expected Result                                                                  |
-| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Create backup         | `backup_journal(name: "test-backup")`                       | Backup file created with `success`, `filename`, `path`, `sizeBytes`              |
-| Auto-named backup     | `backup_journal`                                            | Backup created with auto-generated timestamped name                              |
-| List backups          | `list_backups`                                              | Shows backup files with metadata including `path` field                          |
-| Cleanup backups       | `cleanup_backups(keep_count: 5)`                            | Deletes old backups, keeps N most recent                                         |
-| Backup path traversal | `backup_journal(name: "../../etc/passwd")`                  | Structured error: `{ success: false, error: "..." }` with path traversal message |
-| Restore backup        | `restore_backup(filename: "test-backup.db", confirm: true)` | Restores + `revertedChanges` field with details                                  |
-| Restore nonexistent   | `restore_backup(filename: "nonexistent.db", confirm: true)` | Structured error: `{ success: false, error: "Backup file not found: ..." }`      |
+| #   | Test               | Command                                                  | Expected Result                                                 |
+| --- | ------------------ | -------------------------------------------------------- | --------------------------------------------------------------- |
+| 20  | Small result       | `mj_execute_code(code: "return { msg: 'ok' }")`          | Result returned normally                                        |
+| 21  | Under cap (~50KB)  | `mj_execute_code(code: "return 'z'.repeat(50 * 1024)")`  | Result returned normally                                        |
+| 22  | Oversized (~120KB) | `mj_execute_code(code: "return 'x'.repeat(120 * 1024)")` | `{success: false, error: "..."}` with KB sizes in error message |
+| 23  | Guidance message   | Inspect error from test #22                              | Error contains "aggregate" guidance and actual/limit KB values  |
+
+### Verification Checks
+
+- Results under 100KB pass through without error
+- Results over 100KB produce structured error (not a crash or raw exception)
+- Error message includes actual size in KB, limit in KB, and aggregation guidance example
+
+---
 
 ## Success Criteria
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- `merge_tags` consolidates duplicate tags correctly — verified via `list_tags` and entry re-check
-- `merge_tags` returns structured error when source equals target or source tag nonexistent
-- `backup_journal` rejects names containing path traversal characters (`../`) with structured errors
-- `restore_backup` with nonexistent filename returns structured error
-- `batch_create_entries` enforces max 50 limit with structured error
-- `batch_delete_entries` soft-deletes multiple entries atomically
-- `search_audit_log` successfully returns filtered audit logs
-- `update_configuration` successfully modifies runtime config and returns `updated` keys
+- Kanban `summary_only` returns zero items per column with `itemCount` metadata
+- Kanban `item_limit: 101` is rejected by validation
+- Body truncation defaults to 800 chars with metadata flags
+- `include_comments: true` returns comment data
+- `MAX_QUERY_LIMIT` (500) enforced on core, github, and search tools
+- O(1) keyset cursor pagination correctly returns `nextCursor` and allows distinct forward traversal
+- Code Mode 100KB cap produces agent-guidance error with KB values
+- No raw `-32602` errors from any new parameter
+- Agent reports the Total Token Estimate in the final summary

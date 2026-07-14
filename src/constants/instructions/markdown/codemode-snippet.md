@@ -3,7 +3,7 @@
 
 API: `tool_name` → `mj.group.action()` (e.g., `search_entries` → `mj.search.searchEntries()`)
 Globals: `createEntry()`, `find()`, `recent()`, `searchEntries()`, `deleteEntry()`, `help()` work without the `mj.` prefix.
-Positional: `create("note")`, `searchEntries("performance")`
+Positional: `createEntry("note")`, `searchEntries("performance")`
 Aliases: Common parameter names are auto-corrected (`q`/`search`→`query`, `path`/`filepath`→`output_dir`, `keep`→`keep_count`, `user`/`assignee`→`target_user`, `severity`→`flag_type`, `team`/`project`→`workspace_id`).
 Discovery: `mj.help()` → `{groups, totalMethods}`. `mj.core.help()` for group-specific.
 Anti-Hallucination: DO NOT invoke `mj_execute_code` with an empty `code` payload to "list tools". You must provide valid JavaScript in the `code` parameter.
