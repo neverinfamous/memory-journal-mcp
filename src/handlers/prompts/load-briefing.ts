@@ -94,10 +94,9 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                     }
 
                     const rows = registryKeys.map((key, index) => {
-                        const entry = registry[key] as { project_number?: number; path?: string }
-                        const projectNum = entry?.project_number !== undefined ? String(entry.project_number) : '-'
+                        const entry = registry[key] as { path?: string }
                         const projectPath = entry?.path ?? '-'
-                        return `| ${String(index + 1)} | ${key} | ${projectNum} | ${projectPath} |`
+                        return `| ${String(index + 1)} | ${key} | ${projectPath} |`
                     }).join('\n')
 
                     const activeString = activeWorkspace ? `\n**Active**: ${activeWorkspace}\n` : ''
@@ -108,7 +107,7 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                                 role: 'user',
                                 content: {
                                     type: 'text',
-                                    text: `## Available Projects\n\n| # | Name | Project ID | Path |\n|---|------|------------|------|\n${rows}\n${activeString}\nAsk the user: "Which project(s) would you like to load? Enter names or numbers, separated by commas."\nThen call read_resource for each selected project using: memory://briefing/{name}`,
+                                    text: `## Available Projects\n\n| ID | Name | Path |\n|---|------|------|\n${rows}\n${activeString}\nAsk the user: "Which project(s) would you like to load? (Enter names or IDs, separated by commas. Append \`--show\` if you would like me to print the briefing in the chat)"\n\n**Agent Directives:**\n1. Call \`read_resource\` for each selected project using: \`memory://briefing/{name}\`.\n2. If the user included \`--show\`, output the loaded markdown table to them.\n3. If they did NOT include \`--show\`, silently ingest the context and reply simply with: "Context loaded. What would you like to work on?"\n4. When planning something significant, complex, or architecture-impacting, search the memory journal database for historical context. Small or simple tasks do not require this.`,
                                 },
                             },
                         ],
@@ -136,13 +135,10 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                         continue
                     }
 
-                    // Project number match
-                    const byNumber = registryKeys.find(k => {
-                        const entry = registry[k] as { project_number?: number } | undefined
-                        return entry?.project_number !== undefined && String(entry.project_number) === requested
-                    })
-                    if (byNumber) {
-                        resolvedUris.push(`memory://briefing/${byNumber}`)
+                    // Index match (1-based)
+                    const byIndex = registryKeys.find((_, idx) => String(idx + 1) === requested)
+                    if (byIndex) {
+                        resolvedUris.push(`memory://briefing/${byIndex}`)
                         continue
                     }
 
@@ -198,7 +194,7 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `## Session Briefing Load Instructions\n\nLoad the following project briefing(s) now by calling read_resource for each URI in order:\n\n${uriList}\n\nAfter reading all briefings, present a concise summary of:\n- Active work / recent commits per project\n- Open issues or blockers\n- Any cross-project dependencies\n\nDo NOT skip any of the URIs above.`,
+                                text: `## Session Briefing Load Instructions\n\nLoad the following project briefing(s) now by calling read_resource for each URI in order:\n\n${uriList}\n\nAfter reading all briefings, present a concise summary of:\n- Active work / recent commits per project\n- Open issues or blockers\n- Any cross-project dependencies\n\nDo NOT skip any of the URIs above.\n\n**Agent Directives:**\n- When planning something significant, complex, or architecture-impacting, search the memory journal database for historical context. Small or simple tasks do not require this.`,
                             },
                         },
                     ],

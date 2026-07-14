@@ -66,8 +66,6 @@ export interface SystemContext {
     filterSummary: string | null
     /** Whether the system is in a read-only state (admin tools disabled) */
     isReadonly: boolean
-    /** Registered repo names from PROJECT_REGISTRY, null when unconfigured */
-    registryRepos: string[] | null
     /** Count of ALLOWED_IO_ROOTS entries */
     ioRootCount: number
     /** Whether code-map.md exists in the project root */
@@ -418,9 +416,6 @@ export function buildSystemContext(
         isReadonly = !hasAdmin && !hasCodemode
     }
 
-    // Registry repos
-    const registryRepos = config?.projectRegistry ? Object.keys(config.projectRegistry) : null
-
     // IO roots count
     const ioRootCount = config?.allowedIoRoots?.length ?? 0
 
@@ -459,7 +454,6 @@ export function buildSystemContext(
         testHealth: loadCachedTestHealth(targetRepoPath),
         filterSummary,
         isReadonly,
-        registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,
         lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(targetRepoPath),

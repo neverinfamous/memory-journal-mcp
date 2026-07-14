@@ -97,26 +97,6 @@ export async function buildBriefingData(
 
     const system = buildSystemContext(config, context.filterConfig, activeRepoPath, context.resourceCount)
 
-    // Build registry paths map for non-IDE agent context
-    const registryPaths = config.projectRegistry
-        ? Object.fromEntries(
-              Object.entries(config.projectRegistry).map(([name, entry]) => [name, entry.path])
-          )
-        : undefined
-
-    // Build registry project number map for briefing display
-    const registryProjectNumbers = config.projectRegistry
-        ? Object.fromEntries(
-              Object.entries(config.projectRegistry)
-                  .reduce<[string, number][]>((acc, [name, entry]) => {
-                      if (entry.project_number !== undefined) {
-                          acc.push([name, entry.project_number])
-                      }
-                      return acc
-                  }, [])
-          )
-        : undefined
-
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
         branchName: github?.branch ?? 'unknown',
@@ -139,15 +119,12 @@ export async function buildBriefingData(
         isReadonly: system.isReadonly,
         teamConfigured: !!context.teamDb,
         githubConfigured: !!activeGithub,
-        registryRepos: system.registryRepos,
         ioRootCount: system.ioRootCount,
         hasCodeMap: system.hasCodeMap,
         lastReleaseDaysAgo: system.lastReleaseDaysAgo ?? undefined,
         localCheck: system.localCheck ?? undefined,
         workspaceId: system.workspaceId ?? journal.workspaceId,
         deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
-        registryPaths,
-        registryProjectNumbers,
     })
 
     return {

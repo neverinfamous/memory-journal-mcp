@@ -62,17 +62,12 @@ export function formatUserMessage(opts: {
     isReadonly?: boolean
     teamConfigured?: boolean
     githubConfigured?: boolean
-    registryRepos?: string[] | null
     ioRootCount?: number
     hasCodeMap?: boolean
     lastReleaseDaysAgo?: number
     localCheck?: boolean
     deprecationWarnings?: string[]
     workspaceId?: string
-    /** Registered workspace paths for non-IDE agents: { repoName: diskPath } */
-    registryPaths?: Record<string, string>
-    /** Registered project numbers for display: { repoName: numericId } */
-    registryProjectNumbers?: Record<string, number>
 }): string {
     const {
         repoName,
@@ -208,7 +203,7 @@ export function formatUserMessage(opts: {
     if (summaryPreviews && summaryPreviews.length > 0) {
         for (const s of summaryPreviews) {
             const cleaned = s.replace(/#+\s/g, '').replace(/\*\*/g, '').replace(/[-*]\s/g, '• ')
-            journalParts.push(`Summary: ${escapeCell(cleaned)}`)
+            journalParts.push(`Summary: ${escapeCell(cleaned)} (Use \`mj_execute_code\` or \`read_resource\` to view full entry)`)
         }
     }
 
@@ -276,15 +271,6 @@ export function formatUserMessage(opts: {
     const configLine3: string[] = []
     if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
         configLine3.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
-    }
-    if (opts.registryRepos && opts.registryRepos.length > 0) {
-        const repoNames = opts.registryRepos.slice(0, 3).map((name) => {
-            const projNum = opts.registryProjectNumbers?.[name]
-            return projNum !== undefined ? `${name} (#${String(projNum)})` : name
-        }).join(', ')
-        const suffix =
-            opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
-        configLine3.push(`registry: ${escapeCell(repoNames)}${suffix}`)
     }
     if (configLine3.length) configLines.push(configLine3.join(' · '))
 
@@ -385,55 +371,6 @@ export function formatUserMessage(opts: {
         gitHistoryLines.push(`💡 **Tip:** Use MCP Prompts (\`git-impact-search\`, \`git-velocity-report\`, \`git-audit-trust\`) for deep analysis instead of raw git commands.`);
     }
 
-    // ========================================================================
-    // TABLE ROW 9: Workspaces
-    // ========================================================================
-    const workspacesLines: string[] = []
-    if (opts.registryPaths) {
-        const entries = Object.entries(opts.registryPaths)
-        if (entries.length > 0) {
-            // Compute common prefix for path compression
-            const allPaths = entries.map(([_, p]) => p.replace(/\\/g, '/'))
-            let commonPrefix = ''
-            if (allPaths.length > 1) {
-                // Find longest common prefix across ALL paths
-                let prefix = allPaths[0] ?? ''
-                for (let p = 1; p < allPaths.length; p++) {
-                    const path = allPaths[p] ?? ''
-                    let i = 0
-                    while (i < prefix.length && i < path.length && prefix[i] === path[i]) i++
-                    prefix = prefix.slice(0, i)
-                    if (prefix.length === 0) break
-                }
-                // Snap to last slash boundary
-                const lastSlash = prefix.lastIndexOf('/')
-                if (lastSlash > 0) {
-                    commonPrefix = prefix.slice(0, lastSlash)
-                }
-            }
-
-            const pathList = entries
-                .map(([name, diskPath]) => {
-                    const isActive = name === repoName || name === repoName.split('/').pop()
-                    const projNum = opts.registryProjectNumbers?.[name]
-                    const nameLabel = projNum !== undefined ? `${name} (#${projNum})` : name
-                    // Use forward slashes and strip common prefix
-                    let displayPath = diskPath.replace(/\\/g, '/')
-                    if (commonPrefix && displayPath.startsWith(commonPrefix)) {
-                        displayPath = displayPath.slice(commonPrefix.length)
-                    }
-                    const formatted = `${escapeCell(nameLabel)}: ${escapeCell(displayPath)}`
-                    return isActive ? `**${formatted}** (active)` : formatted
-                })
-                .join('<br>')
-
-            let legend = ''
-            if (commonPrefix) {
-                legend = `[${escapeCell(commonPrefix)}]<br>`
-            }
-            workspacesLines.push(`${legend}${pathList}`)
-        }
-    }
 
     // ========================================================================
     // Assembly
@@ -475,9 +412,9 @@ export function formatUserMessage(opts: {
     if (gitHistoryLines.length > 0) {
         tableRows.push(`| **Git History** | ${gitHistoryLines.join('<br>')} |`)
     }
-    if (workspacesLines.length > 0) {
-        tableRows.push(`| **Workspaces** | ${workspacesLines.join('<br>')} |`)
-    }
 
-    return `${flagsAlert}${tableRows.join('\n')}`
+
+    const footer = `\n\n> **Directive:** Context ingested. Await explicit user instruction before execution.`
+
+    return `${flagsAlert}${tableRows.join('\n')}${footer}`
 }
