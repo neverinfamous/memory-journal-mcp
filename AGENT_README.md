@@ -75,9 +75,11 @@ The server supports strict data isolation using `workspace_id`.
 
 ## 📡 Session Initialization & Context
 
-Agents should never start a task entirely blind. On initialization, check:
+Agents no longer need to proactively pull the briefing. You must wait for the user to optionally inject context using the `load-briefing` prompt.
+When provided, the briefing contains:
 - `memory://briefing` (or `memory://briefing/{repo_name}` for multi-repo environments)
 - This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
+Review it thoroughly before proceeding.
 
 ---
 

@@ -51,18 +51,19 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
 <details>
-<summary><strong>View Mandatory Session Start Routine</strong></summary>
+<summary><strong>View Session Initialization Routine</strong></summary>
 
-🛑 Mandatory Session Start Routine
+🛑 Session Initialization Routine
 
-Before addressing the user's first request:
+When the user initializes the session context by executing the `load-briefing` prompt:
 
-1. Load context: `read_resource` -> `memory://briefing/{repo_name}` (infer repo_name or fallback to `memory://briefing`).
-2. Prepend response EXACTLY as:
+1. You will receive the output of the `memory://briefing/{repo_name}` resource.
+2. Prepend your response EXACTLY as:
    > **📋 Briefing loaded** — `{repo_name}`
    > _{paste ENTIRE briefing here}_
 3. Address the user's request below the briefing.
 4. NEVER autonomously execute tasks listed in the briefing.
+5. Do NOT proactively ask the user to load the briefing. Wait for them to use the prompt.
 </details>
 
 ---
