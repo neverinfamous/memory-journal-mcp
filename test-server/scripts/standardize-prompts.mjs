@@ -243,14 +243,42 @@ if (fs.existsSync(teamFilePath)) {
   fs.unlinkSync(teamFilePath);
 }
 
-const splitGroups = ['core', 'search', 'git', 'io', 'backup', 'analytics', 'relationships', 'admin', 'github'];
-for (const grp of splitGroups) {
+const splitGroups = { core: 2, search: 2, git: 2, io: 2, backup: 2, analytics: 2, relationships: 2, admin: 4, github: 2 };
+for (const [grp, parts] of Object.entries(splitGroups)) {
   const fp = path.join(standardDir, `test-tool-group-${grp}.md`);
   if (fs.existsSync(fp)) {
     const content = fs.readFileSync(fp, 'utf8');
-    fs.writeFileSync(path.join(standardDir, `test-tool-group-${grp}-part1.md`), content);
-    fs.writeFileSync(path.join(standardDir, `test-tool-group-${grp}-part2.md`), content);
+    for (let i = 1; i <= parts; i++) {
+        fs.writeFileSync(path.join(standardDir, `test-tool-group-${grp}-part${i}.md`), content);
+    }
     fs.unlinkSync(fp);
+  }
+}
+
+
+const splitStandardFiles = {
+  'test-core-admin-backup.md': 2,
+  'test-core-admin-batch.md': 2,
+  'test-core-admin-system.md': 2,
+  'test-core-semantic.md': 3,
+  'test-payload-optimization.md': 4,
+  'test-resources.md': 2,
+  'test-github-read.md': 2
+};
+
+for (const [sf, parts] of Object.entries(splitStandardFiles)) {
+  const p = path.join(standardDir, sf);
+  let content;
+  if (fs.existsSync(p)) {
+    content = fs.readFileSync(p, 'utf8');
+    fs.unlinkSync(p);
+  } else if (fs.existsSync(p.replace('.md', '-part1.md'))) {
+    content = fs.readFileSync(p.replace('.md', '-part1.md'), 'utf8');
+  }
+  if (content) {
+    for (let i = 1; i <= parts; i++) {
+        fs.writeFileSync(path.join(standardDir, sf.replace('.md', `-part${i}.md`)), content);
+    }
   }
 }
 
@@ -262,6 +290,19 @@ for (const file of standardFiles) {
   const assignedTools = reverseMap[file] || [];
   
   let fixedContent = fixHallucinations(content);
+  // Fix standard IO part2 hallucination
+  if (file === 'test-tool-group-io-part2.md') {
+    fixedContent = fixedContent.replace(/\| `export_entries` \| [^\n]+\n/g, '');
+  }
+  // Fix analytics part2
+  if (file === 'test-tool-group-analytics-part2.md') {
+    fixedContent = fixedContent.replace(/get_statistics/g, 'get_cross_project_insights');
+  }
+  // Fix relationships part2
+  if (file === 'test-tool-group-relationships-part2.md') {
+    fixedContent = fixedContent.replace(/\| `link_entries` \| [^\n]+\n/g, '');
+  }
+
   
   // Fix hallucinated project admin parameters
   fixedContent = fixedContent.replace(/name: "test-proj", default_owner: "dev", github_repo: "user\/test-proj"/g, 'name: "test-proj", absolute_path: "/tmp/test-proj"');
@@ -353,7 +394,8 @@ const cmSplits = [
   { file: 'test-cm-crud-advanced-part-1.md', marker: '### 20.14 Soft-Delete Recovery, Archiving & Cursor Pagination', phase: 'Phase 20B' },
   { file: 'test-cm-search-advanced-part-2.md', marker: '### 21.10 Keyset Pagination & Archiving in Search', phase: 'Phase 21B' },
   { file: 'test-cm-error-matrix-part-1.md', marker: '### 29.2 Search Group — Empty Params & Type Mismatches', phase: 'Phase 29' },
-  { file: 'test-cm-error-matrix-part-2.md', marker: '### 29.5 Backup Group — Empty Params & Security', phase: 'Phase 29B' }
+  { file: 'test-cm-error-matrix-part-2.md', marker: '### 29.5 Backup Group — Empty Params & Security', phase: 'Phase 29B' },
+  { file: 'test-cm-github-part-2.md', marker: '### 25.4', phase: 'Phase 25C' }
 ];
 
 for (const splitInfo of cmSplits) {

@@ -24,16 +24,10 @@
 
 | Tool                  | Happy Path       | Domain Error Test                              | Zod Empty Param (`{}`)            | Zod Type Mismatch |
 | --------------------- | ---------------- | ---------------------------------------------- | --------------------------------- | ----------------- |
-| `update_entry`        | Valid update     | `entry_id: 999999` (not found)                 | ⚠️ Should return validation error | `entry_id: "abc"` |
 | `delete_entry`        | Soft delete      | `entry_id: 999999` (not found)                 | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `restore_entry`       | Restore entry    | `entry_id: 999999` (not found)                 | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `update_configuration`| Update config    | `instruction_level: "invalid"`                 | Should succeed (defaults)         | `briefing_entries: "abc"` |
 
 | `delete_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
-| `get_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 | `list_projects` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
-| `register_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
-| `update_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 ### Specific Domain Checks
 

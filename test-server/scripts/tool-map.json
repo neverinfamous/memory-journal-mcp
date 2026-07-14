@@ -13,7 +13,7 @@
       "test-usability-github-kanban-part1.md"
     ],
     "add_to_vector_index": [
-      "test-core-semantic.md",
+      "test-core-semantic-part3.md",
       "test-tool-group-admin-part2.md",
       "test-usability-admin-vector.md"
     ],
@@ -22,30 +22,40 @@
       "test-usability-git-analysis-part1.md"
     ],
     "backup_journal": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
       "test-tool-group-backup-part1.md",
       "test-usability-backup-part1.md"
     ],
     "batch_create_entries": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
-      "test-tool-group-admin-part2.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
+      "test-tool-group-admin-part3.md",
       "test-usability-admin-batch-part1.md"
     ],
     "batch_delete_entries": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
-      "test-tool-group-admin-part2.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
+      "test-tool-group-admin-part3.md",
       "test-usability-admin-batch-part1.md"
     ],
     "batch_update_entries": [
-      "test-core-admin-batch.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
       "test-errors-prompts.md",
-      "test-tool-group-admin-part2.md",
+      "test-tool-group-admin-part3.md",
       "test-usability-admin-batch-part2.md"
     ],
     "check_entry_staleness": [
@@ -53,7 +63,8 @@
       "test-usability-git-analysis-part1.md"
     ],
     "cleanup_backups": [
-      "test-core-admin-backup.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
       "test-tool-group-backup-part2.md",
       "test-usability-backup-part1.md"
     ],
@@ -65,7 +76,8 @@
       "test-usability-github-issue-cycle.md"
     ],
     "create_entry": [
-      "test-core-admin-system.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
       "test-core-crud-create.md",
       "test-core-infra.md",
       "test-errors-boundaries.md",
@@ -132,12 +144,12 @@
       "test-usability-git-history-part1.md"
     ],
     "get_copilot_reviews": [
-      "test-github-read.md",
+      "test-github-insights.md",
       "test-tool-group-github-part2.md",
       "test-usability-github-insights.md"
     ],
     "get_cross_project_insights": [
-      "test-core-semantic.md",
+      "test-core-semantic-part2.md",
       "test-seed.md",
       "test-tool-group-analytics-part2.md",
       "test-usability-analytics.md"
@@ -148,7 +160,10 @@
       "test-errors-prompts.md",
       "test-integrity-part1.md",
       "test-integrity-part2.md",
-      "test-payload-optimization.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-tool-group-core-part1.md",
       "test-usability-core-read-part1.md"
     ],
@@ -160,22 +175,29 @@
     ],
     "get_github_context": [
       "test-core-crud-create.md",
-      "test-github-read.md",
+      "test-github-read-core.md",
       "test-tool-group-github-part1.md",
       "test-usability-github-read-part1.md"
     ],
     "get_github_issue": [
       "test-errors-prompts.md",
-      "test-github-read.md",
+      "test-github-read-core.md",
       "test-kanban-lifecycle.md",
-      "test-payload-optimization.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-tool-group-github-part1.md",
       "test-usability-github-read-part1.md"
     ],
     "get_github_issues": [
-      "test-github-read.md",
-      "test-payload-optimization.md",
-      "test-resources.md",
+      "test-github-read-core.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
+      "test-resources-part1.md",
+      "test-resources-part2.md",
       "test-tool-group-github-part1.md",
       "test-usability-github-read-part2.md"
     ],
@@ -190,27 +212,36 @@
       "test-usability-github-milestones-part1.md"
     ],
     "get_github_pr": [
-      "test-github-read.md",
-      "test-payload-optimization.md",
+      "test-github-read-core.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-tool-group-github-part1.md",
       "test-usability-github-read-part2.md"
     ],
     "get_github_prs": [
-      "test-github-read.md",
-      "test-payload-optimization.md",
+      "test-github-read-core.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-tool-group-github-part1.md",
       "test-usability-github-read-part3.md"
     ],
     "get_kanban_board": [
       "test-github-kanban.md",
       "test-kanban-lifecycle.md",
-      "test-payload-optimization.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-tool-group-github-part1.md",
       "test-usability-github-kanban-part2.md"
     ],
     "get_project": [
       "test-core-project-admin.md",
-      "test-tool-group-admin-part1.md",
+      "test-tool-group-admin-part4.md",
       "test-usability-admin-projects-part1.md"
     ],
     "get_recent_entries": [
@@ -219,7 +250,10 @@
       "test-errors-boundaries.md",
       "test-integrity-part1.md",
       "test-integrity-part2.md",
-      "test-payload-optimization.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-tool-group-core-part1.md",
       "test-usability-core-read-part2.md",
       "test-usability-workspace-isolation-part1.md",
@@ -230,13 +264,13 @@
       "test-usability-git-history-part1.md"
     ],
     "get_repo_insights": [
-      "test-github-read.md",
+      "test-github-insights.md",
       "test-tool-group-github-part2.md",
       "test-usability-github-insights.md"
     ],
     "get_statistics": [
       "test-core-infra.md",
-      "test-core-semantic.md",
+      "test-core-semantic-part2.md",
       "test-integrity-part2.md",
       "test-tool-group-analytics-part1.md",
       "test-usability-analytics.md",
@@ -248,7 +282,7 @@
       "test-usability-git-analysis-part2.md"
     ],
     "get_vector_index_stats": [
-      "test-core-semantic.md",
+      "test-core-semantic-part1.md",
       "test-tool-group-search-part2.md",
       "test-usability-search-vector-part1.md"
     ],
@@ -269,7 +303,8 @@
       "test-usability-relationships.md"
     ],
     "list_backups": [
-      "test-core-admin-backup.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
       "test-tool-group-backup-part1.md",
       "test-usability-backup-part2.md"
     ],
@@ -284,9 +319,12 @@
       "test-usability-admin-projects-part2.md"
     ],
     "list_tags": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
       "test-integrity-part1.md",
       "test-tool-group-core-part1.md",
       "test-usability-core-read-part2.md"
@@ -296,9 +334,12 @@
       "test-usability-core-misc-part1.md"
     ],
     "merge_tags": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
       "test-errors-prompts.md",
       "test-integrity-part1.md",
       "test-tool-group-admin-part2.md",
@@ -322,9 +363,9 @@
       "test-cm-error-matrix-part-2b.md",
       "test-cm-error-matrix-part-3.md",
       "test-cm-error-matrix-part-4.md",
-      "test-cm-error-matrix-part-5.md",
       "test-cm-github-part-1.md",
       "test-cm-github-part-2.md",
+      "test-cm-github-part-3.md",
       "test-cm-hallucination-smoothing-part-1.md",
       "test-cm-hallucination-smoothing-part-2.md",
       "test-cm-io.md",
@@ -345,17 +386,15 @@
       "test-cm-session-summary-healing.md",
       "test-cm-team-admin-core.md",
       "test-cm-team-admin-part-2.md",
-      "test-cm-team-admin-part-3.md",
       "test-cm-team-aliases.md",
       "test-cm-team-analytics-relationships.md",
       "test-cm-team-batch.md",
       "test-cm-team-crud-part-1.md",
       "test-cm-team-crud-part-2.md",
       "test-cm-team-rbac.md",
+      "test-cm-team-vector-errors-external.md",
+      "test-cm-team-vector-errors-internal.md",
       "test-cm-team-vector-errors-part-1.md",
-      "test-cm-team-vector-errors-part-2.md",
-      "test-cm-team-vector-errors-part-3.md",
-      "test-cm-team-vector-errors-part-4.md",
       "test-cm-workflows.md",
       "test-config-reload.md",
       "test-git.md",
@@ -368,39 +407,46 @@
       "test-usability-github-kanban-part2.md"
     ],
     "rebuild_vector_index": [
-      "test-core-semantic.md",
+      "test-core-semantic-part3.md",
       "test-seed.md",
-      "test-tool-group-admin-part2.md",
+      "test-tool-group-admin-part3.md",
       "test-usability-admin-vector.md"
     ],
     "register_project": [
       "test-core-project-admin.md",
-      "test-tool-group-admin-part1.md",
+      "test-tool-group-admin-part3.md",
       "test-usability-admin-projects-part1.md"
     ],
     "restore_backup": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
       "test-errors-prompts.md",
       "test-tool-group-backup-part2.md",
       "test-usability-backup-part2.md"
     ],
     "restore_entry": [
       "test-core-crud-read.md",
-      "test-tool-group-admin-part1.md",
+      "test-tool-group-admin-part3.md",
       "test-usability-admin-mutations-part1.md"
     ],
     "run_auto_prune": [
-      "test-core-admin-batch.md",
-      "test-tool-group-admin-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-tool-group-admin-part3.md",
       "test-usability-admin-system-part1.md"
     ],
     "search_audit_log": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
-      "test-tool-group-admin-part2.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
+      "test-tool-group-admin-part4.md",
       "test-usability-admin-system-part2.md"
     ],
     "search_by_date_range": [
@@ -409,7 +455,10 @@
       "test-errors-prompts.md",
       "test-integrity-part1.md",
       "test-integrity-part2.md",
-      "test-payload-optimization.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-tool-group-search-part1.md",
       "test-usability-search-core-part1.md",
       "test-usability-workspace-isolation-part3.md",
@@ -420,12 +469,16 @@
       "test-usability-git-history-part2.md"
     ],
     "search_entries": [
-      "test-core-admin-system.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
       "test-core-search-filters.md",
       "test-core-search-fts.md",
       "test-errors-boundaries.md",
       "test-integrity-part1.md",
-      "test-payload-optimization.md",
+      "test-payload-optimization-part1.md",
+      "test-payload-optimization-part2.md",
+      "test-payload-optimization-part3.md",
+      "test-payload-optimization-part4.md",
       "test-seed.md",
       "test-tool-group-search-part1.md",
       "test-usability-search-core-part2.md",
@@ -433,7 +486,7 @@
       "test-workspace-isolation.md"
     ],
     "semantic_search": [
-      "test-core-semantic.md",
+      "test-core-semantic-part1.md",
       "test-errors-boundaries.md",
       "test-integrity-part2.md",
       "test-seed.md",
@@ -660,10 +713,13 @@
       "test-usability-core-misc-part2.md"
     ],
     "update_configuration": [
-      "test-core-admin-backup.md",
-      "test-core-admin-batch.md",
-      "test-core-admin-system.md",
-      "test-tool-group-admin-part1.md",
+      "test-core-admin-backup-part1.md",
+      "test-core-admin-backup-part2.md",
+      "test-core-admin-batch-part1.md",
+      "test-core-admin-batch-part2.md",
+      "test-core-admin-system-part1.md",
+      "test-core-admin-system-part2.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-system-part2.md"
     ],
     "update_entry": [
@@ -671,7 +727,7 @@
       "test-errors-boundaries.md",
       "test-errors-prompts.md",
       "test-integrity-part1.md",
-      "test-tool-group-admin-part1.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-mutations-part2.md"
     ],
     "update_github_milestone": [
@@ -681,7 +737,7 @@
     ],
     "update_project": [
       "test-core-project-admin.md",
-      "test-tool-group-admin-part1.md",
+      "test-tool-group-admin-part2.md",
       "test-usability-admin-projects-part2.md"
     ],
     "visualize_relationships": [

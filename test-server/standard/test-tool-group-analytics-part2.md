@@ -32,7 +32,7 @@ For every tool, you must explicitly confirm that Domain Errors return a structur
 
 ### Specific Domain Checks
 
-- **Date Ignorance Bug**: Ensure `get_statistics` with invalid dates doesn't silently ignore date limits.
+- **Date Ignorance Bug**: Ensure `get_cross_project_insights` with invalid dates doesn't silently ignore date limits.
 
 ## 2. Integrity & Boundary Testing
 

@@ -26,12 +26,9 @@
 | --------------------- | ---------------- | ---------------------------------------------- | --------------------------------- | ----------------- |
 | `merge_tags`          | Merge valid tags | `source_tag: "nonexistent", target_tag: "abc"` | ⚠️ Should return validation error | `source_tag: 123` |
 | `add_to_vector_index` | Add valid        | `entry_id: 999999`                             | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `batch_create_entries`| Valid batch      | `entries: []`                                  | ⚠️ Should return validation error | `entries: "abc"`  |
-| `batch_update_entries`| Valid updates    | `updates: []`                                  | ⚠️ Should return validation error | `updates: "abc"`  |
-| `batch_delete_entries`| Valid deletes    | `entry_ids: []`                                | ⚠️ Should return validation error | `entry_ids: "abc"`|
-| `search_audit_log`    | Valid search     | `limit: -1`                                    | ⚠️ Should return validation error | `limit: "abc"`    |
-| `rebuild_vector_index`| Rebuild index    | N/A                                            | Should succeed (defaults)         | N/A               |
-| `run_auto_prune`      | Prune entries    | N/A                                            | Should succeed (defaults)         | `workspace_id: "abc"` |
+| `update_configuration` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `update_entry` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `update_project` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
 
 
 ### Specific Domain Checks
