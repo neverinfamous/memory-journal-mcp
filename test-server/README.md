@@ -11,7 +11,7 @@
 | [`usability/`](usability/README.md) | **Usability & Hallucination Tests** — Directory containing organic testing prompts to explicitly trigger agent hallucinations. See `usability/coordinator-workflow.md` for full list. | After standard tests  |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
-| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 108 tools across 11 groups + codemode | Reference |
+| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all tools across 11 groups + codemode | Reference |
 | [`code-map.md`](code-map.md) | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns | When debugging source code or making changes |
 
 ## Integration Test Scripts
@@ -27,8 +27,8 @@ These scripts test features that require separate server processes — they **ca
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
 | `scripts/test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
 | `scripts/test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
-| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts — 108 tools verified                                                                      | stdio         | ~5s      |
-| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 30 prompts (shape + errors)                                                                    | stdio         | ~10s     |
+| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts — all tools verified                                                                      | stdio         | ~5s      |
+| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all prompts (shape + errors)                                                                    | stdio         | ~10s     |
 | `scripts/test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 
 ### Quick Run
@@ -96,7 +96,7 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 ### Tool Annotations (Phase 1.3C)
 
-- [ ] 108 tools returned, all with `annotations` object
+- [ ] all tools returned, all with `annotations` object
 - [ ] Tools correctly categorized by `openWorldHint` with 0 missing
 
 ### Scheduler (Phase 9)

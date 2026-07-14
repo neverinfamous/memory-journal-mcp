@@ -413,7 +413,7 @@ Agents often run into environment-level interceptors (like global PowerShell pro
 ## 3. Phase 2: Implementation
 
 1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
-2. Validate the integrity of your code changes by running \`pnpm run check\` (linting, typechecking, E2E tests).
+2. Validate the integrity of your code changes by running the project's native validation tooling (analogous to the semantic validation tiers).
 3. **Agent-First Validation (CRITICAL):** Programmatic tests cannot verify if an AI agent is actually healed. You MUST verify the fix against an actual agent by running the usability coordinator workflows (e.g., \`test-server/codemode/coordinator-workflow.md\` or \`test-server/standard/coordinator-workflow.md\`).
 4. Commit the changes locally.`
                             },
