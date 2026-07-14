@@ -246,12 +246,28 @@ for (const file of files) {
   updatedContent = updatedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
   updatedContent = updatedContent.replace(/project #5/gi, 'workspace test-ws');
   
-  // Fix logic flaw: replace git add and git commit with commit.ts
-  updatedContent = updatedContent.replace(/Run `git add \.` and `git commit -m "[^"]+"` to save your changes locally\./g, 'Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.');
-  
-  // Catch already replaced ones
-  updatedContent = updatedContent.replace(/Immediately commit passing changes using the `bun [^`]+` utility\. Do NOT use raw `git commit`\.(?! WARNING:)/g, 'Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.');
+  // Fix logic flaw: replace local verification block with the master boilerplate from prompt-template.md
+  const templatePath = path.join(__dirname, 'prompt-template.md');
+  if (fs.existsSync(templatePath)) {
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    const localVerifMatch = templateContent.match(/3\. \*\*Local Verification\*\*[\s\S]*?(?=\n5\.|$)/);
+    if (localVerifMatch) {
+       let verifText = localVerifMatch[0];
+       // Rename 3. and 4. to 1. and 3. (we will put 2. as the live server rule)
+       verifText = verifText.replace(/^3\./, '1.').replace(/\n4\./, '\n3.');
+       // Update commit args for usability
+       verifText = verifText.replace(/--msg "[^"]+" --impact <0\.1-1\.0> --confidence <0\.1-1\.0> --validation passed --journal --add <path>/, '--msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .');
+       
+       // Replace in usability file
+       const verifRegex = /1\. Run `pnpm run lint`[\s\S]*?(?=4\. Conclude the test and report your findings\.)/;
+       const verifLines = verifText.split('\n');
+       verifLines.splice(1, 0, '2. DO NOT perform live server verification. DO NOT pause or wait for a server restart.');
+       
+       updatedContent = updatedContent.replace(verifRegex, verifLines.join('\n') + '\n');
+    }
+  }
 
+  // Catch any remaining older string patterns and replace them so the regex matches later if needed
   updatedContent = updatedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts/g, '`bun ./.agents/scripts/commit.ts');
   
   // Fix hallucinated project admin parameters
