@@ -249,21 +249,20 @@ for (const file of files) {
   // Fix logic flaw: replace local verification block with the master boilerplate from prompt-template.md
   const templatePath = path.join(__dirname, 'prompt-template.md');
   if (fs.existsSync(templatePath)) {
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    let templateContent = fs.readFileSync(templatePath, 'utf8');
+    // Usability tests are standard testing tools directly
+    templateContent = templateContent.replace('{{TOOL_EXECUTION_INSTRUCTION}}', '**Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests.');
     const localVerifMatch = templateContent.match(/3\. \*\*Local Verification\*\*[\s\S]*?(?=\n5\.|$)/);
     if (localVerifMatch) {
        let verifText = localVerifMatch[0];
-       // Rename 3. and 4. to 1. and 3. (we will put 2. as the live server rule)
-       verifText = verifText.replace(/^3\./, '1.').replace(/\n4\./, '\n3.');
+       // Rename 3. and 4. to 1. and 2. 
+       verifText = verifText.replace(/^3\./, '1.').replace(/\n4\./, '\n2.');
        // Update commit args for usability
        verifText = verifText.replace(/--msg "[^"]+" --impact <0\.1-1\.0> --confidence <0\.1-1\.0> --validation passed --journal --add <path>/, '--msg "test(usability): optimize tool usage" --impact 0.5 --confidence 1.0 --validation passed --journal --add .');
        
        // Replace in usability file
        const verifRegex = /1\. Run `pnpm run lint`[\s\S]*?(?=4\. Conclude the test and report your findings\.)/;
-       const verifLines = verifText.split('\n');
-       verifLines.splice(1, 0, '2. DO NOT perform live server verification. DO NOT pause or wait for a server restart.');
-       
-       updatedContent = updatedContent.replace(verifRegex, verifLines.join('\n') + '\n');
+       updatedContent = updatedContent.replace(verifRegex, verifText + '\n');
     }
   }
 
@@ -300,6 +299,18 @@ if (fs.existsSync(teamFilePath)) {
 }
 
 const splitGroups = { core: 2, search: 2, git: 2, io: 2, backup: 2, analytics: 2, relationships: 2, admin: 4, github: 2 };
+
+const searchFiltersPath = path.join(standardDir, 'test-core-search-filters.md');
+if (fs.existsSync(searchFiltersPath)) {
+  const content = fs.readFileSync(searchFiltersPath, 'utf8');
+  fs.writeFileSync(path.join(standardDir, 'test-core-search-filters-part1.md'), content);
+  fs.writeFileSync(path.join(standardDir, 'test-core-search-filters-part2.md'), content);
+  fs.unlinkSync(searchFiltersPath);
+} else if (fs.existsSync(searchFiltersPath.replace('.md', '-part1.md'))) {
+  const content = fs.readFileSync(searchFiltersPath.replace('.md', '-part1.md'), 'utf8');
+  fs.writeFileSync(path.join(standardDir, 'test-core-search-filters-part1.md'), content);
+  fs.writeFileSync(path.join(standardDir, 'test-core-search-filters-part2.md'), content);
+}
 for (const [grp, parts] of Object.entries(splitGroups)) {
   const fp = path.join(standardDir, `test-tool-group-${grp}.md`);
   let content;
@@ -372,7 +383,8 @@ for (const file of standardFiles) {
   // Inject boilerplate from prompt-template.md
   const templatePath = path.join(__dirname, 'prompt-template.md');
   if (fs.existsSync(templatePath)) {
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    let templateContent = fs.readFileSync(templatePath, 'utf8');
+    templateContent = templateContent.replace('{{TOOL_EXECUTION_INSTRUCTION}}', '**Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.');
     // Replace everything from **Prerequisites:** up to the first --- separator
     fixedContent = fixedContent.replace(/\*\*Prerequisites:\*\*[\s\S]*?(?=\n---)/, templateContent.trim());
   }
@@ -468,7 +480,7 @@ for (const splitInfo of cmSplits) {
   }
 }
 
-const codemodeFiles = fs.readdirSync(codemodeDir).filter(f => f.endsWith('.md'));
+const codemodeFiles = fs.readdirSync(codemodeDir).filter(f => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('coordinator-workflow'));
 
 
 const codemodeHallucinationFixes = {
@@ -566,40 +578,6 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(/metadata:\s*\{\s*framework:\s*'nextjs'\s*\}/g, "absolute_path: '/tmp/test-codemode-project-v2'");
   fixedContent = fixedContent.replace(/const pNum = register\.projectNumber/g, "const pNum = register.project?.name");
 
-  
-  fixedContent = fixedContent.replace(
-    /3\. If you made code changes\/fixes, update `UNRELEASED\.md` and commit without pushing\. If tests pass cleanly, do NOT update `UNRELEASED\.md`\. Then, stop so the \*\*USER\*\* can verify with `pnpm run lint` and `npx tsc --noEmit`\.\r?\n4\. After user completes verification, re-test fixes with direct MCP calls\./g,
-    '3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.'
-  );
-
-  fixedContent = fixedContent.replace(/Immediately commit passing changes using the `bun [^`]+` utility\. Do NOT use raw `git commit`\.(?! WARNING:)/g, 'Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow.');
-
-
-  fixedContent = fixedContent.replace(
-    /2\. \*\*Local Verification\*\*: If you or a subagent modifies the codebase, you MUST run the linter and typechecker \(`pnpm run lint` and `npx tsc --noEmit`\) locally and fix any issues BEFORE committing\. Pay strict attention to ESLint and TypeScript compiler outputs\. You MUST fix all validation issues prior to committing\. Do NOT ignore warnings or errors\. Follow strict TypeScript guidelines: NEVER use `any` \(use `unknown` with type guards\), avoid unsafe typecasts, and ensure explicit return types\.\n3\. \*\*Commit\*\*: Immediately commit passing changes using the `bun \.\/\.agents\/scripts\/commit\.ts` utility\. Do NOT use raw `git commit`\. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous\.\n3\. Provide a very brief/g,
-    '2. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n3. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.\n4. Provide a very brief'
-  );
-
-  fixedContent = fixedContent.replace(
-    /2\. If you made code changes\/fixes, update `UNRELEASED\.md` and commit without pushing\. Then, stop so the \*\*USER\*\* can verify with `pnpm run lint` and `npx tsc --noEmit`\.\n3\. Provide a very brief/g,
-    '2. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n3. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.\n4. Provide a very brief'
-  );
-
-
-  fixedContent = fixedContent.replace(
-    /including changes to `(?:src\/)?constants\/server-instructions\.ts`(?: or this file\.)? \*\*If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code \(e\.g\., `(?:src\/filtering\/tool-filter\.ts|codemode\.ts)`\) so future agents succeed automatically\.\*\*/g,
-    'including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**'
-  );
-
-  // Fix test-git.md and test-config-reload.md boilerplate
-  fixedContent = fixedContent.replace(
-    /1\. Create a plan to fix any issues found\.\r?\n2\. If code changes made, commit without pushing\.\r?\n3\. Stop for \*\*USER\*\* verification\.\r?\n4\. Re-test\.\r?\n5\. Provide brief final summary including Total Token Estimate\./g,
-    '1. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.\n2. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.\n3. Provide brief final summary including Total Token Estimate.'
-  );
-
-  fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts`/g, '`bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>`');
-  fixedContent = fixedContent.replace(/`bun \.\/\.agents\/scripts\/commit\.ts --msg/g, '`bun ./.agents/scripts/commit.ts --msg');
-
 
   // Fix parameter drift hallucinations
   fixedContent = fixParameterHallucinations(fixedContent);
@@ -608,11 +586,7 @@ for (const file of codemodeFiles) {
   const templatePath = path.join(__dirname, 'prompt-template.md');
   if (fs.existsSync(templatePath)) {
     let templateContent = fs.readFileSync(templatePath, 'utf8');
-    // Replace standard tool instruction with codemode instruction
-    templateContent = templateContent.replace(
-      /- \*\*Use direct MCP tools exclusively\.\*\* Do NOT use Code Mode \(`mj_execute_code`\) for these tests\. Code Mode tests are handled separately in the `codemode` track\. If you must use a script to supplement a test, use a standard Node\/shell script\./g,
-      '- **Use codemode directly for all tests, NOT the terminal or scripts!**\n- Code Mode is included in all tool filtering presets by default.'
-    );
+    templateContent = templateContent.replace('{{TOOL_EXECUTION_INSTRUCTION}}', '**Use codemode directly for all tests, NOT the terminal or scripts!**\n- Code Mode is included in all tool filtering presets by default.');
     fixedContent = fixedContent.replace(/\*\*Prerequisites:\*\*[\s\S]*?(?=\n---)/, templateContent.trim());
   }
 

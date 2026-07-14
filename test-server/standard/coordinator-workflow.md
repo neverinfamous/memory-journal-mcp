@@ -21,7 +21,7 @@ Systematically execute all Standard tests in `test-server/standard/` to verify d
    - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
    - The user will verify the live fixes in a completely new run/pass in a separate thread.
 4. **Commit**:
-   - Once all local tests pass, the subagent MUST commit their codebase changes locally (`git commit -m "..."`). If no modifications were needed, no commit is required.
+   - Once all local tests pass, the subagent MUST commit their codebase changes locally using the `bun ./.agents/scripts/commit.ts` wrapper. If no modifications were needed, no commit is required. Do NOT use raw `git commit`.
    - Once the subagent completes, record their final token estimate and metric telemetry, mark the task as done, and move to the next test in the queue.
    - **Tool Availability Warning**: If any tools are unavailable during testing for any reason, the subagent MUST immediately warn the user. We want to actively test the tools, not just their graceful degradation.
 5. **Coordinator Progress Reporting**:
