@@ -14,51 +14,57 @@ export function getGitPromptDefinitions(): InternalPromptDef[] {
             name: 'commit',
             description: 'Procedure for committing code changes with intelligent validation gates',
             icons: [ICON_PROMPT],
-            handler: (_args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+            arguments: [
+                {
+                    name: 'validation',
+                    description: 'Validation level: none (default, skip), lint (lint+typecheck), full (all checks+tests)',
+                    required: false,
+                },
+            ],
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const validation = args?.['validation']?.toLowerCase() || 'none'
+
+                let validationText: string
+                if (validation === 'none') {
+                    validationText = `\n> [!NOTE]\n> **Validation Bypassed**: You are executing a quick commit. Validation gates have been bypassed. Only proceed if you are confident the changes are safe or trivial.`
+                } else if (validation === 'lint') {
+                    validationText = `\n## 1. Validation (MANDATORY)\nYou MUST run the project's linting and type-checking tools before committing.\n- Consult the project's config files (\`package.json\`, \`Makefile\`, \`pyproject.toml\`, etc.) to determine the appropriate command (e.g., standard lint/check scripts, \`cargo clippy\`, \`ruff check .\`).\n- If any gate fails, attempt to auto-fix the issue or request human-in-the-loop (HITL) assistance.\n- **Graceful Fallback**: If you cannot determine the appropriate validation command for this project, warn the user, proceed without validation, and lower your confidence score.`
+                } else {
+                    validationText = `\n## 1. Validation (MANDATORY)\nYou MUST run the project's full validation suite (linting, type-checking, build, tests) before committing.\n- Consult the project's config files (\`package.json\`, \`Makefile\`, \`pyproject.toml\`, etc.) to determine the appropriate command (e.g., standard check/test scripts, \`cargo test\`, \`pytest\`).\n- If any gate fails, attempt to auto-fix the issue or request human-in-the-loop (HITL) assistance.\n- **Graceful Fallback**: If you cannot determine the appropriate validation command for this project, warn the user, proceed without validation, and lower your confidence score.`
+                }
+
+                const promptText = `# Git History Commit Workflow
+
+You are initiating a high-integrity procedure for committing code changes. You must follow these steps EXACTLY.
+${validationText}
+
+## 2. Commit Invocation
+Stage your changes and commit using standard Git tooling.
+
+> [!WARNING]
+> **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
+
+> **Environment Note:** If your system environment enforces custom commit wrappers (e.g., via proxy interceptors or project rules), use them with the appropriate semantic flags (impact, confidence, validation). Otherwise, use standard \`git commit\` with conventional commit format.
+> **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** If you are executing commands natively in Windows PowerShell, you MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
+
+**Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
+- \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
+- \`confidence\`: 
+  - 0.3-0.5: Unverified, experimental, or complex changes without tests.
+  - 0.6-0.8: Standard changes, logic looks sound but full E2E validation was skipped (e.g., validation=none or lint).
+  - 0.9-1.0: Rigorously tested, proven (validation=full), or completely trivial (like a typo fix).
+- \`validation\`: 'passed', 'none', or 'failed'
+
+## 3. Journal Entry
+Ensure a journal entry is created for substantive changes (impact > 0.4). If your environment's commit wrapper automatically handles this, you may rely on it. Otherwise, manually create the entry via the journal MCP.`
+
                 return {
                     messages: [
                         {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `# Git History Commit Workflow
-
-You are initiating a high-integrity procedure for committing code changes. You must follow these steps EXACTLY.
-
-## 1. Validation Gates (MANDATORY)
-Before committing, you MUST ensure that validation has passed. Check the "System Metadata" in your active Session Briefing to see the current test health indicators (e.g., \`Tests: ... pass ... · Lint & Typecheck: ✅\`).
-
-- If the briefing indicates tests and linting have already passed, AND you have not made substantive code changes since that status was recorded, you may **bypass** running them again.
-- If the test status is failing, unknown, or you have made substantive changes, you MUST run the validation commands natively in PowerShell before proceeding:
-\`\`\`bash
-npm run check || pnpm run check
-\`\`\`
-If any gate fails, you must attempt to auto-fix the issue or request human-in-the-loop (HITL) assistance.
-
-## 2. Commit Invocation
-Once validation is confirmed (or run), stage your changes and commit using standard native Git tooling.
-
-> [!WARNING]
-> **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
-
-> **Environment Note:** If your system environment enforces custom wrappers like \`commit.ts\`, you MUST use them and pass the semantic flags appropriately instead of raw \`git commit\`. Note that \`commit.ts\` does not support the \`-F\` flag for the full message.
-> **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** You are executing commands in Windows PowerShell. You MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
-> **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
-> - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
-> - \`confidence\`: 
->   - 0.3-0.5: Unverified, experimental, or complex changes without tests.
->   - 0.6-0.8: Standard changes, logic looks sound but full E2E validation was skipped.
->   - 0.9-1.0: Rigorously tested, proven, or completely trivial (like a typo fix).
-> - \`validation\`: 'passed' (tests passed), 'none' (bypassed), or 'failed'
-> 
-> **Example \`commit.ts\` usage (Single Command):**
-> \`\`\`bash
-> bun path/to/commit.ts --msg "feat(scope): message" --history "Narrative explaining the change." --confidence <YOUR_SCORE_0.0_TO_1.0> --impact <IMPACT_SCORE> --validation <passed|none|failed> --add <specific-files-you-modified> --journal
-> \`\`\`
-> *(Note: Use \`--history-file scratch/narrative.txt\` instead of \`--history\` ONLY if your narrative is extremely long or contains complex quotes that risk shell-escaping issues. For trivial quick commits, you may omit \`--history\` and use \`--no-history\`.)*
-
-## 3. Journal Entry
-The \`--journal\` flag in \`commit.ts\` automatically creates a journal entry for substantive changes. It acts as an automated gatekeeper and will intelligently **skip** creating an entry if the impact score is trivial (< 0.4) and no history narrative is provided, keeping the journal noise-free. You should generally pass the \`--journal\` flag and trust the script to decide whether to record the commit. If for some reason you do not use \`--journal\`, you must manually create the entry via \`memory-journal-mcp entry create\`.`,
+                                text: promptText,
                             },
                         },
                     ],

@@ -139,11 +139,8 @@ These prompts manage local git repository interactions.
 
 ### `commit`
 **Description**: Execute a standard interactive commit workflow.
-- **Arguments**: None
-
-### `quick-commit`
-**Description**: Execute a fast, automated commit.
-- **Arguments**: None
+- **Arguments**:
+  - `validation` (optional) - Validation level to run before committing (none, lint, full). Default: full.
 
 ---
 

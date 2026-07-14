@@ -108,7 +108,6 @@ async function main() {
         { name: 'verify-work', args: {}, expect: 'verification' },
         // 8.4 Git History prompts
         { name: 'commit', args: {}, expect: 'Commit Workflow' },
-        { name: 'quick-commit', args: {}, expect: 'Quick Commit' },
         // 8.5 Optimizer prompts
         { name: 'optimize-journal', args: {}, expect: 'Optimizer' },
         // 8.6 Load-briefing prompt
