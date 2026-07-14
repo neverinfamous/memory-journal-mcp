@@ -7,7 +7,7 @@
 
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-import { parseSessionCommitContext } from '../../../../types/auto-context.js'
+
 import {
     markUntrustedContentInline,
 } from '../../../../utils/security-utils.js'
@@ -67,15 +67,7 @@ function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): J
     return 'entries' in result ? result.entries : []
 }
 
-function extractSection(content: string | null | undefined, sectionTitle: string): string | null {
-    if (!content) return null
-    const regex = new RegExp(`##\\s+${sectionTitle}\\s*\\n([\\s\\S]*?)(?:\\n##\\s|$)`, 'i')
-    const match = content.match(regex)
-    if (match?.[1]) {
-        return match[1].trim()
-    }
-    return null
-}
+
 
 export function buildJournalContext(
     context: ResourceContext,
@@ -143,37 +135,16 @@ export function buildJournalContext(
     let sessionSummaries
     if (finalSummaryEntries.length > 0) {
         sessionSummaries = finalSummaryEntries.map((entry: JournalEntry) => {
+            const titleLine = entry.content.split(/\r?\n/)[0]?.replace(/^#+\s*(?:Session Summary:\s*)?/, '') ?? ''
             return {
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: markUntrustedContentInline(cleanPreview(entry.content, PREVIEW_LENGTH)),
+                preview: markUntrustedContentInline(cleanPreview(titleLine, PREVIEW_LENGTH)),
             }
         })
         
         latestSessionSummary = sessionSummaries[0]
-        const firstEntry = finalSummaryEntries[0]
-        if (latestSessionSummary && firstEntry) {
-            let latestPreviewStr = markUntrustedContentInline(cleanPreview(firstEntry.content, PREVIEW_LENGTH))
-            
-            const unfinished = extractSection(firstEntry.content, 'Unfinished / Blocked')
-            const nextSession = extractSection(firstEntry.content, 'Context for Next Session')
-            
-            if (unfinished) {
-                latestPreviewStr += `<br> • Unfinished: ${markUntrustedContentInline(cleanPreview(unfinished, 60))}`
-            }
-            if (nextSession) {
-                latestPreviewStr += `<br> • Next Session: ${markUntrustedContentInline(cleanPreview(nextSession, 120))}`
-            }
-            
-            const commitCtx = parseSessionCommitContext(firstEntry.autoContext)
-            if (commitCtx?.commits && commitCtx.commits.length > 0) {
-                const shortShas = commitCtx.commits.map(c => c.slice(0, 7)).join(', ')
-                latestPreviewStr += `<br> • Latest Session Commits: ${shortShas}`
-            }
-            
-            latestSessionSummary.preview = latestPreviewStr
-        }
     }
 
     // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
