@@ -380,7 +380,8 @@ export function createServerInstance(
         })
 
         // Register prompts (reusing prompts from instruction generation)
-        registerPrompts(server, prompts, db, teamDb ?? undefined, runtime, context.github)
+        const briefingConfig = configManager.getConfig().briefingConfig
+        registerPrompts(server, prompts, db, teamDb ?? undefined, runtime, context.github, briefingConfig)
 
         // Intercept SDK-level Zod validation errors to return structured error responses
         const serverObj = server.server as unknown as {

@@ -11,10 +11,12 @@ import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getAnalyticsPromptDefinitions } from './analytics.js'
 import { getGitHubPromptDefinitions } from './github.js'
 import { getGitPromptDefinitions } from './git.js'
+import type { BriefingConfig } from '../resources/shared.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 
 import { getAdversarialPromptDefinitions } from './adversarial.js'
 import { getOptimizerPromptDefinitions } from './optimizer.js'
+import { getLoadBriefingPromptDefinitions } from './load-briefing.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 
 /**
@@ -44,7 +46,8 @@ export interface InternalPromptDef {
         args: Record<string, string>,
         db: IDatabaseAdapter,
         teamDb?: IDatabaseAdapter,
-        github?: GitHubIntegration
+        github?: GitHubIntegration,
+        briefingConfig?: BriefingConfig
     ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
 
@@ -67,7 +70,8 @@ export function getPrompt(
     args: Record<string, string>,
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
-    github?: GitHubIntegration
+    github?: GitHubIntegration,
+    briefingConfig?: BriefingConfig
 ): Promise<{ messages: PromptMessage[] }> {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
@@ -76,7 +80,7 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return Promise.resolve(prompt.handler(args, db, teamDb, github))
+    return Promise.resolve(prompt.handler(args, db, teamDb, github, briefingConfig))
 }
 
 /**
@@ -90,5 +94,6 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         ...getGitPromptDefinitions(),
         ...getAdversarialPromptDefinitions(),
         ...getOptimizerPromptDefinitions(),
+        ...getLoadBriefingPromptDefinitions(),
     ]
 }

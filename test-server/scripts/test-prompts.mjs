@@ -111,6 +111,9 @@ async function main() {
         { name: 'quick-commit', args: {}, expect: 'Quick Commit' },
         // 8.5 Optimizer prompts
         { name: 'optimize-journal', args: {}, expect: 'Optimizer' },
+        // 8.6 Load-briefing prompt
+        { name: 'load-briefing', args: {}, expect: 'Available Projects' },
+        { name: 'load-briefing', args: { projects: 'nonexistent-project-xyz' }, expect: 'not found' },
     ]
 
     console.log(`\n=== TESTING ${testCases.length} PROMPT CALLS ===\n`)

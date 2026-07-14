@@ -28,7 +28,7 @@ These scripts test features that require separate server processes — they **ca
 | `scripts/test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
 | `scripts/test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
 | `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts — 108 tools verified                                                                      | stdio         | ~5s      |
-| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 29 prompts (shape + errors)                                                                    | stdio         | ~10s     |
+| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 30 prompts (shape + errors)                                                                    | stdio         | ~10s     |
 | `scripts/test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 
 ### Quick Run

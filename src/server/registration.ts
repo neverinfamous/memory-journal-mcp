@@ -16,6 +16,7 @@ import { auditOperation } from '../audit/interceptor.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { ConfigurationError } from '../types/errors.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
+import type { BriefingConfig } from '../handlers/resources/shared.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
 
 // ============================================================================
@@ -144,20 +145,18 @@ export function registerPrompts(
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
     runtime?: ServerRuntime,
-    github?: GitHubIntegration
+    github?: GitHubIntegration,
+    briefingConfig?: BriefingConfig
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
         if (promptDef.arguments && promptDef.arguments.length > 0) {
-            const hasRequired = promptDef.arguments.some((arg) => arg.required === true)
-            if (hasRequired) {
-                argsSchema = {}
-                for (const arg of promptDef.arguments) {
-                    argsSchema[arg.name] =
-                        arg.required === true
-                            ? z.string().describe(arg.description)
-                            : z.string().optional().describe(arg.description)
-                }
+            argsSchema = {}
+            for (const arg of promptDef.arguments) {
+                argsSchema[arg.name] =
+                    arg.required === true
+                        ? z.string().describe(arg.description)
+                        : z.string().optional().describe(arg.description)
             }
         }
 
@@ -184,7 +183,7 @@ export function registerPrompts(
                         }[]
                     }> => {
                         const args = providedArgs as Record<string, string>
-                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github)
+                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github, briefingConfig)
                         return {
                             messages: promptResult.messages.map((m) => ({
                                 role: m.role as 'user' | 'assistant',
