@@ -35,9 +35,9 @@
 | List all issues       | `get_github_issues(state: "all", limit: 3)`    | Returns both open and closed issues                      |
 | List closed PRs       | `get_github_prs(state: "closed", limit: 3)`    | Returns closed/merged PRs                                |
 | List all PRs          | `get_github_prs(state: "all", limit: 3)`       | Returns both open and closed PRs                         |
-| Get PR                | `get_github_pr(pr_number: <N>)`                | Returns PR details (use known closed PR)                 |
+| Get PR                | `get_github_pr(prNumber: <N>)`                | Returns PR details (use known closed PR)                 |
 | Get nonexistent issue | `get_github_issue(issueNumber: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
-| Get nonexistent PR    | `get_github_pr(pr_number: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
+| Get nonexistent PR    | `get_github_pr(prNumber: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
 
 ### 13.5 Repository Insights Tool\n
 
@@ -53,9 +53,9 @@
 
 | Test                  | Command/Action                                        | Expected Result                                                                                                |
 | --------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body`                                  |
-| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                                                   |
-| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Returns structured `CONFIGURATION_ERROR` in multi-workspace environments (or auto-detects in single-workspace) |
+| Reviewed PR           | `get_copilot_reviews(prNumber: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body`                                  |
+| Unreviewed PR         | `get_copilot_reviews(prNumber: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                                                   |
+| Auto-detect repo      | `get_copilot_reviews(prNumber: 1)`                   | Returns structured `CONFIGURATION_ERROR` in multi-workspace environments (or auto-detects in single-workspace) |
 | No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`                                        |
 
 

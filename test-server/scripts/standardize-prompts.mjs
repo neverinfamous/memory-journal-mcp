@@ -202,7 +202,6 @@ for (const file of files) {
   updatedContent = updatedContent.replace(/\n>\s*\n> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
   updatedContent = updatedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   
-  updatedContent = updatedContent.replace(/\bproject_number\b/g, 'workspace_id');
   updatedContent = updatedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
   updatedContent = updatedContent.replace(/project #5/gi, 'workspace test-ws');
   
@@ -324,7 +323,6 @@ for (const file of standardFiles) {
   fixedContent = fixedContent.replace(/- \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\.\r?\n/g, '');
   fixedContent = fixedContent.replace(/> \*\*CRITICAL:\*\* You MUST pass `use_test_db: true`[\s\S]*?instead of production\./g, '');
 
-  fixedContent = fixedContent.replace(/\bproject_number\b/g, 'workspace_id');
   fixedContent = fixedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
   fixedContent = fixedContent.replace(/project #5/gi, 'workspace test-ws');
 
@@ -336,6 +334,10 @@ for (const file of standardFiles) {
   fixedContent = fixedContent.replace(/\bis_personal\b/g, 'isPersonal');
   fixedContent = fixedContent.replace(/\bissue_number\b/g, 'issueNumber');
   fixedContent = fixedContent.replace(/\bpr_status\b/g, 'prStatus');
+  fixedContent = fixedContent.replace(/\bpr_number\b/g, 'prNumber');
+  fixedContent = fixedContent.replace(/\btrust_score\b/g, 'trustScore');
+  fixedContent = fixedContent.replace(/\bimpact_score\b/g, 'impactScore');
+  fixedContent = fixedContent.replace(/\bexpected_version\b/g, 'expectedVersion');
   fixedContent = fixedContent.replace(/\bworkflow_run_id\b/g, 'workflowRunId');
   fixedContent = fixedContent.replace(/\bfts_weight\b/g, 'ftsWeight');
   fixedContent = fixedContent.replace(/\bsemantic_weight\b/g, 'semanticWeight');
@@ -544,6 +546,7 @@ for (const file of codemodeFiles) {
   fixedContent = fixedContent.replace(/project_number: 999999, project_name: "ghost"/g, 'name: "ghost"');
   fixedContent = fixedContent.replace(/project_name: "test-proj"/g, 'name: "test-proj"');
   fixedContent = fixedContent.replace(/project_name: "ghost"/g, 'name: "ghost"');
+  fixedContent = fixedContent.replace(/All 16 GitHub tools callable/g, 'All 18 GitHub tools callable');
   
   
   // Fix logic flaw: remove parameter drift hallucination (use_test_db)
@@ -557,10 +560,7 @@ for (const file of codemodeFiles) {
   // Fix Code Mode wrapper parameter hallucination
   fixedContent = fixedContent.replace(/outer `project_number` parameter/g, 'outer `workspace_id` parameter');
   fixedContent = fixedContent.replace(/String-based `project_number` parameters \(`"5"`\) auto-resolve to numeric safely/g, 'Number-based `workspace_id` parameters (`5`) auto-resolve to string safely');
-  fixedContent = fixedContent.replace(/workflow_run_id, project_number, is_personal/g, 'workflow_run_id, workspace_id, is_personal');
   fixedContent = fixedContent.replace(/filters by project_number/g, 'filters by workspace_id');
-
-  fixedContent = fixedContent.replace(/\bproject_number\b/g, 'workspace_id');
   fixedContent = fixedContent.replace(/\bDEFAULT_PROJECT_NUMBER\b/g, 'DEFAULT_WORKSPACE_ID');
   fixedContent = fixedContent.replace(/project #5/gi, 'workspace test-ws');
 

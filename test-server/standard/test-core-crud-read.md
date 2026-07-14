@@ -34,8 +34,8 @@
 | Update type         | `update_entry(workspace_id: "test-ws", id: <N>, type: "technical_note")`    | Entry type changed                                                       |
 | Update isPersonal        | `update_entry(workspace_id: "test-ws", id: <N>, isPersonal: false)`              | `isPersonal` toggled                                                     |
 | Update nonexistent        | `update_entry(workspace_id: "test-ws", id: 999999, tags: ["x"])`                  | Returns `{ success: false, error: "Entry 999999 not found" }`            |
-| Update with version       | `update_entry(workspace_id: "test-ws", id: <N>, expected_version: <v>, content: "V2")` | Update succeeds; version increments                                      |
-| Update conflict           | `update_entry(workspace_id: "test-ws", id: <N>, expected_version: <stale_v>, content: "V3")` | Returns `VERSION_CONFLICT` error with latest entry payload               |
+| Update with version       | `update_entry(workspace_id: "test-ws", id: <N>, expectedVersion: <v>, content: "V2")` | Update succeeds; version increments                                      |
+| Update conflict           | `update_entry(workspace_id: "test-ws", id: <N>, expectedVersion: <stale_v>, content: "V3")` | Returns `VERSION_CONFLICT` error with latest entry payload               |
 | Update invalid type       | `update_entry(workspace_id: "test-ws", id: <N>, type: "invalid")`           | Structured error listing valid enum values                               |
 | History of new entry      | `get_entry_history(workspace_id: "test-ws", id: <N>)`                             | Returns empty list (0 revisions)                                         |
 | History after update      | `update_entry(..., content: "Changed"); get_entry_history(...)`                   | Returns 1 revision with `revisionNumber: 1` and previous content snapshot|
@@ -78,7 +78,7 @@
 - `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
 - `get_recent_entries` with `isPersonal` filter returns only matching entries
 - `get_entry_history` correctly returns historical snapshots after updates
-- `update_entry` successfully leverages `expected_version` to prevent overwriting concurrent edits (returns `VERSION_CONFLICT`)
+- `update_entry` successfully leverages `expectedVersion` to prevent overwriting concurrent edits (returns `VERSION_CONFLICT`)
 - `update_entry` returns `success: false` for nonexistent entry IDs
 - `delete_entry` returns `success: false` for nonexistent entry IDs
 - `list_deleted_entries` discovers soft-deleted entries, and `restore_entry` successfully un-deletes them

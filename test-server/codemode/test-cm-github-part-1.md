@@ -120,7 +120,7 @@ return {
 
 > **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
 
-- All 16 GitHub tools callable via `mj.github.*`
+- All 18 GitHub tools callable via `mj.github.*`
 - `get_github_context` returns repo and branch info
 - `get_github_issues` and `get_github_prs` support `state` filter (open/closed/all)
 - Single issue/PR lookups return expected fields

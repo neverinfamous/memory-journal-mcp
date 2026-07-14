@@ -710,6 +710,7 @@
       "test-usability-core-misc-part2.md"
     ],
     "update_configuration": [
+      "test-config-reload.md",
       "test-core-admin-backup-part1.md",
       "test-core-admin-backup-part2.md",
       "test-core-admin-batch-part1.md",

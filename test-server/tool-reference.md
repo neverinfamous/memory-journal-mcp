@@ -115,7 +115,7 @@ Entry mutations, vector index management, tag maintenance, and audit log search.
 | `delete_project`       | Remove a project from the global registry.                                                                                                                             |
 | `get_project`          | Get details of a specific registered project.                                                                                                                          |
 | `list_projects`        | List all registered projects.                                                                                                                                          |
-| `update_entry`         | Update an existing journal entry (content, type, tags, and 14 metadata fields including trust_score, impact_score, significance, project_number, issue_number, pr_number, and workflow). Pass `expected_version` for optimistic locking. Pass `null` to clear a field. |
+| `update_entry`         | Update an existing journal entry (content, type, tags, and 14 metadata fields including trustScore, impactScore, significance, workspace_id, issueNumber, prNumber, and workflow). Pass `expectedVersion` for optimistic locking. Pass `null` to clear a field. |
 | `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                                                   |
 | `restore_entry`        | Restore a soft-deleted journal entry.                                                                                                                                  |
 | `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.                                   |
@@ -209,7 +209,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 | Tool                | Description                                                                                                                                               |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `team_update_entry` | Update a team entry (content, type, tags, and 14 metadata fields including trust_score, impact_score, significance, project_number, issue_number, pr_number, and workflow). Pass `expected_version` for optimistic locking. Pass `null` to clear a field. |
+| `team_update_entry` | Update a team entry (content, type, tags, and 14 metadata fields including trustScore, impactScore, significance, workspace_id, issueNumber, prNumber, and workflow). Pass `expectedVersion` for optimistic locking. Pass `null` to clear a field. |
 | `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).                                                                                                 |
 | `team_restore_entry`| Restore a soft-deleted team entry. Requires TEAM_DB_PATH.                                                                                                 |
 | `team_merge_tags`   | Merge a source tag into a target tag in the team database.                                                                                                |

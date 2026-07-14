@@ -32,8 +32,8 @@
 
 | Update type        | `team_update_entry(workspace_id: "test-ws", id: <id>, type: "technical_note")`    | Entry type changed                                   |
 | Update isArchived       | `team_update_entry(workspace_id: "test-ws", id: <id>, isArchived: true)`               | Entry is archived                                    |
-| Update with version      | `team_update_entry(workspace_id: "test-ws", id: <id>, expected_version: <v>, content: "V2")`| `success: true`, version increments                  |
-| Update conflict          | `team_update_entry(workspace_id: "test-ws", id: <id>, expected_version: <stale_v>, content: "V3")`| Structured error with `VERSION_CONFLICT` code       |
+| Update with version      | `team_update_entry(workspace_id: "test-ws", id: <id>, expectedVersion: <v>, content: "V2")`| `success: true`, version increments                  |
+| Update conflict          | `team_update_entry(workspace_id: "test-ws", id: <id>, expectedVersion: <stale_v>, content: "V3")`| Structured error with `VERSION_CONFLICT` code       |
 | Update nonexistent       | `team_update_entry(workspace_id: "test-ws", id: 999999, content: "x")`                  | Structured error: `{ success: false, error: "..." }` |
 | Soft delete              | `team_delete_entry(workspace_id: "test-ws", id: <id>)`                                  | `success: true`, `message` confirming deletion       |
 | List deleted entries     | `team_list_deleted_entries(workspace_id: "test-ws")`                                          | Returns soft-deleted entry in the list               |

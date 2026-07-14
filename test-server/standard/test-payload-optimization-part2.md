@@ -58,8 +58,8 @@
 | 9   | Custom truncation     | `get_github_issue(issueNumber: <N>, truncate_body: 100)`     | Body ≤ 100 chars if original was longer, `bodyFullLength` shows original length |
 | 10  | Include comments      | `get_github_issue(issueNumber: <N>, include_comments: true)` | `comments` array present in response, `commentCount` matches array length       |
 | 11  | Default no comments   | `get_github_issue(issueNumber: <N>)`                         | No `comments` array in response (or `comments` absent)                          |
-| 12  | PR default truncation | `get_github_pr(pr_number: <N>)`                               | `bodyTruncated` flag present on the PR response                                 |
-| 13  | PR full body          | `get_github_pr(pr_number: <N>, truncate_body: 0)`             | Full body returned, `bodyTruncated: false`                                      |
+| 12  | PR default truncation | `get_github_pr(prNumber: <N>)`                               | `bodyTruncated` flag present on the PR response                                 |
+| 13  | PR full body          | `get_github_pr(prNumber: <N>, truncate_body: 0)`             | Full body returned, `bodyTruncated: false`                                      |
 
 ### Verification Checks
 

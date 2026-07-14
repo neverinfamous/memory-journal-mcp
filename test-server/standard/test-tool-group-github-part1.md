@@ -27,7 +27,7 @@
 | `get_github_issues`             | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
 | `get_github_prs`                | Repo not found                                       | Should succeed (defaults if auto-context exists)        |
 | `get_github_issue`              | `issueNumber: 999999` -> Not found structural error | ⚠️ Should return validation error                       |
-| `get_github_pr`                 | `pr_number: 999999` -> Not found structural error    | ⚠️ Should return validation error                       |
+| `get_github_pr`                 | `prNumber: 999999` -> Not found structural error    | ⚠️ Should return validation error                       |
 | `get_github_context`            | N/A                                                  | Should succeed                                          |
 | `get_kanban_board`              | `workspace_id: 999999` -> Not found                | ⚠️ Returns CONFIGURATION_ERROR (auto-detect precedence) |
 | `move_kanban_item`              | `target_status: "Nonexistent"`                       | ⚠️ Should return validation error                       |
