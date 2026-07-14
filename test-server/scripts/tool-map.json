@@ -145,7 +145,7 @@
       "test-usability-git-history-part1.md"
     ],
     "get_copilot_reviews": [
-      "test-github-insights.md",
+      "test-github-read-part2.md",
       "test-tool-group-github-part2.md",
       "test-usability-github-insights.md"
     ],
@@ -161,10 +161,6 @@
       "test-errors-prompts.md",
       "test-integrity-part1.md",
       "test-integrity-part2.md",
-      "test-payload-optimization-part1.md",
-      "test-payload-optimization-part2.md",
-      "test-payload-optimization-part3.md",
-      "test-payload-optimization-part4.md",
       "test-tool-group-core-part1.md",
       "test-usability-core-read-part1.md"
     ],
@@ -176,13 +172,13 @@
     ],
     "get_github_context": [
       "test-core-crud-create.md",
-      "test-github-read-core.md",
+      "test-github-read-part1.md",
       "test-tool-group-github-part1.md",
       "test-usability-github-read-part1.md"
     ],
     "get_github_issue": [
       "test-errors-prompts.md",
-      "test-github-read-core.md",
+      "test-github-read-part1.md",
       "test-kanban-lifecycle.md",
       "test-payload-optimization-part1.md",
       "test-payload-optimization-part2.md",
@@ -192,7 +188,7 @@
       "test-usability-github-read-part1.md"
     ],
     "get_github_issues": [
-      "test-github-read-core.md",
+      "test-github-read-part1.md",
       "test-payload-optimization-part1.md",
       "test-payload-optimization-part2.md",
       "test-payload-optimization-part3.md",
@@ -213,7 +209,7 @@
       "test-usability-github-milestones-part1.md"
     ],
     "get_github_pr": [
-      "test-github-read-core.md",
+      "test-github-read-part1.md",
       "test-payload-optimization-part1.md",
       "test-payload-optimization-part2.md",
       "test-payload-optimization-part3.md",
@@ -222,7 +218,7 @@
       "test-usability-github-read-part2.md"
     ],
     "get_github_prs": [
-      "test-github-read-core.md",
+      "test-github-read-part1.md",
       "test-payload-optimization-part1.md",
       "test-payload-optimization-part2.md",
       "test-payload-optimization-part3.md",
@@ -265,7 +261,7 @@
       "test-usability-git-history-part1.md"
     ],
     "get_repo_insights": [
-      "test-github-insights.md",
+      "test-github-read-part2.md",
       "test-tool-group-github-part2.md",
       "test-usability-github-insights.md"
     ],
@@ -364,9 +360,10 @@
       "test-cm-error-matrix-part-2b.md",
       "test-cm-error-matrix-part-3.md",
       "test-cm-error-matrix-part-4.md",
+      "test-cm-error-matrix-part-5.md",
       "test-cm-github-part-1.md",
-      "test-cm-github-part-2.md",
-      "test-cm-github-part-3.md",
+      "test-cm-github-part-2a.md",
+      "test-cm-github-part-2b.md",
       "test-cm-hallucination-smoothing-part-1.md",
       "test-cm-hallucination-smoothing-part-2.md",
       "test-cm-io.md",
@@ -393,11 +390,9 @@
       "test-cm-team-crud-part-1.md",
       "test-cm-team-crud-part-2.md",
       "test-cm-team-rbac.md",
-      "test-cm-team-vector-errors-external.md",
-      "test-cm-team-vector-errors-internal.md",
       "test-cm-team-vector-errors-part-1.md",
+      "test-cm-team-vector-errors-part-3.md",
       "test-cm-workflows.md",
-      "test-config-reload.md",
       "test-git.md",
       "test-usability-codemode.md"
     ],
