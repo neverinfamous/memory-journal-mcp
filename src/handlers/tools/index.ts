@@ -24,7 +24,7 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import type { ProjectRegistryEntry } from '../../types/index.js'
 
-import { getCoreTools, getStalenessTools } from './core/index.js'
+import { getCoreTools, getStalenessTools, getDummyHealingTools } from './core/index.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
@@ -491,5 +491,6 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         ...getTeamTools(context),
         ...getCodeModeTools(context),
         ...getGitTools(context),
+        ...getDummyHealingTools(),
     ]
 }

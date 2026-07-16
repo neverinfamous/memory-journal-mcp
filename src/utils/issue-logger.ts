@@ -11,6 +11,10 @@ export interface AgentIssue {
 }
 
 export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp'>): void {
+    if (process.env['NODE_ENV'] === 'test') {
+        return
+    }
+
     const fullIssue: AgentIssue = {
         timestamp: new Date().toISOString(),
         ...issue,

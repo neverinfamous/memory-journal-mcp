@@ -37,8 +37,8 @@ test.describe('Tool Filtering', () => {
 
         expect(response.tools).toBeDefined()
         expect(Array.isArray(response.tools)).toBe(true)
-        // Starter preset has ~11 tools (core+search+codemode), not the full 44+
-        expect(response.tools.length).toBeLessThan(20)
+        // Starter preset has ~15 tools (core+search+codemode+always enabled), not the full 100+
+        expect(response.tools.length).toBeLessThan(30)
         expect(response.tools.length).toBeGreaterThan(3)
     })
 

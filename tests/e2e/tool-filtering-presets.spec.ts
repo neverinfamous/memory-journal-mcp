@@ -50,9 +50,9 @@ test.describe('Tool Filter: essential preset', () => {
         stopServer(ESSENTIAL_PORT)
     })
 
-    test('essential: exposes fewer than 20 tools', async () => {
+    test('essential: exposes fewer than 30 tools', async () => {
         const response = await client.listTools()
-        expect(response.tools.length).toBeLessThan(20)
+        expect(response.tools.length).toBeLessThan(30)
         expect(response.tools.length).toBeGreaterThanOrEqual(2) // at least core + codemode
     })
 

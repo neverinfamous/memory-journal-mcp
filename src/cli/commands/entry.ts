@@ -291,8 +291,19 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
 
 export async function createEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command;
-    const options = (args.length > 1 ? args[args.length - 2] : {}) as z.infer<typeof createEntrySchema>;
-    const contentArg = args.length > 2 && typeof args[0] === 'string' ? args[0] : undefined;
+    const options = (args.length > 1 ? args[args.length - 2] : {}) as z.infer<typeof createEntrySchema> & { tag?: string, contentFile?: string, body?: string };
+    
+    // Auto-heal flags
+    if (options.tag !== undefined && options.tags === undefined) options.tags = options.tag;
+    if (options.contentFile !== undefined && options.file === undefined) options.file = options.contentFile;
+    if (options.body !== undefined && options.content === undefined) options.content = options.body;
+
+    // Handle `[args...]` rest arguments for content
+    const restArgs = args.slice(0, args.length - 2);
+    let contentArg: string | undefined = undefined;
+    if (restArgs.length > 0 && typeof restArgs[0] === 'string') {
+        contentArg = restArgs.map(String).join(' ');
+    }
 
     if (contentArg !== undefined && options.content === undefined) {
         options.content = contentArg;
@@ -382,8 +393,19 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
 
 export async function updateEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command;
-    const options = (args.length > 1 ? args[args.length - 2] : {}) as z.infer<typeof updateEntrySchema>;
-    const contentArg = args.length > 2 && typeof args[0] === 'string' ? args[0] : undefined;
+    const options = (args.length > 1 ? args[args.length - 2] : {}) as z.infer<typeof updateEntrySchema> & { tag?: string, contentFile?: string, body?: string };
+
+    // Auto-heal flags
+    if (options.tag !== undefined && options.tags === undefined) options.tags = options.tag;
+    if (options.contentFile !== undefined && options.file === undefined) options.file = options.contentFile;
+    if (options.body !== undefined && options.content === undefined) options.content = options.body;
+
+    // Handle `[args...]` rest arguments for content
+    const restArgs = args.slice(0, args.length - 2);
+    let contentArg: string | undefined = undefined;
+    if (restArgs.length > 0 && typeof restArgs[0] === 'string') {
+        contentArg = restArgs.map(String).join(' ');
+    }
 
     if (contentArg !== undefined && options.content === undefined) {
         options.content = contentArg;

@@ -14,7 +14,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'rebuild_vector_index',
             title: 'Rebuild Vector Index',
-            description: 'Rebuild the semantic search vector index from all existing entries',
+            description: '[REQUIRES ADMIN SCOPE] Rebuild the semantic search vector index from all existing entries',
             group: 'admin',
             inputSchema: z.object({project_number: z.number().int().optional()}).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,

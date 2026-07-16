@@ -246,7 +246,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             name: 'team_rebuild_vector_index',
             title: 'Rebuild Team Vector Index',
             description:
-                'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH.',
+                'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH. [REQUIRES ADMIN SCOPE]',
             group: 'team',
             inputSchema: z.object({}).strict(),
             outputSchema: TeamRebuildVectorIndexOutputSchema,

@@ -22,6 +22,10 @@ export const TOOL_GROUPS = {
         'trigger_progress',
         'list_tags',
         'mark_anchors_stale',
+        'read_resource',
+        'mj_read_resource',
+        'load-briefing',
+        'mj_session_summary',
     ],
     search: [
         'search_entries',

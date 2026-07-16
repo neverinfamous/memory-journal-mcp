@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import type { Command } from 'commander'
+import type { z } from 'zod'
 import { createProgram, addAgentInstructions, withGroup, withValidation } from './program.js'
 import { 
     addServerOptions, addCoreOptions, addDatabaseOptions, 
@@ -23,11 +24,23 @@ program
 
 // Setup default 'serve' command
 const serveCmd = program
-    .command('serve', { isDefault: true })
+    .command('serve [args...]', { isDefault: true })
     .description('Start the Memory Journal MCP Server')
 
 addServerOptions(serveCmd)
-serveCmd.action(withValidation(serveSchema, serveAction))
+serveCmd.action(withValidation(serveSchema, async (argsArray: string[], options: z.infer<typeof serveSchema>, cmd: Command) => {
+    // The action signature in serveSchema parses it correctly, but we need to intercept
+    // if there are args passed to serve which shouldn't happen.
+    // wait, serveAction doesn't take args array natively this way if not passed right. Let's just pass it to serveAction and handle inside there?
+    // Actually, serveAction expects (options, command). Let's see how withValidation works.
+    // If we just change to `serve [args...]`, let's leave it and intercept in the action.
+    // Wait, serveAction signature in index.ts is `serveAction`. Let's intercept here:
+    if (Array.isArray(argsArray) && argsArray.length > 0 && typeof argsArray[0] === 'string') {
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'serve' command does not take arguments. You passed: ${argsArray.join(' ')}. If you are trying to search or run prompts, use the MCP client or the 'search' CLI command.\n`);
+        process.exit(1);
+    }
+    await serveAction(options, cmd);
+}))
 
 addAgentInstructions(program,
     `
@@ -217,18 +230,21 @@ const entryCmd = program
     .description('Manage journal entries')
 
 const createEntryCmd = entryCmd
-    .command('create [content]')
+    .command('create [args...]')
     .description('Create a new journal entry directly in the database')
 
 withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
     cmd
         .option('-f, --file <path>', 'Load markdown content from a file')
+        .option('--content-file <file>', 'Alias for --file (Auto-healing agent hallucination)')
         .option('-c, --content <string>', 'Raw markdown content string')
+        .option('--body <string>', 'Alias for --content (Auto-healing agent hallucination)')
         .option('-d, --description <string>', 'Alias for --content (Auto-healing agent hallucination)')
         .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
         .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
         .option('--category <type>', 'Entry type (alias)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
+        .option('--tag <tags>', 'Alias for --tags (Auto-healing agent hallucination)')
         .option('--project, --project-number <number>', 'Project number')
         .option('--project_number <number>', 'Project number (alias)')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
@@ -268,12 +284,15 @@ withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--id <number>', 'ID of the entry to update')
         .option('--expected-version <number>', 'Expected version of the entry (for concurrent modification safety)')
         .option('-f, --file <path>', 'Load new markdown content from a file')
+        .option('--content-file <file>', 'Alias for --file (Auto-healing agent hallucination)')
         .option('-c, --content <string>', 'Raw new markdown content string')
+        .option('--body <string>', 'Alias for --content (Auto-healing agent hallucination)')
         .option('-d, --description <string>', 'Alias for --content (Auto-healing agent hallucination)')
         .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
         .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
         .option('--category <type>', 'Entry type (alias)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
+        .option('--tag <tags>', 'Alias for --tags (Auto-healing agent hallucination)')
         .option('--project, --project-number <number>', 'Project number')
         .option('--project_number <number>', 'Project number (alias)')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
