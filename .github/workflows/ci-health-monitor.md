@@ -20,13 +20,13 @@ network:
 permissions: read-all
 
 safe-outputs:
-  report-failure-as-issue: false
   create-issue:
     title-prefix: '[ci-health] '
     labels: [maintenance, ci-cd]
     max: 1
   noop:
     max: 1
+    report-as-issue: false
 
 timeout-minutes: 15
 concurrency: ci-health-monitor

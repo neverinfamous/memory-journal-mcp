@@ -19,12 +19,12 @@ network:
 permissions: read-all
 
 safe-outputs:
-  report-failure-as-issue: false
   add-comment:
     max: 3
     discussions: false
   noop:
     max: 1
+    report-as-issue: false
 
 timeout-minutes: 15
 concurrency: wiki-drift-detector
@@ -45,7 +45,7 @@ You are auditing the GitHub Wiki documentation for the **memory-journal-mcp** pr
 
 The wiki is hosted in a separate Git repository. You must clone it to a temporary directory first.
 Run this command in your terminal:
-`git clone https://github.com/neverinfamous/memory-journal-mcp.wiki.git /tmp/wiki`
+`git clone https://github.com/neverinfamous/memory-journal-mcp.wiki.git /tmp/gh-aw/agent/wiki`
 
 ## Step 2: Understand Recent Changes
 
@@ -55,7 +55,7 @@ Run this command in your terminal:
 
 ## Step 3: Audit Core Wiki Pages
 
-Examine the files in `/tmp/wiki` against the PR diff and unreleased changes:
+Examine the files in `/tmp/gh-aw/agent/wiki` against the PR diff and unreleased changes:
 
 - **Tools.md** & **Resources.md** — Are all features described still accurate? Were tools or resources added, removed, or modified? Do the parameter schemas match? Does the tool count match the codebase?
 - **Configuration.md** — Are all documented environment variables and CLI flags still used in the code? Are there any new ones missing from the docs?

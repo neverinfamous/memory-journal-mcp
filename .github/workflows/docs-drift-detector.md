@@ -19,12 +19,12 @@ network:
 permissions: read-all
 
 safe-outputs:
-  report-failure-as-issue: false
   add-comment:
     max: 3
     discussions: false
   noop:
     max: 1
+    report-as-issue: false
 
 timeout-minutes: 15
 concurrency: docs-drift-detector
