@@ -175,15 +175,15 @@ return orphans;
 
 Select one or more workflows to run based on the user's request or the presence of unverified entries. **Crucially, prioritize high-quality, agent-managed editing over blind predetermined scripts.**
 
-1. **Agent-Managed Cognitive Optimization (Subagent Pattern)**: 
+1. **Orphan Resolution & Project Consolidation (Highest Priority)**: Dealing with "Others" (entries not in active projects) is a priority option. Audit the entries for historical bugs and anomalies:
+   - *Miscategorized Projects*: Entries missing a \`project_number\` or assigned to hallucinated projects (e.g. parsed from absolute file paths). **Inform the user of the situation and get their approval before consolidating them to the correct, active project.**
+   - *Missing Metadata*: Audit for missing timestamps or missing impact scores. Inject appropriate defaults or fixes for these anomalies.
+2. **Agent-Managed Cognitive Optimization (Subagent Pattern)**: 
    - **Scope**: Process ONE project at a time.
    - **Batching**: Extract entries in manageable optimal batches of 30-50.
    - **Parallel Subagents**: Employ specialized subagents to perform the cognitive load (inferring tags, relationships, cleaning noise/test artifacts, checking project assignment). Ensure you explicitly kill subagents when their tasks are completed.
    - **Execution Paradigm**: For most updates, compile the subagent outputs into a JavaScript Code Mode payload and use the \`mj.updateEntry(id, payload)\` API via \`mj_execute_code\`. This transparently handles the connection and any database encryption.
    - **Bulk Execution Fallback**: Required if writing a standalone script for massive bulk operations (Code Mode blocks \`fs.\`, preventing you from reading local JSON batch files): (1) You MUST run it using Node (e.g., \`pnpm tsx\`) since the native \`better-sqlite3\` driver is incompatible with \`bun\`. (2) If the database is encrypted, you MUST inject the \`DB_ENCRYPTION_KEY\` into the shell environment natively (e.g., \`$env:DB_ENCRYPTION_KEY="<key>"; pnpm tsx script.ts\`). The \`NativeConnectionManager\` strictly reads from \`process.env\` and ignores the \`encryptionKey\` property passed in the adapter config object. (3) If updating entries outside the \`default\` workspace using \`DatabaseAdapter\`, you MUST explicitly include \`workspaceId: '*'\` directly in your update payload (e.g., \`db.updateEntry(id, { ...payload, workspaceId: '*' })\`) to prevent \`ConflictError\`s. Setting it in the constructor config is insufficient.
-2. **Project Consolidation & Anomalies (Bug Fixes)**: Audit the entries for historical bugs:
-   - *Miscategorized Projects*: Entries missing a \`project_number\` or assigned to hallucinated projects (e.g. parsed from absolute file paths). **Inform the user of the situation and get their approval before consolidating them to the correct, active project.**
-   - *Missing Metadata*: Audit for missing timestamps or missing impact scores. Inject appropriate defaults or fixes for these anomalies.
 3. **Importance Audit** (Pruning): Find older orphans with a base importance of 0.0. Review for soft-deletion. (SKIP this if Orphans is 0).
 4. **Type-Based Cleanup** (Pruning): e.g., finding old \`technical_note\` or \`debug_log\` entries older than 30 days.
 5. **Tier 1: Fast Sanity Check** (Verification): For the \`Unverified Recent Entries\` provided above, instruct the agent to use the native MCP tool via Code Mode (e.g. \`mj.git.getCommitHistory({ techDebtAudit: true })\`) to verify that commits match the entry claims. Ensure structural changes were correctly reflected by running \`bun scripts/update-code-map.ts\` if applicable.
