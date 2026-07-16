@@ -77,6 +77,10 @@ export async function callToolAndParse(
     toolName: string,
     args: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
+    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
+    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
+        args.workspace_id = 'default';
+    }
     const response = await client.callTool({ name: toolName, arguments: args })
 
     if (response.isError) {
@@ -132,6 +136,10 @@ export async function callToolRaw(
     content: Array<{ type: string; text: string }>
     isError?: boolean
 }> {
+    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
+    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
+        args.workspace_id = 'default';
+    }
     const response = await client.callTool({ name: toolName, arguments: args })
     return response as {
         content: Array<{ type: string; text: string }>

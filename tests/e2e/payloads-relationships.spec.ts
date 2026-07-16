@@ -19,12 +19,12 @@ test.describe('Payload Contracts: Relationships', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Create two entries for relationship tests
-        const e1 = await callToolAndParse(client, 'create_entry', {
+        const e1 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Relationship source entry',
             entry_type: 'test_entry',
         })
-        const e2 = await callToolAndParse(client, 'create_entry', {
+        const e2 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Relationship target entry',
             entry_type: 'project_decision',

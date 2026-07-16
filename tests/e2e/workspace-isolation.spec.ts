@@ -17,11 +17,12 @@ test.describe('Workspace Isolation', () => {
     })
 
     test('should isolate entries by workspace', async () => {
-        const createAlpha = await callToolAndParse(client, 'create_entry', { content: 'Entry in default server workspace alpha', project_number: 1 })
+        const createAlpha = await callToolAndParse(client, 'create_entry', { workspace_id: 'alpha',  content: 'Entry in default server workspace alpha', project_number: 1 })
         expect(createAlpha.success).toBe(true)
 
         // 2. Read recent entries - should see the alpha entry
-        const recentAlpha = await callToolAndParse(client, 'get_recent_entries', { limit: 10 })
+        const recentAlpha = await callToolAndParse(client, 'get_recent_entries', { limit: 10, workspace_id: 'alpha' })
+        console.log('DEBUG recentAlpha:', recentAlpha)
         expect(recentAlpha.success).toBe(true)
         expect(recentAlpha.entries.some((e: any) => e.content === 'Entry in default server workspace alpha')).toBe(true)
 
@@ -31,7 +32,7 @@ test.describe('Workspace Isolation', () => {
         expect(createBeta.success).toBe(true)
 
         // 4. Read recent again (implicit alpha) - beta entry should be excluded
-        const recentAlphaAgain = await callToolAndParse(client, 'get_recent_entries', { limit: 10 })
+        const recentAlphaAgain = await callToolAndParse(client, 'get_recent_entries', { limit: 10, workspace_id: 'alpha' })
         expect(recentAlphaAgain.success).toBe(true)
         expect(recentAlphaAgain.entries.some((e: any) => e.content === 'Entry in explicit workspace beta')).toBe(false)
 

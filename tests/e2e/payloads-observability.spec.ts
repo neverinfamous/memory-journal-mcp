@@ -60,7 +60,7 @@ test.describe('Payload Contracts: Observability & Audit', () => {
     // =========================================================================
 
     test('warm-up: create_entry to seed metrics accumulator', async () => {
-        const payload = await callToolAndParse(client, 'create_entry', {
+        const payload = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Observability E2E warm-up entry',
             entry_type: 'test_entry',
@@ -339,7 +339,7 @@ test.describe('Payload Contracts: Observability & Audit', () => {
     // =========================================================================
 
     test('_meta.tokenEstimate is present on create_entry response', async () => {
-        const payload = await callToolAndParse(client, 'create_entry', {
+        const payload = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Token estimate injection test',
             entry_type: 'test_entry',

@@ -17,7 +17,7 @@ test.describe('Payload Contracts: Search', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Seed an entry for search tests
-        await callToolAndParse(client, 'create_entry', {
+        await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Searchable payload contract test entry about performance',
             entry_type: 'test_entry',

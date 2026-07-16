@@ -52,6 +52,7 @@ test.describe('E2E MCP Subscriptions', () => {
         await client.callTool({
             name: 'create_entry',
             arguments: {
+                workspace_id: 'default',
                 project_number: 1,
                 content: 'test subscription entry'
             },
@@ -69,6 +70,7 @@ test.describe('E2E MCP Subscriptions', () => {
         await client.callTool({
             name: 'create_entry',
             arguments: {
+                workspace_id: 'default',
                 project_number: 1,
                 content: 'test another entry'
             },

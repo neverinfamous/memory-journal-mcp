@@ -103,6 +103,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             const resp = await client.callTool({
                 name: 'create_entry',
                 arguments: {
+                    workspace_id: 'default',
                     project_number: 1,
                     content: `Briefing test code ${i}`,
                     entry_type: 'test_entry',
@@ -118,6 +119,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         const t_resp = await client.callTool({
             name: 'team_create_entry',
             arguments: {
+                workspace_id: 'default',
                 project_number: 1,
                 content: 'Team insight',
                 entry_type: 'test_entry',

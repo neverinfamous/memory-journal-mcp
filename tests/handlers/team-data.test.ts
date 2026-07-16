@@ -75,7 +75,7 @@ describe('Team Backup and Export Tool Handlers', () => {
         // Seed entries for export/backup
         const r1 = (await callTool(
             'team_create_entry',
-            { workspace_id: 'default', 
+            { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
                 project_number: 1,
                 content: 'Export test 1',
                 tags: ['export-1'],
@@ -90,7 +90,7 @@ describe('Team Backup and Export Tool Handlers', () => {
         )) as any
         const r2 = (await callTool(
             'team_create_entry',
-            { workspace_id: 'default', 
+            { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
                 project_number: 1,
                 content: 'Export test 2',
                 entry_type: 'project_decision',

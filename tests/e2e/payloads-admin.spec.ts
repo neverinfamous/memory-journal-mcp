@@ -18,7 +18,7 @@ test.describe('Payload Contracts: Admin', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Create an entry for admin operations
-        const e = await callToolAndParse(client, 'create_entry', {
+        const e = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Admin test entry',
             entry_type: 'test_entry',

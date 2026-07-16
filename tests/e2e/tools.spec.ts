@@ -58,6 +58,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         const response = await client.callTool({
             name: 'create_entry',
             arguments: { 
+                workspace_id: 'default',
                 project_number: 1, 
                 content: 'Playwright e2e test entry',
                 trust_score: 0.8,
@@ -110,6 +111,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         const response = await client.callTool({
             name: 'create_entry',
             arguments: {
+                workspace_id: 'default',
                 project_number: 1,
                 content: 'test validation',
                 entry_type: 'invalid_type',

@@ -33,7 +33,7 @@ test.describe('Payload Contracts: Core', () => {
     })
 
     test('create_entry returns { success, entry }', async () => {
-        const payload = await callToolAndParse(client, 'create_entry', {
+        const payload = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Payload contract test entry',
             entry_type: 'test_entry',
