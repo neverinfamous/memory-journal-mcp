@@ -67,17 +67,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-
-                    const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: "Missing project_number. You MUST include it. Please retry your tool call. You can find the correct project_number by querying 'memory://agent-context/{repo_name}' via the read_resource tool.",
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
+                    const wsId = input.workspace_id
+                    let projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    if ((projectNumber === undefined || projectNumber === null) && context.config?.projectRegistry) {
+                        const registryEntry = context.config.projectRegistry[wsId]
+                        if (registryEntry) {
+                            projectNumber = registryEntry.project_number
                         }
                     }
 

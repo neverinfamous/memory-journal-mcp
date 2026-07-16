@@ -38,26 +38,37 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 0, 2, 'Creating entries...')
 
 
-                    const { created: results, errors } = db.createEntries(input.entries.map((e) => ({
-                        content: e.content,
-                        entryType: e.entry_type,
-                        tags: e.tags,
-                        isPersonal: e.is_personal,
-                        significanceType: e.significance_type,
-                        autoContext: undefined, // Ignore deprecated auto_context
-                        projectNumber: e.project_number,
-                        projectOwner: e.project_owner,
-                        issueNumber: e.issue_number,
-                        issueUrl: e.issue_url,
-                        prNumber: e.pr_number,
-                        prUrl: e.pr_url,
-                        prStatus: e.pr_status,
-                        workflowRunId: e.workflow_run_id,
-                        workflowName: e.workflow_name,
-                        workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
-                        sessionId: e.session_id,
-                        workspaceId: resolveWorkspaceId(e.workspace_id || input.workspace_id, e.project_number ?? input.project_number, context.config),
-                    })))
+                    const { created: results, errors } = db.createEntries(input.entries.map((e) => {
+                        const wsId = e.workspace_id
+                        let pNumber = e.project_number ?? input.project_number ?? context.config?.defaultProjectNumber
+                        if ((pNumber === undefined || pNumber === null) && context.config?.projectRegistry) {
+                            const registryEntry = context.config.projectRegistry[wsId]
+                            if (registryEntry) {
+                                pNumber = registryEntry.project_number
+                            }
+                        }
+                        
+                        return {
+                            content: e.content,
+                            entryType: e.entry_type,
+                            tags: e.tags,
+                            isPersonal: e.is_personal,
+                            significanceType: e.significance_type,
+                            autoContext: undefined, // Ignore deprecated auto_context
+                            projectNumber: pNumber,
+                            projectOwner: e.project_owner,
+                            issueNumber: e.issue_number,
+                            issueUrl: e.issue_url,
+                            prNumber: e.pr_number,
+                            prUrl: e.pr_url,
+                            prStatus: e.pr_status,
+                            workflowRunId: e.workflow_run_id,
+                            workflowName: e.workflow_name,
+                            workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                            sessionId: e.session_id,
+                            workspaceId: wsId,
+                        }
+                    }))
                     
                     await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
 

@@ -92,7 +92,7 @@ describe('Team Admin Batch Tool Handlers', () => {
         it('should return error if team DB is not configured', async () => {
             const result = (await callTool(
                 'team_batch_create_entries',
-                { entries: [{ content: 'test' }] },
+                { entries: [{ workspace_id: 'default', content: 'test' }] },
                 personalDb
             )) as any
 
@@ -103,7 +103,7 @@ describe('Team Admin Batch Tool Handlers', () => {
         it('should return validation error if project_number is missing and no default is set', async () => {
             const result = (await callTool(
                 'team_batch_create_entries',
-                { entries: [{ content: 'test' }] },
+                { entries: [{ workspace_id: 'default', content: 'test' }] },
                 personalDb,
                 undefined,
                 undefined,
@@ -132,7 +132,7 @@ describe('Team Admin Batch Tool Handlers', () => {
             }
             const result = (await callTool(
                 'team_batch_create_entries',
-                { entries: [{ content: 'test fallback' }] },
+                { entries: [{ workspace_id: 'default', content: 'test fallback' }] },
                 personalDb,
                 undefined,
                 undefined,
@@ -148,8 +148,8 @@ describe('Team Admin Batch Tool Handlers', () => {
 
         it('should successfully create multiple team entries with author injection', async () => {
             const entries = [
-                { content: 'Team Batch C1', project_number: 1 },
-                { content: 'Team Batch C2', project_number: 1 },
+                { workspace_id: 'default', content: 'Team Batch C1', project_number: 1 },
+                { workspace_id: 'default', content: 'Team Batch C2', project_number: 1 },
             ]
 
             const result = (await callTool(
@@ -194,7 +194,7 @@ describe('Team Admin Batch Tool Handlers', () => {
         it('should successfully update team entries', async () => {
             const createRes = (await callTool(
                 'team_batch_create_entries',
-                { entries: [{ content: 'Old Team 1', project_number: 1 }, { content: 'Old Team 2', project_number: 1 }] },
+                { entries: [{ workspace_id: 'default', content: 'Old Team 1', project_number: 1 }, { workspace_id: 'default', content: 'Old Team 2', project_number: 1 }] },
                 personalDb,
                 undefined,
                 undefined,
@@ -248,7 +248,7 @@ describe('Team Admin Batch Tool Handlers', () => {
         it('should successfully delete team entries', async () => {
             const createRes = (await callTool(
                 'team_batch_create_entries',
-                { entries: [{ content: 'Del Team 1', project_number: 1 }] },
+                { entries: [{ workspace_id: 'default', content: 'Del Team 1', project_number: 1 }] },
                 personalDb,
                 undefined,
                 undefined,

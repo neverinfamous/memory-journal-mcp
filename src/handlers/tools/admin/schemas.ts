@@ -200,11 +200,15 @@ export const BatchCreateEntriesSchema = z.preprocess(
             let modified = false;
             if (Array.isArray(obj['entries'])) {
                 const rootProjectNum = obj['project_number'];
+                const rootWorkspaceId = obj['workspace_id'];
                 const newEntries = obj['entries'].map((e: unknown) => {
                     if (typeof e === 'object' && e !== null) {
                         const eObj = { ...(e as Record<string, unknown>) };
                         if (eObj['project_number'] === undefined && rootProjectNum !== undefined) {
                             eObj['project_number'] = rootProjectNum;
+                        }
+                        if (eObj['workspace_id'] === undefined && rootWorkspaceId !== undefined) {
+                            eObj['workspace_id'] = rootWorkspaceId;
                         }
                         return eObj;
                     }

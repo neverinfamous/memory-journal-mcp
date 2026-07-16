@@ -642,7 +642,7 @@ describe('McpServer', function () {
                 isError?: boolean
             }>
 
-            const result = await handler({ project_number: 1, content: 'Will fail' }, { _meta: {} })
+            const result = await handler({ workspace_id: 'default', project_number: 1, content: 'Will fail' }, { _meta: {} })
 
             // With deterministic error handling, errors are caught by the handler
             // and returned as structured JSON (not as MCP isError)

@@ -94,7 +94,7 @@ describe('Team Vector Tool Handlers', () => {
         // Create the entry that the mock returns
         await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Vector matched',
             },

@@ -70,7 +70,7 @@ describe('Admin Batch Tool Handlers', () => {
             const entries = Array(51).fill({ content: 'Too many' })
             const result = (await callTool(
                 'batch_create_entries',
-                { entries },
+                { workspace_id: 'default',  entries },
                 db,
                 vectorManager
             )) as any
@@ -88,13 +88,13 @@ describe('Admin Batch Tool Handlers', () => {
             }
 
             const entries = [
-                { content: 'Batch C1', entry_type: 'technical_note', project_number: 1 },
-                { content: 'Batch C2', entry_type: 'technical_note', project_number: 1 },
+                { workspace_id: 'default', content: 'Batch C1', entry_type: 'technical_note', project_number: 1 },
+                { workspace_id: 'default', content: 'Batch C2', entry_type: 'technical_note', project_number: 1 },
             ]
 
             const result = (await callTool(
                 'batch_create_entries',
-                { entries, auto_index: true },
+                { workspace_id: 'default',  entries, auto_index: true },
                 db,
                 vectorManager,
                 undefined,
@@ -118,12 +118,12 @@ describe('Admin Batch Tool Handlers', () => {
             vectorManager.addEntry.mockClear()
             
             const entries = [
-                { content: 'No index 1', project_number: 1 }
+                { workspace_id: 'default', content: 'No index 1', project_number: 1 }
             ]
 
             const result = (await callTool(
                 'batch_create_entries',
-                { entries, auto_index: false },
+                { workspace_id: 'default',  entries, auto_index: false },
                 db,
                 vectorManager
             )) as any
@@ -151,7 +151,7 @@ describe('Admin Batch Tool Handlers', () => {
             // Seed
             const createRes = (await callTool(
                 'batch_create_entries',
-                { entries: [{ content: 'Old 1', project_number: 1 }, { content: 'Old 2', project_number: 1 }] },
+                { entries: [{ workspace_id: 'default', content: 'Old 1', project_number: 1 }, { workspace_id: 'default', content: 'Old 2', project_number: 1 }] },
                 db,
                 vectorManager
             )) as any
@@ -207,7 +207,7 @@ describe('Admin Batch Tool Handlers', () => {
             // Seed
             const createRes = (await callTool(
                 'batch_create_entries',
-                { entries: [{ content: 'Delete 1', project_number: 1 }, { content: 'Delete 2', project_number: 1 }] },
+                { entries: [{ workspace_id: 'default', content: 'Delete 1', project_number: 1 }, { workspace_id: 'default', content: 'Delete 2', project_number: 1 }] },
                 db,
                 vectorManager
             )) as any

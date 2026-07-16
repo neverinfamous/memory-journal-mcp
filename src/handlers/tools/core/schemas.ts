@@ -19,7 +19,7 @@ export const CreateEntrySchema = z.preprocess(
         tags: z.array(z.string()).optional(),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-        workspace_id: z.string().optional(),
+        workspace_id: z.string().min(1, 'workspace_id (repository name) is required'),
         project_number: z.number().int().optional(),
         project_owner: z.string().optional(),
         issue_number: z.number().optional(),
@@ -124,10 +124,9 @@ export const CreateEntrySchemaMcp = z.preprocess(
         ),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.string().optional(),
-        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+        workspace_id: z.string().optional().describe('REQUIRED. The repository name (e.g. adamic). Do not use numeric project IDs or "workspace" as the key.'),
         project_number: relaxedNumber().optional().describe(
-            'REQUIRED. Numeric project ID (e.g., 1, 14). Find it in the briefing Config row ' +
-            '(registry: repoName (#N)) or use get_statistics. Do NOT pass a repo name string.'
+            'Numeric project ID (e.g., 1, 14). This is now optional; workspace_id is preferred.'
         ),
         project_owner: z.string().optional(),
         issue_number: relaxedNumber().optional(),

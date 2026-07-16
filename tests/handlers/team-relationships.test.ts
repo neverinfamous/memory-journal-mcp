@@ -77,7 +77,7 @@ describe('Team Relationship Tool Handlers', () => {
         // Seed entries for linking
         const res1 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Node A',
                 tags: ['node-tag'],
@@ -91,7 +91,7 @@ describe('Team Relationship Tool Handlers', () => {
         )) as any
         const res2 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Node B',
                 tags: ['node-tag'],
@@ -105,7 +105,7 @@ describe('Team Relationship Tool Handlers', () => {
         )) as any
         const res3 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Node C',
             },

@@ -120,7 +120,7 @@ describe('Handler catch blocks via Zod validation errors', () => {
     it('create_entry: invalid entry_type triggers catch', async () => {
         const result = (await callTool(
             'create_entry',
-            { content: 'test', entry_type: 'TOTALLY_INVALID_TYPE' },
+            { workspace_id: 'default', content: 'test', entry_type: 12345 },
             db
         )) as any
         expect(result.success).toBe(false)
@@ -129,7 +129,7 @@ describe('Handler catch blocks via Zod validation errors', () => {
     })
 
     it('create_entry: no content triggers catch', async () => {
-        const result = (await callTool('create_entry', {}, db)) as any
+        const result = (await callTool('create_entry', { workspace_id: 'default', }, db)) as any
         expect(result.success).toBe(false)
         expect(typeof result.error).toBe('string')
         expect(result.code).toBeDefined()

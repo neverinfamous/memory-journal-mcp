@@ -90,7 +90,7 @@ describe('Team Tool Handlers', () => {
         it('should create team entry with auto-detected author', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Team entry alpha',
                 },
@@ -111,7 +111,7 @@ describe('Team Tool Handlers', () => {
         it('should use explicit author when provided', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Entry by Alice',
                     author: 'Alice',
@@ -131,7 +131,7 @@ describe('Team Tool Handlers', () => {
         it('should support tags and entry_type', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Tagged team entry',
                     entry_type: 'project_decision',
@@ -153,7 +153,7 @@ describe('Team Tool Handlers', () => {
         it('should return error when team DB not configured', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Should fail',
                 },
@@ -236,7 +236,7 @@ describe('Team Tool Handlers', () => {
         it('should search team entries by query', async () => {
             await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Searchable team xyz987',
                 },
@@ -268,7 +268,7 @@ describe('Team Tool Handlers', () => {
         it('should search by tags', async () => {
             await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Tag-searchable entry',
                     tags: ['unique-search-tag'],
@@ -324,7 +324,7 @@ describe('Team Tool Handlers', () => {
         it('should share entry to team DB when share_with_team is true', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Shared to team abc123', share_with_team: true, project_number: 1 },
+                { workspace_id: 'default',  content: 'Shared to team abc123', share_with_team: true, project_number: 1 },
                 personalDb,
                 undefined,
                 undefined,
@@ -364,7 +364,7 @@ describe('Team Tool Handlers', () => {
         it('should not include sharedWithTeam when share_with_team is false', async () => {
             const result = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Not shared to team', share_with_team: false },
+                { workspace_id: 'default',  project_number: 1, content: 'Not shared to team', share_with_team: false },
                 personalDb,
                 undefined,
                 undefined,
@@ -380,7 +380,7 @@ describe('Team Tool Handlers', () => {
         it('should still save personal entry even without team DB', async () => {
             const result = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Personal only entry', share_with_team: true },
+                { workspace_id: 'default',  project_number: 1, content: 'Personal only entry', share_with_team: true },
                 personalDb
                 // No teamDb — share_with_team is silently ignored
             )) as { success: boolean; entry: { content: string }; sharedWithTeam?: boolean }
