@@ -3,8 +3,8 @@ import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
 
 export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionContext): void {
-  const dockerCmds = ['docker', 'docker.exe'];
-  const dockerComposeCmds = ['docker-compose', 'docker-compose.exe'];
+  const dockerCmds = ['docker', 'docker.exe', 'docker.bat'];
+  const dockerComposeCmds = ['docker-compose', 'docker-compose.exe', 'docker-compose.bat'];
   const kubectlCmds = ['kubectl', 'kubectl.exe'];
 
   if (kubectlCmds.includes(cmdBasename)) {

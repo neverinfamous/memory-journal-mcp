@@ -16,7 +16,14 @@ const basePayloadSchema = z.object({
   env: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
   integrationContext: z.record(z.string(), z.unknown()).optional(),
   templateOverride: safeString.max(1024).optional(),
-  target: z.union([z.literal("windows"), z.literal("wsl2")]).optional(),
+  target: z.preprocess(val => {
+    if (typeof val === 'string') {
+      const v = val.toLowerCase();
+      if (['wsl', 'linux', 'ubuntu'].includes(v)) return 'wsl2';
+      if (['native', 'win', 'win32'].includes(v)) return 'windows';
+    }
+    return val;
+  }, z.union([z.literal("windows"), z.literal("wsl2")])).optional(),
   timeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
   stdin: z.string().max(10 * 1024 * 1024).optional(),
   stdoutFile: safeString.optional(),
@@ -60,6 +67,8 @@ export const agentExecCliArgsSchema = z.object({
   help: z.boolean().optional(),
   json: z.boolean().optional(),
   payloadPath: z.string().max(1024).optional(),
+  target: z.string().max(1024).optional(),
+  n: z.string().max(1024).optional(),
 });
 
 export type AgentExecCliArgs = z.infer<typeof agentExecCliArgsSchema>;

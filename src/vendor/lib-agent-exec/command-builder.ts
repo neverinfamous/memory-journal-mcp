@@ -337,7 +337,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
         }
       }
 
-      const hasShellMeta = /[|&;<>$`{}()]/.test(localCmd) || localArgs.some(a => /[|&;<>$`{}()]/.test(a));
+      const hasShellMeta = /[|&;<>$`{}()]/.test(localCmd) || localCmd.includes(' ') || localArgs.some(a => /[|&;<>$`{}()]/.test(a));
 
       if (BUILT_INS.includes(localCmd.toLowerCase()) || (p.target === 'wsl2' && hasShellMeta)) {
         console.error(`\n   💡 AGENT HINT: '${localCmd}' is a shell built-in or contains shell metacharacters.`);

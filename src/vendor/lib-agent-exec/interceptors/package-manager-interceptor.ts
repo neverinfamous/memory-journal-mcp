@@ -1,9 +1,12 @@
 // @ts-nocheck
+import fs from 'fs';
+import path from 'path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
-  const { cmdBasename, envOverrides } = ctx;
+  let { cmdBasename } = ctx;
+  const { envOverrides } = ctx;
   let { args } = ctx;
   if (!args) args = [];
   if (args.includes('--help') || args.includes('-h')) return;
@@ -62,6 +65,61 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   }
 
   if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(cmdBasename)) {
+    const isBunProject = fs.existsSync(path.join(ctx.payload.cwd || process.cwd(), 'bun.lockb'));
+    const isNpm = cmdBasename.startsWith('npm');
+    const isYarn = cmdBasename.startsWith('yarn');
+    const isPnpm = cmdBasename.startsWith('pnpm');
+
+    if (!isBunProject && (isNpm || isYarn)) {
+      const nonFlagArgs = args.filter(a => !a.startsWith('-'));
+      const subCmd = nonFlagArgs[0];
+      let rewriteToPnpm = false;
+
+      if (isNpm) {
+        if (subCmd === 'install' && nonFlagArgs.length === 1) {
+          rewriteToPnpm = true;
+        } else if (subCmd === 'install' && nonFlagArgs.length > 1) {
+          rewriteToPnpm = true;
+          args[args.indexOf('install')] = 'add';
+        } else if (subCmd === 'uninstall' && nonFlagArgs.length > 1) {
+          rewriteToPnpm = true;
+          args[args.indexOf('uninstall')] = 'remove';
+        } else if (['run', 'test', 'start'].includes(subCmd)) {
+          rewriteToPnpm = true;
+        } else if (subCmd === 'ci') {
+          rewriteToPnpm = true;
+          args[args.indexOf('ci')] = 'install';
+          if (!args.includes('--frozen-lockfile')) args.push('--frozen-lockfile');
+        }
+      } else if (isYarn) {
+        if (!subCmd && args.length === 0) {
+          rewriteToPnpm = true;
+          args.push('install');
+        } else if (['add', 'remove'].includes(subCmd) && nonFlagArgs.length > 1) {
+          rewriteToPnpm = true;
+        }
+      }
+
+      if (rewriteToPnpm) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting '${cmdBasename} ${subCmd || ''}'.trim() to pnpm... (Frictionless Recovery)`);
+        cmdBasename = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+        ctx.cmdBasename = cmdBasename;
+        if ('command' in ctx.payload) {
+           ctx.payload.command = cmdBasename;
+        }
+      }
+    } else if (isBunProject && (isNpm || isYarn || isPnpm)) {
+      const nonFlagArgs = args.filter(a => !a.startsWith('-'));
+      const subCmd = nonFlagArgs[0];
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Bun project detected. Transparently rewriting '${cmdBasename} ${subCmd || ''}'.trim() to bun... (Frictionless Recovery)`);
+      if (isNpm && subCmd === 'uninstall') args[args.indexOf('uninstall')] = 'remove';
+      if (isNpm && subCmd === 'ci') { args[args.indexOf('ci')] = 'install'; if (!args.includes('--frozen-lockfile')) args.push('--frozen-lockfile'); }
+      if (isYarn && !subCmd && args.length === 0) args.push('install');
+      cmdBasename = process.platform === 'win32' ? 'bun.exe' : 'bun';
+      ctx.cmdBasename = cmdBasename;
+      if ('command' in ctx.payload) ctx.payload.command = cmdBasename;
+    }
+
     envOverrides['CI'] = '1';
     envOverrides['PNPM_INTERACTIVE'] = 'false';
 

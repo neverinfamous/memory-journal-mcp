@@ -13,6 +13,7 @@ import { showHelp, showUsageError } from './help.js';
 const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
 let payloadPath: string;
 let interceptorsPaths: string[] = [];
+let targetOverride: string | undefined;
 const isJson = process.argv.includes('--json');
 
 function fatalError(msg: string, details?: string[]): never {
@@ -36,14 +37,29 @@ try {
     help: { type: 'boolean', short: 'h' },
     json: { type: 'boolean' },
     payloadPath: { type: 'string' },
+    target: { type: 'string' },
+    n: { type: 'string' },
   } as const;
 
-  const { values, positionals } = parseArgs({
-    args: process.argv.slice(2),
-    options,
-    strict: true,
-    allowPositionals: true
-  });
+  let values: Record<string, string | boolean | string[] | undefined>;
+  let positionals: string[];
+  try {
+    const parsed = parseArgs({
+      args: process.argv.slice(2),
+      options,
+      strict: true,
+      allowPositionals: true
+    });
+    values = parsed.values;
+    positionals = parsed.positionals;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Unknown option')) {
+       fatalError(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: You passed a CLI flag to 'agent-exec.ts' (${msg}).\n   'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.\n   Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+    }
+    throw err;
+  }
+  targetOverride = values.target as string | undefined;
   
   
 
@@ -108,6 +124,10 @@ try {
   }
 
   const payload = parseResult.data;
+  if (targetOverride) {
+    payload.target = targetOverride as "windows" | "wsl2";
+  }
+  
   if (payload.keepPayload !== true) {
     try { fs.unlinkSync(payloadPath); } catch { /* ignore */ }
   }

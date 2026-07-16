@@ -108,12 +108,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
         process.exit(1);
       }
     })
-    .with({ cmdBasename: P.union('docker', 'docker.exe', 'docker-compose', 'docker-compose.exe') }, ({ args }) => {
-       if (args.includes('logs') && (args.includes('-f') || args.includes('--follow'))) {
-           console.error(`\n   💡 AGENT HINT: 'docker logs -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-           process.exit(1);
-       }
-    })
+
     .with({ cmdBasename: P.union('pm2', 'pm2.cmd', 'pm2.exe') }, ({ args }) => {
        if (args.includes('logs') || args.includes('monit') || args.includes('dash')) {
            console.error(`\n   💡 AGENT HINT: 'pm2 ${args.find(a => ['logs', 'monit', 'dash'].includes(a))}' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
@@ -230,7 +225,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
         }
         return null;
       })
-      .with({ type: 'command', cmd: P.union('docker', 'docker.exe', 'docker-compose', 'docker-compose.exe') }, (p) => {
+      .with({ type: 'command', cmd: P.union('docker', 'docker.exe', 'docker.bat', 'docker-compose', 'docker-compose.exe', 'docker-compose.bat') }, (p) => {
         const runExecIdx = p.cmdArgs.findIndex(a => a === 'run' || a === 'exec');
         if (runExecIdx !== -1) {
             // Find first positional argument after run/exec that doesn't start with '-'

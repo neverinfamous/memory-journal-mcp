@@ -3,7 +3,19 @@ import { stripVTControlCharacters } from 'node:util';
 import { match } from 'ts-pattern';
 
 export function checkPrompt(tail: string): boolean {
-  const lower = stripVTControlCharacters(tail).toLowerCase();
+  const lines = stripVTControlCharacters(tail).split('\n');
+  let recentTail = '';
+  let count = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (line.trim() !== '' || i === lines.length - 1) {
+      recentTail = line + (recentTail ? '\n' + recentTail : '');
+      if (line.trim() !== '') count++;
+      if (count >= 3) break;
+    }
+  }
+  
+  const lower = recentTail.toLowerCase();
   
   if (!/[?:>#$%✔…█▓░=[\]|]/.test(lower) && !/(?:enter|press|hit|type|choose|select|provide|input|password|passphrase|username|login|email|token|y\/n|yes|no|editor|vi|nano|vim|emacs|notepad|code|wait|continue|abort|quit|exit|override|overwrite|replace|sure|accept|proceed|progress|done|receiving|extracting|downloading|uploading|resolving|\b[yn]\b)/.test(lower)) {
     return false;

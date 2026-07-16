@@ -157,12 +157,8 @@ export function gitInterceptor(ctx: ExecutionContext): void {
     .with(
       { cmd: 'stash', args: P.when((a: string[]) => a.includes('show')) },
       ({ ctx }) => {
-        const cwd = ctx.payload.cwd || process.cwd();
-        if (findEcosystemScript(cwd, 'get-git-history-json.ts') !== null) {
-          console.error(`\n   💡 AGENT HINT: 'git stash show' is forbidden via the shell to prevent unparsable text dumps.\n${AUTONOMOUS_HEALING_MSG}`);
-          console.error(`   You must use the designated wrapper instead: bun .\\.agents\\scripts\\get-git-history-json.ts`);
-          process.exit(1);
-        }
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git stash show' to non-interactive 'git diff stash@{0} --stat'... (Frictionless Recovery)`);
+        ctx.args = ['--no-pager', 'diff', 'stash@{0}', '--stat'];
         return;
       }
     )
