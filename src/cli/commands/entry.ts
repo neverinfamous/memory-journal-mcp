@@ -328,9 +328,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
         
         z.object({
-            workspace_id: z.string({
-                required_error: "workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory."
-            }).min(1, "workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory.")
+            workspace_id: z.string().min(1, "workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory.")
         }).parse({ workspace_id: resolvedWs })
 
         const entryInput: CreateEntryInput = {
@@ -365,9 +363,9 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
     } catch (e) {
         if (e instanceof z.ZodError) {
-            const issues = e.errors || (e as any).issues || [];
+            const issues = e.issues;
             if (issues.length > 0) {
-                process.stderr.write(`Validation Error:\n${issues.map((err: any) => `- ${err.path.join('.')}: ${err.message}`).join('\n')}\n`)
+                process.stderr.write(`Validation Error:\n${issues.map(err => `- ${err.path.join('.')}: ${err.message}`).join('\n')}\n`)
             } else {
                 process.stderr.write(`Validation Error:\n${e.message}\n`)
             }
@@ -456,9 +454,9 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         }
     } catch (e) {
         if (e instanceof z.ZodError) {
-            const issues = e.errors || (e as any).issues || [];
+            const issues = e.issues;
             if (issues.length > 0) {
-                process.stderr.write(`Validation Error:\n${issues.map((err: any) => `- ${err.path.join('.')}: ${err.message}`).join('\n')}\n`)
+                process.stderr.write(`Validation Error:\n${issues.map(err => `- ${err.path.join('.')}: ${err.message}`).join('\n')}\n`)
             } else {
                 process.stderr.write(`Validation Error:\n${e.message}\n`)
             }
