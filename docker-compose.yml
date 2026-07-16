@@ -25,7 +25,6 @@ services:
       - MEMORY_JOURNAL_CONFIG=
       - MCP_HOST=
       - PORT=
-      - TRANSPORT=
       - STATELESS=
       - MCP_AUTH_TOKEN=
       - MCP_AUTH_SCOPES=
@@ -122,7 +121,6 @@ services:
       - MEMORY_JOURNAL_CONFIG=
       - MCP_HOST=0.0.0.0
       - PORT=3000
-      - TRANSPORT=
       - STATELESS=
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
       - MCP_AUTH_SCOPES=

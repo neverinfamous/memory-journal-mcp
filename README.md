@@ -421,7 +421,7 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-i
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
 - **OAuth 2.1** — RFC 9728/8414, JWT/JWKS, granular scopes (opt-in via `--oauth-enabled`)
-- **7 Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
+- **Comprehensive Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
 - **Rate Limiting** — 100 req/min per IP · **CORS** — configurable multi-origin (exact-match) · **1MB body limit**
 - **Server Timeouts** — Request (120s), keep-alive (65s), headers (66s) · **404 handler** · **Cross-protocol guard**
 - **Build Provenance** · **SBOM** · **Supply Chain Attestations** · **Non-root execution**
@@ -720,7 +720,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-03-26 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
-- **HTTP transport hardening** - 7 security headers, configurable multi-origin CORS, 1MB body limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, 404 handler, cross-protocol guard
+- **HTTP transport hardening** - comprehensive security headers, configurable multi-origin CORS, 1MB body limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, 404 handler, cross-protocol guard
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error logs
 
 ### Data & Privacy
