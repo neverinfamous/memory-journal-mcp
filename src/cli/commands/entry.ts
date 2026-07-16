@@ -316,6 +316,23 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
         const payload = buildEntryPayload(options, metadata, config)
 
+        // Enforce that workspace_id is explicitly provided or successfully resolved from project/config.
+        // We do not want to silently fall back to 'default' for new entries.
+        let resolvedWs = payload.workspaceId
+        if (resolvedWs === 'default' && config?.defaultWorkspaceId !== 'default') {
+            const optsRec = z.record(z.string(), z.unknown()).parse(options);
+            const explicitWs = optsRec['workspaceId'] ?? optsRec['workspace_id'] ?? metadata['workspaceId'] ?? metadata['workspace_id'];
+            if (explicitWs !== 'default') {
+                resolvedWs = undefined // Force Zod validation to fail
+            }
+        }
+        
+        z.object({
+            workspace_id: z.string({
+                required_error: "workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory."
+            }).min(1, "workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory.")
+        }).parse({ workspace_id: resolvedWs })
+
         const entryInput: CreateEntryInput = {
             content,
             entryType: payload.entryType,
@@ -347,7 +364,14 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             process.stderr.write(`Successfully created entry #${newEntry.id}\n`)
         }
     } catch (e) {
-        if (e instanceof Error && e.message.includes('FOREIGN KEY constraint failed')) {
+        if (e instanceof z.ZodError) {
+            const issues = e.errors || (e as any).issues || [];
+            if (issues.length > 0) {
+                process.stderr.write(`Validation Error:\n${issues.map((err: any) => `- ${err.path.join('.')}: ${err.message}`).join('\n')}\n`)
+            } else {
+                process.stderr.write(`Validation Error:\n${e.message}\n`)
+            }
+        } else if (e instanceof Error && e.message.includes('FOREIGN KEY constraint failed')) {
             process.stderr.write(`🛠️ AUTONOMOUS HEALING: A FOREIGN KEY constraint failed. This usually means a target_id specified in relationships (or relatedIds) does not exist, or the project ID is invalid. Ensure you are passing a valid Entry ID (not a project ID) for relationships, and a valid project ID.\n`)
         } else {
             process.stderr.write("Failed to create entry: " + (e instanceof Error ? e.message : String(e)) + "\n")
@@ -431,7 +455,14 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.stderr.write(`Successfully updated entry #${result.id} to version ${result.version}\n`)
         }
     } catch (e) {
-        if (e instanceof Error && e.message.includes('FOREIGN KEY constraint failed')) {
+        if (e instanceof z.ZodError) {
+            const issues = e.errors || (e as any).issues || [];
+            if (issues.length > 0) {
+                process.stderr.write(`Validation Error:\n${issues.map((err: any) => `- ${err.path.join('.')}: ${err.message}`).join('\n')}\n`)
+            } else {
+                process.stderr.write(`Validation Error:\n${e.message}\n`)
+            }
+        } else if (e instanceof Error && e.message.includes('FOREIGN KEY constraint failed')) {
             process.stderr.write(`🛠️ AUTONOMOUS HEALING: A FOREIGN KEY constraint failed. This usually means a target_id specified in relationships (or relatedIds) does not exist, or the project ID is invalid. Ensure you are passing a valid Entry ID (not a project ID) for relationships, and a valid project ID.\n`)
         } else {
             process.stderr.write("Failed to update entry: " + (e instanceof Error ? e.message : String(e)) + "\n")
