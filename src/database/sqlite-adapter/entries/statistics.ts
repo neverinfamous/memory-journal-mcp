@@ -182,18 +182,33 @@ export function getStatistics(
 
         result['projectBreakdown'] = projRows.map((r) => {
             let name: string | undefined = undefined
-            const url = r.sample_issue_url || r.sample_pr_url
-            if (url) {
-                try {
-                    const parsed = new URL(url)
-                    const parts = parsed.pathname.split('/').filter(Boolean)
-                    if (parts.length >= 2) {
-                        name = parts[1]
-                    }
-                } catch {
-                    // Ignore URL parsing errors
+            
+            // 1. Try to resolve from config registry by 1-based index (the load-briefing UI mapping)
+            if (context.config?.projectRegistry) {
+                const keys = Object.keys(context.config.projectRegistry);
+                // r.project_number maps to the 1-based index in the UI table
+                const index = r.project_number - 1;
+                if (index >= 0 && index < keys.length) {
+                    name = keys[index];
                 }
             }
+            
+            // 2. Fallback to URL parsing if not found in config
+            if (!name) {
+                const url = r.sample_issue_url || r.sample_pr_url
+                if (url) {
+                    try {
+                        const parsed = new URL(url)
+                        const parts = parsed.pathname.split('/').filter(Boolean)
+                        if (parts.length >= 2) {
+                            name = parts[1]
+                        }
+                    } catch {
+                        // Ignore URL parsing errors
+                    }
+                }
+            }
+            
             return {
                 project_number: r.project_number,
                 entry_count: r.entry_count,

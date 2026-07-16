@@ -392,6 +392,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `memory://team/recent` | Recent Team Entries |
 | `memory://team/statistics` | Team Statistics |
 | `memory://tools` | Help — Tool Groups (alias) |
+| `memory://tools/available` | Tools Catalog |
 | `memory://workflows` | Workflows |
 <!-- END: RESOURCES -->
 
